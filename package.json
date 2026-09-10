@@ -56,6 +56,7 @@
         "bench:search": "autocannon -c 20 -d 30 -l -m POST -H 'Content-Type: application/json' -b '{\"text\":\"a\"}' http://localhost:${NODE_PORT:-3000}/products/search",
         "setup:mongod": "docker create --name mongo-temp mongo:latest && docker cp mongo-temp:/usr/bin/mongod /tmp/mongod && docker rm mongo-temp",
         "db:sync": "tsx db/sync-indexes.ts",
+        "db:data": "tsx db/apply-data.ts",
         "db:seed": "tsx db/demo/index.ts",
         "seed:export": "tsx scripts/demo/export-dataset.ts",
         "check:seed-export": "tsx scripts/demo/export-dataset.ts --check",

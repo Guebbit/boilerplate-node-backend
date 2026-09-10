@@ -8,8 +8,9 @@ Neither half is authored here. A module owns its indexes the same way it owns it
 fragment; its demo fixtures live in `demo/<name>.ts` instead, outside the module folder — see
 [The demo dataset](#the-demo-dataset) for why. `db/` is only where the runners live.
 
-There is no migration tool, no changelog collection and no timestamped files. What replaced them,
-and why, is the whole of the next section.
+There is no migration TOOL — no `migrate-mongo`, no `umzug` — but there is a small, owned changelog
+collection and timestamped files for the one thing a schema reconciliation cannot cover: data. What
+replaced the tool, and why, is the whole of the next section.
 
 ---
 
@@ -129,27 +130,19 @@ What is **not** derivable from a schema is a change to the shape of a value that
 
 Roughly: **the shape of the container is free; the shape of the value costs a script.**
 
-Those are rare, and each one is a single run against a single database — so they are ordinary
-one-shot scripts under `ops/`, alongside the `reap:*` jobs, not entries in a framework:
+Those are rare, and each one is a single run against a single database — so they are one-off
+scripts under `ops/data/`, applied and recorded by the small ledger below rather than run bare:
 
 ```ts
-#!/usr/bin/env tsx
-/**
- * @module
- * Split `name` into `firstName` / `lastName` on rows written before the split — run once.
- */
-import 'dotenv/config';
-import { start, connection } from '@infrastructure/runtime/database';
-import { logger } from '@infrastructure/adapters/logger';
-import { runScript } from '../db/run-script';
+// ops/data/20260101000000-split-name.ts
+import type { Db } from 'mongodb';
 
-void runScript(
-    async () => {
-        await start();
-        // …driver-level writes over the affected rows, idempotent, reporting what it touched
-    },
-    () => connection.close()
-);
+/** Split `name` into `firstName` / `lastName` on rows written before the split. */
+export const up = (db: Db): Promise<void> =>
+    db
+        .collection('users')
+        .updateMany(/* the affected rows, filtered so a second run is a no-op */)
+        .then(() => undefined);
 ```
 
 Three rules, and they are the same ones a migration tool would have imposed:
@@ -164,9 +157,58 @@ Three rules, and they are the same ones a migration tool would have imposed:
 Run it before `db:sync` when it is clearing the way for a new constraint (a de-duplication), and
 after when it needs an index to be fast.
 
-> **When this stops being enough.** Many environments, or a change that must provably run exactly
-> once before the app boots. Then a runner with a changelog earns its keep — it is one folder, not
-> a redesign, and nothing above has to change to accommodate it.
+::: warning What the three rules alone do not give you
+
+They are discipline, not machinery. Left on their own, four things stay unanswered:
+
+- **No record of what ran, where.** "Applied in production" and "nobody remembered" look identical.
+- **No ordering.** Two scripts that must run in sequence have no way to say so.
+- **No gate.** Every other artefact in this repo has one; a deploy that skipped a required backfill
+  passes every check.
+- **No pressure to delete.** The third rule is enforced by memory alone.
+
+Idempotency is what keeps a script safe even without the machinery below, so treat it as the
+load-bearing rule rather than the first of three.
+
+:::
+
+## The ledger — `npm run db:data`
+
+A cloner cannot inherit your memory of what ran where, so the four gaps above are closed by a small
+ledger rather than left to discipline: `db/data-changelog.ts` (the logic — file discovery,
+checksums, the diff, testable with no database connection) and `db/apply-data.ts` (the entry point).
+
+```ts
+export const up = (db: Db): Promise<void> => /* driver-level writes, idempotent */;
+```
+
+Each script under `ops/data/` — named `<timestamp>-<slug>.ts`, oldest first — exports exactly this.
+No phases, no `down`: this repo has had one data script so far (deleted unrun — no real deployment
+ever needed it), which is not enough of a pattern to justify either. See `ops/data/README.md`.
+
+```bash
+npm run db:data                    # apply every pending file, oldest first
+npm run db:data -- --check         # list pending/changed, exit 1 if either is non-empty — the gate
+npm run db:data -- --force <file>  # re-run one file deliberately, bypassing "already applied"
+```
+
+**A human runs this, never `db:bootstrap`.** An index sync is safely re-appliable on every
+container boot; a data change is a `$unset` or a rename over real rows, and an irreversible write
+belongs in front of a person deciding to run it, not a container starting up. Wire `-- --check`
+into a deploy pipeline as the gate, and run the apply by hand once it fails.
+
+What the ledger actually gives the four gaps:
+
+| Gap              | Closed by                                                                           |
+| ---------------- | ----------------------------------------------------------------------------------- |
+| Record           | `datachangelog` stores `{ file, appliedAt, durationMs, checksum, host }` per script |
+| Ordering         | The `<timestamp>-` filename prefix — `listMigrationFiles` sorts on it               |
+| Gate             | `--check` exits 1 on anything pending, deliberately never wired into `db:bootstrap` |
+| Edit-after-apply | A stored checksum that no longer matches the file on disk fails the run outright    |
+
+`datachangelog` has no Mongoose model on purpose — `up(db: Db)`'s whole point is driver-level
+access — so it is the one collection whose index `db:sync` never reaches;
+`ensureLedgerIndex` creates it directly, each run, idempotently.
 
 ## The demo dataset
 
