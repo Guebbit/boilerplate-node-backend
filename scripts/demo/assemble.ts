@@ -24,7 +24,7 @@
  */
 
 import path from 'node:path';
-import { demoModules, type DemoShape } from '@demo/index';
+import { demoModules } from '@demo/index';
 import { seedCredentials } from '../../src/kernel/seed-accounts';
 
 /* The dataset sits beside the seeder that produces the rows, not beside this file: `db/` is where
@@ -126,42 +126,6 @@ const findDanglingReferences = (
     return problems;
 };
 
-/**
- * Every collection must say whether a GET serves its rows as they stand.
- *
- * Checked in both directions, because each failure is a different mistake: an unlabelled
- * collection is a module that added rows to `seedExport` and forgot `demoShapes`, and a label with
- * no collection is one that renamed or dropped a collection and left the entry behind. The second
- * is the quieter of the two — the artefact stays valid and the map simply describes a row nobody
- * publishes any more.
- *
- * Refusing here rather than only in the test suite means the unlabelled state cannot be committed
- * at all: `npm run seed:export` writes nothing and `npm run check:seed-export` fails the gate.
- */
-const reconcileShapes = (
-    collections: Record<string, unknown[]>,
-    shapes: Record<string, DemoShape>
-): void => {
-    const unlabelled = Object.keys(collections).filter((name) => !(name in shapes));
-    const orphaned = Object.keys(shapes).filter((name) => !(name in collections));
-
-    const problems = [
-        ...unlabelled.map(
-            (name) =>
-                `  ${name} is published but unclassified — add it to its module's \`demoShapes\``
-        ),
-        ...orphaned.map(
-            (name) => `  ${name} is classified but not published — drop it from \`demoShapes\``
-        )
-    ];
-
-    if (problems.length > 0)
-        throw new Error(
-            `[seed-export] \`_meta.shapes\` must name every published collection, and only those:\n` +
-                problems.join('\n')
-        );
-};
-
 export const assembleDemoDataset = async (): Promise<string> => {
     const modules = Object.values(demoModules);
     const sections = await Promise.all(modules.map((demoModule) => demoModule.export()));
@@ -174,19 +138,7 @@ export const assembleDemoDataset = async (): Promise<string> => {
     const merged = Object.assign({}, ...sections) as Record<string, unknown[]>;
     const collections = toPlainJson(merged);
 
-    /*
-     * What each collection IS, published beside the rows themselves. The paired frontend reads the
-     * artefact and nothing else of this repo, so a mock author asking "can I hand this row back?"
-     * has the answer in the file they already have open. `sortKeys` orders the map, exactly as it
-     * orders everything else here.
-     */
-    const shapes = Object.assign({}, ...modules.map((demoModule) => demoModule.shapes)) as Record<
-        string,
-        DemoShape
-    >;
-    reconcileShapes(collections, shapes);
-
-    const dataset = { _meta: { shapes }, credentials: seedCredentials, collections };
+    const dataset = { credentials: seedCredentials, collections };
 
     const dangling = findDanglingReferences(
         collections,

@@ -145,40 +145,6 @@ The export also refuses to publish a **dangling reference**: every `<something>I
 name a record the file also contains. That replaces the one safety property the shared file had for
 free, back when a cart line and the product it pointed at were literally the same constant.
 
-### `_meta.shapes` — which rows a GET actually serves
-
-The published collections are not the same kind of thing, and the reader who needs to know is in
-the other repo, writing a mock handler against the artefact and nothing else. So the artefact says
-it:
-
-```json
-{
-    "_meta": { "shapes": { "products": "response", "addressBooks": "stored" } },
-    "collections": { "...": [] },
-    "credentials": { "...": {} }
-}
-```
-
-| Value      | Means                                                                                                                                                               |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `response` | A GET answers this row as it stands — `products`, `users`, `orders`. A mock may hand it straight back                                                               |
-| `stored`   | No endpoint serves the row raw. `GET /account/addresses` answers `{ addresses: [...] }` built from a book's `items`; `GET /locales` answers a capabilities envelope |
-
-Two values rather than three, because that is the whole of the question anyone asks of the file:
-can I return this row? A collection that is composed and one that is never served differ only in
-how the response is built, which the consumer is writing anyway.
-
-Each demo module states its own entries as `shapes` beside `export` in `demo/index.ts`'s table,
-and the `DemoModule` type pairs them — declaring one without the other is a compile error.
-`seed:export` then reconciles the map against what was actually published and refuses both an
-unclassified collection and a label naming one that no longer exists, so neither state reaches the
-artefact. `tests/cross-cutting/seed-conformance.test.ts` holds the committed file to the same
-rule, in both repos.
-
-The labels are **stated, not derived**. A matcher that tried each collection against the generated
-schemas would mark the locale rows `response` — a stored language does parse against the CREATE
-response — and a confidently wrong label is worse than none, because the reader stops checking.
-
 ### Commands
 
 | Script                      | What it does                                                        |

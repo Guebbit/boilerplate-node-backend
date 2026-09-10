@@ -34,9 +34,7 @@ export const runDemoSeed = (reset: boolean): Promise<void> =>
         // member of.
         .then(() => seedAccessModel())
         .then(() => import('@demo/index'))
-        .then(({ demoModules }) =>
-            Promise.all(Object.values(demoModules).map((demoModule) => demoModule.seed()))
-        )
+        .then(({ seedAllDemoModules }) => seedAllDemoModules())
         .then(() => {
             clearDemoOutbox();
         });
