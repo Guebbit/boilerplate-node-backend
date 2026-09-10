@@ -17,14 +17,18 @@
  * Ranges refused, and why: RFC 1918 private space, RFC 1122 loopback, RFC 3927 / RFC 4291
  * link-local (this is what blocks the cloud metadata endpoint `169.254.169.254`), RFC 4193 IPv6
  * unique-local, RFC 6598 carrier-grade NAT, RFC 919 broadcast, both families' unspecified
- * (`0.0.0.0`, `::`) and multicast ranges, and the two IPv6 transition mechanisms that embed an
- * address `embeddedIPv4()` does NOT unwrap: 6to4 (RFC 3056, `2002::/16`) and Teredo (RFC 4380,
- * `2001::/32`). Both carry an IPv4 address in their bits — 6to4 plainly, Teredo XOR-obfuscated —
- * that this guard would otherwise never see: a 6to4 literal encoding `169.254.169.254` reads as an
- * ordinary global address to every other check here. Refused outright rather than decoded: a
- * legitimate webhook endpoint has no reason to be specified as a transition-mechanism literal, and
- * native 6to4/Teredo relaying is still enabled on some hosts and networks despite the public relay
- * infrastructure having mostly been decommissioned.
+ * (`0.0.0.0`, `::`) and multicast ranges, and three IPv6 forms that embed an address
+ * `embeddedIPv4()` does NOT unwrap: 6to4 (RFC 3056, `2002::/16`), Teredo (RFC 4380, `2001::/32`),
+ * and the deprecated IPv4-compatible form (RFC 4291 §2.5.5.1, `::/96` — `::a.b.c.d`, distinct from
+ * the IPv4-*mapped* `::ffff:a.b.c.d` `embeddedIPv4()` already covers). All three carry an IPv4
+ * address in their bits — 6to4 plainly, Teredo XOR-obfuscated, the compat form plainly again — that
+ * this guard would otherwise never see: a literal encoding `169.254.169.254` in any of the three
+ * reads as an ordinary global address to every other check here. Refused outright rather than
+ * decoded: a legitimate webhook endpoint has no reason to be specified as a transition-mechanism
+ * literal, and native 6to4/Teredo relaying is still enabled on some hosts and networks despite the
+ * public relay infrastructure having mostly been decommissioned — the compat form's own automatic
+ * tunneling is dead everywhere by now, but it costs nothing to judge it the same way as the other
+ * two rather than carve out an exception.
  *
  * What this module does NOT do:
  *  - No redirect handling. A 3xx must not be followed without re-running this same check on the
@@ -116,6 +120,9 @@ const parseWebhookUrl = (rawUrl: string): URL => {
     return parsed;
 };
 
+/** The deprecated IPv4-compatible IPv6 range (`::/96`) — see {@link isAddressUnsafe}. */
+const IPV4_COMPATIBLE_SUBNET = new Address6('::/96');
+
 /**
  * Whether a single resolved address falls in any range this guard refuses. See the module
  * docblock for the exact range list and the RFCs behind it.
@@ -150,11 +157,15 @@ const isAddressUnsafe = (address: string): boolean => {
         ip.isMulticast() ||
         ip.isCGNAT() ||
         ip.isBroadcast() ||
-        // Neither is unwrapped by `embeddedIPv4()` — see the module docblock — so a 6to4 or
-        // Teredo literal carrying a private/loopback/link-local IPv4 would otherwise read as an
-        // ordinary global address to every check above.
+        // Neither is unwrapped by `embeddedIPv4()` — a 6to4 or Teredo literal carrying a
+        // private/loopback/link-local IPv4 would otherwise read as an ordinary global address to
+        // every check above.
         ip.is6to4() ||
-        ip.isTeredo()
+        ip.isTeredo() ||
+        // `::1`/`::` also sit in `::/96` but are already caught above via `isLoopback`/
+        // `isUnspecified` — this only adds the cases those checks miss, like `::127.0.0.1`, by
+        // recursing into the family-4 branch instead of repeating its range list.
+        (ip.isHostInSubnet(IPV4_COMPATIBLE_SUBNET) && isAddressUnsafe(ip.to4().correctForm()))
     );
 };
 
