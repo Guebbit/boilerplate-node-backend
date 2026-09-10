@@ -7,9 +7,9 @@
  * `orders/module.ts` stopped subscribing.
  */
 import { setupTestDb } from '@tests/setup-test-db';
-import { createUser } from '@modules/users/tests/fixtures';
-import { createProduct } from '@modules/products/tests/fixtures';
-import { createOrder, toOrderItem } from '@modules/orders/tests/fixtures';
+import { createUser } from '@modules/users/tests/factories';
+import { createProduct } from '@modules/products/tests/factories';
+import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { orderRepository } from '@modules/orders';
 import { orderService } from '@modules/orders/services';
 import { userService } from '@modules/users';

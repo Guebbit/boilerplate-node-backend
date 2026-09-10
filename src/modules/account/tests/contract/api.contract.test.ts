@@ -10,16 +10,16 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
-import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/fixtures';
-import { createProduct } from '@modules/products/tests/fixtures';
-import { createOrder, toOrderItem } from '@modules/orders/tests/fixtures';
+import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
+import { createProduct } from '@modules/products/tests/factories';
+import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { userRepository } from '@modules/users';
 import { EMAIL_VERIFY_TOKEN_TYPE } from '@modules/account/services';
 import { TokenType } from '@modules/users';
 import * as mailerPort from '@infrastructure/adapters/mailer';
 import itUsers from '@modules/users/locales/it.json';
 import itShared from '../../../../locales/it.json';
-import { WEAK_PASSWORD } from '@modules/users/tests/fixtures';
+import { WEAK_PASSWORD } from '@modules/users/tests/factories';
 import { getExpiryTime, RefreshTokenExpiryTime } from '@modules/account/session/config';
 
 setupTestDb();

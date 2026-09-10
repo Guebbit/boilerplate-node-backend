@@ -8,12 +8,12 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
-import { createProduct } from '@modules/products/tests/fixtures';
+import { createProduct } from '@modules/products/tests/factories';
 import { productService } from '@modules/products';
 import { productRepository } from '@modules/products';
 import type { ProductDocument } from '@modules/products';
 import { translationRepository, localeRepository } from '@modules/locales/repository';
-import { makeLocale } from '@modules/locales/fixtures';
+import { makeLocale } from '@modules/locales/factories';
 import { localeService } from '@modules/locales/services';
 import { enabledModules } from '../../src/modules';
 

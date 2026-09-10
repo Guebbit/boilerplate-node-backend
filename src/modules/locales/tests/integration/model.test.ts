@@ -13,7 +13,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { LocaleDirection } from '@types';
 import { localeRepository, localeEntryRepository } from '@modules/locales/repository';
 import { localeService } from '@modules/locales/services';
-import { makeLocale } from '@modules/locales/fixtures';
+import { makeLocale } from '@modules/locales/factories';
 
 setupTestDb();
 

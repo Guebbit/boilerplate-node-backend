@@ -9,7 +9,7 @@
  */
 
 import { Types } from 'mongoose';
-import { makeProduct } from '@modules/products/fixtures';
+import { makeProduct } from '@modules/products/factories';
 
 const HEX = '65dc8a99604c307b702b5ccc';
 

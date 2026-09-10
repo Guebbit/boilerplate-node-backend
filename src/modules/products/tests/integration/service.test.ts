@@ -8,8 +8,8 @@
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
-import { createUser } from '@modules/users/tests/fixtures';
-import { createProduct } from '@modules/products/tests/fixtures';
+import { createUser } from '@modules/users/tests/factories';
+import { createProduct } from '@modules/products/tests/factories';
 import * as productService from '@modules/products/service';
 import { productRepository } from '@modules/products';
 import type { ResponseReject } from '@infrastructure/http/response';

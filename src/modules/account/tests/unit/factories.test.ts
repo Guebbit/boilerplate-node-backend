@@ -7,7 +7,7 @@
  */
 
 import { Types } from 'mongoose';
-import { makeAddressBook } from '@modules/account/fixtures';
+import { makeAddressBook } from '@modules/account/factories';
 
 const USER = '65dc8a99604c307b702b5ccc';
 const ADDRESS = '65dcdec2b18ad5e4bd597f0f';

@@ -6,7 +6,7 @@
  * onto `undefined`; `consumeToken` pins the one-time-use behaviour the concurrency suite races.
  */
 import { setupTestDb } from '@tests/setup-test-db';
-import { createUser } from '@modules/users/tests/fixtures';
+import { createUser } from '@modules/users/tests/factories';
 import * as userService from '@modules/users/service';
 import { userRepository, hashToken } from '@modules/users';
 import type { Token } from '@modules/users';

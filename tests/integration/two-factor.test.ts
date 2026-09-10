@@ -13,7 +13,7 @@ import { decode } from 'jsonwebtoken';
 import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { userRepository, TokenType, hashToken } from '@modules/users';
-import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
+import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { twoFactorService } from '@modules/account/services';
 import { DELIVERED_CODE_MAX_ATTEMPTS } from '@modules/account/two-factor';
 import { testCallerContext } from '@tests/caller-context';

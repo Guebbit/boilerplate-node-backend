@@ -1,6 +1,6 @@
 /**
  * @module
- * The bit of fixture-building every module's `fixtures.ts` would otherwise repeat: an `_id`, a
+ * The bit of factory-building every module's `factories.ts` would otherwise repeat: an `_id`, a
  * pair of timestamps, and the type of the overrides bag. Timestamps are pinned rather than left
  * to Mongoose — the seed export commits what it reads back, so a `createdAt` of "whenever the
  * export ran" would make the artefact permanently stale — but this module does not guarantee the
@@ -61,11 +61,11 @@ export const toObjectId = (id?: string): Types.ObjectId =>
     id === undefined ? new Types.ObjectId() : new Types.ObjectId(id);
 
 /**
- * Turn a factory's identity fields into the three columns a fixture pins.
+ * Turn a factory's identity fields into the three columns a factory pins.
  *
  * An unstated `createdAt` is read off the `_id` — an ObjectId's leading four bytes ARE a creation
- * timestamp, so a pinned fixture id already carries its own date. `updatedAt` follows `createdAt`
- * unless stated. Note `getTimestamp()` is second-granular, so fixtures built in the same tick
+ * timestamp, so a pinned id already carries its own date. `updatedAt` follows `createdAt`
+ * unless stated. Note `getTimestamp()` is second-granular, so rows built in the same tick
  * share a `createdAt` exactly — a test that sorts/paginates by it must pass its own dates.
  */
 export const identityOf = ({

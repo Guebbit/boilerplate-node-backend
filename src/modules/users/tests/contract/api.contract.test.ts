@@ -7,7 +7,7 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
-import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
+import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
 

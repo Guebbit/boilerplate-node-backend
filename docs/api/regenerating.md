@@ -225,7 +225,7 @@ bundle's section list under `scripts/contracts/`:
 src/modules/<name>/openapi.yaml      its operations, and the types only it uses
 src/modules/<name>/asyncapi.yaml     its server, channels, messages and schemas — one whole document
 src/modules/<name>/analytics.ts      the events it emits
-src/modules/<name>/fixtures.ts        how demo/test records are built
+src/modules/<name>/factories.ts       how demo/test records are built
 src/modules/<name>/probes.ts         the requests a spec cannot describe
 
 demo/<name>.ts                       the demo records — outside src/, see Demo profile

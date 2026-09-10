@@ -7,7 +7,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
-import { createUser } from '@modules/users/tests/fixtures';
+import { createUser } from '@modules/users/tests/factories';
 import { userRepository } from '@modules/users';
 import * as auditPort from '@infrastructure/observability/audit';
 import * as analyticsPort from '@infrastructure/observability/analytics';

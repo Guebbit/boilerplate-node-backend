@@ -7,7 +7,7 @@
 
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
-import { makeUser, createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
+import { makeUser, createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { userRepository, hashToken } from '@modules/users';
 import { TokenType, type UserDocument } from '@modules/users';
 // The model directly: not exported from the barrel, since no sibling MODULE needs it there. A

@@ -8,9 +8,9 @@
  * `"undefined"`.
  */
 import { setupTestDb } from '@tests/setup-test-db';
-import { createUser } from '@modules/users/tests/fixtures';
-import { createProduct } from '@modules/products/tests/fixtures';
-import { createOrder, toOrderItem } from '@modules/orders/tests/fixtures';
+import { createUser } from '@modules/users/tests/factories';
+import { createProduct } from '@modules/products/tests/factories';
+import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
 import { orderRepository } from '@modules/orders';

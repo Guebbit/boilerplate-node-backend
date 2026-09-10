@@ -9,8 +9,8 @@
 import { zodUserSchema } from '@modules/users';
 import { createUserBodyPasswordMin } from '@api/schemas.zod';
 import { readLocaleDictionary } from '@infrastructure/i18n';
-import { PLAIN_PASSWORD } from '@modules/users/fixtures';
-import { MINIMAL_PASSWORD } from '@modules/users/tests/fixtures';
+import { PLAIN_PASSWORD } from '@modules/users/factories';
+import { MINIMAL_PASSWORD } from '@modules/users/tests/factories';
 
 /** The shipped English copy, read from the same file the thunks resolve against. */
 const en = readLocaleDictionary('en') as { users: Record<string, string> };

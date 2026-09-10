@@ -1,6 +1,6 @@
 /**
  * @module
- * Builds a product fixture — for the demo dataset in `./demo` and for any test needing a
+ * Builds a product row — for the demo dataset in `./demo` and for any test needing a
  * catalogue row. Deliberately leaves the schema's own defaults unset, placeholdering only the
  * required `title` and `price`, so `scripts/demo/export-dataset.ts` reads seeded rows back
  * through the real serializer instead of a guess.
@@ -11,7 +11,7 @@ import {
     stripUndefined,
     toDate,
     type OverridesFor
-} from '@infrastructure/persistence/fixtures';
+} from '@infrastructure/persistence/factories';
 import type { Product } from '@types';
 import type { ProductDocument, ProductRecord } from './model';
 

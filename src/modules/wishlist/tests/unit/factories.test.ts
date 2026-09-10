@@ -7,7 +7,7 @@
  * seed file from repeating it.
  */
 import { Types } from 'mongoose';
-import { makeWishlist } from '@modules/wishlist/fixtures';
+import { makeWishlist } from '@modules/wishlist/factories';
 
 const USER = '65dc8a99604c307b702b5ccc';
 const DOG_FOOD = '65dcdec2b18ad5e4bd597f0f';

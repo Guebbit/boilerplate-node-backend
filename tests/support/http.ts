@@ -13,7 +13,7 @@
  */
 import request from 'supertest';
 import { app } from '../../src/app';
-import { createUser, createOwnerUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
+import { createUser, createOwnerUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import type { UserDocument } from '@modules/users';
 
 export const api = () => request(app);

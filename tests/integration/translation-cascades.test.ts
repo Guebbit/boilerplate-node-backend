@@ -8,7 +8,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { createProduct } from '@modules/products/tests/fixtures';
+import { createProduct } from '@modules/products/tests/factories';
 import { productService } from '@modules/products';
 import { translationRepository } from '@modules/locales/repository';
 import { registerModules } from '@kernel/registry';

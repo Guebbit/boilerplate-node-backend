@@ -10,8 +10,8 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment } from '@tests/environment';
 import { testCallerContext } from '@tests/caller-context';
-import { createUser } from '@modules/users/tests/fixtures';
-import { createProduct } from '@modules/products/tests/fixtures';
+import { createUser } from '@modules/users/tests/factories';
+import { createProduct } from '@modules/products/tests/factories';
 import { cartService } from '@modules/cart';
 import { productRepository } from '@modules/products';
 import { orderService, orderRepository } from '@modules/orders';

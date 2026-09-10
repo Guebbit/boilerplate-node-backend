@@ -15,7 +15,7 @@ import {
 } from '@kernel/seed-accounts';
 import { SEED_PRODUCT_IDS, fillerProductId, seedProductById } from './products';
 import { SEED_CUSTOMER_EMAILS, SEED_CUSTOMER_IDS } from './users';
-import { makeOrder, type OrderSnapshotInput } from '@modules/orders/fixtures';
+import { makeOrder, type OrderSnapshotInput } from '@modules/orders/factories';
 import { orderModel } from '@modules/orders/model';
 import { upsertById, type SeedOutcome, exportCollection } from '@infrastructure/persistence/seed';
 import { orderRepository } from '@modules/orders/repository';
@@ -103,9 +103,9 @@ const namedOrders = [
         email: SEED_USER_EMAIL,
         items: [line(SEED_PRODUCT_IDS.dogFoodStandard, 4)],
         /* Earlier than the `createdAt` this order's id encodes, i.e. deleted before it was
-         * placed — left that way on purpose. The fixtures don't promise their three dates agree;
+         * placed — left that way on purpose. The factories don't promise their three dates agree;
          * nothing reads them together, only the field's PRESENCE. See
-         * `@infrastructure/persistence/fixtures`. */
+         * `@infrastructure/persistence/factories`. */
         deletedAt: '2024-08-07T09:12:03.114Z'
     })
 ];

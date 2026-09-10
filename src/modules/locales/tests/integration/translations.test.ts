@@ -7,9 +7,9 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { createProduct } from '@modules/products/tests/fixtures';
+import { createProduct } from '@modules/products/tests/factories';
 import { productRepository } from '@modules/products';
-import { makeLocale } from '@modules/locales/fixtures';
+import { makeLocale } from '@modules/locales/factories';
 import { localeRepository, translationRepository } from '@modules/locales/repository';
 import { localeService } from '@modules/locales/services';
 

@@ -8,7 +8,7 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api } from '@tests/http';
-import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
+import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { auditLogRepository } from '@modules/audit-logs/repository';
 
 setupTestDb();

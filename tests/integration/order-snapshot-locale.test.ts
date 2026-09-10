@@ -9,14 +9,14 @@
 import '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
-import { createUser } from '@modules/users/tests/fixtures';
-import { createProduct } from '@modules/products/tests/fixtures';
+import { createUser } from '@modules/users/tests/factories';
+import { createProduct } from '@modules/products/tests/factories';
 import { orderService } from '@modules/orders';
 import { cartService } from '@modules/cart';
 import type { OrderDocument } from '@modules/orders';
 import type { ResponseSuccess } from '@infrastructure/http/response';
 import { localeRepository, translationRepository } from '@modules/locales/repository';
-import { makeLocale } from '@modules/locales/fixtures';
+import { makeLocale } from '@modules/locales/factories';
 
 setupTestDb();
 

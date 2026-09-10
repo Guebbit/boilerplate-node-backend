@@ -10,7 +10,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { cartRepository } from '@modules/cart/repository';
 import { cartModel } from '@modules/cart/model';
-import { createUser } from '@modules/users/tests/fixtures';
+import { createUser } from '@modules/users/tests/factories';
 
 setupTestDb();
 

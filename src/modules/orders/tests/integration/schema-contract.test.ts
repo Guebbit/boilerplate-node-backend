@@ -9,8 +9,8 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { orderRepository } from '@modules/orders';
-import { createProduct } from '@modules/products/tests/fixtures';
-import { createUser } from '@modules/users/tests/fixtures';
+import { createProduct } from '@modules/products/tests/factories';
+import { createUser } from '@modules/users/tests/factories';
 
 setupTestDb();
 

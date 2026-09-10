@@ -12,7 +12,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { listSupportedLocales, getDefaultLocale, getFallbackLocale } from '@infrastructure/i18n';
 import { readLocaleDictionary } from '@infrastructure/i18n';
-import { createProduct } from '@modules/products/tests/fixtures';
+import { createProduct } from '@modules/products/tests/factories';
 import itTranslation from '../../../../locales/it.json';
 
 setupTestDb();

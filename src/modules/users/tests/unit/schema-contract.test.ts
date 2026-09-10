@@ -9,7 +9,7 @@ import bcrypt from 'bcrypt';
 import { userSchema, applyUserTransform } from '@modules/users/model';
 import { TokenType } from '@modules/users';
 import { asStub } from '@tests/stub';
-import { PLAIN_PASSWORD } from '@modules/users/fixtures';
+import { PLAIN_PASSWORD } from '@modules/users/factories';
 import {
     defaultOf,
     indexOptionSpecs,

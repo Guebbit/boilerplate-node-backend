@@ -12,9 +12,9 @@ import YAML from 'yaml';
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAsRole } from '@tests/http';
-import { createProduct } from '@modules/products/tests/fixtures';
+import { createProduct } from '@modules/products/tests/factories';
 import { localeRepository } from '@modules/locales/repository';
-import { makeLocale } from '@modules/locales/fixtures';
+import { makeLocale } from '@modules/locales/factories';
 import { localeService } from '@modules/locales/services';
 
 setupTestDb();

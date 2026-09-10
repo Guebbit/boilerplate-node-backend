@@ -3,7 +3,7 @@ import path from 'node:path';
 import sharp from 'sharp';
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
-import { PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
+import { PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { maxUploadBytes } from '@infrastructure/adapters/storage';
 
 /**

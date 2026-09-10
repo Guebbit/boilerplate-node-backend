@@ -7,7 +7,7 @@
  */
 
 import { backendTenant, frontendTenant } from '@modules/locales/tenants';
-import { makeLocale, makeLocaleEntry } from '@modules/locales/fixtures';
+import { makeLocale, makeLocaleEntry } from '@modules/locales/factories';
 import { localeModel, localeEntryModel, translationModel } from '@modules/locales/model';
 import { localeRepository, localeEntryRepository } from '@modules/locales/repository';
 import { upsertById, type SeedOutcome, exportCollection } from '@infrastructure/persistence/seed';

@@ -128,7 +128,7 @@ export type OrderModel = Model<OrderDocument>;
  *
  * `{ timestamps: true }`, matching `productSchema`: a subdocument stamps its own `createdAt`/
  * `updatedAt` on insert regardless of the parent's timestamps option, which is why
- * `orders/fixtures.ts` carries the catalogue row's own dates in explicitly rather than leaving
+ * `orders/factories.ts` carries the catalogue row's own dates in explicitly rather than leaving
  * them to default.
  */
 const orderLineProductSchema = new Schema(

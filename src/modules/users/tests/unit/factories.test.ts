@@ -6,7 +6,7 @@
  * reads as a broken login rather than a broken fixture.
  */
 import { Types } from 'mongoose';
-import { makeUser, PLAIN_PASSWORD } from '@modules/users/fixtures';
+import { makeUser, PLAIN_PASSWORD } from '@modules/users/factories';
 import { zodUserSchema } from '@modules/users';
 import { createUserBodyPasswordMin } from '@api/schemas.zod';
 import {
@@ -14,7 +14,7 @@ import {
     MINIMAL_PASSWORD,
     REPLACEMENT_PASSWORD,
     WEAK_PASSWORD
-} from '@modules/users/tests/fixtures';
+} from '@modules/users/tests/factories';
 
 const HEX = '65dc8a99604c307b702b5ccc';
 

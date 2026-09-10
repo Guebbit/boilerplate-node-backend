@@ -21,7 +21,7 @@ export { orderConfirmEmail } from './emails';
 // `cart`'s checkout freezes its own line snapshots the same way `create()` does — one resolver,
 // not a second opinion on how a buyer's language gets embedded.
 export { resolveSnapshotProducts } from './services';
-// `OrderDocumentItem` stays unpublished — tests derive order lines from a product fixture
-// (`tests/fixtures.ts`'s `toOrderItem`) instead of casting around the type.
+// `OrderDocumentItem` stays unpublished — tests derive order lines from a built product
+// (`tests/factories.ts`'s `toOrderItem`) instead of casting around the type.
 export type { OrderDocument } from './model';
 export { sumLineItems, orderTotal, canTransition, statusesLeadingTo } from './domain';

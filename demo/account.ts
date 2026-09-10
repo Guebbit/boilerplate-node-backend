@@ -12,7 +12,7 @@ import {
     exportCollection,
     upsertByOwner
 } from '@infrastructure/persistence/seed';
-import { makeAddressBook } from '@modules/account/fixtures';
+import { makeAddressBook } from '@modules/account/factories';
 import { addressBookModel } from '@modules/account/model';
 import { addressBookRepository } from '@modules/account/repository';
 

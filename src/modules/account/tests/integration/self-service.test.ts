@@ -13,7 +13,7 @@ import {
     LEGACY_PASSWORD,
     PLAIN_PASSWORD,
     REPLACEMENT_PASSWORD
-} from '@modules/users/tests/fixtures';
+} from '@modules/users/tests/factories';
 import {
     accountService,
     passwordChangeWithCurrent,

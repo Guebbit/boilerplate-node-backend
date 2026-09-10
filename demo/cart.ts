@@ -9,7 +9,7 @@
 import { SEED_OWNER_ID } from '@kernel/seed-accounts';
 import { SEED_PRODUCT_IDS, fillerProductId } from './products';
 import { SEED_CUSTOMER_IDS } from './users';
-import { makeCart } from '@modules/cart/fixtures';
+import { makeCart } from '@modules/cart/factories';
 import { cartModel } from '@modules/cart/model';
 import {
     type SeedOutcome,

@@ -3,7 +3,7 @@
  * The catalogue's slice of the demo dataset. `scripts/demo/export-dataset.ts` seeds these rows and
  * publishes what the API actually serves as `db/demo/demo-data.json`, so the paired frontend gets
  * the data without sharing source. A field a record omits falls to `@modules/products/model`'s
- * `default:` — see `@modules/products/fixtures`.
+ * `default:` — see `@modules/products/factories`.
  *
  * Six named rows carry the branch coverage the storefront and repositories actually exercise
  * (soft-deleted, out of stock, inactive, minimal); `./demo-catalog` supplies a further 126 rows
@@ -26,7 +26,7 @@ import { FILLER_IMAGE_ROLE_KEYS, FILLER_PRODUCTS, fillerProductId } from './demo
  */
 export { fillerProductId } from './demo-catalog';
 import productImages from './products-images.generated.json';
-import { makeProduct } from '@modules/products/fixtures';
+import { makeProduct } from '@modules/products/factories';
 import { productModel } from '@modules/products/model';
 import { upsertById, type SeedOutcome, exportCollection } from '@infrastructure/persistence/seed';
 import { productRepository } from '@modules/products/repository';

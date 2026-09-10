@@ -46,9 +46,9 @@ jest.mock('@infrastructure/adapters/cache', () => {
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
-import { createProduct } from '@modules/products/tests/fixtures';
+import { createProduct } from '@modules/products/tests/factories';
 import { localeRepository } from '@modules/locales/repository';
-import { makeLocale } from '@modules/locales/fixtures';
+import { makeLocale } from '@modules/locales/factories';
 
 setupTestDb();
 

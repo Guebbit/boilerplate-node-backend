@@ -2,7 +2,7 @@ import express from 'express';
 import supertest from 'supertest';
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
-import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
+import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 
 /**
  * Anti-automation Rung 1 (see `docs/tools/security.md#identity--and-block-keyed-budgets--signup-password-reset-the-contact-form`):

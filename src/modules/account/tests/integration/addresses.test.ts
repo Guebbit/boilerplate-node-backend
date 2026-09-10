@@ -7,12 +7,12 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
-import { createUser } from '@modules/users/tests/fixtures';
+import { createUser } from '@modules/users/tests/factories';
 import { addressService } from '@modules/account/services';
 import { cartService } from '@modules/cart';
 import { orderRepository } from '@modules/orders';
 import { productRepository } from '@modules/products';
-import { createProduct } from '@modules/products/tests/fixtures';
+import { createProduct } from '@modules/products/tests/factories';
 
 setupTestDb();
 

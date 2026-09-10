@@ -8,7 +8,7 @@
 
 import { BACKEND, FRONTEND } from '../unit/tenants.fixture';
 import { setupTestDb } from '@tests/setup-test-db';
-import { makeLocale, makeLocaleEntry } from '@modules/locales/fixtures';
+import { makeLocale, makeLocaleEntry } from '@modules/locales/factories';
 import {
     localeEntryRepository,
     localeRepository,

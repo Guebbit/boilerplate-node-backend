@@ -23,7 +23,7 @@
 import type { Response } from 'supertest';
 import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
-import { createProduct } from '@modules/products/tests/fixtures';
+import { createProduct } from '@modules/products/tests/factories';
 import { productRepository } from '@modules/products';
 import { cartModel } from '@modules/cart/model';
 import { orderModel } from '@modules/orders/model';

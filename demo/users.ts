@@ -28,7 +28,7 @@ import {
     SEED_MODERATOR_PASSWORD
 } from '@kernel/seed-accounts';
 import userImages from './users-images.generated.json';
-import { makeUser } from '@modules/users/fixtures';
+import { makeUser } from '@modules/users/factories';
 import { userModel } from '@modules/users/model';
 import { upsertById, type SeedOutcome, exportCollection } from '@infrastructure/persistence/seed';
 import { userRepository } from '@modules/users/repository';

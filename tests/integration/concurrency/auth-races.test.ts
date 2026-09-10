@@ -39,7 +39,7 @@
  */
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
-import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/fixtures';
+import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
 import { userRepository, hashToken } from '@modules/users';
 import { TokenType } from '@modules/users';
 // Not on the barrel — see `users/index.ts`. A spec may reach the model; runtime code may not.

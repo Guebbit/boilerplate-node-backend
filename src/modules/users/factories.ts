@@ -1,6 +1,6 @@
 /**
  * @module
- * How a user fixture is built, for the demo accounts in `./demo` and for any test needing a
+ * How a user row is built, for the demo accounts in `./demo` and for any test needing a
  * person. States no schema default — `imageUrl`, `locale`, `admin`, `active`, `verified` and
  * `tokens` are all filled by `./model` — so `demo-data.json` records what the schema really does.
  * The password stays PLAINTEXT through the builder; `userSchema`'s pre-save hook hashes it on the
@@ -12,7 +12,7 @@ import {
     stripUndefined,
     toDate,
     type OverridesFor
-} from '@infrastructure/persistence/fixtures';
+} from '@infrastructure/persistence/factories';
 import type { User } from '@types';
 import type { Token, UserDocument } from './model';
 

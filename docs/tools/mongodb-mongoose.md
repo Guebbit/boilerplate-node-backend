@@ -104,19 +104,19 @@ The seed runner lives in `db/demo/index.ts` and uses the Mongoose repository lay
 
 The dataset is split by ROLE, and the split matters:
 
-| File                             | Holds                                                                                                                                                                                                                                                           |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/modules/<name>/fixtures.ts` | The **builder** — `makeProduct(overrides)`. States only what the schema requires; anything carrying a `default:` is deliberately left out, so a row records what the model really does. Shared with that module's tests, which is what a fixture builder is for |
-| `demo/<name>.ts`                 | The **records** — the demo catalogue, the two accounts, the order book. Built from the factory, but living outside `src/` entirely: `demo/index.ts` tables it by name, and `db/demo/index.ts` walks that table                                                  |
-| `src/kernel/seed-accounts.ts`    | The **six shared literals** — two account ids and four credentials. In the kernel because four modules need a piece of them and only one owns the record; the file explains why that beats three registry edges                                                 |
-| `db/demo/demo-data.json`         | The **output** — every row as the API actually serves it. Written by `npm run seed:export`, never by hand                                                                                                                                                       |
+| File                              | Holds                                                                                                                                                                                                                                                   |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/modules/<name>/factories.ts` | The **builder** — `makeProduct(overrides)`. States only what the schema requires; anything carrying a `default:` is deliberately left out, so a row records what the model really does. Shared with that module's tests, which is what a factory is for |
+| `demo/<name>.ts`                  | The **records** — the demo catalogue, the two accounts, the order book. Built from the factory, but living outside `src/` entirely: `demo/index.ts` tables it by name, and `db/demo/index.ts` walks that table                                          |
+| `src/kernel/seed-accounts.ts`     | The **six shared literals** — two account ids and four credentials. In the kernel because four modules need a piece of them and only one owns the record; the file explains why that beats three registry edges                                         |
+| `db/demo/demo-data.json`          | The **output** — every row as the API actually serves it. Written by `npm run seed:export`, never by hand                                                                                                                                               |
 
 ### The dataset is published, not shared
 
 `npm run seed:export` seeds a throwaway `mongodb-memory-server` with the real seeders, reads every
 row back through the real serializers, and writes `db/demo/demo-data.json`. The file lives only
 here now: the paired frontend used to hold a byte-identical copy for its MSW mocks, and since
-those retired in favour of this repo's demo profile — which seeds from the same fixtures
+those retired in favour of this repo's demo profile — which seeds from the same factories
 directly — the snapshot's one job is pinning serializer drift in this repo.
 
 ```bash

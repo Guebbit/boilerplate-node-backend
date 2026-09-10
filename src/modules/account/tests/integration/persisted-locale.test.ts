@@ -9,7 +9,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
-import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
+import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { accountService } from '@modules/account/services';
 import { userRepository, userService } from '@modules/users';
 import { getDefaultLocale, runWithLocale } from '@infrastructure/i18n';

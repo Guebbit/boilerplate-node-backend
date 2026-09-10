@@ -14,7 +14,7 @@ import {
     LEGACY_PASSWORD,
     PLAIN_PASSWORD,
     REPLACEMENT_PASSWORD
-} from '@modules/users/tests/fixtures';
+} from '@modules/users/tests/factories';
 import { accountService } from '@modules/account/services';
 import { userRepository, hashToken } from '@modules/users';
 import { TokenType, type Token, type UserDocument } from '@modules/users';

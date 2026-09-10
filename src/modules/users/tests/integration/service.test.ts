@@ -9,7 +9,7 @@ import { observePort } from '@tests/ports';
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
 import { callerContextAs } from '@tests/callers';
-import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/fixtures';
+import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
 import * as userService from '@modules/users/service';
 import { userRepository, USER_SETUP_REQUESTED } from '@modules/users';
 import { usersAuditActions } from '@modules/users/audit';

@@ -34,7 +34,7 @@ export interface OwnedSeedRepository<TFixture> {
 /**
  * What every seed write passes to `save()`.
  *
- * A fixture states its own `createdAt` (see `./fixtures`), and Mongoose's `timestamps: true`
+ * A factory states its own `createdAt` (see `./factories`), and Mongoose's `timestamps: true`
  * would overwrite it with "whenever the seeder ran" — making `db/demo/demo-data.json` differ on
  * every export and its staleness check never pass.
  */

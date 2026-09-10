@@ -7,8 +7,8 @@
  * render them.
  */
 import { Types } from 'mongoose';
-import { makeOrder } from '@modules/orders/fixtures';
-import type { OrderSnapshotInput } from '@modules/orders/fixtures';
+import { makeOrder } from '@modules/orders/factories';
+import type { OrderSnapshotInput } from '@modules/orders/factories';
 
 const HEX = '65dc8a99604c307b702b5ccc';
 const PRODUCT = '65dcdec2b18ad5e4bd597f0f';

@@ -4,7 +4,7 @@ import sharp from 'sharp';
 import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { localeRepository } from '@modules/locales/repository';
-import { makeLocale } from '@modules/locales/fixtures';
+import { makeLocale } from '@modules/locales/factories';
 import { localeService } from '@modules/locales/services';
 
 /**

@@ -1,10 +1,10 @@
 /**
  * @module
- * How a language fixture and an entry fixture are built. Two factories, since the
+ * How a language row and an entry row are built. Two factories, since the
  * collections are addressed differently — a language by a pinned `_id`, an entry by the
  * pair `(locale, key)` — though both pin an id for a byte-stable exported dataset. Fields
- * a fixture doesn't state fall to `./model`'s `default:`, keeping `demo-data.json` a
- * record of the schema, not of a fixture's guess.
+ * a factory doesn't state fall to `./model`'s `default:`, keeping `demo-data.json` a
+ * record of the schema, not of a factory's guess.
  */
 
 import type { Types } from 'mongoose';
@@ -12,7 +12,7 @@ import {
     identityOf,
     stripUndefined,
     type OverridesFor
-} from '@infrastructure/persistence/fixtures';
+} from '@infrastructure/persistence/factories';
 import type { Language, LocaleEntry, Translation } from '@types';
 import { deriveBaseLanguage } from './model';
 import type { LocaleDocument, LocaleEntryDocument, TranslationDocument } from './model';

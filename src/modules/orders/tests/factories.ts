@@ -1,8 +1,8 @@
 /**
  * @module
- * Order fixtures that touch the test database — `toOrderItem`, `makeOrder`, `createOrder`. The
- * builder in `../fixtures.ts` takes a product snapshot as data because seeds build orders from
- * catalogue fixtures that were never persisted; this wrapper converts a real document instead. An
+ * Order factories that touch the test database — `toOrderItem`, `makeOrder`, `createOrder`. The
+ * builder in `../factories.ts` takes a product snapshot as data because seeds build orders from
+ * catalogue rows that were never persisted; this wrapper converts a real document instead. An
  * order item embeds a full snapshot, not a reference, so repricing a product later can't rewrite
  * what a customer was charged.
  */
@@ -16,7 +16,7 @@ import {
     type OrderFixture,
     type OrderLineInput,
     type OrderOverrides
-} from '../fixtures';
+} from '../factories';
 
 /** Everything about an order a test may set beyond who placed it and what is in it. */
 type OrderExtras = Omit<OrderOverrides, 'userId' | 'email' | 'items'>;

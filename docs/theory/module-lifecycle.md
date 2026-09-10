@@ -108,7 +108,7 @@ src/modules/<name>/
     asyncapi.yaml                  the same, if it owns a channel
     probes.ts                      the requests a spec cannot describe
     analytics.ts                   the event names it emits
-    fixtures.ts                    how its test/demo records are built
+    factories.ts                   how its test/demo records are built
     tests/unit/ · tests/contract/  co-located, deleted with the module
 
 demo/<name>.ts                     its demo records — outside src/, see the demo dataset section

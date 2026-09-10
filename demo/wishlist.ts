@@ -7,7 +7,7 @@
 
 import { SEED_OWNER_ID, SEED_USER_ID } from '@kernel/seed-accounts';
 import { SEED_PRODUCT_IDS } from './products';
-import { makeWishlist } from '@modules/wishlist/fixtures';
+import { makeWishlist } from '@modules/wishlist/factories';
 import { wishlistModel } from '@modules/wishlist/model';
 import {
     type SeedOutcome,

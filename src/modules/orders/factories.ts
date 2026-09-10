@@ -1,6 +1,6 @@
 /**
  * @module
- * How an order fixture is built. An order item embeds a product SNAPSHOT (`orderItemSchema`
+ * How an order row is built. An order item embeds a product SNAPSHOT (`orderItemSchema`
  * declares `product: orderLineProductSchema` with no `ref`), so this builder takes the snapshot
  * as a value rather than an id to look up later. It deliberately carries no `onHand`/`reserved` —
  * the embedded schema has nowhere to put them, same reasoning as `deletedAt`'s absence: a
@@ -16,7 +16,7 @@ import {
     stripUndefined,
     toDate,
     type OverridesFor
-} from '@infrastructure/persistence/fixtures';
+} from '@infrastructure/persistence/factories';
 import type { ProductSnapshot } from '@modules/products';
 import type { Id, Order, OrderItem, Product } from '@types';
 import type { OrderDocument } from './model';

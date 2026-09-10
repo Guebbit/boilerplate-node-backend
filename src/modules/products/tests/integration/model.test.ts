@@ -7,7 +7,7 @@
 
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
-import { createProduct } from '@modules/products/tests/fixtures';
+import { createProduct } from '@modules/products/tests/factories';
 import * as productService from '@modules/products/service';
 import { asOwner } from '../../../../../tests/support/callers';
 

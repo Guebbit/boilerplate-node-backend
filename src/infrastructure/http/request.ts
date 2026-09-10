@@ -19,7 +19,7 @@ import { t } from '@infrastructure/i18n';
 import { Types } from 'mongoose';
 import { coerceStringArray } from '@guebbit/js-toolkit';
 import { rejectResponse } from '@infrastructure/http/response';
-import { stripUndefined } from '@infrastructure/persistence/fixtures';
+import { stripUndefined } from '@infrastructure/persistence/factories';
 
 /** String spellings of a boolean, as URLs, HTML forms and common clients send them. */
 const FORM_BOOLEANS: Record<string, boolean> = {

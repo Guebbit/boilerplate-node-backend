@@ -1,5 +1,5 @@
 /**
- * The shared fixture helpers every module's `fixtures.ts` is built from.
+ * The shared helpers every module's `factories.ts` is built from.
  *
  * These four functions decide what a seeded record MEANS when a field was left out, and each one
  * has a failure that is silent by construction:
@@ -22,7 +22,7 @@ import {
     toDate,
     toObjectId,
     identityOf
-} from '@infrastructure/persistence/fixtures';
+} from '@infrastructure/persistence/factories';
 
 const HEX = '65dc8a99604c307b702b5ccc';
 
@@ -37,7 +37,7 @@ describe('toObjectId', () => {
     });
 
     it('mints a fresh id when none is given', () => {
-        // A fixture that names no id still has to be insertable, and two of them must not collide.
+        // A row that names no id still has to be insertable, and two of them must not collide.
         const first = toObjectId();
         const second = toObjectId();
 
@@ -58,7 +58,7 @@ describe('stripUndefined', () => {
     });
 
     it('keeps null, zero, empty string and false', () => {
-        // Each of these is a VALUE a fixture may deliberately state — `shippingCost: 0` and
+        // Each of these is a VALUE a factory may deliberately state — `shippingCost: 0` and
         // `active: false` both mean something. Only `undefined` means "not specified".
         expect(stripUndefined({ n: null, z: 0, s: '', f: false })).toEqual({
             n: null,

@@ -6,9 +6,9 @@
  * half of this service (`create`, `update`, `remove`, …).
  */
 import { setupTestDb } from '@tests/setup-test-db';
-import { createUser } from '@modules/users/tests/fixtures';
-import { createProduct } from '@modules/products/tests/fixtures';
-import { createOrder, toOrderItem } from '@modules/orders/tests/fixtures';
+import { createUser } from '@modules/users/tests/factories';
+import { createProduct } from '@modules/products/tests/factories';
+import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import * as orderService from '@modules/orders/services';
 import type { OrderDocument } from '@modules/orders';
 
