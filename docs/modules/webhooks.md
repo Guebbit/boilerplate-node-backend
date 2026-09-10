@@ -93,6 +93,5 @@ nothing: they never knew this module existed. A clone with no orders declares it
 its own `asyncapi.yaml` fragment and changes nothing else.
 :::
 
-See: [Events & Logging](../tools/events-and-logging.md), [RabbitMQ](../tools/rabbitmq.md),
-[the AsyncAPI workflow](../api/asyncapi-workflow.md), and `DECISIONS.md` at the repo root for the
-retry, secrets and dependency choices made while building this.
+See: [Events & Logging](../tools/events-and-logging.md), [RabbitMQ](../tools/rabbitmq.md), and
+[the AsyncAPI workflow](../api/asyncapi-workflow.md).
