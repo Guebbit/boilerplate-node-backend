@@ -35,7 +35,7 @@ export const wishlistFixtures = [
     })
 ];
 
-/** Seed this collection. Declared in `./index`; called by `db/demo/index.ts`. */
+/** Seed this collection. Declared in `./index`; called by `scenarios/apply.ts`. */
 export const seedWishlistsCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(wishlistFixtures.map((wishlist) => upsertByOwner(wishlistRepository, wishlist)));
 

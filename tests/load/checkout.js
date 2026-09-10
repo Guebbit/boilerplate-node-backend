@@ -15,7 +15,7 @@
  *
  * ── State ────────────────────────────────────────────────────────────────────────────────────
  * This WRITES. It creates orders and moves stock, so point it at a throwaway database and re-seed
- * afterwards (`npm run db:seed:reset`). Never at anything you care about.
+ * afterwards (`npm run scenario:apply:reset`). Never at anything you care about.
  *
  * Thresholds are placeholders — see `k6/browse.js` for how to seed real ones. Writes are slower
  * than reads and their ceiling is set higher here for that reason, not because they matter less.

@@ -5,7 +5,7 @@
  * database WITHOUT being in a container. That means overriding one thing — the hostname — and
  * nothing else. A script that spells out a whole `mongodb://localhost:27017/boilerplate-node-backend`
  * hardcodes the database NAME and ignores `NODE_MONGODB_NAME`, so renaming the database in `.env`
- * has `npm run host -- db:seed` cheerfully seed a different one, silently, with no output naming
+ * has `npm run host -- scenario:apply` cheerfully seed a different one, silently, with no output naming
  * which.
  *
  * So the wrapper blanks `NODE_DB_URI` / `NODE_REDIS_URL` and sets only `*_HOST=127.0.0.1`, letting
@@ -88,7 +88,7 @@ describe('the host script', () => {
     });
 
     it('delegates rather than naming a command of its own', () => {
-        // `npm run host -- db:seed` works because the wrapper ENDS in `npm run`: npm appends the
+        // `npm run host -- scenario:apply` works because the wrapper ENDS in `npm run`: npm appends the
         // arguments after `--`. Anything after that would silently swallow the script name.
         expect(hostScript.trimEnd()).toMatch(/\bnpm run$/);
     });

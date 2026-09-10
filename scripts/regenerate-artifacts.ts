@@ -62,7 +62,7 @@ const STEPS: readonly Step[] = [
             "docs/demo-ecommerce/index.md's role tables, asked of the permission evaluator rather than restated"
     },
     {
-        script: 'seed:export',
+        script: 'scenario:build',
         because:
             'db/demo/demo-data.json — seeds a throwaway database and reads it back through the real serializers (needs api/)'
     }

@@ -2,11 +2,11 @@
  * Drop every cached response belonging to this app.
  *
  * The API invalidates its own cache on every write it handles (see `invalidateCache` in
- * `src/infrastructure/http/middlewares/cache.ts`). Writes that skip the API do not — `db:seed`, a
+ * `src/infrastructure/http/middlewares/cache.ts`). Writes that skip the API do not — `scenario:apply`, a
  * one-off script under `ops/`, a `mongosh` session — so the old answers keep being served until
  * they expire.
  *
- * `db:seed` calls this automatically. Run it by hand after any manual database surgery.
+ * `scenario:apply` calls this automatically. Run it by hand after any manual database surgery.
  *
  * Scoped to `NODE_REDIS_CACHE_PREFIX`, never `FLUSHALL`, so a shared Redis is safe.
  *

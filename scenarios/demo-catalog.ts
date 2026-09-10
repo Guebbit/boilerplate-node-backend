@@ -233,7 +233,7 @@ export const FILLER_PRODUCTS: FillerProduct[] = ANIMALS.flatMap((animal, animalI
 /**
  * A stable 24-hex id for filler row `index` — never `new Types.ObjectId()`, whose default is
  * time-based and would make the same row seed a different id on every run, breaking both
- * `db:seed`'s idempotent upsert and `assembleDemoDataset()`'s byte-stability.
+ * `scenario:apply`'s idempotent upsert and `assembleDemoDataset()`'s byte-stability.
  *
  * @param index - the row's position in {@link FILLER_PRODUCTS}
  * @returns a syntactically valid, deterministic ObjectId hex string

@@ -200,7 +200,7 @@ export const localeEntryFixtures = LOCALE_ENTRIES.map(([id, locale, tenant, key,
 );
 
 /**
- * Seed both collections. Declared in `./index`; called by `db/demo/index.ts`.
+ * Seed both collections. Declared in `./index`; called by `scenarios/apply.ts`.
  * Languages first: an entry names its language by tag, and landing entries before
  * their language would publish a dictionary the manifest doesn't list.
  */
@@ -216,7 +216,7 @@ export const seedLocalesCollection = async (): Promise<SeedOutcome[]> => {
 };
 
 /**
- * Read all three collections back as stored — `./index` declares this, `npm run seed:export`
+ * Read all three collections back as stored — `./index` declares this, `npm run scenario:build`
  * calls it. These are stored rows, not endpoint responses: the frontend's mocks do the same
  * tier-merge assembly the API does, rather than replaying a published answer. `translations`
  * itself is seeded by `./products`, not here — this only publishes what that write produced,

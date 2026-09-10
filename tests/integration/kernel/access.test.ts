@@ -29,7 +29,7 @@ import { roleModel } from '@kernel/access/models';
 import { DEMO_TENANT_SLUG, seedAccessModel, seedPresetRoles } from '@kernel/access/seed';
 import { SEED_OWNER_ID, SEED_USER_ID } from '@kernel/seed-accounts';
 import { userRepository } from '@modules/users';
-import { demoModules } from '@demo/index';
+import { demoModules } from '@scenarios/index';
 import { PRESET_ROLES, wildcardKeyFor } from '@kernel/permissions';
 
 setupTestDb();

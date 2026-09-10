@@ -12,8 +12,8 @@ src/types/asyncapi.generated.ts
 # dataset below. The MODULE documents it is built from are formatted as normal.
 openapi.yaml
 
-# The demo dataset. `npm run seed:export` writes it by seeding a throwaway database and recording
-# what the API answers, and `check:seed-export` asserts the committed bytes match what a fresh run
+# The demo dataset. `npm run scenario:build` writes it by seeding a throwaway database and recording
+# what the API answers, and `check:scenario-build` asserts the committed bytes match what a fresh run
 # produces. Prettier reformatting it afterwards makes that check fail on a file nobody edited — two
 # writers, one artefact — and the copy in the paired frontend is hash-compared against this one, so
 # a format-only difference would read as a forked dataset.

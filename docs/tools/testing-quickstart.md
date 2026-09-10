@@ -119,7 +119,7 @@ threshold is to catch a regression, not to express an ambition; leave headroom o
 unlucky afternoon and everyone learns to ignore it.
 
 `bench:k6:checkout` **writes** — it creates orders and moves stock. Point it at a throwaway
-database and `npm run db:seed:reset` afterwards.
+database and `npm run scenario:apply:reset` afterwards.
 
 ## Related
 

@@ -1,6 +1,6 @@
 /**
  * @module
- * The webhooks module's slice of the demo dataset — the one entry in `demo/index.ts`'s table that
+ * The webhooks module's slice of the demo dataset — the one entry in `scenarios/index.ts`'s table that
  * seeds nothing by default. A demo subscription pointing at `webhook-tester`
  * (`docker-compose.yml`'s `integrations` profile) is a FIXTURE, not code, per
  * `docs/modules/webhooks.md`'s "Seeing it work" precedent: it reads the sink's base url from
@@ -36,7 +36,7 @@ const DEMO_WEBHOOK_SESSION_ID = '4b1d9e2a-6f3c-4a8e-9d1b-2c7a5e6f9b3d';
 const SEED_DATE = new Date('2026-01-01T00:00:00.000Z');
 
 /**
- * Seed the demo webhook subscription. Declared in `./index`; called by `db/demo/index.ts`.
+ * Seed the demo webhook subscription. Declared in `./index`; called by `scenarios/apply.ts`.
  *
  * Seeds nothing when `NODE_WEBHOOK_DEMO_SINK_URL` is unset (the default), and nothing before the
  * demo shop exists (`seedAccessModel()` runs before `seedAllDemoModules()`, so in practice this
@@ -48,7 +48,9 @@ export const seedWebhooksCollection = (): Promise<SeedOutcome[]> => {
 
     return resolveDeploymentTenantId(DEMO_TENANT_SLUG).then((tenantId) => {
         if (!tenantId) {
-            logger.warn('demo/webhooks: no deployment tenant yet, skipping the demo subscription.');
+            logger.warn(
+                'scenarios/webhooks: no deployment tenant yet, skipping the demo subscription.'
+            );
             return [];
         }
 

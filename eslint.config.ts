@@ -629,17 +629,17 @@ export default tseslint.config(
      * ── The one door, and why it is stated as a file ──────────────────────────────────────────
      * A module publishes `index.ts` — its runtime API — and nothing else. `fileInternalPath`
      * names that file inside the target element, so the rule is about the door rather than about
-     * the path spelling that reaches it. A module's demo fixtures used to be the second door,
-     * `demo.ts`; they now live in `demo/`, a tier of its own — see below.
+     * the path spelling that reaches it. A module's demo factories used to be the second door,
+     * `demo.ts`; they now live in `scenarios/`, a tier of its own — see below.
      */
     {
         settings: {
             /*
-             * `src/` and `demo/`. The tiers live here, and this is the tree `no-unknown-files` is
-             * meant to hold exhaustively — `tests/`, `scripts/`, `ops/`, `db/` and `shared/` have
+             * `src/` and `scenarios/`. The tiers live here, and this is the tree `no-unknown-files`
+             * is meant to hold exhaustively — `tests/`, `scripts/`, `ops/`, `db/` and `shared/` have
              * no tier and would each need a descriptor for the sake of being ignored.
              */
-            'boundaries/include': ['src/**/*.ts', 'demo/**/*.ts'],
+            'boundaries/include': ['src/**/*.ts', 'scenarios/**/*.ts'],
 
             /*
              * Every wall below is stated in terms of the FILE an import resolves to, so an
@@ -679,13 +679,13 @@ export default tseslint.config(
                 { type: 'app', pattern: 'src/app', partialMatch: false },
                 { type: 'types', pattern: 'src/types', partialMatch: false },
                 /*
-                 * Outside `src/` entirely, on purpose. A demo file imports a module's repository,
-                 * model and fixtures directly, which is wider access than the one-door rule below
-                 * grants a sibling module; the trade is that nothing under `src/` may import
-                 * `demo` back (see the policies below), so a production image can omit this
-                 * folder outright.
+                 * Outside `src/` entirely, on purpose. A scenario file imports a module's
+                 * repository, model and factories directly, which is wider access than the
+                 * one-door rule below grants a sibling module; the trade is that nothing under
+                 * `src/` may import `scenarios` back (see the policies below), so a production
+                 * image can omit this folder outright.
                  */
-                { type: 'demo', pattern: 'demo', partialMatch: false }
+                { type: 'scenarios', pattern: 'scenarios', partialMatch: false }
             ],
 
             /*
@@ -866,20 +866,20 @@ export default tseslint.config(
                         },
 
                         /*
-                         * `demo/` reaches down into every tier: a demo file imports its module's
-                         * repository, model and fixtures directly, which is wider than the one
-                         * door above grants a sibling module — see the element descriptor above
-                         * for why that trade is fine here specifically. It also reaches its own
-                         * files freely, the same way `infrastructure` and `kernel` do below —
-                         * `demo/cart.ts` reads `demo/products.ts`'s filler ids directly.
+                         * `scenarios/` reaches down into every tier: a scenario file imports its
+                         * module's repository, model and factories directly, which is wider than
+                         * the one door above grants a sibling module — see the element descriptor
+                         * above for why that trade is fine here specifically. It also reaches its
+                         * own files freely, the same way `infrastructure` and `kernel` do below —
+                         * `scenarios/cart.ts` reads `scenarios/products.ts`'s filler ids directly.
                          */
                         {
-                            from: { element: { type: 'demo' } },
+                            from: { element: { type: 'scenarios' } },
                             allow: {
                                 to: {
                                     element: {
                                         type: [
-                                            'demo',
+                                            'scenarios',
                                             'module',
                                             'domain',
                                             'kernel',
@@ -892,15 +892,41 @@ export default tseslint.config(
                         },
 
                         /*
+                         * `scenarios/apply.ts` (the CLI) and `scenarios/build/*` (the export and
+                         * demo-profile tooling) are the two files under `scenarios/` that are not
+                         * data: they boot the real app (`scenarios/build/run-server.ts`) and read
+                         * the module registry (`scenarios/apply.ts`,
+                         * `scenarios/build/export-dataset.ts`) the way only the composition root
+                         * and the registry's own file-layer categories otherwise may. Scoped to
+                         * exactly those two paths so the data files above stay unable to reach
+                         * either.
+                         */
+                        {
+                            from: {
+                                element: {
+                                    type: 'scenarios',
+                                    fileInternalPath: ['apply.ts', 'build/*.ts']
+                                }
+                            },
+                            allow: {
+                                to: [
+                                    { element: { type: 'app' } },
+                                    { file: { categories: ['composition-root', 'registry'] } }
+                                ]
+                            }
+                        },
+
+                        /*
                          * `src/app/demo.ts` is the one file under `src/` allowed back into
-                         * `demo/` — it mounts `POST /__demo/reset`, which has to walk the same
-                         * table `db/demo/index.ts` does. Nothing else may: that is what lets a
-                         * production image omit `demo/` outright, since every OTHER file reaching
-                         * it would pull the whole folder into the bundle regardless of `NODE_DEMO`.
+                         * `scenarios/` — it mounts `POST /__demo/reset`, which has to walk the same
+                         * table `scenarios/apply.ts` does. Nothing else may: that is what lets a
+                         * production image omit `scenarios/` outright, since every OTHER file
+                         * reaching it would pull the whole folder into the bundle regardless of
+                         * `NODE_DEMO`.
                          */
                         {
                             from: { element: { type: 'app', fileInternalPath: 'demo.ts' } },
-                            allow: { to: { element: { type: 'demo' } } }
+                            allow: { to: { element: { type: 'scenarios' } } }
                         },
 
                         /*
@@ -1067,7 +1093,7 @@ export default tseslint.config(
      * `no-console` would flag every line of output it exists to produce.
      */
     {
-        files: ['scripts/**/*.ts', 'ops/**/*.ts', 'db/**/*.ts'],
+        files: ['scripts/**/*.ts', 'ops/**/*.ts', 'db/**/*.ts', 'scenarios/build/**/*.ts'],
         languageOptions: {
             globals: {
                 ...globals.node

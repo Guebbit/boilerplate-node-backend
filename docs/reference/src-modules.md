@@ -77,10 +77,10 @@ Present when the domain needs it. A module that has none of these is not incompl
 | `src/modules/*/factories.ts`  | Factories for tests, on top of the shared persistence factory helpers. Production code, deliberately — a sibling's contract suite may need to build this module's documents. | [Unit Testing](../tools/unit-testing.md)                                              |
 | `src/modules/*/asyncapi.yaml` | This module's slice of the realtime contract, bundled into the root `asyncapi.yaml` the same way the REST fragments are.                                                     | [AsyncAPI Workflow](../api/asyncapi-workflow.md)                                      |
 
-::: tip A module's seed fixtures are not in this folder
-`demo/<name>.ts`, outside `src/` entirely, upserted through the shared seeding primitive and
-tabled by `demo/index.ts` — what `npm run db:seed` and the demo profile put in the database. See
-[Data](./data.md) and [Demo profile](../tools/demo-profile.md).
+::: tip A module's seed factories are not in this folder
+`scenarios/<name>.ts`, outside `src/` entirely, upserted through the shared seeding primitive and
+tabled by `scenarios/index.ts` — what `npm run scenario:apply` and the demo profile put in the
+database. See [Data](./data.md) and [Demo profile](../tools/demo-profile.md).
 :::
 
 ## The one-offs

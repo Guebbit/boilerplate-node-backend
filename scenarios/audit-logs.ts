@@ -4,7 +4,7 @@
  * `GET /observability/audit` can both show happening: a checkout, a catalogue edit, a dictionary
  * edit, a ban, a refund, each by the staff account whose role actually holds the key for it.
  *
- * Deliberately absent from `demo/index.ts`'s export/shapes contract — see `seedAuditLogsCollection`
+ * Deliberately absent from `scenarios/index.ts`'s export — see `seedAuditLogsCollection`
  * below for why a TTL-backed collection cannot join the byte-stable dataset the other modules do.
  */
 
@@ -86,7 +86,7 @@ export const auditLogFixtures: (Partial<AuditLogDocument> & { _id: Types.ObjectI
 ];
 
 /**
- * Seed this collection. Declared in `./index`; called by `db/demo/index.ts`.
+ * Seed this collection. Declared in `./index`; called by `scenarios/apply.ts`.
  *
  * No `upsertById` — that helper needs a repository with `findById`, and `auditLogRepository`
  * deliberately has none (see its own docblock: an audit trail is append-and-read, nothing else).
@@ -109,7 +109,7 @@ export const seedAuditLogsCollection = (): Promise<SeedOutcome[]> =>
  * No export, on purpose — TWO reasons, either one enough on its own:
  *
  *   - the TTL index reaps rows past `NODE_AUDIT_RETENTION_DAYS`, so a byte pinned today is a row
- *     `check:seed-export` would find missing after the window passes;
+ *     `check:scenario-build` would find missing after the window passes;
  *   - `timestamp` is deliberately `now`-relative (`daysAgo`, above) so the history always reads as
  *     recent, and a relative value can never be the fixed byte a committed export needs.
  *

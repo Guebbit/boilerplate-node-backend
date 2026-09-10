@@ -19,10 +19,10 @@ every pull, or the app ships a client for the previous contract.
 Neither is a script you run alone — both wrap another one, and each exists because the alternative
 was the same string copied N times:
 
-| Prefix                     | Replaces                                 | Example                          |
-| -------------------------- | ---------------------------------------- | -------------------------------- |
-| `npm run host -- <script>` | the seven `db:*:host` / `dev:host` twins | `npm run host -- db:seed:reset`  |
-| `npm run compose -- <cmd>` | `podman:compose` and `docker:compose`    | `npm run compose -- logs -f app` |
+| Prefix                     | Replaces                                 | Example                                |
+| -------------------------- | ---------------------------------------- | -------------------------------------- |
+| `npm run host -- <script>` | the seven `db:*:host` / `dev:host` twins | `npm run host -- scenario:apply:reset` |
+| `npm run compose -- <cmd>` | `podman:compose` and `docker:compose`    | `npm run compose -- logs -f app`       |
 
 `host` blanks `NODE_DB_URI` / `NODE_REDIS_URL` and points both hostnames at `localhost`, then hands
 off to `npm run` — see [Database & seed scripts](#database-seed-scripts). `compose` expands to
@@ -100,8 +100,8 @@ Change](../api/regenerating.md).
 | `lint:openapi:modules`   | verify   | lint each `src/modules/*/openapi.yaml` **on its own**, against `shared/contracts/spectral.modules.yaml`                  | [Contract Fragmentation](../api/contract-fragmentation.md) |
 | `lint:asyncapi`          | verify   | validate both bundles — `asyncapi.yaml` and `asyncapi.public.yaml`                                                       | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
 | `lint:asyncapi:modules`  | verify   | the same for each section document, against `shared/contracts/spectral.asyncapi.modules.yaml`                            | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
-| `seed:export`            | generate | seed a throwaway database with the real seeders and publish what the API answers to `db/demo/demo-data.json`             | [Contract Fragmentation](../api/contract-fragmentation.md) |
-| `check:seed-export`      | verify   | fail if `demo-data.json` is stale against a fresh seeding run — the dataset's twin of `check:contracts-bundle`           | [Regenerating](../api/regenerating.md)                     |
+| `scenario:build`         | generate | seed a throwaway database with the real seeders and publish what the API answers to `db/demo/demo-data.json`             | [Contract Fragmentation](../api/contract-fragmentation.md) |
+| `check:scenario-build`   | verify   | fail if `demo-data.json` is stale against a fresh seeding run — the dataset's twin of `check:contracts-bundle`           | [Regenerating](../api/regenerating.md)                     |
 | `sync:frontend`          | generate | copy the shared documents into the paired frontend checkout, so `check:spec-identity` can go green                       | [Contract Fragmentation](../api/contract-fragmentation.md) |
 | `regenerate`             | generate | every generator above, in dependency order, then the sync — the one command to run after changing a generator input      | [Regenerating After a Change](../api/regenerating.md)      |
 
@@ -138,20 +138,20 @@ for exactly which is which.
 seeder owns **demo data**. Both are idempotent, and `db:bootstrap` chains them — it is what the
 compose `app` service runs before starting the server.
 
-| Script           | Job                                                         | Read more                       |
-| ---------------- | ----------------------------------------------------------- | ------------------------------- |
-| `db:sync`        | make every index match the schemas; `-- --check` plans only | [Data](../reference/data.md)    |
-| `db:seed`        | upsert the demo dataset (no-op if already present)          | direct CLI wrapper              |
-| `db:seed:reset`  | drop the database, then reseed                              | direct CLI wrapper              |
-| `db:cache:clear` | drop every cached response under the app's prefix           | [Redis cache](./redis-cache.md) |
-| `db:bootstrap`   | `db:sync` followed by `db:seed`                             | runs on container boot          |
+| Script                 | Job                                                         | Read more                       |
+| ---------------------- | ----------------------------------------------------------- | ------------------------------- |
+| `db:sync`              | make every index match the schemas; `-- --check` plans only | [Data](../reference/data.md)    |
+| `scenario:apply`       | upsert the demo dataset (no-op if already present)          | direct CLI wrapper              |
+| `scenario:apply:reset` | drop the database, then reseed                              | direct CLI wrapper              |
+| `db:cache:clear`       | drop every cached response under the app's prefix           | [Redis cache](./redis-cache.md) |
+| `db:bootstrap`         | `db:sync` followed by `scenario:apply`                      | runs on container boot          |
 
-`db:seed` calls `db:cache:clear`'s logic itself whenever it created something. Run the script by
-hand after editing the database another way (`mongosh`, a GUI) — those writes never reach the
-API, so nothing else invalidates the cache. See _Seeding and the response cache_ in the repo
-README.
+`scenario:apply` calls `db:cache:clear`'s logic itself whenever it created something. Run the
+script by hand after editing the database another way (`mongosh`, a GUI) — those writes never
+reach the API, so nothing else invalidates the cache. See _Seeding and the response cache_ in the
+repo README.
 
-Any of them runs from the host through the `host` prefix — `npm run host -- db:seed:reset`. It
+Any of them runs from the host through the `host` prefix — `npm run host -- scenario:apply:reset`. It
 redirects the **hostname** to `127.0.0.1` via `cross-env`, by blanking `NODE_DB_URI` /
 `NODE_REDIS_URL` so the resolvers fall through to `NODE_MONGODB_HOST` / `NODE_REDIS_HOST`, leaving
 the port and the database name to `.env`. The literal address rather than the name `localhost`:

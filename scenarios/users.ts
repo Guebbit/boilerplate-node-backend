@@ -35,7 +35,7 @@ import { userRepository } from '@modules/users/repository';
 
 /**
  * Deterministic id for demo customer `index` — never `new Types.ObjectId()`, whose default is
- * time-based and would reseed a different id on every run, breaking `db:seed`'s idempotent
+ * time-based and would reseed a different id on every run, breaking `scenario:apply`'s idempotent
  * upsert. Mirrors `./demo-catalog`'s `fillerProductId`, with its own prefix so the two id spaces
  * can never collide.
  */
@@ -155,14 +155,14 @@ const customerUsers = CUSTOMER_NAMES.map(([key, username], index) =>
 /** Every demo account: the named ones the e2e suite logs in as, then the customer base. */
 export const userFixtures = [...namedUsers, ...customerUsers];
 
-/** Seed this collection. Declared in `./index`; called by `db/demo/index.ts`. */
+/** Seed this collection. Declared in `./index`; called by `scenarios/apply.ts`. */
 export const seedUsersCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(userFixtures.map((user) => upsertById(userRepository, user)));
 
 /**
  * Read the seeded accounts back as the API serves them — see `./products`. No password
  * comes out; that's `applyUserTransform`, not an omission — credentials never reach a response,
- * so `scripts/demo/export-dataset.ts` publishes them separately from `@kernel/seed-accounts`.
+ * so `scenarios/build/export-dataset.ts` publishes them separately from `@kernel/seed-accounts`.
  */
 export const exportSeededUsers = async (): Promise<Record<string, unknown[]>> => ({
     users: await exportCollection(userModel, { _id: 1 })

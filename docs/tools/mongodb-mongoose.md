@@ -100,28 +100,28 @@ idempotent, and deleted once they have run everywhere. See
 ## Seeds
 
 Seeds populate the database with **known test data** for local development.
-The seed runner lives in `db/demo/index.ts` and uses the Mongoose repository layer (not raw Mongo), so pre-save hooks (e.g. password hashing) run normally.
+The seed runner lives in `scenarios/apply.ts` and uses the Mongoose repository layer (not raw Mongo), so pre-save hooks (e.g. password hashing) run normally.
 
 The dataset is split by ROLE, and the split matters:
 
 | File                              | Holds                                                                                                                                                                                                                                                   |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/modules/<name>/factories.ts` | The **builder** — `makeProduct(overrides)`. States only what the schema requires; anything carrying a `default:` is deliberately left out, so a row records what the model really does. Shared with that module's tests, which is what a factory is for |
-| `demo/<name>.ts`                  | The **records** — the demo catalogue, the two accounts, the order book. Built from the factory, but living outside `src/` entirely: `demo/index.ts` tables it by name, and `db/demo/index.ts` walks that table                                          |
+| `scenarios/<name>.ts`             | The **records** — the demo catalogue, the two accounts, the order book. Built from the factory, but living outside `src/` entirely: `scenarios/index.ts` tables it by name, and `scenarios/apply.ts` walks that table                                   |
 | `src/kernel/seed-accounts.ts`     | The **six shared literals** — two account ids and four credentials. In the kernel because four modules need a piece of them and only one owns the record; the file explains why that beats three registry edges                                         |
-| `db/demo/demo-data.json`          | The **output** — every row as the API actually serves it. Written by `npm run seed:export`, never by hand                                                                                                                                               |
+| `db/demo/demo-data.json`          | The **output** — every row as the API actually serves it. Written by `npm run scenario:build`, never by hand                                                                                                                                            |
 
 ### The dataset is published, not shared
 
-`npm run seed:export` seeds a throwaway `mongodb-memory-server` with the real seeders, reads every
-row back through the real serializers, and writes `db/demo/demo-data.json`. The file lives only
-here now: the paired frontend used to hold a byte-identical copy for its MSW mocks, and since
+`npm run scenario:build` seeds a throwaway `mongodb-memory-server` with the real seeders, reads
+every row back through the real serializers, and writes `db/demo/demo-data.json`. The file lives
+only here now: the paired frontend used to hold a byte-identical copy for its MSW mocks, and since
 those retired in favour of this repo's demo profile — which seeds from the same factories
 directly — the snapshot's one job is pinning serializer drift in this repo.
 
 ```bash
-npm run seed:export          # write it
-npm run check:seed-export    # fail if the committed copy is stale
+npm run scenario:build          # write it
+npm run check:scenario-build    # fail if the committed copy is stale
 npm run check:spec-identity  # fail if the frontend's copy has forked
 ```
 
@@ -147,12 +147,12 @@ free, back when a cart line and the product it pointed at were literally the sam
 
 ### Commands
 
-| Script                      | What it does                                                        |
-| --------------------------- | ------------------------------------------------------------------- |
-| `npm run db:seed`           | Insert seed documents (safe to run multiple times if IDs are fixed) |
-| `npm run db:seed:reset`     | Drop the database first, then seed                                  |
-| `npm run seed:export`       | Publish `db/demo/demo-data.json` from a throwaway database          |
-| `npm run check:seed-export` | Fail if that file is stale; write nothing                           |
+| Script                         | What it does                                                        |
+| ------------------------------ | ------------------------------------------------------------------- |
+| `npm run scenario:apply`       | Insert seed documents (safe to run multiple times if IDs are fixed) |
+| `npm run scenario:apply:reset` | Drop the database first, then seed                                  |
+| `npm run scenario:build`       | Publish `db/demo/demo-data.json` from a throwaway database          |
+| `npm run check:scenario-build` | Fail if that file is stale; write nothing                           |
 
 ### What gets seeded
 

@@ -30,5 +30,5 @@ export { PRODUCT_DELETED } from './events';
 
 /*
  * The demo catalogue is NOT re-exported here, and never was reachable through this barrel: it
- * lives in `demo/products.ts`, outside `src/` entirely, imported by nothing this module ships.
+ * lives in `scenarios/products.ts`, outside `src/` entirely, imported by nothing this module ships.
  */

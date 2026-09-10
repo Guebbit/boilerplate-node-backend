@@ -10,7 +10,7 @@ name: CI
 # The jobs fall into four groups:
 #   - style           commitlint, lint, prettier
 #   - contract        lint-openapi, lint-asyncapi, their per-module counterparts,
-#                     contracts-bundle-freshness, seed-export-freshness,
+#                     contracts-bundle-freshness, scenario-build-freshness,
 #                     spec-identity — the spec is valid, and the paired frontend still agrees with
 #                     it. api/ and src/types/asyncapi.generated.ts are no longer committed — see
 #                     `postinstall` in package.json — so there is nothing left to go stale for
@@ -263,7 +263,7 @@ jobs:
             - name: Check contract bundles are current
               run: npm run check:contracts-bundle
 
-    seed-export-freshness:
+    scenario-build-freshness:
         # `db/demo/demo-data.json` matches what the seeders produce. It is the specimen the
         # contract suite compares responses against, so a stale copy weakens every test using it.
         runs-on: ubuntu-latest
@@ -280,7 +280,7 @@ jobs:
                   node-version: ${{ env.NODE_VERSION }}
 
             - name: Check the exported demo dataset is current
-              run: npm run check:seed-export
+              run: npm run check:scenario-build
 
     cluster:
         # The only suite that boots `src/cluster.ts` and forks real workers. It is not in
@@ -561,7 +561,7 @@ jobs:
             - lint-openapi-modules
             - lint-asyncapi-modules
             - contracts-bundle-freshness
-            - seed-export-freshness
+            - scenario-build-freshness
             - typecheck
             - build
             - test-unit

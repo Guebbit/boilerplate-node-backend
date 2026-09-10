@@ -342,8 +342,8 @@ i18next, `subscribe` attaches the module's event handlers. That is the bar for a
 at all — the manifest used to also carry `subdomain` and a labelled `dependsOn` graph, which
 nothing read and three tests checked; see [Strategic DDD](./strategic-ddd.md) §2 and §4 for where
 that description lives now. It also used to carry `seeds`/`seedExport`/`demoShapes`: gone for the
-same reason — `demo/index.ts` reads a module's repository and fixtures directly, so a domain with
-no demo data carries nothing about demo data at all, not even an absent field.
+same reason — `scenarios/index.ts` reads a module's repository and factories directly, so a domain
+with no demo data carries nothing about demo data at all, not even an absent field.
 
 `basePath` and `routes` are both optional, so a domain that owns data but no URL is an ordinary
 entry rather than a special case — `audit-logs` declares neither and `app/routes.ts` mounts only
@@ -576,7 +576,7 @@ Some of these rules are relational — what a file may import depends on which m
 | A controller reading the caller on a route that does not guarantee one                | `authenticated-controllers.test.ts`  |
 | Every committed bundle still equals a fresh run of the bundler                        | `contract-bundles.test.ts`           |
 | Every mounted route is in the spec, and every spec operation is mounted               | `request-sources.test.ts`            |
-| `demo/index.ts` names no module `enabledModules` does not also enable                 | `seed-conformance.test.ts`           |
+| `scenarios/index.ts` names no module `enabledModules` does not also enable            | `seed-conformance.test.ts`           |
 
 Each of these was verified by deliberately breaking it and watching it fail. A guard nobody has seen
 fire is a comment. All but the last live in `tests/cross-cutting/`; `request-sources.test.ts` sits

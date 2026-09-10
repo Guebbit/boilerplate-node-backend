@@ -1,13 +1,14 @@
 /**
  * @module
- * The demo dataset's registry — one entry per module with demo fixtures, keyed the same way
+ * The demo dataset's registry — one entry per module with demo data, keyed the same way
  * `enabledModules` names them. Every file in this folder imports its module's repository, model
- * and fixtures directly (never the other way), so a production image can omit this whole folder
+ * and factories directly (never the other way), so a production image can omit this whole folder
  * and nothing under `src/` notices.
  *
- * Walked by `app/demo.ts`, `db/demo/index.ts` and `scripts/demo/{export-dataset,assemble}.ts` —
- * none of which import a module for any other reason. `tests/cross-cutting/seed-conformance.test.ts`
- * refuses an entry whose name `enabledModules` does not also carry.
+ * Walked by `app/demo.ts`, `scenarios/apply.ts` and
+ * `scenarios/build/{export-dataset,assemble}.ts` — none of which import a module for any other
+ * reason. `tests/cross-cutting/seed-conformance.test.ts` refuses an entry whose name
+ * `enabledModules` does not also carry.
  *
  * See: docs/tools/demo-profile.md
  */
@@ -25,7 +26,7 @@ import type { SeedOutcome } from '@infrastructure/persistence/seed';
 
 /** One module's demo registration: how to seed it, how to read it back. */
 export interface DemoModule {
-    /** Write this module's slice of the demo dataset. Called only by `db/demo/index.ts`. */
+    /** Write this module's slice of the demo dataset. Called only by `scenarios/apply.ts`. */
     seed: () => Promise<SeedOutcome[]>;
 
     /**
@@ -79,7 +80,7 @@ export const demoModules: Readonly<Record<string, DemoModule>> = {
 };
 
 /**
- * Seed every module — `db/demo/index.ts` and `scripts/demo/export-dataset.ts` both call this
+ * Seed every module — `scenarios/apply.ts` and `scenarios/build/export-dataset.ts` both call this
  * instead of their own `Promise.all(Object.values(demoModules).map(...))`, so the ordering fix
  * lives in exactly one place.
  *

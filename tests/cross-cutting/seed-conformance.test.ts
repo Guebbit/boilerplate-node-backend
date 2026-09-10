@@ -2,7 +2,7 @@
  * Does the demo dataset still match the contract it is supposed to be a specimen of?
  *
  * The dataset is published here and nowhere else: it is not in `SHARED_FILES`, so nothing copies
- * it to the paired frontend and `check:spec-identity` never sees it. `check:seed-export` proves the
+ * it to the paired frontend and `check:spec-identity` never sees it. `check:scenario-build` proves the
  * committed bytes match a fresh seeding run; nothing compared those bytes to `openapi.yaml`. That
  * is what this does.
  *
@@ -43,7 +43,7 @@ import {
     GetWishlistResponse
 } from '@api/schemas.zod';
 import { getFallbackLocale, listSupportedLocales } from '@infrastructure/i18n';
-import { demoModules } from '@demo/index';
+import { demoModules } from '@scenarios/index';
 import dataset from '../../db/demo/demo-data.json';
 import { enabledModules } from '../../src/modules';
 
@@ -185,7 +185,7 @@ describe('the exported dataset conforms to the generated contract', () => {
 
         it('include exactly one shop owner, and several ordinary accounts', () => {
             /* Only `root` runs the shop. The ordinary count is deliberately not pinned to a
-             * literal — `demo/users.ts`'s ten further customers exist to give `cart`/`orders` a
+             * literal — `scenarios/users.ts`'s ten further customers exist to give `cart`/`orders` a
              * spread of shoppers, and that number is that module's to grow without this test
              * moving too. */
             expect(collections.users.filter((user) => user.role === 'owner')).toHaveLength(1);
@@ -358,7 +358,7 @@ describe('the exported dataset conforms to the generated contract', () => {
         it('name only languages the dataset also publishes', () => {
             /* The referential integrity a tag string buys instead of an ObjectId reference. An
              * entry pointing at a language nobody registered would render as a dictionary the
-             * manifest never lists — and `scripts/demo/export-dataset.ts`'s dangling-reference sweep
+             * manifest never lists — and `scenarios/build/export-dataset.ts`'s dangling-reference sweep
              * cannot see it, because it matches keys ending in `Id`. */
             const tags = new Set(collections.locales.map((language) => language.tag));
             for (const entry of collections.localeEntries) {
@@ -417,7 +417,7 @@ describe('the exported dataset conforms to the generated contract', () => {
     });
 
     /**
-     * `demo/index.ts` colocates nothing — moving a module's fixtures out from under it means
+     * `scenarios/index.ts` colocates nothing — moving a module's factories out from under it means
      * `rm -rf src/modules/<name>` no longer takes its demo data with it. This is the check that
      * replaces the guarantee colocation used to give for free: an entry left behind after its
      * module is deleted is loud here, instead of quietly seeding a collection nothing serves.

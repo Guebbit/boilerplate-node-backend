@@ -255,14 +255,14 @@ export const orderFixtures = [
 ];
 
 /*
- * No seeded reservation: `db/demo/index.ts` runs every module CONCURRENTLY, and
+ * No seeded reservation: `scenarios/apply.ts` runs every module CONCURRENTLY, and
  * `reserveForOrder` would conditionally write the same PRODUCT document `./products` is
  * writing at that moment — a race it loses every time. It would also invent a state this path
- * never reaches: these fixtures are written straight to the collection, none went through
+ * never reaches: these rows are written straight to the collection, none went through
  * checkout, so every seeded product's `reserved` is honestly 0.
  */
 
-/** Seed this collection. Declared in `./index`; called by `db/demo/index.ts`. */
+/** Seed this collection. Declared in `./index`; called by `scenarios/apply.ts`. */
 export const seedOrdersCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(orderFixtures.map((order) => upsertById(orderRepository, order)));
 

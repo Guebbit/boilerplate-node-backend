@@ -2,7 +2,7 @@
  * @module
  * Builds a product row — for the demo dataset in `./demo` and for any test needing a
  * catalogue row. Deliberately leaves the schema's own defaults unset, placeholdering only the
- * required `title` and `price`, so `scripts/demo/export-dataset.ts` reads seeded rows back
+ * required `title` and `price`, so `scenarios/build/export-dataset.ts` reads seeded rows back
  * through the real serializer instead of a guess.
  */
 
@@ -24,7 +24,7 @@ export type ProductOverrides = OverridesFor<Product>;
 
 /**
  * A product ready for `productRepository.create`. The three factory-set fields are required, not
- * optional, so callers like `demo/orders.ts` can read `fixture.title` without a `!`.
+ * optional, so callers like `scenarios/orders.ts` can read `fixture.title` without a `!`.
  */
 export type ProductFixture = Partial<ProductDocument> &
     Pick<ProductRecord, '_id' | 'title' | 'price'>;

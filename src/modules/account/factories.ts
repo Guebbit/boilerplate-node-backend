@@ -1,7 +1,7 @@
 /**
  * @module
  * How an address-book row is built: a book is addressed by its owner (`userId` is `unique`,
- * no book id reaches the wire), so this pins an `_id` it doesn't need so `npm run seed:export` can
+ * no book id reaches the wire), so this pins an `_id` it doesn't need so `npm run scenario:build` can
  * publish a stable one run over run. An ENTRY is the opposite: two addresses can be identical in
  * every field and still be different entries, so it keeps its own.
  */

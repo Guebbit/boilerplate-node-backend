@@ -7,7 +7,7 @@ npm run demo               # :3000 — in-memory Mongo, seeded, cache/queue disa
 NODE_PORT=3101 npm run demo   # several run side by side; each owns its own database
 ```
 
-One process, no Docker: `scripts/demo/run-server.ts` starts a `mongodb-memory-server` (the same dependency the test suite already uses), points `NODE_DB_URI` at it, force-disables Redis and RabbitMQ — a supported deployment shape that `/observability/health` reports as `disabled` rather than as an error — raises the rate limits to the test allowance, and boots `src/app.ts` exactly as any other profile would. Every module `demo/index.ts` registers is seeded at boot. Kill the process and nothing survives it.
+One process, no Docker: `scenarios/build/run-server.ts` starts a `mongodb-memory-server` (the same dependency the test suite already uses), points `NODE_DB_URI` at it, force-disables Redis and RabbitMQ — a supported deployment shape that `/observability/health` reports as `disabled` rather than as an error — raises the rate limits to the test allowance, and boots `src/app.ts` exactly as any other profile would. Every module `scenarios/index.ts` registers is seeded at boot. Kill the process and nothing survives it.
 
 ## Who it is for
 
@@ -50,12 +50,12 @@ page and types. The passwords are overridable via `NODE_SEED_ADMIN_PASSWORD`/
 **The password is stored plaintext on purpose.** `userSchema`'s pre-save hook hashes it on the way
 in, so a hash written there would drift from that hook and lose its plaintext. It never reaches a
 response — `password` is `select: false` and the user transform omits it — which is why
-`scripts/demo/export-dataset.ts` carries these into `demo-data.json` separately rather than reading them
+`scenarios/build/export-dataset.ts` carries these into `demo-data.json` separately rather than reading them
 back off a serialized user.
 :::
 
 ## What it deliberately is not
 
 - **Not the full stack.** Cache and queue run `disabled`, so invalidation behaviour and the queue-backed email/PDF paths are not exercised. That is the live profile's job — the frontend's `test:e2e:live` against `compose:restart`, which its CI requires on every PR.
-- **Not persistent.** `db:seed` against the compose stack is the path that survives a restart; this one is a fresh world per process, which is precisely what makes it a test fixture.
+- **Not persistent.** `scenario:apply` against the compose stack is the path that survives a restart; this one is a fresh world per process, which is precisely what makes it a test fixture.
 - **Not a mock.** Nothing here imitates anything: same routes, same validators, same serializers, same visibility rules as production. When a demo-profile answer surprises you, believe it — that is the API.

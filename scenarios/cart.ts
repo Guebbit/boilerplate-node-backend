@@ -68,7 +68,7 @@ export const cartFixtures = [
     )
 ];
 
-/** Seed this collection. Declared in `./index`; called by `db/demo/index.ts`. */
+/** Seed this collection. Declared in `./index`; called by `scenarios/apply.ts`. */
 export const seedCartsCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(cartFixtures.map((cart) => upsertByOwner(cartRepository, cart)));
 

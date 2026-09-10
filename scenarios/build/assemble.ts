@@ -8,23 +8,24 @@
  *
  * ## Why this is a module and not part of the export script
  *
- * Two callers need the same answer from the same rows — `scripts/demo/export-dataset.ts`
- * publishes it against a database it seeded from scratch, and `npm run check:seed-export`
+ * Two callers need the same answer from the same rows — `scenarios/build/export-dataset.ts`
+ * publishes it against a database it seeded from scratch, and `npm run check:scenario-build`
  * re-derives it and compares against the committed bytes. A second implementation of this walk
  * would let those two disagree about what the dataset even is, which is the class of bug the
  * published-output design exists to remove. So there is one assembler and both callers import it.
  *
  * ## Determinism is a hard requirement
  *
- * The output is committed and `npm run check:seed-export` re-derives it in the gate, so two runs
- * must produce identical bytes. Three things buy that: fixtures pin their own `createdAt` (see
- * `@infrastructure/persistence/factory`), seed writes pass `{ timestamps: false }` so Mongoose does
- * not overwrite them, and this file sorts both the rows and every object key on the way out. If a
- * value ever enters the dataset that cannot be pinned, it does not belong in the export.
+ * The output is committed and `npm run check:scenario-build` re-derives it in the gate, so two
+ * runs must produce identical bytes. Three things buy that: factories pin their own `createdAt`
+ * (see `@infrastructure/persistence/factories`), seed writes pass `{ timestamps: false }` so
+ * Mongoose does not overwrite them, and this file sorts both the rows and every object key on the
+ * way out. If a value ever enters the dataset that cannot be pinned, it does not belong in the
+ * export.
  */
 
 import path from 'node:path';
-import { demoModules } from '@demo/index';
+import { demoModules } from '@scenarios/index';
 import { seedCredentials } from '../../src/kernel/seed-accounts';
 
 /* The dataset sits beside the seeder that produces the rows, not beside this file: `db/` is where
@@ -103,7 +104,7 @@ const collectIds = (value: unknown, found: Set<string>): Set<string> => {
  * which renders as a mysteriously empty page rather than an error.
  *
  * Deliberately structural rather than domain-aware: this script names no module, exactly as
- * `db/demo/index.ts` names none, so a new collection is covered the day it is added.
+ * `scenarios/apply.ts` names none, so a new collection is covered the day it is added.
  */
 const findDanglingReferences = (
     value: unknown,
@@ -132,8 +133,8 @@ export const assembleDemoDataset = async (): Promise<string> => {
 
     /*
      * Collections are keyed and then sorted by name rather than kept in table order, so that
-     * reordering `demo/index.ts`'s table — or renaming a module, which moves it in that table —
-     * does not rewrite the file and light up the cross-repo hash check for no reason.
+     * reordering `scenarios/index.ts`'s table — or renaming a module, which moves it in that
+     * table — does not rewrite the file and light up the cross-repo hash check for no reason.
      */
     const merged = Object.assign({}, ...sections) as Record<string, unknown[]>;
     const collections = toPlainJson(merged);

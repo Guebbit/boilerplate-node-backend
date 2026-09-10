@@ -14,8 +14,8 @@
  * manifests and deletes any `public/images/seed/*.jpg` this run's role list no longer names, so a
  * retired role's old file doesn't linger unreferenced.
  *
- * `demo/products.ts` and `demo/demo-catalog.ts`, and `demo/users.ts`, read the resulting
- * `*-images.generated.json` files — nothing there is hand-edited.
+ * `scenarios/products.ts` and `scenarios/demo-catalog.ts`, and `scenarios/users.ts`, read the
+ * resulting `*-images.generated.json` files — nothing there is hand-edited.
  *
  * See: docs/tools/image-processing.md
  */
@@ -24,7 +24,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { digestImage, thumbnailImage } from '@infrastructure/adapters/image';
-import { FILLER_IMAGE_ROLE_KEYS } from '@demo/demo-catalog';
+import { FILLER_IMAGE_ROLE_KEYS } from '@scenarios/demo-catalog';
 
 /** Where the full-size seed photos land — served directly, so this is a public path. */
 const SEED_ROOT = path.join(__dirname, '../../public/images/seed');
@@ -41,7 +41,8 @@ interface ImageEntry {
 /** The five named product roles that keep an image — `barebones` deliberately has none, since
  * its whole point is exercising the schema's own `imageUrl` default. The filler roles are a
  * fixed pool (`FILLER_IMAGE_ROLE_KEYS`), independent of how large the generated catalogue grid
- * is — `demo/products.ts` cycles through them, so growing the grid never needs a new download. */
+ * is — `scenarios/products.ts` cycles through them, so growing the grid never needs a new
+ * download. */
 const PRODUCT_ROLES = [
     'dogFoodStandard',
     'heaterSoftDeleted',
@@ -163,8 +164,8 @@ const main = async (): Promise<void> => {
         new Set(written.map((e) => path.basename(e.thumbnailUrl)))
     );
 
-    await writeManifest('demo/products-images.generated.json', products);
-    await writeManifest('demo/users-images.generated.json', users);
+    await writeManifest('scenarios/products-images.generated.json', products);
+    await writeManifest('scenarios/users-images.generated.json', users);
 
     console.info(
         `[seed-images] done: ${Object.keys(products).length} product images, ` +

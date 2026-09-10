@@ -42,13 +42,13 @@ edited, and forgetting that is silent, so `tests/cross-cutting/probes-are-wired.
 stronger than a test, and this keeps both halves.
 
 There used to be a `SEED_SECTION_ORDER` here too. It is gone: the demo dataset stopped being
-assembled from per-module text and is now **published** — `npm run seed:export` seeds a throwaway
-database with the real seeders and writes what the API answers to `db/demo/demo-data.json`. A
-module's records live in `demo/<name>.ts`, tabled by `demo/index.ts` — a list, but not a hand-kept
-one of these six: adding an entry is optional (a module need not have demo data at all), and
-forgetting to remove one after deleting a module is caught by
-`tests/cross-cutting/seed-conformance.test.ts` rather than by a build failure. Its staleness check
-for the published bytes is `npm run check:seed-export`.
+assembled from per-module text and is now **published** — `npm run scenario:build` seeds a
+throwaway database with the real seeders and writes what the API answers to
+`db/demo/demo-data.json`. A module's records live in `scenarios/<name>.ts`, tabled by
+`scenarios/index.ts` — a list, but not a hand-kept one of these six: adding an entry is optional (a
+module need not have demo data at all), and forgetting to remove one after deleting a module is
+caught by `tests/cross-cutting/seed-conformance.test.ts` rather than by a build failure. Its
+staleness check for the published bytes is `npm run check:scenario-build`.
 
 Nothing else enumerates domains. Route mounting, the seeder, the i18n boot, the audit vocabulary and
 the metrics registry all walk the registry instead — which is why none of them appears in either
@@ -111,7 +111,7 @@ src/modules/<name>/
     factories.ts                   how its test/demo records are built
     tests/unit/ · tests/contract/  co-located, deleted with the module
 
-demo/<name>.ts                     its demo records — outside src/, see the demo dataset section
+scenarios/<name>.ts                its demo records — outside src/, see the demo dataset section
 ```
 
 Everything at that root is a layer or a self-registering slot; everything that is a **subject**
@@ -177,9 +177,9 @@ already — nothing below applies.
 
 Write `openapi.yaml`, add the domain to `MODULE_SECTIONS`, and add its paths to the root's index. Do
 the same for `ASYNC_SECTION_ORDER` if you wrote an `asyncapi.yaml`. An `analytics.ts` needs no entry
-anywhere — the name is swept off disk. A `demo/<name>.ts`, if the domain has demo data, needs one
-line in `demo/index.ts`'s table; the dataset itself is published from a real seeding run rather than
-assembled from a list.
+anywhere — the name is swept off disk. A `scenarios/<name>.ts`, if the domain has demo data, needs
+one line in `scenarios/index.ts`'s table; the dataset itself is published from a real seeding run
+rather than assembled from a list.
 
 An `asyncapi.yaml` costs one decision the others do not: whether the domain also belongs in
 `SHARED_SECTIONS`. It does if a browser can reach the channels — an SSE stream, a websocket — and it
@@ -478,7 +478,7 @@ ones a sweep cannot express:
     compiler is holding for you.
 
 - **A whole-word scan for domain names.** Tried and rejected: `observability` and `locales` are
-  module names _and_ infrastructure folder names, and a module's `demo/<name>.ts` names
+  module names _and_ infrastructure folder names, and a module's `scenarios/<name>.ts` names
   collections forever by design. The false-positive rate makes it unusable.
 
 What the suite does cover is the neighbouring ground: `eslint-plugin-boundaries` holds a

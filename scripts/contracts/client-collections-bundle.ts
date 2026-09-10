@@ -195,8 +195,8 @@ const values: ValueSources = {
         seedProductId: seedProduct.id,
         seedOrderId: seedOrder.id,
         /* The dataset carries exactly one of each on purpose — see the comments in
-         * `demo/products.ts`: without them the soft-delete and role-scoping branches
-         * have no fixture behind them, and a branch with no fixture is a branch nothing exercises. */
+         * `scenarios/products.ts`: without them the soft-delete and role-scoping branches
+         * have no row behind them, and a branch with no row is a branch nothing exercises. */
         seedSoftDeletedProductId: (
             seedProducts.find((product) => 'deletedAt' in product) ?? seedProduct
         ).id,

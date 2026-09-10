@@ -2,7 +2,7 @@
  * Script entry-point wrapper.
  *
  * The three behaviours a bare promise chain does not provide: a non-zero exit code, cleanup on
- * the failure path, and a logged reason. The middle one is load-bearing — without it `db:seed`
+ * the failure path, and a logged reason. The middle one is load-bearing — without it `scenario:apply`
  * leaves its Mongo and Redis sockets open on a throw, and the process hangs instead of exiting.
  */
 import { runScript } from '../../../db/run-script';

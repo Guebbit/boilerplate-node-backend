@@ -310,7 +310,7 @@ belongs here — the sandbox needs what the TESTS read, not what the repository 
 
 `ignorePatterns` must **not** list `public/**`, even though `coverage/`, `reports/`, `dist/` and
 `docs/` are all excluded there — the sandbox is the only filesystem the tests see, and
-`tests/unit/db/seed-fixtures.test.ts` asserts every seed fixture's `imageUrl` resolves to a
+`tests/unit/db/scenario-images.test.ts` asserts every seed row's `imageUrl` resolves to a
 committed file under `public/images/seed/`. Leave it out of `ignorePatterns` and Stryker refuses to
 start at all.
 

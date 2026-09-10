@@ -120,16 +120,16 @@ This is **cache-aside**: reads fill the cache, and whoever writes the data is re
 invalidating it. `invalidateCache` (in `src/infrastructure/http/middlewares/cache.ts`) does that for every write the
 API handles.
 
-Nothing does it for writes that never reach Express — `npm run db:seed`, a one-off `ops/` script, a
+Nothing does it for writes that never reach Express — `npm run scenario:apply`, a one-off `ops/` script, a
 `mongosh` session, a GUI. Those change Mongo while Redis keeps serving the answer it computed
 beforehand, which is how a freshly-seeded database can still render as an empty product list.
 
 Two mitigations, because neither is sufficient alone:
 
-|                                | What it does                                                                                                                                                                | Limit                                                             |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `npm run db:cache:clear`       | Deletes every key under `NODE_REDIS_CACHE_PREFIX` (`SCAN` + `DEL`, never `FLUSHALL`, so a shared Redis is safe). `db:seed` calls it automatically when it created something | Opt-in — only covers writers that remember                        |
-| `NODE_REDIS_CACHE_DEV_TTL_MAX` | Clamps every route's TTL when `NODE_ENV !== 'production'`, default `30`s                                                                                                    | Dev only, and it shortens the stale window rather than closing it |
+|                                | What it does                                                                                                                                                                       | Limit                                                             |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `npm run db:cache:clear`       | Deletes every key under `NODE_REDIS_CACHE_PREFIX` (`SCAN` + `DEL`, never `FLUSHALL`, so a shared Redis is safe). `scenario:apply` calls it automatically when it created something | Opt-in — only covers writers that remember                        |
+| `NODE_REDIS_CACHE_DEV_TTL_MAX` | Clamps every route's TTL when `NODE_ENV !== 'production'`, default `30`s                                                                                                           | Dev only, and it shortens the stale window rather than closing it |
 
 The TTL cap is the one that matters for writers nobody anticipated: it bounds _every_ out-of-band
 write to seconds instead of the route's declared hour. Set it to `0` to opt out and use the
@@ -137,7 +137,7 @@ declared TTLs everywhere. Production is never clamped, because there the API is 
 
 `clearCache()` never throws, but it does report whether it got through: it resolves
 `{ deleted, reachable }`, where `reachable: false` means caching is switched on and Redis could
-not be reached, so stale entries survived. Its two callers then differ on purpose — `db:seed`
+not be reached, so stale entries survived. Its two callers then differ on purpose — `scenario:apply`
 ignores the flag and keeps seeding (an unreachable Redis must not block a seed), while
 `db:cache:clear` exits `1`, since a recovery tool that announces `0 keys removed` and exits `0`
 having done nothing is indistinguishable from a genuinely empty cache.

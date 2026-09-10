@@ -16,7 +16,7 @@ setupTestDb();
  * A subscription's `tenant` field is `context.caller.tenantId` (see `services/context.ts`), which
  * a real login only resolves once the deployment's shop exists — `resolveDeploymentTenantId`
  * caches `null` ("no shop") the first time it is asked otherwise, for the rest of this file. A
- * real deployment always has this from `npm run db:seed`'s `seedAccessModel()`; this suite has to
+ * real deployment always has this from `npm run scenario:apply`'s `seedAccessModel()`; this suite has to
  * do the same, after `setupTestDb()`'s own `clearAll` (registered first) wipes it every test.
  */
 beforeEach(async () => {

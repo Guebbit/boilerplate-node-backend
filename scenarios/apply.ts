@@ -1,37 +1,37 @@
 /*
  * Demo data seeder.
  *
- * `db:seed` owns DATA; `db:sync` owns SCHEMA. `demo/index.ts` is the table of what to seed; this
- * file is the RUNNER — connection, production gate and the walk over that table, nothing else.
- * The upsert policy lives in `@infrastructure/persistence/seed`. What the API then serves is
- * published by `npm run seed:export` as `./demo-data.json` — an OUTPUT of this seeder, never an
- * input to it.
+ * `scenario:apply` owns DATA; `db:sync` owns SCHEMA. `scenarios/index.ts` is the table of what to
+ * seed; this file is the RUNNER — connection, production gate and the walk over that table,
+ * nothing else. The upsert policy lives in `@infrastructure/persistence/seed`. What the API then
+ * serves is published by `npm run scenario:build` as `db/demo/demo-data.json` — an OUTPUT of this
+ * seeder, never an input to it.
  *
  * Runs on every container boot (see the compose `app` command → `npm run db:bootstrap`), so it
  * must be IDEMPOTENT (fixed `_id`s are upserted, not created, so a second run is a no-op) and
  * GATED (refuses to touch a production database). Note what idempotent means here:
- * `upsertById()` SKIPS a fixture whose `_id` already exists, it does not rewrite it — re-running
- * this does NOT repair a fixture whose stored row has since drifted from the one below;
- * `npm run db:seed:reset` is what does.
+ * `upsertById()` SKIPS a factory row whose `_id` already exists, it does not rewrite it —
+ * re-running this does NOT repair a row whose stored copy has since drifted from the one below;
+ * `npm run scenario:apply:reset` is what does.
  *
  * Passwords are given in PLAIN TEXT: the model's pre-save hook hashes them. Anything hashed by
  * hand here would drift from that hook, and its plaintext would be lost with no way to recover
  * the login.
  *
  * Usage:
- *   npm run db:seed          # upsert the fixtures
- *   npm run db:seed:reset    # drop the database first
+ *   npm run scenario:apply          # upsert the rows
+ *   npm run scenario:apply:reset    # drop the database first
  */
 import 'dotenv/config';
 import { start, connection } from '@infrastructure/runtime/database';
 import { clearCache, stopCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
-import { runScript } from '../run-script';
-import { seedAllDemoModules } from '@demo/index';
+import { runScript } from '../db/run-script';
+import { seedAllDemoModules } from '@scenarios/index';
 import { seedAccessModel } from '@kernel/access/seed';
 import { resolveTranslatables } from '@kernel/registry';
 import { setTranslatables } from '@modules/locales/module';
-import { enabledModules } from '../../src/modules';
+import { enabledModules } from '../src/modules';
 
 /*
  * `src/app.ts` does both of these the moment it is imported: importing THE registry pulls in
@@ -48,7 +48,7 @@ const reset = process.argv.includes('--reset');
 async function seed() {
     /* A boot-time seeder that can drop or overwrite a production database is a footgun. */
     if (process.env.NODE_ENV === 'production') {
-        logger.warn('db:seed refused to run: NODE_ENV is production.');
+        logger.warn('scenario:apply refused to run: NODE_ENV is production.');
         return;
     }
 
@@ -60,20 +60,19 @@ async function seed() {
     }
 
     /*
-     * Every module in `demo/index.ts`'s table seeds its own collection. This runner names no
+     * Every module in `scenarios/index.ts`'s table seeds its own collection. This runner names no
      * domain: it only walks whatever that table lists. `tests/cross-cutting/seed-conformance.test.ts`
      * refuses an entry left behind after the module it names is deleted.
      *
-     * Mostly concurrent, and safe to be: no fixture is derived from another fixture's WRITE. An
-     * order embeds a product snapshot built from the catalogue's own fixtures, not read back from
-     * Mongo, and a cart references a user id rather than requiring the user row to exist first.
-     * The one exception — `products` needing `locales`' rows to already exist — is why
-     * `seedAllDemoModules` runs `locales` first rather than joining the batch; see its own
-     * docblock.
+     * Mostly concurrent, and safe to be: no row is derived from another row's WRITE. An order
+     * embeds a product snapshot built from the catalogue's own factory, not read back from Mongo,
+     * and a cart references a user id rather than requiring the user row to exist first. The one
+     * exception — `products` needing `locales`' rows to already exist — is why `seedAllDemoModules`
+     * runs `locales` first rather than joining the batch; see its own docblock.
      */
-    // The shop, the preset roles and the demo memberships first: a module's fixtures may be
-    // written in any order, but nothing can resolve a caller until there is a shop to be a member
-    // of. Not part of the concurrent batch below for that reason.
+    // The shop, the preset roles and the demo memberships first: a module's rows may be written
+    // in any order, but nothing can resolve a caller until there is a shop to be a member of. Not
+    // part of the concurrent batch below for that reason.
     await seedAccessModel();
 
     const results = await seedAllDemoModules();

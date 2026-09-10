@@ -1,7 +1,7 @@
 /**
  * `src/infrastructure/persistence/seed.ts` — the upsert policy every module seeder goes through.
  *
- * Two arms and both matter: `skipped` is what makes `db:seed` idempotent on every container
+ * Two arms and both matter: `skipped` is what makes `scenario:apply` idempotent on every container
  * boot, `created` is what makes it a seeder at all. The skip arm went unexercised by any unit —
  * the db suites always seed into a dropped database — which left the branch invisible to
  * coverage the day the persistence directory fell out of the threshold globs.

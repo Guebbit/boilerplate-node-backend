@@ -3,7 +3,7 @@
  * The demo profile: the real API, self-contained and disposable — `npm run demo`.
  *
  * Boots the actual application against an in-memory MongoDB, seeds it from every enabled module's
- * fixtures, and serves on `NODE_PORT`. No Docker, no Redis, no broker — cache and queue run
+ * factories, and serves on `NODE_PORT`. No Docker, no Redis, no broker — cache and queue run
  * `disabled`, which is a supported deployment shape.
  *
  * This is what the paired frontend's dev server and e2e suite run against instead of a hand-written

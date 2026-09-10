@@ -36,7 +36,7 @@ Over in the paired frontend the mirror command is `npm run regenerate` as well �
 pull, or the app ships a client for the previous contract.
 
 The steps are still individually runnable (`contracts:bundle`, `gen:api`, `gen:asyncapi`,
-`seed:export`, `sync:frontend`) and worth reaching for when you know exactly what changed. The
+`scenario:build`, `sync:frontend`) and worth reaching for when you know exactly what changed. The
 umbrella exists because the order is not guessable — see below.
 
 ## Why two steps and not one
@@ -75,7 +75,7 @@ flowchart LR
 The four client collections are **generated from `openapi.yaml`**, so the contract has to be
 assembled before they can be produced — and they also read `db/demo/demo-data.json`
 (`scripts/contracts/client-collections-bundle.ts` imports it) for their example request bodies. That file
-is produced by `seed:export`, which runs the real application and so needs `api/`, which is itself
+is produced by `scenario:build`, which runs the real application and so needs `api/`, which is itself
 generated from the contract:
 
 ```
@@ -99,7 +99,7 @@ phase and not the others.
 | `src/modules/*/openapi.yaml`                           | `contracts:bundle` → `gen:api`                       | `openapi.yaml`, then the types and Zod schemas from it |
 | `shared/contracts/openapi.root.yaml`                   | `contracts:bundle` → `gen:api`                   | same, for the parts no single module owns          |
 | `src/modules/*/asyncapi.yaml`, `shared/contracts/asyncapi.{root,workers}.yaml` | `contracts:bundle` → `gen:asyncapi`                  | `asyncapi.yaml` and `asyncapi.public.yaml`, then `src/types/asyncapi.generated.ts` |
-| `demo/*.ts`                                          | `regenerate` → `db:seed:reset`                      | `seed:export` rebuilds `db/demo/demo-data.json`, then the collections have to be bundled AGAIN because they embed its values; the reset is because the database still holds the old records |
+| `scenarios/*.ts`                                     | `regenerate` → `scenario:apply:reset`               | `scenario:build` rebuilds `db/demo/demo-data.json`, then the collections have to be bundled AGAIN because they embed its values; the reset is because the database still holds the old records |
 | `src/modules/*/probes.ts`                             | `contracts:bundle`                                  | probes are hand-authored, then emitted into every client collection |
 | `src/modules/*/module.ts`, `model.ts`, `routes.ts`    | nothing                                             | no generator reads them. If the change is worth a reader knowing, say so on the module's page in `docs/modules/` — by hand, like the rest of that page |
 | `src/modules/*/audit.ts`, `analytics.ts`, `metrics.ts`, `probes.ts`, `events.ts` | `contracts:bundle` for `probes.ts` only | the client collections embed the probes; the other four feed no generator — an analytics name is read straight from the module that declares it |
@@ -155,7 +155,7 @@ npm run test:contract             # do real responses match the contract?
 | `[contracts] STALE — these do not match the fragments`             | a fragment was edited without re-bundling, or a bundle was hand-edited                    | `npm run contracts:bundle`                              |
 | `contract-bundles.test.ts` fails                                    | the same thing, caught by the test suite instead                                          | `npm run contracts:bundle`                              |
 | `check:spec-identity` fails                                         | this repo and the frontend hold different bytes of a shared document                       | copy the bundle over; never re-bundle on both sides     |
-| `check:seed-export` says the dataset is STALE                         | a fixture changed and the dataset was not re-exported                                       | `npm run seed:export`, then copy the result to the frontend |
+| `check:scenario-build` says the dataset is STALE                      | a factory changed and the dataset was not re-exported                                       | `npm run scenario:build`, then copy the result to the frontend |
 | spectral reports a dangling `$ref`                                   | a schema moved into a module document while another module still references it              | move it to `shared/contracts/openapi.root.yaml`         |
 
 One guard runs without you asking: `tests/cross-cutting/contract-bundles.test.ts` asserts every
@@ -203,7 +203,7 @@ npm run sync:frontend -- --forced   # rewrite even the files that already match
 npm run check:spec-identity         # the gate: hashes both sides, fails on a fork
 ```
 
-`sync:frontend` refuses to run on stale sources — `check:contracts-bundle` and `check:seed-export`
+`sync:frontend` refuses to run on stale sources — `check:contracts-bundle` and `check:scenario-build`
 go first, because copying a stale bundle makes both repos agree on a document neither one's sources
 produce. Everything it copies is produced here, so every difference it finds has one correct
 resolution and it applies it.
@@ -228,13 +228,13 @@ src/modules/<name>/analytics.ts      the events it emits
 src/modules/<name>/factories.ts       how demo/test records are built
 src/modules/<name>/probes.ts         the requests a spec cannot describe
 
-demo/<name>.ts                       the demo records — outside src/, see Demo profile
+scenarios/<name>.ts                  the demo records — outside src/, see Demo profile
 ```
 
 Every one is optional: a module with no HTTP surface contributes no OpenAPI fragment, and that is a
 good sign rather than an omission. Deleting a module is `rm -rf` of the folder, one line out of
 `src/modules.ts`, one line out of each section list it appeared in, and its entry out of
-`demo/index.ts`'s table — the last one is not colocated with the folder, so
+`scenarios/index.ts`'s table — the last one is not colocated with the folder, so
 `tests/cross-cutting/seed-conformance.test.ts` is what catches a forgotten one. A module that
 declared probes is also named in `scripts/contracts/client-collections-bundle.ts`, and that one
 announces itself: the import stops compiling.

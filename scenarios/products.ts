@@ -1,9 +1,9 @@
 /**
  * @module
- * The catalogue's slice of the demo dataset. `scripts/demo/export-dataset.ts` seeds these rows and
- * publishes what the API actually serves as `db/demo/demo-data.json`, so the paired frontend gets
- * the data without sharing source. A field a record omits falls to `@modules/products/model`'s
- * `default:` — see `@modules/products/factories`.
+ * The catalogue's slice of the demo dataset. `scenarios/build/export-dataset.ts` seeds these rows
+ * and publishes what the API actually serves as `db/demo/demo-data.json`, so the paired frontend
+ * gets the data without sharing source. A field a record omits falls to
+ * `@modules/products/model`'s `default:` — see `@modules/products/factories`.
  *
  * Six named rows carry the branch coverage the storefront and repositories actually exercise
  * (soft-deleted, out of stock, inactive, minimal); `./demo-catalog` supplies a further 126 rows
@@ -51,7 +51,7 @@ const SEED_TRANSLATION_TIMESTAMP = new Date('2024-01-01T00:00:00.000Z');
 
 /**
  * A stable, valid `_id` for one product's one-locale translation row — every OTHER demo fixture
- * pins its own `_id` ({@link fillerProductId}, `SEED_PRODUCT_IDS`, `demo/locales.ts`'s hex bands),
+ * pins its own `_id` ({@link fillerProductId}, `SEED_PRODUCT_IDS`, `scenarios/locales.ts`'s hex bands),
  * but `upsertEntityLocale` (the write surface's own primitive) has no caller-supplied-id
  * parameter at all: it mints one at insert. An MD5 of `(entityId, locale)`, truncated to a valid
  * 24-hex ObjectId, is deterministic across every reseed without a hand-maintained id table for
@@ -416,9 +416,9 @@ const writeSeedTranslations = (productId: string, productUpdatedAt: Date): Promi
 };
 
 /**
- * Seed this collection. Declared in `./index`; called by `db/demo/index.ts`.
+ * Seed this collection. Declared in `./index`; called by `scenarios/apply.ts`.
  *
- * Each fixture writes twice: {@link upsertById} for the product document (its `title`/
+ * Each row writes twice: {@link upsertById} for the product document (its `title`/
  * `description` are the derived index column, in the fallback locale), then
  * {@link writeSeedTranslations} for its `translations` rows — only when the product was actually
  * `'created'`, so a re-run against an already-seeded database does not redo the translation write
@@ -427,13 +427,13 @@ const writeSeedTranslations = (productId: string, productUpdatedAt: Date): Promi
  * Goes through `planTranslations`/`writeTranslations` rather than `productService.writeCreate`:
  * that service validates its body against `zodProductCreateSchema` (generated from `POST
  * /products`), which has no `id` field and always mints a fresh one — this dataset needs the
- * fixture's PINNED id, both for idempotent re-seeding and because `./orders`/`./cart`/`./wishlist`
+ * factory's PINNED id, both for idempotent re-seeding and because `./orders`/`./cart`/`./wishlist`
  * address specific rows by their known id. `planTranslations`/`writeTranslations` are the same two
  * primitives that service composes; calling them directly is the closest a seeder with its own id
  * can get to "the new write surface".
  *
- * Depends on `./locales` having already seeded the fallback and `it` locale rows — `db/demo/index.ts`
- * and `scripts/demo/export-dataset.ts` both seed `locales` before every other module for exactly
+ * Depends on `./locales` having already seeded the fallback and `it` locale rows — `scenarios/apply.ts`
+ * and `scenarios/build/export-dataset.ts` both seed `locales` before every other module for exactly
  * this reason.
  */
 export const seedProductsCollection = (): Promise<SeedOutcome[]> =>
@@ -455,8 +455,8 @@ export const seedProductsCollection = (): Promise<SeedOutcome[]> =>
 
 /**
  * Read the seeded catalogue back as the API serves it — `./index` declares this, and
- * `scripts/demo/export-dataset.ts` calls it. Sorted by `_id` so the published file is byte-stable
- * across runs rather than dependent on Mongo's natural order.
+ * `scenarios/build/export-dataset.ts` calls it. Sorted by `_id` so the published file is
+ * byte-stable across runs rather than dependent on Mongo's natural order.
  */
 export const exportSeededProducts = async (): Promise<Record<string, unknown[]>> => ({
     products: await exportCollection(productModel, { _id: 1 })

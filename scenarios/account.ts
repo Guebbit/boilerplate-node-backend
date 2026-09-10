@@ -75,7 +75,7 @@ export const addressBookFixtures = [
 ];
 
 /**
- * Seed this collection. Declared in `./index`; called by `db/demo/index.ts`.
+ * Seed this collection. Declared in `./index`; called by `scenarios/apply.ts`.
  *
  * Keyed on the owner even though these fixtures do pin an `_id`: `userId` is the unique column and
  * the one every query here reaches a book through.

@@ -77,7 +77,7 @@ the stack (or at least Mongo and Redis) first:
 ```bash
 npm run host -- dev              # the API on the host, against the containerised database
 npm run host -- db:bootstrap     # any script works the same way
-npm run host -- db:seed:reset
+npm run host -- scenario:apply:reset
 npm run host -- db:cache:clear
 ```
 
