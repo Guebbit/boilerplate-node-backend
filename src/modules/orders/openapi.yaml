@@ -49,6 +49,8 @@ paths:
             operationId: createOrder
             security:
                 - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
                 required: true
                 content:
@@ -76,6 +78,9 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # Also answered when `Idempotency-Key` names a request still in flight.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                # Also answered when `Idempotency-Key` was already used with a different body.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         put:

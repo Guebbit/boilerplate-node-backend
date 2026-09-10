@@ -15,6 +15,7 @@ import { getOrderInvoice } from './controllers/get-order-invoice';
 import { postCancelOrder } from './controllers/post-cancel-order';
 import { invalidateCache, searchCache, setCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
+import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 
 /** Express router for order management (authenticated; non-admin users see only their own orders). */
 export const router = Router();
@@ -31,10 +32,12 @@ router.post('/search', cacheOrdersSearch, getOrders);
 // GET /orders — list (non-admin sees own orders only)
 router.get('/', cacheOrdersSearch, getOrders);
 
-// POST /orders — admin creates order directly
+// POST /orders — admin creates order directly. idempotencyKey first: a retried creation must
+// replay the SAME order rather than mint a second one.
 router.post(
     '/',
     requirePermission('orders.create'),
+    idempotencyKey,
     invalidateCache(['orders', 'products']),
     writeOrders
 );

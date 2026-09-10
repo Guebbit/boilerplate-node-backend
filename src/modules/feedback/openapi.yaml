@@ -13,6 +13,7 @@ paths:
             security: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/AntibotChallengeTokenHeader'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
                 required: true
                 content:
@@ -28,6 +29,9 @@ paths:
                                 $ref: '#/components/schemas/FeedbackRequestEnvelope'
                 # A human-challenge provider is active and the caller's token is missing or refused.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # `Idempotency-Key` names a request still in flight.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                # Also answered when `Idempotency-Key` was already used with a different body.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 

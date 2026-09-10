@@ -97,6 +97,26 @@ components:
                 The token the active human-challenge provider issued to the client — see
                 `GET /antibot/config`. Absent when that provider is `none`.
 
+        # Opt-in per route (see `src/infrastructure/http/middlewares/idempotency.ts`) — never
+        # required at the contract level, since a caller not asking for replay protection must
+        # still be able to call the route.
+        IdempotencyKeyHeader:
+            name: Idempotency-Key
+            in: header
+            required: false
+            schema:
+                type: string
+                minLength: 1
+                maxLength: 200
+                pattern: '^[A-Za-z0-9_-]+$'
+            description: >
+                An opaque, client-generated value (a UUID by convention) that makes a retried
+                write safe. Repeating this request with the SAME key and the SAME body replays
+                the first response (`Idempotent-Replay: true`, no repeated write) instead of
+                running it again; the same key with a DIFFERENT body answers 422; a key still
+                being processed by another in-flight request answers 409. Omitting the header
+                simply forgoes replay protection — the write still happens normally.
+
         # Query ID parameters (just for filtering)
         IdParam:
             name: id

@@ -19,6 +19,7 @@ import {
     loginChallengeGate
 } from '@infrastructure/http/middlewares/rate-limit';
 import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
+import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 import {
     getAuth,
     isAuth,
@@ -130,6 +131,9 @@ router.post('/login', credentialLimiters, loginChallengeGate, postLogin);
 // abuse here (a Sybil account) gets a 201, which `credentialLimiters`' skipSuccessfulRequests
 // would spend nothing on — see rate-limit.ts. `humanChallengeGate` (rung 3, off by default) sits
 // ahead of the upload parse, so a request that fails it never pays for a file read.
+// `idempotencyKey` comes AFTER `upload.single`, not before: its fingerprint reads `request.body`,
+// which multer only populates once it has parsed a multipart request — any earlier and every
+// multipart signup would fingerprint as the same empty body, defeating the mismatch check.
 router.post(
     '/signup',
     signupLimiters,
@@ -137,6 +141,7 @@ router.post(
     humanChallengeGate,
     invalidateCache(['users', 'account']),
     upload.single('imageUpload'),
+    idempotencyKey,
     postSignup
 );
 

@@ -68,14 +68,20 @@ describe('payment routes', () => {
         expect(adminGuarded).toEqual(['POST /order/:orderId/refund']);
     });
 
-    it('guards the sync exactly as it guards the confirm', () => {
+    it('guards the sync exactly as it guards the confirm, plus the idempotency key confirm alone carries', () => {
         // `sync` settles money just as `confirm` does — from the provider's answer rather than
-        // from a method the caller supplied — so it carries the same guards, not fewer. Compared
-        // as a whole rather than named one by one: `requireFreshAuth(…)` is a closure with no
-        // name of its own, and asserting the two lists match survives that.
-        expect(withoutHandler('POST /:id/sync')).toEqual(withoutHandler('POST /:id/confirm'));
-        // And that pair is not trivially empty — the fresh-session closure and the verified check
-        // are both in there.
+        // from a method the caller supplied — so it carries every guard `confirm` does, not
+        // fewer. The one deliberate exception is `idempotencyKey`: `sync` is already idempotent
+        // by construction, keyed on the provider's own payment reference, so it does not need
+        // the generic mechanism `confirm` does. Compared as a whole rather than named one by
+        // one: `requireFreshAuth(…)` is a closure with no name of its own, and asserting the two
+        // lists match survives that.
+        expect(withoutHandler('POST /:id/confirm')).toEqual([
+            ...withoutHandler('POST /:id/sync'),
+            'idempotencyKey'
+        ]);
+        // And that shared prefix is not trivially empty — the fresh-session closure and the
+        // verified check are both in there.
         expect(withoutHandler('POST /:id/sync')).toEqual([
             'getAuth',
             'isAuth',

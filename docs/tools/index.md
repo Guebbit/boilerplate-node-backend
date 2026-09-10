@@ -59,6 +59,7 @@ flowchart LR
 | Overview      | **[Tools Explained](./tools-explained.md)**                 | "What is X and why is it here?" for every tool: plain-English definition, problem it solves, and how it's wired in this repo.  |
 | Core          | **[Runtime](./runtime.md)**                                 | Express 5, Zod, Multer, i18next, TypeScript, tsx: the framework-level packages that make the app run.                          |
 | Core          | **[Security](./security.md)**                               | Helmet, CORS, rate limiting, JWT split-token auth, bcrypt: every guardrail between the internet and your controllers.          |
+| Core          | **[Idempotency](./idempotency.md)**                         | The `Idempotency-Key` middleware: replays a retried write's stored response instead of repeating it.                           |
 | Core          | **[MongoDB & Mongoose](./mongodb-mongoose.md)**             | Document store, schema/model layer, index sync, and seeds.                                                                     |
 | Core          | **[Redis Cache](./redis-cache.md)**                         | Optional response cache with tag-based invalidation, shared by every instance through one keyspace.                            |
 | Async         | **[Email & PDF Rendering](./email-and-rendering.md)**       | Nodemailer + EJS for transactional email; Puppeteer for async PDF generation (invoices).                                       |

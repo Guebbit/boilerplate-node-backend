@@ -12,6 +12,8 @@ paths:
             operationId: createPaymentIntent
             security:
                 - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
                 required: true
                 content:
@@ -33,8 +35,8 @@ paths:
                             description: The intent's id is confirmed here to complete the charge.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # Not `pending` any more, or already paid. `errors[].code` is
-                # `PAYMENT_ORDER_NOT_PAYABLE`.
+                # Not `pending` any more, or already paid (`PAYMENT_ORDER_NOT_PAYABLE`), or
+                # `Idempotency-Key` names a request still in flight.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -88,6 +90,7 @@ paths:
                   schema:
                       $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                   description: The order whose payment is being returned
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             responses:
                 '200':
                     description: The payment, `refunded`
@@ -98,8 +101,8 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # Nothing to return: the payment never succeeded, or it is already refunded.
-                # `errors[].code` is `PAYMENT_NOT_REFUNDABLE`.
+                # Nothing to return: the payment never succeeded, or it is already refunded
+                # (`PAYMENT_NOT_REFUNDABLE`) — or `Idempotency-Key` names a request still in flight.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -125,6 +128,7 @@ paths:
                 - bearerAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
                 required: true
                 content:
@@ -159,8 +163,9 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # Declined by the card issuer (`PAYMENT_DECLINED`), not awaiting confirmation
-                # (`PAYMENT_NOT_CONFIRMABLE`), or the order slipped away between charge and
-                # write (`PAYMENT_ORDER_NOT_PAYABLE` — the charge was refunded on the spot).
+                # (`PAYMENT_NOT_CONFIRMABLE`), the order slipped away between charge and
+                # write (`PAYMENT_ORDER_NOT_PAYABLE` — the charge was refunded on the spot), or
+                # `Idempotency-Key` names a request still in flight.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }

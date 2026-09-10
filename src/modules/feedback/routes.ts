@@ -17,6 +17,7 @@ import { deleteFeedback } from './controllers/delete-feedback';
 import { invalidateCache, searchCache } from '@infrastructure/http/middlewares/cache';
 import { contactLimiters } from '@infrastructure/http/middlewares/rate-limit';
 import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
+import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 
 /** Express router for feedback/contact endpoints (public contact form; admin read/update). */
 export const router = Router();
@@ -37,6 +38,7 @@ router.post(
     '/contact',
     contactLimiters,
     humanChallengeGate,
+    idempotencyKey,
     invalidateCache(['feedback']),
     postFeedbackContact
 );

@@ -98,8 +98,9 @@ a merge is a product decision, not one a script gets to make.
 
 ### TTL windows
 
-`auditlogs`, `carts` and `feedbackrequests` expire rows with a TTL index whose `expireAfterSeconds`
-comes from an environment variable. Mongo will not modify an existing index's window in place, so:
+`auditlogs`, `carts`, `feedbackrequests` and `idempotencyrecords` expire rows with a TTL index
+whose `expireAfterSeconds` comes from an environment variable. Mongo will not modify an existing
+index's window in place, so:
 
 | Action after changing e.g. `NODE_AUDIT_RETENTION_DAYS` | Result                                                                    |
 | ------------------------------------------------------ | ------------------------------------------------------------------------- |

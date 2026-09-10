@@ -673,6 +673,7 @@ paths:
             security: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/AntibotChallengeTokenHeader'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
                 required: true
                 content:
@@ -692,9 +693,10 @@ paths:
                 # Also answered when a human-challenge provider is active and the caller's
                 # token is missing or refused — see antibot/openapi.yaml.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                # Signing up with an email that is already registered — or, with rung 3 on, a
-                # challenge token already spent.
+                # Signing up with an email that is already registered, a challenge token already
+                # spent (rung 3), or `Idempotency-Key` naming a request still in flight.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                # Also answered when `Idempotency-Key` was already used with a different body.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 

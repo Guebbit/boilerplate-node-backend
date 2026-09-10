@@ -11,7 +11,10 @@
         "error-reauth-required": "Conferma che sei tu prima di continuare.",
         "error-antibot-verification-failed": "Non è stato possibile verificare che questa richiesta provenga da una persona. Riprova la verifica.",
         "error-antibot-no-challenge": "Questa installazione non emette una verifica da risolvere.",
-        "error-email-not-verified": "Conferma il tuo indirizzo email prima di continuare."
+        "error-email-not-verified": "Conferma il tuo indirizzo email prima di continuare.",
+        "error-idempotency-key-invalid": "Idempotency-Key deve contenere 1-200 lettere, cifre, trattini o underscore.",
+        "error-idempotency-in-flight": "Una richiesta con questa Idempotency-Key è ancora in elaborazione.",
+        "error-idempotency-key-mismatch": "Questa Idempotency-Key è già stata usata con una richiesta diversa."
     },
     "validation": {
         "required": "Questo campo è obbligatorio.",

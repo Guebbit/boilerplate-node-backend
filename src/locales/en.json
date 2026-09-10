@@ -11,7 +11,10 @@
         "error-reauth-required": "Please confirm it's you before continuing.",
         "error-antibot-verification-failed": "This request could not be verified as coming from a person. Please try the challenge again.",
         "error-antibot-no-challenge": "This deployment does not issue a challenge to solve.",
-        "error-email-not-verified": "Please confirm your email address before continuing."
+        "error-email-not-verified": "Please confirm your email address before continuing.",
+        "error-idempotency-key-invalid": "Idempotency-Key must be 1-200 letters, digits, hyphens or underscores.",
+        "error-idempotency-in-flight": "A request with this Idempotency-Key is still being processed.",
+        "error-idempotency-key-mismatch": "This Idempotency-Key was already used with a different request."
     },
     "validation": {
         "required": "This field is required.",

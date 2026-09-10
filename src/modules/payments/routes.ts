@@ -25,6 +25,7 @@ import {
     REAUTH_TIME_CRITICAL
 } from '@kernel/middlewares/authorizations';
 import { webhookLimiter } from '@infrastructure/http/middlewares/rate-limit';
+import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 import { postPaymentIntent } from './controllers/post-payment-intent';
 import { postPaymentConfirm } from './controllers/post-payment-confirm';
 import { postPaymentSync } from './controllers/post-payment-sync';
@@ -42,8 +43,15 @@ router.post('/webhook', webhookLimiter, postPaymentWebhook);
 // Every route from here down requires authentication — money is somebody's.
 router.use(getAuth, isAuth);
 
-// POST /payments/intent — freeze an order's price, ready to confirm.
-router.post('/intent', requireFreshAuth(REAUTH_TIME_CRITICAL), requireVerified, postPaymentIntent);
+// POST /payments/intent — freeze an order's price, ready to confirm. idempotencyKey guards a
+// retried freeze the same way it guards every other money-moving write below.
+router.post(
+    '/intent',
+    requireFreshAuth(REAUTH_TIME_CRITICAL),
+    requireVerified,
+    idempotencyKey,
+    postPaymentIntent
+);
 
 // GET /payments/order/:orderId — the payment behind an order
 router.get('/order/:orderId', getPaymentByOrder);
@@ -55,17 +63,24 @@ router.get('/order/:orderId', getPaymentByOrder);
  * The tier belongs to the ACTION — money leaving the shop — rather than to this one route, and a
  * second route reaching the same key would otherwise have to remember.
  */
-router.post('/order/:orderId/refund', requirePermission('payments.update'), postPaymentRefund);
+router.post(
+    '/order/:orderId/refund',
+    requirePermission('payments.update'),
+    idempotencyKey,
+    postPaymentRefund
+);
 
 // POST /payments/:id/confirm — the payment form's submit.
 router.post(
     '/:id/confirm',
     requireFreshAuth(REAUTH_TIME_CRITICAL),
     requireVerified,
+    idempotencyKey,
     postPaymentConfirm
 );
 
-// POST /payments/:id/sync — the browser reporting it finished at the provider. Same guards as the
-// confirm: it settles money just as the confirm does, only from the provider's answer rather than
-// from a method the caller supplied.
+// POST /payments/:id/sync — the browser reporting it finished at the provider. No idempotencyKey
+// here: it is already idempotent by construction, keyed on the provider's own payment reference
+// rather than a client-supplied one, so a second sync call settles the same outcome, not a
+// second one.
 router.post('/:id/sync', requireFreshAuth(REAUTH_TIME_CRITICAL), requireVerified, postPaymentSync);
