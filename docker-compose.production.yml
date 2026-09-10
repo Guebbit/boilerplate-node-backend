@@ -9,19 +9,30 @@
 # cannot run without. Telemetry is exported over OTLP to a collector that is deliberately NOT
 # defined here — see the note at the bottom.
 #
-#   docker compose -f docker-compose.production.yml up -d --build
-#   docker compose -f docker-compose.production.yml logs -f app
-#   docker compose -f docker-compose.production.yml down          # add -v to drop the data too
+#   export COMPOSE_PROJECT_NAME=acme
+#   docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml up -d --build
+#   docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml logs -f app
+#   docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml down  # -v: data too
+#
+# ── ONE DEPLOYMENT PER CLIENT ────────────────────────────────────────────────────────────────────
+# This stack serves ONE client organisation. Many clients means many stacks, each with its own
+# database and its own domain — never one stack serving many.
+#
+# `COMPOSE_PROJECT_NAME` is the client's name and does two jobs at once: it namespaces every
+# container, network and volume, and it selects that client's config below. Unset, nothing starts.
 #
 # ── BEFORE THE FIRST DEPLOY ──────────────────────────────────────────────────────────────────────
-# Copy `.env-example` to `.env` and set real values. The application reads `.env` through dotenv;
-# this file passes through only what has to differ inside the network (service hostnames) or what
-# an operator should be able to override per environment without editing a committed file.
+# Copy `.env-example` to `clients/<name>/.env` and set real values.
 #
-# The secrets that MUST NOT keep their example values: NODE_TOKEN_ACCESS, NODE_TOKEN_REFRESH,
-# NODE_METRICS_TOKEN, and the Mongo/Redis/RabbitMQ credentials below. `.env` is in
-# `.dockerignore` and `.gitignore` on purpose — it is mounted at runtime, never baked into the
-# image.
+# The file is named twice on purpose, because compose reads it through two separate channels:
+# `--env-file` resolves the `${...}` substitutions in THIS file, while `env_file:` below is what
+# the container itself receives. Naming only one of them silently gives every client the same
+# application config.
+#
+# Every client needs its OWN secrets and its OWN NODE_PORT — never copy one client's keys to
+# another. The values that MUST NOT keep their examples: NODE_TOKEN_ACCESS, NODE_TOKEN_REFRESH,
+# NODE_METRICS_TOKEN, and the Mongo/Redis/RabbitMQ credentials below. `clients/` is in
+# `.dockerignore` and `.gitignore` on purpose — mounted at runtime, never baked into the image.
 
 services:
     app:
@@ -42,18 +53,18 @@ services:
         stop_grace_period: 30s
 
         env_file:
-            - .env
+            - clients/${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME to the client's name}/.env
 
         environment:
             NODE_ENV: 'production'
-            # Service hostnames on the compose network. These override whatever `.env` holds,
-            # because `.env` is written for a developer running the API on the host against
+            # Service hostnames on the compose network. These override whatever the client env
+            # file holds, because that file is written for a developer running the API against
             # localhost ports, and inside the network the names are the addresses.
             # No `?authSource=admin`: this user is created ON `MONGO_DB` itself (see
             # `docker/mongo-init.js`), so the database already in the path is its auth source.
-            NODE_DB_URI: 'mongodb://${MONGO_APP_USER:-api}:${MONGO_APP_PASSWORD:?set MONGO_APP_PASSWORD in .env}@database:27017/${MONGO_DB:-api}'
-            NODE_REDIS_URL: 'redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}@cache:6379'
-            NODE_RABBITMQ_URL: 'amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}@queue:5672'
+            NODE_DB_URI: 'mongodb://${MONGO_APP_USER:-api}:${MONGO_APP_PASSWORD:?set MONGO_APP_PASSWORD in the client env file}@database:27017/${MONGO_DB:-api}'
+            NODE_REDIS_URL: 'redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in the client env file}@cache:6379'
+            NODE_RABBITMQ_URL: 'amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in the client env file}@queue:5672'
             NODE_PORT: '${NODE_PORT:-3000}'
             # One process per container. Scale with `--scale app=N` or with the orchestrator, not
             # with an in-container cluster — see the Dockerfile CMD note.
@@ -120,12 +131,12 @@ services:
         deploy:
             replicas: 1
         env_file:
-            - .env
+            - clients/${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME to the client's name}/.env
         environment:
             NODE_ENV: 'production'
-            NODE_DB_URI: 'mongodb://${MONGO_APP_USER:-api}:${MONGO_APP_PASSWORD:?set MONGO_APP_PASSWORD in .env}@database:27017/${MONGO_DB:-api}'
-            NODE_REDIS_URL: 'redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}@cache:6379'
-            NODE_RABBITMQ_URL: 'amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}@queue:5672'
+            NODE_DB_URI: 'mongodb://${MONGO_APP_USER:-api}:${MONGO_APP_PASSWORD:?set MONGO_APP_PASSWORD in the client env file}@database:27017/${MONGO_DB:-api}'
+            NODE_REDIS_URL: 'redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in the client env file}@cache:6379'
+            NODE_RABBITMQ_URL: 'amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in the client env file}@queue:5672'
             NODE_SERVICE_NAME: '${NODE_SERVICE_NAME:-api}-cron'
         volumes:
             - ./docker/crontab:/etc/crontabs/node:ro
@@ -146,10 +157,10 @@ services:
             # (see `NODE_DB_URI` above and `docker/mongo-init.js`), so a leaked connection
             # string can never `dropDatabase` on another database or read `admin.system.users`.
             MONGO_INITDB_ROOT_USERNAME: '${MONGO_ROOT_USER:-root}'
-            MONGO_INITDB_ROOT_PASSWORD: '${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in .env}'
+            MONGO_INITDB_ROOT_PASSWORD: '${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in the client env file}'
             MONGO_INITDB_DATABASE: '${MONGO_DB:-api}'
             MONGO_APP_USER: '${MONGO_APP_USER:-api}'
-            MONGO_APP_PASSWORD: '${MONGO_APP_PASSWORD:?set MONGO_APP_PASSWORD in .env}'
+            MONGO_APP_PASSWORD: '${MONGO_APP_PASSWORD:?set MONGO_APP_PASSWORD in the client env file}'
         volumes:
             - mongo-data:/data/db
             # First-run only, same as the Umami init script: creates MONGO_APP_USER against an
@@ -157,7 +168,8 @@ services:
             - ./docker/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
         # No `ports:` entry, deliberately. The database is reachable from the compose network and
         # from nowhere else. Reach it for maintenance with
-        # `docker compose -f docker-compose.production.yml exec database mongosh -u "$MONGO_ROOT_USER" -p`.
+        # `docker compose --env-file "clients/$COMPOSE_PROJECT_NAME/.env" -f docker-compose.production.yml
+        # exec database mongosh -u "$MONGO_ROOT_USER" -p`.
         healthcheck:
             test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
             interval: 10s
@@ -184,7 +196,7 @@ services:
                 '--appendonly',
                 'no',
                 '--requirepass',
-                '${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}'
+                '${REDIS_PASSWORD:?set REDIS_PASSWORD in the client env file}'
             ]
         volumes:
             - redis-data:/data
@@ -202,7 +214,7 @@ services:
         restart: unless-stopped
         environment:
             RABBITMQ_DEFAULT_USER: '${RABBITMQ_USER:-guest}'
-            RABBITMQ_DEFAULT_PASS: '${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}'
+            RABBITMQ_DEFAULT_PASS: '${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in the client env file}'
         volumes:
             - rabbitmq-data:/var/lib/rabbitmq
         healthcheck:

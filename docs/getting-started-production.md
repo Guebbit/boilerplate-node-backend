@@ -13,11 +13,21 @@ themselves. This page is the short version; the compose file is the source of tr
 
 ## First run
 
+A production stack serves **one client organisation**. It is named, and the name picks up that
+client's configuration:
+
 ```bash
-cp .env-example .env
+mkdir -p clients/acme
+cp .env-example clients/acme/.env
+export COMPOSE_PROJECT_NAME=acme
 ```
 
-Then edit `.env`. Three groups of values need real ones before the first deploy:
+`COMPOSE_PROJECT_NAME` does two jobs at once: it prefixes every container, network and volume, and
+it selects `clients/acme/.env` below. Unset, the stack refuses to start rather than guessing. To
+run a second client on the same host, repeat with a different name and a different `NODE_PORT` —
+nothing is shared between them.
+
+Then edit `clients/acme/.env`. Three groups of values need real ones before the first deploy:
 
 | Variable                                                                           | Why                                                                                                                                                       |
 | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -28,8 +38,13 @@ Then edit `.env`. Three groups of values need real ones before the first deploy:
 `MONGO_ROOT_USER` defaults to `root`, `MONGO_APP_USER` and `MONGO_DB` default to `api`, `RABBITMQ_USER` defaults to `guest`. `MONGO_ROOT_USER`/`MONGO_ROOT_PASSWORD` are maintenance-only — the app itself authenticates as `MONGO_APP_USER`, a `readWrite` user scoped to `MONGO_DB` and created by `docker/mongo-init.js` the first time the volume is empty.
 
 ```bash
-docker compose -f docker-compose.production.yml up -d --build
+docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml up -d --build
 ```
+
+The file is named twice — once by `--env-file`, once by `env_file:` inside the compose file —
+because compose reads it through two separate channels. `--env-file` resolves the `${...}`
+substitutions in the compose file itself; `env_file:` is what the container receives. Naming only
+one of them silently gives every client the same application config.
 
 That builds `docker/Dockerfile.production` (multi-stage: type-checks and lints in a build stage,
 ships only production dependencies in the runtime stage) and starts the API plus `database`,
@@ -39,7 +54,7 @@ reload: what's running is exactly what was built.
 ## Check it worked
 
 ```bash
-docker compose -f docker-compose.production.yml logs -f app
+docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml logs -f app
 curl http://127.0.0.1:3000/          # health probe
 ```
 
