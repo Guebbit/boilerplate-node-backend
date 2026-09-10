@@ -74,13 +74,13 @@ survives a move off compose unchanged (a `CronJob` on Kubernetes, a systemd time
 the same `ops/reap-*`/`sweep:*` entry points every one of them already documents as "meant to run
 periodically", via `db/run-script.ts`.
 
-| Job                              | Schedule (UTC) | What it does                                                                                            |
-| -------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------- |
-| `npm run reap:quarantine`        | 02:00 nightly  | Deletes quarantined upload files past their retention window.                                           |
-| `npm run reap:inactive-accounts` | 02:05 nightly  | Warns, then soft-, then hard-deletes an account inactive past the threshold. Disabled by default.       |
-| `npm run reap:orders`            | 02:10 nightly  | Anonymizes an order's remaining PII once its retention window has passed.                               |
-| `npm run reap:payments`          | 02:15 nightly  | Deletes abandoned (never-settled) payment attempts past their retention window.                         |
-| `npm run sweep:order-effects`    | 02:20 nightly  | Re-announces `ORDER_CANCELLED` for a refund the event bus's one delivery attempt did not carry through. |
+| Job                              | Schedule (UTC) | Leased | What it does                                                                                            |
+| -------------------------------- | -------------- | ------ | ------------------------------------------------------------------------------------------------------- |
+| `npm run reap:quarantine`        | 02:00 nightly  | No     | Deletes quarantined upload files past their retention window.                                           |
+| `npm run reap:inactive-accounts` | 02:05 nightly  | Yes    | Warns, then soft-, then hard-deletes an account inactive past the threshold. Disabled by default.       |
+| `npm run reap:orders`            | 02:10 nightly  | No     | Anonymizes an order's remaining PII once its retention window has passed.                               |
+| `npm run reap:payments`          | 02:15 nightly  | No     | Deletes abandoned (never-settled) payment attempts past their retention window.                         |
+| `npm run sweep:order-effects`    | 02:20 nightly  | No     | Re-announces `ORDER_CANCELLED` for a refund the event bus's one delivery attempt did not carry through. |
 
 `docker/crontab` and this list are staggered five minutes apart so five jobs opening their own
 Mongo connection do not all land on the connection pool at once — each job's own header in `ops/`
@@ -92,15 +92,17 @@ not the other is either a job that fails every night or cleanup that silently st
 racing over the same collection — nothing here is meant to scale. `withLease`
 (`src/infrastructure/persistence/lease.ts`) is the backstop if it ever is: an atomic Mongo upsert
 that only one caller can hold at a time, TTL-bounded so a crashed holder's lease still expires.
-None of the five jobs above call it yet — they are correct today under `replicas: 1` alone — but any
-future scheduled job that would NOT be safe to run twice concurrently should wrap its work in it.
+`reap:inactive-accounts` wraps its work in it, as the reference implementation — it hard-deletes
+accounts, so it is where "exactly one runner" earns its keep. The other four are correct today
+under `replicas: 1` alone and are not wrapped; any future scheduled job that would NOT be safe to
+run twice concurrently should wrap its work in it too.
 
 **Observability.** Every `withLease` call stamps its lease document's `lastSuccessAt` on success and
 `lastError` on a throw, and `GET /observability/health`'s `jobs` array is built to report that set —
 so a job wrapped in `withLease` that silently stopped running would be visible on the probe an
-operator already looks at, without a Pushgateway or a second UI. The signal exists; nothing
-populates it yet. None of the five jobs above call `withLease` (see **Mutual exclusion** above), so
-`jobs` is an empty array in production today — do not read that emptiness as "every job is healthy".
+operator already looks at, without a Pushgateway or a second UI. `jobs` reports the leased jobs,
+and only those — the **Leased** column above is the current list, not every job in the crontab. A
+job absent from `jobs` is not wrapped in `withLease` yet; that is not the same as unhealthy.
 See `docs/tools/observability-layer.md`.
 
 ## Data retention

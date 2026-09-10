@@ -28,7 +28,8 @@
  * disabled-by-default safety net, not a substitute for a fuller design if this ever needs one.
  *
  * Meant to run periodically (the same cron container that runs `reap:quarantine` and
- * `reap:orders`), never on every boot.
+ * `reap:orders`), never on every boot. Guarded by `withLease` — the one job wired to the
+ * primitive today, since a double-run here is the most expensive of the five.
  *
  * See: docs/reference/ops.md
  */
@@ -50,10 +51,22 @@ import { enabledModules } from '../src/modules';
 import { userRepository, userService, type UserDocument } from '@modules/users';
 import { inactivityWarningEmail } from '@modules/account/emails';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
+import { withLease } from '@infrastructure/persistence/lease';
 import { runScript } from '../db/run-script';
 
 /** Fixed pause between stages — not configurable, to keep this script's one dial to a single day count. */
 const GRACE_DAYS = 30;
+
+/**
+ * Reference implementation for `withLease` — see `docs/reference/ops.md#scheduled-jobs`. Picked
+ * for this because a double-run here is the most expensive of the five nightly jobs: it hard-
+ * deletes accounts, not just files or already-settled rows.
+ *
+ * Generous relative to a normal run (email enqueues, then a handful of Mongo writes per stage):
+ * long enough that a slow night never gets pre-empted by its own crash-recovery window, short
+ * enough that a holder that really did crash does not block next week's run for long.
+ */
+const LEASE_TTL_MS = 15 * 60 * 1000;
 
 const daysAgo = (days: number): Date => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
@@ -101,27 +114,37 @@ const main = async (): Promise<void> => {
         return;
     }
 
-    await start();
-    registerModules(enabledModules);
-    await initI18n();
+    const ran = await withLease('reap-inactive-accounts', LEASE_TTL_MS, async () => {
+        await start();
+        registerModules(enabledModules);
+        await initI18n();
 
-    const toWarn = await userRepository.findInactiveUnwarned(daysAgo(inactiveDays));
-    for (const user of toWarn) await warn(user);
+        const toWarn = await userRepository.findInactiveUnwarned(daysAgo(inactiveDays));
+        for (const user of toWarn) await warn(user);
 
-    const toSoftDelete = await userRepository.findWarnedStillInactive(
-        daysAgo(inactiveDays + GRACE_DAYS)
-    );
-    for (const user of toSoftDelete) await userService.remove(user, false);
+        const toSoftDelete = await userRepository.findWarnedStillInactive(
+            daysAgo(inactiveDays + GRACE_DAYS)
+        );
+        for (const user of toSoftDelete) await userService.remove(user, false);
 
-    const toHardDelete = await userRepository.findReaperSoftDeletedPastGrace(daysAgo(GRACE_DAYS));
-    for (const user of toHardDelete) await userService.remove(user, true);
+        const toHardDelete = await userRepository.findReaperSoftDeletedPastGrace(
+            daysAgo(GRACE_DAYS)
+        );
+        for (const user of toHardDelete) await userService.remove(user, true);
 
-    logger.info({
-        message: 'Inactive-account reaper run complete.',
-        warned: toWarn.length,
-        softDeleted: toSoftDelete.length,
-        hardDeleted: toHardDelete.length
+        logger.info({
+            message: 'Inactive-account reaper run complete.',
+            warned: toWarn.length,
+            softDeleted: toSoftDelete.length,
+            hardDeleted: toHardDelete.length
+        });
     });
+
+    if (ran === undefined) {
+        logger.info({
+            message: 'Inactive-account reaper skipped: another holder already has the lease.'
+        });
+    }
 };
 
 void runScript(main, () => Promise.all([stopDatabase(), stopQueue()]));
