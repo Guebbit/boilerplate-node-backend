@@ -388,6 +388,23 @@ keys:
           blast radius of every write against it is the same — a party this shop did not intend
           gets signed deliveries.
 
+    # -- api-keys --------------------------------------------------------------------------------
+    - key: apikeys.read
+      module: api-keys
+      subject: ApiKey
+      action: read
+      scope: tenant
+      description: List this shop's machine-to-machine credentials. Never returns a key's secret.
+    - key: apikeys.manage
+      module: api-keys
+      subject: ApiKey
+      action: manage
+      scope: tenant
+      description: >-
+          Mint or revoke a credential. One key rather than create/delete: minting already carries
+          the mint-time floor (a key can never hold a permission the minter lacks), so the blast
+          radius of both writes is the same — who this shop's API trusts.
+
     # -- observability -------------------------------------------------------------------------
     # The only platform-scope module in the boilerplate, and it is what makes the invariant
     # testable here rather than only in a downstream project: health, metrics and the operational

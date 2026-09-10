@@ -11,6 +11,7 @@
 import type { AppModule } from '@kernel/registry';
 import account from './modules/account/module';
 import antibot from './modules/antibot/module';
+import apiKeys from './modules/api-keys/module';
 import auditLogs from './modules/audit-logs/module';
 import cart from './modules/cart/module';
 import delivery from './modules/delivery/module';
@@ -29,6 +30,7 @@ import wishlist from './modules/wishlist/module';
 export const enabledModules: AppModule[] = [
     account,
     antibot,
+    apiKeys,
     auditLogs,
     cart,
     delivery,

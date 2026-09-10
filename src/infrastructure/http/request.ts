@@ -293,6 +293,13 @@ export interface CallerContext {
      * separately instead of one standing in for the other.
      */
     actorRoleName?: string;
+    /**
+     * The api-key behind {@link caller} — `request.credentialId` — absent for every request that
+     * resolved a human session instead. Sibling to {@link actorRoleName} rather than a replacement
+     * for it, and kept only for the audit trail's `actor_credential_id`: a row can say "acted via
+     * key `sk_a1b2c3d4`" instead of attributing machine traffic to the human who created the key.
+     */
+    actorCredentialId?: string;
     /** The caller's address, as Express resolved it (trust-proxy aware). */
     ip?: string;
     /** The `User-Agent` the caller sent, if any. */
@@ -339,6 +346,7 @@ const STRANGER: Caller = { id: null, tenantId: null, scope: 'tenant', permission
 export const callerContextOf = (request: {
     caller?: Caller;
     authContext?: { analyticsConsent?: boolean; roles?: { tenant?: string } };
+    credentialId?: string;
     ip?: string;
     headers?: {
         'user-agent'?: string | string[];
@@ -354,6 +362,7 @@ export const callerContextOf = (request: {
     return {
         caller: request.caller ?? STRANGER,
         actorRoleName: request.authContext?.roles?.tenant,
+        actorCredentialId: request.credentialId,
         ip: request.ip,
         // Node exposes a repeated header as an array; take the first rather than logging
         // '[object Object]'-style noise.

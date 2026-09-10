@@ -69,6 +69,13 @@ export interface AuditEvent {
      */
     actor_role_name?: string;
     /**
+     * The api-key behind `actor_user_id`, e.g. `sk_a1b2c3d4` (the public prefix only, never the
+     * secret) — sibling to `actor_role_name`, absent for a request that resolved a human session
+     * instead. Lets a reader tell "the shop owner did this" from "a credential minted BY the shop
+     * owner did this", which otherwise both record identically.
+     */
+    actor_credential_id?: string;
+    /**
      * Which world this action happened in. Derived from `context.caller.scope` by default, which
      * is correct for every ordinary tenant action — but `context.caller` is ALWAYS resolved in
      * tenant scope (see `CallerContext`'s own docblock), so a PLATFORM-key check must override it
@@ -225,6 +232,7 @@ export const buildAuditEvent = (
                 | 'actor_user_id'
                 | 'actor_role'
                 | 'actor_role_name'
+                | 'actor_credential_id'
                 | 'actor_scope'
                 | 'target_type'
                 | 'target_id'
@@ -238,6 +246,7 @@ export const buildAuditEvent = (
     actor_user_id: fields.actor_user_id ?? context.caller.id ?? 'unknown',
     actor_role: fields.actor_role ?? resolveActorRole(context),
     actor_role_name: fields.actor_role_name ?? context.actorRoleName,
+    actor_credential_id: fields.actor_credential_id ?? context.actorCredentialId,
     // `context.caller.scope` is always `'tenant'` (see `AuditEvent.actor_scope`'s own docblock),
     // so this default is correct for every ordinary tenant action and wrong for a platform one —
     // which is exactly why a platform-key check overrides it explicitly instead of relying here.

@@ -48,6 +48,10 @@ const FRONTEND_PAIRING: Readonly<Partial<Record<string, Pairing>>> = {
         counterparts: [],
         why: 'It has no screen of its own — whichever form is guarded (signup, reset, contact) calls `POST /antibot/challenge` and attaches the solved headers inline, in the frontend module that owns that form.'
     },
+    'api-keys': {
+        counterparts: [],
+        why: 'The admin screen (list, mint, revoke) is deferred, not silently skipped — the backend admin surface is complete and usable via any HTTP client today.'
+    },
     'audit-logs': {
         counterparts: ['admin'],
         why: "Two endpoints read the one trail this module owns — its own `GET /audit` for a shop's staff, `observability`'s `GET /observability/audit` for the platform operator — and both render in the frontend's admin dashboard."

@@ -46,6 +46,49 @@ refresh window in play (`NODE_TOKEN_REFRESH_TIME_LONG` — a year by default —
 `logout-all` for every account instead of waiting), then drop the old secret and deploy again.
 Skipping the wait window logs out every session still signed with the entry you remove.
 
+## Machine-to-machine credentials
+
+A JWT proves a PERSON signed in; a partner integration or a webhook consumer calling back into the
+API has no person behind it, and handing it a person's password would put every request in the
+audit trail under that person's name while carrying their whole reach. `api-keys` is the answer: a
+revocable, opaque credential a person MINTS, scoped to a subset of their own permissions.
+
+**Format and dispatch.** `sk_<8-char prefix>_<32 bytes>`, both halves `base64url`. `getAuth`
+(`kernel/middlewares/authorizations.ts`) branches on the `sk_` prefix before attempting any JWT
+verification — a JWT is always base64url of `{"alg"` and so always begins `eyJ`, so the two
+prefixes can never collide. `kernel/authentication.ts`'s `CredentialResolver` port is what
+`api-keys` fills, the same "module fills a kernel port" shape `AuthResolver` already establishes;
+unlike `AuthResolver`, an unregistered `CredentialResolver` is not an error — a build with no
+`api-keys` module simply resolves nothing for an `sk_...` token, the same as a token nobody can
+verify.
+
+**Storage is a sha256 digest, not encryption.** A credential is verified, never re-signed with, so
+there is no plaintext to recover later — `hashToken` (`@modules/users`), the same one-way primitive
+`account/two-factor/backup-codes.ts` already uses: `randomBytes(32)` has no search space for
+bcrypt/argon2 to make expensive, so the ~100ms they would cost on every authenticated request buys
+nothing. Comparison is constant-time (`constantTimeEqual`,
+`infrastructure/security/constant-time.ts` — the same helper `isMetricsScraper` uses, see below),
+never `===`.
+
+**A key holds a subset of the minter's permissions, floored TWICE.** Once at MINT time
+(`api-keys/services/api-keys.ts`), against what the requesting caller holds right then; again on
+EVERY SUBSEQUENT USE (`api-keys/module.ts`'s `CredentialResolver`), by re-deriving the minter's
+CURRENT permissions and intersecting them against the key's stored snapshot. The second floor is
+the one that matters after the fact: demoting or deleting the person who minted a key shrinks or
+kills every key they ever minted, without the credential document itself ever being touched — the
+same defensive shape as `kernel/permissions.ts`'s own caller flooring (never trust a cached
+permission list; re-derive from the authoritative source on every check).
+
+**Tenant-scoped only.** A credential can never satisfy a `platform.` key — `requirePermission`
+refuses one outright, distinctly from a missing permission, since this repo's deployment model is a
+silo (one organisation per stack) and every real use case is shop-level.
+
+**Lifecycle.** The plaintext is shown exactly once, in `POST /api-keys`'s response. Revoke
+(`DELETE /api-keys/{id}`) is a soft state change — `revokedAt`, not a delete — so a revoked key's
+audit history stays readable; revoking twice is a no-op, not a 404. An optional `expiresAt` refuses
+the credential past that instant with no revoke needed. `lastUsedAt` is stamped on every successful
+resolve, fire-and-forget, so a partner integration that stopped calling can be found and cleaned up.
+
 ## Security properties provided
 
 - **JWT signing (HS256 + secret, key ring)**: prevents token tampering and enforces expiry
@@ -235,6 +278,14 @@ if a miss is WRITTEN: every path that checks a code — the login challenge, the
 and both removal routes — persists the spent attempt before answering, or the ceiling silently
 becomes no ceiling at all.
 
+**A sixth, also keyed on a credential.** `apiKeyLimiter` bounds a request authenticated via
+[an api-key](#machine-to-machine-credentials), keyed on the credential itself rather than the
+caller's address — a partner behind one NAT is one caller, and ten partners behind one CDN are ten,
+which an address-keyed budget can't tell apart. Run from inside `getAuth`'s credential branch
+rather than mounted on any one route, so every route reached through `getAuth` gets it for free; it
+layers on top of, not in place of, the address-keyed global brake, which keeps bounding every
+request including credentialed ones. Default `NODE_API_KEY_RATE_LIMIT_MAX=120`.
+
 ### Identity- and block-keyed budgets — signup, password reset, the contact form
 
 A residential-proxy pool costs about $20 for millions of addresses, and a single IPv6 customer is
@@ -327,6 +378,11 @@ caller who is not an admin is 403. The same rule decides what the auth resolver 
 whose user no longer exists — it resolves `undefined` rather than rejecting, so a deleted admin
 gets 403 rather than being told to log in to an account that cannot.
 
+An [api-key](#machine-to-machine-credentials) follows the same rule from a third direction: it IS
+a credential, so a route it holds no permission for is 403 like any other refusal — including a
+`platform.` route, which it is refused outright rather than merely never granted, since a
+tenant-scoped credential can never reach one by construction.
+
 ## Why the SSE endpoints authenticate by cookie
 
 `EventSource` — the only way a browser consumes SSE — **cannot set request headers**. That is a
@@ -356,6 +412,7 @@ That is why auth, headers, origin checks, and rate limiting stay near routes and
 ## Related pages
 
 - [Request Flow](../theory/request-flow.md)
+- [api-keys](../modules/api-keys.md) — machine-to-machine credentials, in full
 - [Sessions](../modules/account-sessions.md) — the token mechanics, and the freshness claims
 - [Two-factor authentication](../modules/account-two-factor.md) — the registry and its state machine
 - [OAuth](../modules/account-oauth.md) — the provider port and the CSRF handshake

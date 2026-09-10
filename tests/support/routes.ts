@@ -213,7 +213,10 @@ export const securityMock = () => {
         // future route, not by `feedback`'s — that one reads it back through `contactLimiters`
         // above) is a single closure rather than an array, so it gets one label, not an indexed one.
         submissionLimiter: labelled('submissionLimiter'),
-        webhookLimiter: labelled('webhookLimiter')
+        webhookLimiter: labelled('webhookLimiter'),
+        // Same shape as `webhookLimiter`: a single closure, run from inside `getAuth`'s
+        // credential branch rather than mounted on any one route.
+        apiKeyLimiter: labelled('apiKeyLimiter')
     };
 };
 

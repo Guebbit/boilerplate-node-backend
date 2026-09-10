@@ -21,6 +21,14 @@ declare module 'express-serve-static-core' {
          * request acts in one scope, and which one is settled by what is being asked.
          */
         caller?: Caller;
+        /**
+         * The resolved api-key's id, set only on the CREDENTIAL path (`getAuth`'s `sk_...` branch)
+         * — absent whenever {@link authContext} is set, since the two paths are mutually exclusive.
+         * Carried onto `CallerContext.actorCredentialId` for the audit trail, and read by
+         * `apiKeyLimiter` (`@infrastructure/http/middlewares/rate-limit`) to key its budget on the
+         * credential rather than the caller's address.
+         */
+        credentialId?: string;
         requestId?: string;
         /**
          * URLs of the images this request uploaded, set only when there was no broker to hand the

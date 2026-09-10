@@ -119,18 +119,18 @@ The same roles after the evaluator has had them: `manage` expanded into its modu
 keys, and the baseline folded in. This is what a route guard and a listing actually
 answer.
 
-| Role         | products | orders  | payments | inventory | delivery | feedback | locales | users   | account | audit-logs | webhooks | observability |
-| ------------ | -------- | ------- | -------- | --------- | -------- | -------- | ------- | ------- | ------- | ---------- | -------- | ------------- |
-| `guest`      | r        | —       | —        | —         | r        | —        | r       | —       | —       | —          | —        | —             |
-| `customer`   | r        | r       | r        | —         | r        | —        | r       | —       | —       | —          | —        | —             |
-| `manager`    | **all**  | **all** | r        | r         | r        | r        | **all** | r       | —       | r          | **all**  | —             |
-| `warehouse`  | r        | r       | —        | **all**   | **all**  | —        | r       | —       | —       | —          | —        | —             |
-| `support`    | r        | r       | r        | —         | r        | **all**  | r       | ru      | —       | r          | —        | —             |
-| `editor`     | **all**  | —       | —        | —         | r        | —        | **all** | —       | —       | —          | —        | —             |
-| `translator` | r        | —       | —        | —         | r        | —        | **all** | —       | —       | —          | —        | —             |
-| `moderator`  | r        | **all** | **all**  | —         | r        | —        | r       | **all** | —       | r          | —        | —             |
-| `owner`      | **all**  | **all** | **all**  | **all**   | **all**  | **all**  | **all** | **all** | d       | r          | **all**  | —             |
-| `operator`   | —        | —       | —        | —         | —        | —        | —       | —       | —       | —          | —        | **all**       |
+| Role         | products | orders  | payments | inventory | delivery | feedback | locales | users   | account | audit-logs | webhooks | api-keys | observability |
+| ------------ | -------- | ------- | -------- | --------- | -------- | -------- | ------- | ------- | ------- | ---------- | -------- | -------- | ------------- |
+| `guest`      | r        | —       | —        | —         | r        | —        | r       | —       | —       | —          | —        | —        | —             |
+| `customer`   | r        | r       | r        | —         | r        | —        | r       | —       | —       | —          | —        | —        | —             |
+| `manager`    | **all**  | **all** | r        | r         | r        | r        | **all** | r       | —       | r          | **all**  | —        | —             |
+| `warehouse`  | r        | r       | —        | **all**   | **all**  | —        | r       | —       | —       | —          | —        | —        | —             |
+| `support`    | r        | r       | r        | —         | r        | **all**  | r       | ru      | —       | r          | —        | —        | —             |
+| `editor`     | **all**  | —       | —        | —         | r        | —        | **all** | —       | —       | —          | —        | —        | —             |
+| `translator` | r        | —       | —        | —         | r        | —        | **all** | —       | —       | —          | —        | —        | —             |
+| `moderator`  | r        | **all** | **all**  | —         | r        | —        | r       | **all** | —       | r          | —        | —        | —             |
+| `owner`      | **all**  | **all** | **all**  | **all**   | **all**  | **all**  | **all** | **all** | d       | r          | **all**  | **all**  | —             |
+| `operator`   | —        | —       | —        | —         | —        | —        | —       | —       | —       | —          | —        | —        | **all**       |
 
 **all** — every key that module declares · `r` read · `c` create · `u` update · `d` delete · — nothing
 

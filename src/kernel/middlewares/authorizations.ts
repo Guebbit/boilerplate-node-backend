@@ -17,7 +17,12 @@
  */
 
 import type { Request, Response, NextFunction } from 'express';
-import { resolveAccessToken, resolveRefreshToken } from '@kernel/authentication';
+import {
+    resolveAccessToken,
+    resolveRefreshToken,
+    resolveCredential,
+    API_KEY_TOKEN_PREFIX
+} from '@kernel/authentication';
 import { holdsKey } from '@kernel/ability';
 import {
     assertDeclared,
@@ -31,6 +36,7 @@ import { t } from '@infrastructure/i18n';
 import { rejectResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { environmentNumber } from '@infrastructure/runtime/environment';
+import { apiKeyLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import {
     emitAuditEvent,
     coreAuditActions,
@@ -66,19 +72,41 @@ export const getTokenBearer = (request: Request) => request.header('Authorizatio
 /**
  * Resolve `request.authContext` from a bearer token when one is present, then always continue.
  *
- * Never rejects: an absent or invalid token just leaves `authContext` unset, so this can sit in
- * front of routes that work for both anonymous and authenticated callers — `isAuth`/`requirePermission`
- * are what actually gate a route.
+ * Never rejects on the JWT path: an absent or invalid token just leaves `authContext` unset, so
+ * this can sit in front of routes that work for both anonymous and authenticated callers —
+ * `isAuth`/`requirePermission` are what actually gate a route.
  *
- * @param request - populated with `authContext` on success
- * @param response - unused; kept for the Express middleware signature
- * @param next - always called, whether or not a user was resolved
+ * The CREDENTIAL path (`sk_...`, resolved by `@modules/api-keys` when present) is the one
+ * exception: a credential that resolves but is over its own request budget is refused here, with
+ * `apiKeyLimiter`'s 429 — the request never reaches a route only to be refused there instead.
+ *
+ * @param request - populated with `authContext` (JWT) or `caller`/`credentialId` (credential) on success
+ * @param response - unused on the JWT path; answers 429 on the credential path's own rate limit
+ * @param next - always called on the JWT path; called by `apiKeyLimiter` on the credential path
  */
 export const getAuth = (request: Request, response: Response, next: NextFunction) => {
     const token = getTokenBearer(request);
 
     if (!token) {
         next();
+        return;
+    }
+
+    // Checked before any JWT verification is attempted: a JWT is always base64url of `{"alg"`
+    // (`eyJ...`), so the two prefixes can never collide, and this skips a wasted parse attempt on
+    // an opaque token. See `API_KEY_TOKEN_PREFIX`'s own doc comment.
+    if (token.startsWith(API_KEY_TOKEN_PREFIX)) {
+        resolveCredential(token)
+            .then((resolved) => {
+                if (!resolved) {
+                    next();
+                    return;
+                }
+                request.caller = resolved.caller;
+                request.credentialId = resolved.credentialId;
+                apiKeyLimiter(request, response, next);
+            })
+            .catch(() => next());
         return;
     }
 
@@ -191,11 +219,13 @@ export const requirePermission = (key: string) => {
     function requirePermissionGuard(request: Request, response: Response, next: NextFunction) {
         /*
          * No credentials at all — 401, not 403. Unreachable through the current routes, which all
-         * mount `isAuth` first; it guards a future mount that forgets.
+         * mount `isAuth` first; it guards a future mount that forgets. Two paths resolve a
+         * caller: `authContext` (a human session) or `caller` alone (an api-key — see `getAuth`'s
+         * `sk_...` branch); neither present is genuinely unauthenticated.
          *
          * See: docs/tools/security.md#_401-or-403-and-why-the-guards-agree
          */
-        if (!request.authContext) {
+        if (!request.authContext && !request.caller) {
             auditRefusal(request, {
                 action: coreAuditActions.SECURITY_UNAUTHORIZED,
                 actor_user_id: 'anonymous',
@@ -208,12 +238,39 @@ export const requirePermission = (key: string) => {
         }
 
         /*
+         * An api-key is tenant-scoped by construction (docs/tools/security.md#machine-to-machine-credentials)
+         * and can never satisfy a platform key. Refused here, distinctly from a missing
+         * permission, rather than left to fall through to `holdsKey` for the same 403 — the audit
+         * trail should say WHY, not just that the check failed.
+         */
+        if (!request.authContext && scope === 'platform') {
+            auditRefusal(request, {
+                action: coreAuditActions.SECURITY_FORBIDDEN,
+                actor_scope: scope,
+                metadata: { reason: 'credential_wrong_scope', permission: key }
+            });
+            rejectResponse(response, 403);
+            return;
+        }
+
+        /*
          * The guard asks the ability, not the key list, so a route and a query agree by
          * construction: both read the same rules. It asks about the ACTION and SUBJECT rather
          * than about the row, because a route guard runs before anything is fetched — which is
          * the whole point of keeping the row restriction in the read instead.
+         *
+         * `authContext` re-derives the caller PER KEY, because a human may hold both a tenant and
+         * a platform role and the key being checked is what decides which (`callerFor`'s own
+         * docblock). An api-key's caller has no such ambiguity — tenant-scoped only — and is
+         * already fixed at credential-resolve time, so it is used as-is.
+         *
+         * `!` is safe, not a suppression: the two guards above already returned for "neither
+         * present" and "no `authContext` and a platform key", so reaching here with no
+         * `authContext` guarantees `request.caller` is set — a fact the compiler cannot follow
+         * across the two earlier `if`s and their side-effecting calls.
          */
-        const allowed = holdsKey(callerFor(request.authContext, key), key);
+        const caller = request.authContext ? callerFor(request.authContext, key) : request.caller!;
+        const allowed = holdsKey(caller, key);
 
         /*
          * Step-up is asked AFTER the key check, and the order is the argument: telling somebody

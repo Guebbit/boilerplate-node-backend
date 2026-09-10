@@ -8,10 +8,11 @@
  * through the shared error envelope rather than express-rate-limit's own plain-text body.
  */
 
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { isIPv4 } from 'node:net';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { rateLimit, ipKeyGenerator, type Store, type RateLimitInfo } from 'express-rate-limit';
+import { constantTimeEqual } from '@infrastructure/security/constant-time';
 import { rejectResponse } from '@infrastructure/http/response';
 import { logger } from '@infrastructure/adapters/logger';
 import { t } from '@infrastructure/i18n';
@@ -125,6 +126,15 @@ export const DEFAULT_UPLOAD_RATE_LIMIT_MAX = 20;
  * state.
  */
 export const DEFAULT_PAYMENT_WEBHOOK_RATE_LIMIT_MAX = 60;
+
+/**
+ * Requests allowed per window, per api-key CREDENTIAL — see `apiKeyLimiter`.
+ *
+ * Sized like `DEFAULT_PAYMENT_WEBHOOK_RATE_LIMIT_MAX`: well above one legitimate integration's
+ * steady state, well below the global brake, so it bounds a misbehaving or compromised credential
+ * without a partner ever noticing it during normal use.
+ */
+export const DEFAULT_API_KEY_RATE_LIMIT_MAX = 120;
 
 /**
  * What a caller sees when a budget is spent: the shared error envelope, never express-rate-limit's
@@ -544,10 +554,30 @@ export const webhookLimiter: RequestHandler = rateLimit({
 });
 
 /**
+ * The budget for a request authenticated via an api-key — keyed on the CREDENTIAL, not the
+ * address: a partner behind one NAT is one caller, and ten partners behind one CDN are ten, which
+ * an address-keyed budget (the global brake) cannot tell apart. Run directly from `getAuth`'s
+ * credential branch (`@kernel/middlewares/authorizations`) rather than mounted on any one route,
+ * so every route reached through `getAuth` gets it for free. Layers on top of the global brake,
+ * never in place of it.
+ *
+ * `request.credentialId` is always present when this runs — `getAuth` only calls it after a
+ * credential has resolved — so the `!` is safe, not a suppression.
+ *
+ * See: docs/tools/security.md#the-rate-limit-budgets
+ */
+export const apiKeyLimiter: RequestHandler = rateLimitOn(
+    'api-key',
+    'NODE_API_KEY_RATE_LIMIT_MAX',
+    DEFAULT_API_KEY_RATE_LIMIT_MAX,
+    { keyGenerator: (request) => request.credentialId! }
+);
+
+/**
  * Guards the Prometheus scrape endpoint with a static bearer credential — Prometheus cannot hold a
  * session, so the admin JWT the other observability routes use is not available to it.
  *
- * DENY by default when `NODE_METRICS_TOKEN` is unset, and `timingSafeEqual` rather than `===`,
+ * DENY by default when `NODE_METRICS_TOKEN` is unset, and `constantTimeEqual` rather than `===`,
  * which would leak the token's prefix to anyone willing to measure.
  *
  * See: docs/tools/security.md#why-the-metrics-endpoint-has-its-own-credential
@@ -570,16 +600,8 @@ export const isMetricsScraper = (request: Request, response: Response, next: Nex
     const provided = authorization.startsWith('Bearer ')
         ? authorization.slice('Bearer '.length)
         : '';
-    const expectedBytes = Buffer.from(expected);
-    const providedBytes = Buffer.from(provided);
 
-    // `timingSafeEqual` throws on a length mismatch, which would itself be a length oracle — so
-    // the lengths are compared first and the result folded into one boolean.
-    const matches =
-        expectedBytes.length === providedBytes.length &&
-        timingSafeEqual(expectedBytes, providedBytes);
-
-    if (!matches) {
+    if (!constantTimeEqual(expected, provided)) {
         rejectResponse(response, 401, []);
         return;
     }

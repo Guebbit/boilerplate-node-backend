@@ -46,6 +46,8 @@ tags:
       description: The tenant's own action history — who did what, when, to which row. Read-only, and separate from Observability's operational audit, which is the platform operator's view across every shop.
     - name: Webhooks
       description: Outbound webhook subscriptions, the delivery log, replay, and the public event catalogue.
+    - name: ApiKeys
+      description: Machine-to-machine credentials — list, mint, revoke.
 
 # If set, by default all operation requires an authentication
 # security:
@@ -58,6 +60,14 @@ components:
             type: http
             scheme: bearer
             bearerFormat: JWT
+        apiKeyAuth:
+            type: http
+            scheme: bearer
+            # No `bearerFormat` — deliberately: `JWT` would claim a structure this credential
+            # does not have. `sk_<prefix>_<secret>`, opaque, distinguished from a JWT by that
+            # prefix alone (a JWT always begins `eyJ`). See
+            # docs/tools/security.md#machine-to-machine-credentials.
+            description: An opaque `sk_...` machine-to-machine credential, minted via `POST /api-keys`.
 
     parameters:
         # `Accept-Language` is honoured by every operation and is documented in
@@ -1156,3 +1166,9 @@ paths:
         $ref: '../../src/modules/webhooks/openapi.yaml#/paths/~1webhooks~1deliveries~1{id}~1replay'
     /webhooks/events:
         $ref: '../../src/modules/webhooks/openapi.yaml#/paths/~1webhooks~1events'
+
+    # ---------- api-keys ----------
+    /api-keys:
+        $ref: '../../src/modules/api-keys/openapi.yaml#/paths/~1api-keys'
+    /api-keys/{id}:
+        $ref: '../../src/modules/api-keys/openapi.yaml#/paths/~1api-keys~1{id}'
