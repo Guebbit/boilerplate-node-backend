@@ -265,6 +265,11 @@ Conventional Commits, enforced by commitlint on the `commit-msg` hook
   entry whenever a generated client cannot absorb it without being regenerated.
 - MUST stage explicit pathspecs. Never `git add -A` or `git add .`: another session may have
   untracked work in this worktree, and it is not yours to commit.
+- MUST NOT run research subagents that implement concurrently in the same working tree. A subagent
+  investigates and reports; writing code is single-threaded. Two agents that cannot see each
+  other's edits, reconciled by hand afterward, is exactly how a merged file ends up with defects
+  that pass review and only surface under execution — the failure mode is silent, not a merge
+  conflict.
 - The pre-commit hook runs `regenerate` plus the full `complete` gate, so allow ~10 minutes. If
   `ts-check`, `lint` and the tests have already passed by hand in this session, `--no-verify`
   rather than paying for the same gate twice.
