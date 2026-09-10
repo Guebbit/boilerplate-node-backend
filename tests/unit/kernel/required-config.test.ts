@@ -70,6 +70,35 @@ describe('module-declared variables', () => {
 
         expect(() => assertRequiredConfig(modules)).toThrow(/SECRET.*NODE_URL|NODE_URL.*SECRET/);
     });
+
+    it('checks a comma-separated ring member-by-member, not the joined string', () => {
+        // account/session's key ring is exactly this shape: an ordered, comma-separated list of
+        // secrets. A second entry left as the placeholder must refuse to boot even though the
+        // JOINED value is long and does not itself equal the placeholder.
+        configure();
+        process.env.SECRET = 'a-real-secret-value,change-me';
+        const modules: AppModule[] = [
+            {
+                name: 'demo',
+                requiredConfig: [{ key: 'SECRET', minLength: 16, placeholder: 'change-me' }]
+            }
+        ];
+
+        expect(() => assertRequiredConfig(modules)).toThrow(/SECRET/);
+    });
+
+    it('accepts a ring whose every member individually clears minLength and placeholder', () => {
+        configure();
+        process.env.SECRET = 'a-real-secret-value,another-real-secret-value';
+        const modules: AppModule[] = [
+            {
+                name: 'demo',
+                requiredConfig: [{ key: 'SECRET', minLength: 16, placeholder: 'change-me' }]
+            }
+        ];
+
+        expect(() => assertRequiredConfig(modules)).not.toThrow();
+    });
 });
 
 describe('application-wide variables', () => {

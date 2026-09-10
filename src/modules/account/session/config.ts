@@ -49,11 +49,20 @@ export const getExpiryTime = (remember?: RefreshTokenExpiryTime) => {
 export const getExpiryTimeMilliseconds = (remember?: RefreshTokenExpiryTime) =>
     getExpiryTime(remember) * 1000;
 
-/** The secret access tokens are signed and verified with. */
-export const getAccessTokenSecret = () => process.env.NODE_TOKEN_ACCESS ?? '';
+/**
+ * Splits a ring env var on commas, newest first. A ring of one is just that value with no comma,
+ * so an operator who never rotates writes exactly what they write today.
+ */
+const parseKeyRing = (raw: string | undefined): string[] => (raw ?? '').split(',');
 
-/** The secret refresh tokens are signed and verified with. */
-export const getRefreshTokenSecret = () => process.env.NODE_TOKEN_REFRESH ?? '';
+/**
+ * The access-token signing/verification ring, newest first. `./jwt` signs with `ring[0]` and
+ * verifies against whichever member a token's `kid` names — see `./key-ring`.
+ */
+export const getAccessTokenRing = (): string[] => parseKeyRing(process.env.NODE_TOKEN_ACCESS);
+
+/** The refresh-token ring. Same shape and rotation contract as {@link getAccessTokenRing}. */
+export const getRefreshTokenRing = (): string[] => parseKeyRing(process.env.NODE_TOKEN_REFRESH);
 
 /**
  * The key every second factor's stored material is protected with — see `two-factor/`. It

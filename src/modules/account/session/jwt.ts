@@ -8,17 +8,17 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { sign, verify } from 'jsonwebtoken';
+import { sign, verify, decode } from 'jsonwebtoken';
 import { userRepository, TokenType, hashToken } from '@modules/users';
-import type { CastError } from 'mongoose';
 import {
-    getAccessTokenSecret,
-    getRefreshTokenSecret,
+    getAccessTokenRing,
+    getRefreshTokenRing,
     getExpiryTime,
     getExpiryTimeMilliseconds,
     getRotationGraceMilliseconds
 } from './config';
 import type { RefreshTokenExpiryTime } from './config';
+import { keyId, keyForId } from './key-ring';
 
 /**
  * The claims this app puts in every access/refresh JWT. Wire names are OIDC's, so a future
@@ -43,25 +43,48 @@ export interface TokenData {
 }
 
 /**
+ * Verify a token against whichever ring member its `kid` header names, HS256 pinned throughout.
+ * A `kid` naming no current ring member — a key this deployment has already retired, or a token
+ * that never carried one — rejects before jsonwebtoken ever sees it: that is exactly "log in
+ * again", not a signature-mismatch error to report differently.
+ *
+ * @param token - signed JWT string
+ * @param ring - the ordered signing ring, newest first
+ * @returns decoded payload
+ */
+const verifyAgainstRing = (
+    token: string,
+    ring: readonly string[]
+): Promise<TokenData & { exp: number }> =>
+    new Promise((resolve, reject) => {
+        // jsonwebtoken: `decode` reads the header without checking the signature, which is all a
+        // `kid` lookup needs. It returns `null` for a string that isn't shaped like a JWT at all,
+        // rather than throwing.
+        const secret = keyForId(ring, decode(token, { complete: true })?.header.kid);
+        if (secret === undefined) {
+            reject(new Error('Unknown signing key'));
+            return;
+        }
+        // `algorithms: ['HS256']` pins the accepted algorithm: without it a token whose header
+        // claims `alg: none` or an asymmetric algorithm can pass verification under some library
+        // configurations (the classic JWT "algorithm confusion" attack).
+        verify(token, secret, { algorithms: ['HS256'] }, (error, data) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+            resolve(data as TokenData & { exp: number });
+        });
+    });
+
+/**
  * Verify an access token (stateless JWT check only).
  *
  * @param token - signed JWT string
  * @returns decoded payload
  */
 export const verifyAccessToken = (token: string): Promise<TokenData> =>
-    new Promise((resolve, reject) => {
-        // jsonwebtoken: callback-style verify — signature and expiry only, no DB round trip.
-        // `algorithms: ['HS256']` pins the accepted algorithm: without it a token whose header
-        // claims `alg: none` or an asymmetric algorithm can pass verification under some library
-        // configurations (the classic JWT "algorithm confusion" attack).
-        verify(token, getAccessTokenSecret(), { algorithms: ['HS256'] }, (error, data) => {
-            if (error) {
-                reject(error);
-                return;
-            }
-            resolve(data as TokenData);
-        });
-    });
+    verifyAgainstRing(token, getAccessTokenRing());
 
 /**
  * Verify a refresh token — JWT check + DB revocation lookup.
@@ -71,25 +94,34 @@ export const verifyAccessToken = (token: string): Promise<TokenData> =>
  * @returns decoded payload
  */
 export const verifyRefreshToken = (token: string): Promise<TokenData> =>
-    new Promise((resolve, reject) => {
-        // `algorithms: ['HS256']` — same rationale as `verifyAccessToken` above.
-        verify(token, getRefreshTokenSecret(), { algorithms: ['HS256'] }, (error, data) => {
-            if (error) {
-                reject(error);
-                return;
-            }
-            userRepository
-                .findByTokenValue(token)
-                .then((user) => {
-                    if (!user) {
-                        reject(new Error('Forbidden'));
-                        return;
-                    }
-                    resolve(data as TokenData);
-                })
-                .catch((error: Error | CastError) => reject(error));
-        });
+    verifyAgainstRing(token, getRefreshTokenRing()).then((data) =>
+        userRepository.findByTokenValue(token).then((user) => {
+            if (!user) throw new Error('Forbidden');
+            return data;
+        })
+    );
+
+/** Sign an access-token payload with the ring's current key, stamping `kid` so a verifier can find it again. */
+const signAccessToken = (claims: TokenData): string => {
+    const key = getAccessTokenRing()[0];
+    return sign(claims, key, { expiresIn: getExpiryTime(), algorithm: 'HS256', keyid: keyId(key) });
+};
+
+/**
+ * Sign a refresh-token payload with the ring's current key.
+ *
+ * `jwtid` is what makes two refresh tokens minted in the same second different — see
+ * `createRefreshToken`'s note on why that matters.
+ */
+const signRefreshToken = (claims: TokenData, expiresInSeconds: number): string => {
+    const key = getRefreshTokenRing()[0];
+    return sign(claims, key, {
+        expiresIn: expiresInSeconds,
+        algorithm: 'HS256',
+        keyid: keyId(key),
+        jwtid: randomUUID()
     });
+};
 
 /**
  * Create a refresh token, sign it, and persist it on the user document.
@@ -110,28 +142,24 @@ export const createRefreshToken = (
         .then((user) => {
             if (!user) throw new Error('User not found');
             /*
-             * `jwtid` is what makes two refresh tokens minted in the same second different.
-             * The payload is `{ id }` plus JWT's own `iat`/`exp`, both at one-second resolution —
-             * so signing twice within a second for one user produced byte-identical tokens. Two
-             * devices signing in together then shared one credential stored as two identical
-             * rows, and revoking either revoked both: logging out a phone silently logged out the
-             * laptop signed in alongside it. A random `jti` gives every token its own identity —
-             * `tokens.token` is now queried as though it addressed one session, because it does;
-             * `verify` carries `jti` through without checking it.
+             * Signed through `signRefreshToken`, whose `jwtid` is what makes two refresh tokens
+             * minted in the same second different. The payload is `{ id }` plus JWT's own
+             * `iat`/`exp`, both at one-second resolution — so signing twice within a second for
+             * one user produced byte-identical tokens. Two devices signing in together then
+             * shared one credential stored as two identical rows, and revoking either revoked
+             * both: logging out a phone silently logged out the laptop signed in alongside it. A
+             * random `jti` gives every token its own identity — `tokens.token` is now queried as
+             * though it addressed one session, because it does; `verify` carries `jti` through
+             * without checking it.
              */
-            const token = sign(
+            const token = signRefreshToken(
                 {
                     id,
                     // Stamped HERE, at login, and nowhere else — see the TokenData doc above.
                     auth_time: Math.floor(Date.now() / 1000),
                     amr
                 } as TokenData,
-                getRefreshTokenSecret(),
-                {
-                    expiresIn: getExpiryTime(remember),
-                    algorithm: 'HS256',
-                    jwtid: randomUUID()
-                }
+                getExpiryTime(remember)
             );
             return user.tokenAdd(TokenType.REFRESH, getExpiryTimeMilliseconds(remember), token);
         });
@@ -165,11 +193,7 @@ export const recordRefreshTokenUse = (refreshToken: string): Promise<void> =>
  */
 export const createAccessToken = (refreshToken: string) =>
     verifyRefreshToken(refreshToken).then(({ id, auth_time: authTime, amr }) =>
-        sign({ id, auth_time: authTime, amr } as TokenData, getAccessTokenSecret(), {
-            // Seconds, not ms — this app's own TTL config, not a jsonwebtoken magic number.
-            expiresIn: getExpiryTime(),
-            algorithm: 'HS256'
-        })
+        signAccessToken({ id, auth_time: authTime, amr } as TokenData)
     );
 
 /**
@@ -212,20 +236,13 @@ const reissueRotated = (
         if (!user) throw new Error('User not found');
 
         const claims = { id, auth_time: authTime, amr } as TokenData;
-        const newRefreshToken = sign(claims, getRefreshTokenSecret(), {
-            expiresIn: Math.ceil(remainingMs / 1000),
-            algorithm: 'HS256',
-            jwtid: randomUUID()
-        });
+        const newRefreshToken = signRefreshToken(claims, Math.ceil(remainingMs / 1000));
 
         return user
             .tokenAdd(TokenType.REFRESH, remainingMs, newRefreshToken)
             .then((refreshToken) => recordRefreshTokenUse(refreshToken).then(() => refreshToken))
             .then((refreshToken) => ({
-                accessToken: sign(claims, getAccessTokenSecret(), {
-                    expiresIn: getExpiryTime(),
-                    algorithm: 'HS256'
-                }),
+                accessToken: signAccessToken(claims),
                 refreshToken,
                 refreshMaxAgeMs: remainingMs
             }));
@@ -246,59 +263,53 @@ const reissueRotated = (
 export const rotateRefreshToken = (
     oldToken: string
 ): Promise<{ accessToken: string; refreshToken: string; refreshMaxAgeMs: number }> =>
-    new Promise<TokenData & { exp: number }>((resolve, reject) => {
-        // Signature/expiry only, no DB round trip yet — same as `verifyAccessToken`.
-        verify(oldToken, getRefreshTokenSecret(), { algorithms: ['HS256'] }, (error, data) => {
-            if (error) {
-                reject(error);
-                return;
-            }
-            resolve(data as TokenData & { exp: number });
-        });
-    }).then(({ id, exp, auth_time: rawAuthTime, amr }) => {
-        // `exp` is seconds since epoch (the JWT convention); clamp to at least 1s so a token that
-        // verified with almost no time left still signs rather than producing `expiresIn: 0`,
-        // which `jsonwebtoken` treats as "no expiry" — the opposite of what's intended here.
-        const remainingMs = Math.max(exp * 1000 - Date.now(), 1000);
-        // Copied forward through rotation too, same rule `createAccessToken` follows. A token
-        // carrying no `auth_time`/`amr` at all falls back the same way `resolve()` does elsewhere
-        // — infinitely old, `pwd` as the only method it could possibly have used.
-        const authTime = rawAuthTime ?? 0;
-        const carriedAmr = amr ?? ['pwd'];
+    // Signature/expiry/ring lookup only, no DB round trip yet — same as `verifyAccessToken`.
+    verifyAgainstRing(oldToken, getRefreshTokenRing()).then(
+        ({ id, exp, auth_time: rawAuthTime, amr }) => {
+            // `exp` is seconds since epoch (the JWT convention); clamp to at least 1s so a token that
+            // verified with almost no time left still signs rather than producing `expiresIn: 0`,
+            // which `jsonwebtoken` treats as "no expiry" — the opposite of what's intended here.
+            const remainingMs = Math.max(exp * 1000 - Date.now(), 1000);
+            // Copied forward through rotation too, same rule `createAccessToken` follows. A token
+            // carrying no `auth_time`/`amr` at all falls back the same way `resolve()` does elsewhere
+            // — infinitely old, `pwd` as the only method it could possibly have used.
+            const authTime = rawAuthTime ?? 0;
+            const carriedAmr = amr ?? ['pwd'];
 
-        return userRepository.tokenSupersede(oldToken).then((won) => {
-            if (won) return reissueRotated(id, remainingMs, authTime, carriedAmr);
+            return userRepository.tokenSupersede(oldToken).then((won) => {
+                if (won) return reissueRotated(id, remainingMs, authTime, carriedAmr);
 
-            return userRepository.findByTokenValue(oldToken).then((user) => {
-                const digest = hashToken(oldToken);
-                const entry = user?.tokens.find((tk) => tk.token === digest);
+                return userRepository.findByTokenValue(oldToken).then((user) => {
+                    const digest = hashToken(oldToken);
+                    const entry = user?.tokens.find((tk) => tk.token === digest);
 
-                // Genuinely absent — revoked by logout/password-change/deactivation while this
-                // JWT's signature still verified, or already cleaned up. An ordinary dead
-                // credential, same as it always was: NOT reuse, and nothing to revoke that isn't
-                // already gone. `verifyRefreshToken` answers this identically for the non-rotating
-                // callers that still use it.
-                if (!entry) throw new Error('Forbidden');
+                    // Genuinely absent — revoked by logout/password-change/deactivation while this
+                    // JWT's signature still verified, or already cleaned up. An ordinary dead
+                    // credential, same as it always was: NOT reuse, and nothing to revoke that isn't
+                    // already gone. `verifyRefreshToken` answers this identically for the non-rotating
+                    // callers that still use it.
+                    if (!entry) throw new Error('Forbidden');
 
-                // Still live (no `supersededAt`) despite losing the claim: only reachable through
-                // a race tighter than `tokenSupersede` itself allows for. Treat it as live — the
-                // credential is exactly as valid as the caller believes it is.
-                if (!entry.supersededAt)
-                    return reissueRotated(id, remainingMs, authTime, carriedAmr);
+                    // Still live (no `supersededAt`) despite losing the claim: only reachable through
+                    // a race tighter than `tokenSupersede` itself allows for. Treat it as live — the
+                    // credential is exactly as valid as the caller believes it is.
+                    if (!entry.supersededAt)
+                        return reissueRotated(id, remainingMs, authTime, carriedAmr);
 
-                const supersededMsAgo = Date.now() - entry.supersededAt.getTime();
-                if (supersededMsAgo <= getRotationGraceMilliseconds())
-                    // The benign race: someone else's rotation of this SAME token already won,
-                    // moments ago. Reissue rather than reject — see the module doc above.
-                    return reissueRotated(id, remainingMs, authTime, carriedAmr);
+                    const supersededMsAgo = Date.now() - entry.supersededAt.getTime();
+                    if (supersededMsAgo <= getRotationGraceMilliseconds())
+                        // The benign race: someone else's rotation of this SAME token already won,
+                        // moments ago. Reissue rather than reject — see the module doc above.
+                        return reissueRotated(id, remainingMs, authTime, carriedAmr);
 
-                // Superseded well outside the grace window: THIS is the signal that distinguishes
-                // reuse from an ordinary dead credential — a token this account rotated away, on
-                // purpose, being replayed long after. Revoke first, so the throw below is never a
-                // lie about what state the account is left in.
-                return revokeAllRefreshTokens(id).then(() => {
-                    throw new TokenReuseError(id);
+                    // Superseded well outside the grace window: THIS is the signal that distinguishes
+                    // reuse from an ordinary dead credential — a token this account rotated away, on
+                    // purpose, being replayed long after. Revoke first, so the throw below is never a
+                    // lie about what state the account is left in.
+                    return revokeAllRefreshTokens(id).then(() => {
+                        throw new TokenReuseError(id);
+                    });
                 });
             });
-        });
-    });
+        }
+    );

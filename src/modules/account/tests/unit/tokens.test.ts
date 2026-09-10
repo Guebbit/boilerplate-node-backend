@@ -4,15 +4,16 @@
  * JWT lifetime or signing secret — a tier reading the wrong variable produces sessions too long
  * (security) or too short (support), and neither shows up as a failing request elsewhere.
  * Assertions follow the documented contract: each tier reads its own env var, falling back to
- * `NODE_TOKEN_ACCESS_TIME`, seconds-as-integer, secrets defaulting to `''` not `undefined`.
+ * `NODE_TOKEN_ACCESS_TIME`, seconds-as-integer, and each signing ring defaulting to `['']`, never
+ * `undefined`.
  */
 
 import {
     RefreshTokenExpiryTime,
     getExpiryTime,
     getExpiryTimeMilliseconds,
-    getAccessTokenSecret,
-    getRefreshTokenSecret
+    getAccessTokenRing,
+    getRefreshTokenRing
 } from '@modules/account/session/config';
 
 /**
@@ -109,20 +110,27 @@ describe('getExpiryTimeMilliseconds', () => {
     });
 });
 
-describe('token secrets', () => {
-    it('returns the configured access and refresh secrets from separate variables', () => {
+describe('token signing rings', () => {
+    it('returns a ring of one from a plain, comma-free variable', () => {
+        // Unrotated is the common case, and it must read exactly as a single secret always has.
         process.env.NODE_TOKEN_ACCESS = 'access-secret';
         process.env.NODE_TOKEN_REFRESH = 'refresh-secret';
 
-        expect(getAccessTokenSecret()).toBe('access-secret');
-        expect(getRefreshTokenSecret()).toBe('refresh-secret');
+        expect(getAccessTokenRing()).toEqual(['access-secret']);
+        expect(getRefreshTokenRing()).toEqual(['refresh-secret']);
     });
 
-    it('falls back to an empty string when unset', () => {
+    it('splits a comma-separated variable into an ordered ring, newest first', () => {
+        process.env.NODE_TOKEN_ACCESS = 'new-access-secret,old-access-secret';
+
+        expect(getAccessTokenRing()).toEqual(['new-access-secret', 'old-access-secret']);
+    });
+
+    it('falls back to a ring holding one empty string when unset', () => {
         // `jsonwebtoken` throws on an `undefined` secret but accepts ''. Neither is good, but ''
         // is the documented shape and keeps the failure inside the signing call.
-        expect(getAccessTokenSecret()).toBe('');
-        expect(getRefreshTokenSecret()).toBe('');
+        expect(getAccessTokenRing()).toEqual(['']);
+        expect(getRefreshTokenRing()).toEqual(['']);
     });
 });
 

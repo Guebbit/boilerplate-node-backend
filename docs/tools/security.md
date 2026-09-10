@@ -29,9 +29,27 @@ This keeps normal authenticated requests explicit (client-attached Bearer token)
 
 If access-token verification fails, protected routes return `401`. The client can then call refresh and retry with the new access token.
 
+## Signing-key rotation
+
+`NODE_TOKEN_ACCESS` and `NODE_TOKEN_REFRESH` are each an ordered, comma-separated **ring** of
+secrets, newest first — `account/session/config.ts`'s `getAccessTokenRing`/`getRefreshTokenRing`.
+`account/session/jwt.ts` signs every new token with `ring[0]` and stamps a `kid` header
+(`account/session/key-ring.ts#keyId`, a truncated SHA-256 of the secret itself, never its index —
+reordering the ring on rotation must not silently repoint an old `kid` at a different key).
+Verifying looks the claimed `kid` up in the ring and checks the signature against that one member;
+a `kid` naming no current member rejects as an ordinary bad token (401), not a 500 — it is a
+session signed by a key this deployment has since retired, which is exactly "log in again". A ring
+of one — no comma — behaves precisely as an unrotated deployment always has.
+
+**To rotate:** prepend the new secret (`new-secret,old-secret`), deploy, wait out the longest
+refresh window in play (`NODE_TOKEN_REFRESH_TIME_LONG` — a year by default — or force
+`logout-all` for every account instead of waiting), then drop the old secret and deploy again.
+Skipping the wait window logs out every session still signed with the entry you remove.
+
 ## Security properties provided
 
-- **JWT signing (HS256 + secret)**: prevents token tampering and enforces expiry validation.
+- **JWT signing (HS256 + secret, key ring)**: prevents token tampering and enforces expiry
+  validation; the ring above is what makes rotating the secret not a mass logout.
 - **Bearer transport**: token is not auto-attached by browsers; requests must include it explicitly.
 - **Refresh cookie flags** (`httpOnly`, `sameSite=lax`, `secure` in production):
     - `httpOnly` blocks JavaScript reads of the refresh token.

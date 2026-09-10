@@ -2,12 +2,19 @@
  * @module
  * `account/session/jwt.ts` — the token layer, at the unit level. Asserts the properties that keep
  * it SAFE: the two secrets never cross-verify, a refresh token is only valid while still stored,
- * and `jwtid: randomUUID()` keeps two same-second logins from mutually revoking. `@modules/users`
- * is REPLACED rather than driven — see `tests/support/ports.ts`.
+ * `jwtid: randomUUID()` keeps two same-second logins from mutually revoking, and the signing ring
+ * (item 4) rotates without a mass logout. `@modules/users` is REPLACED rather than driven — see
+ * `tests/support/ports.ts`.
+ *
+ * Every fixture below signs with `keyid: keyId(secret)`, matching what `jwt.ts` itself stamps —
+ * a fixture signed without one would verify against nothing, since `kid` is how a ring member is
+ * found at all.
  */
 
 import { sign, decode } from 'jsonwebtoken';
+import type { SignOptions } from 'jsonwebtoken';
 import { asStub } from '@tests/stub';
+import { keyId } from '@modules/account/session/key-ring';
 
 /*
  * The REPOSITORY, not the model: `session/jwt.ts` reaches `userRepository.findByTokenValue`,
@@ -56,6 +63,13 @@ const findByIdReturning = (user: unknown) => {
     mockedUsers.findByIdWithCredentials.mockResolvedValue(user);
 };
 
+/**
+ * Sign a fixture the way `jwt.ts` itself signs — `keyid` stamped from the secret. A fixture built
+ * with plain `sign()` would carry no `kid` at all and never match a ring member.
+ */
+const signAs = (secret: string, payload: object, options: SignOptions = {}) =>
+    sign(payload, secret, { ...options, keyid: keyId(secret) });
+
 beforeEach(() => {
     // `reset`, not `clear`: these doubles are given a resolved or rejected value per test, and
     // `clearAllMocks` keeps the implementation while wiping only the call log — so a rejection
@@ -70,7 +84,7 @@ beforeEach(() => {
 
 describe('verifyAccessToken', () => {
     it('resolves the payload of a token signed with the access secret', async () => {
-        const token = sign({ id: USER_ID }, 'access-secret', { expiresIn: 900 });
+        const token = signAs('access-secret', { id: USER_ID }, { expiresIn: 900 });
 
         await expect(verifyAccessToken(token)).resolves.toMatchObject({ id: USER_ID });
     });
@@ -78,17 +92,21 @@ describe('verifyAccessToken', () => {
     it('rejects a token signed with the REFRESH secret', async () => {
         // The separation that matters: a refresh token presented as a bearer token must not be
         // accepted, or the long-lived credential becomes the API credential.
-        const refresh = sign({ id: USER_ID }, 'refresh-secret', { expiresIn: 3600 });
+        const refresh = signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
 
         await expect(verifyAccessToken(refresh)).rejects.toThrow();
     });
 
     it('rejects a token whose signature does not verify', async () => {
-        await expect(verifyAccessToken(sign({ id: USER_ID }, 'wrong-secret'))).rejects.toThrow();
+        // Claims the real ring member's `kid` but was actually signed with a different secret —
+        // an attacker who can read the (public) kid format but not the secret itself.
+        const forged = sign({ id: USER_ID }, 'wrong-secret', { keyid: keyId('access-secret') });
+
+        await expect(verifyAccessToken(forged)).rejects.toThrow();
     });
 
     it('rejects an expired token', async () => {
-        const expired = sign({ id: USER_ID }, 'access-secret', { expiresIn: -10 });
+        const expired = signAs('access-secret', { id: USER_ID }, { expiresIn: -10 });
 
         await expect(verifyAccessToken(expired)).rejects.toThrow();
     });
@@ -100,7 +118,7 @@ describe('verifyAccessToken', () => {
 
 describe('verifyRefreshToken', () => {
     it('resolves when the signature verifies AND the token is still stored', async () => {
-        const token = sign({ id: USER_ID }, 'refresh-secret', { expiresIn: 3600 });
+        const token = signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
         mockedUsers.findByTokenValue.mockResolvedValue({ _id: USER_ID });
 
         await expect(verifyRefreshToken(token)).resolves.toMatchObject({ id: USER_ID });
@@ -112,14 +130,14 @@ describe('verifyRefreshToken', () => {
     it('rejects a validly signed token that is no longer stored', async () => {
         // Revocation. Without this branch, logout and session revocation are cosmetic: the JWT
         // still verifies until it expires, whatever the database says.
-        const token = sign({ id: USER_ID }, 'refresh-secret', { expiresIn: 3600 });
+        const token = signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
         mockedUsers.findByTokenValue.mockResolvedValue(null);
 
         await expect(verifyRefreshToken(token)).rejects.toThrow('Forbidden');
     });
 
     it('rejects a token signed with the ACCESS secret', async () => {
-        const access = sign({ id: USER_ID }, 'access-secret', { expiresIn: 900 });
+        const access = signAs('access-secret', { id: USER_ID }, { expiresIn: 900 });
 
         await expect(verifyRefreshToken(access)).rejects.toThrow();
     });
@@ -134,10 +152,67 @@ describe('verifyRefreshToken', () => {
     it('rejects rather than resolving when the lookup itself fails', async () => {
         // A database error must not be read as "no such token" OR as success. It rejects, and the
         // caller answers 500 rather than silently logging someone out or letting them in.
-        const token = sign({ id: USER_ID }, 'refresh-secret', { expiresIn: 3600 });
+        const token = signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
         mockedUsers.findByTokenValue.mockRejectedValue(new Error('connection lost'));
 
         await expect(verifyRefreshToken(token)).rejects.toThrow('connection lost');
+    });
+});
+
+describe('the signing-key ring', () => {
+    it('stamps the kid of the key it actually signed with', async () => {
+        const user = userDouble();
+        findByIdReturning(user);
+
+        await createRefreshToken(USER_ID);
+        const token = user.tokenAdd.mock.calls[0][2] as string;
+
+        expect(decode(token, { complete: true })!.header.kid).toBe(keyId('refresh-secret'));
+    });
+
+    it('still verifies a token signed under an entry a rotation later prepends past', async () => {
+        // The property rotation depends on: a token signed moments before a new key is
+        // prepended must not be invalidated by that deploy.
+        const token = signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
+        mockedUsers.findByTokenValue.mockResolvedValue({ _id: USER_ID });
+
+        process.env.NODE_TOKEN_REFRESH = 'new-refresh-secret,refresh-secret';
+
+        await expect(verifyRefreshToken(token)).resolves.toMatchObject({ id: USER_ID });
+    });
+
+    it("signs new tokens with the ring's first entry once one is prepended", async () => {
+        process.env.NODE_TOKEN_REFRESH = 'new-refresh-secret,refresh-secret';
+        const user = userDouble();
+        findByIdReturning(user);
+
+        await createRefreshToken(USER_ID);
+        const token = user.tokenAdd.mock.calls[0][2] as string;
+
+        expect(decode(token, { complete: true })!.header.kid).toBe(keyId('new-refresh-secret'));
+    });
+
+    it('rejects a kid naming a key already dropped from the ring', async () => {
+        // The other half of rotation: once an old secret is removed, a token still carrying its
+        // kid is a retired key presented as current — 401, "log in again", never a crash.
+        const token = signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
+
+        process.env.NODE_TOKEN_REFRESH = 'new-refresh-secret';
+
+        await expect(verifyRefreshToken(token)).rejects.toThrow();
+        expect(mockedUsers.findByTokenValue).not.toHaveBeenCalled();
+    });
+
+    it('behaves identically to an unrotated deployment when the ring holds one entry', async () => {
+        // "A ring of one behaves precisely as today" — the whole point of the migration.
+        const user = userDouble();
+        findByIdReturning(user);
+
+        await createRefreshToken(USER_ID);
+        const token = user.tokenAdd.mock.calls[0][2] as string;
+        mockedUsers.findByTokenValue.mockResolvedValue({ _id: USER_ID });
+
+        await expect(verifyRefreshToken(token)).resolves.toMatchObject({ id: USER_ID });
     });
 });
 
@@ -230,7 +305,7 @@ describe('createRefreshToken', () => {
 
 describe('createAccessToken', () => {
     it('mints an access token from a refresh token that is still stored', async () => {
-        const refresh = sign({ id: USER_ID }, 'refresh-secret', { expiresIn: 3600 });
+        const refresh = signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
         mockedUsers.findByTokenValue.mockResolvedValue({ _id: USER_ID });
 
         const access = await createAccessToken(refresh);
@@ -241,14 +316,14 @@ describe('createAccessToken', () => {
     it('refuses to mint one from a revoked refresh token', async () => {
         // The property that makes logout mean anything: a revoked session must not be able to
         // keep issuing fresh access tokens for the remainder of the refresh token's lifetime.
-        const refresh = sign({ id: USER_ID }, 'refresh-secret', { expiresIn: 3600 });
+        const refresh = signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
         mockedUsers.findByTokenValue.mockResolvedValue(null);
 
         await expect(createAccessToken(refresh)).rejects.toThrow('Forbidden');
     });
 
     it('signs the access token with the access secret and pins HS256', async () => {
-        const refresh = sign({ id: USER_ID }, 'refresh-secret', { expiresIn: 3600 });
+        const refresh = signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
         mockedUsers.findByTokenValue.mockResolvedValue({ _id: USER_ID });
 
         const access = await createAccessToken(refresh);
@@ -260,7 +335,7 @@ describe('createAccessToken', () => {
     it('gives the access token the short TTL, not the refresh window', async () => {
         // The whole point of the pair: the credential sent on every request is the short-lived
         // one. Signing it with the refresh window would make revocation irrelevant for a month.
-        const refresh = sign({ id: USER_ID }, 'refresh-secret', { expiresIn: 3600 });
+        const refresh = signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
         mockedUsers.findByTokenValue.mockResolvedValue({ _id: USER_ID });
 
         const { iat, exp } = decode(await createAccessToken(refresh)) as {

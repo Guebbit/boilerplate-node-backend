@@ -138,10 +138,13 @@ export default {
     routes: router,
     /*
      * `.env-example` ships both as literal placeholders that sign and verify perfectly —
-     * `getAccessTokenSecret`/`getRefreshTokenSecret` (`session/config.ts`) read
-     * `process.env.X ?? ''` with no validation of their own. 16 rather than a stricter minimum:
-     * this rejects empty and drastically truncated values without pretending to assess real
-     * secret strength, which is an operator's job, not a boot-time character count.
+     * `getAccessTokenRing`/`getRefreshTokenRing` (`session/config.ts`) read `process.env.X ?? ''`
+     * with no validation of their own. Each is an ordered, comma-separated key ring (newest
+     * first, see `docs/modules/account-sessions.md`); `required-config.ts`'s `minLength`/
+     * `placeholder` check applies to every comma-separated member, not the joined string, so a
+     * rotated-in second entry left as the placeholder still refuses to boot. 16 rather than a
+     * stricter minimum: this rejects empty and drastically truncated values without pretending to
+     * assess real secret strength, which is an operator's job, not a boot-time character count.
      */
     requiredConfig: [
         { key: 'NODE_TOKEN_ACCESS', minLength: 16, placeholder: 'your-access-token-secret-here' },

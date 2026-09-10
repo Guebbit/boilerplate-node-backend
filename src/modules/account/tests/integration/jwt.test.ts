@@ -5,9 +5,14 @@
  * refresh token is stateful, checked against the user document so logout — which removes the
  * token row — actually ends the session. Secrets are set explicitly here rather than inherited
  * from `.env`, since unit tests don't load dotenv.
+ *
+ * Every fixture signs with `keyid: keyId(secret)`, matching what `jwt.ts` itself stamps — the
+ * ring's `kid` lookup is how a verifier finds the right member at all; see
+ * `session/key-ring.ts`.
  */
 
 import { sign } from 'jsonwebtoken';
+import type { SignOptions } from 'jsonwebtoken';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/fixtures';
 import {
@@ -17,6 +22,7 @@ import {
     createAccessToken
 } from '@modules/account/session/jwt';
 import { RefreshTokenExpiryTime } from '@modules/account/session/config';
+import { keyId } from '@modules/account/session/key-ring';
 import { TokenType } from '@modules/users';
 import { userRepository, hashToken } from '@modules/users';
 
@@ -24,6 +30,10 @@ setupTestDb();
 
 const ACCESS_SECRET = 'test-access-secret';
 const REFRESH_SECRET = 'test-refresh-secret';
+
+/** Sign a fixture the way `jwt.ts` itself signs — `keyid` stamped from the secret. */
+const signAs = (secret: string, payload: object, options: SignOptions = {}) =>
+    sign(payload, secret, { ...options, keyid: keyId(secret) });
 
 const originalEnvironment: Record<string, string | undefined> = {};
 const ENV_KEYS = [
@@ -50,7 +60,7 @@ afterEach(() => {
 
 describe('verifyAccessToken', () => {
     it('resolves the payload of a token signed with the access secret', async () => {
-        const token = sign({ id: 'user-1' }, ACCESS_SECRET, { expiresIn: 900 });
+        const token = signAs(ACCESS_SECRET, { id: 'user-1' }, { expiresIn: 900 });
 
         await expect(verifyAccessToken(token)).resolves.toMatchObject({ id: 'user-1' });
     });
@@ -58,13 +68,13 @@ describe('verifyAccessToken', () => {
     it('rejects a token signed with the refresh secret', async () => {
         // The two secrets must not be interchangeable: if they were, a refresh token would be
         // accepted as an access token and the revocation lookup could be bypassed entirely.
-        const token = sign({ id: 'user-1' }, REFRESH_SECRET, { expiresIn: 900 });
+        const token = signAs(REFRESH_SECRET, { id: 'user-1' }, { expiresIn: 900 });
 
         await expect(verifyAccessToken(token)).rejects.toThrow();
     });
 
     it('rejects an expired token', async () => {
-        const token = sign({ id: 'user-1' }, ACCESS_SECRET, { expiresIn: -10 });
+        const token = signAs(ACCESS_SECRET, { id: 'user-1' }, { expiresIn: -10 });
 
         await expect(verifyAccessToken(token)).rejects.toThrow();
     });
@@ -74,7 +84,7 @@ describe('verifyAccessToken', () => {
     });
 
     it('rejects a token whose payload was tampered with', async () => {
-        const token = sign({ id: 'user-1' }, ACCESS_SECRET, { expiresIn: 900 });
+        const token = signAs(ACCESS_SECRET, { id: 'user-1' }, { expiresIn: 900 });
         const [header, , signature] = token.split('.');
         const forgedPayload = Buffer.from(JSON.stringify({ id: 'admin' })).toString('base64url');
 
@@ -87,7 +97,7 @@ describe('verifyAccessToken', () => {
 describe('verifyRefreshToken', () => {
     it('resolves when the token is signed AND present on the user document', async () => {
         const user = await createUser();
-        const token = sign({ id: String(user._id) }, REFRESH_SECRET, { expiresIn: 3600 });
+        const token = signAs(REFRESH_SECRET, { id: String(user._id) }, { expiresIn: 3600 });
         await user.tokenAdd(TokenType.REFRESH, 3_600_000, token);
 
         await expect(verifyRefreshToken(token)).resolves.toMatchObject({ id: String(user._id) });
@@ -97,14 +107,14 @@ describe('verifyRefreshToken', () => {
         // This is the revocation check. A correct signature is necessary but not sufficient —
         // otherwise logout could never invalidate anything.
         await createUser();
-        const orphanToken = sign({ id: 'user-1' }, REFRESH_SECRET, { expiresIn: 3600 });
+        const orphanToken = signAs(REFRESH_SECRET, { id: 'user-1' }, { expiresIn: 3600 });
 
         await expect(verifyRefreshToken(orphanToken)).rejects.toThrow('Forbidden');
     });
 
     it('rejects once the token has been removed from the user document', async () => {
         const user = await createUser();
-        const token = sign({ id: String(user._id) }, REFRESH_SECRET, { expiresIn: 3600 });
+        const token = signAs(REFRESH_SECRET, { id: String(user._id) }, { expiresIn: 3600 });
         await user.tokenAdd(TokenType.REFRESH, 3_600_000, token);
 
         // Precondition: it works before revocation, so the assertion below cannot pass vacuously.
@@ -117,7 +127,7 @@ describe('verifyRefreshToken', () => {
 
     it('rejects a token signed with the access secret', async () => {
         const user = await createUser();
-        const token = sign({ id: String(user._id) }, ACCESS_SECRET, { expiresIn: 3600 });
+        const token = signAs(ACCESS_SECRET, { id: String(user._id) }, { expiresIn: 3600 });
         await user.tokenAdd(TokenType.REFRESH, 3_600_000, token);
 
         // Even though it is stored, the signature is checked first and must fail.
@@ -126,7 +136,7 @@ describe('verifyRefreshToken', () => {
 
     it('rejects an expired refresh token without consulting the database', async () => {
         const user = await createUser();
-        const token = sign({ id: String(user._id) }, REFRESH_SECRET, { expiresIn: -10 });
+        const token = signAs(REFRESH_SECRET, { id: String(user._id) }, { expiresIn: -10 });
         await user.tokenAdd(TokenType.REFRESH, 3_600_000, token);
 
         await expect(verifyRefreshToken(token)).rejects.toThrow();

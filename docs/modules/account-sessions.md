@@ -3,7 +3,7 @@
 How this application decides who is making a request — and why none of it is published.
 
 ::: tip At a glance
-**Five files** — `config.ts` reads the lifetimes, `jwt.ts` signs and verifies, `cookies.ts` sets and clears, `session.ts` mints the three of them together, `login-observability.ts` records that a login happened.
+**Six files** — `config.ts` reads the lifetimes, `key-ring.ts` gives a secret its `kid`, `jwt.ts` signs and verifies, `cookies.ts` sets and clears, `session.ts` mints the three of them together, `login-observability.ts` records that a login happened.
 **Published** — nothing. `session/` has no barrel and may not be imported from outside the module.
 **Breaks if you change** — the cookie flags or the lifetimes. Every guard in the app resolves through here.
 :::
@@ -61,6 +61,14 @@ the login form and the lifetime in the environment stay one decision:
 `config.ts` is the single place a deployment's answer to _how long is a session_ is parsed —
 `jwt.ts` signs against it and `cookies.ts` sets `maxAge` from it. Its name is deliberate: it holds
 no token and issues none.
+
+## The signing key is a ring, not a single secret
+
+`NODE_TOKEN_ACCESS`/`NODE_TOKEN_REFRESH` are each an ordered, comma-separated list of secrets,
+newest first. `jwt.ts` signs with `ring[0]` and stamps a `kid` (`key-ring.ts#keyId`, a digest of
+the secret itself); verifying looks the token's `kid` up in the ring rather than assuming
+`ring[0]`, so a token signed moments before a rotation still verifies. Full rotation procedure:
+docs/tools/security.md#signing-key-rotation.
 
 ## Freshness: how recently they proved it {#freshness-auth-time-and-amr}
 

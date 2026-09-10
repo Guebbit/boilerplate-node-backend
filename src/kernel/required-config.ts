@@ -46,11 +46,15 @@ const applies = ({ productionOnly }: RequiredConfig): boolean =>
     !productionOnly || process.env.NODE_ENV === 'production';
 
 /**
- * Whether the configured value is absent, too short, or still the placeholder `.env-example` ships.
+ * Whether any comma-separated member of the configured value is absent, too short, or still the
+ * placeholder `.env-example` ships. A plain single-valued variable has no comma, so this checks
+ * exactly one member and behaves exactly as before; a key ring (`account/session/config.ts`'s
+ * `NODE_TOKEN_ACCESS`/`NODE_TOKEN_REFRESH`) is checked member-by-member, so a placeholder or a
+ * truncated value anywhere in the ring — not just its first entry — still refuses to boot.
  */
 const fails = ({ key, minLength, placeholder }: RequiredConfig): boolean => {
     const value = process.env[key] ?? '';
-    return value.length < minLength || value === placeholder;
+    return value.split(',').some((member) => member.length < minLength || member === placeholder);
 };
 
 /**
