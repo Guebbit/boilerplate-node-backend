@@ -31,7 +31,7 @@ import { router } from './routes';
  * This module answers the kernel's "who is making this request". Registered at import time
  * (installs a function, touches no connection) since every guard in the app depends on it being
  * there before the first request. The resolver rejects a bad token and resolves `undefined` for
- * a token whose user is gone — the distinction `requireUnrestrictedViaCookie` turns into 401 versus 403.
+ * a token whose user is gone — the distinction `requirePermissionViaCookie` turns into 401 versus 403.
  */
 
 /**

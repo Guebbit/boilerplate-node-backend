@@ -264,7 +264,7 @@ export const callerForSubject = (context: AuthContext, subject: string): Caller 
  * Does this caller hold the wildcard key in a scope — unrestricted, within that scope only.
  *
  * Role names are data a deployment may rename or add to; "holds the wildcard" is a property of
- * the permission model itself, which is why the audit trail, `requireUnrestricted` and the domain actor all
+ * the permission model itself, which is why the audit trail, `requirePermission` and the domain actor all
  * ask this rather than comparing a name.
  */
 export const isUnrestricted = (caller: Caller): boolean =>
