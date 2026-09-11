@@ -144,10 +144,10 @@ enforced per key.
 - Route guards take a KEY. `users.delete` and `payments.update` carry `stepUp: critical`, and the
   guard demands the fresh session and audits that it did.
 
-**Where the boilerplate stops short, on purpose.** It ships one shop, so no collection carries a
+**Where the boilerplate stops short, on purpose.** It ships one shop, so most collections carry no
 `tenantId` column and `accessibleFilter` drops that condition — the model is tenant-aware and its
-conformance cases prove it, while these tables are not partitioned. A multi-tenant deployment adds
-the column and empties one list; the rules, the guards and the caller already carry the tenant.
+conformance cases prove it, while these tables are not partitioned. See
+[Tenancy](./tenancy.md) for why, and what a pooled deployment would actually have to change.
 
 ## The twins
 

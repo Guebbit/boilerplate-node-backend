@@ -30,8 +30,9 @@ import { anonymousCaller, callerForSubject } from '@kernel/permissions';
  * over a collection that has no such field would match nothing and lock everybody out, so this
  * function is what lets one shop run the tenant-aware model and never notice it.
  *
- * A multi-tenant deployment deletes this list and adds the column. Nothing else changes: the rules
- * already carry the tenant, the guards already read it, and the caller already resolves it.
+ * A pooled deployment deletes this list and adds the column to whichever collections lack one.
+ * Nothing else changes: the rules already carry the tenant, the guards already read it, and the
+ * caller already carries it. See docs/theory/tenancy.md.
  */
 const UNSTORED_FIELDS = new Set(['tenantId']);
 

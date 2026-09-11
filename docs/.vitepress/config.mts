@@ -56,6 +56,7 @@ export default withMermaid(
                             { text: 'Request Input', link: '/theory/request-input' },
                             { text: 'Clustering & Shutdown', link: '/theory/clustering' },
                             { text: 'Authorization', link: '/theory/authorization' },
+                            { text: 'Tenancy', link: '/theory/tenancy' },
                             { text: 'Web Attack Catalog', link: '/theory/web-attack-catalog' },
                             { text: 'Web Attack Defences', link: '/theory/web-attack-defences' },
                             { text: 'Data Protection', link: '/theory/data-protection' }
@@ -151,6 +152,8 @@ export default withMermaid(
                             { text: 'Testing — Quick Start', link: '/tools/testing-quickstart' },
                             { text: 'Package Scripts', link: '/tools/package-scripts' },
                             { text: 'Docker & Podman', link: '/tools/docker-and-podman' },
+                            { text: 'Two Client Stacks', link: '/tools/two-client-stacks' },
+                            { text: 'Hosting', link: '/tools/hosting' },
                             { text: 'Pairing & Ports', link: '/tools/pairing-and-ports' },
                             { text: 'Runtime', link: '/tools/runtime' },
                             { text: 'Internationalisation', link: '/tools/i18n' },
@@ -165,7 +168,8 @@ export default withMermaid(
                         collapsed: false,
                         items: [
                             { text: 'MongoDB & Mongoose', link: '/tools/mongodb-mongoose' },
-                            { text: 'Redis Cache', link: '/tools/redis-cache' }
+                            { text: 'Redis Cache', link: '/tools/redis-cache' },
+                            { text: 'Backups', link: '/tools/backups' }
                         ]
                     },
                     {

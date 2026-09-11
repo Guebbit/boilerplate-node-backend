@@ -124,13 +124,14 @@ generated client and the paired frontend both depend on.
 
 ## Then: pick your next question
 
-| You want to…                                  | Go to                                               |
-| --------------------------------------------- | --------------------------------------------------- |
-| See the request travel the middleware stack   | [Request Flow](./request-flow.md)                   |
-| Understand what may import what               | [Layers](./layers.md)                               |
-| Add or delete a domain                        | [Adding & Removing a Module](./module-lifecycle.md) |
-| Change an endpoint's contract                 | [OpenAPI Workflow](../api/openapi-workflow.md)      |
-| Know which tool does what, and why it is here | [Tools Explained](../tools/tools-explained.md)      |
+| You want to…                                               | Go to                                               |
+| ---------------------------------------------------------- | --------------------------------------------------- |
+| See the request travel the middleware stack                | [Request Flow](./request-flow.md)                   |
+| Understand what may import what                            | [Layers](./layers.md)                               |
+| Add or delete a domain                                     | [Adding & Removing a Module](./module-lifecycle.md) |
+| Change an endpoint's contract                              | [OpenAPI Workflow](../api/openapi-workflow.md)      |
+| Know which tool does what, and why it is here              | [Tools Explained](../tools/tools-explained.md)      |
+| Understand why the code is tenant-aware but ships one shop | [Tenancy](./tenancy.md)                             |
 
 ---
 

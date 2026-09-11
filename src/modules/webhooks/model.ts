@@ -48,8 +48,9 @@ export const webhookSubscriptionSchema = new Schema<
     WebhookSubscriptionModel
 >(
     {
-        // Lower-cased/trimmed like `locales/model.ts`'s own `tenant` field — the convention this
-        // repo already uses for "whose row this is" outside a foreign-key relationship.
+        // The organisation this row belongs to — not `locales/model.ts`'s own `tenant` field,
+        // a translation keyspace with the same name and nothing else in common. See
+        // docs/theory/tenancy.md's glossary.
         tenant: {
             type: String,
             required: true,

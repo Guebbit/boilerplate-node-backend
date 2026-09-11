@@ -89,14 +89,14 @@ an installation-wide role (an operator) instead of a shop role.
 
 ## What's different from dev
 
-| Dev (`docker-compose.yml`)                                  | Production (`docker-compose.production.yml`)                                                    |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Source bind-mounted, `tsx` watches for changes              | Source baked into the image at build time                                                       |
-| API port published to all interfaces                        | API port published to `127.0.0.1` only                                                          |
-| Full observability stack included                           | No observability containers — see [below](#observability-in-production)                         |
-| `NODE_ENABLE_CLUSTERING=1` (multi-process in one container) | `NODE_ENABLE_CLUSTERING=0` — one process per container, always                                  |
-| Runs as whatever user starts compose                        | Runs as the non-root `node` user inside the image                                               |
-| Mongo and Redis have no auth                                | Mongo runs a scoped `readWrite` app user behind a root account, Redis requires `REDIS_PASSWORD` |
+| Dev (`docker-compose.yml`)                                  | Production (`docker-compose.production.yml`)                                                                                     |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Source bind-mounted, `tsx` watches for changes              | Source baked into the image at build time                                                                                        |
+| API port published to all interfaces                        | API port published to `127.0.0.1` only                                                                                           |
+| Full observability stack included                           | No observability containers — see [below](#observability-in-production)                                                          |
+| `NODE_ENABLE_CLUSTERING=1` (multi-process in one container) | `NODE_ENABLE_CLUSTERING=0` — one process per container, always                                                                   |
+| Runs as whatever user starts compose                        | Runs as the non-root `node` user inside the image                                                                                |
+| Mongo is a standalone with no auth                          | Mongo is a single-node replica set (`rs0`), a scoped `readWrite` app user behind a root account, Redis requires `REDIS_PASSWORD` |
 
 Clustering is off on purpose: scale replicas with `--scale app=N` or an orchestrator instead, so
 one thing decides how many processes are live, not two layers of process management fighting a
@@ -108,6 +108,10 @@ Nothing in this repo terminates TLS. The API is bound to loopback specifically s
 it on a public interface — plain HTTP, carrying the auth cookies this application sets — is not the
 easy path. Put nginx, Caddy, Traefik or a managed load balancer in front, terminate TLS there, and
 proxy to `127.0.0.1:${NODE_PORT}`.
+
+Running **several client stacks on one host** is different enough to have its own recipe —
+`docker-compose.proxy.yml` fronts them all with one shared Traefik, discovering each stack straight
+off its own container labels. See [Two Client Stacks](./tools/two-client-stacks.md).
 
 ## Uploaded images do not outlive the container
 
@@ -134,10 +138,14 @@ See [Docker & Podman](./tools/docker-and-podman.md) for what each of those conta
 
 ## Where to go next
 
-| You want to                                      | Read                                            |
-| ------------------------------------------------ | ----------------------------------------------- |
-| Run the dev stack instead                        | [Getting Started](./getting-started.md)         |
-| Understand every container, dev or production    | [Docker & Podman](./tools/docker-and-podman.md) |
-| See every host port and its env var              | [Pairing & Ports](./tools/pairing-and-ports.md) |
-| Understand graceful shutdown under SIGTERM       | [Clustering & Shutdown](./theory/clustering.md) |
-| Look up a file in `docker/` or the compose files | [Ops & Assets](./reference/ops.md)              |
+| You want to                                      | Read                                              |
+| ------------------------------------------------ | ------------------------------------------------- |
+| Run the dev stack instead                        | [Getting Started](./getting-started.md)           |
+| Understand every container, dev or production    | [Docker & Podman](./tools/docker-and-podman.md)   |
+| Run two client stacks, or share one proxy        | [Two Client Stacks](./tools/two-client-stacks.md) |
+| Pick a host that can run this                    | [Hosting](./tools/hosting.md)                     |
+| Back up what a stack holds                       | [Backups](./tools/backups.md)                     |
+| Understand why one stack serves one client       | [Tenancy](./theory/tenancy.md)                    |
+| See every host port and its env var              | [Pairing & Ports](./tools/pairing-and-ports.md)   |
+| Understand graceful shutdown under SIGTERM       | [Clustering & Shutdown](./theory/clustering.md)   |
+| Look up a file in `docker/` or the compose files | [Ops & Assets](./reference/ops.md)                |
