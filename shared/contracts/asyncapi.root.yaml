@@ -18,7 +18,7 @@
 #
 # `id` is the APPLICATION identifier, so both bundles carry it: they describe one backend, one of
 # them partially.
-asyncapi: 2.6.0
+asyncapi: 3.0.0
 id: 'urn:boilerplate-node-backend:asyncapi:contracts'
 info:
     title: Boilerplate Node Backend Async Contracts
@@ -34,7 +34,7 @@ info:
 
         The channels below are the whole of it — every one is implemented in the backend
         runtime, and each says what it carries and when.
+    tags:
+        - name: implemented
+          description: Contracts already implemented in the backend runtime.
 defaultContentType: application/json
-tags:
-    - name: implemented
-      description: Contracts already implemented in the backend runtime.

@@ -35,7 +35,7 @@ rules:
     # `asyncapi-servers` and `asyncapi-channel-servers` are deliberately NOT here: a section owns
     # the server its channels bind to, so both rules are answerable on its own and a section that
     # binds a channel to a server it never declared is a real defect.
-    asyncapi-tags: off
+    asyncapi-3-tags: off
 
     # A section's `info` block exists only to make the file a valid document. The real title,
     # contact and licence are the deployment's.

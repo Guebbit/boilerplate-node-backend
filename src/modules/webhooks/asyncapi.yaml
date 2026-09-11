@@ -14,7 +14,7 @@
 # republishes the ones a subscription's filter matches, signed, to the URL it names. The SIX names
 # below are the shop's worked example; a deployment with no orders declares its own here and
 # deletes this file along with the rest of the module.
-asyncapi: 2.6.0
+asyncapi: 3.0.0
 info:
     title: Webhooks async contract
     version: 1.0.0
@@ -25,121 +25,154 @@ servers:
         # is no one address this document can print. `asyncapi-servers`/`asyncapi-channel-servers`
         # (`spectral.asyncapi.modules.yaml`) still pass, because the channels below DO bind to a
         # declared server — it just resolves per subscription instead of per deployment.
-        url: '{subscriberUrl}'
+        #
+        # Not a server this application runs — the reverse of every other section's server: a
+        # subscriber genuinely subscribes to receive these, over a connection this application
+        # opens outbound.
+        host: '{subscriberHost}'
+        pathname: '{subscriberPath}'
         protocol: https
-        description: >-
-            Whatever HTTPS URL a subscription (`POST /webhooks/subscriptions`) configures. Not a
-            server this application runs — the reverse of every other section's server, which is
-            why this is the one section where "publish" and "subscribe" name real network roles: a
-            subscriber genuinely subscribes to receive these, over a connection this application
-            opens outbound.
         variables:
-            subscriberUrl:
-                default: 'https://example.com/webhooks/inbox'
-                description: The URL a subscription was created or updated with.
+            subscriberHost:
+                default: example.com
+                description: Host (and port, when non-default) of a subscription's configured URL.
+            subscriberPath:
+                default: /webhooks/inbox
+                description: Path of a subscription's configured URL.
 channels:
     order.created:
+        address: order.created
         description: A new order was placed.
         servers:
-            - subscriberEndpoint
-        subscribe:
-            operationId: webhookOrderCreated
-            summary: An order was written for the first time.
-            description: >-
-                Fired once per order, from both an admin create and a storefront checkout — see
-                `orders/services/crud.ts`'s `recordCreated`.
-            message:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            OrderCreatedEvent:
                 $ref: '#/components/messages/OrderCreatedEvent'
     order.paid:
+        address: order.paid
         description: An order's payment settled.
         servers:
-            - subscriberEndpoint
-        subscribe:
-            operationId: webhookOrderPaid
-            summary: An order moved to the `paid` status.
-            description: >-
-                Derived from `order.status_changed` (`to: 'paid'`) rather than its own domain
-                event — see `orders/events.ts`: "listeners filter on `to`; the event doesn't know
-                who cares."
-            message:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            OrderPaidEvent:
                 $ref: '#/components/messages/OrderPaidEvent'
     order.shipped:
+        address: order.shipped
         description: An order was marked shipped.
         servers:
-            - subscriberEndpoint
-        subscribe:
-            operationId: webhookOrderShipped
-            summary: An order moved to the `shipped` status.
-            description: Derived from `order.status_changed` filtered to `to = 'shipped'`, same as `order.paid`.
-            message:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            OrderShippedEvent:
                 $ref: '#/components/messages/OrderShippedEvent'
     order.cancelled:
+        address: order.cancelled
         description: An order was cancelled.
         servers:
-            - subscriberEndpoint
-        subscribe:
-            operationId: webhookOrderCancelled
-            summary: A cancel went through; stock is already back on the shelf.
-            description: One-to-one with the `order.cancelled` domain event — see `orders/events.ts`.
-            message:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            OrderCancelledEvent:
                 $ref: '#/components/messages/OrderCancelledEvent'
     payment.succeeded:
+        address: payment.succeeded
         description: A payment settled successfully.
         servers:
-            - subscriberEndpoint
-        subscribe:
-            operationId: webhookPaymentSucceeded
-            summary: A payment reached `succeeded`.
-            description: One-to-one with the `payment.succeeded` domain event — see `payments/events.ts`.
-            message:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            PaymentSucceededEvent:
                 $ref: '#/components/messages/PaymentSucceededEvent'
     payment.failed:
+        address: payment.failed
         description: A payment attempt was declined.
         servers:
-            - subscriberEndpoint
-        subscribe:
-            operationId: webhookPaymentFailed
-            summary: A payment reached `declined`.
-            description: >-
-                One-to-one with the `payment.failed` domain event. Retryable with another method,
-                so this can fire more than once for the same order.
-            message:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            PaymentFailedEvent:
                 $ref: '#/components/messages/PaymentFailedEvent'
+operations:
+    webhookOrderCreated:
+        action: send
+        channel:
+            $ref: '#/channels/order.created'
+        summary: An order was written for the first time.
+        description: >-
+            Fired once per order, from both an admin create and a storefront checkout — see
+            `orders/services/crud.ts`'s `recordCreated`.
+        messages:
+            - $ref: '#/channels/order.created/messages/OrderCreatedEvent'
+    webhookOrderPaid:
+        action: send
+        channel:
+            $ref: '#/channels/order.paid'
+        summary: An order moved to the `paid` status.
+        description: >-
+            Derived from `order.status_changed` (`to: 'paid'`) rather than its own domain
+            event — see `orders/events.ts`: "listeners filter on `to`; the event doesn't know
+            who cares."
+        messages:
+            - $ref: '#/channels/order.paid/messages/OrderPaidEvent'
+    webhookOrderShipped:
+        action: send
+        channel:
+            $ref: '#/channels/order.shipped'
+        summary: An order moved to the `shipped` status.
+        description: Derived from `order.status_changed` filtered to `to = 'shipped'`, same as `order.paid`.
+        messages:
+            - $ref: '#/channels/order.shipped/messages/OrderShippedEvent'
+    webhookOrderCancelled:
+        action: send
+        channel:
+            $ref: '#/channels/order.cancelled'
+        summary: A cancel went through; stock is already back on the shelf.
+        description: One-to-one with the `order.cancelled` domain event — see `orders/events.ts`.
+        messages:
+            - $ref: '#/channels/order.cancelled/messages/OrderCancelledEvent'
+    webhookPaymentSucceeded:
+        action: send
+        channel:
+            $ref: '#/channels/payment.succeeded'
+        summary: A payment reached `succeeded`.
+        description: One-to-one with the `payment.succeeded` domain event — see `payments/events.ts`.
+        messages:
+            - $ref: '#/channels/payment.succeeded/messages/PaymentSucceededEvent'
+    webhookPaymentFailed:
+        action: send
+        channel:
+            $ref: '#/channels/payment.failed'
+        summary: A payment reached `declined`.
+        description: >-
+            One-to-one with the `payment.failed` domain event. Retryable with another method,
+            so this can fire more than once for the same order.
+        messages:
+            - $ref: '#/channels/payment.failed/messages/PaymentFailedEvent'
 components:
     messages:
         OrderCreatedEvent:
             name: OrderCreatedEvent
-            messageId: order.created
             title: Order created
             payload:
                 $ref: '#/components/schemas/OrderIdPayload'
         OrderPaidEvent:
             name: OrderPaidEvent
-            messageId: order.paid
             title: Order paid
             payload:
                 $ref: '#/components/schemas/OrderIdPayload'
         OrderShippedEvent:
             name: OrderShippedEvent
-            messageId: order.shipped
             title: Order shipped
             payload:
                 $ref: '#/components/schemas/OrderIdPayload'
         OrderCancelledEvent:
             name: OrderCancelledEvent
-            messageId: order.cancelled
             title: Order cancelled
             payload:
                 $ref: '#/components/schemas/OrderCancelledPayload'
         PaymentSucceededEvent:
             name: PaymentSucceededEvent
-            messageId: payment.succeeded
             title: Payment succeeded
             payload:
                 $ref: '#/components/schemas/PaymentEventPayload'
         PaymentFailedEvent:
             name: PaymentFailedEvent
-            messageId: payment.failed
             title: Payment failed
             payload:
                 $ref: '#/components/schemas/PaymentEventPayload'

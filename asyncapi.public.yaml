@@ -2,7 +2,7 @@
 # Sources: shared/contracts/asyncapi.root.yaml
 #          src/modules/observability/asyncapi.yaml
 #          src/modules/webhooks/asyncapi.yaml
-asyncapi: 2.6.0
+asyncapi: 3.0.0
 id: 'urn:boilerplate-node-backend:asyncapi:contracts'
 info:
     title: Boilerplate Node Backend Async Contracts
@@ -18,13 +18,13 @@ info:
 
         The channels below are the whole of it — every one is implemented in the backend
         runtime, and each says what it carries and when.
+    tags:
+        - name: implemented
+          description: Contracts already implemented in the backend runtime.
 defaultContentType: application/json
-tags:
-    - name: implemented
-      description: Contracts already implemented in the backend runtime.
 servers:
     sseLocal:
-        url: localhost:3000
+        host: localhost:3000
         protocol: http
         description: Local HTTP server for SSE (`/observability/events`).
     subscriberEndpoint:
@@ -32,155 +32,207 @@ servers:
         # is no one address this document can print. `asyncapi-servers`/`asyncapi-channel-servers`
         # (`spectral.asyncapi.modules.yaml`) still pass, because the channels below DO bind to a
         # declared server — it just resolves per subscription instead of per deployment.
-        url: '{subscriberUrl}'
+        #
+        # Not a server this application runs — the reverse of every other section's server: a
+        # subscriber genuinely subscribes to receive these, over a connection this application
+        # opens outbound.
+        host: '{subscriberHost}'
+        pathname: '{subscriberPath}'
         protocol: https
-        description: >-
-            Whatever HTTPS URL a subscription (`POST /webhooks/subscriptions`) configures. Not a server this application runs — the reverse of every other section's server, which is why this is the one section where "publish" and "subscribe" name real network roles: a subscriber genuinely subscribes to receive these, over a connection this application opens outbound.
         variables:
-            subscriberUrl:
-                default: 'https://example.com/webhooks/inbox'
-                description: The URL a subscription was created or updated with.
+            subscriberHost:
+                default: example.com
+                description: Host (and port, when non-default) of a subscription's configured URL.
+            subscriberPath:
+                default: /webhooks/inbox
+                description: Path of a subscription's configured URL.
 channels:
     observability.metrics.snapshot:
+        address: observability.metrics.snapshot
         description: Initial metrics snapshot sent on SSE connect.
-        subscribe:
-            operationId: sseMetricsSnapshot
-            description: >-
-                Sent once, immediately on connect, so a dashboard renders populated instead of waiting out the first 5-second tick with empty cards. Same payload shape as the periodic update — a client handles one message type, not two.
-            message:
+        messages:
+            MetricsSnapshotEvent:
                 $ref: '#/components/messages/MetricsSnapshotEvent'
     observability.metrics.updated:
+        address: observability.metrics.updated
         description: Periodic SSE metrics update.
-        subscribe:
-            operationId: sseMetricsUpdated
-            description: >-
-                Pushed every 5 seconds for as long as the connection is open. Memory is in BYTES, identical to what `GET /observability/health` publishes, so a dashboard showing both compares numbers rather than converting units to find out whether they agree.
-            message:
+        messages:
+            MetricsUpdatedEvent:
                 $ref: '#/components/messages/MetricsUpdatedEvent'
     observability.heartbeat:
+        address: observability.heartbeat
         description: SSE heartbeat event.
-        subscribe:
-            operationId: sseHeartbeat
-            description: >-
-                A 15-second keep-alive carrying no metrics. Idle proxies close a connection that has been quiet, and an SSE stream between two ticks looks idle to them; this is also what lets a client tell "the stream is alive and nothing changed" from "the stream died".
-            message:
+        messages:
+            HeartbeatEvent:
                 $ref: '#/components/messages/HeartbeatEvent'
     order.created:
+        address: order.created
         description: A new order was placed.
         servers:
-            - subscriberEndpoint
-        subscribe:
-            operationId: webhookOrderCreated
-            summary: An order was written for the first time.
-            description: >-
-                Fired once per order, from both an admin create and a storefront checkout — see `orders/services/crud.ts`'s `recordCreated`.
-            message:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            OrderCreatedEvent:
                 $ref: '#/components/messages/OrderCreatedEvent'
     order.paid:
+        address: order.paid
         description: An order's payment settled.
         servers:
-            - subscriberEndpoint
-        subscribe:
-            operationId: webhookOrderPaid
-            summary: An order moved to the `paid` status.
-            description: >-
-                Derived from `order.status_changed` (`to: 'paid'`) rather than its own domain event — see `orders/events.ts`: "listeners filter on `to`; the event doesn't know who cares."
-            message:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            OrderPaidEvent:
                 $ref: '#/components/messages/OrderPaidEvent'
     order.shipped:
+        address: order.shipped
         description: An order was marked shipped.
         servers:
-            - subscriberEndpoint
-        subscribe:
-            operationId: webhookOrderShipped
-            summary: An order moved to the `shipped` status.
-            description: Derived from `order.status_changed` filtered to `to = 'shipped'`, same as `order.paid`.
-            message:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            OrderShippedEvent:
                 $ref: '#/components/messages/OrderShippedEvent'
     order.cancelled:
+        address: order.cancelled
         description: An order was cancelled.
         servers:
-            - subscriberEndpoint
-        subscribe:
-            operationId: webhookOrderCancelled
-            summary: A cancel went through; stock is already back on the shelf.
-            description: One-to-one with the `order.cancelled` domain event — see `orders/events.ts`.
-            message:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            OrderCancelledEvent:
                 $ref: '#/components/messages/OrderCancelledEvent'
     payment.succeeded:
+        address: payment.succeeded
         description: A payment settled successfully.
         servers:
-            - subscriberEndpoint
-        subscribe:
-            operationId: webhookPaymentSucceeded
-            summary: A payment reached `succeeded`.
-            description: One-to-one with the `payment.succeeded` domain event — see `payments/events.ts`.
-            message:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            PaymentSucceededEvent:
                 $ref: '#/components/messages/PaymentSucceededEvent'
     payment.failed:
+        address: payment.failed
         description: A payment attempt was declined.
         servers:
-            - subscriberEndpoint
-        subscribe:
-            operationId: webhookPaymentFailed
-            summary: A payment reached `declined`.
-            description: >-
-                One-to-one with the `payment.failed` domain event. Retryable with another method, so this can fire more than once for the same order.
-            message:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            PaymentFailedEvent:
                 $ref: '#/components/messages/PaymentFailedEvent'
+operations:
+    sseMetricsSnapshot:
+        action: send
+        channel:
+            $ref: '#/channels/observability.metrics.snapshot'
+        description: >-
+            Sent once, immediately on connect, so a dashboard renders populated instead of waiting out the first 5-second tick with empty cards. Same payload shape as the periodic update — a client handles one message type, not two.
+        messages:
+            - $ref: '#/channels/observability.metrics.snapshot/messages/MetricsSnapshotEvent'
+    sseMetricsUpdated:
+        action: send
+        channel:
+            $ref: '#/channels/observability.metrics.updated'
+        description: >-
+            Pushed every 5 seconds for as long as the connection is open. Memory is in BYTES, identical to what `GET /observability/health` publishes, so a dashboard showing both compares numbers rather than converting units to find out whether they agree.
+        messages:
+            - $ref: '#/channels/observability.metrics.updated/messages/MetricsUpdatedEvent'
+    sseHeartbeat:
+        action: send
+        channel:
+            $ref: '#/channels/observability.heartbeat'
+        description: >-
+            A 15-second keep-alive carrying no metrics. Idle proxies close a connection that has been quiet, and an SSE stream between two ticks looks idle to them; this is also what lets a client tell "the stream is alive and nothing changed" from "the stream died".
+        messages:
+            - $ref: '#/channels/observability.heartbeat/messages/HeartbeatEvent'
+    webhookOrderCreated:
+        action: send
+        channel:
+            $ref: '#/channels/order.created'
+        summary: An order was written for the first time.
+        description: >-
+            Fired once per order, from both an admin create and a storefront checkout — see `orders/services/crud.ts`'s `recordCreated`.
+        messages:
+            - $ref: '#/channels/order.created/messages/OrderCreatedEvent'
+    webhookOrderPaid:
+        action: send
+        channel:
+            $ref: '#/channels/order.paid'
+        summary: An order moved to the `paid` status.
+        description: >-
+            Derived from `order.status_changed` (`to: 'paid'`) rather than its own domain event — see `orders/events.ts`: "listeners filter on `to`; the event doesn't know who cares."
+        messages:
+            - $ref: '#/channels/order.paid/messages/OrderPaidEvent'
+    webhookOrderShipped:
+        action: send
+        channel:
+            $ref: '#/channels/order.shipped'
+        summary: An order moved to the `shipped` status.
+        description: Derived from `order.status_changed` filtered to `to = 'shipped'`, same as `order.paid`.
+        messages:
+            - $ref: '#/channels/order.shipped/messages/OrderShippedEvent'
+    webhookOrderCancelled:
+        action: send
+        channel:
+            $ref: '#/channels/order.cancelled'
+        summary: A cancel went through; stock is already back on the shelf.
+        description: One-to-one with the `order.cancelled` domain event — see `orders/events.ts`.
+        messages:
+            - $ref: '#/channels/order.cancelled/messages/OrderCancelledEvent'
+    webhookPaymentSucceeded:
+        action: send
+        channel:
+            $ref: '#/channels/payment.succeeded'
+        summary: A payment reached `succeeded`.
+        description: One-to-one with the `payment.succeeded` domain event — see `payments/events.ts`.
+        messages:
+            - $ref: '#/channels/payment.succeeded/messages/PaymentSucceededEvent'
+    webhookPaymentFailed:
+        action: send
+        channel:
+            $ref: '#/channels/payment.failed'
+        summary: A payment reached `declined`.
+        description: >-
+            One-to-one with the `payment.failed` domain event. Retryable with another method, so this can fire more than once for the same order.
+        messages:
+            - $ref: '#/channels/payment.failed/messages/PaymentFailedEvent'
 components:
     messages:
         MetricsSnapshotEvent:
             name: MetricsSnapshotEvent
-            messageId: observability.metrics.snapshot
             title: Initial observability metrics snapshot
             payload:
                 $ref: '#/components/schemas/ObservabilityMetricsPayload'
         MetricsUpdatedEvent:
             name: MetricsUpdatedEvent
-            messageId: observability.metrics.updated
             title: Periodic observability metrics update
             payload:
                 $ref: '#/components/schemas/ObservabilityMetricsPayload'
         HeartbeatEvent:
             name: HeartbeatEvent
-            messageId: observability.heartbeat
             title: Observability heartbeat
             payload:
                 $ref: '#/components/schemas/ObservabilityMetricsPayload'
         OrderCreatedEvent:
             name: OrderCreatedEvent
-            messageId: order.created
             title: Order created
             payload:
                 $ref: '#/components/schemas/OrderIdPayload'
         OrderPaidEvent:
             name: OrderPaidEvent
-            messageId: order.paid
             title: Order paid
             payload:
                 $ref: '#/components/schemas/OrderIdPayload'
         OrderShippedEvent:
             name: OrderShippedEvent
-            messageId: order.shipped
             title: Order shipped
             payload:
                 $ref: '#/components/schemas/OrderIdPayload'
         OrderCancelledEvent:
             name: OrderCancelledEvent
-            messageId: order.cancelled
             title: Order cancelled
             payload:
                 $ref: '#/components/schemas/OrderCancelledPayload'
         PaymentSucceededEvent:
             name: PaymentSucceededEvent
-            messageId: payment.succeeded
             title: Payment succeeded
             payload:
                 $ref: '#/components/schemas/PaymentEventPayload'
         PaymentFailedEvent:
             name: PaymentFailedEvent
-            messageId: payment.failed
             title: Payment failed
             payload:
                 $ref: '#/components/schemas/PaymentEventPayload'

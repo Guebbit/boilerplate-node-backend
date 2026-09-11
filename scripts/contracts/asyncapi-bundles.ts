@@ -62,15 +62,17 @@ const asyncSectionDocument = (section: AsyncSectionName): string =>
 const ASYNC_ROOT_DOCUMENT = path.join(REPO_ROOT, 'shared', 'contracts', 'asyncapi.root.yaml');
 
 /**
- * The four places a section contributes to, in the order the document declares them.
+ * The five places a section contributes to, in the order the document declares them.
  *
  * The order is the output's key order, because the root holds none of these: every one is created
  * by the first section that has it, at the end of the document. `servers` first so a reader meets
- * the transports before the channels bound to them.
+ * the transports before the channels bound to them. `operations` is 3.0's addition — a channel
+ * declares its message once, and the operations bound to it say `send` or `receive`.
  */
 const MERGED_PATHS = [
     ['servers'],
     ['channels'],
+    ['operations'],
     ['components', 'messages'],
     ['components', 'schemas']
 ] as const;
