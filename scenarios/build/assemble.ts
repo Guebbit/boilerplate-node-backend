@@ -8,20 +8,16 @@
  *
  * ## Why this is a module and not part of the export script
  *
- * Two callers need the same answer from the same rows — `scenarios/build/export-dataset.ts`
- * publishes it against a database it seeded from scratch, and `npm run check:scenario-build`
- * re-derives it and compares against the committed bytes. A second implementation of this walk
- * would let those two disagree about what the dataset even is, which is the class of bug the
- * published-output design exists to remove. So there is one assembler and both callers import it.
+ * Kept separate from `scenarios/build/export-dataset.ts` so the walk — read every module back,
+ * check it, render it — stays testable and reusable on its own, the same reasoning that keeps any
+ * pure step apart from the script that drives it.
  *
- * ## Determinism is a hard requirement
+ * ## Stable key order, not byte-pinned content
  *
- * The output is committed and `npm run check:scenario-build` re-derives it in the gate, so two
- * runs must produce identical bytes. Three things buy that: factories pin their own `createdAt`
- * (see `@infrastructure/persistence/factories`), seed writes pass `{ timestamps: false }` so
- * Mongoose does not overwrite them, and this file sorts both the rows and every object key on the
- * way out. If a value ever enters the dataset that cannot be pinned, it does not belong in the
- * export.
+ * `scenarios/dataset.json` is gitignored and rebuilt by `postinstall` — nothing diffs a run's
+ * output against a committed copy, so no factory needs a pinned `createdAt` and no seed write
+ * needs `{ timestamps: false }`. Rows and object keys are still sorted on the way out, purely so a
+ * rebuild after a small factory change is easy to read by eye, not because anything requires it.
  */
 
 import path from 'node:path';
@@ -149,7 +145,7 @@ export const assembleDemoDataset = async (): Promise<string> => {
     );
     if (dangling.length > 0)
         throw new Error(
-            `[seed-export] the dataset references records it does not contain:\n` +
+            `[scenario-build] the dataset references records it does not contain:\n` +
                 dangling.map((problem) => `  ${problem}`).join('\n')
         );
 
