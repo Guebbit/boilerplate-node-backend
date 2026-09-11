@@ -12,9 +12,6 @@
  * POST to `/<any-uuid>` creates that session on arrival, so this subscription is watchable without
  * a human opening the UI first to obtain one — `GET /api/session/<uuid>/requests` on the tester
  * answers with what it has captured.
- *
- * Absent from `dataset.json` — its `export` is empty, always: a local sink url and session id are
- * meaningless on any other developer's machine. See docs/reference/data.md#the-demo-dataset.
  */
 
 import { Types } from 'mongoose';
@@ -71,6 +68,3 @@ export const seedWebhooksCollection = (): Promise<SeedOutcome[]> => {
         return upsertById(webhookSubscriptionRepository, fixture).then((outcome) => [outcome]);
     });
 };
-
-/** This module contributes nothing to the published dataset — see the module docblock. */
-export const exportSeededWebhooks = (): Promise<Record<string, unknown[]>> => Promise.resolve({});

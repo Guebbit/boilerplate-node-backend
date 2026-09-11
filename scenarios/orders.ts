@@ -13,11 +13,11 @@ import {
     SEED_USER_EMAIL,
     SEED_USER_ID
 } from '@kernel/seed-accounts';
-import { SEED_PRODUCT_IDS, fillerProductId, seedProductById } from './products';
+import { fillerProductId, seedProductById } from './products';
+import { SEED_ORDER_IDS, SEED_PRODUCT_IDS } from './subjects';
 import { SEED_CUSTOMER_EMAILS, SEED_CUSTOMER_IDS } from './users';
 import { makeOrder, type OrderSnapshotInput } from '@modules/orders/factories';
-import { orderModel } from '@modules/orders/model';
-import { upsertById, type SeedOutcome, exportCollection } from '@infrastructure/persistence/seed';
+import { upsertById, type SeedOutcome } from '@infrastructure/persistence/seed';
 import { orderRepository } from '@modules/orders/repository';
 
 /** The catalogue row as it stands, reshaped into the snapshot an order item stores. */
@@ -56,7 +56,7 @@ const demoOrderId = (index: number): string => `67f0c4${index.toString(16).padSt
 /** The three test-critical orders — see the comment on each for the branch it exercises. */
 const namedOrders = [
     makeOrder({
-        id: '65de73a69ca05739be2b5e85',
+        id: SEED_ORDER_IDS.ownerFirst,
         userId: SEED_OWNER_ID,
         /* Not the owner's current address. This order predates an email change and keeps the old
          * one, so "the order remembers where it was sent" is a property the dataset demonstrates
@@ -70,7 +70,7 @@ const namedOrders = [
     /* The only fixture with shipping columns — added because the fixtures predate those columns
      * and none demonstrated a chosen delivery method. */
     makeOrder({
-        id: '661c795a9e22bcbef63a5832',
+        id: SEED_ORDER_IDS.ownerShipped,
         userId: SEED_OWNER_ID,
         email: SEED_OWNER_EMAIL,
         items: [line(SEED_PRODUCT_IDS.dogBedPremium, 20)],
@@ -98,7 +98,7 @@ const namedOrders = [
      * first.
      */
     makeOrder({
-        id: '66b3f0c14d2e8a91c7d4a015',
+        id: SEED_ORDER_IDS.userDeleted,
         userId: SEED_USER_ID,
         email: SEED_USER_EMAIL,
         items: [line(SEED_PRODUCT_IDS.dogFoodStandard, 4)],
@@ -246,7 +246,7 @@ const mediumCustomerOrders = MEDIUM_ORDERS.map(({ customer, lines }, index) =>
     })
 );
 
-/** Every demo order, in id order. The seeder and the exported dataset both read this. */
+/** Every demo order, in id order. */
 export const orderFixtures = [
     ...namedOrders,
     ...customerOrders,
@@ -265,14 +265,3 @@ export const orderFixtures = [
 /** Seed this collection. Declared in `./index`; called by `scenarios/apply.ts`. */
 export const seedOrdersCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(orderFixtures.map((order) => upsertById(orderRepository, order)));
-
-/**
- * Read the seeded orders back as the API serves them — see `./products`.
- *
- * `totalItems`, `totalQuantity` and `totalPrice` appear here without being stored anywhere:
- * `applyOrderTransform` derives them during serialization. Publishing the serialized row is what
- * lets the paired frontend stop recomputing that arithmetic in `mockOrderMath` and hope it agrees.
- */
-export const exportSeededOrders = async (): Promise<Record<string, unknown[]>> => ({
-    orders: await exportCollection(orderModel, { _id: 1 })
-});

@@ -11,8 +11,13 @@
  * can answer:
  *
  *   1. Which module owns which path — read from the module contracts, never restated.
- *   2. Where the values come from — `scenarios/dataset.json`, so a generated request asks for a
- *      product that exists and sends credentials that work.
+ *   2. Where the values come from — `scenarios/subjects.ts`, so a generated request asks for a
+ *      product that exists and sends credentials that work. Only ids and credentials: nothing
+ *      here can import a module's own fixtures (`scenarios/products.ts` and friends), because
+ *      those pull in `@modules/*` code, which imports the generated `@api/` client — the same
+ *      cycle `scripts/contracts/openapi-bundle.ts` had to stop importing `enabledModules` to
+ *      avoid. A realistic title, price or description is no longer available here; `npm run demo`
+ *      plus the API is how you see the whole shop.
  *   3. What the contract cannot describe — each module's `probes.ts`, the requests that prove the
  *      API REJECTS things. A spec declares valid calls, so no generator can derive a bogus token.
  *
@@ -29,7 +34,6 @@ import {
     type CollectionRequest,
     type CollectionTool,
     type GenerateResult,
-    type Json,
     type Probe,
     type Section,
     type ValueSources
@@ -41,7 +45,7 @@ import { probes as cartProbes } from '../../src/modules/cart/probes';
 import { probes as ordersProbes } from '../../src/modules/orders/probes';
 import { probes as productsProbes } from '../../src/modules/products/probes';
 import { probes as wishlistProbes } from '../../src/modules/wishlist/probes';
-import dataset from '../../scenarios/dataset.json';
+import { SEED_ORDER_IDS, SEED_PRODUCT_IDS, SUBJECTS } from '../../scenarios/subjects';
 
 /** The four tools, and the order this file names them in. */
 const COLLECTION_TOOLS = ['bruno', 'insomnia', 'mockoon', 'postman'] as const;
@@ -60,89 +64,29 @@ const sections = (): Section[] =>
  * 2. Where the values come from — the shapes are the contract's, the data is the seed's
  * ──────────────────────────────────────────────────────────────────────────────────────────── */
 
-/*
- * Positional, and safe to be: every collection in `dataset.json` is sorted by `_id`, so these
- * indices are stable across exports. The owner sorts before the ordinary user because their
- * ObjectIds encode the order the two accounts were created in.
- */
-const { credentials, collections } = dataset;
-const [seedOwner, seedUser] = collections.users;
-const [seedProduct] = collections.products;
-const [seedOrder] = collections.orders;
-const [seedCart] = collections.carts;
-const seedProducts = collections.products;
-const seedOrders = collections.orders;
-
 const values: ValueSources = {
     /*
      * By property name, because that is what makes a generated body USABLE: a request that posts
      * `{"productId": ""}` is a request whoever opens the collection has to fix before it does
-     * anything. Anything not named here falls through to a type- and format-shaped default.
+     * anything. Everything else — title, price, description and the like — falls through to a
+     * type- and format-shaped default; only ids and credentials are real, see the file header.
      */
     byProperty: {
-        id: seedProduct.id,
-        email: credentials.user.email,
-        password: credentials.user.password,
-        newPassword: credentials.user.password,
-        username: seedUser.username,
-        productId: seedProduct.id,
-        userId: seedUser.id,
-        orderId: seedOrder.id,
-        title: seedProduct.title,
-        description: seedProduct.description,
-        price: seedProduct.price,
-        imageUrl: seedProduct.imageUrl,
+        id: SUBJECTS.product.id,
+        email: SUBJECTS.user.email,
+        password: SUBJECTS.user.password,
+        newPassword: SUBJECTS.user.password,
+        username: 'new-shopper',
+        productId: SUBJECTS.product.id,
+        userId: SUBJECTS.user.id,
+        orderId: SUBJECTS.order.id,
         quantity: 2,
         admin: false,
         active: true,
         locale: 'en',
-        text: seedProduct.title,
         page: 1,
         pageSize: 20
     },
-
-    /*
-     * Whole records for the entities the contract names, rather than field-by-field guesses. A
-     * `$ref` to `Product` should produce the product the database actually holds, so a
-     * `GET /products/{id}` example and the row that answers it are the same record. Only the
-     * properties the schema declares survive, so a field the contract drops stops appearing here
-     * on the next run.
-     */
-    byEntity: {
-        User: {
-            id: seedUser.id,
-            username: seedUser.username,
-            email: seedUser.email,
-            role: seedUser.role,
-            active: seedUser.active,
-            imageUrl: seedUser.imageUrl
-        },
-        Product: {
-            id: seedProduct.id,
-            title: seedProduct.title,
-            description: seedProduct.description,
-            price: seedProduct.price,
-            active: seedProduct.active,
-            imageUrl: seedProduct.imageUrl
-        },
-        Order: {
-            id: seedOrder.id,
-            userId: seedOrder.userId,
-            email: seedOrder.email,
-            /* The serializer's own total, not this file multiplying a price by a quantity and
-             * hoping it matches what `applyOrderTransform` derives. */
-            total: seedOrder.totalPrice
-        },
-        OrderItem: {
-            productId: seedOrder.items[0].product.id,
-            quantity: seedOrder.items[0].quantity,
-            price: seedOrder.items[0].product.price
-        },
-        CartItem: {
-            productId: seedCart.items[0].productId,
-            quantity: seedCart.items[0].quantity
-        }
-    } as Record<string, Record<string, Json>>,
 
     /*
      * Bodies a schema cannot produce correctly on its own. Only two, and both for the same reason:
@@ -152,56 +96,50 @@ const values: ValueSources = {
      */
     byOperation: {
         'POST /account/login': {
-            email: credentials.owner.email,
-            password: credentials.owner.password
+            email: SUBJECTS.owner.email,
+            password: SUBJECTS.owner.password
         },
         'POST /account/signup': {
-            username: seedUser.username,
-            email: credentials.user.email,
-            password: credentials.user.password
+            username: 'new-shopper',
+            email: SUBJECTS.user.email,
+            password: SUBJECTS.user.password
         }
     },
 
-    /** A credential is the dataset's, never invented: an invented one produces a login that fails. */
-    byFormat: { email: credentials.user.email, password: credentials.user.password },
+    /** A credential is a real seeded one, never invented: an invented one produces a login that
+     * fails. */
+    byFormat: { email: SUBJECTS.user.email, password: SUBJECTS.user.password },
 
     /** A path parameter's value: the seeded record of whichever domain the path belongs to. */
     pathParam: (name, template) => {
-        if (name === 'productId') return seedProduct.id;
+        if (name === 'productId') return SUBJECTS.product.id;
         if (name === 'locale') return 'en';
         if (name !== 'id') return undefined;
 
-        if (template.startsWith('/products')) return seedProduct.id;
-        if (template.startsWith('/orders')) return seedOrder.id;
-        if (template.startsWith('/users')) return seedUser.id;
-        if (template.startsWith('/feedback')) return seedOrder.id;
-        return seedOwner.id;
+        if (template.startsWith('/products')) return SUBJECTS.product.id;
+        if (template.startsWith('/orders')) return SUBJECTS.order.id;
+        if (template.startsWith('/users')) return SUBJECTS.user.id;
+        if (template.startsWith('/feedback')) return SUBJECTS.order.id;
+        return SUBJECTS.owner.id;
     },
 
     /*
      * The seed facts a probe may refer to, as `{{token}}`. A probe that pasted
-     * `65dc8ad8604c307b702b5cd4` into its URL would be a copy of the seed dataset, and copies drift
-     * — the whole reason the dataset is published rather than retyped. Every one of these is
-     * DERIVED from the records rather than restated, so a fixture that stops being soft-deleted
-     * takes its probe with it instead of leaving one that quietly tests nothing.
+     * `65dc8ad8604c307b702b5cd4` into its URL would be a copy of `scenarios/subjects.ts`, and
+     * copies drift — the whole reason these are read from there rather than retyped.
      */
     tokens: {
-        seedOwnerEmail: credentials.owner.email,
-        seedOwnerPassword: credentials.owner.password,
-        seedOwnerId: seedOwner.id,
-        seedUserEmail: credentials.user.email,
-        seedUserPassword: credentials.user.password,
-        seedUserId: seedUser.id,
-        seedProductId: seedProduct.id,
-        seedOrderId: seedOrder.id,
-        /* The dataset carries exactly one of each on purpose — see the comments in
-         * `scenarios/products.ts`: without them the soft-delete and role-scoping branches
-         * have no row behind them, and a branch with no row is a branch nothing exercises. */
-        seedSoftDeletedProductId: (
-            seedProducts.find((product) => 'deletedAt' in product) ?? seedProduct
-        ).id,
-        seedInactiveProductId: (seedProducts.find((product) => !product.active) ?? seedProduct).id,
-        seedDeletedOrderId: (seedOrders.find((order) => 'deletedAt' in order) ?? seedOrder).id
+        seedOwnerEmail: SUBJECTS.owner.email,
+        seedOwnerPassword: SUBJECTS.owner.password,
+        seedOwnerId: SUBJECTS.owner.id,
+        seedUserEmail: SUBJECTS.user.email,
+        seedUserPassword: SUBJECTS.user.password,
+        seedUserId: SUBJECTS.user.id,
+        seedProductId: SUBJECTS.product.id,
+        seedOrderId: SUBJECTS.order.id,
+        seedSoftDeletedProductId: SEED_PRODUCT_IDS.heaterSoftDeleted,
+        seedInactiveProductId: SEED_PRODUCT_IDS.bundleInactive,
+        seedDeletedOrderId: SEED_ORDER_IDS.userDeleted
     }
 };
 

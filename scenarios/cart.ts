@@ -7,15 +7,11 @@
  */
 
 import { SEED_OWNER_ID } from '@kernel/seed-accounts';
-import { SEED_PRODUCT_IDS, fillerProductId } from './products';
+import { fillerProductId } from './products';
+import { SEED_PRODUCT_IDS } from './subjects';
 import { SEED_CUSTOMER_IDS } from './users';
 import { makeCart } from '@modules/cart/factories';
-import { cartModel } from '@modules/cart/model';
-import {
-    type SeedOutcome,
-    exportCollection,
-    upsertByOwner
-} from '@infrastructure/persistence/seed';
+import { type SeedOutcome, upsertByOwner } from '@infrastructure/persistence/seed';
 import { cartRepository } from '@modules/cart/repository';
 
 /**
@@ -68,14 +64,3 @@ export const cartFixtures = [
 /** Seed this collection. Declared in `./index`; called by `scenarios/apply.ts`. */
 export const seedCartsCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(cartFixtures.map((cart) => upsertByOwner(cartRepository, cart)));
-
-/**
- * Read the seeded carts back as stored — see `./products`.
- *
- * Sorted by owner, because a cart has no pinned `_id` to sort by. The shape published here is the
- * STORED one, not a `CartResponse`: no endpoint serves a raw cart, `@modules/cart/service` builds
- * the response by pricing the lines, and the frontend's handler mirrors that same construction.
- */
-export const exportSeededCarts = async (): Promise<Record<string, unknown[]>> => ({
-    carts: await exportCollection(cartModel, { userId: 1 })
-});

@@ -29,8 +29,7 @@ import {
 } from '@kernel/seed-accounts';
 import userImages from './users-images.generated.json';
 import { makeUser } from '@modules/users/factories';
-import { userModel } from '@modules/users/model';
-import { upsertById, type SeedOutcome, exportCollection } from '@infrastructure/persistence/seed';
+import { upsertById, type SeedOutcome } from '@infrastructure/persistence/seed';
 import { userRepository } from '@modules/users/repository';
 
 /**
@@ -169,12 +168,3 @@ export const seedUsersCollection = (): Promise<SeedOutcome[]> =>
  */
 export const seedNamedUsersCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(namedUsers.map((user) => upsertById(userRepository, user)));
-
-/**
- * Read the seeded accounts back as the API serves them — see `./products`. No password
- * comes out; that's `applyUserTransform`, not an omission — credentials never reach a response,
- * so `scenarios/build/export-dataset.ts` publishes them separately from `@kernel/seed-accounts`.
- */
-export const exportSeededUsers = async (): Promise<Record<string, unknown[]>> => ({
-    users: await exportCollection(userModel, { _id: 1 })
-});

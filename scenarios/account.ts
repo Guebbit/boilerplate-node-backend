@@ -7,13 +7,8 @@
  */
 
 import { SEED_OWNER_ID, SEED_USER_ID } from '@kernel/seed-accounts';
-import {
-    type SeedOutcome,
-    exportCollection,
-    upsertByOwner
-} from '@infrastructure/persistence/seed';
+import { type SeedOutcome, upsertByOwner } from '@infrastructure/persistence/seed';
 import { makeAddressBook } from '@modules/account/factories';
-import { addressBookModel } from '@modules/account/model';
 import { addressBookRepository } from '@modules/account/repository';
 
 /**
@@ -85,13 +80,3 @@ export const addressBookFixtures = [
  */
 export const seedAddressBooksCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(addressBookFixtures.map((book) => upsertByOwner(addressBookRepository, book)));
-
-/**
- * Read the seeded books back as stored, sorted by owner — see `./cart`.
- * No endpoint serves a raw book; the stored row's entries already serialize as the contract's
- * `Address` (via `addressItemSchema`'s shared serializer), so the frontend's mock can read
- * `items` straight out of this file.
- */
-export const exportSeededAddressBooks = async (): Promise<Record<string, unknown[]>> => ({
-    addressBooks: await exportCollection(addressBookModel, { userId: 1 })
-});

@@ -39,7 +39,6 @@
         "scenarios/**/*.ts",
         "scenarios/**/*.json",
         "db/**/*.ts",
-        "scenarios/dataset.json",
         "eslint/**/*.ts",
         "scripts/**/*.ts",
         "ops/**/*.ts",

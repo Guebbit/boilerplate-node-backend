@@ -24,14 +24,13 @@ flowchart LR
     Sync --> Mongo[("MongoDB")]
     Seeds["scenarios/*.ts<br/><i>factories</i>"] --> Index["scenarios/apply.ts<br/><i>the seeder</i>"]
     Index --> Mongo
-    Mongo --> Assemble["scenarios/build/assemble.ts"]
-    Assemble --> Data["scenarios/dataset.json<br/><i>npm run scenario:build</i>"]
+    Mongo --> Shop["tests/integration/scenarios/shop.test.ts<br/><i>guarantees + conformance</i>"]
 
     classDef schema fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef data fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef store fill:#dcfce7,stroke:#16a34a,color:#111827;
     class Models,Sync schema;
-    class Seeds,Index,Assemble,Data data;
+    class Seeds,Index,Shop data;
     class Mongo store;
 ```
 
@@ -214,11 +213,11 @@ access — so it is the one collection whose index `db:sync` never reaches;
 
 ## The demo dataset
 
-| File                          | What it is                                                                                                                                                                                                                                                                                                                                                                                          | Read next                                                              |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `scenarios/apply.ts`          | The seeder that `npm run scenario:apply` runs. Walks `scenarios/index.ts`'s table and upserts each entry's rows through the shared seeding primitive — so seeding is idempotent, and a module absent from the table seeds nothing. A reset flag empties first.                                                                                                                                      | [Modules](./src-modules.md) · [Demo profile](../tools/demo-profile.md) |
-| `scenarios/build/assemble.ts` | Reads the seeded rows back out **through the real serializers** and checks the result is what the API would actually answer. That is what makes the published dataset a record of the API's behaviour rather than of its storage.                                                                                                                                                                   | [Contract Testing (Response)](../tools/contract-testing.md)            |
-| `scenarios/dataset.json`      | **Generated** by `npm run scenario:build`, and gitignored like `api/` — a generated artefact with no committed copy is one that cannot go stale. Not in `SHARED_FILES` either: the paired frontend keeps no copy and reads this repo's API instead. Read by `scripts/contracts/client-collections-bundle.ts`, and included by `tsconfig.json` for it, so `postinstall` builds it before `tsc` runs. | [Contract Ownership & Fragmentation](../api/contract-fragmentation.md) |
+| File                                       | What it is                                                                                                                                                                                                                                                                                                                                                   | Read next                                                              |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| `scenarios/apply.ts`                       | The seeder that `npm run scenario:apply` runs. Walks `scenarios/index.ts`'s table and upserts each entry's rows through the shared seeding primitive — so seeding is idempotent, and a module absent from the table seeds nothing. A reset flag empties first.                                                                                               | [Modules](./src-modules.md) · [Demo profile](../tools/demo-profile.md) |
+| `scenarios/subjects.ts`                    | The named ids and credentials a consumer that cannot import module code still needs to point at a specific seeded row — a generated API client collection today, a future `GET /__test/scenario`.                                                                                                                                                            | [Contract Ownership & Fragmentation](../api/contract-fragmentation.md) |
+| `tests/integration/scenarios/shop.test.ts` | Seeds the `shop` scenario against a real database, then reads the rows back **through the real serializers** and checks each one against the generated response schema for that entity — what makes the guarantee "the API would actually answer this" a test rather than a claim in a comment. Also asserts every declared `scenario.shop` guarantee holds. | [Contract Testing (Response)](../tools/contract-testing.md)            |
 
 The factories themselves are not here — each module's slice lives in `scenarios/<name>.ts`, and the
 two demo accounts are declared in `src/kernel/seed-accounts.ts`.

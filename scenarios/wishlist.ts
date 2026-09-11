@@ -6,14 +6,9 @@
  */
 
 import { SEED_OWNER_ID, SEED_USER_ID } from '@kernel/seed-accounts';
-import { SEED_PRODUCT_IDS } from './products';
+import { SEED_PRODUCT_IDS } from './subjects';
 import { makeWishlist } from '@modules/wishlist/factories';
-import { wishlistModel } from '@modules/wishlist/model';
-import {
-    type SeedOutcome,
-    exportCollection,
-    upsertByOwner
-} from '@infrastructure/persistence/seed';
+import { type SeedOutcome, upsertByOwner } from '@infrastructure/persistence/seed';
 import { wishlistRepository } from '@modules/wishlist/repository';
 
 /**
@@ -40,8 +35,3 @@ export const wishlistFixtures = [
 /** Seed this collection. Declared in `./index`; called by `scenarios/apply.ts`. */
 export const seedWishlistsCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(wishlistFixtures.map((wishlist) => upsertByOwner(wishlistRepository, wishlist)));
-
-/** Read the seeded wishlists back as stored, sorted by owner — see `./products`. */
-export const exportSeededWishlists = async (): Promise<Record<string, unknown[]>> => ({
-    wishlists: await exportCollection(wishlistModel, { userId: 1 })
-});

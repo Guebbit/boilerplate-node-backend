@@ -397,12 +397,13 @@ It used to be one. `db/seeds/seed-identities.ts` was assembled from a <!-- doc-p
 the frontend needed the same records, one file had to hold them, and no module should own a file
 that lists every domain.
 
-It is gone, and the machinery went with it. The dataset is now **published rather than assembled**:
-`npm run scenario:build` seeds a throwaway database with the real seeders and writes what the API
-answers to `scenarios/dataset.json`. Each module's records live in `scenarios/<name>.ts`, imported
-by `scenarios/index.ts` and by nothing under `src/` — no fragment, no text concatenation, no
-staleness check on this CLI. The demo dataset needs none: it is gitignored and rebuilt by
-`postinstall` and by the pre-commit hook's `regenerate`, so no committed copy can go stale.
+It is gone, and the machinery went with it. Each module's records live in `scenarios/<name>.ts`,
+imported by `scenarios/index.ts` and by nothing under `src/` — no fragment, no text concatenation.
+What the API actually answers for a seeded row is not published to a file at all: it is asserted
+directly, against a real database, by `tests/integration/scenarios/shop.test.ts` — a behaviour
+check belongs in `npm test`, not a build step. The one thing still published is
+`scenarios/subjects.ts`: the named ids and credentials a consumer that cannot import module code
+(a generated client collection) needs to point at a specific seeded row.
 
 The reason is worth keeping, because it is the one case on this page where fragmenting the SOURCE
 was the wrong answer. Sharing facts left each repo writing its own mapper over them, and the mappers
@@ -440,11 +441,12 @@ property of that configuration rather than of the package.
 
 - **shapes come from `openapi.yaml`** — every operation, its auth, its request body, one example per
   declared response;
-- **values come from `scenarios/dataset.json`** — `GET /products/{id}` asks for a product the database
-  actually holds, and `POST /account/login` sends credentials that work. That is the difference
-  between a collection you can click and one you have to fix first. It is also why the examples carry
-  real derived values: an order's `totalPrice` is the number the serializer computed, not arithmetic
-  this file repeated;
+- **values come from `scenarios/subjects.ts`** — `GET /products/{id}` asks for a product the
+  database actually holds, and `POST /account/login` sends credentials that work. That is the
+  difference between a collection you can click and one you have to fix first. Only ids and
+  credentials, though: `scenarios/subjects.ts` cannot import a module's own fixtures without
+  pulling in the `@api/` client the bundler is still building (see below), so a body field this
+  file cannot name — a title, a price, a description — falls to a type- and format-shaped default;
 - **ownership comes from the module contracts** — a path in `src/modules/orders/openapi.yaml`
   is the orders module's, so the mapping is recorded once and a path that moves between modules
   moves in all four collections with it;
@@ -478,8 +480,8 @@ There are 14 today, and each one is a question a contract cannot ask:
 | `orders` | the owner asking for their own soft-deleted order · another user's order |
 
 A probe refers to seed records as `{{seedSoftDeletedProductId}}` rather than pasting an id — the
-tokens are derived from `dataset.json` (the soft-deleted product is *found*, not named), so a
-fixture that stops being soft-deleted takes its probe with it instead of leaving one that quietly
+tokens are read from `scenarios/subjects.ts` (the soft-deleted product is *named* there, once), so
+a fixture that stops being soft-deleted takes its probe with it instead of leaving one that quietly
 tests nothing. An unknown token fails the generator with the list of known ones.
 
 **Two serialisations, four tools.** Bruno and Insomnia are YAML; Mockoon and Postman are JSON.

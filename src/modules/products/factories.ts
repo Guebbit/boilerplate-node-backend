@@ -2,8 +2,8 @@
  * @module
  * Builds a product row — for the demo dataset in `./demo` and for any test needing a
  * catalogue row. Deliberately leaves the schema's own defaults unset, placeholdering only the
- * required `title` and `price`, so `scenarios/build/export-dataset.ts` reads seeded rows back
- * through the real serializer instead of a guess.
+ * required `title` and `price`, so `tests/integration/scenarios/shop.test.ts` reads seeded rows
+ * back through the real serializer instead of a guess.
  */
 
 import {

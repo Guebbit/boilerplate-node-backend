@@ -1,9 +1,9 @@
 /**
  * @module
  * The catalogue's slice of the demo dataset. `scenarios/apply.ts` seeds these rows into a live
- * database; `scenarios/build/export-dataset.ts` seeds them into a throwaway one and writes what the
- * API answers to `scenarios/dataset.json`. A field a record omits falls to
- * `@modules/products/model`'s `default:` — see `@modules/products/factories`.
+ * database; `tests/integration/scenarios/shop.test.ts` seeds them into a throwaway one and checks
+ * what the API answers for each against the generated response schema. A field a record omits
+ * falls to `@modules/products/model`'s `default:` — see `@modules/products/factories`.
  *
  * Six named rows carry the branch coverage the storefront and repositories actually exercise
  * (soft-deleted, out of stock, inactive, minimal); `./demo-catalog` supplies a further 126 rows
@@ -26,9 +26,10 @@ import { FILLER_IMAGE_ROLE_KEYS, FILLER_PRODUCTS, fillerProductId } from './demo
  */
 export { fillerProductId } from './demo-catalog';
 import productImages from './products-images.generated.json';
+import { SEED_PRODUCT_IDS } from './subjects';
 import { makeProduct } from '@modules/products/factories';
 import { productModel } from '@modules/products/model';
-import { upsertById, type SeedOutcome, exportCollection } from '@infrastructure/persistence/seed';
+import { upsertById, type SeedOutcome } from '@infrastructure/persistence/seed';
 import { productRepository } from '@modules/products/repository';
 import {
     getFallbackLocale,
@@ -50,22 +51,6 @@ interface ProductCopy {
     en: ProductTranslationFields;
     it?: ProductTranslationFields;
 }
-
-/**
- * The catalogue ids, named by what each row is for.
- *
- * `./cart`, `./wishlist` and `./orders` read these instead of repeating a hex string. Each name
- * states the row's product and the branch it exists to exercise, so intent like "only visible
- * products are saved" is checkable by eye where a raw id would just be a claim in a comment.
- */
-export const SEED_PRODUCT_IDS = {
-    dogFoodStandard: '65dc8a99604c307b702b5ccc',
-    heaterSoftDeleted: '65dc8ad8604c307b702b5cd4',
-    scratchPostOutOfStock: '65dc9be92f2794d1c16741e1',
-    dogBedPremium: '65dcdec2b18ad5e4bd597f0f',
-    bundleInactive: '6622c88a5123b1e286f440f8',
-    barebones: '67f0a1c2d3e4b5a6c7d8e9f0'
-} as const;
 
 /**
  * Each named product's copy, both locales — the single source `namedProducts`' `title`/
@@ -353,8 +338,7 @@ const writeSeedTranslations = (productId: string): Promise<void> => {
  * can get to "the new write surface".
  *
  * Depends on `./locales` having already seeded the fallback and `it` locale rows — `scenarios/apply.ts`
- * and `scenarios/build/export-dataset.ts` both seed `locales` before every other module for exactly
- * this reason.
+ * seeds `locales` before every other module for exactly this reason.
  */
 export const seedProductsCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(productFixtures.map((product) => upsertById(productRepository, product))).then(
@@ -367,15 +351,6 @@ export const seedProductsCollection = (): Promise<SeedOutcome[]> =>
                 )
             ).then(() => outcomes)
     );
-
-/**
- * Read the seeded catalogue back as the API serves it — `./index` declares this, and
- * `scenarios/build/export-dataset.ts` calls it. Sorted by `_id` so the published file is
- * byte-stable across runs rather than dependent on Mongo's natural order.
- */
-export const exportSeededProducts = async (): Promise<Record<string, unknown[]>> => ({
-    products: await exportCollection(productModel, { _id: 1 })
-});
 
 /**
  * Which of `./module`'s declared `scenario.shop` guarantees the seeded catalogue actually

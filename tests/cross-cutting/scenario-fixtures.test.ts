@@ -2,16 +2,16 @@
  * @module
  * The three claims about the demo fixtures that nothing else makes.
  *
- * Reads the FIXTURES, not the built dataset — no database, no `scenario:build`. Everything else
- * about that data already has a guard, and this file deliberately holds none of it:
+ * Reads the FIXTURES, not a seeded database — no database at all. Everything else about that data
+ * already has a guard, and this file deliberately holds none of it:
  *
- * | Claim                                    | Already enforced by                                |
- * | ---------------------------------------- | -------------------------------------------------- |
- * | a nested `*Id` points at a seeded row    | `scenarios/build/assemble.ts` — fails the build    |
- * | a row matches the wire contract          | every module's contract suite, over real HTTP      |
- * | `(locale, tenant, key)` is unique        | `localeEntries_locale_tenant_key`, a unique index  |
- * | published credentials match the accounts | `tests/unit/kernel/seed-accounts.test.ts`          |
- * | a product has its fallback-locale row    | `planTranslations` refuses to write one without it |
+ * | Claim                                     | Already enforced by                               |
+ * | ------------------------------------------ | ---------------------------------------------------- |
+ * | every `scenario.shop` guarantee is seeded | `tests/integration/scenarios/shop.test.ts`         |
+ * | a seeded row parses as its response shape | `tests/integration/scenarios/shop.test.ts`         |
+ * | `(locale, tenant, key)` is unique          | `localeEntries_locale_tenant_key`, a unique index  |
+ * | published credentials match the accounts  | `tests/unit/kernel/seed-accounts.test.ts`          |
+ * | a product has its fallback-locale row      | `planTranslations` refuses to write one without it |
  *
  * Deliberately NOT here: any assertion counting fixtures ("exactly one soft-deleted product", "at
  * least one deeply nested key"). A census records a choice someone made rather than a rule the data

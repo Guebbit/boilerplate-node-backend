@@ -11,10 +11,10 @@
 import { Types } from 'mongoose';
 import { SEED_USER_ID, SEED_EDITOR_ID, SEED_MODERATOR_ID } from '@kernel/seed-accounts';
 import { SEED_CUSTOMER_IDS } from './users';
-import { SEED_PRODUCT_IDS } from './products';
+import { SEED_PRODUCT_IDS } from './subjects';
 import { orderFixtures } from './orders';
 import { auditLogModel, type AuditLogDocument } from '@modules/audit-logs/model';
-import { exportCollection, type SeedOutcome } from '@infrastructure/persistence/seed';
+import type { SeedOutcome } from '@infrastructure/persistence/seed';
 
 /** `now - days`, so every row reads as recent however long ago the demo was last seeded. */
 const daysAgo = (days: number): Date => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
@@ -104,14 +104,3 @@ export const seedAuditLogsCollection = (): Promise<SeedOutcome[]> =>
                 )
         )
     );
-
-/**
- * Read the seeded trail back as the API serves it — see `./products`.
- *
- * `timestamp` is `now`-relative (`daysAgo`, above), so these rows say "recently" only for the run
- * that built the file. That is fine for an artefact rebuilt on demand and read by a developer, and
- * it is why a row's date here is never worth asserting on.
- */
-export const exportSeededAuditLogs = async (): Promise<Record<string, unknown[]>> => ({
-    auditLogs: await exportCollection(auditLogModel, { _id: 1 })
-});

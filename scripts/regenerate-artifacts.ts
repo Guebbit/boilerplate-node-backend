@@ -10,11 +10,11 @@
  * A script rather than a chain of `&&` because the order is not obvious and needs somewhere to
  * live:
  *
- *   openapi.yaml ──► api/ ──► dataset.json
+ *   openapi.yaml ──► api/
  *
- * The seed export runs the real application, whose models import `@api/schemas.zod`, so `api/` has
- * to exist first. The client collections read `dataset.json` too but are not committed, so they
- * are not a step here.
+ * `api/` has to exist before anything importing a module's code can run — the app's own models
+ * import `@api/schemas.zod`. The client collections read `scenarios/subjects.ts` instead of a
+ * generated dataset, are not committed, and so are not a step here either.
  *
  * See: docs/api/regenerating.md
  */
@@ -60,11 +60,6 @@ const STEPS: readonly Step[] = [
         script: 'docs:roles',
         because:
             "docs/demo-ecommerce/index.md's role tables, asked of the permission evaluator rather than restated"
-    },
-    {
-        script: 'scenario:build',
-        because:
-            'scenarios/dataset.json — seeds a throwaway database and reads it back through the real serializers (needs api/)'
     }
 ];
 

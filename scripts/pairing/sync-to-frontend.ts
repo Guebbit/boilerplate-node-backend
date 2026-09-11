@@ -52,8 +52,7 @@ if (!existsSync(frontendRoot))
  * not re-bundle.
  */
 const STALENESS_GATES = [
-    { label: 'the contract bundles', argv: ['scripts/contracts/build-bundles.ts', '--check'] },
-    { label: 'the demo dataset', argv: ['scenarios/build/export-dataset.ts', '--check'] }
+    { label: 'the contract bundles', argv: ['scripts/contracts/build-bundles.ts', '--check'] }
 ] as const;
 
 for (const gate of STALENESS_GATES) {

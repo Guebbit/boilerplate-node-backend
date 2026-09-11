@@ -41,14 +41,12 @@ edited, and forgetting that is silent, so `tests/cross-cutting/probes-are-wired.
 `probes.ts` on disk is missing from it. The import stays static: the compile-time deletion failure is
 stronger than a test, and this keeps both halves.
 
-There used to be a `SEED_SECTION_ORDER` here too. It is gone: the demo dataset stopped being
-assembled from per-module text and is now **published** — `npm run scenario:build` seeds a
-throwaway database with the real seeders and writes what the API answers to
-`scenarios/dataset.json`. A module's records live in `scenarios/<name>.ts`, tabled by
-`scenarios/index.ts` — a list, but not a hand-kept one of these six: adding an entry is optional (a
-module need not have demo data at all), and forgetting to remove one after deleting a module is
-caught by `tests/cross-cutting/scenario-fixtures.test.ts` rather than by a build failure. The
-dataset itself is gitignored — `npm run scenario:build` rebuilds it whenever a factory changes.
+A module's demo records live in `scenarios/<name>.ts`, tabled by `scenarios/index.ts` — a list,
+but not a hand-kept one of these six: adding an entry is optional (a module need not have demo
+data at all), and forgetting to remove one after deleting a module is caught by
+`tests/cross-cutting/scenario-fixtures.test.ts` rather than by a build failure. What the API
+actually answers for a seeded row is not published anywhere; it is checked directly, against a
+real database, by `tests/integration/scenarios/shop.test.ts`.
 
 Nothing else enumerates domains. Route mounting, the seeder, the i18n boot, the audit vocabulary and
 the metrics registry all walk the registry instead — which is why none of them appears in either
@@ -465,9 +463,9 @@ ones a sweep cannot express:
   the _reason_ for the import, and that is a judgement call.
 - **A named export from a generated file.** ~~`client-collections-bundle.ts` imports `seedProducts` and
   `seedOrders` by name~~ — fixed when the dataset stopped being a bundle. It reads
-  `scenarios/dataset.json` now and indexes into `collections.products` / `collections.orders`, which
-  is _whatever the seeders produced_ rather than two domain-shaped identifiers. Kept here as the
-  worked example: the fix was not a lint rule, it was removing the reason the import existed.
+  `scenarios/subjects.ts` now, which states only ids and credentials rather than two domain-shaped
+  identifiers pulled from a generated file. Kept here as the worked example: the fix was not a lint
+  rule, it was removing the reason the import existed.
 
     The same file imports domain names again today — `src/modules/<name>/probes.ts`, for the four
     modules that declare probes — and that one is deliberate. The difference is what the import is

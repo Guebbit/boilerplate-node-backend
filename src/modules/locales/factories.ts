@@ -2,8 +2,8 @@
  * @module
  * How a language row and an entry row are built. Two factories, since the
  * collections are addressed differently — a language by a pinned `_id`, an entry by the
- * pair `(locale, key)` — though both pin an id, so a rebuilt dataset diffs cleanly. Fields
- * a factory doesn't state fall to `./model`'s `default:`, keeping `dataset.json` a
+ * pair `(locale, key)` — though both pin an id, so a demo fixture reads the same across
+ * runs. Fields a factory doesn't state fall to `./model`'s `default:`, so what gets seeded is a
  * record of the schema, not of a factory's guess.
  */
 

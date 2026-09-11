@@ -95,9 +95,10 @@ describe('the seeded passwords', () => {
 
 describe('seedCredentials', () => {
     /*
-     * `dataset.json` publishes this object, and the frontend's e2e suite logs in with what it
-     * finds there — so a constant changed without its entry would hand that suite a password the
-     * seeded account does not have.
+     * The paired frontend keeps its own literal login list
+     * (`<paired-frontend>/tests/support/e2e/accounts.ts`), not a copy read from this repo — so a
+     * constant changed here without its entry hands the frontend's suite a password the seeded
+     * account does not actually have, with nothing on either side to notice.
      */
     it('publishes exactly what each account was seeded with', () => {
         expect(seedCredentials.owner).toEqual({

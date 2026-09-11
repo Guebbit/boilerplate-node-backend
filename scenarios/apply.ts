@@ -3,9 +3,7 @@
  *
  * `scenario:apply` owns DATA; `db:sync` owns SCHEMA. `scenarios/index.ts` is the table of what to
  * seed; this file is the RUNNER — connection, production gate and the walk over that table,
- * nothing else. The upsert policy lives in `@infrastructure/persistence/seed`. What the API then
- * serves is published by `npm run scenario:build` as `scenarios/dataset.json` — an OUTPUT of this
- * seeder, never an input to it.
+ * nothing else. The upsert policy lives in `@infrastructure/persistence/seed`.
  *
  * Runs on every container boot (see the compose `app` command → `npm run db:bootstrap`), so it
  * must be IDEMPOTENT (fixed `_id`s are upserted, not created, so a second run is a no-op) and

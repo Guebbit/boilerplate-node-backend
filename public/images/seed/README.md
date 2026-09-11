@@ -9,8 +9,7 @@ catalogue role, downloaded once and run through the same digest/thumbnail pipeli
 goes through (`@infrastructure/adapters/image`), never hand-placed or hot-linked. The two
 `*-images.generated.json` files it also writes (`scenarios/products-images.generated.json`,
 `scenarios/users-images.generated.json`) are what `scenarios/products.ts`/`scenarios/users.ts` read
-to attach an image to each row — re-run the script, then re-run `npm run scenario:build`, whenever
-the catalogue's roles change.
+to attach an image to each row — re-run the script whenever the catalogue's roles change.
 
 Everything else under `public/images/` is a runtime upload written by
 `resolveUploadDestination` (`src/infrastructure/adapters/storage.ts`), and `.gitignore` drops it. That is

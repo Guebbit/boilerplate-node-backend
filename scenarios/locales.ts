@@ -8,9 +8,8 @@
 
 import { backendTenant, frontendTenant } from '@modules/locales/tenants';
 import { makeLocale, makeLocaleEntry } from '@modules/locales/factories';
-import { localeModel, localeEntryModel, translationModel } from '@modules/locales/model';
 import { localeRepository, localeEntryRepository } from '@modules/locales/repository';
-import { upsertById, type SeedOutcome, exportCollection } from '@infrastructure/persistence/seed';
+import { upsertById, type SeedOutcome } from '@infrastructure/persistence/seed';
 import { getFallbackLocale } from '@infrastructure/i18n';
 
 /** The seeded languages, named by what each one is here to demonstrate. */
@@ -211,21 +210,3 @@ export const seedLocalesCollection = async (): Promise<SeedOutcome[]> => {
 
     return [...languages, ...entries];
 };
-
-/**
- * Read all three collections back as stored — `./index` declares this, `npm run scenario:build`
- * calls it. These are stored rows, not endpoint responses: the frontend's mocks do the same
- * tier-merge assembly the API does, rather than replaying a published answer. `translations`
- * itself is seeded by `./products`, not here — this only publishes what that write produced,
- * the same way every other module's `export` reads back a write it did not necessarily make.
- * Sorted so the exported file is byte-stable regardless of Mongo's natural order.
- */
-export const exportSeededLocales = async (): Promise<Record<string, unknown[]>> => ({
-    locales: await exportCollection(localeModel, { tag: 1 }),
-    localeEntries: await exportCollection(localeEntryModel, { locale: 1, tenant: 1, key: 1 }),
-    translations: await exportCollection(translationModel, {
-        entityType: 1,
-        entityId: 1,
-        locale: 1
-    })
-});

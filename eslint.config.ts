@@ -892,14 +892,14 @@ export default tseslint.config(
                         },
 
                         /*
-                         * `scenarios/apply.ts` (the CLI), `scenarios/build/*` (the export and
-                         * demo-profile tooling) and `scenarios/check.ts` (the guarantee checker)
-                         * are the files under `scenarios/` that are not data: they boot the real
-                         * app (`scenarios/build/run-server.ts`) and read the module registry
-                         * (`scenarios/apply.ts`, `scenarios/build/export-dataset.ts`,
-                         * `scenarios/check.ts`) the way only the composition root and the
-                         * registry's own file-layer categories otherwise may. Scoped to exactly
-                         * these paths so the data files above stay unable to reach either.
+                         * `scenarios/apply.ts` (the CLI), `scenarios/build/*` (the demo-profile
+                         * tooling) and `scenarios/check.ts` (the guarantee checker) are the files
+                         * under `scenarios/` that are not data: they boot the real app
+                         * (`scenarios/build/run-server.ts`) and read the module registry
+                         * (`scenarios/apply.ts`, `scenarios/check.ts`) the way only the
+                         * composition root and the registry's own file-layer categories otherwise
+                         * may. Scoped to exactly these paths so the data files above stay unable
+                         * to reach either.
                          */
                         {
                             from: {

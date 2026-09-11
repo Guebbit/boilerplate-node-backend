@@ -6,7 +6,7 @@
  * is exactly the coupling this layout exists to remove.
  */
 
-import type { Model, Types } from 'mongoose';
+import type { Types } from 'mongoose';
 
 /** Whether a fixture was written or was already present. Counted by the runner. */
 export type SeedOutcome = 'created' | 'skipped';
@@ -67,26 +67,3 @@ export const upsertByOwner = <TFixture extends { userId: Types.ObjectId }>(
     Promise.resolve(repository.findByUserId(fixture.userId.toString())).then((existing) =>
         existing ? 'skipped' : repository.create(fixture).then((): SeedOutcome => 'created')
     );
-
-/**
- * Read one collection back the way the exported dataset must record it.
- *
- * The `toJSON()` step is the load-bearing part: reading back through the model's real serializer
- * is what puts schema defaults, derived columns and serializer omissions in the file. Publishing
- * the fixtures instead would record what a factory claimed, not what the API answers.
- *
- * @param model - the collection's Mongoose model
- * @param sort - a total order, so successive rebuilds diff cleanly and a positional reader
- *   (`scripts/contracts/client-collections-bundle.ts`) can trust row order
- * @returns every document, serialized as the API would serialize it
- */
-export const exportCollection = <TDocument>(
-    model: Model<TDocument>,
-    sort: Record<string, 1 | -1>
-): Promise<unknown[]> =>
-    model
-        .find()
-        // eslint-disable-next-line unicorn/no-array-sort -- Mongoose's Query#sort, not Array#sort
-        .sort(sort)
-        .exec()
-        .then((documents) => documents.map((document_) => document_.toJSON()));

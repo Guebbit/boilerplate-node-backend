@@ -109,40 +109,24 @@ The dataset is split by ROLE, and the split matters:
 | `src/modules/<name>/factories.ts` | The **builder** — `makeProduct(overrides)`. States only what the schema requires; anything carrying a `default:` is deliberately left out, so a row records what the model really does. Shared with that module's tests, which is what a factory is for |
 | `scenarios/<name>.ts`             | The **records** — the demo catalogue, the two accounts, the order book. Built from the factory, but living outside `src/` entirely: `scenarios/index.ts` tables it by name, and `scenarios/apply.ts` walks that table                                   |
 | `src/kernel/seed-accounts.ts`     | The **six shared literals** — two account ids and four credentials. In the kernel because four modules need a piece of them and only one owns the record; the file explains why that beats three registry edges                                         |
-| `scenarios/dataset.json`          | The **output** — every row as the API actually serves it. Written by `npm run scenario:build`, never by hand                                                                                                                                            |
+| `scenarios/subjects.ts`           | The **named ids** a consumer that cannot import module code still needs — a generated API client collection, a future `GET /__test/scenario`. Import-free, so it resolves before `api/` exists                                                          |
 
-### The dataset is published, not shared
+### Conformance is a test, not a build step
 
-`npm run scenario:build` seeds a throwaway `mongodb-memory-server` with the real seeders, reads
-every row back through the real serializers, and writes `scenarios/dataset.json`. The file lives
-only here now: the paired frontend used to hold a byte-identical copy for its MSW mocks, and since
-those retired in favour of this repo's demo profile — which seeds from the same factories
-directly — the snapshot's one job is pinning serializer drift in this repo.
+No generated dataset file publishes what the API answers for a seeded row. Instead,
+`tests/integration/scenarios/shop.test.ts` seeds the `shop` scenario against a real database and
+checks two things directly, in `npm test`: every module's declared `scenario.shop` guarantee
+actually holds, and a seeded row — read back through the real Mongoose serializer — parses as
+valid input to the contract's own generated response schema for that entity.
 
-```bash
-npm run scenario:build          # write it
-npm run check:spec-identity  # fail if the frontend's copy has forked
-```
-
-Publishing the OUTPUT rather than the input is the whole design, and it corrects an earlier one. The
-two repos used to share a file of plain FACTS — `db/seeds/seed-identities.ts`, assembled from a <!-- doc-paths:ignore -->
-fragment in every module — and each side wrote its own mapper from those facts into the shape it
-needed. Identical facts could not keep the two mappers honest: the frontend's mock hand-wrote
-`active: true` and `verified: true` from a reading of this repo's schema defaults, and carried no
-`locale` at all, because nobody remembered the column existed. Both suites passed, each consistent
-with its own copy. There is one mapper now, and it is the API's.
-
-The parity this protects is not hypothetical — the frontend's mock once served all 5 products to
-everyone while this API served 3 to non-admins, and the spec asserted the mock's number and passed.
-
-Determinism is therefore a hard requirement, and three things buy it: a fixture pins its own
-`createdAt`, read off its ObjectId — whose leading four bytes already encode one — the seed writes
-pass `{ timestamps: false }` so Mongoose cannot overwrite it, and the exporter sorts every key on
-the way out. A value that cannot be pinned does not belong in the dataset.
-
-The export also refuses to publish a **dangling reference**: every `<something>Id` in the file must
-name a record the file also contains. That replaces the one safety property the shared file had for
-free, back when a cart line and the product it pointed at were literally the same constant.
+The client collections (`npm run contracts:bundle -- bruno insomnia mockoon postman`) still need
+values that reference REAL rows, but only ids and credentials:
+`scripts/contracts/client-collections-bundle.ts` reads those from `scenarios/subjects.ts` rather
+than importing a module's fixtures directly, which would reintroduce the same `@api/` import cycle
+`scripts/contracts/openapi-bundle.ts` had to stop triggering (see
+[Contract Ownership & Fragmentation](../api/contract-fragmentation.md)). A realistic title, price
+or description is no longer available to a generated example — `npm run demo` plus the API is how
+you see the whole shop.
 
 ### Commands
 
@@ -150,7 +134,6 @@ free, back when a cart line and the product it pointed at were literally the sam
 | ------------------------------ | ------------------------------------------------------------------- |
 | `npm run scenario:apply`       | Insert seed documents (safe to run multiple times if IDs are fixed) |
 | `npm run scenario:apply:reset` | Drop the database first, then seed                                  |
-| `npm run scenario:build`       | Publish `scenarios/dataset.json` from a throwaway database          |
 
 ### What gets seeded
 

@@ -100,7 +100,6 @@ Change](../api/regenerating.md).
 | `lint:openapi:modules`   | verify   | lint each `src/modules/*/openapi.yaml` **on its own**, against `shared/contracts/spectral.modules.yaml`                  | [Contract Fragmentation](../api/contract-fragmentation.md) |
 | `lint:asyncapi`          | verify   | validate both bundles — `asyncapi.yaml` and `asyncapi.public.yaml`                                                       | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
 | `lint:asyncapi:modules`  | verify   | the same for each section document, against `shared/contracts/spectral.asyncapi.modules.yaml`                            | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
-| `scenario:build`         | generate | seed a throwaway database with the real seeders and publish what the API answers to `scenarios/dataset.json`             | [Contract Fragmentation](../api/contract-fragmentation.md) |
 | `sync:frontend`          | generate | copy the shared documents into the paired frontend checkout, so `check:spec-identity` can go green                       | [Contract Fragmentation](../api/contract-fragmentation.md) |
 | `regenerate`             | generate | every generator above, in dependency order, then the sync — the one command to run after changing a generator input      | [Regenerating After a Change](../api/regenerating.md)      |
 

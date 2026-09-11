@@ -4,8 +4,8 @@
  * `toJSON` or a `.lean()` list mapped through the exported transform. Worth asserting per model
  * rather than trusting `applySerialization`, since 95 schemas in `openapi.yaml` are
  * `additionalProperties: false` and the lean path is the one that bypasses `toJSON` entirely; the
- * schema defaults are pinned here too, since `scenarios/dataset.json` records what the schema
- * does, not what a fixture claimed.
+ * schema defaults are pinned here too, since a seeded row should record what the schema does, not
+ * what a fixture claimed.
  */
 
 import { asStub } from '@tests/stub';

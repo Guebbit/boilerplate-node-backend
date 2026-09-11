@@ -167,8 +167,7 @@ describe('compareSharedFiles', () => {
     });
 
     it('matches a cross-path pair across its two different names', () => {
-        // `asyncapi.public.yaml` here, `asyncapi.yaml` there; `scenarios/dataset.json` here,
-        // `tests/support/mocks/dataset.json` there.
+        // `asyncapi.public.yaml` here, `asyncapi.yaml` there.
         const here = root(sharedFiles(HERE));
         const there = root(sharedFiles(THERE));
 

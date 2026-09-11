@@ -2,8 +2,8 @@
  * @module
  * Assert every module's declared `scenario` guarantees (`src/kernel/registry.ts`'s
  * `AppModule.scenario`) actually hold in whatever database is currently seeded. Called by
- * `scenarios/build/export-dataset.ts` right after seeding, so a guarantee that stops being true
- * fails the build loudly instead of drifting silently.
+ * `tests/integration/scenarios/shop.test.ts` right after seeding, so a guarantee that stops being
+ * true fails the test suite loudly instead of drifting silently.
  */
 
 import { enabledModules } from '../src/modules';
@@ -54,7 +54,7 @@ export const findUnmetGuarantees = async (scenarioName: string): Promise<string[
 
 /**
  * {@link findUnmetGuarantees}, thrown as one error naming every problem — the shape
- * `scenarios/build/export-dataset.ts` wants: fail the run, don't hand back a list to check.
+ * `tests/integration/scenarios/shop.test.ts` wants: fail the test, don't hand back a list to check.
  *
  * @throws {Error} listing every unmet guarantee, when {@link findUnmetGuarantees} finds any
  */

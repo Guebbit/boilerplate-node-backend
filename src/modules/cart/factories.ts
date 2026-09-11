@@ -1,9 +1,8 @@
 /**
  * @module
  * How a cart row is built. Pins an `_id` even though a cart is addressed by its owner
- * (`userId` is unique): a generated id would differ on every rebuild of `scenarios/dataset.json`,
- * turning a factory change into a diff that touches every row. Ids arrive as strings and leave as
- * `ObjectId`s; a bare string would silently match nothing in Mongo.
+ * (`userId` is unique), purely so a demo fixture reads the same across runs. Ids arrive as
+ * strings and leave as `ObjectId`s; a bare string would silently match nothing in Mongo.
  */
 
 import { Types } from 'mongoose';
