@@ -1,0 +1,73 @@
+# resticprofile config — one shared file, one profile per client stack. Copy this OUTSIDE the
+# repo (same treatment as `clients/`, since real profiles hold real repository URLs) and add one
+# `[<client>]` section per stack you run.
+#
+# https://creativeprojects.github.io/resticprofile/
+# https://restic.readthedocs.io/en/stable/manual_rest.html
+#
+# Install once, per host:
+#   restic (>= 0.17.1 if you ever drive it directly — resticprofile's own `stdin-command` works
+#   with any restic version, since resticprofile pipes into `restic backup --stdin` itself)
+#   resticprofile
+#
+# Install the schedule once, per host, after adding your own client sections below:
+#   resticprofile schedule --all
+
+[global]
+    # Retry a lock instead of failing outright — two profiles' scheduled runs landing at the same
+    # minute is routine, not an incident.
+    restic-lock-retry-after = '1m'
+
+[default]
+    # Never commit a real password here — this file only ships the shape. A real deployment keeps
+    # its password in a file outside the repo, same as `clients/<name>/.env`.
+    password-file = '/etc/resticprofile/restic-password'
+
+    # 3-2-1-1-0: this is the "off-site" copy. Any S3-compatible bucket, SFTP, Backblaze B2, Azure,
+    # GCS, a REST server or a local disk works — restic does not care which; only the repository
+    # URL below changes per backend. https://restic.readthedocs.io/en/stable/030_preparing_a_new_repo.html
+    repository = 's3:https://s3.example.com/change-me'
+
+    [default.retention]
+        after-backup = true
+        keep-daily = 7
+        keep-weekly = 4
+        keep-monthly = 6
+        prune = true
+
+    [default.check]
+        # Verifies pack files exist and are readable — cheap, run every time. `--read-data` (full
+        # byte verification) is the quarterly restore drill's job, not every scheduled run's.
+        check-unused = true
+
+# One client, inheriting the base above. Copy this whole block per stack — `acme` is the only
+# thing every line below needs changed.
+[acme]
+    inherit = 'default'
+    repository = 's3:https://s3.example.com/change-me/acme'
+
+    [acme.backup]
+        stdin = true
+        stdin-filename = 'acme-mongo.archive.gz'
+        # A FULL-deployment dump, not a single-database one: `--oplog` (a snapshot consistent
+        # ACROSS collections while orders keep arriving) refuses to run scoped to one database —
+        # verified directly against this repo's own compose stack. Restoring the ordinary case
+        # (give back `acme`'s own data) uses `--nsInclude="acme.*"` with NO `--oplogReplay` — the
+        # two flags cannot be combined. A full, oplog-consistent restore is for the disaster-
+        # recovery drill only, into a THROWAWAY instance, never over the live stack. See
+        # docs/tools/backups.md.
+        # No secret touches this host-side command at all: `$MONGO_INITDB_ROOT_USERNAME`/
+        # `$MONGO_INITDB_ROOT_PASSWORD` are expanded by the CONTAINER's own shell, from its own
+        # environment — the same one `docker-compose.production.yml`'s `database` service already
+        # sets. Verified directly against this repo's own compose stack.
+        stdin-command = '''
+            docker compose --env-file clients/acme/.env -f docker-compose.production.yml \
+                exec -T database sh -c 'mongodump --host localhost --port 27017 \
+                -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" \
+                --authenticationDatabase admin --oplog --archive --gzip'
+        '''
+        tag = ['acme', 'mongo']
+
+    [acme.schedule]
+        schedule = '03:30'
+        schedule-permission = 'system'
