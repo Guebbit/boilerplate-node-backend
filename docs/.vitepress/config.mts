@@ -241,6 +241,10 @@ export default withMermaid(
                         text: 'File Glossary',
                         items: [
                             { text: 'Overview', link: '/reference/' },
+                            {
+                                text: 'Writing These Docs',
+                                link: '/reference/documentation-style'
+                            },
                             { text: 'Repository Root', link: '/reference/root' },
                             { text: 'App, Kernel & Types', link: '/reference/src-app' },
                             { text: 'Infrastructure', link: '/reference/src-infrastructure' },
