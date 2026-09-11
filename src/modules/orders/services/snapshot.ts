@@ -7,6 +7,8 @@
 
 import type { Types } from 'mongoose';
 import { localeCandidatesFor, resolveTranslations, runWithLocale } from '@infrastructure/i18n';
+import type { ProductSnapshot } from '@modules/products';
+import type { OrderDocumentItem } from '../model';
 
 /**
  * Resolves each product's translatable fields (`title`/`description`) into `locale`, ready to
@@ -46,4 +48,28 @@ export const resolveSnapshotProducts = <T extends { _id: Types.ObjectId }>(
                 return fields ? { ...product, ...fields } : product;
             })
         )
+    );
+
+/**
+ * Builds the order lines every writer (admin create, checkout, admin line edit) freezes, from a
+ * resolved locale plus the catalogue rows and quantities being bought. Stamping `locale` here,
+ * once, is what makes "an order's lines share one locale" a fact of the function signature rather
+ * than an assumption three copies of the same map had to keep agreeing on.
+ *
+ * @param locale - the language to resolve every line into, already decided by the caller
+ * @param products - the catalogue rows about to be embedded, already plain, same order as `quantities`
+ * @param quantities - one quantity per product, same order and length as `products`
+ * @returns the frozen order lines, ready to assign to `OrderDocument.items`
+ */
+export const freezeOrderLines = (
+    locale: string,
+    products: readonly ProductSnapshot[],
+    quantities: readonly number[]
+): Promise<OrderDocumentItem[]> =>
+    resolveSnapshotProducts(locale, products).then((resolvedProducts) =>
+        resolvedProducts.map((product, index) => ({
+            product,
+            quantity: quantities[index],
+            locale
+        }))
     );

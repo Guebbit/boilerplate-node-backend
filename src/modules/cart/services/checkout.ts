@@ -22,7 +22,7 @@ import {
     orderRepository,
     orderService,
     orderConfirmEmail,
-    resolveSnapshotProducts,
+    freezeOrderLines,
     retractOrder,
     sumLineItems,
     type OrderDocument
@@ -173,21 +173,16 @@ const runCheckout = async (
 
     // Resolved into the buyer's language only now every check has passed — translation must
     // never gate a purchase, so it runs strictly after the stock/shipping verdicts above.
-    // `.toObject()`: `resolveSnapshotProducts` wants a plain object, and `product` here is a
-    // hydrated document from `readCartLines`'s `populate()` — see that function's own docblock.
-    // Cast, not inferred: `ProductDocument`'s untyped `DocType` generic makes Mongoose's own
-    // `toObject()` overload resolve to `any`; `Lean<ProductDocument>` is the plain shape it
-    // actually returns at runtime.
-    const resolvedProducts = await resolveSnapshotProducts(
+    // `.toObject()`: `freezeOrderLines` wants a plain object, and `product` here is a hydrated
+    // document from `readCartLines`'s `populate()` — see that function's own docblock. Cast, not
+    // inferred: `ProductDocument`'s untyped `DocType` generic makes Mongoose's own `toObject()`
+    // overload resolve to `any`; `Lean<ProductDocument>` is the plain shape it actually returns
+    // at runtime.
+    const orderItems = await freezeOrderLines(
         buyerLocale,
-        joined.map(({ product }) => product.toObject() as Lean<ProductDocument>)
+        joined.map(({ product }) => product.toObject() as Lean<ProductDocument>),
+        joined.map(({ quantity }) => quantity)
     );
-    const orderItems = joined.map(({ quantity }, index) => ({
-        // Same array, same order as `resolvedProducts` — `resolveSnapshotProducts` maps 1:1.
-        product: resolvedProducts[index],
-        quantity,
-        locale: buyerLocale
-    }));
 
     /*
      * The order is written first, and the units are held against it. Forced

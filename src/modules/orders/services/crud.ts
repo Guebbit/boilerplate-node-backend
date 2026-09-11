@@ -11,7 +11,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { orderConfirmEmail } from '../emails';
 import { OrderStatus } from '@types';
 import type { SearchOrdersRequest, CartItem, UpdateOrderByIdRequest } from '@types';
-import type { OrderDocument, OrderDocumentItem } from '../model';
+import type { OrderDocument } from '../model';
 import {
     generateReject,
     generateSuccess,
@@ -30,7 +30,7 @@ import { ordersAuditActions } from '../audit';
 import { ORDER_CREATED, ORDER_STATUS_CHANGED } from '../events';
 import { orderRepository } from '../repository';
 import { canTransition, checkOrderLines, statusesReachableFrom } from '../domain';
-import { resolveSnapshotProducts } from './snapshot';
+import { freezeOrderLines } from './snapshot';
 // `userId` is stored as an ObjectId, so writes have to coerce it. The rule (and its failure
 // mode on a malformed id) lives in the repository layer; this is the only import of it here.
 import { toObjectId } from '@infrastructure/persistence/create-repository';
@@ -181,16 +181,11 @@ export const create = async (
 
     // Resolved into the buyer's language only now the lines are known good — translation must
     // never gate a purchase, so it runs strictly after the availability verdict above.
-    const resolvedProducts = await resolveSnapshotProducts(
+    const orderItems = await freezeOrderLines(
         buyerLocale,
-        resolvedItems.map(({ product }) => product!)
+        resolvedItems.map(({ product }) => product!),
+        resolvedItems.map(({ item }) => item.quantity)
     );
-    const orderItems: OrderDocumentItem[] = resolvedItems.map(({ item }, index) => ({
-        // Same array, same order as `resolvedProducts` — `resolveSnapshotProducts` maps 1:1.
-        product: resolvedProducts[index],
-        quantity: item.quantity,
-        locale: buyerLocale
-    }));
 
     /*
      * Write the order, then hold its units — a hold is keyed by the order it belongs to, so
@@ -322,15 +317,12 @@ export const update = async (
                        * switch the order to a different language mid-flight.
                        */
                       const lineLocale = order.items[0]?.locale ?? getDefaultLocale();
-                      return resolveSnapshotProducts(
+                      return freezeOrderLines(
                           lineLocale,
-                          resolvedItems.map(({ product }) => product!)
-                      ).then((resolvedProducts) => {
-                          order.items = resolvedItems.map(({ item }, index) => ({
-                              product: resolvedProducts[index],
-                              quantity: item.quantity,
-                              locale: lineLocale
-                          }));
+                          resolvedItems.map(({ product }) => product!),
+                          resolvedItems.map(({ item }) => item.quantity)
+                      ).then((lines) => {
+                          order.items = lines;
                           return undefined;
                       });
                   });
