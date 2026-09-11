@@ -2,15 +2,15 @@
  * @module
  * The user directory's slice of the demo dataset: `root` is the owner every admin-only route
  * needs a caller for, and the `customer` account is the shopper every scoping rule needs someone
- * to be scoped against. Alongside them, one account per newer tenant role — editor, translator,
- * moderator — so each can be logged into and tried on its own rather than only read about. Ids and
- * credentials for all five come from `@kernel/seed-accounts`, since other files in this folder
+ * to be scoped against. Alongside them, one account per newer tenant role — editor, moderator —
+ * so each can be logged into and tried on its own rather than only read about. Ids and
+ * credentials for all four come from `@kernel/seed-accounts`, since other files in this folder
  * seed rows belonging to these people.
  *
  * Ten further customers (`SEED_CUSTOMER_IDS`) sit alongside them, purely so `./cart` and
  * `./orders` have more than one shopper to vary an order history across. None of them is
  * wired into `@kernel/seed-accounts` — there is no login promise attached to any of the ten, only
- * to the five named accounts above. Cart lines live in `./cart`, not here.
+ * to the four named accounts above. Cart lines live in `./cart`, not here.
  */
 
 import {
@@ -61,7 +61,7 @@ export const SEED_CUSTOMER_IDS = {
 } as const;
 
 /**
- * The five test-critical accounts — one per role a person actually logs in as. Exported so the
+ * The four test-critical accounts — one per role a person actually logs in as. Exported so the
  * `blank` scenario ({@link seedNamedUsersCollection}) can seed exactly these and none of the
  * filler customer base below — `blank` has no shop for a customer to shop in.
  */
@@ -164,8 +164,8 @@ export const seedUsersCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(userFixtures.map((user) => upsertById(userRepository, user)));
 
 /**
- * Seed only the five named accounts — `blank`'s contribution to `users`. Declared in `./blank`;
- * called by `scenarios/index.ts`'s `seedBlankScenario`.
+ * Seed only the four named accounts — `blank`'s contribution to `users`. Called by
+ * `scenarios/blank.ts`'s `seedBlankScenario`, never by `scenarios/apply.ts`.
  */
 export const seedNamedUsersCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(namedUsers.map((user) => upsertById(userRepository, user)));

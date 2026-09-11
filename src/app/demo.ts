@@ -23,7 +23,7 @@ export type ScenarioName = 'shop' | 'blank';
 /**
  * Seed one named scenario into whatever database is currently connected. `shop` walks
  * `scenarios/index.ts`'s full table; `blank` is `scenarios/blank.ts`'s reduced one — roles, the
- * five named accounts and locales, no catalogue.
+ * four named accounts and locales, no catalogue.
  *
  * Both imported dynamically rather than at the top of this file: `app.ts` imports
  * `installDemo`/`isDemoMode` unconditionally, and a static import here would pull every module's

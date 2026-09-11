@@ -16,10 +16,10 @@ import { roleModel } from '@kernel/access/models';
 setupTestDb();
 
 describe('the `blank` scenario', () => {
-    it('seeds only the five named accounts, roles and locales — no shop data', async () => {
+    it('seeds only the four named accounts, roles and locales — no shop data', async () => {
         await restoreScenario(false, 'blank');
 
-        await expect(userModel.countDocuments()).resolves.toBe(5);
+        await expect(userModel.countDocuments()).resolves.toBe(4);
         await expect(roleModel.countDocuments()).resolves.toBeGreaterThan(0);
         await expect(localeModel.countDocuments()).resolves.toBeGreaterThan(0);
         await expect(productModel.countDocuments()).resolves.toBe(0);
