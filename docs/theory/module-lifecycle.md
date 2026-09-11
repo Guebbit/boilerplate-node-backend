@@ -47,7 +47,7 @@ throwaway database with the real seeders and writes what the API answers to
 `scenarios/dataset.json`. A module's records live in `scenarios/<name>.ts`, tabled by
 `scenarios/index.ts` — a list, but not a hand-kept one of these six: adding an entry is optional (a
 module need not have demo data at all), and forgetting to remove one after deleting a module is
-caught by `tests/cross-cutting/seed-conformance.test.ts` rather than by a build failure. The
+caught by `tests/cross-cutting/scenario-fixtures.test.ts` rather than by a build failure. The
 dataset itself is gitignored — `npm run scenario:build` rebuilds it whenever a factory changes.
 
 Nothing else enumerates domains. Route mounting, the seeder, the i18n boot, the audit vocabulary and

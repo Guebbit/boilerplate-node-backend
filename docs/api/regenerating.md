@@ -235,7 +235,7 @@ Every one is optional: a module with no HTTP surface contributes no OpenAPI frag
 good sign rather than an omission. Deleting a module is `rm -rf` of the folder, one line out of
 `src/modules.ts`, one line out of each section list it appeared in, and its entry out of
 `scenarios/index.ts`'s table — the last one is not colocated with the folder, so
-`tests/cross-cutting/seed-conformance.test.ts` is what catches a forgotten one. A module that
+`tests/cross-cutting/scenario-fixtures.test.ts` is what catches a forgotten one. A module that
 declared probes is also named in `scripts/contracts/client-collections-bundle.ts`, and that one
 announces itself: the import stops compiling.
 

@@ -576,7 +576,7 @@ Some of these rules are relational — what a file may import depends on which m
 | A controller reading the caller on a route that does not guarantee one                | `authenticated-controllers.test.ts`  |
 | Every committed bundle still equals a fresh run of the bundler                        | `contract-bundles.test.ts`           |
 | Every mounted route is in the spec, and every spec operation is mounted               | `request-sources.test.ts`            |
-| `scenarios/index.ts` names no module `enabledModules` does not also enable            | `seed-conformance.test.ts`           |
+| `scenarios/index.ts` names no module `enabledModules` does not also enable            | `scenario-fixtures.test.ts`          |
 
 Each of these was verified by deliberately breaking it and watching it fail. A guard nobody has seen
 fire is a comment. All but the last live in `tests/cross-cutting/`; `request-sources.test.ts` sits

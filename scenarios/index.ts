@@ -7,7 +7,7 @@
  *
  * Walked by `app/demo.ts`, `scenarios/apply.ts` and
  * `scenarios/build/{export-dataset,assemble}.ts` — none of which import a module for any other
- * reason. `tests/cross-cutting/seed-conformance.test.ts` refuses an entry whose name
+ * reason. `tests/cross-cutting/scenario-fixtures.test.ts` refuses an entry whose name
  * `enabledModules` does not also carry.
  *
  * See: docs/tools/demo-profile.md

@@ -30,12 +30,9 @@ const SEED_LOCALE_TAGS = {
 } as const;
 
 /** The seeded languages themselves — see `SEED_LOCALE_TAGS` for what each one demonstrates. */
-const localeFixtures = [
-    /*
-     * No `revision` and no entries: `seed-conformance.test.ts` requires every entry-less language
-     * to sit at the default revision, and this one's dictionary is the deployed `en.json` file,
-     * not a set of dynamic rows.
-     */
+export const localeFixtures = [
+    /* No `revision` and no entries: this one's dictionary is the deployed `en.json` file rather
+     * than a set of dynamic rows, so it sits at the model's default revision. */
     makeLocale({
         id: '65e01f3c9a7d4b2e1c0f0005',
         tag: SEED_LOCALE_TAGS.source,

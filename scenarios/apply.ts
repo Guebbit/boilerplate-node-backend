@@ -4,7 +4,7 @@
  * `scenario:apply` owns DATA; `db:sync` owns SCHEMA. `scenarios/index.ts` is the table of what to
  * seed; this file is the RUNNER — connection, production gate and the walk over that table,
  * nothing else. The upsert policy lives in `@infrastructure/persistence/seed`. What the API then
- * serves is published by `npm run scenario:build` as `db/demo/demo-data.json` — an OUTPUT of this
+ * serves is published by `npm run scenario:build` as `scenarios/dataset.json` — an OUTPUT of this
  * seeder, never an input to it.
  *
  * Runs on every container boot (see the compose `app` command → `npm run db:bootstrap`), so it
@@ -61,7 +61,7 @@ async function seed() {
 
     /*
      * Every module in `scenarios/index.ts`'s table seeds its own collection. This runner names no
-     * domain: it only walks whatever that table lists. `tests/cross-cutting/seed-conformance.test.ts`
+     * domain: it only walks whatever that table lists. `tests/cross-cutting/scenario-fixtures.test.ts`
      * refuses an entry left behind after the module it names is deleted.
      *
      * Mostly concurrent, and safe to be: no row is derived from another row's WRITE. An order
