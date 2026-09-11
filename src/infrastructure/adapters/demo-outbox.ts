@@ -4,7 +4,7 @@
  * e2e suite still needs to read the emails the app "sent" — a password-reset spec is the token in
  * the email, or it is nothing. So in demo mode the mailer records every send here instead of
  * talking to nodemailer, and the demo router (`src/app/demo.ts`) serves it at `GET
- * /__demo/emails`. Infrastructure-tier on purpose: the mailer may not reach up into `app`, so the
+ * /__test/emails`. Infrastructure-tier on purpose: the mailer may not reach up into `app`, so the
  * sink lives beside it. Inert unless `NODE_DEMO=true`.
  */
 
@@ -30,9 +30,10 @@ export interface DemoOutboxEmail {
 /**
  * `npm run demo` sets `NODE_DEMO`; nothing else does. Two conditions, not one:
  * `NODE_DEMO=true` alone must never be enough to mount `POST /__test/restore`, an
- * unauthenticated `dropDatabase()`. `NODE_ENV !== 'production'` closes it even if a copied env
- * file carries `NODE_DEMO` somewhere it shouldn't. Logs at `error` when the flag is set but
- * production still refused it — a fact whoever owns that deployment needs to hear, not swallow.
+ * unauthenticated wipe of every collection. `NODE_ENV !== 'production'` closes it even if a
+ * copied env file carries `NODE_DEMO` somewhere it shouldn't. Logs at `error` when the flag is
+ * set but production still refused it — a fact whoever owns that deployment needs to hear, not
+ * swallow.
  */
 export const isDemoMode = (): boolean => {
     const requested = environmentFlag('NODE_DEMO', false);

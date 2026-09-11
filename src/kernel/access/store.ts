@@ -10,6 +10,7 @@
  * See: docs/theory/authorization.md · `shared/authorization-roles.yaml`
  */
 
+import { Types } from 'mongoose';
 import type { AuthorizationScope } from '@types';
 import { assertDeclared, findRole, wildcardKeyFor } from '@kernel/permissions';
 import { membershipModel, roleModel, tenantModel } from './models';
@@ -27,12 +28,26 @@ export class AccessInvariantError extends Error {
 export const tenantBySlug = (slug: string): Promise<TenantDocument | null> =>
     tenantModel.findOne({ slug: slug.toLowerCase() }).exec();
 
-/** Create a shop, or return the one already carrying that slug. */
-export const ensureTenant = (slug: string, name: string): Promise<TenantDocument> =>
+/**
+ * Create a shop, or return the one already carrying that slug.
+ *
+ * `id` is optional and only `seedAccessModel` passes one — a fixed `_id` so `resolveDeploymentTenantId`'s
+ * process-lifetime cache stays correct across a seed's `emptyDatabase()` + reseed cycle: the row
+ * comes back with the same id it had before, rather than a fresh one the cache has no way to know
+ * about. `$setOnInsert` only, same as `slug`/`name` — an existing tenant keeps its id even if a
+ * caller passed a different one.
+ */
+export const ensureTenant = (slug: string, name: string, id?: string): Promise<TenantDocument> =>
     tenantModel
         .findOneAndUpdate(
             { slug: slug.toLowerCase() },
-            { $setOnInsert: { slug: slug.toLowerCase(), name } },
+            {
+                $setOnInsert: {
+                    slug: slug.toLowerCase(),
+                    name,
+                    ...(id ? { _id: new Types.ObjectId(id) } : {})
+                }
+            },
             { new: true, upsert: true }
         )
         .exec() as Promise<TenantDocument>;

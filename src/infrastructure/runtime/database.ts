@@ -107,3 +107,20 @@ export const stopDatabase = () =>
  * time and is populated by `connect()`, so grabbing the reference before `start()` runs is safe.
  */
 export const { connection } = mongoose;
+
+/**
+ * Empty every collection, never drop the database.
+ *
+ * `dropDatabase()` looks like the obvious reset, but it clears each model's index build along
+ * with the data — Mongoose only runs `Model.init()` at connect and at schema compile, neither of
+ * which fires again after a drop. Everything a unique or TTL index enforces (duplicate-email
+ * refusal, payment idempotency, cart expiry) is silently gone until the process restarts. Emptying
+ * leaves every collection, and every index on it, exactly where `start()` built it.
+ *
+ * Used by `src/app/demo.ts`'s `restoreScenario` and `scenarios/apply.ts --reset` — the same bug,
+ * against the same two callers, is why this is one helper rather than two.
+ */
+export const emptyDatabase = (): Promise<void> =>
+    Promise.all(
+        Object.values(connection.collections).map((collection) => collection.deleteMany({}))
+    ).then(() => undefined);

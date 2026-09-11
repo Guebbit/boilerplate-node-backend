@@ -48,7 +48,16 @@ const REQUIRED_DEFAULTS: Record<string, string> = {
     NODE_UPLOAD_RATE_LIMIT_MAX: '1000'
 };
 
-/** External services have no place here — force-disable whatever the shell happens to carry. */
+/**
+ * External services have no place here — force-disable whatever the shell happens to carry.
+ *
+ * Blanked, not deleted: `src/app.ts` imports `dotenv/config`, which loads `.env` into
+ * `process.env` for every key `.env` sets and the SHELL had not already set — deleting a key
+ * would leave the shell's own version absent too, but `.env`'s compose hostname would come right
+ * back the moment the shell hadn't set one. `dotenv` never overrides a key that is already
+ * PRESENT, empty string included, so setting one to `''` is what actually sticks. Every reader
+ * checked treats an empty string as unset (`if (process.env.NODE_REDIS_URL)`, `!process.env.NODE_REDIS_PORT`).
+ */
 const FORCED_ABSENT = [
     'NODE_REDIS_URL',
     'NODE_REDIS_HOST',
@@ -58,22 +67,26 @@ const FORCED_ABSENT = [
     'NODE_RABBITMQ_PORT'
 ];
 
-const waitForDatabase = (readyState: () => number): Promise<void> =>
-    new Promise((resolve, reject) => {
-        const startedAt = Date.now();
-        const poll = () => {
-            if (readyState() === 1) {
-                resolve();
-                return;
+/**
+ * Poll `GET /` until the server answers, the same signal the paired frontend's shard runner waits
+ * on (`start-server-and-test http-get://…`). Accurate as a "ready" check specifically because
+ * `startServer()` now seeds BEFORE it starts listening — see `src/app.ts` — so a successful
+ * response here means the database holds the scenario already, not just that a socket is open.
+ */
+const waitUntilListening = (port: string): Promise<void> => {
+    const url = `http://localhost:${port}/`;
+    const startedAt = Date.now();
+    const poll = (): Promise<void> =>
+        fetch(url).then(
+            () => undefined,
+            (error: unknown) => {
+                if (Date.now() - startedAt > 60_000)
+                    throw new Error('demo: server never started listening', { cause: error });
+                return new Promise((resolve) => setTimeout(resolve, 100)).then(poll);
             }
-            if (Date.now() - startedAt > 60_000) {
-                reject(new Error('demo: database never connected'));
-                return;
-            }
-            setTimeout(poll, 100);
-        };
-        poll();
-    });
+        );
+    return poll();
+};
 
 MongoMemoryServer.create()
     .then((mongod) => {
@@ -91,8 +104,7 @@ MongoMemoryServer.create()
 
         for (const [key, value] of Object.entries(REQUIRED_DEFAULTS))
             process.env[key] = process.env[key]?.trim() ? process.env[key] : value;
-        // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- assigning undefined would coerce to the string 'undefined'; delete is how an env var is unset
-        for (const key of FORCED_ABSENT) delete process.env[key];
+        for (const key of FORCED_ABSENT) process.env[key] = '';
         process.env.NODE_DB_URI = mongod.getUri('demo');
         // Always derived, never defaulted-when-unset like the block above: a checked-in `.env`'s
         // `NODE_URL` names the SINGLE-instance developer setup (:3000), and this profile's whole
@@ -102,15 +114,14 @@ MongoMemoryServer.create()
         // of this one, on every port but the default.
         process.env.NODE_URL = `http://localhost:${process.env.NODE_PORT ?? '3000'}/`;
 
-        // Import AFTER the environment is shaped — `src/app.ts` boots itself on import.
+        // Import AFTER the environment is shaped — `src/app.ts` boots itself on import, seeding
+        // `shop` before it starts listening.
+        const port = process.env.NODE_PORT ?? '3000';
         return import('../../src/app')
-            .then(() => import('@infrastructure/runtime/database'))
-            .then(({ connection }) => waitForDatabase(() => connection.readyState))
-            .then(() => import('../../src/app/demo'))
-            .then(({ restoreScenario }) => restoreScenario(false))
+            .then(() => waitUntilListening(port))
             .then(() => {
                 console.log(
-                    `[demo] API listening on :${process.env.NODE_PORT ?? '3000'} — in-memory Mongo, seeded, cache/queue disabled.`
+                    `[demo] API listening on :${port} — in-memory Mongo, seeded, cache/queue disabled.`
                 );
             });
     })

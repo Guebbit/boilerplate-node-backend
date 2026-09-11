@@ -139,7 +139,7 @@ compose `app` service runs before starting the server.
 | ---------------------- | ----------------------------------------------------------- | ------------------------------- |
 | `db:sync`              | make every index match the schemas; `-- --check` plans only | [Data](../reference/data.md)    |
 | `scenario:apply`       | upsert the demo dataset (no-op if already present)          | direct CLI wrapper              |
-| `scenario:apply:reset` | drop the database, then reseed                              | direct CLI wrapper              |
+| `scenario:apply:reset` | empty the database, then reseed                             | direct CLI wrapper              |
 | `db:cache:clear`       | drop every cached response under the app's prefix           | [Redis cache](./redis-cache.md) |
 | `db:bootstrap`         | `db:sync` followed by `scenario:apply`                      | runs on container boot          |
 

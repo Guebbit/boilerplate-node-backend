@@ -18,10 +18,10 @@
  *
  * Usage:
  *   npm run scenario:apply          # upsert the rows
- *   npm run scenario:apply:reset    # drop the database first
+ *   npm run scenario:apply:reset    # empty the database first
  */
 import 'dotenv/config';
-import { start, connection } from '@infrastructure/runtime/database';
+import { start, connection, emptyDatabase } from '@infrastructure/runtime/database';
 import { clearCache, stopCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
 import { runScript } from '../db/run-script';
@@ -53,8 +53,8 @@ async function seed() {
     await start();
 
     if (reset) {
-        await connection.dropDatabase();
-        logger.info('Database dropped.');
+        await emptyDatabase();
+        logger.info('Database emptied.');
     }
 
     /*

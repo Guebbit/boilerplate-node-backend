@@ -133,7 +133,7 @@ you see the whole shop.
 | Script                         | What it does                                                        |
 | ------------------------------ | ------------------------------------------------------------------- |
 | `npm run scenario:apply`       | Insert seed documents (safe to run multiple times if IDs are fixed) |
-| `npm run scenario:apply:reset` | Drop the database first, then seed                                  |
+| `npm run scenario:apply:reset` | Empty the database first, then seed                                 |
 
 ### What gets seeded
 

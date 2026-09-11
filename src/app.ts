@@ -44,7 +44,7 @@ import { installTelemetry } from '@app/telemetry';
 import { installStatic } from '@app/static-assets';
 import { installRoutes } from '@app/routes';
 import { installErrorHandling } from '@app/error-handling';
-import { installDemo, isDemoMode } from '@app/demo';
+import { installDemo, isDemoMode, restoreScenario } from '@app/demo';
 
 /**
  * Server start
@@ -108,6 +108,13 @@ export const startServer = () => {
              * would install a translator with no dictionary behind it.
              */
             .then(() => registerValidationMessages())
+            /*
+             * Only in demo mode, and only ever the initial (non-emptying) seed — `npm run demo`'s
+             * own `POST /__test/restore` handles every reseed after this. Before `listen`, so the
+             * paired frontend's readiness probe (`GET /`, which only resolves once listening) never
+             * observes a database that is connected but still empty.
+             */
+            .then(() => (isDemoMode() ? restoreScenario(false) : undefined))
             .then(
                 () =>
                     new Promise<Server>((resolve) => {

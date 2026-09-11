@@ -53,6 +53,26 @@ a changed TTL `expireAfterSeconds` by rebuilding the index — which previously 
 
 See [Data](docs/reference/data.md).
 
+### Breaking — tooling
+
+**The demo control surface is one prefix, `/__test/*`.** It had drifted to two — `/__demo/reset`
+was renamed `POST /__test/restore` without updating the paired frontend's own call sites, which is
+corrected here rather than left standing.
+
+| Before                              | After                                                                                                          |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `POST /__demo/reset`                | `POST /__test/restore { scenario?: 'shop' \| 'blank' }`                                                        |
+| `GET /__demo/emails`                | `GET /__test/emails`                                                                                           |
+| `db:seed` / `db:seed:reset`         | `scenario:apply` / `scenario:apply:reset`                                                                      |
+| `seed:export`, `check:seed-export`  | gone — nothing publishes a dataset file; `tests/integration/scenarios/shop.test.ts` checks conformance instead |
+| `db/demo/demo-data.json`, committed | gone — `scenarios/subjects.ts` (ids and credentials only) is what survives                                     |
+| the `translator` account            | folded into `editor`                                                                                           |
+
+Also fixed in the same pass: `POST /__test/restore` used to drop the database, which cleared every
+unique and TTL index along with the data until the process restarted. It now empties every
+collection instead, and the demo tenant's `_id` is pinned so the cached deployment tenant id never
+strands after a restore. See [Data](docs/reference/data.md).
+
 ## [3.0.0] - 2026-08-23
 
 The release that made this API a **modular monolith with a domain layer**, and made its contract

@@ -32,6 +32,16 @@ import { roleModel } from './models';
 export const DEMO_TENANT_SLUG = 'shop';
 
 /**
+ * The demo shop's pinned `_id` — same format and vintage as `@kernel/seed-accounts`'s ids.
+ *
+ * `ensureTenant` only sets this on INSERT, so it survives every reseed unchanged: `emptyDatabase()`
+ * (never `dropDatabase()`) leaves the row itself in place, and even a from-empty reseed recreates
+ * the same id rather than minting a fresh one. That is what keeps `resolveDeploymentTenantId`'s
+ * process-lifetime cache honest across a restore — see its own docblock in `@kernel/access/store`.
+ */
+export const DEMO_TENANT_ID = '65dd20000000000000000001';
+
+/**
  * Write the preset roles as editable rows.
  *
  * `tenantId: null` marks a role every shop starts with. Editing one changes it everywhere, which
@@ -65,7 +75,7 @@ export const seedPresetRoles = (): Promise<void> =>
  */
 export const seedAccessModel = (): Promise<void> =>
     seedPresetRoles()
-        .then(() => ensureTenant(DEMO_TENANT_SLUG, 'The Demo Shop'))
+        .then(() => ensureTenant(DEMO_TENANT_SLUG, 'The Demo Shop', DEMO_TENANT_ID))
         .then((tenant) =>
             Promise.all([
                 assignRole(SEED_OWNER_ID, String(tenant._id), 'tenant', 'owner'),
