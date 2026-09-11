@@ -4,7 +4,7 @@
  * `toJSON` or a `.lean()` list mapped through the exported transform. Worth asserting per model
  * rather than trusting `applySerialization`, since 95 schemas in `openapi.yaml` are
  * `additionalProperties: false` and the lean path is the one that bypasses `toJSON` entirely; the
- * schema defaults are pinned here too, since `db/demo/demo-data.json` records what the schema
+ * schema defaults are pinned here too, since `scenarios/dataset.json` records what the schema
  * does, not what a fixture claimed.
  */
 

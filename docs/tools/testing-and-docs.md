@@ -81,7 +81,7 @@ Several things can hand you an entity, and it is reasonable to wonder whether th
 
 | Source                            | Repo | What it is for                                                                                                                                                                                                                                                                                                                                                         |
 | --------------------------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `db/demo/demo-data.json`          | BE   | **The demo dataset, as the API answers it.** Every seeded row, serialized — schema defaults, derived order totals and all. The one dataset a human sees when they open either app. Written by `npm run scenario:build`; `npm run check:scenario-build` fails the gate when the committed snapshot is stale, which is what pins serializer drift                        |
+| `scenarios/dataset.json`          | BE   | **The demo dataset, as the API answers it.** Every seeded row, serialized — schema defaults, derived order totals and all. The one dataset a human sees when they open either app. Written by `npm run scenario:build` and gitignored, so nothing can hold a stale copy; `postinstall` and the pre-commit hook's `regenerate` both rebuild it                          |
 | `scenarios/<name>.ts`             | BE   | **The records themselves** — the demo catalogue, the two accounts, the order book. One per module, outside `src/` entirely; tabled by `scenarios/index.ts` and consumed by `scenario:apply`, which reads them back out through the table's `export`                                                                                                                    |
 | `src/modules/<name>/factories.ts` | BE   | **Arbitrary throwaway entities** — "give me _a_ product, I do not care which, and let me override one field". The opposite need to a fixed demo dataset. `make*` builds a payload; `src/modules/<name>/tests/factories.ts` beside it adds `create*`, which persists so the model's hooks run. The same builder the demo records use, which is why the two cannot drift |
 | `tests/support/contract-data.ts`  | BE   | **Payloads derived from the zod schemas**, valid and — uniquely — invalid, each violating exactly one declared constraint. The only source that can produce something the API is supposed to _reject_, which is what makes it a contract test rather than a factory                                                                                                    |
@@ -95,7 +95,7 @@ flowchart TB
         direction TB
         Seed["scenarios/*.ts<br/>the records, per module"]
         Seed --> Export["scenario:build<br/>real seeders + real serializers"]
-        Export --> Dataset["db/demo/demo-data.json<br/>this repo's gated snapshot"]
+        Export --> Dataset["scenarios/dataset.json<br/>this repo's gated snapshot"]
     end
 
     subgraph two["Two generators, two questions"]
@@ -114,7 +114,7 @@ flowchart TB
 
 ### The three questions, and why none absorbs another
 
-- **"Give me _the_ demo data."** → `demo-data.json`, edited through `scenarios/<name>.ts` and republished with `npm run scenario:build`. Published here and nowhere else — it is not in `SHARED_FILES`, so the paired frontend keeps no copy and reads this repo's API instead. Fixed, and the one a human sees on screen. The frontend's `cy.loginAs('user')` types its credentials into a real form served by this repo's demo profile, so it cannot be randomised or generated.
+- **"Give me _the_ demo data."** → `dataset.json`, edited through `scenarios/<name>.ts` and republished with `npm run scenario:build`. Published here and nowhere else — it is not in `SHARED_FILES`, so the paired frontend keeps no copy and reads this repo's API instead. Fixed, and the one a human sees on screen. The frontend's `cy.loginAs('user')` types its credentials into a real form served by this repo's demo profile, so it cannot be randomised or generated.
 - **"Give me _a_ product, I do not care which."** → the module's `factories.ts`. The opposite need: fresh, isolated, overridable per test, and never the demo data — 25 test files would interfere with each other if they shared rows. It is the same builder the demo records go through, so "a product" and "the demo product" cannot disagree about what a product is.
 - **"Give me one the API must _reject_."** → `contract-data.ts`. Derived from the zod schemas so each payload violates exactly one declared constraint. Nothing else here can produce something deliberately illegal, which is the difference between a contract test and a factory.
   Merging any two would mean one of those questions stops being asked. The merge that _was_ worth doing — the demo dataset, previously written out by hand on both sides — is the one already done.

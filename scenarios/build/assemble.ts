@@ -2,7 +2,7 @@
  * Assemble the demo dataset from whatever is currently in the database.
  *
  * Reads every demo module's rows back through the real serializers, checks the result is
- * internally consistent, and renders it as the bytes `db/demo/demo-data.json` holds. Nothing here
+ * internally consistent, and renders it as the bytes `scenarios/dataset.json` holds. Nothing here
  * connects, seeds or writes — the caller supplies an open connection and decides what to do with
  * the string.
  *
@@ -28,12 +28,13 @@ import path from 'node:path';
 import { demoModules } from '@scenarios/index';
 import { seedCredentials } from '../../src/kernel/seed-accounts';
 
-/* The dataset sits beside the seeder that produces the rows, not beside this file: `db/` is where
- * the demo data lives, and this is only the tool that renders it.
+/* At the root of `scenarios/`, beside the seeders whose rows it holds — `./` is only the tool that
+ * renders it. `dataset`, not `snapshot`: these are the SERIALIZED rows as the API answers them, a
+ * different artefact from a dump of the raw stored bytes.
  *
  * `__dirname`, not `import.meta.dirname` — tsx and ts-jest both load this as CommonJS, where the
  * latter is undefined. `scripts/contracts/bundle-kinds.ts` resolves its own root the same way. */
-export const DEMO_DATA_PATH = path.join(__dirname, '../../db/demo/demo-data.json');
+export const DATASET_PATH = path.join(__dirname, '..', 'dataset.json');
 
 /**
  * Flatten to plain JSON before anything walks the structure.
@@ -65,7 +66,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null;
 
 /**
- * Recursively sort object keys so the committed file is byte-stable and its diffs are readable.
+ * Recursively sort object keys, so a rebuild after a factory change diffs down to what changed.
  *
  * Arrays keep their order — each module already sorts its own rows, and reordering a cart's lines
  * would change what the dataset says.

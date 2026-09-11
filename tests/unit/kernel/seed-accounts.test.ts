@@ -95,7 +95,7 @@ describe('the seeded passwords', () => {
 
 describe('seedCredentials', () => {
     /*
-     * `demo-data.json` publishes this object, and the frontend's e2e suite logs in with what it
+     * `dataset.json` publishes this object, and the frontend's e2e suite logs in with what it
      * finds there — so a constant changed without its entry would hand that suite a password the
      * seeded account does not have.
      */

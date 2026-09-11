@@ -11,7 +11,7 @@
  * can answer:
  *
  *   1. Which module owns which path — read from the module contracts, never restated.
- *   2. Where the values come from — `db/demo/demo-data.json`, so a generated request asks for a
+ *   2. Where the values come from — `scenarios/dataset.json`, so a generated request asks for a
  *      product that exists and sends credentials that work.
  *   3. What the contract cannot describe — each module's `probes.ts`, the requests that prove the
  *      API REJECTS things. A spec declares valid calls, so no generator can derive a bogus token.
@@ -41,7 +41,7 @@ import { probes as cartProbes } from '../../src/modules/cart/probes';
 import { probes as ordersProbes } from '../../src/modules/orders/probes';
 import { probes as productsProbes } from '../../src/modules/products/probes';
 import { probes as wishlistProbes } from '../../src/modules/wishlist/probes';
-import dataset from '../../db/demo/demo-data.json';
+import dataset from '../../scenarios/dataset.json';
 
 /** The four tools, and the order this file names them in. */
 const COLLECTION_TOOLS = ['bruno', 'insomnia', 'mockoon', 'postman'] as const;
@@ -61,7 +61,7 @@ const sections = (): Section[] =>
  * ──────────────────────────────────────────────────────────────────────────────────────────── */
 
 /*
- * Positional, and safe to be: every collection in `demo-data.json` is sorted by `_id`, so these
+ * Positional, and safe to be: every collection in `dataset.json` is sorted by `_id`, so these
  * indices are stable across exports. The owner sorts before the ordinary user because their
  * ObjectIds encode the order the two accounts were created in.
  */

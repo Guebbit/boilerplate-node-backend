@@ -19,8 +19,8 @@
 # rather than a verdict).
 # Write the generated artefacts first, then verify them. Regenerating here rather than leaving it
 # to whoever remembers is what stops a commit failing the gate with "STALE" for a file no human
-# authors. Costs about five seconds: contracts:bundle 1s, gen:api 1s, gen:asyncapi 2s,
-# seed:export 1s.
+# authors. Costs about five seconds for the contract artefacts; `scenario:build` adds an in-memory
+# mongod on top of that.
 #
 # `--no-sync` is not optional. A full `regenerate` ends with `sync:frontend`, which writes into the
 # PAIRED REPO's working tree — a commit here would silently dirty a checkout you are not looking
@@ -32,11 +32,11 @@
 # widens a partial `git add -p` to include the whole regenerated output — which is what you want
 # for a generated file, and a surprise exactly once.
 #
-# `openapi.yaml`, `api/` and `src/types/asyncapi.generated.ts` are NOT named here — they are
-# gitignored (postinstall rebuilds them, see package.json), and `git add` errors outright on an
-# explicitly-named ignored path. `regenerate` above still has to build them: the gate that follows
-# reads them off disk regardless of git's opinion of them.
+# `openapi.yaml`, `api/`, `src/types/asyncapi.generated.ts` and `scenarios/dataset.json` are NOT
+# named here — they are gitignored (postinstall rebuilds them, see package.json), and `git add`
+# errors outright on an explicitly-named ignored path. `regenerate` above still has to build them:
+# the gate that follows reads them off disk regardless of git's opinion of them.
 npm run regenerate -- --no-sync
-git add asyncapi.yaml asyncapi.public.yaml db/demo/demo-data.json
+git add asyncapi.yaml asyncapi.public.yaml
 
 npm run complete

@@ -117,8 +117,7 @@ RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 #   shared/   EJS email templates (`shared/views/templates-emails`, resolved against the working
 #             directory by `adapters/mailer.ts`) and the contract fragments
 #   db/       the index sync, for `npm run db:sync` as a deploy step. Named file by file, not as
-#             a directory: `db/demo/` is the seeder and its 190 KB dataset, and neither runs here
-#             — the seeder refuses outright when NODE_ENV is production
+#             a directory, so the image carries only the scripts it runs
 #   ops/      the scheduled `reap:*` jobs, run by a cron container against this image
 #   public/   express.static root — CSS, favicon, and the committed seed images
 #   openapi.yaml / asyncapi.yaml   served by the docs endpoints and read by response validation

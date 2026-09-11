@@ -26,9 +26,6 @@ openapi.yaml                                                   linguist-generate
 asyncapi.yaml                                                  linguist-generated=true
 asyncapi.public.yaml                                           linguist-generated=true
 
-# ── The demo dataset, as the API actually serves it ──────────────────────────────────────────
-db/demo/demo-data.json                                         linguist-generated=true
-
 # ── Realtime types, generated from the async contract ────────────────────────────────────────
 src/types/asyncapi.generated.ts                                linguist-generated=true
 

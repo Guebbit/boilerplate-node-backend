@@ -167,8 +167,8 @@ describe('compareSharedFiles', () => {
     });
 
     it('matches a cross-path pair across its two different names', () => {
-        // `asyncapi.public.yaml` here, `asyncapi.yaml` there; `db/demo/demo-data.json` here,
-        // `tests/support/mocks/demo-data.json` there.
+        // `asyncapi.public.yaml` here, `asyncapi.yaml` there; `scenarios/dataset.json` here,
+        // `tests/support/mocks/dataset.json` there.
         const here = root(sharedFiles(HERE));
         const there = root(sharedFiles(THERE));
 
@@ -284,7 +284,7 @@ describe('formatSharedFileProblems', () => {
     });
 
     it('names both paths when a cross-path pair forks', () => {
-        // "demo-data.json is forked" would send the reader to one of two files with no way to
+        // "dataset.json is forked" would send the reader to one of two files with no way to
         // tell which repo the other one is in.
         const here = root(sharedFiles(HERE));
         const there = root({ ...sharedFiles(THERE), [CROSS_PATH.frontend]: 'forked' });

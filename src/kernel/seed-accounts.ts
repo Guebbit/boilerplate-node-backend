@@ -55,7 +55,7 @@ export const SEED_MODERATOR_EMAIL = 'moderator@example.com';
 export const SEED_MODERATOR_PASSWORD =
     process.env.NODE_SEED_MODERATOR_PASSWORD ?? 'Demo-Moderator1!';
 
-/** What `demo-data.json` publishes so the frontend can log in as any demo account. */
+/** The logins for the demo accounts, recorded in `scenarios/dataset.json` alongside the rows. */
 export const seedCredentials = {
     owner: { email: SEED_OWNER_EMAIL, password: SEED_OWNER_PASSWORD },
     user: { email: SEED_USER_EMAIL, password: SEED_USER_PASSWORD },

@@ -39,7 +39,7 @@
         "scenarios/**/*.ts",
         "scenarios/**/*.json",
         "db/**/*.ts",
-        "db/demo/demo-data.json",
+        "scenarios/dataset.json",
         "eslint/**/*.ts",
         "scripts/**/*.ts",
         "ops/**/*.ts",

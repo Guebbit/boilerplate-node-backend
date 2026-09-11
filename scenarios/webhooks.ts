@@ -13,7 +13,7 @@
  * a human opening the UI first to obtain one — `GET /api/session/<uuid>/requests` on the tester
  * answers with what it has captured.
  *
- * Not published in `demo-data.json` — `shapes: {}`, always: a local sink url and session id are
+ * Absent from `dataset.json` — its `export` is empty, always: a local sink url and session id are
  * meaningless on any other developer's machine. See docs/reference/data.md#the-demo-dataset.
  */
 

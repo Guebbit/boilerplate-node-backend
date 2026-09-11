@@ -44,7 +44,7 @@ import {
 } from '@api/schemas.zod';
 import { getFallbackLocale, listSupportedLocales } from '@infrastructure/i18n';
 import { demoModules } from '@scenarios/index';
-import dataset from '../../db/demo/demo-data.json';
+import dataset from '../../scenarios/dataset.json';
 import { enabledModules } from '../../src/modules';
 
 const { credentials, collections } = dataset;

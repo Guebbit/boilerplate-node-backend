@@ -11,7 +11,7 @@ this shape. This page is the short version you keep open while working.
 `npm ci`, so a fresh clone has them without anyone doing anything. The rest of this page still
 matters the moment you're actively editing a fragment mid-session — `postinstall` only fires on
 install, not on every save — but there is no committed copy of these three to go stale, forget to
-regenerate, or diff in a PR. `db/demo/demo-data.json` and the AsyncAPI bundles
+regenerate, or diff in a PR. `scenarios/dataset.json` and the AsyncAPI bundles
 (`asyncapi.yaml`/`asyncapi.public.yaml`) are the exception: those stay committed — see
 [The generated output and what is committed](#the-generated-output-and-what-is-committed).
 
@@ -73,13 +73,13 @@ flowchart LR
 ```
 
 The four client collections are **generated from `openapi.yaml`**, so the contract has to be
-assembled before they can be produced — and they also read `db/demo/demo-data.json`
+assembled before they can be produced — and they also read `scenarios/dataset.json`
 (`scripts/contracts/client-collections-bundle.ts` imports it) for their example request bodies. That file
 is produced by `scenario:build`, which runs the real application and so needs `api/`, which is itself
 generated from the contract:
 
 ```
-openapi.yaml  ──►  api/  ──►  demo-data.json  ──►  the four client collections
+openapi.yaml  ──►  api/  ──►  dataset.json  ──►  the four client collections
 ```
 
 Nothing has to sequence that for you, because nothing generates a collection unless you ask. Ask
@@ -99,7 +99,7 @@ phase and not the others.
 | `src/modules/*/openapi.yaml`                           | `contracts:bundle` → `gen:api`                       | `openapi.yaml`, then the types and Zod schemas from it |
 | `shared/contracts/openapi.root.yaml`                   | `contracts:bundle` → `gen:api`                   | same, for the parts no single module owns          |
 | `src/modules/*/asyncapi.yaml`, `shared/contracts/asyncapi.{root,workers}.yaml` | `contracts:bundle` → `gen:asyncapi`                  | `asyncapi.yaml` and `asyncapi.public.yaml`, then `src/types/asyncapi.generated.ts` |
-| `scenarios/*.ts`                                     | `regenerate` → `scenario:apply:reset`               | `scenario:build` rebuilds `db/demo/demo-data.json`, then the collections have to be bundled AGAIN because they embed its values; the reset is because the database still holds the old records |
+| `scenarios/*.ts`                                     | `regenerate` → `scenario:apply:reset`               | `scenario:build` rebuilds `scenarios/dataset.json`, then the collections have to be bundled AGAIN because they embed its values; the reset is because the database still holds the old records |
 | `src/modules/*/probes.ts`                             | `contracts:bundle`                                  | probes are hand-authored, then emitted into every client collection |
 | `src/modules/*/module.ts`, `model.ts`, `routes.ts`    | nothing                                             | no generator reads them. If the change is worth a reader knowing, say so on the module's page in `docs/modules/` — by hand, like the rest of that page |
 | `src/modules/*/audit.ts`, `analytics.ts`, `metrics.ts`, `probes.ts`, `events.ts` | `contracts:bundle` for `probes.ts` only | the client collections embed the probes; the other four feed no generator — an analytics name is read straight from the module that declares it |
@@ -155,7 +155,7 @@ npm run test:contract             # do real responses match the contract?
 | `[contracts] STALE — these do not match the fragments`             | a fragment was edited without re-bundling, or a bundle was hand-edited                    | `npm run contracts:bundle`                              |
 | `contract-bundles.test.ts` fails                                    | the same thing, caught by the test suite instead                                          | `npm run contracts:bundle`                              |
 | `check:spec-identity` fails                                         | this repo and the frontend hold different bytes of a shared document                       | copy the bundle over; never re-bundle on both sides     |
-| `check:scenario-build` says the dataset is STALE                      | a factory changed and the dataset was not re-exported                                       | `npm run scenario:build`, then copy the result to the frontend |
+| the demo dataset is missing (`tsc` cannot resolve `scenarios/dataset.json`) | it is generated and gitignored, and `postinstall` has not run in this checkout | `npm run scenario:build` |
 | spectral reports a dangling `$ref`                                   | a schema moved into a module document while another module still references it              | move it to `shared/contracts/openapi.root.yaml`         |
 
 One guard runs without you asking: `tests/cross-cutting/contract-bundles.test.ts` asserts every
@@ -176,7 +176,7 @@ three of them are exactly that:
 | `src/types/asyncapi.generated.ts`                                | every SSE, domain-event and queue call site                                                              | no — gitignored, rebuilt by `postinstall` |
 | `asyncapi.yaml`                                                 | the AsyncAPI CLI · `gen:asyncapi`                                                                        | yes |
 | `asyncapi.public.yaml`                                          | the AsyncAPI CLI · the frontend's whole realtime pipeline                                                | yes |
-| `db/demo/demo-data.json`                                        | the generated collections and the paired frontend's mocks                                                | yes — regenerating it needs a real (seeded, then read back) database, materially heavier and more fragile to ask of `postinstall` than a pure text transform |
+| `scenarios/dataset.json`                                        | the generated collections and the paired frontend's mocks                                                | yes — regenerating it needs a real (seeded, then read back) database, materially heavier and more fragile to ask of `postinstall` than a pure text transform |
 | `contract.{bruno,insomnia,mockoon,postman}.*`                   | you, and whoever explores the API without running it                                                     | no — generated on demand, see above |
 
 For the three gitignored ones: **never hand-edit anything under `api/`, `openapi.yaml`, or
@@ -203,7 +203,7 @@ npm run sync:frontend -- --forced   # rewrite even the files that already match
 npm run check:spec-identity         # the gate: hashes both sides, fails on a fork
 ```
 
-`sync:frontend` refuses to run on stale sources — `check:contracts-bundle` and `check:scenario-build`
+`sync:frontend` refuses to run on stale sources — `check:contracts-bundle`
 go first, because copying a stale bundle makes both repos agree on a document neither one's sources
 produce. Everything it copies is produced here, so every difference it finds has one correct
 resolution and it applies it.

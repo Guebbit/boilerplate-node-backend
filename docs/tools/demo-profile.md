@@ -50,7 +50,7 @@ page and types. The passwords are overridable via `NODE_SEED_ADMIN_PASSWORD`/
 **The password is stored plaintext on purpose.** `userSchema`'s pre-save hook hashes it on the way
 in, so a hash written there would drift from that hook and lose its plaintext. It never reaches a
 response — `password` is `select: false` and the user transform omits it — which is why
-`scenarios/build/export-dataset.ts` carries these into `demo-data.json` separately rather than reading them
+`scenarios/build/export-dataset.ts` carries these into `dataset.json` separately rather than reading them
 back off a serialized user.
 :::
 

@@ -10,10 +10,10 @@
  * A script rather than a chain of `&&` because the order is not obvious and needs somewhere to
  * live:
  *
- *   openapi.yaml ──► api/ ──► demo-data.json
+ *   openapi.yaml ──► api/ ──► dataset.json
  *
  * The seed export runs the real application, whose models import `@api/schemas.zod`, so `api/` has
- * to exist first. The client collections read `demo-data.json` too but are not committed, so they
+ * to exist first. The client collections read `dataset.json` too but are not committed, so they
  * are not a step here.
  *
  * See: docs/api/regenerating.md
@@ -64,7 +64,7 @@ const STEPS: readonly Step[] = [
     {
         script: 'scenario:build',
         because:
-            'db/demo/demo-data.json — seeds a throwaway database and reads it back through the real serializers (needs api/)'
+            'scenarios/dataset.json — seeds a throwaway database and reads it back through the real serializers (needs api/)'
     }
 ];
 

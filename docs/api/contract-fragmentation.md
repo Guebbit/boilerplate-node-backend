@@ -398,9 +398,10 @@ that lists every domain.
 
 It is gone, and the machinery went with it. The dataset is now **published rather than assembled**:
 `npm run scenario:build` seeds a throwaway database with the real seeders and writes what the API
-answers to `db/demo/demo-data.json`. Each module's records live in `scenarios/<name>.ts`, imported
+answers to `scenarios/dataset.json`. Each module's records live in `scenarios/<name>.ts`, imported
 by `scenarios/index.ts` and by nothing under `src/` — no fragment, no text concatenation, no
-staleness check on this CLI. `npm run check:scenario-build` is its equivalent.
+staleness check on this CLI. The demo dataset needs none: it is gitignored and rebuilt by
+`postinstall` and by the pre-commit hook's `regenerate`, so no committed copy can go stale.
 
 The reason is worth keeping, because it is the one case on this page where fragmenting the SOURCE
 was the wrong answer. Sharing facts left each repo writing its own mapper over them, and the mappers
@@ -438,7 +439,7 @@ property of that configuration rather than of the package.
 
 - **shapes come from `openapi.yaml`** — every operation, its auth, its request body, one example per
   declared response;
-- **values come from `db/demo/demo-data.json`** — `GET /products/{id}` asks for a product the database
+- **values come from `scenarios/dataset.json`** — `GET /products/{id}` asks for a product the database
   actually holds, and `POST /account/login` sends credentials that work. That is the difference
   between a collection you can click and one you have to fix first. It is also why the examples carry
   real derived values: an order's `totalPrice` is the number the serializer computed, not arithmetic
@@ -476,7 +477,7 @@ There are 14 today, and each one is a question a contract cannot ask:
 | `orders` | the owner asking for their own soft-deleted order · another user's order |
 
 A probe refers to seed records as `{{seedSoftDeletedProductId}}` rather than pasting an id — the
-tokens are derived from `demo-data.json` (the soft-deleted product is *found*, not named), so a
+tokens are derived from `dataset.json` (the soft-deleted product is *found*, not named), so a
 fixture that stops being soft-deleted takes its probe with it instead of leaving one that quietly
 tests nothing. An unknown token fails the generator with the list of known ones.
 
