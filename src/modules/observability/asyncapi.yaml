@@ -1,8 +1,8 @@
 # The observability module’s async contract — the SSE stream it serves.
 #
 # A complete AsyncAPI document, for the same reason `./openapi.yaml` beside it is a complete
-# OpenAPI one: it can be linted (`npm run lint:asyncapi:modules`), opened in AsyncAPI Studio, and
-# read without the rest of the contract. What makes it a SLICE is only that the bundler merges its
+# OpenAPI one: it can be linted (`npm run lint:asyncapi:modules`) and read on its own, without the
+# rest of the contract. What makes it a SLICE is only that the bundler merges its
 # server, channels and components into the contracts at the repo root — the service-wide facts
 # (tags, the real `info`) come from `shared/contracts/asyncapi.root.yaml`, so the `info` block
 # below exists purely to make this file valid on its own.

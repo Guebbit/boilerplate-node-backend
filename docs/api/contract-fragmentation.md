@@ -330,7 +330,7 @@ shared because the email and PDF workers are substrate, enqueued by whichever do
 sent.
 
 What that bought is the property a fragment could never have: **each section is valid on its own** —
-lintable by `npm run lint:asyncapi:modules`, and openable in AsyncAPI Studio. `channels.yaml` and <!-- doc-paths:ignore -->
+lintable by `npm run lint:asyncapi:modules`. `channels.yaml` and <!-- doc-paths:ignore -->
 its two siblings were half-objects that parsed as nothing until concatenated in the right order at
 the right indentation.
 

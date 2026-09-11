@@ -126,10 +126,9 @@ for exactly which is which.
 
 ## Docs scripts
 
-| Script                                     | Job                                                 | Read more                                        |
-| ------------------------------------------ | --------------------------------------------------- | ------------------------------------------------ |
-| `docs:dev` / `docs:build` / `docs:preview` | local docs authoring, production build, and preview | [Testing & Docs](./testing-and-docs.md)          |
-| `docs:asyncapi`                            | open AsyncAPI Studio locally                        | [AsyncAPI Workflow](../api/asyncapi-workflow.md) |
+| Script                                     | Job                                                 | Read more                               |
+| ------------------------------------------ | --------------------------------------------------- | --------------------------------------- |
+| `docs:dev` / `docs:build` / `docs:preview` | local docs authoring, production build, and preview | [Testing & Docs](./testing-and-docs.md) |
 
 ## Database & seed scripts
 

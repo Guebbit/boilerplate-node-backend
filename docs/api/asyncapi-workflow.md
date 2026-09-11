@@ -18,7 +18,7 @@ The async contract is published twice, from one set of sources:
 
 | File | Holds | Who reads it |
 | ---- | ----- | ------------ |
-| `asyncapi.yaml` | every channel — SSE **and** the queues | this repo: `gen:asyncapi`, `lint:asyncapi`, Studio |
+| `asyncapi.yaml` | every channel — SSE **and** the queues | this repo: `gen:asyncapi`, `lint:asyncapi` |
 | `asyncapi.public.yaml` | the SSE channels only | the paired frontend, as its own `asyncapi.yaml` |
 
 The queues are backend-only because a browser can neither publish to nor consume from RabbitMQ. A
@@ -58,7 +58,7 @@ domain needs a mail sent. It is the async twin of filing `GET /` under `system` 
 
 This replaced a three-fragment layout (`channels.yaml`, `messages.yaml`, `schemas.yaml` per section) <!-- doc-paths:ignore -->
 whose pieces were half-objects that parsed as nothing until concatenated in the right order at the
-right indentation. A whole document can be linted and opened in Studio on its own:
+right indentation. A whole document can be linted on its own:
 
 ```bash
 npm run contracts:bundle        # rebuild both asyncapi bundles (and every other) from their sources
@@ -66,10 +66,13 @@ npm run lint:asyncapi:modules   # lint each section document by itself
 npm run check:contracts-bundle  # fail if a committed bundle is stale
 ```
 
-**It is a merge, not `asyncapi bundle`.** The CLI dereferences — inlining every payload into every
-channel that names it, 239 lines to 819, and leaving `scripts/contracts/generate-asyncapi-types.ts` with no `$ref`
-to follow. `scripts/contracts/asyncapi-bundles.ts` copies four maps instead and refuses on a collision; its
-header carries the full argument, and is the file to read before trying the CLI again.
+**It is a merge, not `asyncapi bundle`.** The AsyncAPI CLI's `bundle` command dereferences — inlining
+every payload into every channel that names it, 239 lines to 819, and leaving
+`scripts/contracts/generate-asyncapi-types.ts` with no `$ref` to follow.
+`scripts/contracts/asyncapi-bundles.ts` copies four maps instead and refuses on a collision; its
+header carries the full argument, and is the file to read before reaching for that command again —
+the CLI itself is not in this repo's dependencies; see [Package
+Dependencies](../tools/package-dependencies.md).
 
 See [Contract Ownership & Fragmentation](./contract-fragmentation.md) for the whole picture,
 including why each bundle uses the verb it does.
@@ -149,14 +152,13 @@ catch. Same in the frontend, over its own copy.
 ## Tooling used here
 
 - `@asyncapi/modelina`: schema-to-code generator used by `scripts/contracts/generate-asyncapi-types.ts` to turn `asyncapi.yaml` schemas into TypeScript models/types (then the script appends repo-specific helper exports).
-- `@asyncapi/cli`: CLI tooling used by this repo to validate `asyncapi.yaml` and open AsyncAPI Studio.
+- `@asyncapi/parser`: validates `asyncapi.yaml` and `asyncapi.public.yaml` against the spec's default ruleset, from `scripts/contracts/validate-asyncapi.ts`. Already in the tree as a dependency of `@asyncapi/modelina`; declared directly because we import it ourselves. `@asyncapi/cli` did this job until it left the tree — see [Package Dependencies](../tools/package-dependencies.md) for why.
 
 ## Commands used in this repo
 
 ```bash
 npm run lint:asyncapi         # validate both asyncapi.yaml and asyncapi.public.yaml
 npm run gen:asyncapi          # regenerate src/types/asyncapi.generated.ts from asyncapi.yaml
-npm run docs:asyncapi         # open AsyncAPI Studio in browser
 ```
 
 ## How this complements OpenAPI

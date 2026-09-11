@@ -20,21 +20,28 @@ Families are grouped by purpose, and same-namespace tools stay together when tha
 
 ## Dev dependencies
 
-| Group                   | Packages                                                                                                                                                                                                       | Why they exist here                                  | Read more                                      |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------- |
-| TypeScript toolchain    | `typescript`, `tsx`, `nodemon`, `jiti`                                                                                                                                                                         | authoring, running, and reloading TS code in dev     | [Runtime](./runtime.md)                        |
-| Type definitions family | `@types/*` packages for Node, Express, Jest, AMQP, auth, uploads, mail, and helpers                                                                                                                            | TS types for runtime packages                        | —                                              |
-| Test family             | `jest`, `ts-jest`, `mongodb-memory-server`                                                                                                                                                                     | unit + integration tests with ephemeral MongoDB      | [Testing & Docs](./testing-and-docs.md)        |
-| ESLint family           | `eslint`, `typescript-eslint`, `@typescript-eslint/eslint-plugin`, `@typescript-eslint/parser`, `eslint-plugin-unicorn`, `eslint-plugin-oxlint`, `eslint-plugin-prettier`, `eslint-config-prettier`, `globals` | lint rules, TS-aware parsing, and rule composition   | [Testing & Docs](./testing-and-docs.md)        |
-| Formatting              | `prettier`                                                                                                                                                                                                     | formatting checks and auto-fixes                     | [Testing & Docs](./testing-and-docs.md)        |
-| OpenAPI family          | `@stoplight/prism-cli`, `@stoplight/spectral-cli`, `@stoplight/spectral-rulesets`, `openapi-typescript-codegen`, `yaml`                                                                                        | linting, mocking, and generated API client workflows | [OpenAPI Workflow](../api/openapi-workflow.md) |
-| Docs family             | `vitepress`, `vitepress-plugin-mermaid`, `mermaid`                                                                                                                                                             | docs site, diagrams, and offline search UI           | [Testing & Docs](./testing-and-docs.md)        |
+| Group                   | Packages                                                                                                                                                                                                       | Why they exist here                                  | Read more                                        |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------ |
+| TypeScript toolchain    | `typescript`, `tsx`, `nodemon`, `jiti`                                                                                                                                                                         | authoring, running, and reloading TS code in dev     | [Runtime](./runtime.md)                          |
+| Type definitions family | `@types/*` packages for Node, Express, Jest, AMQP, auth, uploads, mail, and helpers                                                                                                                            | TS types for runtime packages                        | —                                                |
+| Test family             | `jest`, `ts-jest`, `mongodb-memory-server`                                                                                                                                                                     | unit + integration tests with ephemeral MongoDB      | [Testing & Docs](./testing-and-docs.md)          |
+| ESLint family           | `eslint`, `typescript-eslint`, `@typescript-eslint/eslint-plugin`, `@typescript-eslint/parser`, `eslint-plugin-unicorn`, `eslint-plugin-oxlint`, `eslint-plugin-prettier`, `eslint-config-prettier`, `globals` | lint rules, TS-aware parsing, and rule composition   | [Testing & Docs](./testing-and-docs.md)          |
+| Formatting              | `prettier`                                                                                                                                                                                                     | formatting checks and auto-fixes                     | [Testing & Docs](./testing-and-docs.md)          |
+| OpenAPI family          | `@stoplight/prism-cli`, `@stoplight/spectral-cli`, `@stoplight/spectral-rulesets`, `openapi-typescript-codegen`, `yaml`                                                                                        | linting, mocking, and generated API client workflows | [OpenAPI Workflow](../api/openapi-workflow.md)   |
+| AsyncAPI family         | `@asyncapi/modelina`, `@asyncapi/parser`, `@stoplight/spectral-formatters`                                                                                                                                     | schema-to-TS generation, bundle validation           | [AsyncAPI Workflow](../api/asyncapi-workflow.md) |
+| Docs family             | `vitepress`, `vitepress-plugin-mermaid`, `mermaid`                                                                                                                                                             | docs site, diagrams, and offline search UI           | [Testing & Docs](./testing-and-docs.md)          |
 
 ## Quick take
 
 - Runtime dependencies are split between **core app behavior** and **optional infrastructure**.
 - Most observability and queue tooling can be disabled without breaking the basic API shape.
 - Dev dependencies are heavy because this repo also ships **contract tooling**, **generated artifacts**, and a **full docs site**, not just app code.
+- **`@asyncapi/cli` is deliberately not here.** It measured at ~446 MB transitive across this repo
+  and the paired frontend, bundled a web app (Studio) nobody opened, and by default sent a
+  telemetry event to a third party on every `npm run lint:asyncapi` — including inside the
+  pre-commit gate. The two things it actually did — validate, generate TypeScript — are covered
+  directly by `@asyncapi/parser` (a library `@asyncapi/modelina` already pulls in) and by our own
+  `scripts/contracts/generate-asyncapi-types.ts`.
 
 ## Related pages
 
