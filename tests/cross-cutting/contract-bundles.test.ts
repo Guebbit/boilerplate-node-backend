@@ -29,7 +29,7 @@
  * unlike everything else below it was never a guard against a real fork.
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import {
@@ -44,6 +44,7 @@ import {
 import { MODULE_SECTIONS, moduleSpec } from '../../scripts/contracts/openapi-bundle';
 import { allProbes } from '../../scripts/contracts/client-collections-bundle';
 import { SHARED_FILES } from '../../scripts/pairing/spec-identity';
+import { enabledModules } from '../../src/modules';
 
 /** How many requests a collection's folders hold, whichever key that tool nests them under. */
 const counted = (groups: { items?: unknown[]; children?: unknown[] }[]): number =>
@@ -97,6 +98,23 @@ describe('every contract bundle', () => {
             if (bundle.shared === false) expect(guarded).not.toContain(file);
             else expect(guarded).toContain(file);
         }
+    });
+});
+
+describe('MODULE_SECTIONS', () => {
+    it('lists exactly the enabled modules that ship their own openapi.yaml', () => {
+        // Guards what `openapi-bundle.ts` used to assert on import: a module silently shipping
+        // with no contract entry, or a section outliving the module it named. Moved here — rather
+        // than back onto the bundler — because `enabledModules` pulls in every module's code,
+        // which imports the generated `@api/` client the bundler itself produces; a cross-cutting
+        // test runs after codegen, the bundler has to run before it.
+        const shouldBeListed = enabledModules
+            .map(({ name }) => name)
+            .filter((name) =>
+                existsSync(path.join(REPO_ROOT, 'src', 'modules', name, 'openapi.yaml'))
+            );
+
+        expect(new Set(MODULE_SECTIONS)).toEqual(new Set(shouldBeListed));
     });
 });
 
