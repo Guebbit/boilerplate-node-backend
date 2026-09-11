@@ -39,6 +39,19 @@ import {
 import type { ProductTranslationFields, UpsertTranslationsRequest } from '@types';
 
 /**
+ * One product's copy, per locale.
+ *
+ * `en` is required and `it` is not: `en` is the fallback, the one locale `planTranslations` will
+ * not let a row be deleted in, and the one the product document's own derived index column is
+ * written from. Every other locale is a fixture author's choice — a product shipped in English
+ * alone is a legitimate state of a real catalogue, and the seeder writes exactly what it finds.
+ */
+interface ProductCopy {
+    en: ProductTranslationFields;
+    it?: ProductTranslationFields;
+}
+
+/**
  * The catalogue ids, named by what each row is for.
  *
  * `./cart`, `./wishlist` and `./orders` read these instead of repeating a hex string. Each name
@@ -60,10 +73,7 @@ export const SEED_PRODUCT_IDS = {
  * once and never duplicated by hand. `barebones` has no `description` in either locale, matching
  * its deliberately minimal English fixture.
  */
-const NAMED_PRODUCT_COPY: Record<
-    keyof typeof SEED_PRODUCT_IDS,
-    { en: ProductTranslationFields; it: ProductTranslationFields }
-> = {
+const NAMED_PRODUCT_COPY: Record<keyof typeof SEED_PRODUCT_IDS, ProductCopy> = {
     dogFoodStandard: {
         en: {
             title: 'Premium Grain-Free Dog Food, 15kg',
@@ -246,14 +256,11 @@ const fillerProductRows = FILLER_PRODUCTS.map(
 export const productFixtures = [...namedProducts, ...fillerProductRows];
 
 /**
- * Every product's bilingual copy, keyed by its seeded id — the named six from
- * {@link NAMED_PRODUCT_COPY}, the filler rows from `./demo-catalog`'s own `translations` field.
+ * Every product's copy, keyed by its seeded id — the named six from {@link NAMED_PRODUCT_COPY},
+ * the filler rows from `./demo-catalog`'s own `translations` field.
  * {@link seedProductsCollection} is the only reader.
  */
-const PRODUCT_COPY_BY_ID: ReadonlyMap<
-    string,
-    { en: ProductTranslationFields; it: ProductTranslationFields }
-> = new Map([
+const PRODUCT_COPY_BY_ID: ReadonlyMap<string, ProductCopy> = new Map([
     ...Object.entries(SEED_PRODUCT_IDS).map(
         ([name, id]) => [id, NAMED_PRODUCT_COPY[name as keyof typeof SEED_PRODUCT_IDS]] as const
     ),
@@ -278,26 +285,25 @@ export const seedProductById = (productId: string): (typeof productFixtures)[num
 };
 
 /**
- * One product's copy, reshaped for `@infrastructure/i18n`'s `plan`/`write` primitives — the
- * fallback locale keyed by {@link getFallbackLocale} rather than a hardcoded `'en'`, and `it`
- * fixed, since that is the whole set this dataset seeds today (`./locales` names the rest).
- * `description` is included only when the locale's copy has one, matching `UpsertTranslationRequestFields`'s
- * `Record<string, string>` — an explicit `undefined` value would fail that shape.
+ * One locale's copy as the write surface takes it.
+ *
+ * `description` appears only when that locale states one: `UpsertTranslationRequestFields` is a
+ * `Record<string, string>`, which an explicit `undefined` value would fail.
  */
-const toUpsertTranslationsRequest = (copy: {
-    en: ProductTranslationFields;
-    it: ProductTranslationFields;
-}): UpsertTranslationsRequest => {
-    const fieldsOf = (entry: ProductTranslationFields): Record<string, string> =>
-        entry.description === undefined
-            ? { title: entry.title }
-            : { title: entry.title, description: entry.description };
+const localeFields = (entry: ProductTranslationFields): Record<string, string> =>
+    entry.description === undefined
+        ? { title: entry.title }
+        : { title: entry.title, description: entry.description };
 
-    return {
-        [getFallbackLocale()]: { fields: fieldsOf(copy.en) },
-        it: { fields: fieldsOf(copy.it) }
-    };
-};
+/**
+ * One product's copy, reshaped for `@infrastructure/i18n`'s `plan`/`write` primitives — the
+ * fallback locale keyed by {@link getFallbackLocale} rather than a hardcoded `'en'`, and every
+ * other locale included only when the fixture states one.
+ */
+const toUpsertTranslationsRequest = (copy: ProductCopy): UpsertTranslationsRequest => ({
+    [getFallbackLocale()]: { fields: localeFields(copy.en) },
+    ...(copy.it ? { it: { fields: localeFields(copy.it) } } : {})
+});
 
 /** `true` for a validated plan, narrowing a union with a rejection — mirrors the private helper of
  * the same name in `@modules/products/service.ts`'s `writeCreate`, the primitive this seeder is
