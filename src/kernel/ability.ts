@@ -163,7 +163,7 @@ const effectiveKeys = (caller: Caller): { key: PermissionKey; wide: boolean }[] 
  */
 export const buildAbility = (caller: Caller): Ability => {
     const { can, build } = new AbilityBuilder(createMongoAbility);
-    const tenancy = caller.scope === 'tenant' ? { tenantId: caller.tenantId ?? null } : {};
+    const tenancy = caller.scope === 'tenant' ? { tenantId: caller.tenantId } : {};
 
     for (const { key, wide } of effectiveKeys(caller)) {
         const conditions = wide ? {} : resolveConditions(key.conditions ?? {}, caller);

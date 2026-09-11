@@ -21,6 +21,10 @@ import {
 } from '@kernel/seed-accounts';
 import { assignRole, ensureTenant } from './store';
 import { roleModel } from './models';
+import type { TenantDocument } from './models';
+import { DEMO_TENANT_ID } from './tenant';
+
+export { DEMO_TENANT_ID } from './tenant';
 
 /**
  * The one shop this boilerplate ships.
@@ -30,16 +34,6 @@ import { roleModel } from './models';
  * evaluator. That is the point of being tenant-aware before there is a second tenant.
  */
 export const DEMO_TENANT_SLUG = 'shop';
-
-/**
- * The demo shop's pinned `_id` — same format and vintage as `@kernel/seed-accounts`'s ids.
- *
- * `ensureTenant` only sets this on INSERT, so it survives every reseed unchanged: `emptyDatabase()`
- * (never `dropDatabase()`) leaves the row itself in place, and even a from-empty reseed recreates
- * the same id rather than minting a fresh one. That is what keeps `resolveDeploymentTenantId`'s
- * process-lifetime cache honest across a restore — see its own docblock in `@kernel/access/store`.
- */
-export const DEMO_TENANT_ID = '65dd20000000000000000001';
 
 /**
  * Write the preset roles as editable rows.
@@ -65,6 +59,16 @@ export const seedPresetRoles = (): Promise<void> =>
     ).then(() => undefined);
 
 /**
+ * The shop and the presets, with no accounts in it — what a fresh deployment needs to boot.
+ *
+ * Idempotent and safe to run against a live database with no `NODE_ENV` guard: every write is an
+ * upsert, unlike `scenarios/apply.ts`'s demo data. `seedAccessModel` below is this plus the demo
+ * accounts; `db/bootstrap-access.ts` is this alone, for a production deploy.
+ */
+export const bootstrapAccessModel = (name: string): Promise<TenantDocument> =>
+    seedPresetRoles().then(() => ensureTenant(DEMO_TENANT_SLUG, name, DEMO_TENANT_ID));
+
+/**
  * The whole model, seeded: one shop, the presets, and the demo accounts placed in it.
  *
  * `root` is the shop's owner AND the installation's operator — two memberships, because they are
@@ -74,8 +78,7 @@ export const seedPresetRoles = (): Promise<void> =>
  * so each can be logged into and tried on its own — the whole point of adding them to experiment.
  */
 export const seedAccessModel = (): Promise<void> =>
-    seedPresetRoles()
-        .then(() => ensureTenant(DEMO_TENANT_SLUG, 'The Demo Shop', DEMO_TENANT_ID))
+    bootstrapAccessModel('The Demo Shop')
         .then((tenant) =>
             Promise.all([
                 assignRole(SEED_OWNER_ID, String(tenant._id), 'tenant', 'owner'),

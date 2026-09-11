@@ -31,11 +31,10 @@ export const tenantBySlug = (slug: string): Promise<TenantDocument | null> =>
 /**
  * Create a shop, or return the one already carrying that slug.
  *
- * `id` is optional and only `seedAccessModel` passes one — a fixed `_id` so `resolveDeploymentTenantId`'s
- * process-lifetime cache stays correct across a seed's `emptyDatabase()` + reseed cycle: the row
- * comes back with the same id it had before, rather than a fresh one the cache has no way to know
- * about. `$setOnInsert` only, same as `slug`/`name` — an existing tenant keeps its id even if a
- * caller passed a different one.
+ * `id` is optional and only `bootstrapAccessModel` passes one — the fixed `DEMO_TENANT_ID` every
+ * deployment reads directly, so the row keeps the same id across an `emptyDatabase()` + reseed
+ * cycle rather than minting a fresh one. `$setOnInsert` only, same as `slug`/`name` — an existing
+ * tenant keeps its id even if a caller passed a different one.
  */
 export const ensureTenant = (slug: string, name: string, id?: string): Promise<TenantDocument> =>
     tenantModel
@@ -267,30 +266,6 @@ export const deleteRole = (
                 );
         });
     });
-
-/**
- * The shop this deployment IS, resolved once and remembered.
- *
- * A single-tenant deployment has one, named by `DEMO_TENANT_SLUG`. This is the one place that
- * decides "which shop is this request in", and it is deliberately not a request parameter: a
- * multi-tenant app replaces THIS function — reading a host, a subdomain, a claim — and nothing
- * else changes, because every rule downstream already takes the tenant from the resolved caller.
- *
- * Cached because it cannot change while the process lives and it would otherwise be a database
- * round trip on every authenticated request. `null` when nothing is seeded yet, which reads as
- * "no shop", and a caller with no shop holds no tenant keys.
- */
-let deploymentTenantId: string | null | undefined;
-
-/** The id of the shop a bare tenant key is held in, read once and remembered. */
-export const resolveDeploymentTenantId = (slug: string): Promise<string | null> =>
-    deploymentTenantId === undefined
-        ? tenantBySlug(slug).then((tenant) => {
-              deploymentTenantId = tenant ? String(tenant._id) : null;
-
-              return deploymentTenantId;
-          })
-        : Promise.resolve(deploymentTenantId);
 
 /**
  * The two role names a person holds, and the shop they hold the first one in.

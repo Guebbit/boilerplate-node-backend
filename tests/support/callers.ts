@@ -73,7 +73,7 @@ export const asModerator = (id = 'test-moderator'): AuthContext => asRole('moder
 export const asOperator = (id = 'test-operator'): AuthContext => ({
     ...identity(id),
     roles: { tenant: 'guest', platform: 'operator' },
-    tenantId: null
+    tenantId: TEST_TENANT_ID
 });
 
 /**

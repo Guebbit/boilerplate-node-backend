@@ -39,19 +39,27 @@ describe('GET /account/abilities', () => {
         // A shop front that greys nothing out for a visitor lies twice: it offers what it will
         // refuse, and it hides that a visitor may browse at all.
         const response = await api().get('/account/abilities').expect(200);
+        // The client's own job, documented on `Abilities.tenantId`: the collection stores no
+        // tenant column at all (this deployment ships one shop), so a checked object never
+        // carries one — the envelope's own `tenantId` is what a client attaches before asking.
+        const { tenantId } = response.body.data;
 
         expect(
-            abilityFrom(response.body, 'tenant').can('read', subject('Product', { active: true }))
+            abilityFrom(response.body, 'tenant').can(
+                'read',
+                subject('Product', { active: true, tenantId })
+            )
         ).toBe(true);
     });
 
     it('does not let a stranger read somebody’s order', async () => {
         const response = await api().get('/account/abilities').expect(200);
+        const { tenantId } = response.body.data;
 
         expect(
             abilityFrom(response.body, 'tenant').can(
                 'read',
-                subject('Order', { userId: 'someone' })
+                subject('Order', { userId: 'someone', tenantId })
             )
         ).toBe(false);
     });
@@ -64,11 +72,14 @@ describe('GET /account/abilities', () => {
             .set('Authorization', bearer)
             .expect(200);
         const ability = abilityFrom(response.body, 'tenant');
+        const { tenantId } = response.body.data;
 
-        expect(ability.can('read', subject('Order', { userId: user.id, deletedAt: null }))).toBe(
-            true
+        expect(
+            ability.can('read', subject('Order', { userId: user.id, deletedAt: null, tenantId }))
+        ).toBe(true);
+        expect(ability.can('read', subject('Order', { userId: 'somebody-else', tenantId }))).toBe(
+            false
         );
-        expect(ability.can('read', subject('Order', { userId: 'somebody-else' }))).toBe(false);
     });
 
     it('carries a shop owner’s rules, which narrow nothing', async () => {
@@ -78,11 +89,12 @@ describe('GET /account/abilities', () => {
             .get('/account/abilities')
             .set('Authorization', bearer)
             .expect(200);
+        const { tenantId } = response.body.data;
 
         // The same key that lets the route guard through: one rule set, asked twice.
-        expect(abilityFrom(response.body, 'tenant').can('delete', subject('Product', {}))).toBe(
-            true
-        );
+        expect(
+            abilityFrom(response.body, 'tenant').can('delete', subject('Product', { tenantId }))
+        ).toBe(true);
     });
 
     it('keeps the two scopes apart in the one payload', async () => {

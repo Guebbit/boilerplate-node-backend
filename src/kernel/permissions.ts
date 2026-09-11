@@ -24,6 +24,7 @@ import {
     WILDCARD_ACTION,
     WILDCARD_SUBJECT
 } from '@infrastructure/authorization/keys';
+import { DEMO_TENANT_ID } from '@kernel/access/tenant';
 
 /** The action vocabulary, CASL's own. `manage` is the wildcard meaning any declared action. */
 export type PermissionAction = 'read' | 'create' | 'update' | 'delete' | 'manage';
@@ -152,14 +153,27 @@ export const permissionsOfRole = (name: string): readonly string[] => {
  * A value in the model rather than a null branch: `guest` is a role like any other, seeded from
  * `shared/authorization-roles.yaml`, so "what may a stranger do" is answered in the same file and
  * by the same evaluator as every other role. Tenant scope, because an unauthenticated request
- * never acts over the installation.
+ * never acts over the installation — a stranger still browses the one shop, `DEMO_TENANT_ID`.
+ *
+ * @throws Error if `shared/authorization-roles.yaml` ever moves `anonymous` out of tenant scope —
+ *   the discriminated `Caller` union needs the literal, and this is what keeps it honest against
+ *   the file rather than merely asserting it in a comment.
  */
-export const anonymousCaller = (): Caller => ({
-    id: null,
-    tenantId: null,
-    scope: ANONYMOUS_ROLE.scope,
-    permissions: ANONYMOUS_ROLE.permissions
-});
+export const anonymousCaller = (): Caller => {
+    if (ANONYMOUS_ROLE.scope !== 'tenant') {
+        throw new Error(
+            '[permissions] the anonymous role must stay tenant-scoped — a stranger has no ' +
+                'installation to operate, only a shop to browse.'
+        );
+    }
+
+    return {
+        id: null,
+        tenantId: DEMO_TENANT_ID,
+        scope: 'tenant',
+        permissions: ANONYMOUS_ROLE.permissions
+    };
+};
 
 /** A declared key by name, or `undefined`. Wildcards are not declared keys and never resolve. */
 export const findKey = (key: string): PermissionKey | undefined => byKey.get(key);
@@ -234,15 +248,22 @@ const keysInScope = (roleName: string | null, scope: AuthorizationScope): readon
  * @param scope - which of the two worlds this request acts in
  */
 export const callerInScope = (context: AuthContext, scope: AuthorizationScope): Caller => {
-    const roleName = scope === 'platform' ? context.roles.platform : context.roles.tenant;
+    if (scope === 'platform') {
+        return {
+            id: context.id,
+            // Platform scope is tenant-less by definition; carrying a tenantId here would let a
+            // platform rule be narrowed by a shop it does not belong to.
+            tenantId: null,
+            scope,
+            permissions: keysInScope(context.roles.platform, scope)
+        };
+    }
 
     return {
         id: context.id,
-        // Platform scope is tenant-less by definition; carrying a tenantId there would let a
-        // platform rule be narrowed by a shop it does not belong to.
-        tenantId: scope === 'platform' ? null : context.tenantId,
+        tenantId: context.tenantId,
         scope,
-        permissions: keysInScope(roleName, scope)
+        permissions: keysInScope(context.roles.tenant, scope)
     };
 };
 
@@ -287,7 +308,7 @@ export const SYSTEM_ACTOR: AuthContext = {
     email: 'system@localhost',
     username: 'system',
     roles: { tenant: 'owner', platform: null },
-    tenantId: null,
+    tenantId: DEMO_TENANT_ID,
     authTime: 0,
     amr: [],
     analyticsConsent: false,

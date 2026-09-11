@@ -67,15 +67,17 @@ const modules = [...new Set(PERMISSION_KEYS.map((key) => key.module))];
  * @param name - the role name
  * @param scope - the scope that role belongs to
  */
-const callerFor = (name: string, scope: AuthorizationScope): Caller => ({
-    id: name === ANONYMOUS_ROLE.name ? null : 'generated',
-    tenantId: scope === 'platform' ? null : 'generated',
-    scope,
-    permissions:
+const callerFor = (name: string, scope: AuthorizationScope): Caller => {
+    const id = name === ANONYMOUS_ROLE.name ? null : 'generated';
+    const permissions =
         scope === ANONYMOUS_ROLE.scope
             ? [...new Set([...permissionsOfRole(name), ...ANONYMOUS_ROLE.permissions])]
-            : permissionsOfRole(name)
-});
+            : permissionsOfRole(name);
+
+    return scope === 'platform'
+        ? { id, tenantId: null, scope, permissions }
+        : { id, tenantId: 'generated', scope, permissions };
+};
 
 /** One-letter action codes, so a ten-column table still fits a page. */
 const codes: Record<string, string> = {

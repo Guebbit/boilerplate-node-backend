@@ -9,9 +9,21 @@ import type { CallerContext } from '@infrastructure/http/request';
 /**
  * The tenant id a `webhooks.read`/`webhooks.manage` caller always carries.
  *
- * Non-null by the authorization layer's own invariant, not by a check this function can make:
- * both permission keys are `scope: tenant` in `shared/authorization-keys.yaml`, and
- * `Caller.tenantId` is null only in platform scope (see its own doc comment) — a caller without
- * one never reaches a handler that calls this.
+ * Both permission keys are `scope: tenant` in `shared/authorization-keys.yaml`, so a caller who
+ * reached a handler that calls this is a `'tenant'`-scope `Caller` by the authorization layer's own
+ * invariant — the narrow below is what lets the compiler prove it, no `!` needed. The throw is
+ * unreachable in practice; it exists because the invariant lives in a YAML file this function
+ * cannot see, not in the type.
+ *
+ * @throws Error if the caller somehow reached here in platform scope — a routing bug, not a user's
  */
-export const tenantOf = (context: CallerContext): string => context.caller.tenantId!;
+export const tenantOf = (context: CallerContext): string => {
+    if (context.caller.scope !== 'tenant') {
+        throw new Error(
+            '[webhooks] tenantOf called with a platform-scope caller — webhooks permissions are ' +
+                'all tenant-scoped, so this route must be misconfigured.'
+        );
+    }
+
+    return context.caller.tenantId;
+};

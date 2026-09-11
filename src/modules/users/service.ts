@@ -30,13 +30,8 @@ import { usersAnalyticsEvents } from './analytics';
 import { usersAuditActions } from './audit';
 import { USER_DELETED, USER_SETUP_REQUESTED } from './events';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
-import {
-    assignRole,
-    revokeRole,
-    resolveDeploymentTenantId,
-    AccessInvariantError
-} from '@kernel/access/store';
-import { DEMO_TENANT_SLUG } from '@kernel/access/seed';
+import { assignRole, revokeRole, AccessInvariantError } from '@kernel/access/store';
+import { DEMO_TENANT_ID } from '@kernel/access/seed';
 
 /**
  * Validate user data for admin create/edit forms; returns UI-friendly error messages (empty means
@@ -127,15 +122,13 @@ export const create = (
             const membership =
                 data.role === undefined
                     ? Promise.resolve()
-                    : resolveDeploymentTenantId(DEMO_TENANT_SLUG).then((tenantId) =>
-                          assignRole(
-                              String(user._id),
-                              tenantId,
-                              'tenant',
-                              data.role!,
-                              context.caller.permissions
-                          ).then(() => undefined)
-                      );
+                    : assignRole(
+                          String(user._id),
+                          DEMO_TENANT_ID,
+                          'tenant',
+                          data.role,
+                          context.caller.permissions
+                      ).then(() => undefined);
 
             return membership.then(() => user);
         })
@@ -269,15 +262,13 @@ export const update = (
         const membership =
             data.role === undefined
                 ? Promise.resolve()
-                : resolveDeploymentTenantId(DEMO_TENANT_SLUG).then((tenantId) =>
-                      assignRole(
-                          String(savedUser._id),
-                          tenantId,
-                          'tenant',
-                          data.role!,
-                          context.caller.permissions
-                      ).then(() => undefined)
-                  );
+                : assignRole(
+                      String(savedUser._id),
+                      DEMO_TENANT_ID,
+                      'tenant',
+                      data.role,
+                      context.caller.permissions
+                  ).then(() => undefined);
 
         return revoke
             .then(() => membership)
@@ -353,8 +344,7 @@ export const remove = (
     hardDelete = false
 ): Promise<ResponseSuccess<UserDocument> | ResponseSuccess<undefined> | ResponseReject> => {
     if (hardDelete)
-        return resolveDeploymentTenantId(DEMO_TENANT_SLUG)
-            .then((tenantId) => revokeRole(user.id, tenantId, 'tenant'))
+        return revokeRole(user.id, DEMO_TENANT_ID, 'tenant')
             .then(() => emitDomainEvent(USER_DELETED, { userId: user.id }))
             .then(() => userRepository.deleteOne(user))
             .then(() => generateSuccess(undefined, 200, t('users.hard-deleted')))

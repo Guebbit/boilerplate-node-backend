@@ -15,12 +15,10 @@
  */
 
 import { Types } from 'mongoose';
-import { DEMO_TENANT_SLUG } from '@kernel/access/seed';
-import { resolveDeploymentTenantId } from '@kernel/access/store';
+import { DEMO_TENANT_ID } from '@kernel/access/seed';
 import { webhookSubscriptionRepository } from '@modules/webhooks/repository';
 import { mintRingSecret } from '@modules/webhooks/secrets';
 import type { WebhookSubscriptionDocument } from '@modules/webhooks/model';
-import { logger } from '@infrastructure/adapters/logger';
 import { upsertById, type SeedOutcome } from '@infrastructure/persistence/seed';
 
 /** The fixed `_id` this subscription is upserted under, so re-seeding is a no-op like every other fixture. */
@@ -35,36 +33,25 @@ const SEED_DATE = new Date('2026-01-01T00:00:00.000Z');
 /**
  * Seed the demo webhook subscription. Declared in `./index`; called by `scenarios/apply.ts`.
  *
- * Seeds nothing when `NODE_WEBHOOK_DEMO_SINK_URL` is unset (the default), and nothing before the
- * demo shop exists (`seedAccessModel()` runs before `seedAllDemoModules()`, so in practice this
- * only trips in a test importing this file in isolation).
+ * Seeds nothing when `NODE_WEBHOOK_DEMO_SINK_URL` is unset, the default.
  */
 export const seedWebhooksCollection = (): Promise<SeedOutcome[]> => {
     const sinkBaseUrl = process.env.NODE_WEBHOOK_DEMO_SINK_URL;
     if (!sinkBaseUrl) return Promise.resolve([]);
 
-    return resolveDeploymentTenantId(DEMO_TENANT_SLUG).then((tenantId) => {
-        if (!tenantId) {
-            logger.warn(
-                'scenarios/webhooks: no deployment tenant yet, skipping the demo subscription.'
-            );
-            return [];
-        }
+    const { entry } = mintRingSecret();
+    const fixture = {
+        _id: new Types.ObjectId(DEMO_WEBHOOK_SUBSCRIPTION_ID),
+        tenant: DEMO_TENANT_ID,
+        url: `${sinkBaseUrl.replace(/\/+$/, '')}/${DEMO_WEBHOOK_SESSION_ID}`,
+        description: 'Demo sink (webhook-tester)',
+        eventTypes: ['*'],
+        enabled: true,
+        consecutiveFailures: 0,
+        secrets: [entry],
+        createdAt: SEED_DATE,
+        updatedAt: SEED_DATE
+    } as WebhookSubscriptionDocument;
 
-        const { entry } = mintRingSecret();
-        const fixture = {
-            _id: new Types.ObjectId(DEMO_WEBHOOK_SUBSCRIPTION_ID),
-            tenant: tenantId,
-            url: `${sinkBaseUrl.replace(/\/+$/, '')}/${DEMO_WEBHOOK_SESSION_ID}`,
-            description: 'Demo sink (webhook-tester)',
-            eventTypes: ['*'],
-            enabled: true,
-            consecutiveFailures: 0,
-            secrets: [entry],
-            createdAt: SEED_DATE,
-            updatedAt: SEED_DATE
-        } as WebhookSubscriptionDocument;
-
-        return upsertById(webhookSubscriptionRepository, fixture).then((outcome) => [outcome]);
-    });
+    return upsertById(webhookSubscriptionRepository, fixture).then((outcome) => [outcome]);
 };

@@ -37,12 +37,12 @@ export interface AuthContext {
         platform: string | null;
     };
     /**
-     * The shop this person belongs to.
+     * The shop this person belongs to — the one shop every account belongs to, `DEMO_TENANT_ID`.
      *
      * Read from the account and never from a request parameter, which is what makes a
      * cross-tenant read impossible to express by accident rather than merely discouraged.
      */
-    tenantId: string | null;
+    tenantId: string;
     imageUrl?: string;
     /**
      * Epoch seconds this session last actually proved itself — carried from the token's own
@@ -85,14 +85,27 @@ export interface AuthContext {
  *
  * Identity stays optional because a stranger genuinely has none; a rule that needs an id and is
  * handed `undefined` drops its own rule rather than widening — see `resolveConditions`.
+ *
+ * Discriminated on `scope`: a `'tenant'` caller's `tenantId` is a proven `string`, a `'platform'`
+ * caller's is proven `null` — narrowing on `scope` is what lets a module read its shop's id with
+ * no runtime check and no `!`.
  */
-export interface Caller {
-    /** Who they are, when they are anyone. `null`/absent for a stranger. */
-    id?: string | null;
-    /** The shop this request acts in. `null` in platform scope, and only there. */
-    tenantId?: string | null;
-    /** Which of the two worlds this REQUEST acts in — one scope per request, never both. */
-    scope: AuthorizationScope;
-    /** The permission keys the caller's role in that scope holds. */
-    permissions: readonly string[];
-}
+export type Caller =
+    | {
+          scope: 'tenant';
+          /** The shop this request acts in — every tenant-scope caller has one, the compiler proves it. */
+          tenantId: string;
+          /** Who they are, when they are anyone. `null`/absent for a stranger. */
+          id?: string | null;
+          /** The permission keys the caller's role in that scope holds. */
+          permissions: readonly string[];
+      }
+    | {
+          scope: 'platform';
+          /** Platform scope is tenant-less by definition. */
+          tenantId: null;
+          /** Who they are, when they are anyone. `null`/absent for a stranger. */
+          id?: string | null;
+          /** The permission keys the caller's role in that scope holds. */
+          permissions: readonly string[];
+      };

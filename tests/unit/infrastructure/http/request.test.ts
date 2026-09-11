@@ -670,10 +670,13 @@ describe('callerContextOf', () => {
 
         // Not the `guest` ROLE: this is what the trail records for a request the resolver never
         // saw, and an empty key list is the honest answer to "what had this request proved".
+        // `scope: 'platform'` is not a claim about which world the request acts in — the empty
+        // permissions list makes every scope-gated check fail alike — it is the branch of the
+        // `Caller` union that needs no tenant id; see `STRANGER`'s own comment.
         expect(context.caller).toEqual({
             id: null,
             tenantId: null,
-            scope: 'tenant',
+            scope: 'platform',
             permissions: []
         });
         expect(context.ip).toBe('9.9.9.9');
@@ -710,7 +713,7 @@ describe('callerContextOf', () => {
                     email: 'a@b.c',
                     username: 'a',
                     roles: { tenant: 'customer', platform: null },
-                    tenantId: null,
+                    tenantId: 'tenant-1',
                     authTime: 0,
                     amr: [],
                     analyticsConsent: true,

@@ -26,7 +26,12 @@ import {
     tenantBySlug
 } from '@kernel/access/store';
 import { roleModel } from '@kernel/access/models';
-import { DEMO_TENANT_SLUG, seedAccessModel, seedPresetRoles } from '@kernel/access/seed';
+import {
+    bootstrapAccessModel,
+    DEMO_TENANT_SLUG,
+    seedAccessModel,
+    seedPresetRoles
+} from '@kernel/access/seed';
 import { SEED_OWNER_ID, SEED_USER_ID } from '@kernel/seed-accounts';
 import { userRepository } from '@modules/users';
 import { demoModules } from '@scenarios/index';
@@ -266,6 +271,24 @@ describe('the invariants', () => {
         await expect(deleteRole('curator', 'tenant', String(shop._id), 'nobody')).rejects.toThrow(
             /no such role/
         );
+    });
+});
+
+describe('bootstrapAccessModel', () => {
+    it('creates the shop and the presets, with no accounts', async () => {
+        const tenant = await bootstrapAccessModel('Shop');
+
+        expect(tenant.slug).toBe(DEMO_TENANT_SLUG);
+        expect(await roleModel.countDocuments({ preset: true })).toBe(PRESET_ROLES.length + 1);
+        expect(await membershipsOf(SEED_OWNER_ID)).toEqual([]);
+    });
+
+    it('is idempotent, and keeps the id a first insert set', async () => {
+        const first = await bootstrapAccessModel('Shop');
+        const second = await bootstrapAccessModel('A different name');
+
+        expect(String(second._id)).toBe(String(first._id));
+        expect(second.name).toBe('Shop');
     });
 });
 
