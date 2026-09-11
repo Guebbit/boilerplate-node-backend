@@ -158,6 +158,6 @@ router.patch(
     '/translations/:entityType/:id',
     getAuth,
     isAuth,
-    requirePermission('translations.manage'),
+    requirePermission('translations.update'),
     upsertEntityTranslations
 );

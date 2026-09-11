@@ -33,7 +33,13 @@ export default {
      * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
      * whose module is gone.
      */
-    permissions: ['webhooks.read', 'webhooks.manage'],
+    permissions: [
+        'webhooks.read',
+        'webhooks.create',
+        'webhooks.update',
+        'webhooks.delete',
+        'webhooks.manage'
+    ],
     subscribe: subscribeToWebhookEvents,
     requiredConfig: [
         // A subscription's secret ring is encrypted under this key (`./secrets.ts`); the shipped

@@ -44,6 +44,11 @@ roles:
           - products.manage
           - orders.manage
           - locales.manage
+          # Stated rather than inherited. A product write stacks `products.update` AND
+          # `translations.manage`, and a `manage` key expands only over its own family — so
+          # `locales.manage` does not reach `translations.*` and a manager editing a listing needs
+          # this key by name.
+          - translations.manage
           - payments.read
           - inventory.read
           - delivery.read

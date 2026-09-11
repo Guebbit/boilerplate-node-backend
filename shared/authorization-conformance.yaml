@@ -520,3 +520,59 @@ cases:
       subject: Product
       resource: { tenantId: shop_1, active: true }
       expect: deny
+
+    # =============================================================================================
+    # A `manage` key expands over its own FAMILY, never over the module that declares it.
+    #
+    # `locales` declares two families — `locales.*` and `translations.*` — and expanding over the
+    # module let a translations key grant locale writes: a role documented as reading the
+    # dictionary could delete a language from it. These pin the boundary in both directions.
+    # =============================================================================================
+
+    - name: translations.manage does not reach the dictionary it writes against
+      caller: { id: usr_10, scope: tenant, tenantId: shop_1, permissions: [translations.manage] }
+      action: delete
+      subject: Locale
+      resource: { tenantId: shop_1 }
+      expect: deny
+
+    - name: translations.manage does grant the write it is named for
+      caller: { id: usr_10, scope: tenant, tenantId: shop_1, permissions: [translations.manage] }
+      action: update
+      subject: Translation
+      resource: { tenantId: shop_1 }
+      expect: allow
+
+    - name: locales.manage does not reach an entity's translated words
+      caller: { id: usr_11, scope: tenant, tenantId: shop_1, permissions: [locales.manage] }
+      action: update
+      subject: Translation
+      resource: { tenantId: shop_1 }
+      expect: deny
+
+    - name: a manage key still expands across its own family's differing subjects
+      # `inventory.read` is about a StockLevel and `inventory.create` about a StockMovement — one
+      # family, two subjects. Expanding over the SUBJECT rather than the family would have left a
+      # warehouse unable to record the movement it is hired to record.
+      caller: { id: usr_12, scope: tenant, tenantId: shop_1, permissions: [inventory.manage] }
+      action: create
+      subject: StockMovement
+      resource: { tenantId: shop_1 }
+      expect: allow
+
+    - name: a credential reader may not mint one
+      # The escalation this pair exists to refuse: `apikeys` once declared only read and manage, so
+      # "holds every concrete key in the family" reduced to "holds the read" and a read-only role
+      # passed a guard asking for manage. Concrete write keys are what make the question answerable.
+      caller: { id: usr_13, scope: tenant, tenantId: shop_1, permissions: [apikeys.read] }
+      action: create
+      subject: ApiKey
+      resource: { tenantId: shop_1 }
+      expect: deny
+
+    - name: a webhook reader may not delete a subscription
+      caller: { id: usr_14, scope: tenant, tenantId: shop_1, permissions: [webhooks.read] }
+      action: delete
+      subject: WebhookSubscription
+      resource: { tenantId: shop_1 }
+      expect: deny

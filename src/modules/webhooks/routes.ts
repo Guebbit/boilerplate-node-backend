@@ -1,7 +1,8 @@
 /**
  * @module
  * The `/webhooks` router — subscriptions, the delivery log, replay, and the public event
- * catalogue. Every route sits behind `webhooks.read` or `webhooks.manage`; there is no public
+ * catalogue. Every route sits behind a `webhooks.*` key — read to list, create to add, update
+ * to change a subscription or replay a delivery, delete to remove one; there is no public
  * route here, unlike `feedback`'s `/contact`.
  */
 
@@ -21,15 +22,15 @@ export const router = Router();
 router.use(getAuth, isAuth);
 
 router.get('/subscriptions', requirePermission('webhooks.read'), listWebhookSubscriptions);
-router.post('/subscriptions', requirePermission('webhooks.manage'), createWebhookSubscription);
-router.patch('/subscriptions/:id', requirePermission('webhooks.manage'), updateWebhookSubscription);
+router.post('/subscriptions', requirePermission('webhooks.create'), createWebhookSubscription);
+router.patch('/subscriptions/:id', requirePermission('webhooks.update'), updateWebhookSubscription);
 router.delete(
     '/subscriptions/:id',
-    requirePermission('webhooks.manage'),
+    requirePermission('webhooks.delete'),
     deleteWebhookSubscription
 );
 
 router.get('/deliveries', requirePermission('webhooks.read'), listWebhookDeliveries);
-router.post('/deliveries/:id/replay', requirePermission('webhooks.manage'), replayWebhookDelivery);
+router.post('/deliveries/:id/replay', requirePermission('webhooks.update'), replayWebhookDelivery);
 
 router.get('/events', requirePermission('webhooks.read'), listWebhookEvents);

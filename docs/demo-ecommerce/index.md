@@ -95,17 +95,17 @@ pages because this is where you pick an account to log in as.
 
 ### What each role is given
 
-| Role        | Scope    | Permissions, as written in `shared/authorization-roles.yaml`                                                                                                             |
-| ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `guest`     | tenant   | `products.read`, `locales.read`, `delivery.read`                                                                                                                         |
-| `customer`  | tenant   | `products.read`, `locales.read`, `delivery.read`, `orders.read`, `payments.read`                                                                                         |
-| `manager`   | tenant   | `products.manage`, `orders.manage`, `locales.manage`, `payments.read`, `inventory.read`, `delivery.read`, `feedback.read`, `users.read`, `audit.read`, `webhooks.manage` |
-| `warehouse` | tenant   | `products.read`, `orders.read`, `inventory.manage`, `delivery.manage`                                                                                                    |
-| `support`   | tenant   | `feedback.manage`, `users.read`, `users.update`, `orders.read`, `payments.read`, `audit.read`                                                                            |
-| `editor`    | tenant   | `products.manage`, `locales.manage`, `translations.manage`                                                                                                               |
-| `moderator` | tenant   | `users.manage`, `orders.manage`, `payments.manage`, `audit.read`                                                                                                         |
-| `owner`     | tenant   | `all.manage`                                                                                                                                                             |
-| `operator`  | platform | `platform.observability.manage`                                                                                                                                          |
+| Role        | Scope    | Permissions, as written in `shared/authorization-roles.yaml`                                                                                                                                    |
+| ----------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `guest`     | tenant   | `products.read`, `locales.read`, `delivery.read`                                                                                                                                                |
+| `customer`  | tenant   | `products.read`, `locales.read`, `delivery.read`, `orders.read`, `payments.read`                                                                                                                |
+| `manager`   | tenant   | `products.manage`, `orders.manage`, `locales.manage`, `translations.manage`, `payments.read`, `inventory.read`, `delivery.read`, `feedback.read`, `users.read`, `audit.read`, `webhooks.manage` |
+| `warehouse` | tenant   | `products.read`, `orders.read`, `inventory.manage`, `delivery.manage`                                                                                                                           |
+| `support`   | tenant   | `feedback.manage`, `users.read`, `users.update`, `orders.read`, `payments.read`, `audit.read`                                                                                                   |
+| `editor`    | tenant   | `products.manage`, `locales.manage`, `translations.manage`                                                                                                                                      |
+| `moderator` | tenant   | `users.manage`, `orders.manage`, `payments.manage`, `audit.read`                                                                                                                                |
+| `owner`     | tenant   | `all.manage`                                                                                                                                                                                    |
+| `operator`  | platform | `platform.observability.manage`                                                                                                                                                                 |
 
 `guest` is not an account anybody logs into — it is what an unauthenticated request
 resolves to, and the floor every signed-in role is raised to. Signing in can only ever

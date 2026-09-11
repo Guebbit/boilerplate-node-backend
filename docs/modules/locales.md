@@ -82,7 +82,7 @@ every response still resolves its copy from the files.
 ## The translations collection
 
 A third axis, unrelated to the two tiers above: not the shop's own UI copy, but content an editor
-or anyone holding `translations.manage` writes — a product's `title`, its `description`. This
+or anyone holding `translations.update` writes — a product's `title`, its `description`. This
 module owns that collection
 too, though nothing about it is a tier — see
 [Internationalisation](../tools/i18n.md#tier-3-user-authored-content) for how it composes with tier
@@ -121,8 +121,8 @@ Both doors stay, on purpose:
 
 | door                                      | who                                                   | may change a price | generic across entities |
 | ----------------------------------------- | ----------------------------------------------------- | ------------------ | ----------------------- |
-| `/products/{id}`                          | holds `products.update` **and** `translations.manage` | **yes**            | no — products only      |
-| `/locales/translations/{entityType}/{id}` | any holder of `translations.manage`                   | **no**             | yes                     |
+| `/products/{id}`                          | holds `products.update` **and** `translations.update` | **yes**            | no — products only      |
+| `/locales/translations/{entityType}/{id}` | any holder of `translations.update`                   | **no**             | yes                     |
 
 Collapsing them would mean handing anyone who may write a word `products.manage` just so a form can
 save a title alongside a price — the coupling `Translation` was carved out as its own CASL subject

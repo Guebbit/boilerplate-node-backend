@@ -309,12 +309,21 @@ keys:
       action: read
       scope: tenant
       description: Read an entity's translated fields, in the admin shape (every locale at once).
+    - key: translations.update
+      module: locales
+      subject: Translation
+      action: update
+      scope: tenant
+      description: >-
+          Write an entity's translated fields. Never grants a write on the entity itself — that is
+          `products.update`, and the two are stacked on the product write route precisely so one
+          alone cannot turn a rewording into a repricing.
     - key: translations.manage
       module: locales
       subject: Translation
       action: manage
       scope: tenant
-      description: Write an entity's translated fields. Never grants a write on the entity itself.
+      description: Any action on an entity's translated fields.
 
     # -- users ---------------------------------------------------------------------------------
     - key: users.read
@@ -377,16 +386,33 @@ keys:
       action: read
       scope: tenant
       description: Read this shop's webhook subscriptions, delivery log and event catalogue.
+    - key: webhooks.create
+      module: webhooks
+      subject: WebhookSubscription
+      action: create
+      scope: tenant
+      description: Add a subscription, minting its first secret.
+    - key: webhooks.update
+      module: webhooks
+      subject: WebhookSubscription
+      action: update
+      scope: tenant
+      description: >-
+          Change a subscription, rotate or drop a secret from its ring, and replay a delivery. The
+          blast radius of all three is the same — a party this shop did not intend gets signed
+          deliveries — so they share one key.
+    - key: webhooks.delete
+      module: webhooks
+      subject: WebhookSubscription
+      action: delete
+      scope: tenant
+      description: Remove a subscription. Separate from update because the blast radius is.
     - key: webhooks.manage
       module: webhooks
       subject: WebhookSubscription
       action: manage
       scope: tenant
-      description: >-
-          Create, update or delete a webhook subscription, and replay a delivery. One key rather
-          than the create/update/delete quartet: a subscription carries a secret ring, and the
-          blast radius of every write against it is the same — a party this shop did not intend
-          gets signed deliveries.
+      description: Any action on a webhook subscription.
 
     # -- api-keys --------------------------------------------------------------------------------
     - key: apikeys.read
@@ -395,15 +421,26 @@ keys:
       action: read
       scope: tenant
       description: List this shop's machine-to-machine credentials. Never returns a key's secret.
+    - key: apikeys.create
+      module: api-keys
+      subject: ApiKey
+      action: create
+      scope: tenant
+      description: >-
+          Mint a credential. Carries its own floor on top of this key: a credential can never hold
+          a permission the minter lacks.
+    - key: apikeys.delete
+      module: api-keys
+      subject: ApiKey
+      action: delete
+      scope: tenant
+      description: Revoke a credential. Soft and immediate; the row stays readable.
     - key: apikeys.manage
       module: api-keys
       subject: ApiKey
       action: manage
       scope: tenant
-      description: >-
-          Mint or revoke a credential. One key rather than create/delete: minting already carries
-          the mint-time floor (a key can never hold a permission the minter lacks), so the blast
-          radius of both writes is the same — who this shop's API trusts.
+      description: Any action on a machine-to-machine credential.
 
     # -- observability -------------------------------------------------------------------------
     # The only platform-scope module in the boilerplate, and it is what makes the invariant

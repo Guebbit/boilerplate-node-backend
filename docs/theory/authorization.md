@@ -89,11 +89,24 @@ it decides what to render, never what is allowed, and every request is re-evalua
 ### The key grammar, and the invariant it exists for
 
 ```
-tenant scope     <subject>.<action>            knowledge.read · tasks.write · members.invite
-platform scope   platform.<subject>.<action>   platform.taxonomy.merge
-wildcards        <subject>.manage              any action on that subject
+tenant scope     <family>.<action>             knowledge.read · tasks.write · members.invite
+platform scope   platform.<family>.<action>    platform.taxonomy.merge
+wildcards        <family>.manage               any action in that family
                  all.manage                    everything in this scope — never both scopes
 ```
+
+**A `manage` key expands over its FAMILY — the key's own prefix — and never over the module that
+declares it.** One module may own two families: `locales` declares both `locales.*` and
+`translations.*`, and expanding over the module once let `translations.manage` delete a language.
+The family may span more than one subject, and that is fine and intended: `inventory.read` is
+about a `StockLevel` and `inventory.create` about a `StockMovement`, so expanding over the subject
+instead would leave a warehouse unable to record the movement it exists to record.
+
+**A family needs a concrete WRITE key for its `manage` to be answerable.** "Holds every concrete
+key in the family" reduces to "holds the read" when read is the only concrete key there is — which
+is how a read-only credential role once satisfied a guard asking for `apikeys.manage` and could
+mint credentials. Such a family now fails closed: only the literal key, or the scope wildcard,
+grants it. Declare the write key rather than relying on the collapse.
 
 **Tenant keys are bare; platform keys are always prefixed.** That asymmetry is the whole safety
 property:

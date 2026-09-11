@@ -46,8 +46,8 @@ A product's copy can be reached two ways, and they are genuinely different endpo
 
 | Door                                       | Reaches                                                                       | Key                                             |
 | ------------------------------------------ | ----------------------------------------------------------------------------- | ----------------------------------------------- |
-| `PATCH /products/{id}`                     | the whole record — price, stock flags, and every language's copy in one write | `products.update` **and** `translations.manage` |
-| `PATCH /locales/translations/product/{id}` | that product's words only, never a price                                      | `translations.manage`                           |
+| `PATCH /products/{id}`                     | the whole record — price, stock flags, and every language's copy in one write | `products.update` **and** `translations.update` |
+| `PATCH /locales/translations/product/{id}` | that product's words only, never a price                                      | `translations.update`                           |
 
 The second is generic: it is the same endpoint that would translate a category description or a
 CMS page were one added — `product` is simply the only thing the kernel registers as translatable

@@ -1,6 +1,7 @@
 /**
  * @module
- * The `/api-keys` router. Every route sits behind `apikeys.read` or `apikeys.manage`, and every
+ * The `/api-keys` router. Every route sits behind an `apikeys.*` key — read to list, create to
+ * mint, delete to revoke — and every
  * route is reached with a human session — the credentials THIS module mints are presented to
  * OTHER routes, never to these.
  */
@@ -17,5 +18,5 @@ export const router = Router();
 router.use(getAuth, isAuth);
 
 router.get('/', requirePermission('apikeys.read'), listApiKeys);
-router.post('/', requirePermission('apikeys.manage'), mintApiKey);
-router.delete('/:id', requirePermission('apikeys.manage'), revokeApiKey);
+router.post('/', requirePermission('apikeys.create'), mintApiKey);
+router.delete('/:id', requirePermission('apikeys.delete'), revokeApiKey);

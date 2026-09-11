@@ -10,8 +10,11 @@
  *
  *   - `all.manage` expands to every key DECLARED in the caller's scope, never to an unbounded
  *     `can('manage', 'all')`. Nothing declares `audit.update`, so nothing grants it.
- *   - `<module>.manage` expands to that module's keys, unconditionally — which is what lets staff
+ *   - `<family>.manage` expands to that FAMILY's keys, unconditionally — which is what lets staff
  *     see drafts: the narrow read key carries `published: true`, the wide one carries nothing.
+ *     The family is the key's own prefix (`products`, `translations`), NOT the declaring module:
+ *     `locales` declares both `locales.*` and `translations.*`, and expanding over the module
+ *     handed `translations.manage` the power to delete a language.
  *
  * See `docs/theory/authorization.md`, and `shared/authorization-keys.yaml` for the keys
  * themselves — a file the PHP twin reads byte-for-byte identically.
@@ -32,6 +35,17 @@ export type Ability = MongoAbility;
 
 /** The prefix a `$caller.<field>` placeholder is written with in the shared keys file. */
 const PLACEHOLDER = '$caller.';
+
+/**
+ * A key's FAMILY — everything before its action. `products.read` is `products`,
+ * `platform.observability.read` is `platform.observability`.
+ *
+ * This, not `module`, is what a `manage` key expands over. One module may declare two families
+ * (`locales` owns both `locales.*` and `translations.*`), and expanding over the module let a
+ * translations key grant locale writes — a role documented as reading the dictionary could delete
+ * a language from it.
+ */
+const familyOf = (key: string): string => key.slice(0, key.lastIndexOf('.'));
 
 /**
  * Substitute `$caller.<field>` throughout a key's conditions.
@@ -86,7 +100,8 @@ const effectiveKeys = (caller: Caller): { key: PermissionKey; wide: boolean }[] 
      * A `manage` key is never itself a grant: it is an instruction to expand, and its own entry
      * would emit CASL's unbounded `manage` action — the thing this model deliberately does not
      * have. `products.manage` grants read, create, update and delete on `Product`; it does not
-     * grant an action nothing declares.
+     * grant an action nothing declares, and it does not reach a sibling family its module happens
+     * to declare too.
      */
     const add = (key: PermissionKey, wide: boolean) => {
         if (key.scope !== caller.scope || key.action === WILDCARD_ACTION) {
@@ -117,8 +132,10 @@ const effectiveKeys = (caller: Caller): { key: PermissionKey; wide: boolean }[] 
         }
 
         if (declared.action === WILDCARD_ACTION) {
+            const family = familyOf(declared.key);
+
             for (const key of PERMISSION_KEYS) {
-                if (key.module === declared.module) {
+                if (familyOf(key.key) === family) {
                     add(key, true);
                 }
             }
@@ -201,7 +218,21 @@ export const holdsKey = (caller: Caller, key: string): boolean => {
         return ability.can(declared.action, declared.subject);
     }
 
-    return PERMISSION_KEYS.filter(
-        (candidate) => candidate.module === declared.module && candidate.action !== WILDCARD_ACTION
-    ).every((candidate) => ability.can(candidate.action, candidate.subject));
+    const family = familyOf(declared.key);
+    const concrete = PERMISSION_KEYS.filter(
+        (candidate) => familyOf(candidate.key) === family && candidate.action !== WILDCARD_ACTION
+    );
+
+    /*
+     * A family with no concrete WRITE cannot answer this question honestly: "holds every concrete
+     * key" would reduce to "holds the read", and a read-only role would pass a guard asking for
+     * `manage`. That is how `apikeys.read` once satisfied `apikeys.manage` and could mint a
+     * credential. Fail closed instead — only the literal key, or the scope wildcard above, grants
+     * it — and declare a concrete write key if a route needs to be reachable.
+     */
+    if (!concrete.some((candidate) => candidate.action !== 'read')) {
+        return caller.permissions.includes(key);
+    }
+
+    return concrete.every((candidate) => ability.can(candidate.action, candidate.subject));
 };

@@ -74,6 +74,7 @@ export default {
         'locales.delete',
         'locales.manage',
         'translations.read',
+        'translations.update',
         'translations.manage'
     ],
     routes: router,

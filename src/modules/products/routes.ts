@@ -41,7 +41,7 @@ router.post(
     uploadLimiter,
     isAuth,
     requirePermission('products.create'),
-    requirePermission('translations.manage'),
+    requirePermission('translations.update'),
     invalidateCache(['products']),
     upload.single('imageUpload'),
     createProduct
@@ -73,7 +73,7 @@ router.patch(
     uploadLimiter,
     isAuth,
     requirePermission('products.update'),
-    requirePermission('translations.manage'),
+    requirePermission('translations.update'),
     invalidateCache(['products']),
     upload.single('imageUpload'),
     updateProduct
