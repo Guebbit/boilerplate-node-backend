@@ -83,6 +83,8 @@ The bundler is split by output, with one shared engine underneath.
 | `scripts/contracts/asyncapi-bundles.ts`          | Compiles both async bundles — the full `asyncapi.yaml` and the `asyncapi.public.yaml` the frontend receives — from one set of sources.                                                  | [AsyncAPI Workflow](../api/asyncapi-workflow.md)                       |
 | `scripts/contracts/client-collections-bundle.ts` | Writes the four client collections from `openapi.yaml` — one request at a time, with auth, bodies and example responses.                                                                | [Contracts](./contracts.md)                                            |
 | `scripts/contracts/generate-asyncapi-types.ts`   | Generates `src/types/asyncapi.generated.ts` from `asyncapi.yaml`. Its check mode is the gate. Byte-identical to the frontend's copy.                                                    | [AsyncAPI Workflow](../api/asyncapi-workflow.md)                       |
+| `scripts/contracts/validate-asyncapi.ts`         | The CLI — `npm run lint:asyncapi`. Validates a document against `@asyncapi/parser`'s default ruleset; the replacement for `asyncapi validate` now that `@asyncapi/cli` is gone.         | [AsyncAPI Workflow](../api/asyncapi-workflow.md)                       |
+| `scripts/contracts/check-asyncapi-breaking.ts`   | The CLI — `npm run check:asyncapi-breaking`. Fails when `asyncapi.public.yaml` drops or narrows something since `origin/main`, via `@asyncapi/diff`. PR-only in CI.                     | [AsyncAPI Workflow](../api/asyncapi-workflow.md)                       |
 
 ## Cross-repo pairing — `scripts/pairing/`
 

@@ -10,7 +10,8 @@ name: CI
 # The jobs fall into four groups:
 #   - style           commitlint, lint, prettier
 #   - contract        lint-openapi, lint-asyncapi, their per-module counterparts,
-#                     contracts-bundle-freshness,
+#                     contracts-bundle-freshness, asyncapi-breaking (PR-only — nothing to diff
+#                     against on a push to main),
 #                     spec-identity — the spec is valid, and the paired frontend still agrees with
 #                     it. api/ and src/types/asyncapi.generated.ts are no longer committed — see
 #                     `postinstall` in package.json — so there is nothing left to go stale for
@@ -262,6 +263,34 @@ jobs:
 
             - name: Check contract bundles are current
               run: npm run check:contracts-bundle
+
+    asyncapi-breaking:
+        # asyncapi.public.yaml is partner-facing — GET /webhooks/events serves it, and a
+        # subscriber builds against its event names and payload shapes. This fails the PR when a
+        # change removes or narrows one instead of finding out from a subscriber's bug report.
+        #
+        # PR-only: on a push to main the code is already merged, and diffing HEAD against its own
+        # already-updated origin/main answers nothing. The mutation-diff job (mutation.yml) draws
+        # the same line for the same reason.
+        if: github.event_name == 'pull_request'
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+              with:
+                  # `merge-base` needs both sides; a shallow clone has neither.
+                  fetch-depth: 0
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            - name: Check for breaking changes to the public event catalogue
+              run: npm run check:asyncapi-breaking -- --base=origin/${{ github.base_ref }}
 
     cluster:
         # The only suite that boots `src/cluster.ts` and forks real workers. It is not in
@@ -542,6 +571,7 @@ jobs:
             - lint-openapi-modules
             - lint-asyncapi-modules
             - contracts-bundle-freshness
+            - asyncapi-breaking
             - typecheck
             - build
             - test-unit

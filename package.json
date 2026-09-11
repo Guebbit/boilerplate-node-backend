@@ -23,6 +23,7 @@
         "prettier:fix": "prettier . --write",
         "contracts:bundle": "tsx scripts/contracts/build-bundles.ts",
         "check:contracts-bundle": "tsx scripts/contracts/build-bundles.ts --check",
+        "check:asyncapi-breaking": "tsx scripts/contracts/check-asyncapi-breaking.ts",
         "check:spec-identity": "tsx scripts/pairing/check-spec-identity.ts",
         "check:dependencies": "depcruise src tests --output-type err",
         "docs:graph": "tsx scripts/docs/generate-module-graph.ts",
@@ -77,8 +78,8 @@
         "docs:build": "vitepress build docs",
         "docs:preview": "vitepress preview docs",
         "update:all": "npm-check-updates -u",
-        "complete": "npm run ts-check && npm run lint && npm run lint:openapi && npm run lint:openapi:modules && npm run lint:asyncapi && npm run lint:asyncapi:modules && npm run prettier:check && npm run check:contracts-bundle && npm run check:spec-identity && npm run check:dependencies && npm run check:docs-graph && npm run check:docs-roles && npm run check:docs-references && npm run docs:build && npm run test",
-        "complete:fix": "npm run ts-check && npm run lint:fix && npm run lint && npm run lint:openapi && npm run lint:openapi:modules && npm run lint:asyncapi && npm run lint:asyncapi:modules && npm run prettier:fix && npm run check:contracts-bundle && npm run check:spec-identity && npm run check:dependencies && npm run check:docs-graph && npm run check:docs-roles && npm run check:docs-references && npm run docs:build && npm run test",
+        "complete": "npm run ts-check && npm run lint && npm run lint:openapi && npm run lint:openapi:modules && npm run lint:asyncapi && npm run lint:asyncapi:modules && npm run prettier:check && npm run check:contracts-bundle && npm run check:asyncapi-breaking && npm run check:spec-identity && npm run check:dependencies && npm run check:docs-graph && npm run check:docs-roles && npm run check:docs-references && npm run docs:build && npm run test",
+        "complete:fix": "npm run ts-check && npm run lint:fix && npm run lint && npm run lint:openapi && npm run lint:openapi:modules && npm run lint:asyncapi && npm run lint:asyncapi:modules && npm run prettier:fix && npm run check:contracts-bundle && npm run check:asyncapi-breaking && npm run check:spec-identity && npm run check:dependencies && npm run check:docs-graph && npm run check:docs-roles && npm run check:docs-references && npm run docs:build && npm run test",
         "complete:manual": "npm run test:prism && npm run test:cluster",
         "postinstall": "npm run contracts:bundle && npm run gen:api && npm run gen:asyncapi && npm run scenario:build",
         "prepare": "husky",
@@ -91,6 +92,7 @@
         "bench:k6:checkout": "k6 run tests/load/checkout.js"
     },
     "devDependencies": {
+        "@asyncapi/diff": "^0.5.0",
         "@asyncapi/modelina": "^5.10.1",
         "@asyncapi/parser": "^3.6.3",
         "@commitlint/cli": "^21.2.1",
