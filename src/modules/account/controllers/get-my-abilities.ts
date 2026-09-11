@@ -19,6 +19,7 @@ import { packRules } from '@casl/ability/extra';
 import { successResponse } from '@infrastructure/http/response';
 import { buildAbility } from '@kernel/ability';
 import { anonymousCaller, callerInScope, PERMISSION_KEYS } from '@kernel/permissions';
+import type { AuthContext } from '@types';
 
 /**
  * The permission model's own version.
@@ -31,26 +32,41 @@ import { anonymousCaller, callerInScope, PERMISSION_KEYS } from '@kernel/permiss
 const modelVersion = PERMISSION_KEYS.length;
 
 /**
- * Answer the caller's own rules, in tenant scope.
+ * One scope's rules, in CASL's wire format.
  *
- * Tenant scope because that is what a shop's client renders. Platform work resolves its own caller
- * per key inside the guard and has no screen here to grey out.
+ * `packRules` is CASL's own and exists for exactly this: a tuple per rule with trailing absent
+ * members dropped, which is what makes shipping a few dozen of them cheap. The frontend calls
+ * `unpackRules` and builds the same `Ability` this server just built.
+ * https://casl.js.org/v6/en/advanced/ability-to-json
+ *
+ * @param caller - the caller as resolved in ONE scope; never both at once
+ */
+const rulesFor = (caller: Parameters<typeof buildAbility>[0]) =>
+    packRules(buildAbility(caller).rules);
+
+/**
+ * Answer the caller's own rules, in BOTH scopes.
+ *
+ * Both, because a request acts in one scope and a CLIENT renders from two: the shop's screens read
+ * tenant keys, the health dashboard reads `platform.observability.read`, and they share one
+ * navigation. Publishing tenant rules alone left the platform screens with nothing to grey out,
+ * so they were gated on a tenant key that merely correlated — the guess this endpoint abolishes
+ * everywhere else. The two lists stay apart, because the model refuses to let either satisfy the
+ * other.
  */
 export const getMyAbilities = (request: Request, response: Response) => {
-    const caller = request.authContext
-        ? callerInScope(request.authContext, 'tenant')
-        : anonymousCaller();
+    const context: AuthContext | undefined = request.authContext;
+
+    // A stranger is the `guest` role in tenant scope and holds nothing over the installation, so
+    // their platform list is empty rather than absent — same shape for every caller.
+    const tenant = context ? callerInScope(context, 'tenant') : anonymousCaller();
+    const platform = context ? callerInScope(context, 'platform') : undefined;
 
     successResponse(response, {
-        // Absent rather than null in platform scope: the contract has no nullable field.
-        ...(caller.tenantId ? { tenantId: caller.tenantId } : {}),
-        scope: caller.scope,
-        /*
-         * `packRules` is CASL's own wire format and exists for exactly this: a tuple per rule with
-         * trailing absent members dropped, which is what makes shipping a few dozen of them cheap.
-         * The frontend calls `unpackRules` and builds the same `Ability` this server just used.
-         */
-        rules: packRules(buildAbility(caller).rules),
+        // Absent rather than null for a caller with no shop: the contract has no nullable field.
+        ...(tenant.tenantId ? { tenantId: tenant.tenantId } : {}),
+        tenant: rulesFor(tenant),
+        platform: platform ? rulesFor(platform) : [],
         version: modelVersion
     });
 };

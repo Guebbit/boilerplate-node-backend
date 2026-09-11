@@ -19,14 +19,20 @@ import { PERMISSION_KEYS } from '@kernel/permissions';
 setupTestDb();
 
 /**
- * Rebuild the ability a browser would, from what the wire carried.
+ * Rebuild ONE scope's ability the way a browser would, from what the wire carried.
  *
  * `unpackRules` is CASL's own reader for `packRules`' output, so this is literally the client's
  * code path — which is the point: if these two ever stopped agreeing, the endpoint would be
  * publishing something no client can use.
+ *
+ * Takes the scope by name because the two lists are never merged: a client builds one ability per
+ * scope and asks the one that owns the subject, and a test that concatenated them would prove the
+ * opposite of the invariant.
  */
-const abilityFrom = (body: { data: { rules: unknown[] } }): MongoAbility =>
-    createMongoAbility(unpackRules(body.data.rules as never) as never);
+const abilityFrom = (
+    body: { data: { tenant: unknown[]; platform: unknown[] } },
+    scope: 'tenant' | 'platform'
+): MongoAbility => createMongoAbility(unpackRules(body.data[scope] as never) as never);
 
 describe('GET /account/abilities', () => {
     it('answers a stranger with the guest role rather than refusing them', async () => {
@@ -34,17 +40,19 @@ describe('GET /account/abilities', () => {
         // refuse, and it hides that a visitor may browse at all.
         const response = await api().get('/account/abilities').expect(200);
 
-        expect(response.body.data.scope).toBe('tenant');
-        expect(abilityFrom(response.body).can('read', subject('Product', { active: true }))).toBe(
-            true
-        );
+        expect(
+            abilityFrom(response.body, 'tenant').can('read', subject('Product', { active: true }))
+        ).toBe(true);
     });
 
     it('does not let a stranger read somebody’s order', async () => {
         const response = await api().get('/account/abilities').expect(200);
 
         expect(
-            abilityFrom(response.body).can('read', subject('Order', { userId: 'someone' }))
+            abilityFrom(response.body, 'tenant').can(
+                'read',
+                subject('Order', { userId: 'someone' })
+            )
         ).toBe(false);
     });
 
@@ -55,7 +63,7 @@ describe('GET /account/abilities', () => {
             .get('/account/abilities')
             .set('Authorization', bearer)
             .expect(200);
-        const ability = abilityFrom(response.body);
+        const ability = abilityFrom(response.body, 'tenant');
 
         expect(ability.can('read', subject('Order', { userId: user.id, deletedAt: null }))).toBe(
             true
@@ -64,7 +72,7 @@ describe('GET /account/abilities', () => {
     });
 
     it('carries a shop owner’s rules, which narrow nothing', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         const response = await api()
             .get('/account/abilities')
@@ -72,23 +80,45 @@ describe('GET /account/abilities', () => {
             .expect(200);
 
         // The same key that lets the route guard through: one rule set, asked twice.
-        expect(abilityFrom(response.body).can('delete', subject('Product', {}))).toBe(true);
+        expect(abilityFrom(response.body, 'tenant').can('delete', subject('Product', {}))).toBe(
+            true
+        );
     });
 
-    it('does not hand a shop owner the platform’s keys', async () => {
-        const { bearer } = await authenticateAs('admin');
+    it('keeps the two scopes apart in the one payload', async () => {
+        // This account is a shop owner AND the installation's operator — two memberships, which is
+        // what makes it the one caller that can prove the lists do not leak into each other.
+        const { bearer } = await authenticateAs('owner');
 
         const response = await api()
             .get('/account/abilities')
             .set('Authorization', bearer)
             .expect(200);
 
-        // The scope invariant, reaching the client: what is published is the TENANT scope's rules,
-        // and a platform key can never be satisfied from them.
-        expect(response.body.data.scope).toBe('tenant');
-        expect(abilityFrom(response.body).can('read', subject('ObservabilitySnapshot', {}))).toBe(
-            false
-        );
+        // The scope invariant, reaching the client: the platform key is answerable ONLY from the
+        // platform list, and the shop's unrestricted `all.manage` does not reach it.
+        expect(
+            abilityFrom(response.body, 'platform').can('read', subject('ObservabilitySnapshot', {}))
+        ).toBe(true);
+        expect(
+            abilityFrom(response.body, 'tenant').can('read', subject('ObservabilitySnapshot', {}))
+        ).toBe(false);
+    });
+
+    it('hands a caller with no platform membership an empty platform list', async () => {
+        // Empty rather than absent: every caller gets the same shape, so a client never branches
+        // on whether the field arrived — it just builds an ability that grants nothing.
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api()
+            .get('/account/abilities')
+            .set('Authorization', bearer)
+            .expect(200);
+
+        expect(response.body.data.platform).toEqual([]);
+        expect(
+            abilityFrom(response.body, 'platform').can('read', subject('ObservabilitySnapshot', {}))
+        ).toBe(false);
     });
 
     it('states a version that moves with the KEYS, not with a role', async () => {

@@ -20,6 +20,11 @@ paths:
                 rather than from a copy of them — a hand-maintained duplicate of "what may I do"
                 drifts, and the drift is silent until somebody is shown a button that answers 403.
 
+                Answered in BOTH scopes, as two separate lists. A request acts in exactly one — the
+                one its key declares — but a client renders the shop's screens and the
+                installation's health dashboard from a single navigation, so it needs both and must
+                never merge them.
+
                 **The client's copy has no authority.** It decides what to RENDER, never what is
                 allowed; every request is re-evaluated server-side. Published here because the
                 alternative is every client inventing the same guess.
