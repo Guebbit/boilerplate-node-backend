@@ -58,7 +58,9 @@ x-app-env: &app-env
     # `:-` default is compose-version-sensitive — see the two-stacks experiment for that.
     # No `?authSource=admin` on Mongo: the app user is created ON `MONGO_DB` itself (see
     # `docker/mongo-init.js`), so the database already in the path is its auth source.
-    NODE_DB_URI: '${NODE_DB_URI:-mongodb://${MONGO_APP_USER:-api}:${MONGO_APP_PASSWORD:-}@database:27017/${MONGO_DB:-api}}'
+    # `?replicaSet=rs0` matches the bundled `database`'s own one-node set (see `database` and
+    # `mongo-rs-init` below) — only on the bundled default; a managed URI supplies its own topology.
+    NODE_DB_URI: '${NODE_DB_URI:-mongodb://${MONGO_APP_USER:-api}:${MONGO_APP_PASSWORD:-}@database:27017/${MONGO_DB:-api}?replicaSet=rs0}'
     NODE_REDIS_URL: '${NODE_REDIS_URL:-redis://:${REDIS_PASSWORD:-}@cache:6379}'
     NODE_RABBITMQ_URL: '${NODE_RABBITMQ_URL:-amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-}@queue:5672}'
 
@@ -206,12 +208,35 @@ services:
             database:
                 condition: service_healthy
                 required: false
+            mongo-rs-init:
+                condition: service_completed_successfully
+                required: false
 
     database:
         image: docker.io/library/mongo:8
         restart: unless-stopped
         # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
         profiles: [bundled]
+        # A replica set of one, not a standalone: MongoDB's own documented production topology,
+        # the only path to a dump consistent across collections while orders keep arriving
+        # (`mongodump --oplog`), and the prerequisite for Percona Backup for MongoDB or real PITR
+        # later. Converting a live standalone to a set is a data-bearing migration; starting as a
+        # set of one is only this line. `--keyFile` is what auth requires once `--replSet` is on,
+        # even with a single member — MongoDB refuses `--auth` alone on a replica set.
+        #
+        # `mongo-entrypoint.sh` wraps the image's own entrypoint purely to get the keyFile onto
+        # disk with the right ownership first — see its own header for why that isn't a separate
+        # one-shot service instead.
+        entrypoint: ['bash', '/mongo-entrypoint.sh']
+        command:
+            [
+                'mongod',
+                '--replSet',
+                'rs0',
+                '--keyFile',
+                '/keyfile-dir/mongo-keyfile',
+                '--bind_ip_all'
+            ]
         environment:
             # Root stays maintenance-only — the app authenticates as MONGO_APP_USER instead
             # (see `NODE_DB_URI` above and `docker/mongo-init.js`), so a leaked connection
@@ -223,19 +248,44 @@ services:
             MONGO_APP_PASSWORD: '${MONGO_APP_PASSWORD:?set MONGO_APP_PASSWORD in the client env file}'
         volumes:
             - mongo-data:/data/db
+            - mongo-keyfile-dir:/keyfile-dir
+            - ./docker/mongo-entrypoint.sh:/mongo-entrypoint.sh:ro
             # First-run only, same as the Umami init script: creates MONGO_APP_USER against an
-            # empty data directory and never runs again on that volume.
+            # empty data directory and never runs again on that volume. Runs during the official
+            # image's temporary, flag-stripped standalone boot — which shares this same /data/db —
+            # so it needs no change for --replSet/--keyFile; only rs.initiate() is new, see
+            # `mongo-rs-init` below.
             - ./docker/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
         # No `ports:` entry, deliberately. The database is reachable from the compose network and
         # from nowhere else. Reach it for maintenance with
         # `docker compose --env-file "clients/$COMPOSE_PROJECT_NAME/.env" -f docker-compose.production.yml
         # exec database mongosh -u "$MONGO_ROOT_USER" -p`.
         healthcheck:
+            # `ping` needs no auth even under `--keyFile` (which implies `--auth`), so this keeps
+            # gating readiness the same way it did as a standalone.
             test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
             interval: 10s
             timeout: 5s
             retries: 5
             start_period: 30s
+
+    # A one-shot: calls rs.initiate() once the real, replSet-enabled mongod is up, then waits for
+    # PRIMARY before exiting — see docker/mongo-rs-init.sh for why this cannot live in
+    # docker-entrypoint-initdb.d. `setup` depends on this finishing successfully, since db:sync and
+    # access:bootstrap both need a set that can take writes.
+    mongo-rs-init:
+        image: docker.io/library/mongo:8
+        restart: 'no'
+        profiles: [bundled]
+        entrypoint: ['bash', '/mongo-rs-init.sh']
+        environment:
+            MONGO_ROOT_USER: '${MONGO_ROOT_USER:-root}'
+            MONGO_ROOT_PASSWORD: '${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in the client env file}'
+        volumes:
+            - ./docker/mongo-rs-init.sh:/mongo-rs-init.sh:ro
+        depends_on:
+            database:
+                condition: service_healthy
 
     cache:
         image: docker.io/library/redis:8-alpine
@@ -290,6 +340,7 @@ services:
 
 volumes:
     mongo-data:
+    mongo-keyfile-dir:
     redis-data:
     rabbitmq-data:
     uploads:
