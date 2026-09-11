@@ -83,5 +83,13 @@ Every ingredient it is built from — `kernel/authentication.ts`'s `CredentialRe
 for one instead of throwing, exactly like a build with no `account` has no JWTs to verify.
 :::
 
+## Managing it
+
+Minting, listing and revoking a credential all have an admin screen now, in the paired
+`boilerplate-vue-frontend` — `api-keys` there, its own two routes over this module's three
+endpoints. "Usable via any HTTP client" is still true (nothing here requires the UI), but no longer
+the only way in. See that repo's `docs/modules/api-keys.md` for the client side, including why the
+permissions field is free text rather than a picker.
+
 See: [Security](../tools/security.md#machine-to-machine-credentials),
 [Authorization theory](../theory/authorization.md).

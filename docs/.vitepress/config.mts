@@ -84,6 +84,7 @@ export default withMermaid(
                         text: 'supporting',
                         collapsed: false,
                         items: [
+                            { text: 'api-keys', link: '/modules/api-keys' },
                             { text: 'delivery', link: '/modules/delivery' },
                             {
                                 text: 'inventory',
@@ -105,6 +106,7 @@ export default withMermaid(
                                     }
                                 ]
                             },
+                            { text: 'webhooks', link: '/modules/webhooks' },
                             { text: 'wishlist', link: '/modules/wishlist' }
                         ]
                     },
