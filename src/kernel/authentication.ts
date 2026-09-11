@@ -3,7 +3,7 @@
  * Who is making this request — a port the kernel declares and `account` supplies at boot. Two
  * outcomes, and callers depend on the difference: **rejects** (token absent, malformed, expired,
  * wrongly signed) vs. **resolves `undefined`** (token verified, user no longer exists). Collapsing
- * them turns a deleted admin's 403 into a 401: "log in again" for an account that cannot.
+ * them turns a deleted account's 403 into a 401: "log in again" for an account that cannot.
  *
  * See: docs/tools/security.md#_401-or-403-and-why-the-guards-agree
  */

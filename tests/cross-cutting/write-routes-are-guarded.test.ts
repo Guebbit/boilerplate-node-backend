@@ -1,19 +1,19 @@
 /**
- * One app-wide guard: every write route is authenticated by default, and admin-guarded by
- * default too, unless the route is listed in {@link WRITE_EXCEPTIONS} below with a reason.
+ * One app-wide guard: every write route is authenticated by default, and behind a
+ * `requirePermission` key by default too, unless the route is listed in {@link WRITE_EXCEPTIONS}
+ * below with a reason.
  *
  * The twelve per-module `routes.test.ts` suites each state their own module's authorization in
  * full, and that stays valuable — mount order, cache tags, and upload fields are genuinely
- * per-module. But "every write is admin-guarded" is an app-wide property, and stating it twelve
+ * per-module. But "every write demands a permission key" is an app-wide property, and stating it twelve
  * times locally enforces it zero times globally: a thirteenth module with no `routes.test.ts` of
  * its own would be guarded by nothing. This file states the property once, for every routed
  * module at once, so a new module inherits the guarantee instead of needing to opt into it.
  *
  * `WRITE_EXCEPTIONS` is the actual guardrail's shape: MOST writes here are somebody's own resource
- * (a cart, a wishlist, an address book, a session) rather than an admin action, so the exception
- * list is not the short allowlist a purely admin-guarded API would have — it is the list of every
- * write in the app that is deliberately NOT admin-only, plus the handful that need no session at
- * all. Every entry is a decision someone made when the route was written; this is the one place
+ * (a cart, a wishlist, an address book, a session) rather than a staff action, so the exception
+ * list is not the short allowlist a fully keyed API would have — it is the list of every write in
+ * the app that deliberately needs no key, plus the handful that need no session at all. Every entry is a decision someone made when the route was written; this is the one place
  * they are all listed together.
  */
 import { existsSync, readdirSync } from 'node:fs';
@@ -88,7 +88,7 @@ const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
  * `requiresAuth: false` is reserved for a route that genuinely needs no session — either there is
  * none to have yet (login, signup), or a token IN the request is itself the credential (an emailed
  * reset/verify/confirm link). Every other exception is `requiresAuth: true`: authenticated, but
- * deliberately not admin-only because the write is scoped to the caller's own resource.
+ * deliberately keyless because the write is scoped to the caller's own resource.
  */
 interface WriteException {
     requiresAuth: boolean;
@@ -99,7 +99,7 @@ interface WriteException {
 const WRITE_EXCEPTIONS: Record<string, WriteException> = {
     'feedback POST /contact': {
         requiresAuth: false,
-        reason: 'the visitor contact form, mounted above the admin gate on purpose'
+        reason: 'the visitor contact form, mounted above the keyed gate on purpose'
     },
     'products POST /search': {
         requiresAuth: false,
@@ -298,7 +298,7 @@ describe('every write route is guarded by default', () => {
             const guards = guardsOn(router, signature);
 
             if (exception === undefined) {
-                // The default: authenticated, and admin, in that order.
+                // The default: authenticated, then holding the route's key, in that order.
                 expect(guards).toContain('isAuth');
                 expect(guards).toContain('requirePermissionGuard');
                 expect(guards.indexOf('isAuth')).toBeLessThan(

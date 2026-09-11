@@ -311,8 +311,9 @@ mailboxes, cost something rather than nothing.
 
 ## Why the metrics endpoint has its own credential
 
-`/observability/metrics` cannot use the admin JWT the other observability routes use: it is scraped
-by Prometheus, which has no way to log in, refresh a token or hold a session. What Prometheus does
+`/observability/metrics` cannot use the bearer token the other observability routes check
+`platform.observability.read` on: it is scraped by Prometheus, which has no way to log in, refresh
+a token or hold a session. What Prometheus does
 support is a static bearer credential in its `scrape_configs`, so that is the credential here.
 
 Left open, the endpoint is free reconnaissance: request volumes, error rates, latency percentiles,
@@ -373,10 +374,10 @@ The distinction is the client's next move, not a shade of politeness:
   to where they were aiming.
 - **403** — "you are known and still refused". Logging in again would only loop.
 
-Every guard follows it: no credentials at all is 401 even on an admin-only route, and a verified
-caller who is not an admin is 403. The same rule decides what the auth resolver does with a token
-whose user no longer exists — it resolves `undefined` rather than rejecting, so a deleted admin
-gets 403 rather than being told to log in to an account that cannot.
+Every guard follows it: no credentials at all is 401 even on the most tightly keyed route, and a
+verified caller who does not hold the key is 403. The same rule decides what the auth resolver
+does with a token whose user no longer exists — it resolves `undefined` rather than rejecting, so
+a deleted account gets 403 rather than being told to log in to an account that cannot.
 
 An [api-key](#machine-to-machine-credentials) follows the same rule from a third direction: it IS
 a credential, so a route it holds no permission for is 403 like any other refusal — including a
@@ -390,8 +391,9 @@ limitation of the browser API, not an oversight, so `isAuth`, which reads `Autho
 can never be satisfied by an SSE connection.
 
 What `EventSource` does send, given `withCredentials: true`, is cookies, and this app already
-issues an `HttpOnly` refresh cookie at login. So `isAdminViaCookie` verifies that cookie exactly as
-`GET /account/refresh` does — signature **and** presence on the user document — so a revoked or
+issues an `HttpOnly` refresh cookie at login. So `requirePermissionViaCookie` takes the same
+permission key every other guard takes and verifies that cookie exactly as `GET /account/refresh`
+does — signature **and** presence on the user document — so a revoked or
 logged-out token is rejected, not merely an expired one.
 
 ::: danger Not a query-string token

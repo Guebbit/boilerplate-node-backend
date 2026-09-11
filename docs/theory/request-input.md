@@ -82,7 +82,7 @@ declaring a body on its GET.
 |                                                                         | `active`                                        | body, query                                | merged, then Zod `value === 'true'`                        |
 |                                                                         | `page`, `pageSize`, `text`, `email`, `username` | body, query                                | merged, then Zod (pagination shared)                       |
 | `GET /orders`, `POST /orders/search`                                    | `id`                                            | body, query                                | first non-empty wins                                       |
-|                                                                         | `userId`                                        | body, query                                | merged; **ignored for non-admin callers**                  |
+|                                                                         | `userId`                                        | body, query                                | merged; **ignored unless the caller holds the key**        |
 |                                                                         | `page`, `pageSize`, `productId`, `email`        | body, query                                | merged, then Zod (pagination shared)                       |
 | `DELETE /products`, `DELETE /products/:id`, `DELETE /products/:id/hard` | `id`                                            | params, body                               | validated as an ObjectId, 422 on failure                   |
 |                                                                         | `hardDelete`                                    | params, query, body — **OR'd, not ranked** | boolean; any `true` wins; 422 for anything that is not one |
@@ -97,7 +97,7 @@ declaring a body on its GET.
 |                                                                         | `categories`, `tags`                            | body                                       | string array; decoded only on multipart                    |
 |                                                                         | everything else                                 | body                                       | untouched                                                  |
 | `POST /users`, `PUT /users`, `PUT /users/:id`                           | `id`                                            | params, body                               | first non-empty wins                                       |
-|                                                                         | `admin`, `active`                               | body                                       | boolean; decoded only on multipart                         |
+|                                                                         | `active`, `sendSetupEmail`                      | body                                       | boolean; decoded only on multipart                         |
 |                                                                         | everything else                                 | body                                       | untouched                                                  |
 | `POST /cart`                                                            | `productId`, `quantity`                         | body                                       | Zod, then `isValidObjectId`                                |
 | `PUT /cart/:productId`                                                  | `productId`                                     | params, body                               | first non-empty wins, then `isValidObjectId`               |
@@ -319,7 +319,7 @@ there, and per-operation declarations are what would remove it.
   the test that guarded it are gone.
 - **`category` and `tag` were body-only in the spec** while the controller accepted them from the
   query on both `GET /products` and `POST /products/search`. Now declared as query parameters too.
-- **`active`/`admin` were decoded, validated and stored on every user write route** while only
+- **`active` was decoded, validated and stored on every user write route** while only
   `CreateUserRequest` declared them. Added to `UpdateUserRequest`, `UpdateUserByIdRequest` and
   both multipart variants. Not a privilege hole — every route in `/users` is behind `isAuth` and
   the matching `users.*` permission — but undeclared input all the same.
@@ -336,7 +336,7 @@ there, and per-operation declarations are what would remove it.
   had no `POST /feedback/search` sibling to carry the DTO form. That reasoning was wrong twice
   over, and the body is now gone: no browser could have sent it (the Fetch spec rejects a body on
   a GET), and `setCache(600, …)` keys on the declared **query** parameters, so a filter that did
-  arrive in a body was invisible to the key — two different searches by the same admin shared one
+  arrive in a body was invisible to the key — two different searches by the same caller shared one
   cached page for the cache's whole lifetime. The sibling exists now; `GET /feedback` is `list`.
 - **`hardDelete` treated presence as the switch,** so `DELETE /products/:id?hardDelete=false`
   permanently deleted the product — the query value is the string `'false'`, which is truthy —

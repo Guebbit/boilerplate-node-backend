@@ -1,7 +1,8 @@
 /**
  * @module
  * The feedback route table. `routes.ts` mounts ONE public route (the visitor contact form), then
- * `router.use(getAuth, isAuth, requireUnrestricted)` — everything below is admin-only, purely by position, and
+ * `router.use(getAuth, isAuth)` and a `requirePermission('feedback.*')` per route — everything
+ * below the mount is keyed, purely by position, and
  * nothing looks wrong either way if that's gotten wrong. Assertions here are positional for that
  * reason (see `effectiveRouteTable` in `tests/support/routes.ts`); per-route middleware alone
  * would pass whatever happened.
@@ -45,7 +46,7 @@ describe('feedback routes — the positional guard', () => {
     });
 
     it.each(['POST /search', 'GET /', 'PUT /:id', 'DELETE /:id'])(
-        '%s sits below the gate and is admin-only',
+        '%s sits below the gate and is keyed',
         (signature) => {
             const guards = guardsOn(router, signature);
 

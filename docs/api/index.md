@@ -47,4 +47,4 @@ flowchart LR
 - Keep controllers thin and move reusable rules into services.
 - Reuse shared schemas, parameters, and responses inside [`openapi.yaml`](./openapi-workflow.md#openapi-is-the-source-of-truth).
 - Keep response handling consistent so auth, caching, metrics, and tracing can plug into the same request path.
-- Treat the sample entities (`users`, `products`, `orders`, `cart`, `admin`) as examples of API patterns, not product law.
+- Treat the sample entities (`users`, `products`, `orders`, `cart`, `observability`) as examples of API patterns, not product law.

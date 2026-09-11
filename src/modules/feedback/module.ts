@@ -11,7 +11,7 @@ import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
 
-/** This module's manifest entry: public contact form, admin-only triage. */
+/** This module's manifest entry: public contact form, keyed triage (`feedback.*`). */
 export default {
     name: 'feedback',
     basePath: '/feedback',

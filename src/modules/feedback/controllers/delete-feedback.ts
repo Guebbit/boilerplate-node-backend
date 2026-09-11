@@ -1,6 +1,6 @@
 /**
  * @module
- * Controller for `DELETE /feedback/:id` — admin-only, permanent. Hand-written rather than built
+ * Controller for `DELETE /feedback/:id` — `feedback.delete`, permanent. Hand-written rather than built
  * on `createDeleteController`: that factory exists for the soft/hard delete triplet, and this
  * module has no soft-delete tier.
  *

@@ -218,8 +218,8 @@ as much as a correctness one.
 Request bodies are validated by Zod schemas generated from `openapi.yaml` before a controller runs,
 so a Mongoose validator firing means the model is enforcing something the contract does not.
 `POST /locales` was the worked example: a display name of one space satisfies `minLength: 1`, then
-the schema's `trim` reduces it to `''` and `required` refuses it — a 500 for a stray space, on an
-admin route, found by `tests/fuzz/endpoints.fuzz.test.ts` on its third generated case.
+the schema's `trim` reduces it to `''` and `required` refuses it — a 500 for a stray space, on a
+keyed route, found by `tests/fuzz/endpoints.fuzz.test.ts` on its third generated case.
 
 Closing it **at the contract** is still the better fix where the constraint can be expressed there.
 This branch is the floor under that, across all twelve models at once.

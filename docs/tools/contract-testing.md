@@ -53,8 +53,8 @@ import { api, authenticateAs } from '../helpers/http';
 
 setupTestDb();
 
-it('matches the contract for an admin caller', async () => {
-    const { bearer } = await authenticateAs('admin');
+it('matches the contract for an unrestricted caller', async () => {
+    const { bearer } = await authenticateAs('owner');
     const response = await api().get('/users').set('Authorization', bearer);
 
     expect(response.status).toBe(200);
@@ -64,7 +64,7 @@ it('matches the contract for an admin caller', async () => {
 
 Three recurring shapes across the per-module `api.contract.test.ts` files:
 
-- **Role branches, both sides.** `orders`' suite asserts `GET /orders/{id}` for both an admin caller and a non-admin caller — the suite exists specifically because those two branches once returned _different shapes_ (the non-admin path aggregated computed totals in, the admin path did a plain `findById` and didn't), and nothing before this layer crossed HTTP to notice.
+- **Role branches, both sides.** `orders`' suite asserts `GET /orders/{id}` for both an unrestricted caller and a scoped one — the suite exists specifically because those two branches once returned _different shapes_ (the scoped path aggregated computed totals in, the unscoped path did a plain `findById` and didn't), and nothing before this layer crossed HTTP to notice. `authenticateAs('owner' | 'user')` covers those two; `authenticateAsRole('editor')` and friends drive any other preset role through the same HTTP surface.
 - **Credential-leak guards as explicit assertions, backed by the contract as the general case.** `users`' suite keeps a hand-written `assertNoCredentials()` (checks the serialized JSON for `password`, `tokens`, a bcrypt hash prefix) _and_ `toSatisfyApiSpec()`. The explicit check is a readable statement of intent; the contract check is what makes it general — `openapi.yaml`'s `User` schema declares `additionalProperties: false`, so _any_ undeclared field fails, not just the two named here.
 - **Error shapes, not just success shapes.** Every file also drives the 401/403/404/422 branches through the real route and checks those against the spec too — a `ValidationErrorResponse` that drifts from what's declared is exactly as much a contract break as a success response would be.
 
@@ -78,7 +78,7 @@ along with it. Only the specs that belong to no domain stayed central.
 | `tests/support/contract.ts`                              | Registers `jest-openapi` against `openapi.yaml`; the "why not Zod" reasoning lives in this file's own header |
 | `src/modules/<name>/tests/contract/api.contract.test.ts` | One per routed module — twelve today. Everything under that module's `basePath`                              |
 | `src/modules/users/tests/contract/…`                     | `/users` — the credential-leak guard, `assertNoCredentials()`                                                |
-| `src/modules/orders/tests/contract/…`                    | `/orders` — the role-branch guard, admin and scoped caller                                                   |
+| `src/modules/orders/tests/contract/…`                    | `/orders` — the role-branch guard, unrestricted and scoped caller                                            |
 | `tests/contract/system.test.ts`                          | `/` — the one route that belongs to no module                                                                |
 | `tests/contract/request-sources.test.ts`                 | Every mounted route is in the spec, and every spec operation is mounted                                      |
 | `tests/contract/request-contract.test.ts`                | The other half — see [Contract-Derived Request Data](./contract-request-data.md)                             |

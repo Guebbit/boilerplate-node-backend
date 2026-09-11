@@ -121,7 +121,7 @@ Running this against the current API surfaced genuine, pre-existing drift betwee
 | `CreateProductRequest`/`CreateUserRequest`/`SignupRequest` `.imageUrl`        | `format: uri`     | overridden to a plain `z.string()` (holds a relative upload path) — **laxer than the contract**                                                                 |
 | `CreateProductRequest.price`                                                  | `minimum: 0`      | only `.refine()`d to be present — the non-negative constraint isn't checked at all                                                                              |
 | `CreateProductRequest.active`/`categories`/`tags`, `CreateUserRequest.active` | boolean / array   | coerced (`!!request.body.active`, `coerceStringArray(...)`) **before** zod validation runs, so a wrong-typed value never reaches the check that would reject it |
-| `POST /users` with a wrong-typed `admin`                                      | should be `422`   | returns **`500`** — malformed input crashing the request instead of being rejected cleanly                                                                      |
+| `POST /users` with a wrong-typed `active`                                     | should be `422`   | returns **`500`** — malformed input crashing the request instead of being rejected cleanly                                                                      |
 
 ### A finding in the generator itself
 

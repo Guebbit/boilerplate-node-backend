@@ -231,7 +231,7 @@ router.post(
     postEmailChangeConfirm
 );
 
-// DELETE /account/tokens/expired — remove expired tokens from the DB (admin only)
+// DELETE /account/tokens/expired — remove expired tokens from the DB (`tokens.delete`)
 router.delete(
     '/tokens/expired',
     isAuth,
