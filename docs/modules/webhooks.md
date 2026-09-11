@@ -42,11 +42,13 @@ to `to: 'paid'`/`to: 'shipped'`), `order.cancelled`, `payment.succeeded` and `pa
 kernel's domain-event bus, and there the coupling ends — no import in either direction, the same
 shape [`delivery`](./delivery.md) uses for `order.status_changed`.
 
-**The public event catalogue is a contract, not an accident.** `asyncapi.yaml` declares the six
-events this shop's clone is willing to promise, and `asyncapi.public.yaml` — generated from it — is
-both what `GET /webhooks/events` serves and what `tests/contract`'s producer-coverage check reads.
-A module reaching for the internal domain-event bus and calling it "public" would publish internal
-coupling as an external promise; declaring the six here instead is what keeps that from happening.
+**The public event catalogue is a contract, not an accident.** This module's own `asyncapi.yaml`
+fragment declares the six events this shop's clone is willing to promise, and both
+`GET /webhooks/events` and `tests/cross-cutting/webhook-event-producers.test.ts`'s producer-coverage
+check read that fragment directly — `asyncapi.public.yaml` is a derived sibling output, not the
+source either reads. A module reaching for the internal domain-event bus and calling it "public"
+would publish internal coupling as an external promise; declaring the six here instead is what
+keeps that from happening.
 
 ### The delivery path
 

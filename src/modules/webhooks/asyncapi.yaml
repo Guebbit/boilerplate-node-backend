@@ -5,8 +5,8 @@
 # section (`scripts/contracts/asyncapi-bundles.ts`), unlike the queue this module also owns
 # (`worker.webhook.deliver`, in `shared/contracts/asyncapi.workers.yaml`, backend-only). That
 # split IS the module's whole point: `GET /webhooks/events` serves this section straight out of
-# the generated `asyncapi.public.yaml`, so the catalogue a subscriber reads and the events this
-# module can actually fire can never drift apart.
+# this very file, so the catalogue a subscriber reads and the events this module can actually fire
+# can never drift apart.
 #
 # `webhooks/module.ts` subscribes to each of these on the kernel's domain-event bus
 # (`order.status_changed` filtered by `to`, `order.created`, `order.cancelled`,

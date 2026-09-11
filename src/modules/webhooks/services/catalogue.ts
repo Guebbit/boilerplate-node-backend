@@ -1,7 +1,7 @@
 /**
  * @module
  * The public event catalogue, read straight from this module's own `asyncapi.yaml` fragment — the
- * same source `asyncapi.public.yaml` is generated from (`npm run gen:asyncapi`) — so
+ * same source `asyncapi.public.yaml` is generated from (`npm run contracts:bundle`) — so
  * `GET /webhooks/events` and what this module can actually fire can never drift apart.
  */
 
