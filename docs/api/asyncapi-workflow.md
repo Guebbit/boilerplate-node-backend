@@ -102,21 +102,19 @@ npm run gen:asyncapi
 
 The generator (`scripts/contracts/generate-asyncapi-types.ts`) reads `asyncapi.yaml` with `yaml`, converts each `components.schemas` entry into a TypeScript interface, appends the channel-name constants and the SSE payload map, and writes the result to the path given by `--out`.
 
-### One alias per payload shape
+### One alias per message
 
-Several messages share one payload — `observability.metrics.snapshot`, `.updated` and `heartbeat`
-all carry `ObservabilityMetricsPayload`. Aliasing each separately produced three names for one
-shape, and no hand-written caller used any of them: real code imports the shared payload type
-directly, the same way `mailer.ts` names its own `EmailJob` rather than a generated
-`EmailJobMessage`.
+Every `components.messages` entry gets its own `export type <Message> = <Payload>` alias, even
+when several messages share one payload — `observability.metrics.snapshot`, `.updated` and
+`heartbeat` all carry `ObservabilityMetricsPayload`, and all three get their own alias. No
+hand-written caller uses any of them: real code imports the shared payload type directly, the same
+way `mailer.ts` names its own `EmailJob` rather than a generated `EmailJobMessage`.
 
-So the generator emits **one alias per shape**, in declaration order — which is the name a caller
-who does want the message-level spelling actually finds. The others were never a second fact, just
-a second spelling of the first.
-
-Deduping is safe at that point because the SSE map is resolved through the same
-`resolveMessagePayloadType` the alias loop uses: `SseEventPayloadMap` never names a message-level
-alias, so it cannot be left pointing at one the loop dropped.
+3.0 made this the whole story: a channel declares its message once, so a queue's `...Publish` and
+`...Consume` operations point at the SAME message and there is only ever one alias to emit for it.
+Before the move to 3.0 that was not true — a queue's two operations each declared their own message
+for the one payload, so the generator carried a dedupe pass to stop that showing up as two aliases
+for one shape. Gone along with the duplicate declarations it existed for.
 
 ### Shared with the frontend
 

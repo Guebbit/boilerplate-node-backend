@@ -24,14 +24,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 
-interface AsyncApiOperation {
-    message?: {
-        $ref?: string;
-    };
-}
-
 interface AsyncApiChannel {
-    subscribe?: AsyncApiOperation;
+    /** 3.0: a channel declares its message(s) once, direction lives on the operations that bind to it. */
+    messages?: Record<string, { $ref?: string }>;
 }
 
 interface AsyncApiMessage {
@@ -138,9 +133,9 @@ const resolveMessagePayloadType = (
 };
 
 /*
- * Builds channel-to-message-type entries from channel prefixes. Only `subscribe` — the one
- * operation any caller has ever asked for; the queue channels' message types are generated a
- * different way entirely, by walking `components.messages` directly.
+ * Builds channel-to-message-type entries from channel prefixes. Every channel here declares
+ * exactly one message — direction (SSE push vs. queue publish/consume) lives on the operations
+ * bound to the channel, not on which map this reads.
  *
  * @param channels AsyncAPI channels map.
  * @param messages AsyncAPI message definitions, resolved to their PAYLOAD type — never the
@@ -156,7 +151,7 @@ const collectChannelMessageEntries = (
     Object.entries(channels)
         .filter(([channelName]) => channelName.startsWith(prefix))
         .map(([channelName, channel]) => {
-            const ref = channel.subscribe?.message?.$ref;
+            const ref = Object.values(channel.messages ?? {})[0]?.$ref;
             const messageName = ref ? (ref.split('/').pop() ?? '') : '';
             return {
                 channelName,
@@ -282,25 +277,12 @@ const channelNamespaceBlocks = [...groupChannelsByNamespace(Object.keys(channels
     ([namespace, channelNames]) => renderChannelNamespace(namespace, channelNames)
 );
 
-/*
- * Every target type this pass has already aliased, so one shape gets one alias.
- *
- * Safe here because `sseEntries` above resolves through the same `resolveMessagePayloadType`:
- * `SseEventPayloadMap` never names a message-level alias, so it cannot be left pointing at one
- * this loop dropped.
- *
- * See: docs/api/asyncapi-workflow.md#one-alias-per-payload-shape
- */
-const seenTargets = new Set<string>();
-
 const messageTypeBlocks = Object.entries(messages)
     .map(([messageName]) => {
         const aliasName = toPascalCase(messageName);
         const targetName = resolveMessagePayloadType(messageName, messages);
         // Skip self-referential aliases (message name resolves to same type as schema)
         if (aliasName === targetName) return '';
-        if (seenTargets.has(targetName)) return '';
-        seenTargets.add(targetName);
         return `export type ${aliasName} = ${targetName};`;
     })
     .filter(Boolean);

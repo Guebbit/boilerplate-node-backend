@@ -62,6 +62,9 @@ const bundleAt = (ref: string): string | undefined => {
 const describe = (change: DiffOutputItem): string =>
     `  ${change.path}  (${change.action}): ${JSON.stringify(change.before)} -> ${JSON.stringify(change.after)}`;
 
+/** The leading `MAJOR` segment of an AsyncAPI version string. */
+const majorVersion = (version: string): string => version.split('.')[0] ?? version;
+
 const before = bundleAt(mergeBase());
 const after = readFileSync(path.join(REPO_ROOT, BUNDLE), 'utf8');
 
@@ -87,6 +90,23 @@ Promise.all([
                 `[asyncapi-breaking] one of the two documents failed to parse. Run \`npm run lint:asyncapi\` first.`
             );
             process.exit(2);
+        }
+
+        /*
+         * @asyncapi/diff refuses to compare across a major version (a `TypeError`, not a result) —
+         * and a major bump IS the deliberate, reviewed break this gate exists to catch everything
+         * ELSE from being. Nothing to diff structurally; say so and pass.
+         */
+        if (
+            majorVersion(beforeResult.document.version()) !==
+            majorVersion(afterResult.document.version())
+        ) {
+            console.log(
+                `[asyncapi-breaking] ${BUNDLE} crossed a major AsyncAPI version (` +
+                    `${beforeResult.document.version()} -> ${afterResult.document.version()}) since ${base} — ` +
+                    'that is the deliberate break, not one this gate can classify further.'
+            );
+            return;
         }
 
         const breaking = diff(beforeResult.document.json(), afterResult.document.json()).breaking();

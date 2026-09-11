@@ -149,12 +149,19 @@ const asyncDocument = (
     name: string
 ): {
     servers: Record<string, { protocol: string }>;
-    channels: Record<string, Record<string, { message?: { $ref?: string } }>>;
+    channels: Record<
+        string,
+        { messages?: Record<string, { $ref?: string }>; servers?: { $ref: string }[] }
+    >;
+    operations: Record<
+        string,
+        { action: 'send' | 'receive'; channel: { $ref: string }; messages: { $ref: string }[] }
+    >;
     components: { messages: Record<string, unknown>; schemas: Record<string, unknown> };
 } => parseYaml(readCommittedBundle(bundleByName(name)));
 
 describe.each([['asyncapi'], ['asyncapi-public']])('the %s bundle', (name) => {
-    it('parses, and declares a message for every channel operation', () => {
+    it('parses, and every channel declares a message every operation can reach', () => {
         // The generated realtime types are an output of these documents, so a bundle that parses
         // but has lost a channel forks `src/types/asyncapi.generated.ts` one `gen:asyncapi` later.
         const document = asyncDocument(name);
@@ -162,18 +169,45 @@ describe.each([['asyncapi'], ['asyncapi-public']])('the %s bundle', (name) => {
         const channels = Object.entries(document.channels);
         expect(channels.length).toBeGreaterThan(0);
 
-        for (const [channelName, channel] of channels)
-            for (const operation of ['publish', 'subscribe'] as const) {
-                const reference = channel[operation]?.message?.$ref;
-                if (!reference) continue;
+        for (const [channelName, channel] of channels) {
+            const messageNames = Object.values(channel.messages ?? {}).map((message) =>
+                (message.$ref ?? '').replace('#/components/messages/', '')
+            );
+            expect(messageNames.length).toBeGreaterThan(0);
 
-                const message = reference.replace('#/components/messages/', '');
+            for (const message of messageNames)
                 expect({
                     channel: channelName,
                     message,
                     known: message in document.components.messages
                 }).toEqual({ channel: channelName, message, known: true });
-            }
+        }
+
+        // Every operation resolves to a channel that actually exists, and to one of that
+        // channel's own messages — a bare `$ref` two sections could each get wrong independently.
+        for (const [operationId, operation] of Object.entries(document.operations)) {
+            const channelName = operation.channel.$ref.replace('#/channels/', '');
+            const channel = document.channels[channelName];
+
+            expect({ operationId, channel: channelName, exists: channel !== undefined }).toEqual({
+                operationId,
+                channel: channelName,
+                exists: true
+            });
+
+            for (const messageReference of operation.messages)
+                expect({
+                    operationId,
+                    reference: messageReference.$ref,
+                    boundToChannel: messageReference.$ref.startsWith(
+                        `#/channels/${channelName}/messages/`
+                    )
+                }).toEqual({
+                    operationId,
+                    reference: messageReference.$ref,
+                    boundToChannel: true
+                });
+        }
     });
 
     it('declares a server for every channel, and no server without one', () => {
@@ -188,7 +222,9 @@ describe.each([['asyncapi'], ['asyncapi-public']])('the %s bundle', (name) => {
 
         const bound = new Set(
             Object.values(document.channels).flatMap(
-                (channel) => (channel as { servers?: string[] }).servers ?? declared
+                (channel) =>
+                    channel.servers?.map((reference) => reference.$ref.replace('#/servers/', '')) ??
+                    declared
             )
         );
 
@@ -219,6 +255,8 @@ describe('the public AsyncAPI bundle', () => {
             expect(full.channels[channel]).toEqual(definition);
         for (const [server, definition] of Object.entries(shared.servers))
             expect(full.servers[server]).toEqual(definition);
+        for (const [operationId, definition] of Object.entries(shared.operations))
+            expect(full.operations[operationId]).toEqual(definition);
         for (const [message, definition] of Object.entries(shared.components.messages))
             expect(full.components.messages[message]).toEqual(definition);
     });

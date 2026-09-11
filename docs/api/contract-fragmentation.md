@@ -337,14 +337,15 @@ the right indentation.
 **Why this is a merge and not `asyncapi bundle`.** The obvious symmetry, once the sources are whole
 documents, is to shell out to `@asyncapi/cli` the way `openapi` shells out to Redocly. It was tried
 and it does the wrong thing: **`asyncapi bundle` dereferences.** Every `$ref` is inlined, the
-document grows from 239 lines to 819, each payload is repeated once per channel that names it *and*
+document balloons, each payload is repeated once per channel that names it *and*
 kept under `components` — and `scripts/contracts/generate-asyncapi-types.ts`, which walks
-`channels[*].{publish,subscribe}.message.$ref` to decide what to name a generated model, is left
+`channels[*].messages.*.$ref` to decide what to name a generated model, is left
 with nothing to follow. So the merge happens in about thirty lines in
-`scripts/contracts/asyncapi-bundles.ts`, deliberately dumber than a bundler: it copies four maps and
-refuses on a collision, carrying `$ref` strings across untouched because every section already
-resolves its own refs internally. That file's header is the full argument, and it is the file to
-read before anyone tries the symmetry again.
+`scripts/contracts/asyncapi-bundles.ts`, deliberately dumber than a bundler: it copies five maps —
+`servers`, `channels`, `operations` and the two under `components` — and refuses on a collision,
+carrying `$ref` strings across untouched because every section already resolves its own refs
+internally. That file's header is the full argument, and it is the file to read before anyone
+tries the symmetry again.
 
 ### The analytics names — the bundle that stopped being one
 
