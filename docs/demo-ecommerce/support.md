@@ -76,8 +76,8 @@ process it.
 ## Languages
 
 The shop's buttons, labels and messages speak more than one language, and **that wording can be
-changed without a developer** — the [translator](./translator.md) does exactly this, and needs no
-other access to do it.
+changed without a developer** — the [editor](./editor.md) does exactly this, and needs no other
+access to do it.
 
 Someone in that role can edit the text customers see on-screen, and register or retire a language.
 The demo ships with Spanish, Italian, French and Japanese in deliberately different states of
@@ -85,9 +85,9 @@ completeness, so a half-translated shop can be seen behaving.
 
 ::: tip You can change what a phrase says, not invent new ones — and not what a product says
 Editing replaces existing wording. A brand-new label still needs a developer — the application
-decides _what text exists_, the translator decides _what it says_. And it is screen text only: a
-product's own title and description are not translated at all today, in any language — see
-[`products`](../modules/products.md).
+decides _what text exists_, the editor decides _what it says_. A product's own title and
+description are translated too, but through a different door — see
+[`products`](../modules/products.md#writing-translated-content).
 :::
 
 → [`locales`](../modules/locales.md)
@@ -102,6 +102,37 @@ order, when. Most "what happened here?" questions end there — reachable from y
 needing the platform-wide view a developer or operator would use instead.
 
 → [`observability`](../modules/observability.md) · [`audit-logs`](../modules/audit-logs.md)
+
+## "Our other system stopped getting notified"
+
+When a shop is wired up to notify another system — accounting software, a mailing list — every
+attempt to deliver that notification is logged: what event, when, whether it succeeded, and why it
+didn't when it didn't.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
+flowchart LR
+    Q["a partner says<br/>'we stopped hearing from you'"] --> L["open the delivery log,<br/>filter to their subscription"]
+    L -->|"all failed"| U["their URL or server<br/>is the problem"]
+    L -->|"all succeeded"| T["the problem is on their side<br/>after receiving it"]
+    L -->|"nothing there at all"| S["the subscription itself<br/>may be switched off"]
+
+    classDef act fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef effect fill:#ccfbf1,stroke:#0f766e,color:#111827;
+    class Q,L act;
+    class U,T,S effect;
+```
+
+Filtering the log by subscription and by status is usually the whole investigation — the error
+column says what actually went wrong (timed out, refused, a wrong status code back).
+
+::: tip Replay does not wait for the retry schedule
+A failed delivery retries itself automatically for a while, then gives up. Once whatever was
+wrong is fixed, **replay** sends that exact attempt again immediately, right now, without waiting
+for a next scheduled try or asking the other system to trigger the event over again.
+:::
+
+→ [The shop manager](./manager.md) · [`webhooks`](../modules/webhooks.md)
 
 ## What is pretend here
 
@@ -125,3 +156,5 @@ Worth knowing before promising anything to a customer:
 | **Session**      | One signed-in device. → [`account`](../modules/account.md)                                     |
 | **Audit log**    | The 90-day record of staff actions. → [`audit-logs`](../modules/audit-logs.md)                 |
 | **Health check** | A page that says whether the shop is running. → [`observability`](../modules/observability.md) |
+| **Delivery**     | One attempt to notify another system of one event. → [`webhooks`](../modules/webhooks.md)      |
+| **Replay**       | Resending a delivery right now, instead of waiting for its next automatic retry.               |

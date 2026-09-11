@@ -118,6 +118,40 @@ looking at their orders. Editing an account or erasing one is not part of this j
 session.
 → [`users`](../modules/users.md)
 
+## Notifying other systems
+
+A **webhook subscription** tells the shop to send a message to some other system — your
+accounting software, a mailing-list tool — the moment something happens: an order is paid, an
+order ships, a payment fails. You pick the URL and which events it cares about.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
+flowchart LR
+    C["you create a subscription"] --> S["shown a secret<br/><i>once, ever</i>"]
+    E["an order gets paid"] --> D["the shop sends<br/>a signed message"]
+    D -->|"succeeds"| OK["done"]
+    D -->|"fails"| R["retried automatically"]
+
+    classDef act fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef effect fill:#ccfbf1,stroke:#0f766e,color:#111827;
+    classDef bad fill:#fee2e2,stroke:#b91c1c,color:#111827;
+    class C,E act;
+    class S,OK effect;
+    class R bad;
+```
+
+::: warning The secret is shown exactly once
+When you create a subscription, or rotate its secret, the secret itself is shown on screen a
+single time and never again — not even to you. It proves to the other system that a message really
+came from this shop. Copy it somewhere safe immediately; if you lose it, rotate for a new one.
+:::
+
+**Rotating** a secret does not break anything mid-flight: the old one keeps working until you
+separately remove it, so the other system has time to switch over. If a delivery keeps failing —
+the other system was down, its URL changed — that shows up in the delivery log, which is
+[the support desk's](./support.md) to read.
+→ [`webhooks`](../modules/webhooks.md)
+
 ## Everything is written down
 
 Every staff action — a price change, a cancellation, a deleted product — is recorded with who did
@@ -135,3 +169,5 @@ Nobody can turn this off from inside the application, which is the point.
 | **Refund**       | Money returned. Happens automatically when a paid order is cancelled. → [`payments`](../modules/payments.md) |
 | **Audit log**    | The 90-day record of who did what. → [`audit-logs`](../modules/audit-logs.md)                                |
 | **Bulk**         | The same change applied to many rows at once.                                                                |
+| **Webhook**      | A message the shop sends to another system when something happens. → [`webhooks`](../modules/webhooks.md)    |
+| **Secret**       | The one-time-shown key that proves a webhook message came from this shop.                                    |

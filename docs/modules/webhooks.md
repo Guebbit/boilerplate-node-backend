@@ -93,5 +93,13 @@ nothing: they never knew this module existed. A clone with no orders declares it
 its own `asyncapi.yaml` fragment and changes nothing else.
 :::
 
+## Managing it
+
+Subscriptions, the secret ring and the delivery log all have an admin screen now, in the paired
+`boilerplate-vue-frontend` — `webhooks` there, its own five routes over this module's seven
+endpoints. "Usable via any HTTP client" is still true (nothing here requires the UI), but no longer
+the only way in. See that repo's `docs/modules/webhooks.md` for the client side, including why
+`rotateSecret`'s response never gets cached client-side.
+
 See: [Events & Logging](../tools/events-and-logging.md), [RabbitMQ](../tools/rabbitmq.md), and
 [the AsyncAPI workflow](../api/asyncapi-workflow.md).
