@@ -34,6 +34,8 @@ export interface EntityTranslationsResult {
     entityType: string;
     entityId: string;
     translations: TranslationDocument[];
+    /** Every field name the `translatables` registry declares for this `entityType`. */
+    fields: readonly string[];
 }
 
 /** An `entityType` the `translatables` registry does not know. */
@@ -257,14 +259,16 @@ export const getEntityTranslations = async (
     entityType: string,
     entityId: string
 ): Promise<ResponseSuccess<EntityTranslationsResult> | ResponseReject> => {
-    if (!translatableTarget(entityType)) return entityTypeUnknown(entityType);
+    const target = translatableTarget(entityType);
+    if (!target) return entityTypeUnknown(entityType);
 
     const rows = await translationRepository.findEntityTranslations(entityType, entityId);
 
     return generateSuccess({
         entityType,
         entityId,
-        translations: translationRepository.normalize(rows)
+        translations: translationRepository.normalize(rows),
+        fields: target.fields
     });
 };
 
@@ -313,6 +317,7 @@ export const upsertEntityTranslations = async (
     return generateSuccess({
         entityType,
         entityId,
-        translations: translationRepository.normalize(rows)
+        translations: translationRepository.normalize(rows),
+        fields: target.fields
     });
 };
