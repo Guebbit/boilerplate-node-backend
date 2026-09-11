@@ -13,7 +13,7 @@
  */
 import request from 'supertest';
 import { app } from '../../src/app';
-import { createUser, createAdminUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
+import { createUser, createOwnerUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
 import type { UserDocument } from '@modules/users';
 
 export const api = () => request(app);
@@ -36,10 +36,10 @@ interface AuthenticatedTestUser {
  * fighting this default.
  */
 export const authenticateAs = async (
-    role: 'admin' | 'user' = 'user'
+    role: 'owner' | 'user' = 'user'
 ): Promise<AuthenticatedTestUser> => {
-    const user = await (role === 'admin'
-        ? createAdminUser({ verified: true })
+    const user = await (role === 'owner'
+        ? createOwnerUser({ verified: true })
         : createUser({ verified: true }));
 
     return authenticateUser(user, role);

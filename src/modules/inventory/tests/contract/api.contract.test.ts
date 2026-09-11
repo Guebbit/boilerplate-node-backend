@@ -21,7 +21,7 @@ const MISSING_ID = 'f'.repeat(24);
 
 describe('GET /inventory/levels', () => {
     it('matches the contract and reports all three numbers', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createProduct({ onHand: 7 });
 
         const response = await api().get('/inventory/levels').set('Authorization', bearer);
@@ -37,7 +37,7 @@ describe('GET /inventory/levels', () => {
     });
 
     it('matches the contract when narrowed to what needs ordering', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createProduct({ title: 'Plenty', onHand: 5000 });
 
         const response = await api()
@@ -51,7 +51,7 @@ describe('GET /inventory/levels', () => {
     });
 
     it('pages the board rather than reading the whole catalogue', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         for (let index = 0; index < 5; index += 1)
             await createProduct({ title: `P${index}`, onHand: index });
 
@@ -68,7 +68,7 @@ describe('GET /inventory/levels', () => {
 
 describe('GET /inventory/movements', () => {
     it('matches the contract for an empty ledger', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         const response = await api().get('/inventory/movements').set('Authorization', bearer);
 
@@ -79,7 +79,7 @@ describe('GET /inventory/movements', () => {
     });
 
     it('pages the ledger rather than truncating it', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const product = await createProduct({ onHand: 0 });
         for (let index = 0; index < 5; index += 1)
             await api()
@@ -105,7 +105,7 @@ describe('GET /inventory/movements', () => {
     });
 
     it('narrows the ledger to one kind of transition', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const product = await createProduct({ onHand: 10 });
         await api()
             .post('/inventory/receipts')
@@ -127,7 +127,7 @@ describe('GET /inventory/movements', () => {
     });
 
     it('matches the contract for a ledger holding rows, narrowed by product', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const product = await createProduct();
         await api()
             .post('/inventory/receipts')
@@ -152,7 +152,7 @@ describe('GET /inventory/movements', () => {
 
 describe('POST /inventory/receipts', () => {
     it('matches the contract and answers the counters after the delivery', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const product = await createProduct({ onHand: 3 });
 
         const response = await api()
@@ -166,7 +166,7 @@ describe('POST /inventory/receipts', () => {
     });
 
     it('matches the error contract for an unknown product', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         const response = await api()
             .post('/inventory/receipts')
@@ -178,7 +178,7 @@ describe('POST /inventory/receipts', () => {
     });
 
     it('matches the error contract for an invalid body', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         const response = await api()
             .post('/inventory/receipts')
@@ -192,7 +192,7 @@ describe('POST /inventory/receipts', () => {
 
 describe('POST /inventory/adjustments', () => {
     it('matches the contract for a correction in either direction', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const product = await createProduct({ onHand: 10 });
 
         const response = await api()
@@ -206,7 +206,7 @@ describe('POST /inventory/adjustments', () => {
     });
 
     it('matches the error contract when the correction goes below what is reserved', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const product = await createProduct({ onHand: 10, reserved: 8 });
 
         const response = await api()
@@ -220,7 +220,7 @@ describe('POST /inventory/adjustments', () => {
     });
 
     it('matches the error contract for a zero correction', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const product = await createProduct({ onHand: 10 });
 
         const response = await api()
@@ -235,7 +235,7 @@ describe('POST /inventory/adjustments', () => {
 
 describe('POST /inventory/reservations/sweep', () => {
     it('matches the contract with nothing to expire', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         const response = await api()
             .post('/inventory/reservations/sweep')

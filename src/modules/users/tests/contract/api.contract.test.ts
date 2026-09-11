@@ -33,7 +33,7 @@ const assertNoCredentials = (payload: unknown) => {
 
 describe('GET /users', () => {
     it('matches the contract and exposes no credentials', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const response = await api().get('/users').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
@@ -56,7 +56,7 @@ describe('GET /users — the role and verified filters', () => {
     it('narrows to one role, and to the unverified', async () => {
         // Asserted by membership, not by an exact list: the authenticated admin is a fixture this
         // test does not own, and pinning the whole page would break on any change to it.
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createUser({
             username: 'plain-manager',
             email: 'pm@example.com',
@@ -85,7 +85,7 @@ describe('GET /users — the role and verified filters', () => {
 
 describe('GET /users/{id}', () => {
     it('matches the contract and exposes no credentials', async () => {
-        const { bearer, user } = await authenticateAs('admin');
+        const { bearer, user } = await authenticateAs('owner');
         const response = await api()
             .get(`/users/${String(user._id)}`)
             .set('Authorization', bearer);
@@ -149,7 +149,7 @@ describe('POST /account/signup', () => {
  */
 describe('POST /users', () => {
     it('creates a user with a password supplied directly, and exposes no credentials', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const response = await api().post('/users').set('Authorization', bearer).send({
             email: 'admin-created@example.com',
             username: 'admincreated',
@@ -162,7 +162,7 @@ describe('POST /users', () => {
     });
 
     it('creates a user with no password when sendSetupEmail is true', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const response = await api().post('/users').set('Authorization', bearer).send({
             email: 'setup-email@example.com',
             username: 'setupemailuser',
@@ -175,7 +175,7 @@ describe('POST /users', () => {
     });
 
     it('matches the error contract for neither a password nor sendSetupEmail', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const response = await api().post('/users').set('Authorization', bearer).send({
             email: 'no-way-in@example.com',
             username: 'nowayinuser'
@@ -186,7 +186,7 @@ describe('POST /users', () => {
     });
 
     it('accepts sendSetupEmail: false the same as omitting it', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const response = await api().post('/users').set('Authorization', bearer).send({
             email: 'setup-false@example.com',
             username: 'setupfalseuser',
@@ -202,7 +202,7 @@ describe('PUT /users/{id}', () => {
     // Regression guard: the controller once defaulted `requirePassword` to true on updates too,
     // so an admin couldn't edit a user without resubmitting their password.
     it('updates a user without resubmitting a password', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const target = await createUser({
             username: 'editnocredential',
             email: 'editnocredential@example.com'
@@ -222,7 +222,7 @@ describe('PUT /users/{id}', () => {
 describe('DELETE /users/{id} — the audit action names which discharge happened', () => {
     it('soft delete audits admin.user.soft_deleted, not an erasure', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const target = await createUser({ email: 'soft-delete@example.com' });
 
         const response = await api()
@@ -242,7 +242,7 @@ describe('DELETE /users/{id} — the audit action names which discharge happened
 
     it('?hardDelete=true audits admin.user.erased — the one that discharges an Art. 17 request', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const target = await createUser({ email: 'hard-delete@example.com' });
 
         const response = await api()

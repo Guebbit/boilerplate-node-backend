@@ -84,7 +84,7 @@ describe('GET /locales', () => {
      * messages — those are different questions, and a flat list of tags answers neither.
      */
     it('reports a database-only language as downloadable but not answerable', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
 
         const response = await api().get('/locales');
@@ -98,7 +98,7 @@ describe('GET /locales', () => {
     });
 
     it('merges a language present in both tiers into one row with both tenants', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer, { tag: 'it', name: 'Italian', nativeName: 'Italiano' });
 
         const response = await api().get('/locales');
@@ -112,7 +112,7 @@ describe('GET /locales', () => {
     });
 
     it('counts a language’s entries, so a half-translated one is visible at a glance', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
         await createEntry(bearer, 'pt', 'cart.title', 'O seu carrinho');
 
@@ -126,7 +126,7 @@ describe('GET /locales', () => {
     });
 
     it('hides an inactive language entirely', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
         await api().put('/locales/pt').set('Authorization', bearer).send({ active: false });
 
@@ -183,7 +183,7 @@ describe('GET /locales/:locale', () => {
      * exists for.
      */
     it('still 404s for a language that exists only in the database', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
 
         const response = await api().get('/locales/pt');
@@ -208,7 +208,7 @@ describe('GET /locales/:locale', () => {
 
 describe('GET /locales/:locale/messages', () => {
     it('matches the contract and serves the tree a client merges', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
         await createEntry(bearer, 'pt', 'products.list.title', 'Catálogo');
         await createEntry(bearer, 'pt', 'products.list.empty', 'Sem resultados');
@@ -223,7 +223,7 @@ describe('GET /locales/:locale/messages', () => {
     });
 
     it('states the revision the dictionary belongs to', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
         await createEntry(bearer, 'pt', 'cart.title', 'Carrinho');
 
@@ -233,7 +233,7 @@ describe('GET /locales/:locale/messages', () => {
     });
 
     it('answers an empty dictionary for a language with no entries yet', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
 
         const response = await api().get('/locales/pt/messages');
@@ -244,7 +244,7 @@ describe('GET /locales/:locale/messages', () => {
     });
 
     it('is public, like every other locale read', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
 
         const response = await api().get('/locales/pt/messages');
@@ -253,7 +253,7 @@ describe('GET /locales/:locale/messages', () => {
     });
 
     it('404s for an inactive language, exactly as for an unknown one', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
         await api().put('/locales/pt').set('Authorization', bearer).send({ active: false });
 
@@ -268,7 +268,7 @@ describe('GET /locales/:locale/messages', () => {
 
 describe('POST /locales', () => {
     it('matches the contract', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         const response = await api()
             .post('/locales')
@@ -280,7 +280,7 @@ describe('POST /locales', () => {
     });
 
     it('409s on a duplicate tag', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
 
         const response = await api()
@@ -293,7 +293,7 @@ describe('POST /locales', () => {
     });
 
     it('422s on a tag that is not a language tag', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         const response = await api()
             .post('/locales')
@@ -312,7 +312,7 @@ describe('POST /locales', () => {
     it.each(['name', 'nativeName'])(
         '422s on a whitespace-only %s rather than 500',
         async (field) => {
-            const { bearer } = await authenticateAs('admin');
+            const { bearer } = await authenticateAs('owner');
 
             const response = await api()
                 .post('/locales')
@@ -325,7 +325,7 @@ describe('POST /locales', () => {
     );
 
     it('trims the display names it does store', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         const response = await api()
             .post('/locales')
@@ -359,7 +359,7 @@ describe('POST /locales', () => {
 
 describe('PUT /locales/:locale', () => {
     it('matches the contract', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
 
         const response = await api()
@@ -374,7 +374,7 @@ describe('PUT /locales/:locale', () => {
     });
 
     it('404s for a language that does not exist', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         const response = await api()
             .put('/locales/zz')
@@ -388,7 +388,7 @@ describe('PUT /locales/:locale', () => {
     it('422s on a whitespace-only name, the same as the create route', async () => {
         // Asserted on both routes because they parse separately: fixing one and not the other is
         // the shape this defect had in the first place.
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
 
         const response = await api()
@@ -414,7 +414,7 @@ describe('PUT /locales/:locale', () => {
 
 describe('DELETE /locales/:locale', () => {
     it('refuses while the language is still active', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
 
         const response = await api().delete('/locales/pt').set('Authorization', bearer);
@@ -424,7 +424,7 @@ describe('DELETE /locales/:locale', () => {
     });
 
     it('matches the contract once the language is inactive, and takes its entries', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
         await createEntry(bearer, 'pt', 'cart.title', 'Carrinho');
         await api().put('/locales/pt').set('Authorization', bearer).send({ active: false });
@@ -439,7 +439,7 @@ describe('DELETE /locales/:locale', () => {
     });
 
     it('404s for a language that does not exist', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         const response = await api().delete('/locales/zz').set('Authorization', bearer);
 
@@ -456,7 +456,7 @@ describe('DELETE /locales/:locale', () => {
 
 describe('GET /locales/:locale/entries', () => {
     it('matches the contract', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
         await createEntry(bearer, 'pt', 'cart.title', 'Carrinho');
 
@@ -468,7 +468,7 @@ describe('GET /locales/:locale/entries', () => {
     });
 
     it('matches the contract when the language has no entries yet', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
 
         const response = await api().get('/locales/pt/entries').set('Authorization', bearer);
@@ -482,7 +482,7 @@ describe('GET /locales/:locale/entries', () => {
     it.each(['pageSize=500', 'page=0'])(
         'rejects out-of-range pagination like every other search endpoint (%s)',
         async (queryString) => {
-            const { bearer } = await authenticateAs('admin');
+            const { bearer } = await authenticateAs('owner');
             await createLanguage(bearer);
 
             const response = await api()
@@ -513,7 +513,7 @@ describe('GET /locales/:locale/entries', () => {
 
 describe('POST /locales/:locale/entries', () => {
     it('matches the contract', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
 
         const response = await api()
@@ -526,7 +526,7 @@ describe('POST /locales/:locale/entries', () => {
     });
 
     it('409s on a duplicate key', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
         await createEntry(bearer, 'pt', 'cart.title', 'Carrinho');
 
@@ -544,7 +544,7 @@ describe('POST /locales/:locale/entries', () => {
      * silently missing one of the two strings — and which one depends on insertion order.
      */
     it('409s on a key that collides with an existing one', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
         await createEntry(bearer, 'pt', 'products.list.title', 'Catálogo');
 
@@ -558,7 +558,7 @@ describe('POST /locales/:locale/entries', () => {
     });
 
     it('409s in the other direction too', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
         await createEntry(bearer, 'pt', 'products.list', 'Lista');
 
@@ -571,7 +571,7 @@ describe('POST /locales/:locale/entries', () => {
     });
 
     it('422s on an empty key', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
 
         const response = await api()
@@ -584,7 +584,7 @@ describe('POST /locales/:locale/entries', () => {
     });
 
     it('404s for a language that does not exist', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         const response = await api()
             .post('/locales/zz/entries')
@@ -598,7 +598,7 @@ describe('POST /locales/:locale/entries', () => {
 
 describe('PUT and DELETE /locales/:locale/entries/:entryId', () => {
     it('matches the contract when editing a value', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
         const entryId = await createEntry(bearer, 'pt', 'cart.title', 'Carrinho');
 
@@ -613,7 +613,7 @@ describe('PUT and DELETE /locales/:locale/entries/:entryId', () => {
     });
 
     it('matches the contract when removing one key', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
         const entryId = await createEntry(bearer, 'pt', 'cart.title', 'Carrinho');
 
@@ -629,7 +629,7 @@ describe('PUT and DELETE /locales/:locale/entries/:entryId', () => {
     });
 
     it('404s for an entry that does not exist', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
 
         const response = await api()
@@ -642,7 +642,7 @@ describe('PUT and DELETE /locales/:locale/entries/:entryId', () => {
     });
 
     it('422s on a malformed entry id rather than answering 500', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
 
         const response = await api()
@@ -655,7 +655,7 @@ describe('PUT and DELETE /locales/:locale/entries/:entryId', () => {
     });
 
     it('422s on a malformed entry id for the delete route too', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
 
         const response = await api()
@@ -691,7 +691,7 @@ const seedTwoKeys = async (bearer: string) => {
  */
 describe('PUT vs PATCH /locales/:locale/entries', () => {
     it('PUT removes what was not sent', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await seedTwoKeys(bearer);
 
         const response = await api()
@@ -708,7 +708,7 @@ describe('PUT vs PATCH /locales/:locale/entries', () => {
     });
 
     it('PATCH does not', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await seedTwoKeys(bearer);
 
         const response = await api()
@@ -727,7 +727,7 @@ describe('PUT vs PATCH /locales/:locale/entries', () => {
     });
 
     it('reports the revision the import produced, so a client need not re-read the manifest', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
 
         const response = await api()
@@ -739,7 +739,7 @@ describe('PUT vs PATCH /locales/:locale/entries', () => {
     });
 
     it('409s on a batch that collides with itself', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
 
         const response = await api()
@@ -758,7 +758,7 @@ describe('PUT vs PATCH /locales/:locale/entries', () => {
     });
 
     it('422s on a body that is not an entry list', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
 
         const response = await api()
@@ -813,7 +813,7 @@ describe('a locale only the API has', () => {
      * it and never will until a file is deployed, so negotiating it would be a header that lies.
      */
     it('does not start answering in a language that exists only in the database', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
 
         const response = await api().get('/locales').set('Accept-Language', 'pt');
@@ -844,7 +844,7 @@ describe('GET /locales/tenants', () => {
 
 describe('tenants on the write routes', () => {
     it('refuses an entry for a tenant nobody configured, with a 422', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
 
         const response = await api()
@@ -857,7 +857,7 @@ describe('tenants on the write routes', () => {
     });
 
     it('refuses a bulk import for a tenant nobody configured, before writing anything', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
 
         const response = await api()
@@ -872,7 +872,7 @@ describe('tenants on the write routes', () => {
     });
 
     it('keeps the same key apart across two tenants', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
         await createEntry(bearer, 'pt', 'generic.title', 'do frontend', 'demo-fe');
         await createEntry(bearer, 'pt', 'generic.title', 'do backend', 'demo-be');
@@ -889,7 +889,7 @@ describe('tenants on the write routes', () => {
 
 describe('GET /locales/:locale/messages?tenant=', () => {
     it('serves the named frontend tenant and never the backend one', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
         await createEntry(bearer, 'pt', 'cart.title', 'Carrinho', 'demo-fe');
         await createEntry(bearer, 'pt', 'generic.error-internal', 'Falha', 'demo-be');
@@ -909,7 +909,7 @@ describe('GET /locales/:locale/messages?tenant=', () => {
 
 describe('GET & PATCH /locales/translations/:entityType/:id', () => {
     it('answers an empty list matching the spec for an entity with no rows yet', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const product = await createProduct();
 
         const response = await api()
@@ -922,7 +922,7 @@ describe('GET & PATCH /locales/translations/:entityType/:id', () => {
     });
 
     it('upserts a locale and matches the spec', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createLanguage(bearer);
         const product = await createProduct();
 
@@ -942,7 +942,7 @@ describe('GET & PATCH /locales/translations/:entityType/:id', () => {
     });
 
     it('422s an unregistered entityType, matching the spec', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         const response = await api()
             .get('/locales/translations/bogus/000000000000000000000000')
@@ -953,7 +953,7 @@ describe('GET & PATCH /locales/translations/:entityType/:id', () => {
     });
 
     it('422s a null on the fallback locale, matching the spec', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const product = await createProduct();
 
         const response = await api()

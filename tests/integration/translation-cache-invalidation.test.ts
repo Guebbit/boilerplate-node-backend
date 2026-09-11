@@ -62,7 +62,7 @@ describe('a translation write invalidates the cached product it translated', () 
         );
         const product = await createProduct({ title: 'Old title' });
         const id = String(product._id);
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         const first = await api().get(`/products/${id}`);
         expect(first.headers['x-cache']).toBe('MISS');
@@ -87,7 +87,7 @@ describe('a translation write invalidates the cached product it translated', () 
         );
         const product = await createProduct({ title: 'Untouched' });
         const id = String(product._id);
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         await api().get(`/products/${id}`);
 

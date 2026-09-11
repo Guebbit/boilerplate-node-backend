@@ -3,7 +3,7 @@ import supertest from 'supertest';
 import cookieParser from 'cookie-parser';
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
-import { createUser, createAdminUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
+import { createUser, createOwnerUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
 import { userRepository } from '@modules/users';
 
 /**
@@ -21,7 +21,7 @@ setupTestDb();
 
 /** Logs in through the real route and returns the user plus the `jwt` refresh cookie it sets. */
 const signIn = async (role: 'admin' | 'user') => {
-    const user = await (role === 'admin' ? createAdminUser() : createUser());
+    const user = await (role === 'admin' ? createOwnerUser() : createUser());
     const response = await api()
         .post('/account/login')
         .send({ email: user.email, password: PLAIN_PASSWORD });

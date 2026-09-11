@@ -78,7 +78,7 @@ describe('POST /feedback/contact', () => {
 
 describe('GET /feedback', () => {
     it('matches the contract for an admin caller', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createFeedbackRequest();
         const response = await api().get('/feedback').set('Authorization', bearer);
 
@@ -87,7 +87,7 @@ describe('GET /feedback', () => {
     });
 
     it('matches the contract when the list is empty', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const response = await api().get('/feedback').set('Authorization', bearer);
 
         expect(response.body.data.items).toHaveLength(0);
@@ -99,7 +99,7 @@ describe('GET /feedback', () => {
     it.each(['pageSize=500', 'page=0'])(
         'rejects out-of-range pagination like every other search endpoint (%s)',
         async (queryString) => {
-            const { bearer } = await authenticateAs('admin');
+            const { bearer } = await authenticateAs('owner');
             const response = await api()
                 .get(`/feedback?${queryString}`)
                 .set('Authorization', bearer);
@@ -119,7 +119,7 @@ describe('GET /feedback', () => {
  */
 describe('POST /feedback/search', () => {
     it('matches the contract', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createFeedbackRequest();
         const response = await api()
             .post('/feedback/search')
@@ -131,7 +131,7 @@ describe('POST /feedback/search', () => {
     });
 
     it('filters on a body field, which is the whole point of the route', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await createFeedbackRequest();
         const response = await api()
             .post('/feedback/search')
@@ -148,7 +148,7 @@ describe('POST /feedback/search', () => {
     it.each([{ pageSize: 500 }, { page: 0 }])(
         'rejects out-of-range pagination exactly as the query form does (%p)',
         async (body) => {
-            const { bearer } = await authenticateAs('admin');
+            const { bearer } = await authenticateAs('owner');
             const response = await api()
                 .post('/feedback/search')
                 .set('Authorization', bearer)
@@ -163,7 +163,7 @@ describe('POST /feedback/search', () => {
 
 describe('PUT /feedback/{id}', () => {
     it('matches the contract when updating status and notes', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const id = await createFeedbackRequest();
         const response = await api()
             .put(`/feedback/${id}`)
@@ -176,7 +176,7 @@ describe('PUT /feedback/{id}', () => {
     });
 
     it('matches the error contract for a status outside the enum', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const id = await createFeedbackRequest();
         const response = await api()
             .put(`/feedback/${id}`)
@@ -188,7 +188,7 @@ describe('PUT /feedback/{id}', () => {
     });
 
     it('matches the error contract for a request that does not exist', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const response = await api()
             .put(`/feedback/${MISSING_ID}`)
             .set('Authorization', bearer)
@@ -201,7 +201,7 @@ describe('PUT /feedback/{id}', () => {
 
 describe('POST /feedback/contact — honeypot', () => {
     it('writes suspected spam as status "spam", answers 201 either way, and drops the field', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const response = await api()
             .post('/feedback/contact')
             .send({ ...CONTACT_PAYLOAD, website: 'https://spammer.example' });
@@ -218,7 +218,7 @@ describe('POST /feedback/contact — honeypot', () => {
 
 describe('DELETE /feedback/{id}', () => {
     it('matches the contract for an admin caller', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const id = await createFeedbackRequest();
 
         const response = await api().delete(`/feedback/${id}`).set('Authorization', bearer);
@@ -231,7 +231,7 @@ describe('DELETE /feedback/{id}', () => {
     });
 
     it('matches the error contract for a request that does not exist', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const response = await api().delete(`/feedback/${MISSING_ID}`).set('Authorization', bearer);
 
         expect(response.status).toBe(404);
@@ -239,7 +239,7 @@ describe('DELETE /feedback/{id}', () => {
     });
 
     it('answers 404, not 500, for a malformed id', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const response = await api()
             .delete('/feedback/not-an-object-id')
             .set('Authorization', bearer);

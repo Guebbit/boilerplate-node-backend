@@ -65,7 +65,7 @@ describe('GET /delivery/order/{orderId}', () => {
 describe('POST /delivery/advance', () => {
     it('matches the contract and reports the parcels that arrived', async () => {
         await authenticateWithShipment();
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         const response = await api().post('/delivery/advance').set('Authorization', bearer);
 

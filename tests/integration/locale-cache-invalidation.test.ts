@@ -84,7 +84,7 @@ const givenPublishedLanguage = async (bearer: string) => {
 
 describe('an admin write invalidates the cached public dictionary', () => {
     it('serves a second identical read from cache, then re-renders it after an edit', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await givenPublishedLanguage(bearer);
 
         // First read renders from Mongo and stores the response under the `locales` tag.
@@ -118,7 +118,7 @@ describe('an admin write invalidates the cached public dictionary', () => {
         // Both public reads carry the same tag, and a client discovering languages through a stale
         // manifest cannot ask for the one that was just added — the dictionary being current would
         // not help it.
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         await api().get('/locales');
         const cached = await api().get('/locales');
@@ -140,7 +140,7 @@ describe('an admin write invalidates the cached public dictionary', () => {
     it('does not clear the cache when the write was refused', async () => {
         // `invalidateCache` only fires on a 2xx. A failed write that dropped every cached locale
         // response would turn a mistyped request into a cache stampede.
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         await givenPublishedLanguage(bearer);
 
         await api().get('/locales/pt/messages');

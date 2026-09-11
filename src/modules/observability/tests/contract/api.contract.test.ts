@@ -39,7 +39,7 @@ const pollUntilAudited = async (bearer: string, query: string) => {
 
 describe('GET /observability/health', () => {
     it('matches the contract for an admin', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         const response = await api().get('/observability/health').set('Authorization', bearer);
 
@@ -51,7 +51,7 @@ describe('GET /observability/health', () => {
         /* `setupTestDb()` has connected, so this is the one assertion that would fail if the
          * snapshot ever stopped reading a live connection and started reporting a constant —
          * which is what a hard-coded 'ready' would look like to every shape check. */
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         const response = await api().get('/observability/health').set('Authorization', bearer);
 
@@ -68,7 +68,7 @@ describe('GET /observability/health', () => {
          * laptop for a reason that has nothing to do with the contract. What must hold everywhere
          * is that all three speak the same four words, and that `status` is the honest fold of
          * them. `dependency-health.test.ts` pins the mapping itself, with the state controlled. */
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         const response = await api().get('/observability/health').set('Authorization', bearer);
 
@@ -94,7 +94,7 @@ describe('GET /observability/health', () => {
          * which is the most common analytics failure there is, on the endpoint whose stated job is
          * "which part is missing".
          */
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         const response = await api().get('/observability/health').set('Authorization', bearer);
 
@@ -119,7 +119,7 @@ describe('GET /observability/health', () => {
             lastError: 'temporary outage'
         });
 
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const response = await api().get('/observability/health').set('Authorization', bearer);
 
         expect(response).toSatisfyApiSpec();
@@ -134,7 +134,7 @@ describe('GET /observability/health', () => {
 
 describe('GET /observability/metrics/overview', () => {
     it('matches the contract for an admin', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         const response = await api()
             .get('/observability/metrics/overview')
@@ -149,7 +149,7 @@ describe('GET /observability/metrics/overview', () => {
          * row — which is what lets this module survive the deletion of the domains it reports on.
          * The contract requires the keys either way, so their absence would be a 500, not a
          * smaller body. */
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         const response = await api()
             .get('/observability/metrics/overview')
@@ -167,7 +167,7 @@ describe('GET /observability/metrics/overview', () => {
 
 describe('GET /observability/audit', () => {
     it('matches the contract for an empty log', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         const response = await api().get('/observability/audit').set('Authorization', bearer);
 
@@ -176,7 +176,7 @@ describe('GET /observability/audit', () => {
     });
 
     it('matches the contract for a log holding rows, narrowed by outcome', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         /*
          * A REAL failed login rather than a synthetic entry. `account/audit.ts` owns `auth.login`,
          * and `outcome: 'failure'` is what this filter narrows by — a test that drives the
@@ -199,7 +199,7 @@ describe('GET /observability/audit', () => {
     it('refuses a page size the contract does not allow', async () => {
         // `maximum: 100`, answered with a 422 rather than a quietly smaller page — this endpoint
         // pages, so an out-of-range page size is a broken request like anywhere else.
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         const response = await api()
             .get('/observability/audit?pageSize=5000')
@@ -213,7 +213,7 @@ describe('GET /observability/audit', () => {
         /* The one input this endpoint validates itself: a bad date reaching Mongo as `Invalid
          * Date` filters nothing rather than erroring, so the page would look complete and be
          * wrong. */
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         const response = await api()
             .get('/observability/audit?since=yesterday')

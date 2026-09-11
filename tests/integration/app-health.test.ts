@@ -12,7 +12,7 @@
 import type { IncomingMessage } from 'node:http';
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
-import { createAdminUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
+import { createOwnerUser, PLAIN_PASSWORD } from '@modules/users/tests/fixtures';
 
 setupTestDb();
 
@@ -72,7 +72,7 @@ describe('Observability routes', () => {
         // the first chunk lands rather than by holding the connection open.
         // `EventSource` cannot set headers, so the stream authenticates with the session cookie
         // an admin login sets — which is how the frontend opens it (`withCredentials: true`).
-        const admin = await createAdminUser({ email: 'sse-admin@example.com' });
+        const admin = await createOwnerUser({ email: 'sse-admin@example.com' });
         const login = await api()
             .post('/account/login')
             .send({ email: admin.email, password: PLAIN_PASSWORD });

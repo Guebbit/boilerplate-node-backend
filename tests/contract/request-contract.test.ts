@@ -116,7 +116,7 @@ const withRealRole = (payload: Record<string, unknown>) => ({
 
 describe('POST /users (contract-derived)', () => {
     it('accepts a payload the contract declares legal', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const payload = withRealRole(validPayload(CreateUserBody));
 
         const response = await api().post('/users').set('Authorization', bearer).send(payload);
@@ -129,7 +129,7 @@ describe('POST /users (contract-derived)', () => {
     it.each(invalidPayloads(CreateUserBody))(
         'rejects a payload where $field is $violation',
         async ({ payload }) => {
-            const { bearer } = await authenticateAs('admin');
+            const { bearer } = await authenticateAs('owner');
             const response = await api().post('/users').set('Authorization', bearer).send(payload);
 
             expect(response.status).toBe(422);
@@ -153,7 +153,7 @@ describe('POST /products (contract-derived)', () => {
     });
 
     it('accepts a payload the contract declares legal', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const payload = withRealTranslations(validPayload(CreateProductBody));
 
         const response = await api().post('/products').set('Authorization', bearer).send(payload);
@@ -166,7 +166,7 @@ describe('POST /products (contract-derived)', () => {
     it.each(invalidPayloads(CreateProductBody))(
         'rejects a payload where $field is $violation',
         async ({ payload }) => {
-            const { bearer } = await authenticateAs('admin');
+            const { bearer } = await authenticateAs('owner');
             const response = await api()
                 .post('/products')
                 .set('Authorization', bearer)
@@ -181,7 +181,7 @@ describe('POST /products (contract-derived)', () => {
 
 describe('POST /orders (contract-derived)', () => {
     it('accepts a payload the contract declares legal', async () => {
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
         const payload = await withRealOrderReferences(validPayload(CreateOrderBody));
 
         const response = await api().post('/orders').set('Authorization', bearer).send(payload);
@@ -194,7 +194,7 @@ describe('POST /orders (contract-derived)', () => {
     it.each(invalidPayloads(CreateOrderBody))(
         'rejects a payload where $field is $violation',
         async ({ field, payload }) => {
-            const { bearer } = await authenticateAs('admin');
+            const { bearer } = await authenticateAs('owner');
             // Only patch in real references for fields other than the one under test — doing so
             // would overwrite the violation under test.
             const finalPayload =

@@ -839,7 +839,7 @@ describe('admin-assisted recovery', () => {
         const { user, bearer } = await authenticateVerified();
         await enrollTotp(bearer);
         await enrollEmail(bearer);
-        const { bearer: adminBearer } = await authenticateAs('admin');
+        const { bearer: adminBearer } = await authenticateAs('owner');
 
         const recovery = await api()
             .delete(`/users/${user._id.toString()}/2fa`)

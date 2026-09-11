@@ -34,7 +34,7 @@ describe('GET /orders — the filters it now publishes', () => {
      * so the filter is only reachable by someone who can already see it.
      */
     it('narrows by status, and by a fragment of the notes', async () => {
-        const { bearer, user } = await authenticateAs('admin');
+        const { bearer, user } = await authenticateAs('owner');
         const product = await createProduct();
         const paid = await createOrder(user, [toOrderItem(product, 1)]);
         const pending = await createOrder(user, [toOrderItem(product, 1)], {
@@ -59,8 +59,8 @@ describe('GET /orders — the filters it now publishes', () => {
 });
 
 describe('GET /orders', () => {
-    it('matches the contract for an admin caller', async () => {
-        const { bearer, user } = await authenticateAs('admin');
+    it('matches the contract for an unrestricted caller', async () => {
+        const { bearer, user } = await authenticateAs('owner');
         await seedOrderFor(user);
         const response = await api().get('/orders').set('Authorization', bearer);
 
@@ -68,7 +68,7 @@ describe('GET /orders', () => {
         expect(response).toSatisfyApiSpec();
     });
 
-    it('matches the contract for a non-admin caller, scoped to their own orders', async () => {
+    it('matches the contract for a scoped caller, limited to their own orders', async () => {
         const { bearer, user } = await authenticateAs('user');
         await seedOrderFor(user);
         const response = await api().get('/orders').set('Authorization', bearer);
@@ -78,7 +78,7 @@ describe('GET /orders', () => {
     });
 
     it('reports the three order totals rather than a single collapsed total', async () => {
-        const { bearer, user } = await authenticateAs('admin');
+        const { bearer, user } = await authenticateAs('owner');
         await seedOrderFor(user);
         const response = await api().get('/orders').set('Authorization', bearer);
         const [order] = response.body.data.items;
@@ -91,10 +91,10 @@ describe('GET /orders', () => {
 });
 
 describe('GET /orders/{id}', () => {
-    // The admin path uses findById and the non-admin path uses an aggregate — two routes into
+    // The unscoped path uses findById and the scoped path uses an aggregate — two routes into
     // the same transform, so both are asserted against the contract.
-    it('matches the contract on the admin (unscoped) path', async () => {
-        const { bearer, user } = await authenticateAs('admin');
+    it('matches the contract on the unscoped path', async () => {
+        const { bearer, user } = await authenticateAs('owner');
         const order = await seedOrderFor(user);
         const response = await api()
             .get(`/orders/${String(order._id)}`)
@@ -104,7 +104,7 @@ describe('GET /orders/{id}', () => {
         expect(response).toSatisfyApiSpec();
     });
 
-    it('matches the contract on the non-admin (scoped) path', async () => {
+    it('matches the contract on the scoped path', async () => {
         const { bearer, user } = await authenticateAs('user');
         const order = await seedOrderFor(user);
         const response = await api()
@@ -117,12 +117,12 @@ describe('GET /orders/{id}', () => {
 
     /*
      * One case per role: the two roles run different queries, and a malformed id can easily answer
-     * differently between them — admin's `findById` raises a Mongoose `CastError` mapped to 404,
+     * differently between them — the unscoped `findById` raises a Mongoose `CastError` mapped to 404,
      * while the scoped aggregate's own coercion raises a `BSONError`, which the interpreter maps to
      * 422 unless something upstream of it already turned the id away. Both need their own case, or
      * a regression on either path alone has nothing to catch it.
      */
-    it.each([['admin'], ['user']] as const)(
+    it.each([['owner'], ['user']] as const)(
         '404s on a malformed id for a %s caller',
         async (role) => {
             const { bearer } = await authenticateAs(role);
@@ -134,7 +134,7 @@ describe('GET /orders/{id}', () => {
         }
     );
 
-    it.each([['admin'], ['user']] as const)(
+    it.each([['owner'], ['user']] as const)(
         'the invoice route answers the same 404 for a %s caller',
         async (role) => {
             const { bearer } = await authenticateAs(role);
@@ -148,7 +148,7 @@ describe('GET /orders/{id}', () => {
         }
     );
 
-    it("a non-admin cannot download another customer's invoice — absence, not refusal", async () => {
+    it("a scoped caller cannot download another customer's invoice — absence, not refusal", async () => {
         // `getOrderInvoice` scopes through `orderService.callerScope`, the same rule `GET
         // /orders/:id` enforces. The malformed-id case above 404s before any scope is consulted,
         // so it cannot prove this — this is the one request that names a REAL order owned by
@@ -168,14 +168,14 @@ describe('GET /orders/{id}', () => {
         expect(response.status).toBe(404);
     });
 
-    it("an admin CAN download another customer's invoice — the scope narrows, the route isn't broken", async () => {
+    it("an unrestricted caller CAN download another customer's invoice — the scope narrows, the route isn't broken", async () => {
         const { user: owner } = await authenticateAs('user');
         const order = await seedOrderFor(owner);
-        const { bearer: adminBearer } = await authenticateAs('admin');
+        const { bearer: ownerBearer } = await authenticateAs('owner');
 
         const response = await api()
             .get(`/orders/${String(order._id)}/invoice`)
-            .set('Authorization', adminBearer);
+            .set('Authorization', ownerBearer);
 
         expect(response.status).toBe(200);
         expect(response.headers['content-type']).toBe('application/pdf');
@@ -196,10 +196,10 @@ describe('POST /orders/{id}/cancel', () => {
         expect(response).toSatisfyApiSpec();
     });
 
-    it("lets an admin cancel someone else's pending order", async () => {
+    it("lets an unrestricted caller cancel someone else's pending order", async () => {
         const { user: owner } = await authenticateAs('user');
         const order = await seedOrderFor(owner);
-        const { bearer } = await authenticateAs('admin');
+        const { bearer } = await authenticateAs('owner');
 
         const response = await api()
             .post(`/orders/${String(order._id)}/cancel`)
