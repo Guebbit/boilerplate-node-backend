@@ -18,14 +18,14 @@ That loop, repeated per section, is most of this page.
 
 ## The five rules
 
-| Rule                                                 | What it looks like                                                                                           |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| A diagram or table before the prose                  | The reader gets the shape before the explanation, not after it                                               |
-| One idea per line, short lines                       | A sentence that needs "and" twice is two sentences                                                           |
-| A worked example that can be copy-pasted             | A command, a config block, a curl call — something a reader runs rather than imagines                        |
-| A "try it yourself" block, where the subject can run | Not every page has one — a theory page about a trade-off has nothing to run                                  |
-| Tables over paragraphs, always                       | If a paragraph is comparing two or more things, it is a table that hasn't been formatted yet                 |
-| One home per fact, reached by anchor                 | State a fact once; every other page **links** `page.md#anchor` to it rather than restating a shorter version |
+| Rule                                                 | What it looks like                                                                                             |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| A diagram or table before the prose                  | The reader gets the shape before the explanation, not after it                                                 |
+| One idea per line, short lines                       | A sentence that needs "and" twice is two sentences                                                             |
+| A worked example that can be copy-pasted             | A command, a config block, a curl call — something a reader runs rather than imagines                          |
+| A "try it yourself" block, where the subject can run | Not every page has one — a theory page about a trade-off has nothing to run                                    |
+| Tables over paragraphs, always                       | If a paragraph is comparing two or more things, it is a table that hasn't been formatted yet                   |
+| One home per fact, reached by anchor                 | State a fact once; every other page **links** `<page>.md#anchor` to it rather than restating a shorter version |
 
 ## Try it yourself
 
@@ -48,7 +48,7 @@ Same facts, and the reader compares columns instead of re-parsing a sentence to 
 ## One home per fact
 
 The rule that keeps a big site from drifting: when two pages would otherwise say the same thing,
-one of them says it and the other links to `page.md#anchor`. A fact stated twice is a fact that
+one of them says it and the other links to `<page>.md#anchor`. A fact stated twice is a fact that
 goes stale in only one of the two places, silently.
 
 ```mermaid

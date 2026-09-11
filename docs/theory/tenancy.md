@@ -151,6 +151,8 @@ Three collections still carry an explicit column, and each earns it:
 
 Neither is on either public API contract — keeping the column costs nothing outside the backend,
 and removing it would be a two-module refactor with no functional gain.
+[API Keys](../modules/api-keys.md#the-story) already states the tenant-scoped-only design in full;
+this section doesn't restate it.
 
 **One place it stays half-scoped, deliberately not fixed:** the webhooks fan-out
 (`src/modules/webhooks/services/publish.ts`) matches every enabled subscription against an event
