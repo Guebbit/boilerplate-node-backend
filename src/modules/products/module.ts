@@ -50,11 +50,6 @@ export default {
      * `scenarios/check.ts` fails the build if one goes missing.
      */
     scenario: {
-        shop: [
-            'product.softDeleted',
-            'product.inactive',
-            'product.outOfStock',
-            'product.barebones'
-        ]
+        shop: ['product.softDeleted', 'product.inactive', 'product.outOfStock', 'product.barebones']
     }
 } satisfies AppModule;
