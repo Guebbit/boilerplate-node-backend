@@ -17,7 +17,6 @@ import {
     SEED_OWNER_ID,
     SEED_USER_ID,
     SEED_EDITOR_ID,
-    SEED_TRANSLATOR_ID,
     SEED_MODERATOR_ID
 } from '@kernel/seed-accounts';
 import { assignRole, ensureTenant } from './store';
@@ -61,7 +60,7 @@ export const seedPresetRoles = (): Promise<void> =>
  * `root` is the shop's owner AND the installation's operator — two memberships, because they are
  * two jobs. A request acts as one or the other depending on the key it is asking about, which is
  * exactly the behaviour the platform/tenant split exists to produce, demonstrated by the account
- * everybody logs in as. The three staff accounts each hold exactly one of the newer tenant roles,
+ * everybody logs in as. The two staff accounts each hold exactly one of the newer tenant roles,
  * so each can be logged into and tried on its own — the whole point of adding them to experiment.
  */
 export const seedAccessModel = (): Promise<void> =>
@@ -73,7 +72,6 @@ export const seedAccessModel = (): Promise<void> =>
                 assignRole(SEED_OWNER_ID, null, 'platform', 'operator'),
                 assignRole(SEED_USER_ID, String(tenant._id), 'tenant', 'customer'),
                 assignRole(SEED_EDITOR_ID, String(tenant._id), 'tenant', 'editor'),
-                assignRole(SEED_TRANSLATOR_ID, String(tenant._id), 'tenant', 'translator'),
                 assignRole(SEED_MODERATOR_ID, String(tenant._id), 'tenant', 'moderator')
             ])
         )

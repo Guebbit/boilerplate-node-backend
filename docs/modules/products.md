@@ -116,8 +116,9 @@ product and its rows in the same operation; `getAdmin` backs `GET /products/{id}
 read that returns every language at once rather than the caller's resolved one — what the editor's
 form populates its tabs from.
 
-This is a different door from the translator's generic one — see
-[`locales`](./locales.md#the-translator-s-door-and-why-it-s-not-the-only-one): only `/products/{id}`
+This is a different door from the generic one — see
+[`locales`](./locales.md#the-generic-translations-door-and-why-it-s-not-the-only-one): only
+`/products/{id}`
 may also touch price, stock flags and the image.
 
 ### Order line snapshots freeze the resolved words

@@ -80,30 +80,17 @@ roles:
 
     - name: editor
       scope: tenant
-      title: The catalogue editor
+      title: The editor
       description: >-
-          What is for sale, in words, pictures and price, in every registered language at once —
-          `products.manage` is the whole catalogue record, price included, and
-          `translations.manage` is what lets the same write carry every locale's copy alongside
-          it. What neither touches is a different subject entirely: stock (that is `inventory`),
-          a delivery rule, or an order.
+          Everything the shop SAYS and SHOWS, in every registered language: the catalogue record
+          itself (`products.manage`, price included), the dictionary a shopper reads the shop in
+          (`locales.manage` — including registering a language the shop has not spoken before),
+          and the words on a translatable entity such as a product's title and description
+          (`translations.manage`). What none of them touches is a different subject entirely:
+          stock (that is `inventory`), a delivery rule, an order, or an account.
       permissions:
           - products.manage
-          - locales.read
-          - translations.manage
-
-    - name: translator
-      scope: tenant
-      title: The translator
-      description: >-
-          The dictionary a shopper reads the shop in — every screen's copy, in every registered
-          language — plus the words on a translatable entity such as a product: its title and
-          description, in every registered language. May add a language the shop has not spoken
-          before. Touches no product's price or stock, no order, no account: a mistranslation
-          cannot become a mischarge.
-      permissions:
           - locales.manage
-          - translations.read
           - translations.manage
 
     - name: moderator

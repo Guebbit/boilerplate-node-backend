@@ -23,9 +23,6 @@ import {
     SEED_EDITOR_EMAIL,
     SEED_EDITOR_ID,
     SEED_EDITOR_PASSWORD,
-    SEED_TRANSLATOR_EMAIL,
-    SEED_TRANSLATOR_ID,
-    SEED_TRANSLATOR_PASSWORD,
     SEED_MODERATOR_EMAIL,
     SEED_MODERATOR_ID,
     SEED_MODERATOR_PASSWORD
@@ -99,15 +96,6 @@ const namedUsers = [
         role: 'editor',
         verified: true,
         ...userImages.root
-    }),
-    makeUser({
-        id: SEED_TRANSLATOR_ID,
-        username: 'translator',
-        email: SEED_TRANSLATOR_EMAIL,
-        password: SEED_TRANSLATOR_PASSWORD,
-        role: 'translator',
-        verified: true,
-        ...userImages.customer
     }),
     makeUser({
         id: SEED_MODERATOR_ID,

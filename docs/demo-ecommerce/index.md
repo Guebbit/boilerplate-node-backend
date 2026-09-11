@@ -61,17 +61,16 @@ Staff see all 132. That difference is deliberate and it is explained on
 
 Every account below comes with a password you can actually type in:
 
-| Who                | Email                    | Password            | Can do                                |
-| ------------------ | ------------------------ | ------------------- | ------------------------------------- |
-| **A customer**     | `customer@example.com`   | `Demo-User1!`       | shop, buy, track their own orders     |
-| **The owner**      | `root@root.it`           | `Demo-Admin1!`      | everything, plus run the shop         |
-| **The editor**     | `editor@example.com`     | `Demo-Editor1!`     | the catalogue, and nothing else       |
-| **The translator** | `translator@example.com` | `Demo-Translator1!` | the dictionary, and a product's words |
-| **The moderator**  | `moderator@example.com`  | `Demo-Moderator1!`  | accounts, orders, payments            |
+| Who               | Email                   | Password           | Can do                             |
+| ----------------- | ----------------------- | ------------------ | ---------------------------------- |
+| **A customer**    | `customer@example.com`  | `Demo-User1!`      | shop, buy, track their own orders  |
+| **The owner**     | `root@root.it`          | `Demo-Admin1!`     | everything, plus run the shop      |
+| **The editor**    | `editor@example.com`    | `Demo-Editor1!`    | the catalogue and every word in it |
+| **The moderator** | `moderator@example.com` | `Demo-Moderator1!` | accounts, orders, payments         |
 
 The manager, warehouse and support pages are jobs, not logins — the owner account does all three,
 and this section splits them up because it reads better, not because the software forces a
-narrower one. **The last three rows are different on purpose.** They exist to show restriction
+narrower one. **The last two rows are different on purpose.** They exist to show restriction
 actually happening, and an omnipotent account cannot demonstrate a restriction — only a narrower
 one, refused when it reaches past its own job, can. Log into `editor@example.com` and try to open
 `/users`; the 403 is the point of the account existing — `/orders` shows the same restriction a
@@ -79,7 +78,7 @@ different way, coming back 200 and empty rather than refused, since nothing rout
 through a permission check at all. See [the editor's own page](./editor.md#what-this-role-cannot-reach-and-why-each-one-is-a-different-reason)
 for why the two shapes differ.
 
-→ [The editor](./editor.md) · [The translator](./translator.md) · [The moderator](./moderator.md)
+→ [The editor](./editor.md) · [The moderator](./moderator.md)
 
 A further ten customer accounts exist too — `amelia.clarke`, `benjamin.hughes` and so on — with an
 order history spread across them (mostly one small order each, three with a couple more) so the
@@ -96,18 +95,17 @@ pages because this is where you pick an account to log in as.
 
 ### What each role is given
 
-| Role         | Scope    | Permissions, as written in `shared/authorization-roles.yaml`                                                                                                             |
-| ------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `guest`      | tenant   | `products.read`, `locales.read`, `delivery.read`                                                                                                                         |
-| `customer`   | tenant   | `products.read`, `locales.read`, `delivery.read`, `orders.read`, `payments.read`                                                                                         |
-| `manager`    | tenant   | `products.manage`, `orders.manage`, `locales.manage`, `payments.read`, `inventory.read`, `delivery.read`, `feedback.read`, `users.read`, `audit.read`, `webhooks.manage` |
-| `warehouse`  | tenant   | `products.read`, `orders.read`, `inventory.manage`, `delivery.manage`                                                                                                    |
-| `support`    | tenant   | `feedback.manage`, `users.read`, `users.update`, `orders.read`, `payments.read`, `audit.read`                                                                            |
-| `editor`     | tenant   | `products.manage`, `locales.read`, `translations.manage`                                                                                                                 |
-| `translator` | tenant   | `locales.manage`, `translations.read`, `translations.manage`                                                                                                             |
-| `moderator`  | tenant   | `users.manage`, `orders.manage`, `payments.manage`, `audit.read`                                                                                                         |
-| `owner`      | tenant   | `all.manage`                                                                                                                                                             |
-| `operator`   | platform | `platform.observability.manage`                                                                                                                                          |
+| Role        | Scope    | Permissions, as written in `shared/authorization-roles.yaml`                                                                                                             |
+| ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `guest`     | tenant   | `products.read`, `locales.read`, `delivery.read`                                                                                                                         |
+| `customer`  | tenant   | `products.read`, `locales.read`, `delivery.read`, `orders.read`, `payments.read`                                                                                         |
+| `manager`   | tenant   | `products.manage`, `orders.manage`, `locales.manage`, `payments.read`, `inventory.read`, `delivery.read`, `feedback.read`, `users.read`, `audit.read`, `webhooks.manage` |
+| `warehouse` | tenant   | `products.read`, `orders.read`, `inventory.manage`, `delivery.manage`                                                                                                    |
+| `support`   | tenant   | `feedback.manage`, `users.read`, `users.update`, `orders.read`, `payments.read`, `audit.read`                                                                            |
+| `editor`    | tenant   | `products.manage`, `locales.manage`, `translations.manage`                                                                                                               |
+| `moderator` | tenant   | `users.manage`, `orders.manage`, `payments.manage`, `audit.read`                                                                                                         |
+| `owner`     | tenant   | `all.manage`                                                                                                                                                             |
+| `operator`  | platform | `platform.observability.manage`                                                                                                                                          |
 
 `guest` is not an account anybody logs into — it is what an unauthenticated request
 resolves to, and the floor every signed-in role is raised to. Signing in can only ever
@@ -119,18 +117,17 @@ The same roles after the evaluator has had them: `manage` expanded into its modu
 keys, and the baseline folded in. This is what a route guard and a listing actually
 answer.
 
-| Role         | products | orders  | payments | inventory | delivery | feedback | locales | users   | account | audit-logs | webhooks | api-keys | observability |
-| ------------ | -------- | ------- | -------- | --------- | -------- | -------- | ------- | ------- | ------- | ---------- | -------- | -------- | ------------- |
-| `guest`      | r        | —       | —        | —         | r        | —        | r       | —       | —       | —          | —        | —        | —             |
-| `customer`   | r        | r       | r        | —         | r        | —        | r       | —       | —       | —          | —        | —        | —             |
-| `manager`    | **all**  | **all** | r        | r         | r        | r        | **all** | r       | —       | r          | **all**  | —        | —             |
-| `warehouse`  | r        | r       | —        | **all**   | **all**  | —        | r       | —       | —       | —          | —        | —        | —             |
-| `support`    | r        | r       | r        | —         | r        | **all**  | r       | ru      | —       | r          | —        | —        | —             |
-| `editor`     | **all**  | —       | —        | —         | r        | —        | **all** | —       | —       | —          | —        | —        | —             |
-| `translator` | r        | —       | —        | —         | r        | —        | **all** | —       | —       | —          | —        | —        | —             |
-| `moderator`  | r        | **all** | **all**  | —         | r        | —        | r       | **all** | —       | r          | —        | —        | —             |
-| `owner`      | **all**  | **all** | **all**  | **all**   | **all**  | **all**  | **all** | **all** | d       | r          | **all**  | **all**  | —             |
-| `operator`   | —        | —       | —        | —         | —        | —        | —       | —       | —       | —          | —        | —        | **all**       |
+| Role        | products | orders  | payments | inventory | delivery | feedback | locales | users   | account | audit-logs | webhooks | api-keys | observability |
+| ----------- | -------- | ------- | -------- | --------- | -------- | -------- | ------- | ------- | ------- | ---------- | -------- | -------- | ------------- |
+| `guest`     | r        | —       | —        | —         | r        | —        | r       | —       | —       | —          | —        | —        | —             |
+| `customer`  | r        | r       | r        | —         | r        | —        | r       | —       | —       | —          | —        | —        | —             |
+| `manager`   | **all**  | **all** | r        | r         | r        | r        | **all** | r       | —       | r          | **all**  | —        | —             |
+| `warehouse` | r        | r       | —        | **all**   | **all**  | —        | r       | —       | —       | —          | —        | —        | —             |
+| `support`   | r        | r       | r        | —         | r        | **all**  | r       | ru      | —       | r          | —        | —        | —             |
+| `editor`    | **all**  | —       | —        | —         | r        | —        | **all** | —       | —       | —          | —        | —        | —             |
+| `moderator` | r        | **all** | **all**  | —         | r        | —        | r       | **all** | —       | r          | —        | —        | —             |
+| `owner`     | **all**  | **all** | **all**  | **all**   | **all**  | **all**  | **all** | **all** | d       | r          | **all**  | **all**  | —             |
+| `operator`  | —        | —       | —        | —         | —        | —        | —       | —       | —       | —          | —        | —        | **all**       |
 
 **all** — every key that module declares · `r` read · `c` create · `u` update · `d` delete · — nothing
 
@@ -160,16 +157,16 @@ declined" path can be shown on demand.
 
 ## Which page do you want
 
-| You are…                                              | Read                              |
-| ----------------------------------------------------- | --------------------------------- |
-| Wondering what a customer experiences                 | [The customer](./shopper.md)      |
-| Running the shop — products, prices, orders           | [The shop manager](./manager.md)  |
-| Looking after stock and getting parcels out           | [The warehouse](./warehouse.md)   |
-| Answering emails, resets, complaints                  | [The support desk](./support.md)  |
-| Writing and photographing products, not prices        | [The editor](./editor.md)         |
-| Translating the shop's screens, and a product's words | [The translator](./translator.md) |
-| Handling accounts, disputed orders and refunds        | [The moderator](./moderator.md)   |
-| A developer who took a wrong turn                     | [Modules](../modules/)            |
+| You are…                                              | Read                             |
+| ----------------------------------------------------- | -------------------------------- |
+| Wondering what a customer experiences                 | [The customer](./shopper.md)     |
+| Running the shop — products, prices, orders           | [The shop manager](./manager.md) |
+| Looking after stock and getting parcels out           | [The warehouse](./warehouse.md)  |
+| Answering emails, resets, complaints                  | [The support desk](./support.md) |
+| Writing and photographing products, and pricing them  | [The editor](./editor.md)        |
+| Translating the shop's screens, and a product's words | [The editor](./editor.md)        |
+| Handling accounts, disputed orders and refunds        | [The moderator](./moderator.md)  |
+| A developer who took a wrong turn                     | [Modules](../modules/)           |
 
 ## Opening it yourself
 

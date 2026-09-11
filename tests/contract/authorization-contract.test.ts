@@ -105,7 +105,6 @@ const NON_OWNER_TENANT_ROLES = [
     'warehouse',
     'support',
     'editor',
-    'translator',
     'moderator'
 ] as const;
 

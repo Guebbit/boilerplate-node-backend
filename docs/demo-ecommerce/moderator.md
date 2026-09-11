@@ -56,7 +56,7 @@ exercises that edge; it is named here rather than left for someone to discover b
 
 ::: tip What this role cannot touch
 No `products.*` — a moderator cannot change what a thing costs or looks like; that is
-[the editor's](./editor.md) job. No `locales.*` — that is [the translator's](./translator.md). No
+[the editor's](./editor.md) job. No `locales.*` — also [the editor's](./editor.md). No
 `inventory.*` — a moderator reads an order, never moves stock.
 :::
 

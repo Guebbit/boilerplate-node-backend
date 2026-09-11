@@ -9,12 +9,7 @@
  */
 
 import { Types } from 'mongoose';
-import {
-    SEED_USER_ID,
-    SEED_EDITOR_ID,
-    SEED_TRANSLATOR_ID,
-    SEED_MODERATOR_ID
-} from '@kernel/seed-accounts';
+import { SEED_USER_ID, SEED_EDITOR_ID, SEED_MODERATOR_ID } from '@kernel/seed-accounts';
 import { SEED_CUSTOMER_IDS } from './users';
 import { SEED_PRODUCT_IDS } from './products';
 import { orderFixtures } from './orders';
@@ -54,9 +49,9 @@ export const auditLogFixtures: (Partial<AuditLogDocument> & { _id: Types.ObjectI
     },
     {
         _id: new Types.ObjectId('65df2a2b3c4d5e6f7a8b9c03'),
-        actor_user_id: SEED_TRANSLATOR_ID,
+        actor_user_id: SEED_EDITOR_ID,
         actor_role: 'user',
-        actor_role_name: 'translator',
+        actor_role_name: 'editor',
         action: 'admin.locale_entry.updated',
         outcome: 'success',
         target_type: 'localeEntry',

@@ -7536,21 +7536,6 @@
                 "active": true,
                 "analyticsConsent": false,
                 "createdAt": "2024-02-28T11:34:03.000Z",
-                "email": "translator@example.com",
-                "id": "65df1a2b3c4d5e6f7a8b9c02",
-                "imageUrl": "/images/seed/3869a7783f7c5177cd2ce90ee3cca59d.jpg",
-                "locale": "en",
-                "role": "translator",
-                "termsAccepted": true,
-                "thumbnailUrl": "/images/seed/thumbs/v1/5c8745f639573d005d8ec99a9dce2ed9.webp",
-                "updatedAt": "2024-02-28T11:34:03.000Z",
-                "username": "translator",
-                "verified": true
-            },
-            {
-                "active": true,
-                "analyticsConsent": false,
-                "createdAt": "2024-02-28T11:34:03.000Z",
                 "email": "moderator@example.com",
                 "id": "65df1a2b3c4d5e6f7a8b9c03",
                 "imageUrl": "/images/seed/56c137af3f833aec2543052cc75720d0.jpg",
@@ -7753,10 +7738,6 @@
         "owner": {
             "email": "root@root.it",
             "password": "Demo-Admin1!"
-        },
-        "translator": {
-            "email": "translator@example.com",
-            "password": "Demo-Translator1!"
         },
         "user": {
             "email": "customer@example.com",

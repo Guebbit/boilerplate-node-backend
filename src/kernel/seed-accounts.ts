@@ -18,9 +18,6 @@ export const SEED_USER_ID = '65de646a44f861fd83c13f13';
 /** The demo editor's id — same format as {@link SEED_OWNER_ID}. */
 export const SEED_EDITOR_ID = '65df1a2b3c4d5e6f7a8b9c01';
 
-/** The demo translator's id — same format as {@link SEED_OWNER_ID}. */
-export const SEED_TRANSLATOR_ID = '65df1a2b3c4d5e6f7a8b9c02';
-
 /** The demo moderator's id — same format as {@link SEED_OWNER_ID}. */
 export const SEED_MODERATOR_ID = '65df1a2b3c4d5e6f7a8b9c03';
 
@@ -51,13 +48,6 @@ export const SEED_EDITOR_EMAIL = 'editor@example.com';
 /** The demo editor's login password — PLAINTEXT; same reasoning as {@link SEED_OWNER_PASSWORD}. */
 export const SEED_EDITOR_PASSWORD = process.env.NODE_SEED_EDITOR_PASSWORD ?? 'Demo-Editor1!';
 
-/** The demo translator's login email. */
-export const SEED_TRANSLATOR_EMAIL = 'translator@example.com';
-
-/** The demo translator's login password — PLAINTEXT; same reasoning as {@link SEED_OWNER_PASSWORD}. */
-export const SEED_TRANSLATOR_PASSWORD =
-    process.env.NODE_SEED_TRANSLATOR_PASSWORD ?? 'Demo-Translator1!';
-
 /** The demo moderator's login email. */
 export const SEED_MODERATOR_EMAIL = 'moderator@example.com';
 
@@ -70,6 +60,5 @@ export const seedCredentials = {
     owner: { email: SEED_OWNER_EMAIL, password: SEED_OWNER_PASSWORD },
     user: { email: SEED_USER_EMAIL, password: SEED_USER_PASSWORD },
     editor: { email: SEED_EDITOR_EMAIL, password: SEED_EDITOR_PASSWORD },
-    translator: { email: SEED_TRANSLATOR_EMAIL, password: SEED_TRANSLATOR_PASSWORD },
     moderator: { email: SEED_MODERATOR_EMAIL, password: SEED_MODERATOR_PASSWORD }
 } as const;

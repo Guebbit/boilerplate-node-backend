@@ -57,11 +57,11 @@ export const asWarehouse = (id = 'test-warehouse'): AuthContext => asRole('wareh
 /** Handles messages and accounts. May update an account, never erase one. */
 export const asSupport = (id = 'test-support'): AuthContext => asRole('support', id);
 
-/** Manages the catalogue in words and pictures. Cannot touch stock, an order, or a person. */
+/**
+ * Everything the shop says and shows, in every registered language: the catalogue record, the
+ * dictionary, and the words on a translatable entity. Cannot touch stock, an order, or a person.
+ */
 export const asEditor = (id = 'test-editor'): AuthContext => asRole('editor', id);
-
-/** Edits the dictionary in every registered language. Cannot touch anything that costs money. */
-export const asTranslator = (id = 'test-translator'): AuthContext => asRole('translator', id);
 
 /** Accounts, orders and payments, plus the audit trail those three write to. Cannot set a price. */
 export const asModerator = (id = 'test-moderator'): AuthContext => asRole('moderator', id);

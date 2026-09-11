@@ -13,7 +13,6 @@ import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAsRole } from '@tests/http';
 import { createProduct } from '@modules/products/tests/fixtures';
-import { productRepository } from '@modules/products';
 import { localeRepository } from '@modules/locales/repository';
 import { makeLocale } from '@modules/locales/fixtures';
 import { localeService } from '@modules/locales/services';
@@ -85,8 +84,10 @@ describe('PATCH /products/{id}', () => {
         expect(response).toSatisfyApiSpec();
     });
 
-    // The editor's door may set a price; the translator's door may not — the founding argument
-    // the multilingual write surface was built on, exercised over real HTTP.
+    // The write route stacks `products.update` AND `translations.manage`. No preset role holds one
+    // without the other any more, so the "one key alone refuses" half of this cannot be exercised
+    // over HTTP today — `shared/authorization-conformance.yaml` asserts it at the ability layer
+    // instead ("the dictionary keys do not update a price, even together").
     it('lets the editor change a price', async () => {
         const { bearer } = await authenticateAsRole('editor');
         const product = await createProduct({ title: 'Bed', price: 10 });
@@ -98,21 +99,6 @@ describe('PATCH /products/{id}', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.price).toBe(999);
-    });
-
-    // A translator holds `translations.manage` but not `products.update` — the route stacks both
-    // keys, so one alone must refuse rather than silently degrade to "translations only".
-    it('refuses a translator, who holds translations.manage but not products.update', async () => {
-        const { bearer } = await authenticateAsRole('translator');
-        const product = await createProduct({ title: 'Bed', price: 10 });
-
-        const response = await api()
-            .patch(`/products/${String(product._id)}`)
-            .set('Authorization', bearer)
-            .send({ price: 999 });
-
-        expect(response.status).toBe(403);
-        expect(await productRepository.findById(String(product._id))).toMatchObject({ price: 10 });
     });
 });
 

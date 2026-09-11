@@ -361,64 +361,94 @@ cases:
       expect: deny
 
     # =============================================================================================
-    # The catalogue editor. Manages products in words and pictures, and reads the dictionary they
-    # are written against — nothing about stock, an order, or a person.
+    # The editor. Everything the shop says and shows, in every registered language: the catalogue
+    # record, the dictionary, and the words on a translatable entity — nothing about stock, an
+    # order, or a person.
     # =============================================================================================
 
     - name: an editor may add a product
-      caller: { id: usr_7, scope: tenant, tenantId: shop_1, permissions: [products.manage, locales.read] }
+      caller:
+          {
+              id: usr_7,
+              scope: tenant,
+              tenantId: shop_1,
+              permissions: [products.manage, locales.manage, translations.manage]
+          }
       action: create
       subject: Product
       resource: { tenantId: shop_1 }
       expect: allow
 
     - name: an editor sees a draft the storefront does not
-      caller: { id: usr_7, scope: tenant, tenantId: shop_1, permissions: [products.manage, locales.read] }
+      caller:
+          {
+              id: usr_7,
+              scope: tenant,
+              tenantId: shop_1,
+              permissions: [products.manage, locales.manage, translations.manage]
+          }
       action: read
       subject: Product
       resource: { tenantId: shop_1, active: false }
       expect: allow
 
     - name: an editor may not read an order
-      caller: { id: usr_7, scope: tenant, tenantId: shop_1, permissions: [products.manage, locales.read] }
+      caller:
+          {
+              id: usr_7,
+              scope: tenant,
+              tenantId: shop_1,
+              permissions: [products.manage, locales.manage, translations.manage]
+          }
       action: read
       subject: Order
       resource: { tenantId: shop_1, userId: usr_1 }
       expect: deny
 
     - name: an editor may not read an account
-      caller: { id: usr_7, scope: tenant, tenantId: shop_1, permissions: [products.manage, locales.read] }
+      caller:
+          {
+              id: usr_7,
+              scope: tenant,
+              tenantId: shop_1,
+              permissions: [products.manage, locales.manage, translations.manage]
+          }
       action: read
       subject: User
       resource: { tenantId: shop_1 }
       expect: deny
 
     # =============================================================================================
-    # The translator. The dictionary, in every registered language — nothing that costs money.
+    # The dictionary keys ON THEIR OWN — `locales.*` and `translations.*` without `products.*`.
+    #
+    # No shipped role holds exactly this set: `translator` was folded into `editor`, which also
+    # carries `products.manage`. The guarantees below are about the KEYS rather than about anybody
+    # who holds them, so they are what a deployment cutting a words-only role gets back, and they
+    # are the reason such a role remains expressible at all.
     # =============================================================================================
 
-    - name: a translator may register a language
+    - name: locales.manage registers a language
       caller: { id: usr_8, scope: tenant, tenantId: shop_1, permissions: [locales.manage] }
       action: create
       subject: Locale
       resource: { tenantId: shop_1 }
       expect: allow
 
-    - name: a translator may read a draft language nobody has published yet
+    - name: locales.manage reads a draft language nobody has published yet
       caller: { id: usr_8, scope: tenant, tenantId: shop_1, permissions: [locales.manage] }
       action: read
       subject: Locale
       resource: { tenantId: shop_1, active: false }
       expect: allow
 
-    - name: a translator may not add a product
+    - name: locales.manage does not add a product
       caller: { id: usr_8, scope: tenant, tenantId: shop_1, permissions: [locales.manage] }
       action: create
       subject: Product
       resource: { tenantId: shop_1 }
       expect: deny
 
-    - name: a translator may not update a price, even holding the translations key
+    - name: the dictionary keys do not update a price, even together
       caller:
           {
               id: usr_8,
@@ -431,7 +461,7 @@ cases:
       resource: { tenantId: shop_1, active: true }
       expect: deny
 
-    - name: a translator may read a product's translations
+    - name: translations.read reads a product's translations
       caller: { id: usr_8, scope: tenant, tenantId: shop_1, permissions: [translations.read] }
       action: read
       subject: Translation

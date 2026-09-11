@@ -82,7 +82,8 @@ every response still resolves its copy from the files.
 ## The translations collection
 
 A third axis, unrelated to the two tiers above: not the shop's own UI copy, but content an editor
-or translator writes — a product's `title`, its `description`. This module owns that collection
+or anyone holding `translations.manage` writes — a product's `title`, its `description`. This
+module owns that collection
 too, though nothing about it is a tier — see
 [Internationalisation](../tools/i18n.md#tier-3-user-authored-content) for how it composes with tier
 1's fallback locale and tier 2's `locales` collection.
@@ -108,7 +109,7 @@ applies it, and is also the one place that updates an entity's derived index col
 `title`/`description`, kept for sort and search only — see [`products`](./products.md)), so that
 write can never vary by caller.
 
-### The translator's door, and why it's not the only one
+### The generic translations door, and why it's not the only one
 
 `GET`/`PATCH /locales/translations/{entityType}/{id}` is generic across whatever `translatables`
 declares — words only, any registered entity, and it has no way to touch anything else about that
@@ -118,14 +119,16 @@ writes the SAME rows but alongside price, stock flags and the image, in one requ
 
 Both doors stay, on purpose:
 
-| door                                      | who        | may change a price | generic across entities |
-| ----------------------------------------- | ---------- | ------------------ | ----------------------- |
-| `/products/{id}`                          | editor     | **yes**            | no — products only      |
-| `/locales/translations/{entityType}/{id}` | translator | **no**             | yes                     |
+| door                                      | who                                                   | may change a price | generic across entities |
+| ----------------------------------------- | ----------------------------------------------------- | ------------------ | ----------------------- |
+| `/products/{id}`                          | holds `products.update` **and** `translations.manage` | **yes**            | no — products only      |
+| `/locales/translations/{entityType}/{id}` | any holder of `translations.manage`                   | **no**             | yes                     |
 
-Collapsing them would mean handing the translator `products.manage` just so a form can save a title
-alongside a price — the coupling `Translation` was carved out as its own CASL subject specifically
-to avoid: a mistranslation can never become a mischanged price. The generic door also has to
+Collapsing them would mean handing anyone who may write a word `products.manage` just so a form can
+save a title alongside a price — the coupling `Translation` was carved out as its own CASL subject
+specifically to avoid. The shipped `editor` role happens to hold both keys, so it reaches both
+doors; that is a fact about that role, not about the doors, and a deployment that cuts a words-only
+role gets the separation back untouched. The generic door also has to
 outlive `product`: the next `translatables` entry — a category description, a CMS page, an email
 template — gets no product-shaped write surface of its own.
 
