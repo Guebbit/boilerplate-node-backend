@@ -107,7 +107,7 @@ MongoMemoryServer.create()
             .then(() => import('@infrastructure/runtime/database'))
             .then(({ connection }) => waitForDatabase(() => connection.readyState))
             .then(() => import('../../src/app/demo'))
-            .then(({ runDemoSeed }) => runDemoSeed(false))
+            .then(({ restoreScenario }) => restoreScenario(false))
             .then(() => {
                 console.log(
                     `[demo] API listening on :${process.env.NODE_PORT ?? '3000'} — in-memory Mongo, seeded, cache/queue disabled.`

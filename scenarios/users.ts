@@ -60,8 +60,12 @@ export const SEED_CUSTOMER_IDS = {
     isla: demoCustomerId(9)
 } as const;
 
-/** The five test-critical accounts — one per role a person actually logs in as. */
-const namedUsers = [
+/**
+ * The five test-critical accounts — one per role a person actually logs in as. Exported so the
+ * `blank` scenario ({@link seedNamedUsersCollection}) can seed exactly these and none of the
+ * filler customer base below — `blank` has no shop for a customer to shop in.
+ */
+export const namedUsers = [
     makeUser({
         id: SEED_OWNER_ID,
         username: 'root',
@@ -158,6 +162,13 @@ export const userFixtures = [...namedUsers, ...customerUsers];
 /** Seed this collection. Declared in `./index`; called by `scenarios/apply.ts`. */
 export const seedUsersCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(userFixtures.map((user) => upsertById(userRepository, user)));
+
+/**
+ * Seed only the five named accounts — `blank`'s contribution to `users`. Declared in `./blank`;
+ * called by `scenarios/index.ts`'s `seedBlankScenario`.
+ */
+export const seedNamedUsersCollection = (): Promise<SeedOutcome[]> =>
+    Promise.all(namedUsers.map((user) => upsertById(userRepository, user)));
 
 /**
  * Read the seeded accounts back as the API serves them — see `./products`. No password
