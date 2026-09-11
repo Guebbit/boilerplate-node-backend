@@ -475,8 +475,16 @@ components:
                 out what it would be refused from the same rules the server enforces, rather than
                 from a hand-maintained duplicate that drifts — the drift is silent until somebody
                 is shown a button that answers 403.
-            required: [tenant, platform, version]
+            required: [tenant, platform, version, subjects]
             properties:
+                subjects:
+                    type: array
+                    items: { type: string }
+                    description: |
+                        Every CASL subject a declared key names, deduplicated and sorted — the
+                        `Order`/`Product`/`ApiKey`/... a rule's second element may be. Published so
+                        a client's own `meta.can` rules are typed against the real set rather than
+                        an unchecked string a typo can silently fail closed on.
                 tenantId:
                     type: string
                     description: |

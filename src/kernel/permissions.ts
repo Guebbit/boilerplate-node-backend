@@ -107,6 +107,16 @@ if (
 /** Every declared key, in the order the shared file lists them. */
 export const PERMISSION_KEYS: readonly PermissionKey[] = keysDocument.keys;
 
+/**
+ * Every CASL subject a declared key names, deduplicated and sorted — published on
+ * `GET /account/abilities` so a client's `meta.can` rules can be typed against the real set
+ * instead of an unchecked string. Never includes the wildcard subject: `all.manage` is not a key
+ * a route would name in `meta.can`, only something a role may hold.
+ */
+export const PERMISSION_SUBJECTS: readonly string[] = [
+    ...new Set(PERMISSION_KEYS.map((entry) => entry.subject))
+].toSorted();
+
 /** The preset roles a deployment starts with, and may edit afterwards. */
 export const PRESET_ROLES: readonly PresetRole[] = rolesDocument.roles;
 

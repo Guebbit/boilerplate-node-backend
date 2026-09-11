@@ -14,7 +14,7 @@ import { api, authenticateAs } from '@tests/http';
 import { unpackRules } from '@casl/ability/extra';
 import { createMongoAbility, subject, type MongoAbility } from '@casl/ability';
 import { setupTestDb } from '@tests/setup-test-db';
-import { PERMISSION_KEYS } from '@kernel/permissions';
+import { PERMISSION_KEYS, PERMISSION_SUBJECTS } from '@kernel/permissions';
 
 setupTestDb();
 
@@ -140,5 +140,14 @@ describe('GET /account/abilities', () => {
         const response = await api().get('/account/abilities').expect(200);
 
         expect(response.body.data.version).toBe(PERMISSION_KEYS.length);
+    });
+
+    it('publishes the declared subject set, for every caller alike', async () => {
+        // Not derived from the caller's own rules: a client types its `meta.can` rules against
+        // every subject a key COULD name, not just the ones this particular caller holds.
+        const response = await api().get('/account/abilities').expect(200);
+
+        expect(response.body.data.subjects).toEqual(PERMISSION_SUBJECTS);
+        expect(response.body.data.subjects).toEqual(expect.arrayContaining(['Product', 'Order']));
     });
 });

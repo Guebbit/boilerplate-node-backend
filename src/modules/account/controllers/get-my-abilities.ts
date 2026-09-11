@@ -18,7 +18,12 @@ import type { Request, Response } from 'express';
 import { packRules } from '@casl/ability/extra';
 import { successResponse } from '@infrastructure/http/response';
 import { buildAbility } from '@kernel/ability';
-import { anonymousCaller, callerInScope, PERMISSION_KEYS } from '@kernel/permissions';
+import {
+    anonymousCaller,
+    callerInScope,
+    PERMISSION_KEYS,
+    PERMISSION_SUBJECTS
+} from '@kernel/permissions';
 import type { AuthContext } from '@types';
 
 /**
@@ -67,6 +72,7 @@ export const getMyAbilities = (request: Request, response: Response) => {
         ...(tenant.tenantId ? { tenantId: tenant.tenantId } : {}),
         tenant: rulesFor(tenant),
         platform: platform ? rulesFor(platform) : [],
-        version: modelVersion
+        version: modelVersion,
+        subjects: PERMISSION_SUBJECTS
     });
 };
