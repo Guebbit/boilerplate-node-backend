@@ -11,7 +11,7 @@
  */
 
 import { Types } from 'mongoose';
-import type { Model, Document, QueryFilter, SaveOptions } from 'mongoose';
+import type { Model, Document, QueryFilter } from 'mongoose';
 
 /**
  * What `.lean()` actually hands back: `TDocument`'s own fields, none of `Document`'s instance
@@ -199,14 +199,8 @@ export interface Repository<TDocument extends Document> {
     ) => Promise<Lean<TDocument>[]>;
     /** Count the documents matching a filter. */
     count: (where?: QueryFilter<TDocument>) => Promise<number>;
-    /**
-     * Insert a new document.
-     *
-     * `options` reaches the underlying `save()`, and exists for one caller: seeding passes
-     * `{ timestamps: false }` so a factory's pinned `createdAt` survives instead of being
-     * overwritten with the moment the seeder ran. See `./factories`.
-     */
-    create: (data: Partial<TDocument>, options?: SaveOptions) => Promise<TDocument>;
+    /** Insert a new document. */
+    create: (data: Partial<TDocument>) => Promise<TDocument>;
     /** Persist in-memory changes to an already-fetched document. */
     save: (document: TDocument) => Promise<TDocument>;
     /**
@@ -289,15 +283,8 @@ export function createRepository<TDocument extends Document>(
     const count = (where: QueryFilter<TDocument> = {}): Promise<number> =>
         mongooseModel.countDocuments(where);
 
-    /**
-     * Insert a new document.
-     *
-     * The branch matters: `Model.create(doc, options)` is ambiguous — Mongoose reads a trailing
-     * plain object as a SECOND document to insert — so passing options goes through
-     * `new Model(...).save(options)` instead.
-     */
-    const create = (data: Partial<TDocument>, options?: SaveOptions): Promise<TDocument> =>
-        options === undefined ? mongooseModel.create(data) : new mongooseModel(data).save(options);
+    /** Insert a new document. */
+    const create = (data: Partial<TDocument>): Promise<TDocument> => mongooseModel.create(data);
 
     /** Persist in-memory changes to an already-fetched document. */
     const save = (document: TDocument): Promise<TDocument> => document.save();

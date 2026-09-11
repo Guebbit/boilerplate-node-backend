@@ -16,7 +16,7 @@ it('creates when no document carries the pinned id', async () => {
     const repository = { findById: jest.fn().mockResolvedValue(null), create };
 
     await expect(upsertById(repository, FIXTURE)).resolves.toBe('created');
-    expect(create).toHaveBeenCalledWith(FIXTURE, expect.anything());
+    expect(create).toHaveBeenCalledWith(FIXTURE);
 });
 
 it('skips when the id already exists — a second boot is a no-op, not a rewrite', async () => {

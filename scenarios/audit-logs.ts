@@ -4,8 +4,8 @@
  * `GET /observability/audit` can both show happening: a checkout, a catalogue edit, a dictionary
  * edit, a ban, a refund, each by the staff account whose role actually holds the key for it.
  *
- * Deliberately absent from `scenarios/index.ts`'s export — see `seedAuditLogsCollection`
- * below for why a TTL-backed collection cannot join the byte-stable dataset the other modules do.
+ * TTL-backed on `timestamp` (`NODE_AUDIT_RETENTION_DAYS`), so a seeded row is reaped once it ages
+ * past the window — which is why every fixture below dates itself relative to now.
  */
 
 import { Types } from 'mongoose';
@@ -14,7 +14,7 @@ import { SEED_CUSTOMER_IDS } from './users';
 import { SEED_PRODUCT_IDS } from './products';
 import { orderFixtures } from './orders';
 import { auditLogModel, type AuditLogDocument } from '@modules/audit-logs/model';
-import type { SeedOutcome } from '@infrastructure/persistence/seed';
+import { exportCollection, type SeedOutcome } from '@infrastructure/persistence/seed';
 
 /** `now - days`, so every row reads as recent however long ago the demo was last seeded. */
 const daysAgo = (days: number): Date => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
@@ -106,15 +106,12 @@ export const seedAuditLogsCollection = (): Promise<SeedOutcome[]> =>
     );
 
 /**
- * No export, on purpose — TWO reasons, either one enough on its own:
+ * Read the seeded trail back as the API serves it — see `./products`.
  *
- *   - the TTL index reaps rows past `NODE_AUDIT_RETENTION_DAYS`, so a byte pinned today is a row
- *     `check:scenario-build` would find missing after the window passes;
- *   - `timestamp` is deliberately `now`-relative (`daysAgo`, above) so the history always reads as
- *     recent, and a relative value can never be the fixed byte a committed export needs.
- *
- * The trail stays fully seeded and fully live either way — `demo-data.json` is a published
- * snapshot for the frontend's mocks, and this collection has no mock to serve; the frontend reads
- * `GET /audit` from the running API, same as every other admin screen that shows it.
+ * `timestamp` is `now`-relative (`daysAgo`, above), so these rows say "recently" only for the run
+ * that built the file. That is fine for an artefact rebuilt on demand and read by a developer, and
+ * it is why a row's date here is never worth asserting on.
  */
-export const exportSeededAuditLogs = (): Promise<Record<string, unknown[]>> => Promise.resolve({});
+export const exportSeededAuditLogs = async (): Promise<Record<string, unknown[]>> => ({
+    auditLogs: await exportCollection(auditLogModel, { _id: 1 })
+});

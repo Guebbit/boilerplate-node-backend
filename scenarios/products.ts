@@ -1,8 +1,8 @@
 /**
  * @module
- * The catalogue's slice of the demo dataset. `scenarios/build/export-dataset.ts` seeds these rows
- * and publishes what the API actually serves as `db/demo/demo-data.json`, so the paired frontend
- * gets the data without sharing source. A field a record omits falls to
+ * The catalogue's slice of the demo dataset. `scenarios/apply.ts` seeds these rows into a live
+ * database; `scenarios/build/export-dataset.ts` seeds them into a throwaway one and writes what the
+ * API answers to `scenarios/dataset.json`. A field a record omits falls to
  * `@modules/products/model`'s `default:` — see `@modules/products/factories`.
  *
  * Six named rows carry the branch coverage the storefront and repositories actually exercise
@@ -36,29 +36,7 @@ import {
     writeTranslations,
     type TranslationWritePlan
 } from '@infrastructure/i18n';
-import { translationModel } from '@modules/locales/model';
-import { createHash } from 'node:crypto';
 import type { ProductTranslationFields, UpsertTranslationsRequest } from '@types';
-
-/**
- * Every seeded translation row's `createdAt`/`updatedAt` — fixed, like every other demo
- * fixture's dates, rather than "whenever the seeder ran". `writeTranslations` goes through
- * `findOneAndUpdate`, which (schema `timestamps: true`) stamps the real clock; nothing in that
- * port takes a caller-supplied date, so {@link writeSeedTranslations} overwrites it after the
- * fact — the same reason `db/demo/demo-data.json` must be byte-stable across re-exports.
- */
-const SEED_TRANSLATION_TIMESTAMP = new Date('2024-01-01T00:00:00.000Z');
-
-/**
- * A stable, valid `_id` for one product's one-locale translation row — every OTHER demo fixture
- * pins its own `_id` ({@link fillerProductId}, `SEED_PRODUCT_IDS`, `scenarios/locales.ts`'s hex bands),
- * but `upsertEntityLocale` (the write surface's own primitive) has no caller-supplied-id
- * parameter at all: it mints one at insert. An MD5 of `(entityId, locale)`, truncated to a valid
- * 24-hex ObjectId, is deterministic across every reseed without a hand-maintained id table for
- * 264 rows.
- */
-const translationSeedId = (entityId: string, locale: string): string =>
-    createHash('md5').update(`product:${entityId}:${locale}`).digest('hex').slice(0, 24);
 
 /**
  * The catalogue ids, named by what each row is for.
@@ -328,64 +306,15 @@ const isTranslationPlan = (value: unknown): value is TranslationWritePlan =>
     typeof value === 'object' && value !== null && 'fallbackLocale' in value;
 
 /**
- * Replaces each just-written translation row with an identical one under a deterministic
- * {@link translationSeedId} and {@link SEED_TRANSLATION_TIMESTAMP} — `upsertEntityLocale` (the
- * write surface's own primitive) has no caller-supplied-id parameter, so a fresh insert's `_id`
- * and `createdAt` are the real clock, which `db/demo/demo-data.json`'s byte-stability across
- * reseeds cannot tolerate. `_id` is immutable in MongoDB, so this deletes and reinserts rather
- * than updating in place; every other field is carried over unchanged from what
- * `writeTranslations` actually computed (fields, origin, digest), so only the ROW's identity and
- * timing become deterministic, never its content.
- */
-const pinSeedTranslationRows = (entityId: string, locales: readonly string[]): Promise<void> =>
-    Promise.all(
-        locales.map((locale) =>
-            translationModel
-                .findOne({ entityType: 'product', entityId, locale })
-                .lean()
-                .exec()
-                .then((row) => {
-                    if (!row) return undefined;
-                    const {
-                        _id: oldId,
-                        createdAt: _createdAt,
-                        updatedAt: _updatedAt,
-                        __v,
-                        ...rest
-                    } = row;
-                    return translationModel
-                        .deleteOne({ _id: oldId })
-                        .exec()
-                        .then(() =>
-                            new translationModel({
-                                ...rest,
-                                _id: translationSeedId(entityId, locale),
-                                createdAt: SEED_TRANSLATION_TIMESTAMP,
-                                updatedAt: SEED_TRANSLATION_TIMESTAMP
-                            }).save({ timestamps: false })
-                        );
-                })
-        )
-    ).then(() => undefined);
-
-/**
  * Write one freshly-created product's fallback and Italian rows, through the write surface's own
  * validate/apply primitives (`planTranslations`/`writeTranslations`) rather than a raw repository
  * insert — the derived index column on the product document is already correct (it was written by
  * `upsertById` above, from the same `title`/`description` this batch also carries), this call adds
  * the `translations` rows a real editor's write would have produced alongside it.
  *
- * Two follow-up fixups undo timestamp side effects `writeTranslations` has no reason to avoid in
- * production but that break `db/demo/demo-data.json`'s byte-stability: {@link pinSeedTranslationRows}
- * for the rows themselves, and re-pinning the PRODUCT's own `updatedAt` — `writePlannedTranslations`
- * re-touches it (the derived-column write) with an ordinary, timestamps-enabled `updateOne`,
- * silently bumping it past the fixed value `upsertById` had just set.
- *
- * @param productUpdatedAt - the fixture's own `updatedAt` ({@link identityOf}'s default is its
- *   `createdAt`), restored after the derived-column write bumps it
  * @throws {Error} if the batch fails to validate — a bug in the fixture data, never a caller input
  */
-const writeSeedTranslations = (productId: string, productUpdatedAt: Date): Promise<void> => {
+const writeSeedTranslations = (productId: string): Promise<void> => {
     const copy = PRODUCT_COPY_BY_ID.get(productId);
     if (!copy) throw new Error(`seed fixtures: no translation copy for product ${productId}`);
 
@@ -395,23 +324,8 @@ const writeSeedTranslations = (productId: string, productUpdatedAt: Date): Promi
                 `seed fixtures: product ${productId} translations failed to plan: ${JSON.stringify(plan)}`
             );
 
-        const upsertedLocales = plan.planned
-            .filter((slot) => slot.kind === 'upsert')
-            .map((slot) => slot.locale);
-
         // `translatedBy: undefined` — this is a system seed, not a human translator's write.
-        return writeTranslations('product', productId, plan, undefined)
-            .then(() => pinSeedTranslationRows(productId, upsertedLocales))
-            .then(() =>
-                productModel
-                    .updateOne(
-                        { _id: productId },
-                        { $set: { updatedAt: productUpdatedAt } },
-                        { timestamps: false }
-                    )
-                    .exec()
-            )
-            .then(() => undefined);
+        return writeTranslations('product', productId, plan, undefined).then(() => undefined);
     });
 };
 
@@ -442,12 +356,7 @@ export const seedProductsCollection = (): Promise<SeedOutcome[]> =>
             Promise.all(
                 productFixtures.map((product, index) =>
                     outcomes[index] === 'created'
-                        ? // `identityOf` (via `makeProduct`) always sets `updatedAt`, defaulting
-                          // it to `createdAt` — the `??` only guards the type, not a real gap.
-                          writeSeedTranslations(
-                              product._id.toString(),
-                              product.updatedAt ?? product.createdAt ?? new Date()
-                          )
+                        ? writeSeedTranslations(product._id.toString())
                         : Promise.resolve()
                 )
             ).then(() => outcomes)

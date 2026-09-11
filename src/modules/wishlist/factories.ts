@@ -1,7 +1,7 @@
 /**
  * @module
  * How a wishlist row is built. Addressed by owner like the cart — `userId` is unique and no
- * wishlist id reaches the wire — but pins an `_id` anyway for byte-stable exports; see
+ * wishlist id reaches the wire — but pins an `_id` anyway so a rebuilt dataset diffs cleanly; see
  * `../cart/factories`. A line is a bare product id, not a full `WishlistItem`, since a wishlist
  * answers "do I want this," not "how many."
  */

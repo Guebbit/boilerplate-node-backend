@@ -20,7 +20,7 @@ export type SeedOutcome = 'created' | 'skipped';
  */
 export interface SeedRepository<TFixture> {
     findById: (id: string) => PromiseLike<unknown>;
-    create: (data: TFixture, options?: { timestamps: false }) => Promise<unknown>;
+    create: (data: TFixture) => Promise<unknown>;
 }
 
 /**
@@ -28,17 +28,8 @@ export interface SeedRepository<TFixture> {
  */
 export interface OwnedSeedRepository<TFixture> {
     findByUserId: (userId: string) => PromiseLike<unknown>;
-    create: (data: TFixture, options?: { timestamps: false }) => Promise<unknown>;
+    create: (data: TFixture) => Promise<unknown>;
 }
-
-/**
- * What every seed write passes to `save()`.
- *
- * A factory states its own `createdAt` (see `./factories`), and Mongoose's `timestamps: true`
- * would overwrite it with "whenever the seeder ran" — making `db/demo/demo-data.json` differ on
- * every export and its staleness check never pass.
- */
-const SEED_SAVE_OPTIONS = { timestamps: false } as const;
 
 /**
  * Upsert one fixture by its fixed `_id`.
@@ -56,9 +47,7 @@ export const upsertById = <TFixture extends { _id: Types.ObjectId }>(
     fixture: TFixture
 ): Promise<SeedOutcome> =>
     Promise.resolve(repository.findById(fixture._id.toString())).then((existing) =>
-        existing
-            ? 'skipped'
-            : repository.create(fixture, SEED_SAVE_OPTIONS).then((): SeedOutcome => 'created')
+        existing ? 'skipped' : repository.create(fixture).then((): SeedOutcome => 'created')
     );
 
 /**
@@ -76,20 +65,19 @@ export const upsertByOwner = <TFixture extends { userId: Types.ObjectId }>(
     fixture: TFixture
 ): Promise<SeedOutcome> =>
     Promise.resolve(repository.findByUserId(fixture.userId.toString())).then((existing) =>
-        existing
-            ? 'skipped'
-            : repository.create(fixture, SEED_SAVE_OPTIONS).then((): SeedOutcome => 'created')
+        existing ? 'skipped' : repository.create(fixture).then((): SeedOutcome => 'created')
     );
 
 /**
  * Read one collection back the way the exported dataset must record it.
  *
- * The `toJSON()` step is the load-bearing part: `registry.ts` requires the export to read back
- * through the model's real serializer, or `seed-conformance.test.ts` ends up comparing the
- * fixtures to themselves.
+ * The `toJSON()` step is the load-bearing part: reading back through the model's real serializer
+ * is what puts schema defaults, derived columns and serializer omissions in the file. Publishing
+ * the fixtures instead would record what a factory claimed, not what the API answers.
  *
  * @param model - the collection's Mongoose model
- * @param sort - a total order, so a re-export of unchanged data is byte-identical
+ * @param sort - a total order, so successive rebuilds diff cleanly and a positional reader
+ *   (`scripts/contracts/client-collections-bundle.ts`) can trust row order
  * @returns every document, serialized as the API would serialize it
  */
 export const exportCollection = <TDocument>(

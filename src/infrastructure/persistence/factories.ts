@@ -1,10 +1,12 @@
 /**
  * @module
  * The bit of factory-building every module's `factories.ts` would otherwise repeat: an `_id`, a
- * pair of timestamps, and the type of the overrides bag. Timestamps are pinned rather than left
- * to Mongoose — the seed export commits what it reads back, so a `createdAt` of "whenever the
- * export ran" would make the artefact permanently stale — but this module does not guarantee the
- * three dates make sense together; a test that cares about ordering states the dates it needs.
+ * pair of timestamps, and the type of the overrides bag.
+ *
+ * The timestamps here reach a document that is BUILT, not written: `timestamps: true` on every
+ * schema means a real `create()` stamps its own, whatever a factory said. So they matter to
+ * `build()`/`new Model()` callers and to assertions on a hydrated shape, and this module does not
+ * guarantee the three dates make sense together — a test that cares about ordering states them.
  */
 
 import { Types } from 'mongoose';

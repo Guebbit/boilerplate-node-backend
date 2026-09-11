@@ -201,8 +201,8 @@ export interface FillerProduct {
 /**
  * Every animal × product-type × tier combination — {@link ANIMALS}`.length` ×
  * {@link PRODUCT_TYPES}`.length` × {@link TIERS}`.length` rows, each active, non-deleted and in
- * stock: `seed-conformance.test.ts`'s "exactly one soft-deleted/inactive product" only holds if
- * nothing here can be mistaken for one — those states live on the six named rows in `./products`.
+ * stock. The soft-deleted, inactive and out-of-stock states live on the six named rows in
+ * `./products`, so a filler row is never mistaken for one of them.
  */
 export const FILLER_PRODUCTS: FillerProduct[] = ANIMALS.flatMap((animal, animalIndex) =>
     PRODUCT_TYPES.flatMap((type, typeIndex) =>
@@ -232,8 +232,8 @@ export const FILLER_PRODUCTS: FillerProduct[] = ANIMALS.flatMap((animal, animalI
 
 /**
  * A stable 24-hex id for filler row `index` — never `new Types.ObjectId()`, whose default is
- * time-based and would make the same row seed a different id on every run, breaking both
- * `scenario:apply`'s idempotent upsert and `assembleDemoDataset()`'s byte-stability.
+ * time-based and would make the same row seed a different id on every run, breaking
+ * `scenario:apply`'s idempotent upsert.
  *
  * @param index - the row's position in {@link FILLER_PRODUCTS}
  * @returns a syntactically valid, deterministic ObjectId hex string
