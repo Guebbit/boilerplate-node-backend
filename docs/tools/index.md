@@ -76,6 +76,7 @@ flowchart LR
 | Observability | **[Frontend Observability](./frontend-observability.md)**   | How the paired frontend reuses this stack (Faro + Alloy, Umami) instead of Sentry/PostHog cloud — plus the heavy upgrade path. |
 | Project       | **[Testing & Docs](./testing-and-docs.md)**                 | Vitest, Supertest, Bruno, and VitePress: how the repo tests itself and generates this docs site.                               |
 | Project       | **[Package Dependencies](./package-dependencies.md)**       | Guided tour of `package.json` grouped by concern (runtime, dev, optional, peer).                                               |
+| Project       | **[Dependency Vetting](./dependency-vetting.md)**           | Rules for what earns a place in `package.json` — measure the transitive weight, grep for telemetry, before it lands.           |
 | Project       | **[Package Scripts](./package-scripts.md)**                 | What every `npm run <script>` does and when to reach for it.                                                                   |
 | Project       | **[Docker & Podman](./docker-and-podman.md)**               | 11-container local stack: what each container is for and how to run it.                                                        |
 | API           | **[API](../api/)**                                          | OpenAPI Generator, Spectral, Prism, Bruno, Mockoon: contract-first API tooling.                                                |

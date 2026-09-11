@@ -41,10 +41,13 @@ Families are grouped by purpose, and same-namespace tools stay together when tha
   telemetry event to a third party on every `npm run lint:asyncapi` — including inside the
   pre-commit gate. The two things it actually did — validate, generate TypeScript — are covered
   directly by `@asyncapi/parser` (a library `@asyncapi/modelina` already pulls in) and by our own
-  `scripts/contracts/generate-asyncapi-types.ts`.
+  `scripts/contracts/generate-asyncapi-types.ts`. See
+  [Dependency Vetting](./dependency-vetting.md) for the rules this should have caught at install
+  time.
 
 ## Related pages
 
 - [Package Scripts](./package-scripts.md)
+- [Dependency Vetting](./dependency-vetting.md)
 - [Docker & Podman](./docker-and-podman.md)
 - [API](../api/)
