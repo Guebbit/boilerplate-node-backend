@@ -16,11 +16,14 @@ import {
 } from '@infrastructure/persistence/seed';
 import { wishlistRepository } from '@modules/wishlist/repository';
 
-/** The seeded wishlists: one per demo account, holding only publicly visible products. */
+/**
+ * The seeded wishlists: one per demo account, holding only publicly visible products.
+ *
+ * No pinned `_id` — see `./cart`, which explains why the owner-keyed collections differ.
+ */
 export const wishlistFixtures = [
     /* root — one saved product, enough for the owner account to show a non-empty page. */
     makeWishlist({
-        id: '65dd2cb27c5e8a1f3b9d4602',
         userId: SEED_OWNER_ID,
         productIds: [SEED_PRODUCT_IDS.scratchPostOutOfStock]
     }),
@@ -29,7 +32,6 @@ export const wishlistFixtures = [
      * it to the cart is a state change a demo can actually show happening.
      */
     makeWishlist({
-        id: '65de64f2a3c1d05b7e8f2103',
         userId: SEED_USER_ID,
         productIds: [SEED_PRODUCT_IDS.dogFoodStandard, SEED_PRODUCT_IDS.dogBedPremium]
     })

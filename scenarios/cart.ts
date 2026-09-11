@@ -19,12 +19,6 @@ import {
 import { cartRepository } from '@modules/cart/repository';
 
 /**
- * Deterministic id for demo cart `index` — see `./users`'s `demoCustomerId` for why this isn't
- * `new Types.ObjectId()`. Its own prefix keeps this id space apart from every other.
- */
-const demoCartId = (index: number): string => `67f0c3${index.toString(16).padStart(18, '0')}`;
-
-/**
  * The three "medium" customers' carts, as `[customer, productIndexA, quantityA, productIndexB,
  * quantityB]` — each a two-line basket drawn from the combinatorial catalogue, differing from one
  * another only in who and what.
@@ -46,19 +40,22 @@ const FILLER_CARTS: [
  * draws on the named catalogue rather than the filler one; {@link FILLER_CARTS} supplies the rest.
  * The other seven demo shoppers, and the `customer` account, have no cart row at all — see this
  * module's own docblock for why that IS their fixture.
+ *
+ * No pinned `_id`, unlike every other fixture file: {@link upsertByOwner} keys on `userId`, so an
+ * id buys no idempotency here, and nothing outside this file names one. Letting Mongo mint it also
+ * dates the row NOW — which this collection needs, since `carts_updatedAt_ttl` reaps a cart older
+ * than `NODE_CART_RETENTION_DAYS`, and a date decoded from a hand-written id ages past it.
  */
 export const cartFixtures = [
     makeCart({
-        id: '65dd2c9e1b4a7f3c0d2e5a01',
         userId: SEED_OWNER_ID,
         items: [
             { productId: SEED_PRODUCT_IDS.dogFoodStandard, quantity: 2 },
             { productId: SEED_PRODUCT_IDS.dogBedPremium, quantity: 3 }
         ]
     }),
-    ...FILLER_CARTS.map(([customer, productIndexA, quantityA, productIndexB, quantityB], index) =>
+    ...FILLER_CARTS.map(([customer, productIndexA, quantityA, productIndexB, quantityB]) =>
         makeCart({
-            id: demoCartId(index),
             userId: SEED_CUSTOMER_IDS[customer],
             items: [
                 { productId: fillerProductId(productIndexA), quantity: quantityA },

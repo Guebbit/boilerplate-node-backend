@@ -16,10 +16,14 @@ import { makeAddressBook } from '@modules/account/factories';
 import { addressBookModel } from '@modules/account/model';
 import { addressBookRepository } from '@modules/account/repository';
 
-/** The two seeded books: the owner's (two entries) and the ordinary customer's (one). */
+/**
+ * The two seeded books: the owner's (two entries) and the ordinary customer's (one).
+ *
+ * No pinned `_id` on the BOOK — see `./cart`. Each ENTRY keeps one: those reach the wire, and a
+ * "set as default" demo names the entry it moves the flag onto.
+ */
 export const addressBookFixtures = [
     makeAddressBook({
-        id: '65dd2ce31f5b3a9e04c7b210',
         userId: SEED_OWNER_ID,
         items: [
             /*
@@ -57,7 +61,6 @@ export const addressBookFixtures = [
      * client what an absent one looks like.
      */
     makeAddressBook({
-        id: '65de650b3d7e2c1a48f0b104',
         userId: SEED_USER_ID,
         items: [
             {
