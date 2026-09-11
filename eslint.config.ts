@@ -892,20 +892,20 @@ export default tseslint.config(
                         },
 
                         /*
-                         * `scenarios/apply.ts` (the CLI) and `scenarios/build/*` (the export and
-                         * demo-profile tooling) are the two files under `scenarios/` that are not
-                         * data: they boot the real app (`scenarios/build/run-server.ts`) and read
-                         * the module registry (`scenarios/apply.ts`,
-                         * `scenarios/build/export-dataset.ts`) the way only the composition root
-                         * and the registry's own file-layer categories otherwise may. Scoped to
-                         * exactly those two paths so the data files above stay unable to reach
-                         * either.
+                         * `scenarios/apply.ts` (the CLI), `scenarios/build/*` (the export and
+                         * demo-profile tooling) and `scenarios/check.ts` (the guarantee checker)
+                         * are the files under `scenarios/` that are not data: they boot the real
+                         * app (`scenarios/build/run-server.ts`) and read the module registry
+                         * (`scenarios/apply.ts`, `scenarios/build/export-dataset.ts`,
+                         * `scenarios/check.ts`) the way only the composition root and the
+                         * registry's own file-layer categories otherwise may. Scoped to exactly
+                         * these paths so the data files above stay unable to reach either.
                          */
                         {
                             from: {
                                 element: {
                                     type: 'scenarios',
-                                    fileInternalPath: ['apply.ts', 'build/*.ts']
+                                    fileInternalPath: ['apply.ts', 'build/*.ts', 'check.ts']
                                 }
                             },
                             allow: {
@@ -918,8 +918,8 @@ export default tseslint.config(
 
                         /*
                          * `src/app/demo.ts` is the one file under `src/` allowed back into
-                         * `scenarios/` — it mounts `POST /__demo/reset`, which has to walk the same
-                         * table `scenarios/apply.ts` does. Nothing else may: that is what lets a
+                         * `scenarios/` — it mounts `POST /__test/restore`, which has to walk the
+                         * same tables `scenarios/apply.ts` does. Nothing else may: that is what lets a
                          * production image omit `scenarios/` outright, since every OTHER file
                          * reaching it would pull the whole folder into the bundle regardless of
                          * `NODE_DEMO`.

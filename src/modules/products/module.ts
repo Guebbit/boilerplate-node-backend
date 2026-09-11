@@ -43,5 +43,18 @@ export default {
      */
     translatables: {
         product: { collection: 'products', fields: ['title', 'description'], cacheTag: 'products' }
+    },
+    /**
+     * The catalogue states the storefront and the repositories actually branch on.
+     * `scenarios/products.ts`'s `checkProductGuarantees` verifies these against what got seeded;
+     * `scenarios/check.ts` fails the build if one goes missing.
+     */
+    scenario: {
+        shop: [
+            'product.softDeleted',
+            'product.inactive',
+            'product.outOfStock',
+            'product.barebones'
+        ]
     }
 } satisfies AppModule;

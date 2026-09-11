@@ -18,7 +18,7 @@ import { seedAuditLogsCollection, exportSeededAuditLogs } from './audit-logs';
 import { seedCartsCollection, exportSeededCarts } from './cart';
 import { seedLocalesCollection, exportSeededLocales } from './locales';
 import { seedOrdersCollection, exportSeededOrders } from './orders';
-import { seedProductsCollection, exportSeededProducts } from './products';
+import { seedProductsCollection, exportSeededProducts, checkProductGuarantees } from './products';
 import { seedUsersCollection, exportSeededUsers } from './users';
 import { seedWebhooksCollection, exportSeededWebhooks } from './webhooks';
 import { seedWishlistsCollection, exportSeededWishlists } from './wishlist';
@@ -36,6 +36,13 @@ export interface DemoModule {
      * returning the fixtures it wrote. Returning fixtures publishes a guess labelled as truth.
      */
     export: () => Promise<Record<string, unknown[]>>;
+
+    /**
+     * Which of this module's `scenario.shop` guarantees (its own `module.ts`) the currently
+     * seeded database actually satisfies. Absent for a module that declares none —
+     * `scenarios/check.ts` only calls this for a module whose manifest lists something.
+     */
+    checkGuarantees?: () => Promise<string[]>;
 }
 
 /** Every module with demo fixtures. Replaces what each `module.ts` used to carry as `seeds` and
@@ -63,7 +70,8 @@ export const demoModules: Readonly<Record<string, DemoModule>> = {
     },
     products: {
         seed: seedProductsCollection,
-        export: exportSeededProducts
+        export: exportSeededProducts,
+        checkGuarantees: checkProductGuarantees
     },
     users: {
         seed: seedUsersCollection,

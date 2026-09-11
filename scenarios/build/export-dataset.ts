@@ -19,6 +19,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
 import { assembleDemoDataset, DATASET_PATH } from './assemble';
 import { seedAllDemoModules } from '@scenarios/index';
+import { assertScenarioGuarantees } from '@scenarios/check';
 import { seedAccessModel } from '@kernel/access/seed';
 import { resolveTranslatables } from '@kernel/registry';
 import { setTranslatables } from '@modules/locales/module';
@@ -51,6 +52,7 @@ const run = async (): Promise<void> => {
         // `seedAllDemoModules` then runs `locales` before the rest — see its own docblock for why.
         await seedAccessModel();
         await seedAllDemoModules();
+        await assertScenarioGuarantees('shop');
 
         writeFileSync(DATASET_PATH, await assembleDemoDataset());
         console.info('[scenario-build] wrote scenarios/dataset.json.');

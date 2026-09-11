@@ -376,3 +376,27 @@ export const seedProductsCollection = (): Promise<SeedOutcome[]> =>
 export const exportSeededProducts = async (): Promise<Record<string, unknown[]>> => ({
     products: await exportCollection(productModel, { _id: 1 })
 });
+
+/**
+ * Which of `./module`'s declared `scenario.shop` guarantees the seeded catalogue actually
+ * satisfies — `scenarios/check.ts` calls this, never the fixtures directly, so a guarantee
+ * failing here means the DATABASE lost the state, not just that a comment says it exists.
+ *
+ * `description: ''` is the schema's own default (`@modules/products/model`), so it uniquely
+ * picks out {@link SEED_PRODUCT_IDS}'s `barebones` row: every other seeded product, named or
+ * filler, states a real description.
+ */
+export const checkProductGuarantees = (): Promise<string[]> =>
+    Promise.all([
+        productModel.exists({ deletedAt: { $exists: true } }),
+        productModel.exists({ active: false }),
+        productModel.exists({ onHand: 0 }),
+        productModel.exists({ description: '' })
+    ]).then(([softDeleted, inactive, outOfStock, barebones]) =>
+        [
+            softDeleted && 'product.softDeleted',
+            inactive && 'product.inactive',
+            outOfStock && 'product.outOfStock',
+            barebones && 'product.barebones'
+        ].filter((guarantee): guarantee is string => guarantee !== null)
+    );
