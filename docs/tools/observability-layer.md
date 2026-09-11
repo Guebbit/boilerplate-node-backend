@@ -8,16 +8,16 @@ Prometheus, Loki, Tempo, Grafana, the OTel collector — and its config. This pa
 
 Five signals, one transport, one module.
 
-| Signal          | Mechanism (infrastructure)                                                                        | What a module contributes                                                       | Where it goes                                                   |
-| --------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| **Logs**        | `adapters/logger.ts` — Winston, JSON, two loggers                                                 | nothing; every tier just logs                                                   | stdout → Promtail → Loki                                        |
-| **Metrics**     | `observability/metrics-http.ts` — the shared `metricsRegistry`, HTTP counters, latency histogram  | `<module>/metrics.ts` declares counters **onto the shared registry**            | `GET /observability/metrics`, scraped by Prometheus             |
-| **Traces**      | `observability/tracer.ts` — a thin wrapper over the OTel API (`withSpan`, `getActiveSpanContext`) | nothing declared; spans are taken where useful                                  | OTLP → collector → Tempo                                        |
-| **Audit**       | `observability/audit.ts` — the action vocabulary, `emitAuditEvent`, and the sink port             | `<module>/audit.ts` augments the action map; `audit-logs` **installs the sink** | a log line always; a Mongo row when the sink is registered      |
-| **Analytics**   | `observability/analytics/` — the provider port + `umami` (default), `posthog`, `none`             | `<module>/analytics.ts` declares the names that module emits                    | the configured provider                                         |
-| **Readiness**   | `observability/dependency-health.ts` — every backing service's state, read without I/O            | nothing                                                                         | `GET /observability/health`                                     |
-| **Live stream** | `observability/stream.ts` — SSE, 5 s updates, 15 s heartbeat                                      | nothing                                                                         | `GET /observability/events`, shape pinned by `asyncapi.yaml`    |
-| **The module**  | `src/modules/observability/` — controllers only, no service, no model                             | —                                                                               | `/observability/{health,metrics,metrics/overview,audit,events}` |
+| Signal          | Mechanism (infrastructure)                                                                         | What a module contributes                                                       | Where it goes                                                   |
+| --------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| **Logs**        | `adapters/logger.ts` — Winston, JSON, two loggers                                                  | nothing; every tier just logs                                                   | stdout → Promtail → Loki                                        |
+| **Metrics**     | `observability/metrics-http.ts` — the shared `metricsRegistry`, HTTP counters, latency histogram   | `<module>/metrics.ts` declares counters **onto the shared registry**            | `GET /observability/metrics`, scraped by Prometheus             |
+| **Traces**      | `observability/tracer.ts` — a thin wrapper over the OTel API (`withSpan`, `getActiveSpanContext`)  | nothing declared; spans are taken where useful                                  | OTLP → collector → Tempo                                        |
+| **Audit**       | `observability/audit.ts` — the action vocabulary, `emitAuditEvent`, and the sink port              | `<module>/audit.ts` augments the action map; `audit-logs` **installs the sink** | a log line always; a Mongo row when the sink is registered      |
+| **Analytics**   | `observability/analytics/` — the provider port + `umami` (default), `posthog`, `none`              | `<module>/analytics.ts` declares the names that module emits                    | the configured provider                                         |
+| **Readiness**   | `observability/dependency-health.ts` (no I/O) + `observability/job-health.ts` (one `leases` query) | nothing                                                                         | `GET /observability/health`                                     |
+| **Live stream** | `observability/stream.ts` — SSE, 5 s updates, 15 s heartbeat                                       | nothing                                                                         | `GET /observability/events`, shape pinned by `asyncapi.yaml`    |
+| **The module**  | `src/modules/observability/` — controllers only, no service, no model                              | —                                                                               | `/observability/{health,metrics,metrics/overview,audit,events}` |
 
 ## The four properties any change has to preserve
 
@@ -40,10 +40,12 @@ Five signals, one transport, one module.
 4. **Liveness and readiness are different endpoints, on purpose.** `GET /` answers "is the process
    alive" and is what the container HEALTHCHECK probes; `GET /observability/health` answers "can this
    instance serve, and what is missing". Conflating them means an orchestrator restarting a healthy
-   container because Redis blinked — and restarting it does not bring Redis back. Nothing in the
-   readiness payload performs I/O: every dependency is read from the connection state its adapter
-   already maintains, so the endpoint polled every few seconds by every replica cannot become an
-   amplifier pointed at the infrastructure it reports on.
+   container because Redis blinked — and restarting it does not bring Redis back. The dependency half
+   of the readiness payload performs no I/O: every backing service is read from the connection state
+   its adapter already maintains, so that part cannot become an amplifier pointed at the
+   infrastructure it reports on. The job half (`job-health.ts`) is the one exception — it runs a
+   single `leases` query, because there is no in-memory copy anywhere of when a scheduled job last
+   finished.
 
 ## What this layer does NOT have, and probably should not
 
