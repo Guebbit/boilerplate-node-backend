@@ -43,20 +43,28 @@ COPY package.json package-lock.json ./
 
 # `npm ci` rather than `npm install`: it installs exactly the lockfile, deletes any existing
 # node_modules first, and never rewrites package-lock.json. Dev dependencies are needed HERE —
-# TypeScript and ESLint are what the gate below is made of.
-RUN npm ci
+# TypeScript is what the gate below is made of.
+#
+# `--ignore-scripts`: `postinstall` bundles the contracts from `scripts/` and `shared/contracts/`,
+# neither of which exists in the image yet at this point — only the two manifests have been copied.
+# Running it here would fail on a missing module, not merely skip work.
+RUN npm ci --ignore-scripts
 
 # Now the source. `.dockerignore` keeps node_modules, .git, .env, coverage and reports out.
 COPY . .
 
-# The gate. `npm run build` is `tsc --noEmit && eslint`, so a type error or a lint failure stops the
-# build and no image is produced. This is the whole reason for a separate stage that installs
-# devDependencies: the runtime stage cannot run this check, and an image that was never checked is
-# an image that fails in front of a user instead of in front of CI.
+# The gate. `postinstall` now has what it needs on disk (bundles the contracts, generates the typed
+# client and the AsyncAPI types); `ts-check` then stops the build on a type error, so an image that
+# was never checked is an image that fails in front of a user instead of in front of CI.
+#
+# Deliberately NOT `npm run build` (`ts-check && lint`): `local/comment-links` shells out to
+# `git ls-files`, and `.dockerignore` excludes `.git` from this context, so lint has no repository
+# to query here. Lint already runs in the pre-commit hook and in CI — this gate only needs to catch
+# what a type error can break at runtime, which lint cannot.
 #
 # It deliberately does NOT run the test suites. Those need MongoDB, Redis and RabbitMQ; a build that
 # reaches for a database is a build that fails on a laptop with no network. Tests belong to CI.
-RUN npm run build
+RUN npm run postinstall && npm run ts-check
 
 # ────────────────────────────────────────────────────────────────────────────────────────────────
 # Stage 2 — runtime: production dependencies, application source, and nothing else.
@@ -116,8 +124,8 @@ RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 #   api/      orval-generated request/response types and zod schemas, imported as @api/*
 #   shared/   EJS email templates (`shared/views/templates-emails`, resolved against the working
 #             directory by `adapters/mailer.ts`) and the contract fragments
-#   db/       the index sync, for `npm run db:sync` as a deploy step. Named file by file, not as
-#             a directory, so the image carries only the scripts it runs
+#   db/       the deploy-time scripts — `db:sync`, `db:data`, `access:bootstrap`, `access:grant`.
+#             Named file by file, not as a directory, so the image carries only the scripts it runs
 #   ops/      the scheduled `reap:*` jobs, run by a cron container against this image
 #   public/   express.static root — CSS, favicon, and the committed seed images
 #   openapi.yaml / asyncapi.yaml   served by the docs endpoints and read by response validation
@@ -125,7 +133,9 @@ COPY --from=build --chown=node:node /app/src ./src
 COPY --from=build --chown=node:node /app/api ./api
 COPY --from=build --chown=node:node /app/shared ./shared
 COPY --from=build --chown=node:node /app/db/run-script.ts /app/db/index-sync.ts \
-    /app/db/sync-indexes.ts /app/db/cache-clear.ts ./db/
+    /app/db/sync-indexes.ts /app/db/cache-clear.ts /app/db/apply-data.ts \
+    /app/db/data-changelog.ts /app/db/bootstrap-access.ts /app/db/grant-access.ts \
+    /app/db/access-grant.ts ./db/
 COPY --from=build --chown=node:node /app/ops ./ops
 COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/openapi.yaml /app/asyncapi.yaml ./

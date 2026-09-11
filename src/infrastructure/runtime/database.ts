@@ -53,6 +53,10 @@ export const getDatabaseUri = () => {
  *
  * Exists for orchestrated environments: when the API container starts alongside the database
  * container, the first few connects legitimately fail while Mongo is still initialising.
+ *
+ * Does not touch `autoIndex` — a caller with its own requirement (`db/sync-indexes.ts` turns it
+ * off before calling this; `src/app.ts`'s `startServer` turns it off in production) sets it before
+ * calling `start()`, and this shared connection helper has no opinion of its own to override that.
  */
 export const start = () => {
     // Recursive rather than a `for` loop so each retry chains onto the previous promise

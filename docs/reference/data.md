@@ -50,8 +50,10 @@ npm run db:sync              # apply
 npm run db:sync -- --check   # print the plan, change nothing, exit 1 if it is not empty
 ```
 
-**Adding an index is one edit.** Declare it on the schema. The next `db:sync` builds it — and
-`db:bootstrap` runs on every container boot, so in development there is nothing else to do.
+**Adding an index is one edit.** Declare it on the schema. The next `db:sync` builds it — in
+development `db:bootstrap` runs on every container boot, so there is nothing else to do; in
+production, `docker-compose.production.yml`'s one-shot `setup` service runs `db:sync` before `app`/
+`cron` ever start.
 
 ### Why a reconciliation and not a migration
 
@@ -85,9 +87,10 @@ reconstruct — but it is also why `--check` exists. Run that first against a da
 rebuild.
 
 `--check` is genuinely read-only, and that takes one deliberate line: the script turns `autoIndex`
-OFF before connecting. It is on everywhere else, which is what gives the app and the test suite
-their indexes for free — but here it would have Mongoose build every declared index during
-`connect()`, so an inspection would silently write.
+OFF before connecting. It is on in development and the test suite, which is what gives them their
+indexes for free — but here it would have Mongoose build every declared index during `connect()`,
+so an inspection would silently write. Production turns it off too, for a different reason: see
+"TTL windows" below.
 
 ### It refuses to build a constraint the data violates
 
@@ -102,13 +105,15 @@ a merge is a product decision, not one a script gets to make.
 whose `expireAfterSeconds` comes from an environment variable. Mongo will not modify an existing
 index's window in place, so:
 
-| Action after changing e.g. `NODE_AUDIT_RETENTION_DAYS` | Result                                                                    |
-| ------------------------------------------------------ | ------------------------------------------------------------------------- |
-| Restart the app                                        | **Fails to boot.** `autoIndex` asks for the new window; Mongo refuses it. |
-| `npm run db:sync`                                      | Drops the index and rebuilds it with the new window.                      |
+| Action after changing e.g. `NODE_AUDIT_RETENTION_DAYS` | In dev/test (`autoIndex` on)                                              | In production (`autoIndex` off)                       |
+| ------------------------------------------------------ | ------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Restart the app                                        | **Fails to boot.** `autoIndex` asks for the new window; Mongo refuses it. | Boots fine — it never asks Mongo to rebuild anything. |
+| `npm run db:sync`                                      | Drops the index and rebuilds it with the new window.                      | Same — this is what actually applies the new window.  |
 
-So `db:bootstrap` — which syncs before the server starts — is what makes a window change a
-restart-safe operation.
+So in development, `db:bootstrap` — which syncs before the server starts — is what makes a window
+change restart-safe. In production, turning `autoIndex` off is what makes it restart-safe instead:
+`docker-compose.production.yml`'s `setup` service runs `db:sync` before `app`/`cron` start, and a
+later restart with no `setup` re-run simply keeps running on the index that is already there.
 
 ## Data: a one-off script under `ops/`
 

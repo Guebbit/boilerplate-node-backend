@@ -27,15 +27,26 @@ it selects `clients/acme/.env` below. Unset, the stack refuses to start rather t
 run a second client on the same host, repeat with a different name and a different `NODE_PORT` —
 nothing is shared between them.
 
-Then edit `clients/acme/.env`. Three groups of values need real ones before the first deploy:
+Then edit `clients/acme/.env` and set real values. Rather than a hand-copied list here — which goes
+stale the moment a new secret is added — boot itself tells you what it needs: start the stack with
+the shipped placeholders still in place and it refuses, naming the first one it hit. Generate a
+strong value for each with:
 
-| Variable                                                                           | Why                                                                                                                                                       |
-| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_TOKEN_ACCESS`, `NODE_TOKEN_REFRESH`                                          | JWT signing secrets. Any two long random strings — never the example values.                                                                              |
-| `NODE_METRICS_TOKEN`                                                               | Bearer credential a scraper needs to read `/observability/metrics`.                                                                                       |
-| `MONGO_ROOT_PASSWORD`, `MONGO_APP_PASSWORD`, `RABBITMQ_PASSWORD`, `REDIS_PASSWORD` | Not in `.env-example` at all — dev runs every one of these unauthenticated. Add all four yourself; the compose file refuses to start without any of them. |
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
 
-`MONGO_ROOT_USER` defaults to `root`, `MONGO_APP_USER` and `MONGO_DB` default to `api`, `RABBITMQ_USER` defaults to `guest`. `MONGO_ROOT_USER`/`MONGO_ROOT_PASSWORD` are maintenance-only — the app itself authenticates as `MONGO_APP_USER`, a `readWrite` user scoped to `MONGO_DB` and created by `docker/mongo-init.js` the first time the volume is empty.
+`.env-example`'s own `MUST SET` markers (Part A) and its production-only block (Part D6) are the
+complete list; `MONGO_ROOT_USER` defaults to `root`, `MONGO_APP_USER` and `MONGO_DB` default to
+`api`, `RABBITMQ_USER` defaults to `guest`. `MONGO_ROOT_USER`/`MONGO_ROOT_PASSWORD` are
+maintenance-only — the app itself authenticates as `MONGO_APP_USER`, a `readWrite` user scoped to
+`MONGO_DB` and created by `docker/mongo-init.js` the first time the volume is empty.
+
+**Bundled or managed backing services.** `COMPOSE_PROFILES=bundled` (`.env-example`'s default)
+starts the `database`/`cache`/`queue` containers below. Pointing at a managed MongoDB, Redis or
+RabbitMQ instead is two edits, not a compose-file change: set `NODE_DB_URI`/`NODE_REDIS_URL`/
+`NODE_RABBITMQ_URL` to the managed connection string, and clear `COMPOSE_PROFILES` so the bundled
+containers never start.
 
 ```bash
 docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml up -d --build
@@ -46,10 +57,11 @@ because compose reads it through two separate channels. `--env-file` resolves th
 substitutions in the compose file itself; `env_file:` is what the container receives. Naming only
 one of them silently gives every client the same application config.
 
-That builds `docker/Dockerfile.production` (multi-stage: type-checks and lints in a build stage,
-ships only production dependencies in the runtime stage) and starts the API plus `database`,
-`cache` and `queue` — the production names for Mongo, Redis and RabbitMQ. No bind mount, no hot
-reload: what's running is exactly what was built.
+That builds `docker/Dockerfile.production` (multi-stage: type-checks in a build stage, ships only
+production dependencies in the runtime stage), runs `setup` once — indexes and the shop's row, see
+[below](#the-first-owner) — then starts the API, `cron`, and (bundled profile) `database`, `cache`
+and `queue`, the production names for Mongo, Redis and RabbitMQ. No bind mount, no hot reload:
+what's running is exactly what was built.
 
 ## Check it worked
 
@@ -60,6 +72,20 @@ curl http://127.0.0.1:3000/          # health probe
 
 The port is published to `127.0.0.1`, not `0.0.0.0` — reachable from the host, not from the
 network. That is deliberate, see [Putting a reverse proxy in front](#putting-a-reverse-proxy-in-front) below.
+
+## The first owner
+
+`setup` gives the database its shop and its preset roles, but nobody starts with a role above
+`customer` — the first signup racing to become owner is a known vulnerability pattern, so nothing
+does that automatically. Sign up through the app once, then grant the account a role from the host:
+
+```bash
+docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml \
+    exec app npm run access:grant -- you@example.com owner
+```
+
+The same command is the recovery path if every owner is ever locked out — `--scope platform` grants
+an installation-wide role (an operator) instead of a shop role.
 
 ## What's different from dev
 

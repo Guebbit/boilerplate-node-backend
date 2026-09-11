@@ -69,10 +69,11 @@ fresh ones the tests use.
 name, and a derived name changes when the key does — which leaves the old index in place until the
 next sync drops it.
 
-**`autoIndex` is still on**, and that is what gives the test suite its constraints for free:
-`mongodb-memory-server` starts empty and Mongoose builds every declared index on connect. It is not
-what production relies on — `db:bootstrap` syncs before the server starts, so the index set is in
-place even on a deployment that runs with `autoIndex` off.
+**`autoIndex` is on in development and test**, and that is what gives the test suite its constraints
+for free: `mongodb-memory-server` starts empty and Mongoose builds every declared index on connect.
+Production turns it off (`src/app.ts`) and relies on `docker-compose.production.yml`'s one-shot
+`setup` service instead — it runs `db:sync` before `app`/`cron` ever start, so the index set is
+already in place by the time a connection with `autoIndex` off is opened.
 
 `tests/integration/db/index-sync.test.ts` is what holds this. It runs the reconciliation against a
 real database from nothing, against deliberately constructed drift, and twice over, and asserts
@@ -83,8 +84,10 @@ reach, since every other test runs against a database that has never disagreed w
 
 `auditlogs`, `carts` and `feedbackrequests` expire rows with a TTL index whose `expireAfterSeconds`
 is computed from an env var. Mongo will not modify an existing window in place: after changing one,
-a **restart fails to boot** (`autoIndex` asks for the new value and Mongo refuses the conflicting
-options), while `npm run db:sync` drops the index and rebuilds it. See
+`npm run db:sync` drops the index and rebuilds it. In development and test, where `autoIndex` is on,
+skipping that and just restarting **fails to boot** — Mongo refuses the conflicting options.
+Production's `autoIndex` is off precisely so a restart never asks Mongo to rebuild anything; `setup`
+running `db:sync` on deploy is what applies a changed window there. See
 [Ops](../reference/ops.md).
 
 ### Changing data, not shape

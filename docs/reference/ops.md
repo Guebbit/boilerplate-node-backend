@@ -122,10 +122,13 @@ jobs above.
 | `leases`           | `NODE_LEASE_RETENTION_DAYS`    | 30      | Scheduled jobs, above                       |
 
 All four share one caveat, worth stating once rather than four times: **Mongo will not modify an
-existing TTL index's `expireAfterSeconds` in place.** Raising or lowering any of these variables and
-RESTARTING fails the boot — `autoIndex` asks for the new window and Mongo refuses the conflicting
-options. `npm run db:sync` is what applies it: it drops the index and rebuilds it, which is why
-`db:bootstrap` syncs before the server starts. `feedback`'s window
+existing TTL index's `expireAfterSeconds` in place.** In development and test, where `autoIndex` is
+on, raising or lowering any of these variables and RESTARTING fails the boot outright — Mongo
+refuses the conflicting options. `npm run db:sync` is what applies it: it drops the index and
+rebuilds it, which is why `db:bootstrap` syncs before the server starts there. Production runs with
+`autoIndex` off for exactly this reason — a restart never asks Mongo to rebuild anything — and
+`docker-compose.production.yml`'s one-shot `setup` service is what runs `db:sync` on deploy instead,
+see [Data — TTL windows](./data.md#ttl-windows). `feedback`'s window
 is the longest on purpose: a contact request can be evidence in a commercial dispute, and 24 months
 sits inside the common limitation periods. `carts` and `leases` both tie to `updatedAt`, so any
 edit — a cart line changed, a lease re-acquired — restarts the clock; only a genuinely abandoned row
