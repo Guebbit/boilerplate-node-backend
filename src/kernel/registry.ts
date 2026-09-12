@@ -188,10 +188,11 @@ export interface AppModule {
     customCheck?: () => string[];
 
     /**
-     * The states this module GUARANTEES a named scenario seeds, keyed by scenario name (currently
-     * only `shop`). `scenarios/check.ts` fails the build until every key here is actually present
-     * in what got seeded — declared here rather than only inside `scenarios/` so deleting a module
-     * deletes its guarantees the same way {@link permissions} does.
+     * The states this module GUARANTEES a named scenario offers, keyed by scenario name (currently
+     * only `shop`). Each name resolves to one row id — pinned in `scenarios/subjects.ts` or
+     * recorded by the flow runner — and `scenarios/check.ts` holds the two lists equal in both
+     * directions. Declared here rather than only inside `scenarios/` so deleting a module deletes
+     * its guarantees the same way {@link permissions} does.
      *
      * Absent for a module with nothing to guarantee, which is most of them: `antibot`, `api-keys`,
      * `feedback` and `observability` say nothing, on purpose.

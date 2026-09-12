@@ -135,18 +135,23 @@ for exactly which is which.
 ## Database & seed scripts
 
 `db:sync` owns **schema** (the indexes, reconciled against the schemas that declare them); the
-seeder owns **demo data**. Both are idempotent, and `db:bootstrap` chains them — it is what the
-compose `app` service runs before starting the server.
+seeder owns **demo data**. `db:bootstrap` chains them — it is what the compose `app` service runs
+before starting the server.
 
-| Script                 | Job                                                         | Read more                       |
-| ---------------------- | ----------------------------------------------------------- | ------------------------------- |
-| `db:sync`              | make every index match the schemas; `-- --check` plans only | [Data](../reference/data.md)    |
-| `scenario:apply`       | upsert the demo dataset (no-op if already present)          | direct CLI wrapper              |
-| `scenario:apply:reset` | empty the database, then reseed                             | direct CLI wrapper              |
-| `db:cache:clear`       | drop every cached response under the app's prefix           | [Redis cache](./redis-cache.md) |
-| `db:bootstrap`         | `db:sync` followed by `scenario:apply`                      | runs on container boot          |
+`db:sync` is idempotent. The seeder is not, and cannot be: it seeds the catalogue and then builds
+the order book by driving the real checkout, payment and shipping endpoints, so a second run over
+the same database would give the shop a second history. It skips a database that already holds
+anything and says so; `scenario:apply:reset` is how you rebuild on purpose.
 
-`scenario:apply` calls `db:cache:clear`'s logic itself whenever it created something. Run the
+| Script                 | Job                                                         | Read more                         |
+| ---------------------- | ----------------------------------------------------------- | --------------------------------- |
+| `db:sync`              | make every index match the schemas; `-- --check` plans only | [Data](../reference/data.md)      |
+| `scenario:apply`       | build the demo dataset (skipped if anything is present)     | [Demo profile](./demo-profile.md) |
+| `scenario:apply:reset` | empty the database, then build it                           | [Demo profile](./demo-profile.md) |
+| `db:cache:clear`       | drop every cached response under the app's prefix           | [Redis cache](./redis-cache.md)   |
+| `db:bootstrap`         | `db:sync` followed by `scenario:apply`                      | runs on container boot            |
+
+`scenario:apply` calls `db:cache:clear`'s logic itself after building. Run the
 script by hand after editing the database another way (`mongosh`, a GUI) — those writes never
 reach the API, so nothing else invalidates the cache. See _Seeding and the response cache_ in the
 repo README.

@@ -62,12 +62,14 @@ let activeServer: Server | undefined;
 let shutdownPromise: Promise<void> | undefined;
 
 /**
- * Boot sequence: connect infra, mount i18n, then listen. Idempotent — a second call while the
- * server is already listening resolves with the running instance rather than binding twice.
+ * Everything a request needs answering except a socket to arrive on: the database, the cache, the
+ * queue and its workers, then i18n and the validation messages that read through it.
+ *
+ * Separate from {@link startServer} for one caller — `scenarios/apply.ts` drives the real flows
+ * against a loopback listener of its own and must not bind `NODE_PORT` on a container boot. It is
+ * also the honest split: nothing below this line is about listening.
  */
-export const startServer = () => {
-    if (activeServer?.listening) return Promise.resolve(activeServer);
-
+export const bootInfrastructure = () => {
     /*
      * Off in production only, and set before `start()` connects: an index built at connect time is
      * what makes a TTL-window change fail the boot outright, since Mongo refuses to rebuild an
@@ -119,12 +121,26 @@ export const startServer = () => {
              * would install a translator with no dictionary behind it.
              */
             .then(() => registerValidationMessages())
+            .then(() => undefined)
+    );
+};
+
+/**
+ * Boot sequence: {@link bootInfrastructure}, the demo profile's own data, then listen. Idempotent
+ * — a second call while the server is already listening resolves with the running instance rather
+ * than binding twice.
+ */
+export const startServer = () => {
+    if (activeServer?.listening) return Promise.resolve(activeServer);
+
+    return (
+        bootInfrastructure()
             /*
-             * Only in demo mode, and only ever the initial seed — `npm run demo`'s own
-             * `POST /__test/restore` handles every reseed after this. `restoreScenario` always
-             * empties first, which is free here: the in-memory database is already empty. Before
-             * `listen`, so the paired frontend's readiness probe (`GET /`, which only resolves
-             * once listening) never observes a database that is connected but still empty.
+             * Only in demo mode, and only ever the initial build — `npm run demo`'s own
+             * `POST /__test/restore` replays it from memory afterwards. Before `listen`, so the
+             * paired frontend's readiness probe (`GET /`, which only resolves once listening)
+             * never observes a shop that is connected but has not lived its history yet: the
+             * flows this runs drive the app on a throwaway loopback listener of their own.
              */
             .then(() => (isDemoMode() ? restoreScenario() : undefined))
             .then(
@@ -215,9 +231,14 @@ installRoutes(app);
 installErrorHandling(app);
 
 /*
- * Auto-start in non-test environments
+ * Auto-start, for every process that imports this file wanting a SERVER.
+ *
+ * Two do not, and both want the `app` object alone: jest, and `scenarios/apply.ts`, which boots
+ * the infrastructure itself and drives the flows on a loopback listener rather than binding
+ * `NODE_PORT` on a container boot. The environment is the only channel that can carry that
+ * decision — importing this file IS the side effect, so no export of it could be read in time.
  */
-if (process.env.NODE_ENV !== 'test') {
+if (process.env.NODE_ENV !== 'test' && process.env.NODE_APP_NO_LISTEN !== '1') {
     registerSignalHandlers(stopServer);
     void startServer().catch((error: Error) =>
         logger.error('------------- SERVER ERROR -------------', error)

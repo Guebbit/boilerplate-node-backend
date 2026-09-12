@@ -13,12 +13,35 @@ import {
     bankTransferMaxOpenPerAccount
 } from '@infrastructure/adapters/bank-transfer';
 
+/**
+ * The variables these cases drive, saved and put back around every one.
+ *
+ * Saved rather than deleted: `tests/support/setup.ts` configures bank transfer for the whole
+ * worker (the `shop` scenario declares a guarantee that needs it offered), and `process.env` is
+ * shared by every suite that worker runs. Clearing in `beforeEach` is what lets a case start from
+ * "not configured" at all.
+ */
+const TOUCHED = [
+    'NODE_BANK_TRANSFER_BENEFICIARY',
+    'NODE_BANK_TRANSFER_IBAN',
+    'NODE_BANK_TRANSFER_BIC',
+    'NODE_BANK_TRANSFER_HOLD_HOURS',
+    'NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT'
+] as const;
+
+/** Each variable as the worker had it, so `afterEach` can restore an unset one as unset. */
+const original = new Map(TOUCHED.map((key) => [key, process.env[key]]));
+
+beforeEach(() => {
+    for (const key of TOUCHED) delete process.env[key];
+});
+
 afterEach(() => {
-    delete process.env.NODE_BANK_TRANSFER_BENEFICIARY;
-    delete process.env.NODE_BANK_TRANSFER_IBAN;
-    delete process.env.NODE_BANK_TRANSFER_BIC;
-    delete process.env.NODE_BANK_TRANSFER_HOLD_HOURS;
-    delete process.env.NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT;
+    for (const key of TOUCHED) {
+        const value = original.get(key);
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+    }
 });
 
 describe('bankTransferEnabled', () => {

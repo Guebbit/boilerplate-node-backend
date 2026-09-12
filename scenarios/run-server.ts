@@ -54,7 +54,14 @@ const REQUIRED_DEFAULTS: Record<string, string> = {
     NODE_SUBMISSION_RATE_LIMIT_MAX: '1000',
     NODE_SUBMISSION_RATE_LIMIT_EMAIL_MAX: '1000',
     NODE_SUBMISSION_RATE_LIMIT_BLOCK_MAX: '1000',
-    NODE_UPLOAD_RATE_LIMIT_MAX: '1000'
+    NODE_UPLOAD_RATE_LIMIT_MAX: '1000',
+    /*
+     * Bank transfer is offered only where a deployment names both of these, and the `shop`
+     * scenario's `order.awaitingTransfer` guarantee needs it offered — so the demo profile names
+     * them. Fictional, and loopback-only: nobody can send money to a demo.
+     */
+    NODE_BANK_TRANSFER_BENEFICIARY: 'Guebbit Demo Shop',
+    NODE_BANK_TRANSFER_IBAN: 'IT60X0542811101000000123456'
 };
 
 /**

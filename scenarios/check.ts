@@ -1,59 +1,48 @@
 /**
  * @module
- * Assert every module's declared `scenario` guarantees (`src/kernel/registry.ts`'s
- * `AppModule.scenario`) actually hold in whatever database is currently seeded. Called by
- * `tests/integration/scenarios/shop.test.ts` right after seeding, so a guarantee that stops being
- * true fails the test suite loudly instead of drifting silently.
+ * Hold a scenario's DECLARED guarantees (`src/kernel/registry.ts`'s `AppModule.scenario`) equal to
+ * the SUBJECTS it actually offers — the id map `scenarios/index.ts`'s `buildScenario` returns and
+ * `GET /__test/scenario` serves.
+ *
+ * Both directions, which is the point: a guarantee nobody pinned a row for is a promise the
+ * backend cannot keep, and a subject no module declares is a name left behind after the module
+ * that wanted it was deleted. Neither has any other guard —
+ * `tests/integration/scenarios/shop.test.ts` runs this right after building the scenario, and
+ * checks the rows themselves.
  */
 
 import { enabledModules } from '../src/modules';
-import type { ScenarioModule } from './index';
 
 /**
- * Every guarantee `scenarioName` fails to hold, one line per problem — empty when everything
- * declared is actually satisfied.
+ * Every mismatch between what `scenarioName`'s modules declare and what `subjects` offers, one
+ * line per problem — empty when the two agree exactly.
  *
- * Two distinct ways a module can show up here: declaring a guarantee `modules` has no
- * `checkGuarantees` registered for at all (nothing can verify the claim), or a `checkGuarantees`
- * call that comes back without a key the manifest declares (the state stopped being seeded).
- *
- * Takes `modules` as a parameter, rather than reading `scenarios/index.ts`'s `shopModules`
- * directly, so a caller can exercise the "nothing registered" branch with an empty table.
+ * Takes `subjects` as a parameter rather than building the scenario itself: this is a comparison
+ * of two lists, and a checker that also had to seed a database could not be run against a
+ * hand-made list to prove it catches anything.
  *
  * @param scenarioName - which scenario's guarantees to check, e.g. `'shop'`
- * @param modules - the scenario's module table — `shopModules` for `'shop'`
+ * @param subjects - guarantee name → row id, as `buildScenario` resolved it
  */
-export const findUnmetGuarantees = async (
+export const findUnmetGuarantees = (
     scenarioName: string,
-    modules: Readonly<Record<string, Pick<ScenarioModule, 'checkGuarantees'>>>
-): Promise<string[]> => {
-    const problems: string[] = [];
+    subjects: Readonly<Record<string, string>>
+): string[] => {
+    const declared = new Map<string, string>();
+    for (const appModule of enabledModules)
+        for (const guarantee of appModule.scenario?.[scenarioName] ?? [])
+            declared.set(guarantee, appModule.name);
 
-    for (const appModule of enabledModules) {
-        const declared = appModule.scenario?.[scenarioName];
-        if (!declared || declared.length === 0) continue;
+    const problems = [...declared]
+        .filter(([guarantee]) => !Object.hasOwn(subjects, guarantee))
+        .map(([guarantee, moduleName]) => `${moduleName}: ${guarantee} is declared but has no row`);
 
-        // `modules` is declared as `Record<string, ...>` (this repo runs with
-        // `noUncheckedIndexedAccess` off), so an index access alone types as always-present even
-        // though most modules have no entry at all — `Object.hasOwn` narrows it back.
-        const checkGuarantees = Object.hasOwn(modules, appModule.name)
-            ? modules[appModule.name].checkGuarantees
-            : undefined;
-        if (!checkGuarantees) {
-            problems.push(
-                `${appModule.name} declares ${scenarioName} guarantees but its scenario module ` +
-                    `table has no checkGuarantees registered for it`
-            );
-            continue;
-        }
-
-        const satisfied = new Set(await checkGuarantees());
-        for (const guarantee of declared)
-            if (!satisfied.has(guarantee))
-                problems.push(`${appModule.name}: ${guarantee} is declared but not seeded`);
-    }
-
-    return problems;
+    return [
+        ...problems,
+        ...Object.keys(subjects)
+            .filter((guarantee) => !declared.has(guarantee))
+            .map((guarantee) => `${guarantee} is a subject no enabled module declares`)
+    ];
 };
 
 /**
@@ -61,14 +50,14 @@ export const findUnmetGuarantees = async (
  * `tests/integration/scenarios/shop.test.ts` wants: fail the test, don't hand back a list to check.
  *
  * @param scenarioName - which scenario's guarantees to check, e.g. `'shop'`
- * @param modules - the scenario's module table — `shopModules` for `'shop'`
- * @throws {Error} listing every unmet guarantee, when {@link findUnmetGuarantees} finds any
+ * @param subjects - guarantee name → row id, as `buildScenario` resolved it
+ * @throws {Error} listing every mismatch, when {@link findUnmetGuarantees} finds any
  */
-export const assertScenarioGuarantees = async (
+export const assertScenarioGuarantees = (
     scenarioName: string,
-    modules: Readonly<Record<string, Pick<ScenarioModule, 'checkGuarantees'>>>
-): Promise<void> => {
-    const problems = await findUnmetGuarantees(scenarioName, modules);
+    subjects: Readonly<Record<string, string>>
+): void => {
+    const problems = findUnmetGuarantees(scenarioName, subjects);
     if (problems.length > 0)
         throw new Error(
             `[scenario-check] ${scenarioName} guarantees not met:\n` +

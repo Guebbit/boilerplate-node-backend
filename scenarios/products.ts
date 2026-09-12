@@ -20,14 +20,14 @@
 import { FILLER_IMAGE_ROLE_KEYS, FILLER_PRODUCTS, fillerProductId } from './products-filler';
 
 /**
- * Re-exported so `./cart`, `./orders` and `./wishlist` can address a specific filler row (for
- * variety beyond the six named products) through this file rather than reaching into
+ * Re-exported so `./wishlist` and `scenarios/flows/shop-history.ts` can address a specific filler
+ * row (for variety beyond the six named products) through this file rather than reaching into
  * `./products-filler` directly.
  */
 export { fillerProductId } from './products-filler';
 import productImages from './products-images.generated.json';
 import { SEED_PRODUCT_IDS } from './subjects';
-import { makeProduct } from '@modules/products/factories';
+import { makeProduct, type ProductOverrides } from '@modules/products/factories';
 import { productModel } from '@modules/products/model';
 import { insertIfAbsent, type SeedOutcome } from '@scenarios/seed';
 import { productRepository } from '@modules/products/repository';
@@ -134,6 +134,19 @@ const NAMED_PRODUCT_COPY: Record<keyof typeof SEED_PRODUCT_IDS, ProductCopy> = {
 };
 
 /**
+ * `makeProduct`, with the shelf empty.
+ *
+ * `onHand` defaults to 100 in the schema, which is right for a product created through the admin
+ * API and wrong for every row here: the demo's stock arrives by opening receipt
+ * (`scenarios/flows/shop-history.ts`), so that every unit on the shelf has a movement behind it.
+ * Stated once rather than on each of the catalogue's rows.
+ *
+ * @param overrides - exactly what `makeProduct` takes
+ */
+const makeUnstockedProduct = (overrides: ProductOverrides) =>
+    makeProduct({ ...overrides, onHand: 0 });
+
+/**
  * Six named products, chosen to cover the branches the storefront and repositories actually
  * exercise rather than to look like a shop on their own — `./products-filler`'s filler rows are what
  * make the catalogue look like a shop. `categories` is non-empty on every RICH record, since a
@@ -141,12 +154,11 @@ const NAMED_PRODUCT_COPY: Record<keyof typeof SEED_PRODUCT_IDS, ProductCopy> = {
  * `barebones` is the deliberate exception, see its note below.
  */
 const namedProducts = [
-    makeProduct({
+    makeUnstockedProduct({
         id: SEED_PRODUCT_IDS.dogFoodStandard,
         title: NAMED_PRODUCT_COPY.dogFoodStandard.en.title,
         description: NAMED_PRODUCT_COPY.dogFoodStandard.en.description,
         price: 68,
-        onHand: 30,
         categories: ['dogs', 'food'],
         tags: ['dog-food', 'premium'],
         ...productImages.dogFoodStandard
@@ -156,62 +168,60 @@ const namedProducts = [
      * repositories' soft-delete filters both check. Exactly one record carries it, independent of
      * the inactive one, so the dataset can tell the two states apart.
      */
-    makeProduct({
+    makeUnstockedProduct({
         id: SEED_PRODUCT_IDS.heaterSoftDeleted,
         title: NAMED_PRODUCT_COPY.heaterSoftDeleted.en.title,
         description: NAMED_PRODUCT_COPY.heaterSoftDeleted.en.description,
         price: 55,
-        onHand: 12,
         categories: ['reptiles'],
         tags: ['heating', 'reptile'],
         deletedAt: '2024-02-26T23:34:44.832Z',
         ...productImages.heaterSoftDeleted
     }),
     /*
-     * `onHand: 0` on purpose — the storefront needs an out-of-stock badge and checkout needs a
-     * refusal to exercise. It's `onHand` itself that is zero, not just availability; the other way
-     * to be unbuyable (units held, all reserved) is deliberately not seeded — see `./orders`.
+     * The out-of-stock one. Every row here seeds at `onHand: 0`; this is the row that never gets
+     * an opening receipt (see {@link OPENING_STOCK}), so it is still at zero once the flows have
+     * run — the storefront's out-of-stock badge and checkout's refusal both need it. It's `onHand`
+     * itself that is zero, not just availability; the other way to be unbuyable (units held, all
+     * reserved) is what `order.ownerPending` exercises instead.
      */
-    makeProduct({
+    makeUnstockedProduct({
         id: SEED_PRODUCT_IDS.scratchPostOutOfStock,
         title: NAMED_PRODUCT_COPY.scratchPostOutOfStock.en.title,
         description: NAMED_PRODUCT_COPY.scratchPostOutOfStock.en.description,
         price: 45,
-        onHand: 0,
         categories: ['cats'],
         tags: ['scratching-post', 'heavy-duty'],
         ...productImages.scratchPostOutOfStock
     }),
-    makeProduct({
+    makeUnstockedProduct({
         id: SEED_PRODUCT_IDS.dogBedPremium,
         title: NAMED_PRODUCT_COPY.dogBedPremium.en.title,
         description: NAMED_PRODUCT_COPY.dogBedPremium.en.description,
         price: 84,
-        onHand: 45,
         categories: ['dogs'],
         tags: ['dog-bed', 'premium'],
         ...productImages.dogBedPremium
     }),
     /* The inactive one — soft-deleted's independent twin. `publicScope()` requires active AND not
      * deleted, so from outside these two behave identically while remaining distinct states. */
-    makeProduct({
+    makeUnstockedProduct({
         id: SEED_PRODUCT_IDS.bundleInactive,
         title: NAMED_PRODUCT_COPY.bundleInactive.en.title,
         description: NAMED_PRODUCT_COPY.bundleInactive.en.description,
         price: 96,
-        onHand: 18,
         categories: ['rabbits', 'bundles'],
         tags: ['bundle', 'rabbit'],
         active: false,
         ...productImages.bundleInactive
     }),
     /*
-     * The minimal one — only `title` and `price`, so every optional field falls to the model's
-     * defaults, `imageUrl` included. The others are richly populated and can't catch a card or
+     * The minimal one — only `title` and `price`, so every optional field but the stock counter
+     * falls to the model's defaults, `imageUrl` included. The others are richly populated and can't catch a card or
      * filter chip that wrongly assumes a description, category or image is present. Public on
      * purpose, so it appears in every list the storefront actually renders.
      */
-    makeProduct({
+    makeUnstockedProduct({
         id: SEED_PRODUCT_IDS.barebones,
         title: NAMED_PRODUCT_COPY.barebones.en.title,
         price: 9
@@ -225,8 +235,8 @@ const namedProducts = [
  * path, and {@link PRODUCT_COPY_BY_ID} below keeps it addressable by id for the translation batch.
  */
 const fillerProductRows = FILLER_PRODUCTS.map(
-    ({ translations: _translations, ...product }, index) =>
-        makeProduct({
+    ({ translations: _translations, openingStock: _openingStock, ...product }, index) =>
+        makeUnstockedProduct({
             id: fillerProductId(index),
             ...product,
             ...productImages[
@@ -241,6 +251,35 @@ const fillerProductRows = FILLER_PRODUCTS.map(
 export const productFixtures = [...namedProducts, ...fillerProductRows];
 
 /**
+ * How many units each product's OPENING RECEIPT brings in — not a seeded column.
+ *
+ * Every row above seeds at the schema's `onHand: 0`, and `scenarios/flows/shop-history.ts` puts
+ * these on the shelf through `POST /inventory/receipts` before the first checkout, so the demo's
+ * stock is stock the application itself received and every unit is accounted for by a movement
+ * row. `scratchPostOutOfStock` is absent on purpose: a product that never took delivery.
+ */
+const OPENING_STOCK: ReadonlyMap<string, number> = new Map([
+    [SEED_PRODUCT_IDS.dogFoodStandard, 30],
+    [SEED_PRODUCT_IDS.heaterSoftDeleted, 12],
+    [SEED_PRODUCT_IDS.dogBedPremium, 45],
+    [SEED_PRODUCT_IDS.bundleInactive, 18],
+    [SEED_PRODUCT_IDS.barebones, 9],
+    ...FILLER_PRODUCTS.map(
+        (product, index) => [fillerProductId(index), product.openingStock] as const
+    )
+]);
+
+/**
+ * {@link OPENING_STOCK} for one product — `0` for a row that takes no delivery.
+ *
+ * A function rather than the map itself: the flow runner is the only reader, and handing it the
+ * table would let it write to one.
+ *
+ * @param productId - a seeded product's id
+ */
+export const openingStockFor = (productId: string): number => OPENING_STOCK.get(productId) ?? 0;
+
+/**
  * Every product's copy, keyed by its seeded id — the named six from {@link NAMED_PRODUCT_COPY},
  * the filler rows from `./products-filler`'s own `translations` field.
  * {@link seedProductsCollection} is the only reader.
@@ -253,21 +292,6 @@ const PRODUCT_COPY_BY_ID: ReadonlyMap<string, ProductCopy> = new Map([
         (product, index) => [fillerProductId(index), product.translations] as const
     )
 ]);
-
-/**
- * One demo product by id, or a thrown error naming what's missing.
- *
- * `./orders` needs the actual record — it embeds a product SNAPSHOT, not a reference — so the
- * throw lives here, next to the data it validates, instead of every consumer reimplementing it.
- * Returns the fixture type directly; reshaping to `orders`' own snapshot type is the caller's job.
- * @throws {Error} when no demo product carries that id
- */
-export const seedProductById = (productId: string): (typeof productFixtures)[number] => {
-    const product = productFixtures.find((candidate) => candidate._id.toString() === productId);
-    if (!product) throw new Error(`seed fixtures: no product ${productId} in the demo catalogue`);
-
-    return product;
-};
 
 /**
  * One locale's copy as the write surface takes it.
@@ -326,7 +350,7 @@ const writeSeedTranslations = (productId: string): Promise<void> => {
  * Goes through `planTranslations`/`writeTranslations` rather than `productService.writeCreate`:
  * that service validates its body against `zodProductCreateSchema` (generated from `POST
  * /products`), which has no `id` field and always mints a fresh one — this dataset needs the
- * factory's PINNED id, both for idempotent re-seeding and because `./orders`/`./cart`/`./wishlist`
+ * factory's PINNED id, both for idempotent re-seeding and because `./wishlist` and the flow runner
  * address specific rows by their known id. `planTranslations`/`writeTranslations` are the same two
  * primitives that service composes; calling them directly is the closest a seeder with its own id
  * can get to "the new write surface".

@@ -11,7 +11,7 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironment, withoutEnvironment } from '@tests/environment';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
@@ -298,18 +298,24 @@ describe('POST /cart/checkout', () => {
         expect(response).toSatisfyApiSpec();
     });
 
-    it('matches the error contract for an unoffered payment method', async () => {
-        const { bearer } = await authenticateWithCart();
+    it('matches the error contract for an unoffered payment method', () =>
+        // Explicitly unset: `tests/support/setup.ts` configures transfer for the whole worker, so
+        // "this deployment offers no transfer" is a state this case has to create.
+        withoutEnvironment(
+            ['NODE_BANK_TRANSFER_BENEFICIARY', 'NODE_BANK_TRANSFER_IBAN'],
+            async () => {
+                const { bearer } = await authenticateWithCart();
 
-        const response = await api()
-            .post('/cart/checkout')
-            .set('Authorization', bearer)
-            .send({ paymentMethod: 'bank_transfer' });
+                const response = await api()
+                    .post('/cart/checkout')
+                    .set('Authorization', bearer)
+                    .send({ paymentMethod: 'bank_transfer' });
 
-        expect(response.status).toBe(409);
-        expect(response.body.errors[0].code).toBe('CART_PAYMENT_METHOD_NOT_AVAILABLE');
-        expect(response).toSatisfyApiSpec();
-    });
+                expect(response.status).toBe(409);
+                expect(response.body.errors[0].code).toBe('CART_PAYMENT_METHOD_NOT_AVAILABLE');
+                expect(response).toSatisfyApiSpec();
+            }
+        ));
 
     it('matches the contract for a bank_transfer checkout, transferInstructions included', () =>
         withEnvironment('NODE_BANK_TRANSFER_BENEFICIARY', 'Guebbit Shop', () =>

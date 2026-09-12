@@ -55,5 +55,14 @@ export default {
         // Detach, never delete: the payment survives the account.
         onDomainEvent(USER_DELETED, ({ userId }) => detachUserId(userId));
     },
-    locales: path.join(__dirname, 'locales')
+    locales: path.join(__dirname, 'locales'),
+    /**
+     * One refunded payment, reached the way a shop reaches one: an order paid by card, then
+     * cancelled by an operator, with this module's own `ORDER_CANCELLED` listener returning the
+     * money. Named so the admin's refunded-payment screen has a row to open.
+     *
+     * The id behind it is the ORDER's: `GET /payments/order/{orderId}` is the only read path a
+     * payment has, so a payment id would name a row no caller could fetch.
+     */
+    scenario: { shop: ['payment.refunded'] }
 } satisfies AppModule;

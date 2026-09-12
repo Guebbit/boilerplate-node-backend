@@ -189,7 +189,12 @@ export interface FillerProduct {
     title: string;
     description: string;
     price: number;
-    onHand: number;
+    /**
+     * What the opening receipt brings in, NOT a seeded column — `./products` writes every row at
+     * `onHand: 0` and `scenarios/flows/shop-history.ts` puts this on the shelf through
+     * `POST /inventory/receipts`, so the shop's stock is stock the app itself received.
+     */
+    openingStock: number;
     categories: string[];
     tags: string[];
     /** Both locales' copy for the write surface's translation batch (see `./products`). `en` is
@@ -200,9 +205,10 @@ export interface FillerProduct {
 
 /**
  * Every animal × product-type × tier combination — {@link ANIMALS}`.length` ×
- * {@link PRODUCT_TYPES}`.length` × {@link TIERS}`.length` rows, each active, non-deleted and in
- * stock. The soft-deleted, inactive and out-of-stock states live on the six named rows in
- * `./products`, so a filler row is never mistaken for one of them.
+ * {@link PRODUCT_TYPES}`.length` × {@link TIERS}`.length` rows, each active and non-deleted, and
+ * each stocked by an opening receipt once the flows run. The soft-deleted, inactive and
+ * out-of-stock states live on the six named rows in `./products`, so a filler row is never
+ * mistaken for one of them.
  */
 export const FILLER_PRODUCTS: FillerProduct[] = ANIMALS.flatMap((animal, animalIndex) =>
     PRODUCT_TYPES.flatMap((type, typeIndex) =>
@@ -221,7 +227,7 @@ export const FILLER_PRODUCTS: FillerProduct[] = ANIMALS.flatMap((animal, animalI
                 title: en.title,
                 description: en.description,
                 price: Math.round(type.basePrice * tier.priceMultiplier) + animalIndex * 2,
-                onHand: Math.max(5, 60 - tierIndex * 15 - typeIndex * 3 + animalIndex * 2),
+                openingStock: Math.max(5, 60 - tierIndex * 15 - typeIndex * 3 + animalIndex * 2),
                 categories: [animal.slug],
                 tags: [type.slug, tier.slug],
                 translations: { en, it }

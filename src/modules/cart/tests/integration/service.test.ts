@@ -11,7 +11,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
-import { withEnvironment } from '@tests/environment';
+import { withEnvironment, withoutEnvironment } from '@tests/environment';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 
 // The queue, not the copy: what checkout owes the customer is that a confirmation was DISPATCHED
@@ -758,23 +758,29 @@ describe('orderConfirm — paymentMethod', () => {
         expect(order!.payBy).toBeUndefined();
     });
 
-    it('refuses bank_transfer when this deployment has not configured it', async () => {
-        const user = await createUser();
-        const product = await createProduct();
-        await cartItemSetById(user.id, String(product._id), 1);
+    it('refuses bank_transfer when this deployment has not configured it', () =>
+        // Explicitly unset: `tests/support/setup.ts` configures transfer for the whole worker, so
+        // "this deployment offers no transfer" is a state this case has to create.
+        withoutEnvironment(
+            ['NODE_BANK_TRANSFER_BENEFICIARY', 'NODE_BANK_TRANSFER_IBAN'],
+            async () => {
+                const user = await createUser();
+                const product = await createProduct();
+                await cartItemSetById(user.id, String(product._id), 1);
 
-        const result = await orderConfirm(
-            user.id,
-            testCallerContext,
-            undefined,
-            undefined,
-            'bank_transfer'
-        );
+                const result = await orderConfirm(
+                    user.id,
+                    testCallerContext,
+                    undefined,
+                    undefined,
+                    'bank_transfer'
+                );
 
-        expect(asReject(result).status).toBe(409);
-        expect(asReject(result).errors[0].code).toBe('CART_PAYMENT_METHOD_NOT_AVAILABLE');
-        await expect(orderRepository.count({ userId: user._id })).resolves.toBe(0);
-    });
+                expect(asReject(result).status).toBe(409);
+                expect(asReject(result).errors[0].code).toBe('CART_PAYMENT_METHOD_NOT_AVAILABLE');
+                await expect(orderRepository.count({ userId: user._id })).resolves.toBe(0);
+            }
+        ));
 
     it(
         'stamps paymentMethod and a payBy the configured hold-hours away',

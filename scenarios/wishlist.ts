@@ -14,7 +14,7 @@ import { wishlistRepository } from '@modules/wishlist/repository';
 /**
  * The seeded wishlists: one per demo account, holding only publicly visible products.
  *
- * No pinned `_id` — see `./cart`, which explains why the owner-keyed collections differ.
+ * No pinned `_id` — `insertIfAbsentForOwner` keys on `userId`, so an id would buy no idempotency.
  */
 export const wishlistFixtures = [
     /* root — one saved product, enough for the owner account to show a non-empty page. */

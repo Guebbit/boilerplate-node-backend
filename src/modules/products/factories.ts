@@ -24,7 +24,7 @@ export type ProductOverrides = OverridesFor<Product>;
 
 /**
  * A product ready for `productRepository.create`. The three factory-set fields are required, not
- * optional, so callers like `scenarios/orders.ts` can read `fixture.title` without a `!`.
+ * optional, so a caller like `scenarios/products.ts` can read `fixture.title` without a `!`.
  */
 export type ProductFixture = Partial<ProductDocument> &
     Pick<ProductRecord, '_id' | 'title' | 'price'>;
