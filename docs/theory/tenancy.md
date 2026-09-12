@@ -117,14 +117,14 @@ sequenceDiagram
     C->>R: bearer token
     R->>U: findAuthenticatableById(claims.id)
     U-->>R: user (or none)
-    R->>S: rolesOf(user.id, DEMO_TENANT_ID, fallback)
+    R->>S: rolesOf(user.id, DEPLOYMENT_TENANT_ID, fallback)
     S-->>R: { tenant, platform } role names
-    R-->>C: AuthContext { tenantId: DEMO_TENANT_ID, roles }
+    R-->>C: AuthContext { tenantId: DEPLOYMENT_TENANT_ID, roles }
     C->>P: callerInScope(context, 'tenant' | 'platform')
     P-->>C: Caller — tenantId proven `string` in tenant scope, `null` in platform scope
 ```
 
-**There is no lookup.** `DEMO_TENANT_ID` is a constant in `@kernel/access/seed` — the Django
+**There is no lookup.** `DEPLOYMENT_TENANT_ID` is a constant in `@kernel/access/seed` — the Django
 `SITE_ID` pattern: one organisation per database means its id can be fixed at build time instead of
 resolved at boot. `AuthContext.tenantId` is a plain, non-nullable `string`; `Caller` is a
 discriminated union on `scope`, so a tenant-scope caller's id is proven by the type, not asserted

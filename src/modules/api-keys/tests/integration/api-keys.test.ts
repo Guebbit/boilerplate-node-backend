@@ -9,8 +9,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { TEST_TENANT_ID } from '@tests/callers';
-import type { CallerContext } from '@infrastructure/http/request';
-import type { Caller } from '@types';
+import type { TenantCallerContext } from '@infrastructure/http/request';
 import { userRepository } from '@modules/users';
 import { seedPresetRoles } from '@kernel/access/seed';
 import { assignRole } from '@kernel/access/store';
@@ -33,13 +32,13 @@ const createRealUser = (id: string) =>
     });
 
 /** The `CallerContext` a mint call needs — a real user's id, with whatever permissions they currently hold. */
-const contextFor = (userId: string, permissions: readonly string[]): CallerContext => ({
+const contextFor = (userId: string, permissions: readonly string[]): TenantCallerContext => ({
     caller: {
         id: userId,
         tenantId: TEST_TENANT_ID,
         scope: 'tenant',
         permissions
-    } as Caller,
+    },
     analyticsConsent: false
 });
 

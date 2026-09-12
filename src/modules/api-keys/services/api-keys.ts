@@ -14,7 +14,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import type { CallerContext } from '@infrastructure/http/request';
+import type { TenantCallerContext } from '@infrastructure/http/request';
 import type { PaginatedResult } from '@infrastructure/persistence/create-repository';
 import { holdsKey } from '@kernel/ability';
 import { findKey } from '@kernel/permissions';
@@ -24,7 +24,6 @@ import type { ApiKeyDocument } from '../model';
 import { apiKeyRepository } from '../repository';
 import { mintApiKey, displayIdOf } from '../credentials';
 import { apiKeysAuditActions } from '../audit';
-import { tenantOf } from './context';
 
 /**
  * Is `key` something `caller` may hand out on a credential?
@@ -41,10 +40,14 @@ const isMintable = (key: string, caller: Caller): boolean =>
 
 /** List this tenant's credentials, newest first. Never returns a secret — see `model.ts`'s transform. */
 export const list = (
-    context: CallerContext,
+    context: TenantCallerContext,
     filters: { page?: unknown; pageSize?: unknown }
 ): Promise<PaginatedResult<ApiKeyDocument>> =>
-    apiKeyRepository.search(filters, { tenant: tenantOf(context) }, { createdAt: -1, _id: -1 });
+    apiKeyRepository.search(
+        filters,
+        { tenant: context.caller.tenantId },
+        { createdAt: -1, _id: -1 }
+    );
 
 /**
  * Mint a credential. `body.permissions` must be a non-empty subset of what the minter currently
@@ -57,7 +60,7 @@ export const list = (
  */
 export const mint = (
     body: MintApiKeyRequest,
-    context: CallerContext
+    context: TenantCallerContext
 ): Promise<ResponseSuccess<ApiKeyCreated> | ResponseReject> => {
     const invalid = body.permissions.filter((key) => !isMintable(key, context.caller));
     if (invalid.length > 0)
@@ -75,7 +78,7 @@ export const mint = (
 
     return apiKeyRepository
         .create({
-            tenant: tenantOf(context),
+            tenant: context.caller.tenantId,
             name: body.name,
             publicPrefix,
             hash,
@@ -106,10 +109,10 @@ export const mint = (
 /** Revoke a credential. Idempotent: revoking an already-revoked key is a no-op success, not a 404. */
 export const revoke = (
     id: string,
-    context: CallerContext
+    context: TenantCallerContext
 ): Promise<ResponseSuccess<undefined> | ResponseReject> =>
     apiKeyRepository.findById(id).then((apiKey) => {
-        if (apiKey?.tenant !== tenantOf(context))
+        if (apiKey?.tenant !== context.caller.tenantId)
             return generateReject(404, [t('generic.error-not-found')]);
 
         if (apiKey.revokedAt) return generateSuccess(undefined);

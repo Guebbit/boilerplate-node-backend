@@ -7,10 +7,9 @@
  * /__test/emails`. Infrastructure-tier on purpose: the mailer may not reach up into `app`, so the
  * sink lives beside it. Inert unless {@link enableDemoProfile} was called.
  *
- * `NODE_DEMO` used to gate this on its own — one wrong env var on any non-production host turned
- * this into an unauthenticated database wipe, diverted mail and a skipped boot secrets gate.
- * {@link enableDemoProfile} replaces it with a positive proof: nothing but
- * `scenarios/run-server.ts` calls it, so no copied `.env` can switch it on by accident.
+ * Gated on an in-process call, never on an env var: switching this on diverts mail, opens an
+ * unauthenticated database wipe and skips the boot secrets gate, so no copied `.env` may be able
+ * to do it. Nothing but `scenarios/run-server.ts` calls {@link enableDemoProfile}.
  */
 
 import type { SendMailOptions } from 'nodemailer';

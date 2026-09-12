@@ -28,7 +28,6 @@
         "check:dependencies": "depcruise src tests --output-type err",
         "docs:graph": "tsx scripts/docs/generate-module-graph.ts",
         "docs:roles": "tsx scripts/docs/generate-role-matrix.ts",
-        "docs:attacks": "tsx scripts/docs/generate-attack-index.ts",
         "check:docs-graph": "tsx scripts/docs/generate-module-graph.ts --check",
         "check:docs-roles": "tsx scripts/docs/generate-role-matrix.ts --check",
         "check:docs-references": "tsx scripts/docs/check-references.ts",

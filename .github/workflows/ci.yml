@@ -432,8 +432,11 @@ jobs:
 
     test-unit:
         # The fast suite: pure functions, services and repositories against in-memory Mongo.
+        # 15 minutes was too tight for the coverage rerun below (`--runInBand`, ~10 minutes alone)
+        # plus the plain run and setup — the job hit the wall mid-run and reported a bare timeout
+        # instead of the coverage failure underneath it.
         runs-on: ubuntu-latest
-        timeout-minutes: 15
+        timeout-minutes: 25
         permissions:
             contents: read
         steps:

@@ -26,7 +26,7 @@ import { start, connection, emptyDatabase } from '@infrastructure/runtime/databa
 import { clearCache, stopCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
 import { runScript } from '../db/run-script';
-import { SCENARIOS, type ScenarioName } from '@scenarios/index';
+import { SCENARIOS, DEFAULT_SCENARIO, isScenarioName } from '@scenarios/index';
 import { resolveTranslatables } from '@kernel/registry';
 import { setTranslatables } from '@modules/locales/module';
 import { hasFallbackSeedPassword } from '@scenarios/accounts';
@@ -53,13 +53,12 @@ async function seed() {
         return;
     }
 
-    if (scenarioArgument !== undefined && !Object.hasOwn(SCENARIOS, scenarioArgument)) {
+    if (scenarioArgument !== undefined && !isScenarioName(scenarioArgument)) {
         logger.warn(`scenario:apply refused to run: unknown scenario "${scenarioArgument}".`);
         return;
     }
-    // `Object.hasOwn` above narrows against `SCENARIOS`'s keys, not `scenarioArgument`'s own type —
-    // the cast states what the guard already proved.
-    const scenarioName = (scenarioArgument as ScenarioName | undefined) ?? 'shop';
+
+    const scenarioName = scenarioArgument ?? DEFAULT_SCENARIO;
 
     /*
      * Outside development/test, a still-public password is the one thing this refuses: a

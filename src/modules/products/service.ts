@@ -41,7 +41,7 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { productsAnalyticsEvents } from './analytics';
 import { productsAuditActions } from './audit';
-import { PRODUCT_DELETED } from './events';
+import { PRODUCT_DELETED, PRODUCT_CREATED } from './events';
 import { zodProductCreateSchema, zodProductUpdateSchema, toProduct } from './model';
 import type { ProductDocument } from './model';
 import { productRepository } from './repository';
@@ -257,6 +257,14 @@ const enqueueIfPending = (product: ProductDocument): ProductDocument => {
 
 /**
  * Create a new product document in the database.
+ *
+ * Written with `onHand: 0` regardless of what `data.onHand` asks for — this module never moves
+ * that counter (see `./model`'s own docblock). `PRODUCT_CREATED` is how the opening count still
+ * happens on this same request: `inventory` (which already imports this module, so this cannot
+ * import back) is the one subscriber, and moves the counter to `onHand` through its own
+ * `receive()` — one call, ledger row included, same as every other stock change. The product is
+ * re-read after the awaited emit so the response reflects the real count whether or not that
+ * listener succeeded; a throw there leaves `onHand` at the honest `0` it started from, not a lie.
  */
 export const create = (
     data: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'deletedAt'> & {
@@ -268,19 +276,29 @@ export const create = (
     productRepository
         .create({
             ...data,
+            onHand: 0,
             categories: sanitizeStringArray(data.categories),
             tags: sanitizeStringArray(data.tags)
         })
+        .then((product) =>
+            emitDomainEvent(PRODUCT_CREATED, {
+                productId: String(product._id),
+                onHand: data.onHand ?? 0
+            }).then(() => productRepository.findById(String(product._id)))
+        )
         .then((product) => {
+            // Re-read right after our own create(); absent only if something hard-deleted it
+            // within that same tick, which nothing in this flow does.
+            const created = product!;
             emitAuditEvent(
                 buildAuditEvent(context, {
                     action: productsAuditActions.ADMIN_PRODUCT_CREATED,
                     outcome: 'success',
                     target_type: 'product',
-                    target_id: String(product._id)
+                    target_id: String(created._id)
                 })
             );
-            return enqueueIfPending(product);
+            return enqueueIfPending(created);
         });
 
 /**

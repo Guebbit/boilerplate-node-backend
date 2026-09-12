@@ -9,6 +9,20 @@ secondary path.
 
 ## First run
 
+```mermaid
+flowchart TD
+    Clone(["Fresh clone"]) --> Install["npm install"]
+    Install --> Env["cp .env-example .env,\nset the two NODE_TOKEN_* vars"]
+    Env --> Up["npm run compose:restart"]
+    Up --> Boot["app container runs\nnpm run db:bootstrap on its own"]
+    Boot --> Ready(["Seeded API on :3000"])
+
+    classDef step fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef done fill:#dcfce7,stroke:#16a34a,color:#111827;
+    class Clone,Install,Env,Up,Boot step;
+    class Ready done;
+```
+
 ```bash
 npm install
 cp .env-example .env

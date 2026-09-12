@@ -45,14 +45,15 @@ export type OrderLineInput = Omit<OrderItem, 'product' | 'locale'> & {
 };
 
 /**
- * What a caller may pin, derived from the generated `Order`. The three totals and `status` are
- * dropped, not optional: they're required on the wire but never stored, so stating one would
- * invent a column the API never produced. `items` is replaced because a line here takes a
- * snapshot as DATA; see `OrderLineInput`.
+ * What a caller may pin, derived from the generated `Order`. The three totals are dropped, not
+ * optional: they're required on the wire but never stored, so stating one would invent a column
+ * the API never produced. `status` stays — it IS stored (`OrderDocument.status`, default
+ * `OrderStatus.pending`) — so a fixture that needs a history order past `pending` can say so.
+ * `items` is replaced because a line here takes a snapshot as DATA; see `OrderLineInput`.
  */
 export type OrderOverrides = Omit<
     OverridesFor<Order>,
-    'items' | 'status' | 'totalItems' | 'totalQuantity' | 'totalPrice'
+    'items' | 'totalItems' | 'totalQuantity' | 'totalPrice'
 > & {
     /** 24-char hex of the person who placed it. */
     userId?: Id;
@@ -96,6 +97,7 @@ export const makeOrder = ({
     userId,
     email,
     items,
+    status,
     shippingMethod,
     shippingCost,
     shippingAddress,
@@ -110,6 +112,9 @@ export const makeOrder = ({
         quantity,
         locale: locale ?? getDefaultLocale()
     })),
+    // Passed through, never defaulted here: the model's own `default: OrderStatus.pending`
+    // already covers "not stated", and repeating that default in two places is how they drift.
+    ...stripUndefined({ status }),
     /*
      * The three shipping columns pass through rather than defaulting to anything. All three are
      * optional on the wire and absent on an order placed before the checkout asked for them, so a

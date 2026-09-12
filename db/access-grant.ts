@@ -6,7 +6,7 @@
  */
 
 import { assignRole } from '@kernel/access/store';
-import { DEMO_TENANT_ID } from '@kernel/access/seed';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { userService } from '@modules/users';
 import type { AuthorizationScope } from '@types';
 
@@ -38,7 +38,7 @@ export const grantAccess = (
 
         return assignRole(
             user.id,
-            scope === 'platform' ? null : DEMO_TENANT_ID,
+            scope === 'platform' ? null : DEPLOYMENT_TENANT_ID,
             scope,
             roleName
         ).then(() => undefined);

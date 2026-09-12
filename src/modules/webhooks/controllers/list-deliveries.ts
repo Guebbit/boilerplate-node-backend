@@ -6,7 +6,7 @@
 import { z } from 'zod';
 import { paginationSchema } from '@infrastructure/http/schemas';
 import { createListController } from '@infrastructure/surfaces/create-list-controller';
-import { callerContextOf } from '@infrastructure/http/request';
+import { tenantCallerContextOf } from '@infrastructure/http/request';
 import type { WebhookDelivery, WebhookDeliveriesResponse } from '@types';
 import { webhooksService } from '../services';
 
@@ -29,7 +29,7 @@ export const listWebhookDeliveries = createListController({
     entity: 'webhookDeliveries',
     schema: listWebhookDeliveriesQuerySchema,
     runList: (parsed, request) =>
-        webhooksService.listDeliveries(callerContextOf(request), parsed).then((result) => {
+        webhooksService.listDeliveries(tenantCallerContextOf(request), parsed).then((result) => {
             const items: unknown = result.items;
             return {
                 items: items as WebhookDelivery[],

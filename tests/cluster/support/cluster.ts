@@ -104,6 +104,15 @@ const startCluster = ({
                 NODE_TOKEN_ACCESS: 'cluster-suite-access-secret',
                 NODE_TOKEN_REFRESH: 'cluster-suite-refresh-secret',
                 /*
+                 * `NODE_ENV: 'development'` above means `assertRequiredConfig` runs for real —
+                 * unlike every other suite, which sets `NODE_ENV=test` and skips it. A local `.env`
+                 * (via `dotenv/config` in `src/app.ts`) supplies these on a dev machine; CI has none,
+                 * so the child refuses to boot without them (`src/kernel/required-config.ts`).
+                 */
+                NODE_URL: `http://127.0.0.1:${String(port)}`,
+                NODE_TOTP_ENCRYPTION_KEY: 'cluster-suite-totp-encryption-key',
+                NODE_WEBHOOK_SECRET_ENCRYPTION_KEY: 'cluster-suite-webhook-secret-encryption-key',
+                /*
                  * Clustering is OFF by default — `NODE_ENABLE_CLUSTERING` gates the fork, and
                  * `NODE_CLUSTER_WORKERS` alone does nothing. Without this the child is a single
                  * process, and every assertion about crossing workers passes for the wrong reason.

@@ -10,7 +10,7 @@ import type { CastError } from 'mongoose';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { t } from '@infrastructure/i18n';
-import { callerContextOf, extractAndValidateId } from '@infrastructure/http/request';
+import { tenantCallerContextOf, extractAndValidateId } from '@infrastructure/http/request';
 import { refused } from '@infrastructure/http/controller';
 import { apiKeysService } from '../services';
 
@@ -24,7 +24,7 @@ export const revokeApiKey = (request: Request<{ id: string }>, response: Respons
     if (!id) return;
 
     return apiKeysService
-        .revokeApiKey(id, callerContextOf(request))
+        .revokeApiKey(id, tenantCallerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
             successResponse(response, undefined, 200, result.message);

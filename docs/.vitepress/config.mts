@@ -220,6 +220,10 @@ export default withMermaid(
                             { text: 'Internationalisation', link: '/tools/i18n' },
                             { text: 'Demo profile', link: '/tools/demo-profile' },
                             { text: 'Security', link: '/tools/security' },
+                            {
+                                text: 'Deployment Hardening',
+                                link: '/tools/deployment-hardening'
+                            },
                             { text: 'Idempotency', link: '/tools/idempotency' },
                             { text: 'Image Processing', link: '/tools/image-processing' }
                         ]

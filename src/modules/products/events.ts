@@ -16,17 +16,28 @@ declare module '@kernel/events' {
          * the product was soft-deleted, and re-adding them is the user's call, not the catalogue's.
          */
         'product.deleted': { productId: string };
+
+        /**
+         * A product was created, with the opening stock count the request asked for. The document
+         * itself is written with `onHand: 0` — `inventory` (which already imports this module, so
+         * an import back here would cycle) is the one and only listener, and moves the counter to
+         * `onHand` through its own `receive()`. That is still ONE call moving the counter and
+         * writing the ledger row together; the event is only how `products` triggers it without
+         * importing `inventory`. Never repeat this for an UPDATE: a past `product.stock_moved`
+         * event reacted to a counter a separate write had already changed, so a listener failure
+         * left a moved counter with no ledger row explaining it. Here there is nothing to leave
+         * inconsistent — a failed listener leaves `onHand` at the honest `0` it started at,
+         * recoverable later through `POST /inventory/receipts`, never a silent lie.
+         */
+        'product.created': { productId: string; onHand: number };
     }
 }
-
-/*
- * Deliberately no stock event: `product.stock_moved` let the ledger row react to a counter change
- * instead of being part of it, so rollback paths sometimes skipped it, corrupting the audit trail.
- * That row is now written by the same call that moves the counter, in `@modules/inventory`.
- */
 
 /**
  * The event names, exported through the barrel so an emitter and its listeners share one
  * spelling rather than two string literals that typo independently.
  */
 export const PRODUCT_DELETED = 'product.deleted';
+
+/** See {@link DomainEventMap}'s `'product.created'` for why this exists and what it may trigger. */
+export const PRODUCT_CREATED = 'product.created';

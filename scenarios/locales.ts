@@ -92,52 +92,72 @@ type LocaleEntryRow = [
 ];
 
 /**
- * Sixteen translated strings, grouped by what each group demonstrates. The first ten are Spanish
- * across four namespaces and up to three levels — `products.list.filters.*` is the deep one, so a
- * builder that only ever nests once would fail here. Ids are the fixture's own, not derived: each
- * group has its own hex band and they don't run on from one another.
+ * Sixteen translated strings, grouped by what each group demonstrates. The first ten are Spanish,
+ * against keys the paired frontend's own `en.json` files actually declare — so a real dictionary
+ * deployed for `es` tomorrow would slot these straight in, and an admin editing them today sees a
+ * key that means something. `static-pages.about.features.catalogue.title` is the deep one, five
+ * levels, so a builder that only ever nests once would fail here. Ids are the fixture's own, not
+ * derived: each group has its own hex band and they don't run on from one another.
  */
 const LOCALE_ENTRIES: LocaleEntryRow[] = [
-    ['65e0200a9a7d4b2e1c0f1001', 'downloadable', 'frontend', 'products.list.title', 'Catálogo'],
+    [
+        '65e0200a9a7d4b2e1c0f1001',
+        'downloadable',
+        'frontend',
+        'products-list-page.page-title',
+        'Catálogo de productos'
+    ],
     [
         '65e0200a9a7d4b2e1c0f1002',
         'downloadable',
         'frontend',
-        'products.list.empty',
-        'Sin resultados'
+        'product-target-page.out-of-stock',
+        'Agotado'
     ],
     [
         '65e0200a9a7d4b2e1c0f1003',
         'downloadable',
         'frontend',
-        'products.list.filters.title',
-        'Filtros'
+        'static-pages.about.features.catalogue.title',
+        'Explora el catálogo'
     ],
-    [
-        '65e0200a9a7d4b2e1c0f1004',
-        'downloadable',
-        'frontend',
-        'products.list.filters.reset',
-        'Quitar filtros'
-    ],
+    ['65e0200a9a7d4b2e1c0f1004', 'downloadable', 'frontend', 'generic.reset', 'Restablecer'],
     [
         '65e0200a9a7d4b2e1c0f1005',
         'downloadable',
         'frontend',
-        'products.detail.add-to-cart',
+        'product-target-page.button-add-to-cart',
         'Añadir al carrito'
     ],
-    ['65e0200a9a7d4b2e1c0f1006', 'downloadable', 'frontend', 'cart.title', 'Tu carrito'],
-    ['65e0200a9a7d4b2e1c0f1007', 'downloadable', 'frontend', 'cart.empty', 'Tu carrito está vacío'],
-    ['65e0200a9a7d4b2e1c0f1008', 'downloadable', 'frontend', 'checkout.title', 'Finalizar compra'],
+    ['65e0200a9a7d4b2e1c0f1006', 'downloadable', 'frontend', 'cart-page.page-title', 'Mi carrito'],
+    [
+        '65e0200a9a7d4b2e1c0f1007',
+        'downloadable',
+        'frontend',
+        'cart-page.empty-cart',
+        'Tu carrito está vacío'
+    ],
+    [
+        '65e0200a9a7d4b2e1c0f1008',
+        'downloadable',
+        'frontend',
+        'cart-page.button-checkout',
+        'Finalizar compra'
+    ],
     [
         '65e0200a9a7d4b2e1c0f1009',
         'downloadable',
         'frontend',
-        'checkout.actions.confirm',
-        'Confirmar pedido'
+        'cart-page.success-checkout',
+        '¡Pedido realizado con éxito!'
     ],
-    ['65e0200a9a7d4b2e1c0f100a', 'downloadable', 'frontend', 'account.menu.orders', 'Mis pedidos'],
+    [
+        '65e0200a9a7d4b2e1c0f100a',
+        'downloadable',
+        'frontend',
+        'orders-list-page.page-title',
+        'Mis pedidos'
+    ],
 
     /*
      * The API's own half, for the same language — STORED, VALID, AND NOT APPLIED. Spanish has no
@@ -180,8 +200,8 @@ const LOCALE_ENTRIES: LocaleEntryRow[] = [
     ],
 
     /* The draft language: two rows, enough to prove `active: false` hides something real. */
-    ['65e0200a9a7d4b2e1c0f2001', 'draft', 'frontend', 'products.list.title', 'Catalogue'],
-    ['65e0200a9a7d4b2e1c0f2002', 'draft', 'frontend', 'cart.title', 'Votre panier']
+    ['65e0200a9a7d4b2e1c0f2001', 'draft', 'frontend', 'products-list-page.page-title', 'Catalogue'],
+    ['65e0200a9a7d4b2e1c0f2002', 'draft', 'frontend', 'cart-page.page-title', 'Votre panier']
 ];
 
 /** {@link LOCALE_ENTRIES}, built into fixtures. */

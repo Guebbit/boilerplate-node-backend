@@ -14,9 +14,10 @@ import { DEPLOYMENT_TENANT_SLUG } from '@kernel/access/seed';
 setupTestDb();
 
 /**
- * A credential's `tenant` field is `context.caller.tenantId` (see `services/context.ts`), which a
- * real login only resolves once the deployment's shop exists — same setup `webhooks`' own contract
- * suite needs, for the same reason. See that file's fuller comment.
+ * A credential's `tenant` field is `context.caller.tenantId`, proven a `string` by
+ * `TenantCallerContext`. A real login only resolves it once the deployment's shop exists — the
+ * same setup `webhooks`' own contract suite needs, for the same reason. See that file's fuller
+ * comment.
  */
 beforeEach(async () => {
     await ensureTenant(DEPLOYMENT_TENANT_SLUG, 'Contract test shop');

@@ -15,9 +15,7 @@ import { ANONYMOUS_ROLE, PRESET_ROLES } from '@kernel/permissions';
 import { ensureTenant } from './store';
 import { roleModel } from './models';
 import type { TenantDocument } from './models';
-import { DEMO_TENANT_ID } from './tenant';
-
-export { DEMO_TENANT_ID } from './tenant';
+import { DEPLOYMENT_TENANT_ID } from './tenant';
 
 /**
  * The one shop this boilerplate ships.
@@ -60,4 +58,4 @@ export const seedPresetRoles = (): Promise<void> =>
  * production deploy.
  */
 export const bootstrapAccessModel = (name: string): Promise<TenantDocument> =>
-    seedPresetRoles().then(() => ensureTenant(DEPLOYMENT_TENANT_SLUG, name, DEMO_TENANT_ID));
+    seedPresetRoles().then(() => ensureTenant(DEPLOYMENT_TENANT_SLUG, name, DEPLOYMENT_TENANT_ID));

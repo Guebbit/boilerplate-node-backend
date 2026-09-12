@@ -6,7 +6,7 @@
 import { z } from 'zod';
 import { paginationSchema } from '@infrastructure/http/schemas';
 import { createListController } from '@infrastructure/surfaces/create-list-controller';
-import { callerContextOf } from '@infrastructure/http/request';
+import { tenantCallerContextOf } from '@infrastructure/http/request';
 import type { WebhookSubscription, WebhookSubscriptionsResponse } from '@types';
 import { webhooksService } from '../services';
 
@@ -24,7 +24,7 @@ export const listWebhookSubscriptions = createListController({
     schema: listWebhookSubscriptionsQuerySchema,
     input: { booleans: ['enabled'] },
     runList: (parsed, request) =>
-        webhooksService.listSubscriptions(callerContextOf(request), parsed).then((result) => {
+        webhooksService.listSubscriptions(tenantCallerContextOf(request), parsed).then((result) => {
             // `search()` returns pre-normalized (wire-shape) rows, same reasoning as every other
             // module's list controller — see `audit-logs`' `getAudit` for the fuller comment.
             const items: unknown = result.items;

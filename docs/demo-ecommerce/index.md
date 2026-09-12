@@ -87,35 +87,33 @@ the ten; they exist to be _looked at_, not signed into.
 
 ## What each role may do
 
-Two tables, generated from the permission model on every `npm run regenerate` — the first is what
-somebody edits, the second is what the server answers. They are here rather than in the theory
-pages because this is where you pick an account to log in as.
+Nine roles, each a job somebody actually does. They are described here rather than in the theory
+pages because this is where you pick an account to log in as. Each one is defined in
+`shared/authorization-roles.yaml`, the same file the PHP twin seeds from — which is what makes both
+backends ship the same shop rather than two that merely pass the same tests.
 
-<!-- role-matrix:start -->
+**`guest`** — not an account anybody logs into. It is what an unauthenticated request resolves to,
+and the floor every signed-in role is raised to: signing in can only ever widen what a person sees.
+Reads published products, the dictionary the shop is rendered in, and the delivery options.
 
-### What each role is given
-
-| Role        | Scope    | Permissions, as written in `shared/authorization-roles.yaml`                                                                                                                                    |
-| ----------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `guest`     | tenant   | `products.read`, `locales.read`, `delivery.read`                                                                                                                                                |
-| `customer`  | tenant   | `products.read`, `locales.read`, `delivery.read`, `orders.read`, `payments.read`                                                                                                                |
-| `manager`   | tenant   | `products.manage`, `orders.manage`, `locales.manage`, `translations.manage`, `payments.read`, `inventory.read`, `delivery.read`, `feedback.read`, `users.read`, `audit.read`, `webhooks.manage` |
-| `warehouse` | tenant   | `products.read`, `orders.read`, `inventory.manage`, `delivery.manage`                                                                                                                           |
-| `support`   | tenant   | `feedback.manage`, `users.read`, `users.update`, `orders.read`, `payments.read`, `audit.read`                                                                                                   |
-| `editor`    | tenant   | `products.manage`, `locales.manage`, `translations.manage`                                                                                                                                      |
-| `moderator` | tenant   | `users.manage`, `orders.manage`, `payments.manage`, `audit.read`                                                                                                                                |
-| `owner`     | tenant   | `all.manage`                                                                                                                                                                                    |
-| `operator`  | platform | `platform.observability.manage`                                                                                                                                                                 |
-
-`guest` is not an account anybody logs into — it is what an unauthenticated request
-resolves to, and the floor every signed-in role is raised to. Signing in can only ever
-widen what a person sees.
+| Role            | What the job is                                                                                                                                                                                                                                                                                                                              |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`customer`**  | Someone buying things. Everything they may do to their own basket, wishlist, addresses and account follows from being signed in and needs no permission key at all — the keys they hold are only what they may read of the SHOP.                                                                                                             |
+| **`manager`**   | What is for sale, at what price, and what happens to an order after it arrives. Reads stock but does not move it; that is the warehouse's job, and its audit trail.                                                                                                                                                                          |
+| **`warehouse`** | Stock, and getting parcels out of the door. Records movements and advances consignments; may not change what a thing costs or delete it from the catalogue.                                                                                                                                                                                  |
+| **`support`**   | Messages from people, and accounts that need help. May update an account and may not erase one — erasure is the owner's, and it expects a freshly proved session.                                                                                                                                                                            |
+| **`editor`**    | Everything the shop SAYS and SHOWS, in every registered language: the catalogue record itself (price included), the dictionary a shopper reads the shop in — including registering a language the shop has not spoken before — and the words on a product's title and description. Touches no stock, no delivery rule, no order, no account. |
+| **`moderator`** | Accounts, and the two things people write about their orders: the message they send and the order itself. May ban an account, reverse a bad charge, and read why either happened.                                                                                                                                                            |
+| **`owner`**     | Unrestricted within this shop, and only within it. It says nothing about the platform: one role cannot reach both scopes, which is the point.                                                                                                                                                                                                |
+| **`operator`**  | Runs the installation — health, metrics, the operational audit. Explicitly **not** a super-owner: it holds no shop key and therefore cannot read a single shop's orders, customers or messages. The conformance suite asserts both halves of that.                                                                                           |
 
 ### What that actually grants
 
-The same roles after the evaluator has had them: `manage` expanded into its module’s own
-keys, and the baseline folded in. This is what a route guard and a listing actually
-answer.
+<!-- role-matrix:start -->
+
+The roles above after the evaluator has had them: `manage` expanded into its module’s own
+keys, and the `guest` baseline folded in. This is what a route guard and a listing
+actually answer.
 
 | Role        | products | orders  | payments | inventory | delivery | feedback | locales | users   | account | audit-logs | webhooks | api-keys | observability |
 | ----------- | -------- | ------- | -------- | --------- | -------- | -------- | ------- | ------- | ------- | ---------- | -------- | -------- | ------------- |

@@ -47,7 +47,7 @@ export const authenticateAs = async (
 
 /**
  * Creates a user seeded with an arbitrary TENANT role name — `manager`, `warehouse`, `support`,
- * `editor`, `translator`, `moderator`, `customer` — and logs it in the same way
+ * `editor`, `moderator`, `customer` — and logs it in the same way
  * {@link authenticateAs} does. Separate from it rather than a third accepted value there: those
  * two are the two accounts most tests reach for by NAME, while this one exists for the contract
  * sweep that has to drive every preset role through the HTTP surface — see `rolesOf`'s

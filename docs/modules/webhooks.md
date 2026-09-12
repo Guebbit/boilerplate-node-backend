@@ -103,5 +103,25 @@ endpoints. "Usable via any HTTP client" is still true (nothing here requires the
 the only way in. See that repo's `docs/modules/webhooks.md` for the client side, including why
 `rotateSecret`'s response never gets cached client-side.
 
+## Seeing it work
+
+`npm run demo` seeds no subscription by default — nothing to deliver to. Start
+`docker compose --profile integrations up webhook-tester`, set `NODE_WEBHOOK_DEMO_SINK_URL` to its
+base url (`.env-example` has the exact line), then reseed. `scenarios/webhooks.ts` points a
+subscription at it and captures deliveries at `http://localhost:${WEBHOOK_TESTER_PORT:-3070}`.
+
+Two things make this reachable at all, both narrowed on purpose:
+
+- `webhook-tester` is plain HTTP on a private compose-network address — exactly what
+  `ssrf-guard.ts` exists to refuse. It gets a one-hostname exemption
+  (`@modules/webhooks/config`'s `getWebhookDemoAllowedHost`) from the `https:` and
+  private-address checks only, and only in development/test; set `NODE_WEBHOOK_DEMO_SINK_URL`
+  under production and the app refuses to boot.
+- The seeded subscription's ring secret is a FIXED plaintext
+  (`scenarios/webhooks.ts`'s `WEBHOOK_DEMO_SECRET`), not one a real `POST /webhooks/subscriptions`
+  would mint — a minted secret is returned once and never stored in the clear, so nothing here
+  could ever hand it to `webhook-tester` to verify against. Paste it into the tester's UI to check
+  a captured delivery's `webhook-signature` header by hand.
+
 See: [Events & Logging](../tools/events-and-logging.md), [RabbitMQ](../tools/rabbitmq.md), and
 [the AsyncAPI workflow](../api/asyncapi-workflow.md).

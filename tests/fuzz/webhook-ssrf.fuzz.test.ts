@@ -16,6 +16,7 @@
 
 import { EventEmitter } from 'node:events';
 import { request as httpsRequest } from 'node:https';
+import { request as httpRequest } from 'node:http';
 import { resolveSafeWebhookTarget, SsrfRefusedError } from '@infrastructure/adapters/ssrf-guard';
 import { deliverWebhook } from '@infrastructure/adapters/webhook-delivery';
 
@@ -29,6 +30,11 @@ jest.mock('node:dns/promises', () => ({
 // The redirect-chain case below drives `deliverWebhook` end to end EXCEPT the actual socket —
 // `node:https` itself is mocked so a simulated 3xx never needs a real server to answer it.
 jest.mock('node:https', () => ({ request: jest.fn() }));
+
+// Only reached by the exempted-demo-host case below — `webhook-delivery.ts` picks this over
+// `node:https` for a plain `http:` target, which the guard only ever lets through for one
+// exact, caller-named hostname.
+jest.mock('node:http', () => ({ request: jest.fn() }));
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- mocked module, requiring the mock's own jest.fn()s to configure per-test resolved addresses
 const dns = require('node:dns/promises') as {
@@ -232,5 +238,65 @@ describe('deliverWebhook — a redirect is a failed delivery, never followed', (
         expect(result.success).toBe(false);
         expect(result.statusCode).toBe(302);
         expect(result.error).toMatch(/redirect/i);
+    });
+});
+
+/*
+ * `exemptHostname` — `@modules/webhooks/config`'s development/test-only demo-sink exemption.
+ * Literal IPs, not DNS names: `resolveAllAddresses` returns a literal straight back without
+ * calling `resolve4`/`resolve6`, so these cases need no `mockDns`.
+ */
+describe('resolveSafeWebhookTarget — the exemptHostname parameter', () => {
+    it('allows a private, http: address for the exact exempted hostname', async () => {
+        const target = await resolveSafeWebhookTarget('http://127.0.0.1:8080/hook', '127.0.0.1');
+        expect(target.resolvedAddress).toBe('127.0.0.1');
+    });
+
+    it('still refuses a hostname other than the one exempted', async () => {
+        await expect(
+            resolveSafeWebhookTarget('http://127.0.0.1/hook', 'webhook-tester')
+        ).rejects.toMatchObject({ reason: 'insecure-scheme' });
+    });
+
+    it('still refuses credentials in the URL, even for the exempted hostname', async () => {
+        await expect(
+            resolveSafeWebhookTarget('http://user:pass@127.0.0.1/hook', '127.0.0.1')
+        ).rejects.toMatchObject({ reason: 'credentials-in-url' });
+    });
+});
+
+describe('deliverWebhook — speaks plain HTTP only to an exempted http: target', () => {
+    it('uses node:http, never node:https, once the guard exempts the target', async () => {
+        const mockedHttpRequest = httpRequest as jest.Mock;
+        const mockedHttpsRequest = httpsRequest as jest.Mock;
+        mockedHttpRequest.mockImplementation(
+            (_options: unknown, callback: (response: unknown) => void) => {
+                // eslint-disable-next-line unicorn/prefer-event-target -- mocking Node's own EventEmitter-based HTTP API, not writing new code
+                const response = new EventEmitter() as EventEmitter & {
+                    statusCode: number;
+                    resume: () => void;
+                };
+                response.statusCode = 200;
+                response.resume = jest.fn();
+                queueMicrotask(() => callback(response));
+
+                // eslint-disable-next-line unicorn/prefer-event-target -- same reason as `response` above
+                const outgoing = new EventEmitter() as EventEmitter & { end: () => void };
+                outgoing.end = jest.fn();
+                return outgoing;
+            }
+        );
+
+        const result = await deliverWebhook({
+            url: 'http://127.0.0.1:8080/hook',
+            secrets: ['whsec_test-secret'],
+            eventId: 'evt_demo_1',
+            payload: { a: 1 },
+            allowedInsecureHost: '127.0.0.1'
+        });
+
+        expect(mockedHttpRequest).toHaveBeenCalledTimes(1);
+        expect(mockedHttpsRequest).not.toHaveBeenCalled();
+        expect(result.success).toBe(true);
     });
 });

@@ -3,10 +3,12 @@
  * The product catalogue: public read, admin write, soft delete with restore. Depends on nothing —
  * a leaf module, and everything downstream (cart, orders, stock) is a statement about a product,
  * which is what makes this the one model other contexts conform to. It stays a leaf by emitting
- * `product.deleted` rather than importing the cart directly.
+ * `product.deleted` and `product.created` rather than importing a sibling directly.
  *
  * Not in the import graph: `onHand` and `reserved` are declared on this document and written ONLY
- *   by `inventory`. This module never moves them. See that module's docblock.
+ *   by `inventory`, including the opening count — `product.created` is how `inventory` (which
+ *   already imports this module) gives a new product its stock without this module importing back.
+ *   This module never moves either counter itself. See that module's docblock.
  *
  * See: docs/modules/products.md
  */

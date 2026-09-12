@@ -15,14 +15,16 @@ import { clearDemoOutbox, readDemoOutbox } from '@infrastructure/adapters/demo-o
 import { clearCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
 import { refreshLocaleOverrides } from '@infrastructure/i18n';
-import type { ScenarioName } from '@scenarios/index';
 
 export { isDemoMode } from '@infrastructure/adapters/demo-outbox';
 
-/** Thrown by {@link restoreScenario} for a name `scenarios/index.ts`'s `SCENARIOS` registry does
- * not carry. */
+/**
+ * Thrown for anything `scenarios/index.ts`'s `SCENARIOS` registry does not carry — by
+ * {@link restoreScenario} for an unknown name, and by {@link installDemo} for a `scenario` field
+ * that is not even a string. Takes `unknown` so both share one message format.
+ */
 export class UnknownScenarioError extends Error {
-    constructor(name: string) {
+    constructor(name: unknown) {
         super(`unknown scenario: ${JSON.stringify(name)}`);
     }
 }
@@ -36,14 +38,18 @@ export class UnknownScenarioError extends Error {
  * scenario factories into every process whether or not `enableDemoProfile()` is ever called — the
  * exact cost this file's split from `src/modules/*` exists to avoid.
  *
+ * Also where `DEFAULT_SCENARIO` is applied, rather than as a parameter default up the call chain:
+ * a static `import { DEFAULT_SCENARIO }` would load the registry — and every module's factories
+ * behind it — in every process, which is the one thing this dynamic import exists to prevent.
+ *
+ * @param name - the scenario to seed, or `undefined` for the registry's `DEFAULT_SCENARIO`
  * @throws {UnknownScenarioError} for a name `SCENARIOS` does not carry
  */
-const seedScenario = (name: string): Promise<void> =>
-    import('@scenarios/index').then(({ SCENARIOS }) => {
-        if (!Object.hasOwn(SCENARIOS, name)) throw new UnknownScenarioError(name);
-        // `Object.hasOwn` above narrows against `SCENARIOS`'s keys, not `name`'s own type — the
-        // cast states what the guard already proved.
-        return SCENARIOS[name as ScenarioName]().then(() => undefined);
+const seedScenario = (name: string | undefined): Promise<void> =>
+    import('@scenarios/index').then((scenarios) => {
+        const requested = name ?? scenarios.DEFAULT_SCENARIO;
+        if (!scenarios.isScenarioName(requested)) throw new UnknownScenarioError(requested);
+        return scenarios.SCENARIOS[requested]().then(() => undefined);
     });
 
 /**
@@ -61,7 +67,7 @@ const seedScenario = (name: string): Promise<void> =>
  * @param scenario - which scenario to seed
  * @throws {UnknownScenarioError} for a name `SCENARIOS` does not carry
  */
-const runRestore = (scenario: string): Promise<void> =>
+const runRestore = (scenario: string | undefined): Promise<void> =>
     emptyDatabase()
         .then(() => seedScenario(scenario))
         .then(() => {
@@ -80,10 +86,10 @@ let restoreQueue: Promise<void> = Promise.resolve();
  * A failed restore must not wedge the ones behind it, so the queue itself never rejects — each
  * caller still sees its own restore's outcome through the promise this returns.
  *
- * @param scenario - which scenario to seed; defaults to `shop`.
+ * @param scenario - which scenario to seed; `undefined` takes the registry's own default.
  * @throws {UnknownScenarioError} for a name `SCENARIOS` does not carry
  */
-export const restoreScenario = (scenario = 'shop'): Promise<void> => {
+export const restoreScenario = (scenario?: string): Promise<void> => {
     const outcome = restoreQueue.then(() => runRestore(scenario));
     restoreQueue = outcome.then(
         () => undefined,
@@ -99,7 +105,7 @@ export const installDemo = (app: Express): void => {
         if (requested !== undefined && typeof requested !== 'string') {
             response.status(400).json({
                 success: false,
-                message: `unknown scenario: ${JSON.stringify(requested)}`
+                message: new UnknownScenarioError(requested).message
             });
             return;
         }

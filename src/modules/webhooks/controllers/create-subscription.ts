@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { CreateWebhookSubscriptionBody } from '@api/schemas.zod';
 import type { CreateWebhookSubscriptionRequest, WebhookSubscriptionCreated } from '@types';
 import { successResponse } from '@infrastructure/http/response';
-import { callerContextOf } from '@infrastructure/http/request';
+import { tenantCallerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { webhooksService } from '../services';
 
@@ -35,7 +35,7 @@ export const createWebhookSubscription = (
     if (!body) return;
 
     return webhooksService
-        .createSubscription(body, callerContextOf(request))
+        .createSubscription(body, tenantCallerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
             // `refused` only reports the reject branch; a success result always carries the

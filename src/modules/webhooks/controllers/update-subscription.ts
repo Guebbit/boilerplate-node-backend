@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { UpdateWebhookSubscriptionBody } from '@api/schemas.zod';
 import type { UpdateWebhookSubscriptionRequest, WebhookSubscriptionCreated } from '@types';
 import { successResponse } from '@infrastructure/http/response';
-import { callerContextOf, extractAndValidateId } from '@infrastructure/http/request';
+import { tenantCallerContextOf, extractAndValidateId } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { webhooksService } from '../services';
 
@@ -36,7 +36,7 @@ export const updateWebhookSubscription = (
     if (!body) return;
 
     return webhooksService
-        .updateSubscription(id, body, callerContextOf(request))
+        .updateSubscription(id, body, tenantCallerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
             if (!result.data)

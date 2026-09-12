@@ -5,7 +5,7 @@
 
 import { paginationSchema } from '@infrastructure/http/schemas';
 import { createListController } from '@infrastructure/surfaces/create-list-controller';
-import { callerContextOf } from '@infrastructure/http/request';
+import { tenantCallerContextOf } from '@infrastructure/http/request';
 import type { ApiKey, ApiKeysResponse } from '@types';
 import { apiKeysService } from '../services';
 
@@ -17,7 +17,7 @@ export const listApiKeys = createListController({
     entity: 'apiKeys',
     schema: paginationSchema,
     runList: (parsed, request) =>
-        apiKeysService.listApiKeys(callerContextOf(request), parsed).then((result) => {
+        apiKeysService.listApiKeys(tenantCallerContextOf(request), parsed).then((result) => {
             // `search()` returns pre-normalized (wire-shape) rows, same reasoning as every other
             // module's list controller — see `webhooks`' `listWebhookSubscriptions`.
             const items: unknown = result.items;

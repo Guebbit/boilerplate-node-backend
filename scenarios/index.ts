@@ -16,7 +16,7 @@ import { seedAddressBooksCollection } from './account';
 import { seedAuditLogsCollection } from './audit-logs';
 import { seedCartsCollection } from './cart';
 import { seedLocalesCollection } from './locales';
-import { seedOrdersCollection } from './orders';
+import { seedOrdersCollection, seedOwnerPendingOrder } from './orders';
 import { seedProductsCollection, checkProductGuarantees } from './products';
 import { seedUsersCollection } from './users';
 import { seedWebhooksCollection } from './webhooks';
@@ -71,7 +71,8 @@ export const shopModules: Readonly<Record<string, ScenarioModule>> = {
 };
 
 /**
- * The `shop` scenario: the access model, then every `shopModules` entry's records.
+ * The `shop` scenario: the access model, then every `shopModules` entry's records, then
+ * `order.ownerPending`'s real stock hold.
  *
  * `locales` MUST finish first, not join the concurrent batch: `products.seed()` writes its rows'
  * `translations` through `planTranslations`/`writeTranslations`, and `planSlot`
@@ -81,6 +82,11 @@ export const shopModules: Readonly<Record<string, ScenarioModule>> = {
  * No other module reads another module's write, which is what keeps the rest of the table
  * concurrent. Nothing can resolve a caller until there is a shop to be a member of, which is why
  * the access model runs before either.
+ *
+ * `seedOwnerPendingOrder` MUST run last, after the concurrent batch, for the same reason in
+ * reverse: it holds real stock against `./products`'s row through the real
+ * `inventoryService.reserveForOrder`, which needs that row to already exist. Racing it into the
+ * concurrent batch would mean it sometimes finds no product to hold against.
  */
 export const seedShop = (): Promise<SeedOutcome[]> =>
     seedAccessModel().then(() =>
@@ -89,7 +95,9 @@ export const seedShop = (): Promise<SeedOutcome[]> =>
                 Object.entries(shopModules)
                     .filter(([name]) => name !== 'locales')
                     .map(([, scenarioModule]) => scenarioModule.seed())
-            ).then((restOutcomes) => [localeOutcomes, ...restOutcomes].flat())
+            ).then((restOutcomes) =>
+                seedOwnerPendingOrder().then(() => [localeOutcomes, ...restOutcomes].flat())
+            )
         )
     );
 
@@ -105,3 +113,22 @@ export const SCENARIOS = {
 
 /** A name {@link SCENARIOS} actually knows how to seed. */
 export type ScenarioName = keyof typeof SCENARIOS;
+
+/**
+ * The scenario every caller falls back to when none was named — the shop, since a demo of an
+ * ecommerce boilerplate with no catalogue in it demonstrates nothing.
+ */
+export const DEFAULT_SCENARIO: ScenarioName = 'shop';
+
+/**
+ * Whether `name` is one {@link SCENARIOS} carries, narrowing it to {@link ScenarioName}.
+ *
+ * The registry owns this rather than each caller repeating `Object.hasOwn` and then casting: a
+ * bare `Object.hasOwn` narrows the TABLE, never the string handed in, so every caller that skipped
+ * this needed an `as ScenarioName` to say what it had already proved. Stated once, as a type
+ * guard, the callers need no cast at all.
+ *
+ * @param name - an unvalidated scenario name, from argv or a request body
+ */
+export const isScenarioName = (name: string): name is ScenarioName =>
+    Object.hasOwn(SCENARIOS, name);

@@ -7,9 +7,12 @@ Back to the [index](SCENARIOS_NEXT.md).
 > was re-checked after `d4506845` deleted `export-dataset.ts` and `assemble.ts`.
 >
 > **Amended 2026-09-12: the peer's WIP landed** (`c9c67811`), so there is nothing to coordinate any
-> more — `src/kernel/access/tenant.ts` is committed and `seed.ts` re-exports `DEMO_TENANT_ID` from
-> it. It also did part of this plan's work already: `bootstrapAccessModel` (the shop + the presets)
-> is now split from `seedAccessModel` (that plus the demo memberships), which is the split the
+> more — `src/kernel/access/tenant.ts` is committed and is the ONE home of the shop's pinned id,
+> now named `DEPLOYMENT_TENANT_ID` (`f4199f35`: renamed off the `DEMO_` prefix because
+> `db/bootstrap-access.ts` and `db/grant-access.ts` both ship in the production image, and
+> `seed.ts`'s back-compat re-export was dropped). It also did part of this plan's work already:
+> `bootstrapAccessModel` (the shop + the presets) is now split from `seedAccessModel` (that plus
+> the demo memberships), which is the split the
 > "moves" table asks for — what is left is moving the memberships into `seedShop`/`seedBlank`.
 >
 > **Amended 2026-09-12: item 4 is also built** (`worktree-scenarios-next`, merged to `main`), so the
