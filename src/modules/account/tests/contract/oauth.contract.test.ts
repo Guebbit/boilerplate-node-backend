@@ -1,26 +1,25 @@
 /**
  * @module
  * Contract tests for the OAuth surface: `GET /account/oauth/providers`, and the full
- * start → callback round trip through the `fake` provider (`NODE_DEMO=true`) — the same path a
- * Cypress spec walks against a real browser, exercised here against the real routes, the real CSRF
- * cookie, and a real database.
+ * start → callback round trip through the `fake` provider (`enableDemoProfile()`) — the same path
+ * a Cypress spec walks against a real browser, exercised here against the real routes, the real
+ * CSRF cookie, and a real database.
  */
 
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api } from '@tests/http';
 import { userRepository } from '@modules/users';
+import { enableDemoProfile } from '@infrastructure/adapters/demo-outbox';
 
 setupTestDb();
 
-/** Saved so the fake provider these cases need is switched off again for every other suite. */
-const originalDemo = process.env.NODE_DEMO;
+/** So the fake provider these cases need is switched off again for every other suite. */
 beforeAll(() => {
-    process.env.NODE_DEMO = 'true';
+    enableDemoProfile();
 });
 afterAll(() => {
-    if (originalDemo === undefined) delete process.env.NODE_DEMO;
-    else process.env.NODE_DEMO = originalDemo;
+    enableDemoProfile(false);
 });
 
 /** One named cookie's full `Set-Cookie` value, or `undefined` if the response set none by that name. */

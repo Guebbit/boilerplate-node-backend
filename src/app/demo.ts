@@ -1,6 +1,7 @@
 /**
  * @module
- * The demo profile's control surface — mounted only when `NODE_DEMO=true` (see `npm run demo`).
+ * The demo profile's control surface — mounted only when `enableDemoProfile()` was called (see
+ * `npm run demo`).
  * Two routes for the paired frontend's e2e suite, both under `/__test/*`: `POST /__test/restore`
  * empties the database and reseeds a named scenario from `scenarios/`, clearing the email outbox;
  * `GET /__test/emails` reads back what the app "sent" since. App-tier since it is the one tier
@@ -29,8 +30,8 @@ export type ScenarioName = 'shop' | 'blank';
  *
  * Both imported dynamically rather than at the top of this file: `app.ts` imports
  * `installDemo`/`isDemoMode` unconditionally, and a static import here would pull every module's
- * demo factories into every process regardless of `NODE_DEMO` — the exact cost this file's split
- * from `src/modules/*` exists to avoid.
+ * demo factories into every process whether or not `enableDemoProfile()` is ever called — the
+ * exact cost this file's split from `src/modules/*` exists to avoid.
  */
 const seedScenario = (scenario: ScenarioName): Promise<void> =>
     scenario === 'blank'
@@ -85,7 +86,7 @@ export const restoreScenario = (reset: boolean, scenario: ScenarioName = 'shop')
 const isScenarioName = (value: unknown): value is ScenarioName =>
     value === 'shop' || value === 'blank';
 
-/** Mount the demo profile's two routes. Only ever called when `NODE_DEMO=true`. */
+/** Mount the demo profile's two routes. Only ever called when `enableDemoProfile()` was called. */
 export const installDemo = (app: Express): void => {
     app.post('/__test/restore', (request: Request, response: Response) => {
         const requested: unknown = (request.body as { scenario?: unknown } | undefined)?.scenario;

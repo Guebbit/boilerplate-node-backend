@@ -85,7 +85,8 @@ describe('environmentFlag', () => {
 
     it('accepts both vocabularies for the same flag', () => {
         // The bug this closes: kill switches were `!== '0'` and opt-ins `=== 'true'`, so
-        // `NODE_DEMO=1` turned demo mode off and `NODE_RABBITMQ_ENABLED=false` left the queue on.
+        // `NODE_ENABLE_CLUSTERING=1` turned clustering off and `NODE_RABBITMQ_ENABLED=false` left
+        // the queue on.
         expect(withValue('1', () => environmentFlag(CANARY, false))).toBe(true);
         expect(withValue('true', () => environmentFlag(CANARY, false))).toBe(true);
         expect(withValue('0', () => environmentFlag(CANARY, true))).toBe(false);
