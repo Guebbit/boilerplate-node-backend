@@ -52,7 +52,7 @@ describe('productSchema — what a product must carry', () => {
         // A catalogue with a broken image is worse than one with a placeholder, and the
         // environment override is what lets a deployment supply its own.
         expect(defaultOf(productSchema, 'imageUrl')).toBe(
-            process.env.NODE_DEFAULT_IMAGE_PRODUCT ?? 'https://placekitten.com/400/400'
+            process.env.NODE_DEFAULT_IMAGE_PRODUCT ?? '/images/system/placeholder-product.png'
         );
     });
 

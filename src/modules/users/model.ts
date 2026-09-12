@@ -289,7 +289,10 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
         },
         imageUrl: {
             type: String,
-            default: process.env.NODE_DEFAULT_IMAGE_USER ?? 'https://placekitten.com/600/600'
+            // A local asset, not a third-party host: placekitten.com (the previous default) went
+            // dark, and picsum.photos would rot the same way. `/images/system/` is served by
+            // `app/static-assets.ts`, the same as `NODE_PENDING_IMAGE_URL`'s own placeholder.
+            default: process.env.NODE_DEFAULT_IMAGE_USER ?? '/images/system/placeholder-user.png'
         },
         /*
          * Set together with `imageUrl` by `readUploadedImage` — never independently, and never by

@@ -65,7 +65,7 @@ describe('userSchema — what a user must carry', () => {
     it('gives a new user the configured locale and avatar', () => {
         expect(defaultOf(userSchema, 'locale')).toBe(process.env.NODE_DEFAULT_LOCALE ?? 'en');
         expect(defaultOf(userSchema, 'imageUrl')).toBe(
-            process.env.NODE_DEFAULT_IMAGE_USER ?? 'https://placekitten.com/600/600'
+            process.env.NODE_DEFAULT_IMAGE_USER ?? '/images/system/placeholder-user.png'
         );
     });
 
