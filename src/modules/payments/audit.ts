@@ -3,14 +3,17 @@
  * Audit actions this module emits, declared by augmentation — see `modules/account/audit.ts` for
  * why. `admin.` marks the refund because it is genuinely admin-only, unlike confirm/fail which any
  * checkout can produce; `refundForOrder` (the cancel listener's compensation) has no request to
- * audit and logs instead, like the token-cleanup job.
+ * audit and logs instead, like the token-cleanup job. `PAYMENT_RECORDED_OFFLINE` is admin-only too
+ * but keeps the plain `payment.` prefix, since it names a kind of payment event rather than an
+ * admin override of one.
  */
 
 /** The audit action strings this module fires, keyed by event. */
 export const paymentsAuditActions = {
     PAYMENT_CONFIRMED: 'payment.confirmed',
     PAYMENT_FAILED: 'payment.failed',
-    ADMIN_PAYMENT_REFUNDED: 'admin.payment.refunded'
+    ADMIN_PAYMENT_REFUNDED: 'admin.payment.refunded',
+    PAYMENT_RECORDED_OFFLINE: 'payment.recorded_offline'
 } as const;
 
 /** Augments infrastructure's audit action map with this module's own action strings. */

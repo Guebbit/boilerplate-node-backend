@@ -1160,6 +1160,8 @@ paths:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1order~1{orderId}'
     /payments/order/{orderId}/refund:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1order~1{orderId}~1refund'
+    /payments/order/{orderId}/offline:
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1order~1{orderId}~1offline'
     /payments/{id}/confirm:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1{id}~1confirm'
     /payments/{id}/sync:

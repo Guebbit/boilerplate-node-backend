@@ -11,7 +11,7 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
-import { PaymentStatus } from '@types';
+import { PaymentStatus, PaymentMethod } from '@types';
 
 /**
  * Payment Document interface.
@@ -29,7 +29,7 @@ export interface PaymentDocument extends Document {
     /** ISO-4217, from `NODE_DEFAULT_CURRENCY`. Carried per document: config can change. */
     currency: string;
     status: PaymentStatus;
-    /** Which provider implementation handled it — 'fake' in the demo, 'stripe' one day. */
+    /** Which provider implementation handled it — 'fake' in the demo, 'manual' by hand, 'stripe' one day. */
     provider: string;
     /**
      * The provider's own id for this intent. The webhook's lookup key, which is why it is indexed
@@ -38,10 +38,24 @@ export interface PaymentDocument extends Document {
      *
      * NOT published on the wire. It is the handle that operates on real money at the provider, and
      * a client has no operation that needs it — every endpoint here takes this API's own id.
+     *
+     * Absent on a `manual` payment: there is no provider intent behind money recorded by hand.
      */
     providerRef?: string;
     /** The only card digits a payment system may remember. */
     cardLast4?: string;
+    /** How the money moved. `card` for the intent path; the other three only from recording by hand. */
+    method: PaymentMethod;
+    /** A bank transaction id, a receipt number — set only by recording a payment by hand. */
+    reference?: string;
+    /** When the money actually arrived, as the admin reported it — set only by recording by hand. */
+    receivedAt?: Date;
+    /**
+     * `true` once a refunded `manual` payment has had its money returned to the customer outside
+     * this application — there is no provider to ask, so this is the operator's own record that it
+     * was done by hand.
+     */
+    refundedByHand?: boolean;
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -90,6 +104,23 @@ export const paymentSchema = new Schema<PaymentDocument>(
         },
         cardLast4: {
             type: String
+        },
+        method: {
+            type: String,
+            enum: Object.values(PaymentMethod),
+            required: true
+        },
+        // Offline-only. Not `required`: a card payment has neither.
+        reference: {
+            type: String,
+            maxlength: 120
+        },
+        receivedAt: {
+            type: Date
+        },
+        // Offline-only, and only once refunded — see `refunds.ts`'s dispatch on `provider`.
+        refundedByHand: {
+            type: Boolean
         }
     },
     {

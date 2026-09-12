@@ -131,9 +131,58 @@ stateDiagram-v2
     declined --> processing: confirm, retried
     declined --> succeeded: confirm, retried
     declined --> declined: confirm, refused again
+    requires_confirmation --> succeeded: recorded by hand
+    declined --> succeeded: recorded by hand
     succeeded --> refunded: admin refund, or order cancelled
     refunded --> [*]
 ```
+
+`POST /payments/order/{orderId}/offline` (below) is a fourth way to reach `succeeded`, alongside
+confirm, sync and the webhook — it calls the exact same `settlePayment`, so nothing about this
+diagram's terminal states or their guards changes for it.
+
+## Offline payments
+
+Not every payment goes through the provider: an admin can record money that arrived some other
+way — cash at the counter, a phone order paid by bank transfer — on a still-`pending` order.
+
+```mermaid
+sequenceDiagram
+    actor Admin
+    participant API as POST /payments/order/:orderId/offline
+    participant Pay as payments
+    participant Set as settlePayment
+    Admin->>API: method, reference?, receivedAt?
+    API->>Pay: order pending? no card charge in flight?
+    Pay->>Pay: upsert payment — provider "manual"
+    Pay->>Set: state { status: succeeded }
+    Set->>Set: order pending → paid (system)
+    Set-->>Admin: 201 payment
+```
+
+**The admin records a payment; `settlePayment` moves the order.** Same code path as a card, so the
+stock commits, `ORDER_STATUS_CHANGED` and `PAYMENT_SUCCEEDED` fire, and webhooks and emails follow
+exactly as they would for a card. `manual` is not a provider port implementation — the port is
+card-shaped, and a `manual` adapter would be three methods that throw — the offline path instead
+writes the row directly and calls `settlePayment`.
+
+The amount is always the order's own total; a partial or over-payment is out of scope, handled by
+hand and off-system. Recording is refused with `PAYMENT_ORDER_NOT_PAYABLE` once the order is no
+longer `pending` (including a second attempt at the same order), and with `PAYMENT_IN_FLIGHT` while
+a card charge on the same order is still `requires_action` or `processing` — the provider could
+still land that charge on its own, and recording money too would risk charging twice. A card
+attempt that never got that far (`requires_confirmation`, `declined`) is simply overwritten: the row
+becomes the offline one.
+
+**Refunding a `manual` payment moves the status and nothing else.** There is no provider to ask, so
+`refundedByHand` on the payment is the admin's own record that the money actually went back to the
+customer outside this application. Every other refund still dispatches to the provider named on the
+payment's own `provider` field — never the deployment's currently configured one, so a refund of an
+older payment still reaches the provider that actually took the money even after a deployment
+switches to another.
+
+Requires `payments.create`, the same fresh-session tier as a refund (`payments.update`) — an
+admin's own word that money arrived is exactly as consequential as one that it left.
 
 The webhook is not on this diagram because it does not add an edge the diagram doesn't already
 have — it reaches the exact same `settlePayment` a sync does, with `succeeded` or `declined` as the

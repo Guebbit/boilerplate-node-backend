@@ -2,9 +2,10 @@
  * @module
  * The payments route table. Two rules, and both are security rules: everything below the auth wall
  * is authenticated at the router level — money is somebody's — while the provider's webhook sits
- * ABOVE it, because its caller is a machine that authenticates by signing the body. Exactly one
- * route is additionally admin-only: the refund, a self-service withdrawal if left open to any
- * caller, versus an intent or confirm locked to admins being a checkout nobody can complete.
+ * ABOVE it, because its caller is a machine that authenticates by signing the body. Exactly two
+ * routes are additionally admin-only: the refund and the offline record, a self-service withdrawal
+ * or a self-reported "I paid" if left open to any caller, versus an intent or confirm locked to
+ * admins being a checkout nobody can complete.
  */
 
 import { routeSignatures, guardsOn } from '@tests/routes';
@@ -28,6 +29,7 @@ describe('payment routes', () => {
             'POST /intent',
             'GET /order/:orderId',
             'POST /order/:orderId/refund',
+            'POST /order/:orderId/offline',
             'POST /:id/confirm',
             'POST /:id/sync'
         ]);
@@ -58,14 +60,17 @@ describe('payment routes', () => {
         expect(routeSignatures(router).indexOf(WEBHOOK)).toBe(0);
     });
 
-    it('admin-guards the refund, and only the refund', () => {
-        // The one route that moves money back out. Everything else is the customer's own
-        // checkout, which they must be able to complete themselves.
+    it('admin-guards the refund and the offline record, and nothing else', () => {
+        // The two routes an operator drives instead of a customer's own checkout — money moving
+        // back out, or a claim that money moved in some way the provider never saw.
         const adminGuarded = routeSignatures(router).filter((signature) =>
             guardsOn(router, signature).includes('requirePermissionGuard')
         );
 
-        expect(adminGuarded).toEqual(['POST /order/:orderId/refund']);
+        expect(adminGuarded).toEqual([
+            'POST /order/:orderId/refund',
+            'POST /order/:orderId/offline'
+        ]);
     });
 
     it('guards the sync exactly as it guards the confirm, plus the idempotency key confirm alone carries', () => {
@@ -90,13 +95,17 @@ describe('payment routes', () => {
         ]);
     });
 
-    it('declares the refund before the bare /:id routes', () => {
-        // `/order/:orderId/refund` is three segments and `/:id/confirm` is two, so they cannot
-        // collide today. The ordering is the convention this module states, and asserting it
-        // stops a two-segment admin route added later from being shadowed.
+    it('declares the refund and the offline record before the bare /:id routes', () => {
+        // `/order/:orderId/refund` and `/order/:orderId/offline` are three segments and
+        // `/:id/confirm` is two, so they cannot collide today. The ordering is the convention this
+        // module states, and asserting it stops a two-segment admin route added later from being
+        // shadowed.
         const paths = routeSignatures(router);
 
         expect(paths.indexOf('POST /order/:orderId/refund')).toBeLessThan(
+            paths.indexOf('POST /:id/confirm')
+        );
+        expect(paths.indexOf('POST /order/:orderId/offline')).toBeLessThan(
             paths.indexOf('POST /:id/confirm')
         );
     });

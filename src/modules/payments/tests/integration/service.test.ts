@@ -23,7 +23,8 @@ import {
     applyWebhookDelivery,
     applyWebhookSettlement,
     getForOrder,
-    refundByOrder
+    refundByOrder,
+    recordOfflinePayment
 } from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
 import { FAKE_DECLINE_METHOD, fakePaymentProvider } from '@modules/payments/providers/fake';
@@ -133,6 +134,15 @@ describe('createIntent', () => {
 
         expect(asReject(result).status).toBe(409);
         expect(asReject(result).errors[0].code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
+    });
+
+    it('writes `card` as the method — the vocabulary offline payments share the row with', async () => {
+        const { user, order } = await orderFor();
+
+        await createIntent(String(order._id), auth(user));
+
+        const payment = await paymentRepository.findByOrderId(String(order._id));
+        expect(payment!.method).toBe('card');
     });
 });
 
@@ -710,6 +720,154 @@ describe('refundByOrder', () => {
         const result = await refundByOrder(String(order._id), asOwner(), testCallerContext);
 
         expect(asReject(result).status).toBe(404);
+    });
+
+    it('reaches the card provider — a card refund is not the manual short-circuit', async () => {
+        const refundSpy = jest.spyOn(fakePaymentProvider, 'refund');
+        const { order } = await paidOrder();
+
+        await refundByOrder(String(order._id), asOwner(), testCallerContext);
+
+        expect(refundSpy).toHaveBeenCalledTimes(1);
+        refundSpy.mockRestore();
+    });
+});
+
+describe('recordOfflinePayment', () => {
+    it('records the money and settles exactly like a card payment — order paid, stock committed', async () => {
+        const { product, order } = await placedOrder(10, 3);
+
+        const result = await recordOfflinePayment(
+            String(order._id),
+            { method: 'cash', reference: 'till-42' },
+            testCallerContext
+        );
+
+        expect(result.success).toBe(true);
+        const payment = await paymentRepository.findByOrderId(String(order._id));
+        expect(payment).toMatchObject({
+            status: 'succeeded',
+            provider: 'manual',
+            method: 'cash',
+            reference: 'till-42'
+        });
+        const stored = await orderRepository.findById(String(order._id));
+        expect(stored!.status).toBe('paid');
+        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0 });
+    });
+
+    it('refuses an order that is not pending, the same code createIntent uses', async () => {
+        const { order } = await orderFor();
+        await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'cancelled');
+
+        const result = await recordOfflinePayment(
+            String(order._id),
+            { method: 'cash' },
+            testCallerContext
+        );
+
+        expect(asReject(result).status).toBe(409);
+        expect(asReject(result).errors[0].code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
+    });
+
+    it('refuses a second recording once the order is already paid', async () => {
+        const { order } = await orderFor();
+        await recordOfflinePayment(String(order._id), { method: 'cash' }, testCallerContext);
+
+        const result = await recordOfflinePayment(
+            String(order._id),
+            { method: 'cash' },
+            testCallerContext
+        );
+
+        expect(asReject(result).status).toBe(409);
+        expect(asReject(result).errors[0].code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
+    });
+
+    it('refuses while a card charge is still reachable at the provider', async () => {
+        const { user, order } = await orderFor();
+        const intent = await createIntent(String(order._id), auth(user));
+        await confirmPayment(
+            String(intent.success && intent.data?.id),
+            'pm_card_authentication_required',
+            auth(user),
+            testCallerContext
+        );
+
+        const result = await recordOfflinePayment(
+            String(order._id),
+            { method: 'cash' },
+            testCallerContext
+        );
+
+        expect(asReject(result).status).toBe(409);
+        expect(asReject(result).errors[0].code).toBe('PAYMENT_IN_FLIGHT');
+    });
+
+    it('allows recording over a card attempt nobody completed — declined, or never confirmed', async () => {
+        const { user, order } = await orderFor();
+        const intent = await createIntent(String(order._id), auth(user));
+        await confirmPayment(
+            String(intent.success && intent.data?.id),
+            FAKE_DECLINE_METHOD,
+            auth(user),
+            testCallerContext
+        );
+
+        const result = await recordOfflinePayment(
+            String(order._id),
+            { method: 'bank_transfer', reference: 'TRX-1' },
+            testCallerContext
+        );
+
+        expect(result.success).toBe(true);
+        const payment = await paymentRepository.findByOrderId(String(order._id));
+        expect(payment).toMatchObject({ status: 'succeeded', provider: 'manual' });
+    });
+
+    it('refuses a `receivedAt` in the future', async () => {
+        const { order } = await orderFor();
+
+        const result = await recordOfflinePayment(
+            String(order._id),
+            { method: 'cash', receivedAt: new Date(Date.now() + 60_000).toISOString() },
+            testCallerContext
+        );
+
+        expect(asReject(result).status).toBe(422);
+    });
+});
+
+describe('recordOfflinePayment — refunding it back', () => {
+    beforeEach(() => {
+        registerModules([
+            accountModule,
+            deliveryModule,
+            productsModule,
+            usersModule,
+            inventoryModule,
+            ordersModule,
+            cartModule,
+            paymentsModule
+        ]);
+    });
+
+    afterEach(() => {
+        resetDomainEvents();
+    });
+
+    it('cancelling an offline-paid order marks it refunded by hand, with no provider call', async () => {
+        const refundSpy = jest.spyOn(fakePaymentProvider, 'refund');
+        const { user, order } = await orderFor();
+        await recordOfflinePayment(String(order._id), { method: 'cash' }, testCallerContext);
+
+        const cancelled = await orderService.cancelById(String(order._id), auth(user));
+
+        expect(cancelled.success).toBe(true);
+        const payment = await paymentRepository.findByOrderId(String(order._id));
+        expect(payment).toMatchObject({ status: 'refunded', refundedByHand: true });
+        expect(refundSpy).not.toHaveBeenCalled();
+        refundSpy.mockRestore();
     });
 });
 

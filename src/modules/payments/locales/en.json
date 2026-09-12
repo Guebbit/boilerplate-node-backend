@@ -10,6 +10,9 @@
         "confirm-success": "Payment received — the order is paid.",
         "not-refundable": "This payment cannot be refunded — no money arrived, or it has already been returned.",
         "refund-success": "Payment refunded.",
+        "in-flight": "A card payment is already in progress for this order — wait for it to resolve before recording money by hand.",
+        "received-at-future": "The date the money arrived cannot be in the future.",
+        "offline-recorded": "Payment recorded — the order is paid.",
         "webhook-accepted": "Accepted.",
         "webhook-unverified": "That delivery could not be verified."
     }

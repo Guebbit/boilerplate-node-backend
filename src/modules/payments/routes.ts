@@ -5,8 +5,9 @@
  * machine with no account, authenticating by signing the raw body instead — session auth on top
  * would only stop deliveries arriving, not make it safer.
  *
- * Admin-only:    the refund alone — a self-service withdrawal if left open to any caller, versus
- *                an intent or confirm locked to admins being a checkout nobody can complete.
+ * Admin-only:    the refund and the offline record — a self-service withdrawal, or a self-reported
+ *                "I paid", if left open to any caller, versus an intent or confirm locked to
+ *                admins being a checkout nobody can complete.
  * Fresh session: every route that moves money requires `requireFreshAuth(REAUTH_TIME_CRITICAL)` —
  *                a stolen access token proves nothing about how recently the holder typed their
  *                password.
@@ -32,6 +33,7 @@ import { postPaymentSync } from './controllers/post-payment-sync';
 import { postPaymentWebhook } from './controllers/post-payment-webhook';
 import { getPaymentByOrder } from './controllers/get-payment-by-order';
 import { postPaymentRefund } from './controllers/post-payment-refund';
+import { postPaymentOffline } from './controllers/post-payment-offline';
 
 /** Express router for payment operations (intent, confirm, sync, webhook, read back). */
 export const router = Router();
@@ -68,6 +70,15 @@ router.post(
     requirePermission('payments.update'),
     idempotencyKey,
     postPaymentRefund
+);
+
+// POST /payments/order/:orderId/offline — the admin recording money by hand. Same `stepUp`
+// arrangement as the refund: `payments.create` carries it in `shared/authorization-keys.yaml`.
+router.post(
+    '/order/:orderId/offline',
+    requirePermission('payments.create'),
+    idempotencyKey,
+    postPaymentOffline
 );
 
 // POST /payments/:id/confirm — the payment form's submit.

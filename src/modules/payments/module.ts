@@ -28,7 +28,7 @@ export default {
      * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
      * whose module is gone, and a module claiming one the file does not attribute to it.
      */
-    permissions: ['payments.read', 'payments.update', 'payments.manage'],
+    permissions: ['payments.read', 'payments.create', 'payments.update', 'payments.manage'],
     routes: router,
     // The provider signs over the exact bytes it sent — relative to `basePath`, composed by the
     // app tier, so the mount point is stated once and the two cannot drift.

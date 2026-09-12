@@ -24,8 +24,15 @@ describe('paymentSchema', () => {
         // `cardLast4` is absent: not every provider has a card, and the fake one has no digits to
         // report. `status` carries a default instead, which is why it is not required either.
         // `userId` is deliberately absent too — account erasure unsets it, the same treatment
-        // as `orders`'.
-        expect(requiredPaths(paymentSchema)).toEqual(['amount', 'currency', 'orderId', 'provider']);
+        // as `orders`'. `method` IS required: every path that creates a payment (the intent, and
+        // recording one by hand) sets it, so there is never a row that does not say how.
+        expect(requiredPaths(paymentSchema)).toEqual([
+            'amount',
+            'currency',
+            'method',
+            'orderId',
+            'provider'
+        ]);
     });
 
     it('allows at most one payment per order, in the database', () => {

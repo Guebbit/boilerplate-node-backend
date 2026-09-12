@@ -7,7 +7,7 @@
  */
 
 import { paymentModel, paymentWebhookEventModel, applyPaymentTransform } from './model';
-import { PaymentStatus } from '@types';
+import { PaymentStatus, PaymentMethod } from '@types';
 import type { PaymentDocument } from './model';
 import {
     createRepository,
@@ -32,6 +32,17 @@ export const paymentRepository: Repository<PaymentDocument> & {
         orderId: string,
         userId: string | undefined,
         data: { amount: number; currency: string; provider: string }
+    ) => Promise<PaymentDocument | null>;
+    upsertOffline: (
+        orderId: string,
+        userId: string | undefined,
+        data: {
+            amount: number;
+            currency: string;
+            method: PaymentMethod;
+            reference?: string;
+            receivedAt: Date;
+        }
     ) => Promise<PaymentDocument | null>;
     detachUserId: (userId: string) => Promise<number>;
     deleteAbandonedBefore: (cutoff: Date) => Promise<number>;
@@ -122,9 +133,36 @@ export const paymentRepository: Repository<PaymentDocument> & {
                     status: { $in: ['requires_confirmation', 'declined'] }
                 },
                 {
-                    $set: { ...data, status: 'requires_confirmation' },
+                    $set: { ...data, method: PaymentMethod.card, status: 'requires_confirmation' },
                     // Absent rather than `toObjectId(undefined)`: an intent against an order
                     // whose account is already erased pays for real, with no payer to record.
+                    $setOnInsert: userId === undefined ? {} : { userId: toObjectId(userId) }
+                },
+                { upsert: true, returnDocument: 'after' }
+            )
+            .exec()
+            .catch((error: { code?: number }) => {
+                if (error.code === 11_000) return null;
+                throw error;
+            }),
+
+    /**
+     * Create or refresh the payment record for an order paid by hand — same filter as
+     * {@link upsertIntent}'s, and the same reason: the row of a card payment nobody confirmed
+     * (`requires_confirmation`, `declined`) becomes the offline one rather than colliding with it.
+     * Left at `requires_confirmation` here; `settlePayment` is what moves it to `succeeded` and the
+     * order to `paid`, so this record never invents its own copy of that move.
+     */
+    upsertOffline: (orderId, userId, data) =>
+        paymentModel
+            .findOneAndUpdate(
+                {
+                    orderId: toObjectId(orderId),
+                    status: { $in: ['requires_confirmation', 'declined'] }
+                },
+                {
+                    $set: { ...data, provider: 'manual', status: 'requires_confirmation' },
+                    $unset: { providerRef: 1, cardLast4: 1 },
                     $setOnInsert: userId === undefined ? {} : { userId: toObjectId(userId) }
                 },
                 { upsert: true, returnDocument: 'after' }
