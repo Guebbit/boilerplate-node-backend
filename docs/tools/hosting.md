@@ -79,75 +79,58 @@ flowchart LR
 
 ## 3 · The capability matrix
 
-Columns, once per category:
+Prices move every few months — this page stopped tracking them ([§7](#7-keeping-it-true)). What
+doesn't move nearly as fast is **control**: whether you get a shell, whether a database is a
+managed add-on, where the region is. Those are the questions that actually decide "can I run the
+shipped compose file here."
 
-| Column                      | Meaning                                                                                     |
-| --------------------------- | ------------------------------------------------------------------------------------------- |
-| Node / Containers / Compose | Can it run a Node process? Any OCI image? A compose file as-is?                             |
-| Root / SSH                  | Can you get a shell and install things                                                      |
-| Managed MongoDB / Redis     | Offered by the same provider                                                                |
-| Persistent disk             | Survives a redeploy                                                                         |
-| Scheduled jobs              | A built-in cron, or only through your own container                                         |
-| Email                       | Mailboxes / SMTP it provides — a shared host that can't run the app can still send its mail |
-| EU region · HQ jurisdiction | Where data can live, and whose law governs the company                                      |
-| Cheapest plan that runs it  | Plan **name**, linked to the pricing page — no prices restated here                         |
-| Runs this stack             | **As shipped** (compose) · **With changes** (say which) · **No** (say why)                  |
-| Verified                    | The date this row's facts were last checked against the vendor's own pages                  |
+| Column            | Meaning                                                                                       |
+| ----------------- | --------------------------------------------------------------------------------------------- |
+| Node / Containers | Can it run a Node process at all? Any OCI image, docker-compose included?                     |
+| Root / shell      | A host shell you install things on, versus a shell into a container the platform runs for you |
+| Managed MongoDB   | A first-party database-as-a-service, not just "you can `docker run mongo` yourself"           |
+| EU region         | Where the data can physically live                                                            |
+| HQ jurisdiction   | Whose law governs the company that holds the data — see [§6](#6-the-data-protection-lens)     |
+| Runs this stack   | **As shipped** (compose) · **With changes** (say which) · **No** (say why)                    |
+| Pricing           | Link only — no figure restated here, see the warning above                                    |
 
-**Shared hosting (cPanel and similar)** — the example that motivated the "with changes" column.
-[HostGator's own data-center page](https://www.hostgator.com/help/article/hostgator-data-centers)
-for locations and its [VPS plan page](https://www.hostgator.com/vps-hosting) for capability,
-re-checked 2026-09-12:
+A handful of concrete hosts, one or two per category, chosen by the rule in
+[§7](#7-keeping-it-true):
 
-| Tier                                | Node | Containers | MongoDB | Root | EU region | Verified   |
-| ----------------------------------- | ---- | ---------- | ------- | ---- | --------- | ---------- |
-| Shared / Cloud / WordPress (cPanel) | No   | No         | No      | No   | No        | 2026-09-12 |
-| VPS (KVM, AlmaLinux 9)              | Yes  | Yes        | Yes     | Yes  | No        | 2026-09-12 |
-| Dedicated                           | Yes  | Yes        | Yes     | Yes  | No        | 2026-09-12 |
+| Host                      | Category       | Node/Containers        | Root/shell                             | Managed MongoDB                                    | EU region                          | HQ                   | Runs this stack | Pricing                                                                  | Verified   |
+| ------------------------- | -------------- | ---------------------- | -------------------------------------- | -------------------------------------------------- | ---------------------------------- | -------------------- | --------------- | ------------------------------------------------------------------------ | ---------- |
+| HostGator shared (cPanel) | Shared         | No                     | No                                     | No                                                 | No                                 | US                   | No              | [Plans](https://www.hostgator.com/web-hosting)                           | 2026-09-12 |
+| HostGator VPS (KVM)       | VPS            | Yes                    | Full root, SSH                         | No — self-install only                             | No                                 | US                   | As shipped      | [VPS plans](https://www.hostgator.com/vps-hosting)                       | 2026-09-12 |
+| Hetzner Cloud             | VPS            | Yes                    | Full root, SSH                         | No — self-install only                             | Yes (Germany, Finland)             | Germany              | As shipped      | [Cloud pricing](https://www.hetzner.com/cloud/)                          | 2026-09-12 |
+| OVHcloud Public Cloud     | VPS            | Yes                    | Full root, SSH                         | **Yes** — managed database add-on                  | Yes (France + more)                | France (SecNumCloud) | As shipped      | [Public Cloud pricing](https://www.ovhcloud.com/en/public-cloud/prices/) | 2026-09-12 |
+| DigitalOcean Droplets     | VPS            | Yes                    | Full root, SSH                         | No — self-install only                             | Yes (Amsterdam, London, Frankfurt) | US                   | As shipped      | [Droplet pricing](https://www.digitalocean.com/pricing/droplets)         | 2026-09-12 |
+| Render                    | Container PaaS | Image only, no compose | Shell into the container, not the host | No — a self-managed private service, not an add-on | Yes (Frankfurt only)               | US                   | With changes    | [Pricing](https://render.com/pricing)                                    | 2026-09-12 |
 
-HostGator's own marketing page and its knowledge-base price chart disagreed by roughly 6× on
-identical VPS plans at the time of checking — a reminder to click through to the vendor's own
-current page rather than trust a cached number, here or anywhere else. `.env-example` names
-HostGator as an SMTP host precisely because "can't run the app, can still send its mail" is a real,
-useful answer for a shared host.
+A dedicated server from a shared-hosting vendor (HostGator's own included) profiles identically to
+that vendor's VPS row — physical rather than virtual, same root and network story.
 
-**Developer VPS / cloud VM and the hyperscalers** — adoption context rather than a full matrix
-(each entry needs its own verification pass before publishing a row): AWS held 43.3% and
-DigitalOcean 10.7% of the developer-VPS category in the
-[2025 Stack Overflow survey](https://survey.stackoverflow.co/2025/technology) — still the latest
-published edition as of 2026-09-12; the 2026 survey is open but unreleased. Hetzner is absent from
-that survey but runs 500,000+ servers and passed one million concurrent cloud instances in 2025.
-European providers collectively hold about
-[15% of the European cloud market](https://www.srgresearch.com/articles/european-cloud-providers-local-market-share-now-holds-steady-at-15),
-re-confirmed 2026-09-12: unchanged since 2022, with the hyperscalers taking the other 70%.
-Any VPS that meets §1's requirements — a shell, an OCI runtime, a persistent disk — runs the
-compose file exactly as shipped.
+**A shared/cPanel host is the example that motivated the "with changes" — really "no" — outcome.**
+`.env-example` names HostGator as an SMTP host precisely because "can't run the app, can still send
+its mail" is a real, useful answer for a host that can do nothing else here.
 
-**Container PaaS** (Render, Railway, Fly.io, Heroku, DigitalOcean App Platform, Koyeb) runs the
-built image directly; the compose file itself doesn't apply, but the same requirements do — a
-platform without a persistent disk needs the (not-yet-built) S3 image store, and its own managed
-MongoDB/Redis/RabbitMQ addons stand in for the bundled ones.
+**Container PaaS** (Render above; Railway, Fly.io, Heroku, DigitalOcean App Platform and Koyeb read
+the same way) runs a built image directly — the compose file itself doesn't apply. A platform
+without a persistent disk needs the (not-yet-built) S3 image store, and its managed
+Postgres/Redis-shaped add-ons stand in for the bundled services. **None of the PaaS options checked
+manage MongoDB itself** — only Postgres/MySQL/Redis-family engines — so Mongo there means "run your
+own container," the opposite of what "managed" means for every other engine on the same platform.
 
-**Managed Kubernetes** — only relevant once
-[a trigger fires](../theory/tenancy.md#9-when-to-revisit-this-decision); nothing here is provider
-work until then. Entry prices for 3 workers + a load balancer, re-checked 2026-09-12: self-run k3s
-on Hetzner ~€21/mo (up from ~€24 the same setup cost 2026-09-10 — Hetzner raised cloud-server and
-load-balancer prices twice in 2026, up to +176% on its higher tiers, so its per-VM math moves
-around even where the 3-node total roughly held) · OVHcloud MKS ~€45/mo · **Scaleway Kapsule
-~€19–20/mo, corrected from the ~€48 this page previously stated** — the smaller entry node type
-(`DEV1-S`, 2 vCPU/2 GB) prices closer to a third of what was recorded before · DOKS $48/mo,
-confirmed exact · Civo ~$43/mo, confirmed. Hetzner offers no first-party managed control plane.
-Managed market share splits roughly EKS 42% / GKE 27% / AKS 23%, ~8% to everyone else — repeated
-identically across every 2026 source checked, but none of them named a primary study, so treat the
-split itself as directional rather than re-verified.
+**Managed Kubernetes** is out of scope for this table entirely — only relevant once
+[a trigger fires](../theory/tenancy.md#9-when-to-revisit-this-decision), and nothing here is
+provider work until then.
 
 ## 4 · How to deploy, per category
 
-| Category           | What actually runs                                                                                                                                     |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| VPS / dedicated    | The compose file as shipped — see [Getting Started — Production](../getting-started-production.md)                                                     |
-| Container PaaS     | The image `docker build -f docker/Dockerfile.production` produces, plus the platform's own managed MongoDB/Redis/RabbitMQ in place of the bundled ones |
-| Managed Kubernetes | Not yet — see the trigger list linked above                                                                                                            |
+| Category           | What actually runs                                                                                                                                                                                                      |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| VPS / dedicated    | The compose file as shipped — see [Getting Started — Production](../getting-started-production.md)                                                                                                                      |
+| Container PaaS     | The image `docker build -f docker/Dockerfile.production` produces, plus the platform's own managed Postgres/Redis in place of the bundled ones — none checked manage MongoDB itself, see [§3](#3-the-capability-matrix) |
+| Managed Kubernetes | Not yet — see the trigger list linked above                                                                                                                                                                             |
 
 ## 5 · Managed backing services — "compatible, not identical"
 
@@ -183,12 +166,16 @@ Facts to weigh, not a verdict this page makes for you:
 
 ## 7 · Keeping it true
 
-- Re-verify a row by visiting the vendor's own pricing/docs page named in its **Verified** date —
-  never trust a cached number, including the ones on this page.
-- The provider list itself is chosen by rule, not by taste: the hyperscalers named in the latest
-  Stack Overflow Developer Survey, the largest European VPS providers, the container PaaS options
-  actually used for Node, and the managed Kubernetes offerings by market share plus EU-owned
-  alternatives. Add a row when a rule-based candidate is missing; drop one only when it stops
+- Re-verify a row by visiting the vendor's own docs, not its marketing page — a capability drifts
+  far slower than a price, but it still drifts: a provider adds or drops a managed engine, opens or
+  closes a region. Re-check by updating that row's **Verified** date, not the whole table.
+- This page deliberately carries no prices. A **Pricing** link points at the vendor's own current
+  page instead of a number that would be wrong within months — this page tracked two managed
+  Kubernetes prices in euros once, and both had moved by the time they were next checked.
+- The provider list itself is chosen by rule, not by taste: a large US hyperscaler-adjacent VPS
+  (DigitalOcean), the largest EU-native VPS providers (Hetzner, OVHcloud), the shared-hosting
+  example that motivated the "with changes" column (HostGator), and one representative container
+  PaaS (Render). Add a row when a rule-based candidate is missing; drop one only when it stops
   meeting the rule.
 
 ## Where to go next
