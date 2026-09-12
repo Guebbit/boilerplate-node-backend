@@ -87,8 +87,11 @@ Do you use `NODE_WEBHOOK_DEMO_SINK_URL` today? If not, **C**. If yes, **B**.
       `_id` with `target_type: 'locale_entry'`; marcus `active: false`; `actor_scope` added to
       every row. The refund row is dropped, not repointed — nothing here seeds a payment; it
       returns with OFFLINE_PAYMENTS 3
-- [ ] D3 seed a few real frontend keys; the frontend spec asserts one Spanish string next to one
-      English fallback. Check which languages have a dictionary before seeding overrides for them
+- [x] D3 — all twelve `es`/`fr` frontend-tenant entries now key against strings the paired
+      frontend's own `en.json` files actually declare (`products-list-page.page-title`,
+      `cart-page.*`, …), including a real five-level-deep key
+      (`static-pages.about.features.catalogue.title`) for the deep-nesting case the fixture
+      demonstrates. The `it`/backend overlay pair already used real backend keys — untouched
 - [ ] D4 document the exemption now; opening `receive` rows come with OFFLINE_PAYMENTS 3
 - [ ] D5 per the answer
 - [ ] D7 frontend: fix the two order assumptions; make the reorder spec assert the reordered line
