@@ -100,6 +100,16 @@ const siblingRoot = resolveFrontendPath();
 const siblingModules = path.join(siblingRoot, 'src', 'modules');
 const siblingPresent = existsSync(siblingModules);
 
+/**
+ * Whether someone named a checkout, and so expects these cases to actually run.
+ *
+ * Not `CI`: the pipeline's cross-repo guard is the `spec-identity` job, which checks the sibling out
+ * and fails on its own when it cannot — see `tests/unit/scripts/pairing/spec-identity.test.ts` for
+ * the same reasoning at more length. Failing here as well only made a job that clones one repo red
+ * for something it had no way to check.
+ */
+const siblingExpected = Boolean(process.env.FRONTEND_PATH?.trim());
+
 /** Every module folder in the paired frontend. */
 const frontendModules = (): string[] =>
     readdirSync(siblingModules, { withFileTypes: true })
@@ -120,8 +130,8 @@ describe(`the paired frontend at ${siblingRoot}`, () => {
 
         const message = `Cross-repo pairing checks skipped: no frontend modules at ${siblingModules}.`;
         // eslint-disable-next-line no-console -- the skip warning must reach a terminal with no logger configured
-        if (!process.env.CI) console.warn(`⚠️  ${message}`);
-        expect(process.env.CI ? message : '').toBe('');
+        if (!siblingExpected) console.warn(`⚠️  ${message}`);
+        expect(siblingExpected ? message : '').toBe('');
     });
 
     if (!siblingPresent) return;

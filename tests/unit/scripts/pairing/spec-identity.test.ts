@@ -315,12 +315,21 @@ describe('formatSharedFileProblems', () => {
  * way to work — but NOT silently. A `describe.skip` reads as green, and the one guard that would
  * have caught a forked contract is exactly the guard nobody notices going missing.
  *
- * So the absence is asserted rather than assumed: locally it says so out loud, and under `CI` it
- * fails, because a pipeline that checks out one half of a pair and reports success on the shared
- * contract is reporting something it did not check.
+ * So the absence is asserted rather than assumed: it says so out loud, and it FAILS wherever
+ * someone pointed `FRONTEND_PATH` at a checkout that is not there — having named the path is the
+ * claim that the check can run.
+ *
+ * It does not fail on `CI` alone. The pipeline's cross-repo guard is the `spec-identity` job, which
+ * checks the sibling out itself, passes `FRONTEND_PATH`, runs the `check:spec-identity` CLI and
+ * fails with "Could not check out the paired frontend" when the sibling is unreachable. That job is
+ * this question's one home; asserting it a second time from a job that clones one repo only made
+ * `test-unit` fail for something it was never given the means to check.
  */
 const siblingRoot = resolveFrontendPath();
 const siblingPresent = existsSync(siblingRoot);
+
+/** Whether someone named a checkout, and so expects these cases to actually run. */
+const siblingExpected = Boolean(process.env.FRONTEND_PATH?.trim());
 
 describe(`the paired frontend at ${siblingRoot}`, () => {
     it('is checked out, or this suite is knowingly incomplete', () => {
@@ -328,8 +337,8 @@ describe(`the paired frontend at ${siblingRoot}`, () => {
 
         const message = `Shared-contract checks skipped: no sibling repo at ${siblingRoot}.`;
         // eslint-disable-next-line no-console -- the skip warning must reach a terminal that has no logger configured
-        if (!process.env.CI) console.warn(`⚠️  ${message}`);
-        expect(process.env.CI ? message : '').toBe('');
+        if (!siblingExpected) console.warn(`⚠️  ${message}`);
+        expect(siblingExpected ? message : '').toBe('');
     });
 
     (siblingPresent ? it : it.skip)('carries byte-identical copies of every shared file', () => {
