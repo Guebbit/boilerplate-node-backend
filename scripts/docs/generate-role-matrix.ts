@@ -1,20 +1,16 @@
 #!/usr/bin/env tsx
 /**
- * The role tables in `docs/demo-ecommerce/index.md`, generated from the permission model itself.
+ * The EFFECTIVE role matrix in `docs/demo-ecommerce/index.md`: what `holdsKey` actually answers,
+ * per role, per module. Same shape as `generate-module-graph.ts` — markers in the page, prose
+ * around them untouched, `--check` in `complete`.
  *
- * Generated rather than typed out, for the reason `CLAUDE.md` gives: a hand-maintained table that
- * restates `shared/authorization-roles.yaml` is a published claim with no guard behind it, right
- * on the day it is written and quietly wrong after the next role edit. Same shape as
- * `generate-module-graph.ts` — markers in the page, prose around them untouched, `--check` in
- * `complete`.
+ * ONE TABLE, and only this one. What a role DECLARES is prose on the page, written by hand from
+ * `shared/authorization-roles.yaml`'s own `title` and `description` — that file documents itself,
+ * and a generated copy of its key lists said less than the descriptions it ignored.
  *
- * TWO TABLES, because the file and the evaluator do not say the same thing:
- *   - DECLARED is what `authorization-roles.yaml` holds, verbatim. It is what a person edits.
- *   - EFFECTIVE is what `holdsKey` actually answers, which is the only thing a reader can act on:
- *     `manage` expands into its module's concrete keys, and every tenant caller is floored at the
- *     anonymous baseline (see `keysInScope` in `kernel/permissions.ts`).
- * Publishing only the first would describe a shop nobody gets; only the second would hide where
- * to go and change it.
+ * What it answers cannot be written by hand, which is why this survives: `manage` expands into its
+ * module's concrete keys, and every tenant caller is floored at the anonymous baseline (see
+ * `keysInScope` in `kernel/permissions.ts`). That is 117 cells nobody can derive reliably by eye.
  *
  * Asked through `holdsKey` rather than by re-expanding the keys here: a second expander is a
  * second answer to "what may this role do", and the one in the docs would be the one nobody runs.
@@ -102,19 +98,6 @@ const cell = (caller: Caller, module: string): string => {
     return held.map((key) => codes[key.action] ?? key.action).join('');
 };
 
-/** The declared table: what the YAML holds, verbatim, with nothing expanded. */
-const declaredTable = (): string =>
-    [
-        '| Role | Scope | Permissions, as written in `shared/authorization-roles.yaml` |',
-        '| --- | --- | --- |',
-        ...roles.map(
-            (role) =>
-                `| \`${role.name}\` | ${role.scope} | ${role.permissions
-                    .map((key) => `\`${key}\``)
-                    .join(', ')} |`
-        )
-    ].join('\n');
-
 /** The effective table: what `holdsKey` answers, per module. */
 const effectiveTable = (): string =>
     [
@@ -129,22 +112,12 @@ const effectiveTable = (): string =>
         })
     ].join('\n');
 
-/** Both tables and the legend, as the block that replaces whatever sits between the markers. */
+/** The table and its legend, as the block that replaces whatever sits between the markers. */
 const body = (): string =>
     [
-        '### What each role is given',
-        '',
-        declaredTable(),
-        '',
-        '`guest` is not an account anybody logs into — it is what an unauthenticated request',
-        'resolves to, and the floor every signed-in role is raised to. Signing in can only ever',
-        'widen what a person sees.',
-        '',
-        '### What that actually grants',
-        '',
-        'The same roles after the evaluator has had them: `manage` expanded into its module’s own',
-        'keys, and the baseline folded in. This is what a route guard and a listing actually',
-        'answer.',
+        'The roles above after the evaluator has had them: `manage` expanded into its module’s own',
+        'keys, and the `guest` baseline folded in. This is what a route guard and a listing',
+        'actually answer.',
         '',
         effectiveTable(),
         '',
