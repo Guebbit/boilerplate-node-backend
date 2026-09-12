@@ -41,6 +41,15 @@ const freePort = (): Promise<number> =>
         });
     });
 
+/**
+ * How many of the child's output chunks to keep for the error message when it never listens.
+ *
+ * Chunks, not lines — this is a stream, and a chunk boundary falls wherever the OS put it. Bounded
+ * because a boot that fails late can write thousands of lines first and a jest failure carrying all
+ * of them is unreadable; the reason is always near the end.
+ */
+const MAX_CAPTURED_CHUNKS = 40;
+
 /** Resolves once something is accepting connections on `port`, or rejects after `timeoutMs`. */
 const waitForListening = (port: number, timeoutMs: number): Promise<void> => {
     const deadline = Date.now() + timeoutMs;
@@ -70,7 +79,7 @@ const waitForListening = (port: number, timeoutMs: number): Promise<void> => {
  * Its own in-memory Mongo, because the workers connect over TCP from another process and cannot be
  * handed this one's mongoose connection.
  */
-export const startCluster = ({
+const startCluster = ({
     workers,
     env = {},
     bootTimeoutMs = 60_000
@@ -103,8 +112,22 @@ export const startCluster = ({
                 NODE_CLUSTER_WORKERS: String(workers),
                 ...env
             },
-            stdio: ['ignore', 'ignore', 'ignore']
+            stdio: ['ignore', 'pipe', 'pipe']
         });
+
+        /*
+         * Kept so a boot failure can say WHY. Discarding the child's output made every failure here
+         * read as a bare 60-second timeout with no cause attached, which is how a red `cluster` job
+         * stayed unexplained: the process that knew what went wrong was the one nobody was reading.
+         */
+        const output: string[] = [];
+        const capture = (chunk: Buffer | string): void => {
+            output.push(String(chunk));
+            if (output.length > MAX_CAPTURED_CHUNKS)
+                output.splice(0, output.length - MAX_CAPTURED_CHUNKS);
+        };
+        child.stdout?.on('data', capture);
+        child.stderr?.on('data', capture);
 
         const stop = (): Promise<void> =>
             new Promise<void>((resolve) => {
@@ -125,10 +148,27 @@ export const startCluster = ({
             () => ({ port, stop }),
             (error: unknown) =>
                 stop().then(() => {
-                    throw error instanceof Error ? error : new Error(String(error));
+                    const reason = error instanceof Error ? error.message : String(error);
+                    throw new Error(
+                        `${reason}\nThe child's last output:\n${output.join('') || '(nothing — it wrote neither stdout nor stderr)'}`
+                    );
                 })
         );
     });
+
+/**
+ * Boot a cluster, hand it to `use`, and stop it however that ends.
+ *
+ * The lifecycle lives here rather than in each case because the obvious hand-rolled shape — a
+ * `let cluster` assigned inside a `.then`, stopped in a `.finally` — throws
+ * `Cannot read properties of undefined (reading 'stop')` when the boot itself fails, replacing the
+ * real reason with a TypeError from the cleanup.
+ */
+export const withCluster = <T>(
+    options: Parameters<typeof startCluster>[0],
+    use: (cluster: Cluster) => Promise<T>
+): Promise<T> =>
+    startCluster(options).then((cluster) => use(cluster).finally(() => cluster.stop()));
 
 /**
  * One GET, on its own connection.

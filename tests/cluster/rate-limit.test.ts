@@ -33,7 +33,7 @@
  * promise in `rate-limit-store.ts` is the fix, and these cases are what keep it fixed.
  */
 
-import { getOnFreshConnection, startCluster, tally, type Cluster } from './support/cluster';
+import { getOnFreshConnection, tally, withCluster, type Cluster } from './support/cluster';
 import { containerEngineAvailable, startRedis, type TestRedis } from './support/redis';
 
 /** Small enough that a burst passes it quickly, large enough that an off-by-one is not the story. */
@@ -81,27 +81,23 @@ describe('the rate limiter across a real cluster', () => {
          * The assertion the fix needs. `LIMIT` requests are answered and every one after them is
          * refused — no matter which of the two workers each landed on.
          */
-        let cluster: Cluster;
-
-        return startCluster({
-            workers: WORKERS,
-            env: {
-                NODE_RATE_LIMIT_REDIS_ENABLED: '1',
-                NODE_RATE_LIMIT_REDIS_URL: redis.url,
-                NODE_RATE_LIMIT_REDIS_PREFIX: keyPrefix(),
-                NODE_RATE_LIMIT_MAX: String(LIMIT),
-                NODE_RATE_LIMIT_WINDOW_MS: '60000'
-            }
-        })
-            .then((started) => {
-                cluster = started;
-                return burstAgainst(cluster);
-            })
-            .then((counts) => {
-                expect(counts[200]).toBe(LIMIT);
-                expect(counts[429]).toBe(BURST - LIMIT);
-            })
-            .finally(() => cluster.stop());
+        return withCluster(
+            {
+                workers: WORKERS,
+                env: {
+                    NODE_RATE_LIMIT_REDIS_ENABLED: '1',
+                    NODE_RATE_LIMIT_REDIS_URL: redis.url,
+                    NODE_RATE_LIMIT_REDIS_PREFIX: keyPrefix(),
+                    NODE_RATE_LIMIT_MAX: String(LIMIT),
+                    NODE_RATE_LIMIT_WINDOW_MS: '60000'
+                }
+            },
+            (cluster) =>
+                burstAgainst(cluster).then((counts) => {
+                    expect(counts[200]).toBe(LIMIT);
+                    expect(counts[429]).toBe(BURST - LIMIT);
+                })
+        );
     });
 
     it('gives each worker its own budget when the counters are in memory', () => {
@@ -117,26 +113,22 @@ describe('the rate limiter across a real cluster', () => {
          * has none of its own, so leaving it set would quietly put these counters back in Redis and
          * turn this case into a duplicate of the one above.
          */
-        let cluster: Cluster;
-
-        return startCluster({
-            workers: WORKERS,
-            env: {
-                NODE_RATE_LIMIT_REDIS_ENABLED: '0',
-                NODE_RATE_LIMIT_REDIS_URL: '',
-                NODE_REDIS_URL: '',
-                NODE_RATE_LIMIT_MAX: String(LIMIT),
-                NODE_RATE_LIMIT_WINDOW_MS: '60000'
-            }
-        })
-            .then((started) => {
-                cluster = started;
-                return burstAgainst(cluster);
-            })
-            .then((counts) => {
-                expect(counts[200]).toBe(LIMIT * WORKERS);
-                expect(counts[429]).toBe(BURST - LIMIT * WORKERS);
-            })
-            .finally(() => cluster.stop());
+        return withCluster(
+            {
+                workers: WORKERS,
+                env: {
+                    NODE_RATE_LIMIT_REDIS_ENABLED: '0',
+                    NODE_RATE_LIMIT_REDIS_URL: '',
+                    NODE_REDIS_URL: '',
+                    NODE_RATE_LIMIT_MAX: String(LIMIT),
+                    NODE_RATE_LIMIT_WINDOW_MS: '60000'
+                }
+            },
+            (cluster) =>
+                burstAgainst(cluster).then((counts) => {
+                    expect(counts[200]).toBe(LIMIT * WORKERS);
+                    expect(counts[429]).toBe(BURST - LIMIT * WORKERS);
+                })
+        );
     });
 });
