@@ -95,14 +95,15 @@ Columns, once per category:
 | Verified                    | The date this row's facts were last checked against the vendor's own pages                  |
 
 **Shared hosting (cPanel and similar)** — the example that motivated the "with changes" column.
-[HostGator's own support pages](https://www.hostgator.com/help/article/hostgator-data-centers),
-checked 2026-09-10:
+[HostGator's own data-center page](https://www.hostgator.com/help/article/hostgator-data-centers)
+for locations and its [VPS plan page](https://www.hostgator.com/vps-hosting) for capability,
+re-checked 2026-09-12:
 
 | Tier                                | Node | Containers | MongoDB | Root | EU region | Verified   |
 | ----------------------------------- | ---- | ---------- | ------- | ---- | --------- | ---------- |
-| Shared / Cloud / WordPress (cPanel) | No   | No         | No      | No   | No        | 2026-09-10 |
-| VPS (KVM, AlmaLinux 9)              | Yes  | Yes        | Yes     | Yes  | No        | 2026-09-10 |
-| Dedicated                           | Yes  | Yes        | Yes     | Yes  | No        | 2026-09-10 |
+| Shared / Cloud / WordPress (cPanel) | No   | No         | No      | No   | No        | 2026-09-12 |
+| VPS (KVM, AlmaLinux 9)              | Yes  | Yes        | Yes     | Yes  | No        | 2026-09-12 |
+| Dedicated                           | Yes  | Yes        | Yes     | Yes  | No        | 2026-09-12 |
 
 HostGator's own marketing page and its knowledge-base price chart disagreed by roughly 6× on
 identical VPS plans at the time of checking — a reminder to click through to the vendor's own
@@ -113,9 +114,12 @@ useful answer for a shared host.
 **Developer VPS / cloud VM and the hyperscalers** — adoption context rather than a full matrix
 (each entry needs its own verification pass before publishing a row): AWS held 43.3% and
 DigitalOcean 10.7% of the developer-VPS category in the
-[2025 Stack Overflow survey](https://survey.stackoverflow.co/2025/technology). Hetzner is absent
-from that survey but runs 500,000+ servers and passed one million concurrent cloud instances in 2025. European providers collectively hold about
-[15% of the European cloud market](https://www.srgresearch.com/articles/european-cloud-providers-local-market-share-now-holds-steady-at-15).
+[2025 Stack Overflow survey](https://survey.stackoverflow.co/2025/technology) — still the latest
+published edition as of 2026-09-12; the 2026 survey is open but unreleased. Hetzner is absent from
+that survey but runs 500,000+ servers and passed one million concurrent cloud instances in 2025.
+European providers collectively hold about
+[15% of the European cloud market](https://www.srgresearch.com/articles/european-cloud-providers-local-market-share-now-holds-steady-at-15),
+re-confirmed 2026-09-12: unchanged since 2022, with the hyperscalers taking the other 70%.
 Any VPS that meets §1's requirements — a shell, an OCI runtime, a persistent disk — runs the
 compose file exactly as shipped.
 
@@ -126,10 +130,16 @@ MongoDB/Redis/RabbitMQ addons stand in for the bundled ones.
 
 **Managed Kubernetes** — only relevant once
 [a trigger fires](../theory/tenancy.md#9-when-to-revisit-this-decision); nothing here is provider
-work until then. Entry prices for 3 workers + a load balancer, checked 2026-09-10: self-run k3s on
-Hetzner ~€24/mo · OVHcloud MKS ~$49.50 · Scaleway Kapsule ~€48 · DOKS ~$48 · Civo ~$43. Hetzner
-offers no first-party managed control plane. Managed market share splits roughly EKS 42% / GKE 27%
-/ AKS 23%, ~8% to everyone else.
+work until then. Entry prices for 3 workers + a load balancer, re-checked 2026-09-12: self-run k3s
+on Hetzner ~€21/mo (up from ~€24 the same setup cost 2026-09-10 — Hetzner raised cloud-server and
+load-balancer prices twice in 2026, up to +176% on its higher tiers, so its per-VM math moves
+around even where the 3-node total roughly held) · OVHcloud MKS ~€45/mo · **Scaleway Kapsule
+~€19–20/mo, corrected from the ~€48 this page previously stated** — the smaller entry node type
+(`DEV1-S`, 2 vCPU/2 GB) prices closer to a third of what was recorded before · DOKS $48/mo,
+confirmed exact · Civo ~$43/mo, confirmed. Hetzner offers no first-party managed control plane.
+Managed market share splits roughly EKS 42% / GKE 27% / AKS 23%, ~8% to everyone else — repeated
+identically across every 2026 source checked, but none of them named a primary study, so treat the
+split itself as directional rather than re-verified.
 
 ## 4 · How to deploy, per category
 
@@ -144,10 +154,11 @@ offers no first-party managed control plane. Managed market share splits roughly
 A managed MongoDB, Redis or RabbitMQ is not a drop-in guarantee of identical behaviour, only of the
 same wire protocol:
 
-- **MongoDB Atlas** is 75% of MongoDB Inc.'s own Q3 FY2026 revenue and the dominant managed
-  offering; its free M0 tier includes EU regions (Milan among them) but is capped at 512 MB,
-  pauses after 30 idle days, and ships no backups — fine for evaluating this boilerplate, not for a
-  client relying on it.
+- **MongoDB Atlas** is 75% of MongoDB Inc.'s own Q3 FY2026 revenue (confirmed against the
+  [company's own filing](https://investors.mongodb.com/news-releases/news-release-details/mongodb-inc-announces-third-quarter-fiscal-2026-financial),
+  re-checked 2026-09-12) and the dominant managed offering; its free M0 tier includes EU regions
+  (Milan among them) but is capped at 512 MB, pauses after 30 idle days, and ships no backups —
+  fine for evaluating this boilerplate, not for a client relying on it.
 - **Azure Cosmos DB for MongoDB** and **AWS DocumentDB** both speak the MongoDB wire protocol
   without being MongoDB — features this app might one day use (a specific aggregation operator, a
   specific index type) are the risk, not a certainty; check the specific feature against the
