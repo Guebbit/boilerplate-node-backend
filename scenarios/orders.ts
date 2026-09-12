@@ -3,7 +3,7 @@
  * The order book's slice of the demo dataset. Every snapshot is an exact copy of the live
  * catalogue row, built by LOOKUP (`seedProductById`) rather than restated, so a fixture that
  * needs to differ from today's product must say so explicitly; the lookup throws rather than
- * skipping a missing product. The email is a SNAPSHOT too, from `@kernel/seed-accounts` — no
+ * skipping a missing product. The email is a SNAPSHOT too, from `@scenarios/accounts` — no
  * import here reads a live user record.
  */
 
@@ -12,12 +12,12 @@ import {
     SEED_OWNER_ID,
     SEED_USER_EMAIL,
     SEED_USER_ID
-} from '@kernel/seed-accounts';
+} from '@scenarios/accounts';
 import { fillerProductId, seedProductById } from './products';
 import { SEED_ORDER_IDS, SEED_PRODUCT_IDS } from './subjects';
 import { SEED_CUSTOMER_EMAILS, SEED_CUSTOMER_IDS } from './users';
 import { makeOrder, type OrderSnapshotInput } from '@modules/orders/factories';
-import { upsertById, type SeedOutcome } from '@infrastructure/persistence/seed';
+import { insertIfAbsent, type SeedOutcome } from '@scenarios/seed';
 import { orderRepository } from '@modules/orders/repository';
 
 /** The catalogue row as it stands, reshaped into the snapshot an order item stores. */
@@ -47,11 +47,11 @@ const line = (productId: string, quantity: number) => ({
 });
 
 /**
- * Deterministic id for a demo history order at `index` — see `./users`'s `demoCustomerId` for why
+ * Deterministic id for a seed history order at `index` — see `./users`'s `seedCustomerId` for why
  * this isn't `new Types.ObjectId()`. Its own prefix keeps this id space apart from every other
  * collection's.
  */
-const demoOrderId = (index: number): string => `67f0c4${index.toString(16).padStart(18, '0')}`;
+const seedOrderId = (index: number): string => `67f0c4${index.toString(16).padStart(18, '0')}`;
 
 /** The three test-critical orders — see the comment on each for the branch it exercises. */
 const namedOrders = [
@@ -119,7 +119,7 @@ const namedOrders = [
  */
 const customerOrders = [
     makeOrder({
-        id: demoOrderId(0),
+        id: seedOrderId(0),
         userId: SEED_USER_ID,
         email: SEED_USER_EMAIL,
         items: [
@@ -130,7 +130,7 @@ const customerOrders = [
         ]
     }),
     makeOrder({
-        id: demoOrderId(1),
+        id: seedOrderId(1),
         userId: SEED_USER_ID,
         email: SEED_USER_EMAIL,
         items: [
@@ -140,7 +140,7 @@ const customerOrders = [
         ]
     }),
     makeOrder({
-        id: demoOrderId(2),
+        id: seedOrderId(2),
         userId: SEED_USER_ID,
         email: SEED_USER_EMAIL,
         items: [
@@ -169,7 +169,7 @@ const smallCustomerOrders = (
     ] as [customer: keyof typeof SEED_CUSTOMER_IDS, productIndex: number, quantity: number][]
 ).map(([customer, productIndex, quantity], index) =>
     makeOrder({
-        id: demoOrderId(3 + index),
+        id: seedOrderId(3 + index),
         userId: SEED_CUSTOMER_IDS[customer],
         email: SEED_CUSTOMER_EMAILS[customer],
         items: [line(fillerProductId(productIndex), quantity)]
@@ -237,7 +237,7 @@ const MEDIUM_ORDERS: MediumOrderSeed[] = [
 /** The multi-line orders, ids from 10 up, each spending against the filler catalogue. */
 const mediumCustomerOrders = MEDIUM_ORDERS.map(({ customer, lines }, index) =>
     makeOrder({
-        id: demoOrderId(10 + index),
+        id: seedOrderId(10 + index),
         userId: SEED_CUSTOMER_IDS[customer],
         email: SEED_CUSTOMER_EMAILS[customer],
         items: lines.map(([productIndex, quantity]) =>
@@ -262,6 +262,6 @@ export const orderFixtures = [
  * checkout, so every seeded product's `reserved` is honestly 0.
  */
 
-/** Seed this collection. Declared in `./index`; called by `scenarios/apply.ts`. */
+/** Seed this collection. Declared in `./index`'s `shopModules`; walked by `seedShop`. */
 export const seedOrdersCollection = (): Promise<SeedOutcome[]> =>
-    Promise.all(orderFixtures.map((order) => upsertById(orderRepository, order)));
+    Promise.all(orderFixtures.map((order) => insertIfAbsent(orderRepository, order)));

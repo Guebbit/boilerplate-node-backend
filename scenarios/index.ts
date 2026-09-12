@@ -1,13 +1,13 @@
 /**
  * @module
- * The demo dataset's registry — one entry per module with demo data, keyed the same way
- * `enabledModules` names them. Every file in this folder imports its module's repository, model
- * and factories directly (never the other way), so a production image can omit this whole folder
- * and nothing under `src/` notices.
+ * The scenario registry: every named, whole-database state this repo knows how to seed, plus the
+ * `shop` scenario's own table of per-module fixtures. Every file in this folder imports its
+ * module's repository, model and factories directly (never the other way), so a production image
+ * can omit this whole folder and nothing under `src/` notices.
  *
  * Walked by `app/demo.ts` and `scenarios/apply.ts` — neither of which imports a module for any
- * other reason. `tests/cross-cutting/scenario-fixtures.test.ts` refuses an entry whose name
- * `enabledModules` does not also carry.
+ * other reason. `tests/cross-cutting/scenario-fixtures.test.ts` refuses a `shopModules` entry
+ * whose name `enabledModules` does not also carry.
  *
  * See: docs/tools/demo-profile.md
  */
@@ -21,11 +21,13 @@ import { seedProductsCollection, checkProductGuarantees } from './products';
 import { seedUsersCollection } from './users';
 import { seedWebhooksCollection } from './webhooks';
 import { seedWishlistsCollection } from './wishlist';
-import type { SeedOutcome } from '@infrastructure/persistence/seed';
+import { seedBlank } from './blank';
+import { seedAccessModel } from './accounts';
+import type { SeedOutcome } from '@scenarios/seed';
 
-/** One module's demo registration: how to seed it. */
-export interface DemoModule {
-    /** Write this module's slice of the demo dataset. Called only by `scenarios/apply.ts`. */
+/** One module's `shop` registration: how to seed it. */
+export interface ScenarioModule {
+    /** Write this module's slice of the `shop` scenario. Called only by {@link seedShop}. */
     seed: () => Promise<SeedOutcome[]>;
 
     /**
@@ -36,8 +38,8 @@ export interface DemoModule {
     checkGuarantees?: () => Promise<string[]>;
 }
 
-/** Every module with demo fixtures. */
-export const demoModules: Readonly<Record<string, DemoModule>> = {
+/** Every module with `shop` fixtures. */
+export const shopModules: Readonly<Record<string, ScenarioModule>> = {
     account: {
         seed: seedAddressBooksCollection
     },
@@ -69,9 +71,7 @@ export const demoModules: Readonly<Record<string, DemoModule>> = {
 };
 
 /**
- * Seed every module — `scenarios/apply.ts` calls this instead of its own
- * `Promise.all(Object.values(demoModules).map(...))`, so the ordering fix lives in exactly one
- * place.
+ * The `shop` scenario: the access model, then every `shopModules` entry's records.
  *
  * `locales` MUST finish first, not join the concurrent batch: `products.seed()` writes its rows'
  * `translations` through `planTranslations`/`writeTranslations`, and `planSlot`
@@ -79,13 +79,29 @@ export const demoModules: Readonly<Record<string, DemoModule>> = {
  * the fallback locale itself — to already exist as an ACTIVE row. A `Promise.all` over every
  * module would race `products` against `locales` writing that row, and lose it as often as not.
  * No other module reads another module's write, which is what keeps the rest of the table
- * concurrent.
+ * concurrent. Nothing can resolve a caller until there is a shop to be a member of, which is why
+ * the access model runs before either.
  */
-export const seedAllDemoModules = (): Promise<SeedOutcome[]> =>
-    demoModules.locales.seed().then((localeOutcomes) =>
-        Promise.all(
-            Object.entries(demoModules)
-                .filter(([name]) => name !== 'locales')
-                .map(([, demoModule]) => demoModule.seed())
-        ).then((restOutcomes) => [localeOutcomes, ...restOutcomes].flat())
+export const seedShop = (): Promise<SeedOutcome[]> =>
+    seedAccessModel().then(() =>
+        shopModules.locales.seed().then((localeOutcomes) =>
+            Promise.all(
+                Object.entries(shopModules)
+                    .filter(([name]) => name !== 'locales')
+                    .map(([, scenarioModule]) => scenarioModule.seed())
+            ).then((restOutcomes) => [localeOutcomes, ...restOutcomes].flat())
+        )
     );
+
+/**
+ * The named, whole-database scenarios this repo can seed. `scenarios/apply.ts` and
+ * `src/app/demo.ts` both index this instead of a hand-rolled ternary, so a new scenario is added
+ * in exactly one place.
+ */
+export const SCENARIOS = {
+    shop: seedShop,
+    blank: seedBlank
+} satisfies Record<string, () => Promise<SeedOutcome[]>>;
+
+/** A name {@link SCENARIOS} actually knows how to seed. */
+export type ScenarioName = keyof typeof SCENARIOS;

@@ -10,10 +10,10 @@
  * Animal × product-type × tier — a pet-supply retailer's catalogue, in plain professional copy,
  * English and Italian. `FILLER_IMAGE_ROLE_KEYS` is a fixed pool independent of that grid's size:
  * growing it (more animals, more types, more tiers) never requires downloading a new photo, it
- * only means more rows share the ones `npm run seed:images` already fetched.
+ * only means more rows share the ones `npm run scenario:images` already fetched.
  */
 
-/** The image roles `npm run seed:images` populated under this key — see
+/** The image roles `npm run scenario:images` populated under this key — see
  * `./products-images.generated.json`. Fixed at 20 regardless of how large {@link FILLER_PRODUCTS}
  * grows; `./products` cycles through them by index. */
 export const FILLER_IMAGE_ROLE_KEYS: string[] = Array.from(

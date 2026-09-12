@@ -9,7 +9,7 @@
 import { backendTenant, frontendTenant } from '@modules/locales/tenants';
 import { makeLocale, makeLocaleEntry } from '@modules/locales/factories';
 import { localeRepository, localeEntryRepository } from '@modules/locales/repository';
-import { upsertById, type SeedOutcome } from '@infrastructure/persistence/seed';
+import { insertIfAbsent, type SeedOutcome } from '@scenarios/seed';
 import { getFallbackLocale } from '@infrastructure/i18n';
 
 /** The seeded languages, named by what each one is here to demonstrate. */
@@ -196,16 +196,16 @@ export const localeEntryFixtures = LOCALE_ENTRIES.map(([id, locale, tenant, key,
 );
 
 /**
- * Seed both collections. Declared in `./index`; called by `scenarios/apply.ts`.
+ * Seed both collections. Declared in `./index`'s `shopModules`; walked by `seedShop`.
  * Languages first: an entry names its language by tag, and landing entries before
  * their language would publish a dictionary the manifest doesn't list.
  */
 export const seedLocalesCollection = async (): Promise<SeedOutcome[]> => {
     const languages = await Promise.all(
-        localeFixtures.map((language) => upsertById(localeRepository, language))
+        localeFixtures.map((language) => insertIfAbsent(localeRepository, language))
     );
     const entries = await Promise.all(
-        localeEntryFixtures.map((entry) => upsertById(localeEntryRepository, entry))
+        localeEntryFixtures.map((entry) => insertIfAbsent(localeEntryRepository, entry))
     );
 
     return [...languages, ...entries];

@@ -138,18 +138,15 @@ module.exports = {
          */
         'src/modules/*/domain/!(index).ts': floor(100, 69, 100),
         // `registry.ts` is the low file on functions at 66.66.
-        'src/kernel/**/!(seed-accounts).ts': floor(70, 70, 66),
-        // Two branches, neither reached by a unit test. Negated out of the key above rather than
-        // dropping that key's branch floor to 0 for the five files that do clear it.
-        'src/kernel/seed-accounts.ts': floor(100, 0, 100),
+        'src/kernel/**/*.ts': floor(70, 70, 66),
         /*
          * Every subdirectory of `src/infrastructure/` carries its own key: one that falls out of
          * this list stops being measured rather than failing.
          * `tests/cross-cutting/coverage-thresholds.test.ts` is what turns that red instead.
          */
         'src/infrastructure/i18n/**/*.ts': STANDARD,
-        // `create-repository.ts` and `seed.ts` both sit at 33.33 functions — the factories are
-        // driven through the repositories they build, which the unit run does not exercise.
+        // `create-repository.ts` sits at 33.33 functions — the factories are driven through the
+        // repositories they build, which the unit run does not exercise.
         'src/infrastructure/persistence/*.ts': floor(70, 70, 33),
         // `otel-sdk.ts` is negated out because its behaviour belongs to the OpenTelemetry runtime
         // rather than to this codebase; the other two carry their own entries below.

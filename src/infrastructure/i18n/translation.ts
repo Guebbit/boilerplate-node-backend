@@ -195,6 +195,14 @@ export const planTranslations = (
     return translationPort.plan(entityType, payload);
 };
 
+/**
+ * `true` for a validated plan, narrowing away {@link planTranslations}'s rejection branch — every
+ * caller needs this before it may call {@link writeTranslations}.
+ */
+export const isTranslationPlan = (
+    value: TranslationWritePlan | ResponseReject
+): value is TranslationWritePlan => 'fallbackLocale' in value;
+
 /** The write half of a write — see {@link TranslationPort.write}. A no-op when unregistered. */
 export const writeTranslations = (
     entityType: string,

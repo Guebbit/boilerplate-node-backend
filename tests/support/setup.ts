@@ -21,6 +21,7 @@ import {
     registerLocaleDirectories
 } from '@infrastructure/i18n';
 import { registerValidationMessages } from '@infrastructure/http/validation-messages';
+import { usePreinstalledMongodBinary } from '@infrastructure/runtime/mongodb-memory-binary';
 
 /**
  * 10x the live default (`DEFAULT_RATE_LIMIT_MAX` in src/infrastructure/http/middlewares/rate-limit.ts, currently 100).
@@ -150,19 +151,7 @@ process.env.NODE_PAYMENT_WEBHOOK_SECRET ??= 'test-payment-webhook-secret';
  */
 process.env.NODE_SMTP_HOST ??= 'smtp.test.invalid';
 
-//
-//
-/**
- * Use a pre-installed mongod binary when available (set by `npm run setup:mongod`).
- * If the binary is absent, mongodb-memory-server will download it automatically at runtime.
- * So first run may be slow (download is 100mb)
- */
-const systemBinary = process.env.MONGOMS_SYSTEM_BINARY ?? '/tmp/mongod';
-if (existsSync(systemBinary)) {
-    process.env.MONGOMS_SYSTEM_BINARY = systemBinary;
-    process.env.MONGOMS_SYSTEM_BINARY_VERSION_CHECK = 'false';
-    process.env.MONGOMS_MD5_CHECK = 'false';
-}
+usePreinstalledMongodBinary();
 
 /**
  * WARNING: it's async — and it runs in `setupFiles`, i.e. BEFORE the test file imports anything.

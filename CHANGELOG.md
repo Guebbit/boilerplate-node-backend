@@ -73,6 +73,13 @@ unique and TTL index along with the data until the process restarted. It now emp
 collection instead, and the demo tenant's `_id` is pinned so the cached deployment tenant id never
 strands after a restore. See [Data](docs/reference/data.md).
 
+**`npm run seed:images` is `npm run scenario:images`.** Scenario-only code moved out of `src/`
+entirely (`scenarios/seed.ts`, `scenarios/accounts.ts`) and the two scripts that never shipped in
+the production image moved from `scenarios/build/` to `scenarios/run-server.ts` and
+`scenarios/tools/generate-seed-images.ts` — the rename follows that move, since "build" stopped
+describing either one. `npm run demo`, `scenario:apply` and `scenario:apply --reset` keep their
+names and behaviour.
+
 ### Breaking — security
 
 **The demo profile no longer mounts on `NODE_DEMO`.** The env var alone, on any non-production

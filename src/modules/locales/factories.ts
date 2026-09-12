@@ -25,7 +25,7 @@ export type LocaleOverrides = OverridesFor<Language> & {
 
 /**
  * A language ready for `localeRepository.create`. `_id` and `tag` are required, not
- * optional: `upsertById` addresses the fixture by id, and every entry references the tag.
+ * optional: `insertIfAbsent` addresses the fixture by id, and every entry references the tag.
  */
 export type LocaleFixture = Partial<LocaleDocument> & {
     _id: Types.ObjectId;

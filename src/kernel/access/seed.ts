@@ -1,7 +1,6 @@
 /**
  * @module
- * Putting the model into a database that has never seen it: the shop, the preset roles, and the
- * demo accounts' memberships.
+ * Putting the model into a database that has never seen it: the shop and the preset roles.
  *
  * **Nobody is handed an empty permission matrix.** A deployment gets the roles in
  * `shared/authorization-roles.yaml` on day one and may edit them afterwards — which is the whole
@@ -13,13 +12,7 @@
  */
 
 import { ANONYMOUS_ROLE, PRESET_ROLES } from '@kernel/permissions';
-import {
-    SEED_OWNER_ID,
-    SEED_USER_ID,
-    SEED_EDITOR_ID,
-    SEED_MODERATOR_ID
-} from '@kernel/seed-accounts';
-import { assignRole, ensureTenant } from './store';
+import { ensureTenant } from './store';
 import { roleModel } from './models';
 import type { TenantDocument } from './models';
 import { DEMO_TENANT_ID } from './tenant';
@@ -33,7 +26,7 @@ export { DEMO_TENANT_ID } from './tenant';
  * and a downstream multi-tenant app adds rows without touching the kernel, the guards or the
  * evaluator. That is the point of being tenant-aware before there is a second tenant.
  */
-export const DEMO_TENANT_SLUG = 'shop';
+export const DEPLOYMENT_TENANT_SLUG = 'shop';
 
 /**
  * Write the preset roles as editable rows.
@@ -62,30 +55,9 @@ export const seedPresetRoles = (): Promise<void> =>
  * The shop and the presets, with no accounts in it — what a fresh deployment needs to boot.
  *
  * Idempotent and safe to run against a live database with no `NODE_ENV` guard: every write is an
- * upsert, unlike `scenarios/apply.ts`'s demo data. `seedAccessModel` below is this plus the demo
- * accounts; `db/bootstrap-access.ts` is this alone, for a production deploy.
+ * upsert, unlike `scenarios/apply.ts`'s scenario data. `scenarios/accounts.ts`'s `seedAccessModel`
+ * is this plus the seed accounts' memberships; `db/bootstrap-access.ts` is this alone, for a
+ * production deploy.
  */
 export const bootstrapAccessModel = (name: string): Promise<TenantDocument> =>
-    seedPresetRoles().then(() => ensureTenant(DEMO_TENANT_SLUG, name, DEMO_TENANT_ID));
-
-/**
- * The whole model, seeded: one shop, the presets, and the demo accounts placed in it.
- *
- * `root` is the shop's owner AND the installation's operator — two memberships, because they are
- * two jobs. A request acts as one or the other depending on the key it is asking about, which is
- * exactly the behaviour the platform/tenant split exists to produce, demonstrated by the account
- * everybody logs in as. The two staff accounts each hold exactly one of the newer tenant roles,
- * so each can be logged into and tried on its own — the whole point of adding them to experiment.
- */
-export const seedAccessModel = (): Promise<void> =>
-    bootstrapAccessModel('The Demo Shop')
-        .then((tenant) =>
-            Promise.all([
-                assignRole(SEED_OWNER_ID, String(tenant._id), 'tenant', 'owner'),
-                assignRole(SEED_OWNER_ID, null, 'platform', 'operator'),
-                assignRole(SEED_USER_ID, String(tenant._id), 'tenant', 'customer'),
-                assignRole(SEED_EDITOR_ID, String(tenant._id), 'tenant', 'editor'),
-                assignRole(SEED_MODERATOR_ID, String(tenant._id), 'tenant', 'moderator')
-            ])
-        )
-        .then(() => undefined);
+    seedPresetRoles().then(() => ensureTenant(DEPLOYMENT_TENANT_SLUG, name, DEMO_TENANT_ID));

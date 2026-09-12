@@ -9,7 +9,7 @@ import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAsRole } from '@tests/http';
 import { ensureTenant } from '@kernel/access/store';
-import { DEMO_TENANT_SLUG } from '@kernel/access/seed';
+import { DEPLOYMENT_TENANT_SLUG } from '@kernel/access/seed';
 
 setupTestDb();
 
@@ -19,7 +19,7 @@ setupTestDb();
  * suite needs, for the same reason. See that file's fuller comment.
  */
 beforeEach(async () => {
-    await ensureTenant(DEMO_TENANT_SLUG, 'Contract test shop');
+    await ensureTenant(DEPLOYMENT_TENANT_SLUG, 'Contract test shop');
 });
 
 describe('GET /api-keys', () => {

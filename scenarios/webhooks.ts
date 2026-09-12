@@ -19,19 +19,20 @@ import { DEMO_TENANT_ID } from '@kernel/access/seed';
 import { webhookSubscriptionRepository } from '@modules/webhooks/repository';
 import { mintRingSecret } from '@modules/webhooks/secrets';
 import type { WebhookSubscriptionDocument } from '@modules/webhooks/model';
-import { upsertById, type SeedOutcome } from '@infrastructure/persistence/seed';
+import { insertIfAbsent, type SeedOutcome } from '@scenarios/seed';
 
 /** The fixed `_id` this subscription is upserted under, so re-seeding is a no-op like every other fixture. */
-const DEMO_WEBHOOK_SUBSCRIPTION_ID = '65e0000000000000000000a1';
+const WEBHOOK_SUBSCRIPTION_ID = '65e0000000000000000000a1';
 
 /** A fixed, valid-shaped session id — see the module docblock. */
-const DEMO_WEBHOOK_SESSION_ID = '4b1d9e2a-6f3c-4a8e-9d1b-2c7a5e6f9b3d';
+const WEBHOOK_SESSION_ID = '4b1d9e2a-6f3c-4a8e-9d1b-2c7a5e6f9b3d';
 
-/** Every fixture here shares this timestamp, matching the rest of the demo dataset's convention. */
+/** Every fixture here shares this timestamp, matching the rest of the scenario's convention. */
 const SEED_DATE = new Date('2026-01-01T00:00:00.000Z');
 
 /**
- * Seed the demo webhook subscription. Declared in `./index`; called by `scenarios/apply.ts`.
+ * Seed the scenario's webhook subscription. Declared in `./index`'s `shopModules`; walked by
+ * `seedShop`.
  *
  * Seeds nothing when `NODE_WEBHOOK_DEMO_SINK_URL` is unset, the default.
  */
@@ -41,9 +42,9 @@ export const seedWebhooksCollection = (): Promise<SeedOutcome[]> => {
 
     const { entry } = mintRingSecret();
     const fixture = {
-        _id: new Types.ObjectId(DEMO_WEBHOOK_SUBSCRIPTION_ID),
+        _id: new Types.ObjectId(WEBHOOK_SUBSCRIPTION_ID),
         tenant: DEMO_TENANT_ID,
-        url: `${sinkBaseUrl.replace(/\/+$/, '')}/${DEMO_WEBHOOK_SESSION_ID}`,
+        url: `${sinkBaseUrl.replace(/\/+$/, '')}/${WEBHOOK_SESSION_ID}`,
         description: 'Demo sink (webhook-tester)',
         eventTypes: ['*'],
         enabled: true,
@@ -53,5 +54,5 @@ export const seedWebhooksCollection = (): Promise<SeedOutcome[]> => {
         updatedAt: SEED_DATE
     } as WebhookSubscriptionDocument;
 
-    return upsertById(webhookSubscriptionRepository, fixture).then((outcome) => [outcome]);
+    return insertIfAbsent(webhookSubscriptionRepository, fixture).then((outcome) => [outcome]);
 };

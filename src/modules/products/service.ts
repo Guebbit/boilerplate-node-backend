@@ -8,14 +8,14 @@ import {
     applyTranslations,
     getCurrentLocale,
     getFallbackLocale,
+    isTranslationPlan,
     localeCandidatesFor,
     planTranslations,
     readAllTranslations,
     removeTranslations,
     searchTranslatedEntityIds,
     t,
-    writeTranslations,
-    type TranslationWritePlan
+    writeTranslations
 } from '@infrastructure/i18n';
 import type {
     SearchProductsRequest,
@@ -384,11 +384,6 @@ const toUpsertTranslationsRequest = (
                   }
         ])
     );
-
-/** `true` for a rejection, narrowing a union of it and a validated plan — only the plan carries `fallbackLocale`. */
-const isTranslationPlan = (
-    value: TranslationWritePlan | ResponseReject
-): value is TranslationWritePlan => 'fallbackLocale' in value;
 
 /**
  * A translations-plan rejection, reshaped for THIS module's write body — `translations` is a

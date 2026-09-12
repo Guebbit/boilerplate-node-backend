@@ -17,8 +17,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { seedAllDemoModules } from '@scenarios/index';
-import { seedAccessModel } from '@kernel/access/seed';
+import { seedShop, shopModules } from '@scenarios/index';
 import { assertScenarioGuarantees } from '@scenarios/check';
 import { resolveTranslatables } from '@kernel/registry';
 import { setTranslatables } from '@modules/locales/module';
@@ -44,7 +43,7 @@ setupTestDb();
 beforeAll(() => setTranslatables(resolveTranslatables(enabledModules)));
 afterAll(() => setTranslatables({}));
 
-beforeEach(() => seedAccessModel().then(() => seedAllDemoModules()));
+beforeEach(() => seedShop());
 
 /**
  * What `res.json()` would actually send: a `Date` on a Mongoose document's `toJSON()` is still a
@@ -57,7 +56,7 @@ const wireShape = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 describe("the shop scenario's guarantees, actually seeded", () => {
     it('satisfies every guarantee every module declares', async () => {
-        await expect(assertScenarioGuarantees('shop')).resolves.toBeUndefined();
+        await expect(assertScenarioGuarantees('shop', shopModules)).resolves.toBeUndefined();
     });
 });
 

@@ -7,7 +7,7 @@
  */
 
 /**
- * The one shop's pinned `_id` — same format and vintage as `@kernel/seed-accounts`'s ids.
+ * The one shop's pinned `_id` — same format and vintage as `@scenarios/accounts`'s ids.
  *
  * Every deployment reads this constant directly rather than looking its shop up: with one shop per
  * database, the id can be fixed at build time instead of resolved at boot, the Django `SITE_ID`

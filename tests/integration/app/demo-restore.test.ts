@@ -24,7 +24,7 @@ setupTestDb();
 
 describe('the `blank` scenario', () => {
     it('seeds only the four named accounts, roles and locales — no shop data', async () => {
-        await restoreScenario(false, 'blank');
+        await restoreScenario('blank');
 
         await expect(userModel.countDocuments()).resolves.toBe(4);
         await expect(roleModel.countDocuments()).resolves.toBeGreaterThan(0);
@@ -39,7 +39,7 @@ describe('a restore never loses an index', () => {
         // `emptyDatabase()` — never `dropDatabase()` — is what this asserts: a drop clears each
         // model's index build along with the data, so `users_email`'s unique index would be gone
         // here and the second signup would insert instead of refusing.
-        await restoreScenario(true, 'blank');
+        await restoreScenario('blank');
 
         const email = 'twice@example.com';
         await api().post('/account/signup').send({
@@ -68,8 +68,8 @@ describe('a restore never strands the tenant cache', () => {
         // Twice, not once: the cache in `resolveDeploymentTenantId` is process-lifetime, so the
         // property under test is that a SECOND restore still agrees with it, not that the first
         // one happened to populate it correctly.
-        await restoreScenario(true, 'blank');
-        await restoreScenario(true, 'blank');
+        await restoreScenario('blank');
+        await restoreScenario('blank');
 
         const { bearer } = await authenticateAs('owner');
         const response = await api().get('/account/abilities').set('Authorization', bearer);

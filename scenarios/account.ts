@@ -6,8 +6,8 @@
  * makes "an order remembers where it was sent" checkable against a book that can still change.
  */
 
-import { SEED_OWNER_ID, SEED_USER_ID } from '@kernel/seed-accounts';
-import { type SeedOutcome, upsertByOwner } from '@infrastructure/persistence/seed';
+import { SEED_OWNER_ID, SEED_USER_ID } from '@scenarios/accounts';
+import { type SeedOutcome, insertIfAbsentForOwner } from '@scenarios/seed';
 import { makeAddressBook } from '@modules/account/factories';
 import { addressBookRepository } from '@modules/account/repository';
 
@@ -73,10 +73,12 @@ export const addressBookFixtures = [
 ];
 
 /**
- * Seed this collection. Declared in `./index`; called by `scenarios/apply.ts`.
+ * Seed this collection. Declared in `./index`'s `shopModules`; walked by `seedShop`.
  *
  * Keyed on the owner even though these fixtures do pin an `_id`: `userId` is the unique column and
  * the one every query here reaches a book through.
  */
 export const seedAddressBooksCollection = (): Promise<SeedOutcome[]> =>
-    Promise.all(addressBookFixtures.map((book) => upsertByOwner(addressBookRepository, book)));
+    Promise.all(
+        addressBookFixtures.map((book) => insertIfAbsentForOwner(addressBookRepository, book))
+    );

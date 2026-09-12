@@ -6,9 +6,9 @@
  * falls to `@modules/products/model`'s `default:` — see `@modules/products/factories`.
  *
  * Six named rows carry the branch coverage the storefront and repositories actually exercise
- * (soft-deleted, out of stock, inactive, minimal); `./demo-catalog` supplies a further 126 rows
+ * (soft-deleted, out of stock, inactive, minimal); `./products-filler` supplies a further 126 rows
  * combinatorially, so the catalogue reads like a real pet-supply retailer rather than a list of
- * edge cases. Every image comes from `./products-images.generated.json` (`npm run seed:images`) —
+ * edge cases. Every image comes from `./products-images.generated.json` (`npm run scenario:images`) —
  * none is hand-placed. The filler rows share a fixed pool of 20 images by cycling through it
  * (`FILLER_IMAGE_ROLE_KEYS`), so a larger grid never means a new download.
  *
@@ -17,25 +17,25 @@
  * as a `translations` row per locale — see {@link seedProductsCollection}.
  */
 
-import { FILLER_IMAGE_ROLE_KEYS, FILLER_PRODUCTS, fillerProductId } from './demo-catalog';
+import { FILLER_IMAGE_ROLE_KEYS, FILLER_PRODUCTS, fillerProductId } from './products-filler';
 
 /**
  * Re-exported so `./cart`, `./orders` and `./wishlist` can address a specific filler row (for
  * variety beyond the six named products) through this file rather than reaching into
- * `./demo-catalog` directly.
+ * `./products-filler` directly.
  */
-export { fillerProductId } from './demo-catalog';
+export { fillerProductId } from './products-filler';
 import productImages from './products-images.generated.json';
 import { SEED_PRODUCT_IDS } from './subjects';
 import { makeProduct } from '@modules/products/factories';
 import { productModel } from '@modules/products/model';
-import { upsertById, type SeedOutcome } from '@infrastructure/persistence/seed';
+import { insertIfAbsent, type SeedOutcome } from '@scenarios/seed';
 import { productRepository } from '@modules/products/repository';
 import {
     getFallbackLocale,
+    isTranslationPlan,
     planTranslations,
-    writeTranslations,
-    type TranslationWritePlan
+    writeTranslations
 } from '@infrastructure/i18n';
 import type { ProductTranslationFields, UpsertTranslationsRequest } from '@types';
 
@@ -135,7 +135,7 @@ const NAMED_PRODUCT_COPY: Record<keyof typeof SEED_PRODUCT_IDS, ProductCopy> = {
 
 /**
  * Six named products, chosen to cover the branches the storefront and repositories actually
- * exercise rather than to look like a shop on their own — `./demo-catalog`'s filler rows are what
+ * exercise rather than to look like a shop on their own — `./products-filler`'s filler rows are what
  * make the catalogue look like a shop. `categories` is non-empty on every RICH record, since a
  * facet endpoint returning `[]` on a fresh install reads as broken rather than empty —
  * `barebones` is the deliberate exception, see its note below.
@@ -219,7 +219,7 @@ const namedProducts = [
 ];
 
 /**
- * The combinatorial filler rows from `./demo-catalog`, each given an id and an image cycled from
+ * The combinatorial filler rows from `./products-filler`, each given an id and an image cycled from
  * the fixed 20-image pool — the grid is far larger than that pool, so rows share photos rather
  * than each needing its own. `translations` is excluded from the spread: it isn't a product-schema
  * path, and {@link PRODUCT_COPY_BY_ID} below keeps it addressable by id for the translation batch.
@@ -242,7 +242,7 @@ export const productFixtures = [...namedProducts, ...fillerProductRows];
 
 /**
  * Every product's copy, keyed by its seeded id — the named six from {@link NAMED_PRODUCT_COPY},
- * the filler rows from `./demo-catalog`'s own `translations` field.
+ * the filler rows from `./products-filler`'s own `translations` field.
  * {@link seedProductsCollection} is the only reader.
  */
 const PRODUCT_COPY_BY_ID: ReadonlyMap<string, ProductCopy> = new Map([
@@ -290,17 +290,11 @@ const toUpsertTranslationsRequest = (copy: ProductCopy): UpsertTranslationsReque
     ...(copy.it ? { it: { fields: localeFields(copy.it) } } : {})
 });
 
-/** `true` for a validated plan, narrowing a union with a rejection — mirrors the private helper of
- * the same name in `@modules/products/service.ts`'s `writeCreate`, the primitive this seeder is
- * standing in for (see {@link seedProductsCollection}'s own docblock for why). */
-const isTranslationPlan = (value: unknown): value is TranslationWritePlan =>
-    typeof value === 'object' && value !== null && 'fallbackLocale' in value;
-
 /**
  * Write one freshly-created product's fallback and Italian rows, through the write surface's own
  * validate/apply primitives (`planTranslations`/`writeTranslations`) rather than a raw repository
  * insert — the derived index column on the product document is already correct (it was written by
- * `upsertById` above, from the same `title`/`description` this batch also carries), this call adds
+ * `insertIfAbsent` above, from the same `title`/`description` this batch also carries), this call adds
  * the `translations` rows a real editor's write would have produced alongside it.
  *
  * @throws {Error} if the batch fails to validate — a bug in the fixture data, never a caller input
@@ -321,13 +315,13 @@ const writeSeedTranslations = (productId: string): Promise<void> => {
 };
 
 /**
- * Seed this collection. Declared in `./index`; called by `scenarios/apply.ts`.
+ * Seed this collection. Declared in `./index`'s `shopModules`; walked by `seedShop`.
  *
- * Each row writes twice: {@link upsertById} for the product document (its `title`/
+ * Each row writes twice: {@link insertIfAbsent} for the product document (its `title`/
  * `description` are the derived index column, in the fallback locale), then
  * {@link writeSeedTranslations} for its `translations` rows — only when the product was actually
  * `'created'`, so a re-run against an already-seeded database does not redo the translation write
- * for a row `upsertById` itself skipped.
+ * for a row `insertIfAbsent` itself skipped.
  *
  * Goes through `planTranslations`/`writeTranslations` rather than `productService.writeCreate`:
  * that service validates its body against `zodProductCreateSchema` (generated from `POST
@@ -341,7 +335,7 @@ const writeSeedTranslations = (productId: string): Promise<void> => {
  * seeds `locales` before every other module for exactly this reason.
  */
 export const seedProductsCollection = (): Promise<SeedOutcome[]> =>
-    Promise.all(productFixtures.map((product) => upsertById(productRepository, product))).then(
+    Promise.all(productFixtures.map((product) => insertIfAbsent(productRepository, product))).then(
         (outcomes) =>
             Promise.all(
                 productFixtures.map((product, index) =>

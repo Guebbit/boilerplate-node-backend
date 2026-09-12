@@ -24,6 +24,13 @@ const SCENARIOS_ROOT = path.join(__dirname, '../../../scenarios');
 const PUBLIC_ROOT = path.join(__dirname, '../../../public');
 
 /**
+ * The two files directly under `scenarios/` that act the moment they are `require()`'d, rather
+ * than merely exporting data — see the walk below for what each one does. `check.ts` and the
+ * `tools/`/`run-server.ts` subdirectory-free layout mean this is the whole list.
+ */
+const RUNNER_FILES = new Set(['apply.ts', 'run-server.ts']);
+
+/**
  * Every `imageUrl` the dataset contains, labelled so a failure names the row at fault rather
  * than just an index.
  *
@@ -52,11 +59,14 @@ const collectImageUrls = (): [label: string, url: string][] => {
     };
 
     for (const file of readdirSync(SCENARIOS_ROOT)) {
-        // `apply.ts` is the CLI runner, not a data file: it connects to Mongo and seeds on
-        // `require()` (see its own `void runScript(...)` at the bottom), which this suite must
-        // never trigger — `unit-layer-stays-database-free` (`.dependency-cruiser.cjs`) is exactly
-        // the rule that would catch it doing so anywhere else.
-        if (!file.endsWith('.ts') || file === 'apply.ts') continue;
+        // `apply.ts` and `run-server.ts` are runners, not data files: each connects to Mongo (or
+        // boots one) and acts the moment it is `require()`'d — `apply.ts` via its own
+        // `void runScript(...)` at the bottom, `run-server.ts` via its top-level
+        // `MongoMemoryServer.create().then(...)`. Requiring either here would trigger that for
+        // real, which `unit-layer-stays-database-free` (`.dependency-cruiser.cjs`) exists to catch
+        // everywhere else. `check.ts` has no such side effect — it only exports functions — so it
+        // is left to the ordinary `Array.isArray` filter below rather than named here too.
+        if (!file.endsWith('.ts') || RUNNER_FILES.has(file)) continue;
         const seeds = path.join(SCENARIOS_ROOT, file);
 
         // Synchronous on purpose: `it.each` needs the list while the file is being collected, and

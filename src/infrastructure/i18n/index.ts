@@ -46,6 +46,7 @@ export { negotiateLocale } from './negotiate';
 
 export {
     applyTranslations,
+    isTranslationPlan,
     localeCandidatesFor,
     planTranslations,
     readAllTranslations,

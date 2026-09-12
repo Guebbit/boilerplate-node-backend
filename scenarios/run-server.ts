@@ -18,6 +18,9 @@
  */
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { enableDemoProfile } from '@infrastructure/adapters/demo-outbox';
+import { usePreinstalledMongodBinary } from '@infrastructure/runtime/mongodb-memory-binary';
+
+usePreinstalledMongodBinary();
 
 const REQUIRED_DEFAULTS: Record<string, string> = {
     NODE_ENV: 'development',
@@ -127,7 +130,7 @@ MongoMemoryServer.create()
         // Import AFTER the environment is shaped — `src/app.ts` boots itself on import, seeding
         // `shop` before it starts listening.
         const port = process.env.NODE_PORT ?? '3000';
-        return import('../../src/app')
+        return import('../src/app')
             .then(() => waitUntilListening(port))
             .then(() => {
                 console.log(

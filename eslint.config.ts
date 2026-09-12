@@ -892,10 +892,10 @@ export default tseslint.config(
                         },
 
                         /*
-                         * `scenarios/apply.ts` (the CLI), `scenarios/build/*` (the demo-profile
-                         * tooling) and `scenarios/check.ts` (the guarantee checker) are the files
-                         * under `scenarios/` that are not data: they boot the real app
-                         * (`scenarios/build/run-server.ts`) and read the module registry
+                         * `scenarios/apply.ts` (the CLI), `scenarios/run-server.ts` (the
+                         * demo-profile server) and `scenarios/check.ts` (the guarantee checker) are
+                         * the files under `scenarios/` that are not data: they boot the real app
+                         * (`scenarios/run-server.ts`) and read the module registry
                          * (`scenarios/apply.ts`, `scenarios/check.ts`) the way only the
                          * composition root and the registry's own file-layer categories otherwise
                          * may. Scoped to exactly these paths so the data files above stay unable
@@ -905,7 +905,7 @@ export default tseslint.config(
                             from: {
                                 element: {
                                     type: 'scenarios',
-                                    fileInternalPath: ['apply.ts', 'build/*.ts', 'check.ts']
+                                    fileInternalPath: ['apply.ts', 'run-server.ts', 'check.ts']
                                 }
                             },
                             allow: {
@@ -1093,7 +1093,13 @@ export default tseslint.config(
      * `no-console` would flag every line of output it exists to produce.
      */
     {
-        files: ['scripts/**/*.ts', 'ops/**/*.ts', 'db/**/*.ts', 'scenarios/build/**/*.ts'],
+        files: [
+            'scripts/**/*.ts',
+            'ops/**/*.ts',
+            'db/**/*.ts',
+            'scenarios/run-server.ts',
+            'scenarios/tools/**/*.ts'
+        ],
         languageOptions: {
             globals: {
                 ...globals.node

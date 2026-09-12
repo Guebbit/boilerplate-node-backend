@@ -120,12 +120,13 @@ export const startServer = () => {
              */
             .then(() => registerValidationMessages())
             /*
-             * Only in demo mode, and only ever the initial (non-emptying) seed — `npm run demo`'s
-             * own `POST /__test/restore` handles every reseed after this. Before `listen`, so the
-             * paired frontend's readiness probe (`GET /`, which only resolves once listening) never
-             * observes a database that is connected but still empty.
+             * Only in demo mode, and only ever the initial seed — `npm run demo`'s own
+             * `POST /__test/restore` handles every reseed after this. `restoreScenario` always
+             * empties first, which is free here: the in-memory database is already empty. Before
+             * `listen`, so the paired frontend's readiness probe (`GET /`, which only resolves
+             * once listening) never observes a database that is connected but still empty.
              */
-            .then(() => (isDemoMode() ? restoreScenario(false) : undefined))
+            .then(() => (isDemoMode() ? restoreScenario() : undefined))
             .then(
                 () =>
                     new Promise<Server>((resolve) => {

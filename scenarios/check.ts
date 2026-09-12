@@ -7,38 +7,42 @@
  */
 
 import { enabledModules } from '../src/modules';
-import { demoModules, type DemoModule } from './index';
-
-/**
- * `demoModules[name]` for a name that may not be one of its keys — `demoModules` is declared as
- * `Record<string, DemoModule>` (this repo runs with `noUncheckedIndexedAccess` off), so an index
- * access alone types as always-present even though most modules have no entry at all.
- */
-const demoModuleFor = (name: string): DemoModule | undefined =>
-    Object.hasOwn(demoModules, name) ? demoModules[name] : undefined;
+import type { ScenarioModule } from './index';
 
 /**
  * Every guarantee `scenarioName` fails to hold, one line per problem — empty when everything
  * declared is actually satisfied.
  *
- * Two distinct ways a module can show up here: declaring a guarantee `scenarios/index.ts` has no
+ * Two distinct ways a module can show up here: declaring a guarantee `modules` has no
  * `checkGuarantees` registered for at all (nothing can verify the claim), or a `checkGuarantees`
  * call that comes back without a key the manifest declares (the state stopped being seeded).
  *
+ * Takes `modules` as a parameter, rather than reading `scenarios/index.ts`'s `shopModules`
+ * directly, so a caller can exercise the "nothing registered" branch with an empty table.
+ *
  * @param scenarioName - which scenario's guarantees to check, e.g. `'shop'`
+ * @param modules - the scenario's module table — `shopModules` for `'shop'`
  */
-export const findUnmetGuarantees = async (scenarioName: string): Promise<string[]> => {
+export const findUnmetGuarantees = async (
+    scenarioName: string,
+    modules: Readonly<Record<string, Pick<ScenarioModule, 'checkGuarantees'>>>
+): Promise<string[]> => {
     const problems: string[] = [];
 
     for (const appModule of enabledModules) {
         const declared = appModule.scenario?.[scenarioName];
         if (!declared || declared.length === 0) continue;
 
-        const checkGuarantees = demoModuleFor(appModule.name)?.checkGuarantees;
+        // `modules` is declared as `Record<string, ...>` (this repo runs with
+        // `noUncheckedIndexedAccess` off), so an index access alone types as always-present even
+        // though most modules have no entry at all — `Object.hasOwn` narrows it back.
+        const checkGuarantees = Object.hasOwn(modules, appModule.name)
+            ? modules[appModule.name].checkGuarantees
+            : undefined;
         if (!checkGuarantees) {
             problems.push(
-                `${appModule.name} declares ${scenarioName} guarantees but scenarios/index.ts ` +
-                    `has no checkGuarantees registered for it`
+                `${appModule.name} declares ${scenarioName} guarantees but its scenario module ` +
+                    `table has no checkGuarantees registered for it`
             );
             continue;
         }
@@ -56,10 +60,15 @@ export const findUnmetGuarantees = async (scenarioName: string): Promise<string[
  * {@link findUnmetGuarantees}, thrown as one error naming every problem — the shape
  * `tests/integration/scenarios/shop.test.ts` wants: fail the test, don't hand back a list to check.
  *
+ * @param scenarioName - which scenario's guarantees to check, e.g. `'shop'`
+ * @param modules - the scenario's module table — `shopModules` for `'shop'`
  * @throws {Error} listing every unmet guarantee, when {@link findUnmetGuarantees} finds any
  */
-export const assertScenarioGuarantees = async (scenarioName: string): Promise<void> => {
-    const problems = await findUnmetGuarantees(scenarioName);
+export const assertScenarioGuarantees = async (
+    scenarioName: string,
+    modules: Readonly<Record<string, Pick<ScenarioModule, 'checkGuarantees'>>>
+): Promise<void> => {
+    const problems = await findUnmetGuarantees(scenarioName, modules);
     if (problems.length > 0)
         throw new Error(
             `[scenario-check] ${scenarioName} guarantees not met:\n` +

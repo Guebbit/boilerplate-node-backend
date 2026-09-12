@@ -5,10 +5,10 @@
  * hole in the storefront's wishlist page, a product the scoping rules then refuse to return.
  */
 
-import { SEED_OWNER_ID, SEED_USER_ID } from '@kernel/seed-accounts';
+import { SEED_OWNER_ID, SEED_USER_ID } from '@scenarios/accounts';
 import { SEED_PRODUCT_IDS } from './subjects';
 import { makeWishlist } from '@modules/wishlist/factories';
-import { type SeedOutcome, upsertByOwner } from '@infrastructure/persistence/seed';
+import { type SeedOutcome, insertIfAbsentForOwner } from '@scenarios/seed';
 import { wishlistRepository } from '@modules/wishlist/repository';
 
 /**
@@ -32,6 +32,8 @@ export const wishlistFixtures = [
     })
 ];
 
-/** Seed this collection. Declared in `./index`; called by `scenarios/apply.ts`. */
+/** Seed this collection. Declared in `./index`'s `shopModules`; walked by `seedShop`. */
 export const seedWishlistsCollection = (): Promise<SeedOutcome[]> =>
-    Promise.all(wishlistFixtures.map((wishlist) => upsertByOwner(wishlistRepository, wishlist)));
+    Promise.all(
+        wishlistFixtures.map((wishlist) => insertIfAbsentForOwner(wishlistRepository, wishlist))
+    );

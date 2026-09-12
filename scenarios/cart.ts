@@ -6,12 +6,12 @@
  * is itself the fixture for a person who has never added anything.
  */
 
-import { SEED_OWNER_ID } from '@kernel/seed-accounts';
+import { SEED_OWNER_ID } from '@scenarios/accounts';
 import { fillerProductId } from './products';
 import { SEED_PRODUCT_IDS } from './subjects';
 import { SEED_CUSTOMER_IDS } from './users';
 import { makeCart } from '@modules/cart/factories';
-import { type SeedOutcome, upsertByOwner } from '@infrastructure/persistence/seed';
+import { type SeedOutcome, insertIfAbsentForOwner } from '@scenarios/seed';
 import { cartRepository } from '@modules/cart/repository';
 
 /**
@@ -37,7 +37,7 @@ const FILLER_CARTS: [
  * The other seven demo shoppers, and the `customer` account, have no cart row at all — see this
  * module's own docblock for why that IS their fixture.
  *
- * No pinned `_id`, unlike every other fixture file: {@link upsertByOwner} keys on `userId`, so an
+ * No pinned `_id`, unlike every other fixture file: {@link insertIfAbsentForOwner} keys on `userId`, so an
  * id buys no idempotency here, and nothing outside this file names one. Letting Mongo mint it also
  * dates the row NOW — which this collection needs, since `carts_updatedAt_ttl` reaps a cart older
  * than `NODE_CART_RETENTION_DAYS`, and a date decoded from a hand-written id ages past it.
@@ -61,6 +61,6 @@ export const cartFixtures = [
     )
 ];
 
-/** Seed this collection. Declared in `./index`; called by `scenarios/apply.ts`. */
+/** Seed this collection. Declared in `./index`'s `shopModules`; walked by `seedShop`. */
 export const seedCartsCollection = (): Promise<SeedOutcome[]> =>
-    Promise.all(cartFixtures.map((cart) => upsertByOwner(cartRepository, cart)));
+    Promise.all(cartFixtures.map((cart) => insertIfAbsentForOwner(cartRepository, cart)));

@@ -72,17 +72,14 @@ So `kernel` is small on purpose. It is the module system, and nothing else:
 | `events.ts`                     | it exists so two modules can talk without importing each other            |
 | `authentication.ts`             | the socket `account` plugs into, so guards need no module import          |
 | `middlewares/authorizations.ts` | the guard that consumes that socket                                       |
-| `seed-accounts.ts`              | the two demo identities four modules point at, owned by none of them      |
 
-`seed-accounts.ts` is the one that looks like it does not belong, so it is worth a sentence. `users`
-seeds the demo accounts, but `orders`, `cart` and `wishlist` each seed a row that belongs to a
-person and need that person's id to name them. Reaching into `@modules/users` for six string
-literals would buy three registry edges — one of them a `shared-kernel` — for pure data; repeating
-the ids in four files buys a dangling reference nothing catches. So the kernel holds the handles and
-not the records, which is the same inversion as the auth port: a sibling gets what it needs to name
-a person without taking on the shape of a user. The file's own header carries the full argument.
+The seed accounts' ids and credentials — the two demo identities `users`, `orders`, `cart` and
+`wishlist` each point at — are NOT here: they are pure scenario data, owned by none of the modules
+that need them, so `scenarios/accounts.ts` holds them outside `src/` entirely rather than in the
+kernel. A sibling gets what it needs to name a person without taking on the shape of a user, the
+same inversion as the auth port; the file's own header carries the full argument.
 
-Delete `src/modules/` and those five files lose their reason to exist. Everything else that is
+Delete `src/modules/` and those four files lose their reason to exist. Everything else that is
 domain-free is `infrastructure`, no matter where it sits in the request lifecycle:
 
 | Feature                        | Home                                                | Why it is not kernel                          |

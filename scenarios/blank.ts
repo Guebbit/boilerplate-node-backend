@@ -6,19 +6,19 @@
  * this instead of `shop`.
  */
 
-import { seedAccessModel } from '@kernel/access/seed';
+import type { SeedOutcome } from '@scenarios/seed';
+import { seedAccessModel } from './accounts';
 import { seedNamedUsersCollection } from './users';
-import { demoModules } from './index';
+import { seedLocalesCollection } from './locales';
 
 /**
- * Seed `blank` into the current database. Declared here; called by `src/app/demo.ts`'s
- * `POST /__test/restore` when the request names this scenario.
+ * Seed `blank`. Read by `scenarios/index.ts`'s `SCENARIOS` registry; never called directly.
  *
  * Roles and the shop membership first — nothing can resolve a caller until a shop exists to be a
  * member of — then the four named accounts and the languages, concurrently: neither reads the
  * other's write.
  */
-export const seedBlankScenario = (): Promise<void> =>
+export const seedBlank = (): Promise<SeedOutcome[]> =>
     seedAccessModel()
-        .then(() => Promise.all([seedNamedUsersCollection(), demoModules.locales.seed()]))
-        .then(() => undefined);
+        .then(() => Promise.all([seedNamedUsersCollection(), seedLocalesCollection()]))
+        .then(([users, locales]) => [...users, ...locales]);

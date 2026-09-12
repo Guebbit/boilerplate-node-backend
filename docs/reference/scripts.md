@@ -26,7 +26,7 @@ scripts/
 └── docs/                     generators that write into docs/
 ```
 
-The demo profile and the data it serves live in `scenarios/build/`, outside `scripts/` entirely —
+The demo profile and the data it serves live in `scenarios/`, outside `scripts/` entirely —
 see [Data](./data.md) and [Demo profile](../tools/demo-profile.md).
 
 The folder's word is not repeated in the filename: `scripts/mutation/run-tests.ts`, not
@@ -97,15 +97,15 @@ This backend and its frontend share a set of files byte-for-byte. These four kee
 | `scripts/pairing/check-spec-identity.ts`  | Its CLI — `npm run check:spec-identity`. Wired into CI, which checks out the sibling first. Degrades to a warning locally when the sibling is not on disk, because a half-cloned pair should still be able to commit. | [Pairing & Ports](../tools/pairing-and-ports.md) |
 | `scripts/pairing/sync-to-frontend.ts`     | Copies every backend-owned shared file into the paired frontend — `npm run sync:frontend`. The write side of what the identity check only verifies.                                                                   | [Pairing & Ports](../tools/pairing-and-ports.md) |
 
-## Demo and data — `scenarios/build/`
+## Demo and data — `scenarios/`
 
 Outside `scripts/` entirely, alongside the factories it builds from — see
 [Data](./data.md#the-demo-dataset).
 
 | File                                      | What it is                                                                                                                                                                     | Read next                                        |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ |
-| `scenarios/build/run-server.ts`           | The demo profile — the real API against an in-memory MongoDB, self-contained and disposable. What `npm run demo` boots, and what the paired frontend's e2e suite runs against. | [Demo profile](../tools/demo-profile.md)         |
-| `scenarios/build/generate-seed-images.ts` | Downloads one photo per catalogue role and runs it through the real upload pipeline — `npm run seed:images`. Network-using and one-off, deliberately outside `regenerate`.     | [Image processing](../tools/image-processing.md) |
+| `scenarios/run-server.ts`                 | The demo profile — the real API against an in-memory MongoDB, self-contained and disposable. What `npm run demo` boots, and what the paired frontend's e2e suite runs against. | [Demo profile](../tools/demo-profile.md)         |
+| `scenarios/tools/generate-seed-images.ts` | Downloads one photo per catalogue role and runs it through the real upload pipeline — `npm run scenario:images`. Network-using and one-off, deliberately outside `regenerate`. | [Image processing](../tools/image-processing.md) |
 
 ## Mutation testing — `scripts/mutation/`
 

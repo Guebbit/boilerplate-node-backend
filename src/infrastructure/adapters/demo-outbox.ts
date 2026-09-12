@@ -10,7 +10,7 @@
  * `NODE_DEMO` used to gate this on its own — one wrong env var on any non-production host turned
  * this into an unauthenticated database wipe, diverted mail and a skipped boot secrets gate.
  * {@link enableDemoProfile} replaces it with a positive proof: nothing but
- * `scenarios/build/run-server.ts` calls it, so no copied `.env` can switch it on by accident.
+ * `scenarios/run-server.ts` calls it, so no copied `.env` can switch it on by accident.
  */
 
 import type { SendMailOptions } from 'nodemailer';
@@ -36,7 +36,7 @@ let demoProfileEnabled = false;
 
 /**
  * Mark this process as the demo profile — the only way {@link isDemoMode} can return `true`.
- * Called once, in-process, by `scenarios/build/run-server.ts`, before `src/app.ts` (and
+ * Called once, in-process, by `scenarios/run-server.ts`, before `src/app.ts` (and
  * everything it wires) is even imported. A handful of tests call it directly to exercise the
  * demo surface without booting through that script; pass `false` to turn it back off, which
  * every such test must do in its own cleanup so the flag cannot leak into the next one.

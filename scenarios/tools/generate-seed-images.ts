@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 /**
  * @module
- * Generate the demo catalogue's images — `npm run seed:images`.
+ * Generate the demo catalogue's images — `npm run scenario:images`.
  *
  * Downloads a real photo per catalogue role from Lorem Picsum, then runs it through the SAME
  * digest/thumbnail pipeline a real upload goes through (`@infrastructure/adapters/image`), so
@@ -14,7 +14,7 @@
  * manifests and deletes any `public/images/seed/*.jpg` this run's role list no longer names, so a
  * retired role's old file doesn't linger unreferenced.
  *
- * `scenarios/products.ts` and `scenarios/demo-catalog.ts`, and `scenarios/users.ts`, read the
+ * `scenarios/products.ts` and `scenarios/products-filler.ts`, and `scenarios/users.ts`, read the
  * resulting `*-images.generated.json` files — nothing there is hand-edited.
  *
  * See: docs/tools/image-processing.md
@@ -24,7 +24,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { digestImage, thumbnailImage } from '@infrastructure/adapters/image';
-import { FILLER_IMAGE_ROLE_KEYS } from '@scenarios/demo-catalog';
+import { FILLER_IMAGE_ROLE_KEYS } from '@scenarios/products-filler';
 
 /** Where the full-size seed photos land — served directly, so this is a public path. */
 const SEED_ROOT = path.join(__dirname, '../../public/images/seed');

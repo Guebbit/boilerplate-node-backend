@@ -15,47 +15,54 @@ import { clearDemoOutbox, readDemoOutbox } from '@infrastructure/adapters/demo-o
 import { clearCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
 import { refreshLocaleOverrides } from '@infrastructure/i18n';
-import { seedAccessModel } from '@kernel/access/seed';
+import type { ScenarioName } from '@scenarios/index';
 
 export { isDemoMode } from '@infrastructure/adapters/demo-outbox';
 
-/** The scenarios `POST /__test/restore` knows how to seed — `shop`, the full catalogue, or
- * `blank`, harness infrastructure only. See `scenarios/blank.ts`'s own docblock. */
-export type ScenarioName = 'shop' | 'blank';
+/** Thrown by {@link restoreScenario} for a name `scenarios/index.ts`'s `SCENARIOS` registry does
+ * not carry. */
+export class UnknownScenarioError extends Error {
+    constructor(name: string) {
+        super(`unknown scenario: ${JSON.stringify(name)}`);
+    }
+}
 
 /**
- * Seed one named scenario into whatever database is currently connected. `shop` walks
- * `scenarios/index.ts`'s full table; `blank` is `scenarios/blank.ts`'s reduced one — roles, the
- * four named accounts and locales, no catalogue.
+ * Seed one named scenario into whatever database is currently connected —
+ * `scenarios/index.ts`'s `SCENARIOS` registry says which names exist and how to seed each.
  *
- * Both imported dynamically rather than at the top of this file: `app.ts` imports
+ * Imported dynamically rather than at the top of this file: `app.ts` imports
  * `installDemo`/`isDemoMode` unconditionally, and a static import here would pull every module's
- * demo factories into every process whether or not `enableDemoProfile()` is ever called — the
+ * scenario factories into every process whether or not `enableDemoProfile()` is ever called — the
  * exact cost this file's split from `src/modules/*` exists to avoid.
+ *
+ * @throws {UnknownScenarioError} for a name `SCENARIOS` does not carry
  */
-const seedScenario = (scenario: ScenarioName): Promise<void> =>
-    scenario === 'blank'
-        ? import('@scenarios/blank').then(({ seedBlankScenario }) => seedBlankScenario())
-        : seedAccessModel()
-              .then(() => import('@scenarios/index'))
-              .then(({ seedAllDemoModules }) => seedAllDemoModules())
-              .then(() => undefined);
+const seedScenario = (name: string): Promise<void> =>
+    import('@scenarios/index').then(({ SCENARIOS }) => {
+        if (!Object.hasOwn(SCENARIOS, name)) throw new UnknownScenarioError(name);
+        // `Object.hasOwn` above narrows against `SCENARIOS`'s keys, not `name`'s own type — the
+        // cast states what the guard already proved.
+        return SCENARIOS[name as ScenarioName]().then(() => undefined);
+    });
 
 /**
  * Empty every collection and reseed `scenario` — the same walk `scenarios/apply.ts --reset`
  * performs for `shop`. Never `dropDatabase()`: that clears each model's index build along with the
  * data, so the next write racing an unbuilt unique index would succeed where it should have been
- * refused — see `emptyDatabase`'s own docblock.
+ * refused — see `emptyDatabase`'s own docblock. Always empties first, even at boot: free on a
+ * fresh in-memory database, and it is what lets this take a bare name instead of a caller-supplied
+ * flag.
  *
  * Serialised through {@link restoreQueue} rather than run as called: `installDemo` has no queue of
  * its own, and two overlapping restores emptying and reseeding the same collections concurrently
  * would interleave their writes.
  *
- * @param reset - empty the database first; `false` seeds into whatever is there (first boot).
- * @param scenario - which scenario to seed; defaults to `shop`.
+ * @param scenario - which scenario to seed
+ * @throws {UnknownScenarioError} for a name `SCENARIOS` does not carry
  */
-const runRestore = (reset: boolean, scenario: ScenarioName = 'shop'): Promise<void> =>
-    (reset ? emptyDatabase() : Promise.resolve())
+const runRestore = (scenario: string): Promise<void> =>
+    emptyDatabase()
         .then(() => seedScenario(scenario))
         .then(() => {
             clearDemoOutbox();
@@ -72,9 +79,12 @@ let restoreQueue: Promise<void> = Promise.resolve();
  *
  * A failed restore must not wedge the ones behind it, so the queue itself never rejects — each
  * caller still sees its own restore's outcome through the promise this returns.
+ *
+ * @param scenario - which scenario to seed; defaults to `shop`.
+ * @throws {UnknownScenarioError} for a name `SCENARIOS` does not carry
  */
-export const restoreScenario = (reset: boolean, scenario: ScenarioName = 'shop'): Promise<void> => {
-    const outcome = restoreQueue.then(() => runRestore(reset, scenario));
+export const restoreScenario = (scenario = 'shop'): Promise<void> => {
+    const outcome = restoreQueue.then(() => runRestore(scenario));
     restoreQueue = outcome.then(
         () => undefined,
         () => undefined
@@ -82,15 +92,11 @@ export const restoreScenario = (reset: boolean, scenario: ScenarioName = 'shop')
     return outcome;
 };
 
-/** `true` for a value naming a scenario {@link restoreScenario} actually knows how to seed. */
-const isScenarioName = (value: unknown): value is ScenarioName =>
-    value === 'shop' || value === 'blank';
-
 /** Mount the demo profile's two routes. Only ever called when `enableDemoProfile()` was called. */
 export const installDemo = (app: Express): void => {
     app.post('/__test/restore', (request: Request, response: Response) => {
         const requested: unknown = (request.body as { scenario?: unknown } | undefined)?.scenario;
-        if (requested !== undefined && !isScenarioName(requested)) {
+        if (requested !== undefined && typeof requested !== 'string') {
             response.status(400).json({
                 success: false,
                 message: `unknown scenario: ${JSON.stringify(requested)}`
@@ -98,9 +104,13 @@ export const installDemo = (app: Express): void => {
             return;
         }
 
-        restoreScenario(true, requested)
+        restoreScenario(requested)
             .then(() => response.status(204).end())
             .catch((error: unknown) => {
+                if (error instanceof UnknownScenarioError) {
+                    response.status(400).json({ success: false, message: error.message });
+                    return;
+                }
                 logger.error({ message: 'scenario restore failed', error });
                 response.status(500).json({ success: false });
             });

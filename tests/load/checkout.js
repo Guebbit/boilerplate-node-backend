@@ -28,7 +28,7 @@ import { check, group } from 'k6';
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:3000';
 
-// The demo customer. `SEED_USER_EMAIL`/`SEED_USER_PASSWORD` in `src/kernel/seed-accounts.ts`, so
+// The demo customer. `SEED_USER_EMAIL`/`SEED_USER_PASSWORD` in `scenarios/accounts.ts`, so
 // this is not a secret and not a second copy of one — change it there, not here.
 const EMAIL = __ENV.K6_EMAIL || 'customer@example.com';
 const PASSWORD = __ENV.K6_PASSWORD || 'password';

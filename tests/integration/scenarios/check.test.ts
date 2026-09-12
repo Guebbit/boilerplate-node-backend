@@ -8,12 +8,13 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct } from '@modules/products/tests/factories';
 import { findUnmetGuarantees, assertScenarioGuarantees } from '@scenarios/check';
+import { shopModules } from '@scenarios/index';
 
 setupTestDb();
 
 describe("the shop scenario's guarantees", () => {
     it('reports every declared product guarantee missing from an empty catalogue', async () => {
-        const problems = await findUnmetGuarantees('shop');
+        const problems = await findUnmetGuarantees('shop', shopModules);
 
         expect(problems).toEqual([
             'products: product.softDeleted is declared but not seeded',
@@ -32,7 +33,7 @@ describe("the shop scenario's guarantees", () => {
             createProduct({})
         ]);
 
-        await expect(assertScenarioGuarantees('shop')).resolves.toBeUndefined();
+        await expect(assertScenarioGuarantees('shop', shopModules)).resolves.toBeUndefined();
     });
 
     it('throws naming every guarantee still missing', async () => {
@@ -40,7 +41,7 @@ describe("the shop scenario's guarantees", () => {
         // can only ever demonstrate one of the mutually exclusive states below.
         await createProduct({ active: false });
 
-        await expect(assertScenarioGuarantees('shop')).rejects.toThrow(
+        await expect(assertScenarioGuarantees('shop', shopModules)).rejects.toThrow(
             /product\.softDeleted[\S\s]*product\.outOfStock/
         );
     });

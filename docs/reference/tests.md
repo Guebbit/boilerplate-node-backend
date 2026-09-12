@@ -174,7 +174,7 @@ One function, no database, no HTTP. Fast enough to run from the pre-commit hook.
 | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
 | `tests/unit/db/host-scripts.test.ts`                    | The `host` script and the URI resolver agree over the whole environment matrix — the pin that keeps `npm run host -- <script>` reaching the database `.env` names.    | [Repository Root](./root.md)                             |
 | `tests/unit/db/run-script.test.ts`                      | The `db/` entry-point wrapper opens, closes and exits non-zero on failure.                                                                                            | [Data](./data.md)                                        |
-| `tests/unit/db/scenario-images.test.ts`                 | Every module's seed rows are internally consistent — image URLs included.                                                                                             | [Data](./data.md)                                        |
+| `tests/unit/scenarios/scenario-images.test.ts`          | Every module's seed rows are internally consistent — image URLs included.                                                                                             | [Data](./data.md)                                        |
 | `tests/unit/eslint/controller-chain-must-catch.test.ts` | The repo's own lint rule fires on the code it is meant to catch and stays quiet otherwise.                                                                            | [Scripts & Hooks](./scripts.md)                          |
 | `tests/unit/eslint/no-hardcoded-user-text.test.ts`      | The same for the hardcoded-copy rule.                                                                                                                                 | [Scripts & Hooks](./scripts.md)                          |
 | `tests/unit/i18n/email-locale.test.ts`                  | Where an email's language is decided — the producer resolves the copy before publishing, so a queued job cannot be rendered in the worker's locale.                   | [Email & PDF Rendering](../tools/email-and-rendering.md) |
@@ -194,10 +194,9 @@ One function, no database, no HTTP. Fast enough to run from the pre-commit hook.
 
 ### `tests/unit/infrastructure/runtime/` and `persistence/`
 
-| File                                                    | What it guarantees                                                                                                                              | Read next                      |
-| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| `tests/unit/infrastructure/runtime/environment.test.ts` | The fail-fast boot check, tested exhaustively because it is small and because it decides whether the process starts at all.                     | [Runtime](../tools/runtime.md) |
-| `tests/unit/infrastructure/persistence/seed.test.ts`    | The upsert policy every module seeder goes through — both arms, because the skip arm is what makes seeding idempotent on every container start. | [Data](./data.md)              |
+| File                                                    | What it guarantees                                                                                                          | Read next                      |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `tests/unit/infrastructure/runtime/environment.test.ts` | The fail-fast boot check, tested exhaustively because it is small and because it decides whether the process starts at all. | [Runtime](../tools/runtime.md) |
 
 ### `tests/unit/infrastructure/adapters/`
 

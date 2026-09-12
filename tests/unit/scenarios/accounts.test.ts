@@ -1,6 +1,6 @@
 /**
  * @module
- * `kernel/seed-accounts.ts` — the two demo identities, and the env vars that override their
+ * `scenarios/accounts.ts` — the two demo identities, and the env vars that override their
  * passwords. The overrides are read at module scope, so every case that exercises one reloads
  * the module rather than mutating an already-evaluated constant.
  */
@@ -14,7 +14,7 @@ import {
     SEED_OWNER_PASSWORD,
     SEED_USER_PASSWORD,
     seedCredentials
-} from '@kernel/seed-accounts';
+} from '@scenarios/accounts';
 
 /** Every seed password override var, restored after each `hasFallbackSeedPassword` case. */
 const ALL_PASSWORD_KEYS = [
@@ -42,7 +42,7 @@ const reloadWith = async (admin: string | undefined, user: string | undefined) =
     else process.env.NODE_SEED_USER_PASSWORD = user;
 
     jest.resetModules();
-    return import('@kernel/seed-accounts');
+    return import('@scenarios/accounts');
 };
 
 afterEach(() => {
@@ -140,7 +140,7 @@ describe('hasFallbackSeedPassword', () => {
             else process.env[key] = value;
         }
         jest.resetModules();
-        return import('@kernel/seed-accounts');
+        return import('@scenarios/accounts');
     };
 
     afterEach(() => {

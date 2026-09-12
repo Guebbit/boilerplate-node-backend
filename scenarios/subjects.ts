@@ -19,7 +19,7 @@ import {
     SEED_USER_ID,
     SEED_USER_EMAIL,
     SEED_USER_PASSWORD
-} from '@kernel/seed-accounts';
+} from '@scenarios/accounts';
 
 /**
  * The catalogue ids, named by what each row is for.
@@ -52,7 +52,7 @@ export const SEED_ORDER_IDS = {
 /**
  * The owner and the ordinary user — id, login and, where seeded, one representative row — the pair
  * every generated example that needs a *working* request draws from. Re-exported from
- * `@kernel/seed-accounts` rather than duplicated: that file is the one place credentials must stay
+ * `@scenarios/accounts` rather than duplicated: that file is the one place credentials must stay
  * fixed against the paired frontend's own `.env` copy.
  */
 export const SUBJECTS = {

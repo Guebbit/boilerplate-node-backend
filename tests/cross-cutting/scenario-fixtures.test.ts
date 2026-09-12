@@ -1,6 +1,6 @@
 /**
  * @module
- * The three claims about the demo fixtures that nothing else makes.
+ * The three claims about the scenario fixtures that nothing else makes.
  *
  * Reads the FIXTURES, not a seeded database — no database at all. Everything else about that data
  * already has a guard, and this file deliberately holds none of it:
@@ -10,7 +10,7 @@
  * | every `scenario.shop` guarantee is seeded | `tests/integration/scenarios/shop.test.ts`         |
  * | a seeded row parses as its response shape | `tests/integration/scenarios/shop.test.ts`         |
  * | `(locale, tenant, key)` is unique          | `localeEntries_locale_tenant_key`, a unique index  |
- * | published credentials match the accounts  | `tests/unit/kernel/seed-accounts.test.ts`          |
+ * | published credentials match the accounts  | `tests/unit/scenarios/accounts.test.ts`            |
  * | a product has its fallback-locale row      | `planTranslations` refuses to write one without it |
  *
  * Deliberately NOT here: any assertion counting fixtures ("exactly one soft-deleted product", "at
@@ -19,7 +19,7 @@
  */
 
 import { localeEntryFixtures, localeFixtures } from '@scenarios/locales';
-import { demoModules } from '@scenarios/index';
+import { shopModules } from '@scenarios/index';
 import { enabledModules } from '../../src/modules';
 
 /**
@@ -66,9 +66,9 @@ it('never lets one locale entry key prefix another in the same tree', () => {
  * A module seeding rows the app does not mount writes a collection nothing serves — silent, since
  * `scenarios/apply.ts` only ever walks the table it is given.
  */
-it('registers no demo module that `enabledModules` does not also enable', () => {
+it('registers no shop module that `enabledModules` does not also enable', () => {
     const mounted = new Set(enabledModules.map((appModule) => appModule.name));
-    const unmounted = Object.keys(demoModules).filter((name) => !mounted.has(name));
+    const unmounted = Object.keys(shopModules).filter((name) => !mounted.has(name));
 
     expect(unmounted).toEqual([]);
 });

@@ -1,13 +1,16 @@
 /**
  * @module
- * Who the demo accounts are: their ids, and how to log in as them. Lives in the kernel, not
- * `users`, since several modules need a handle on these people and only one owns the record. Two
- * constraints before editing: credentials must stay fixed (the frontend's e2e login types them —
- * keep every `NODE_SEED_*_PASSWORD` identical to the paired frontend's own `.env` copy), and the
- * password stays PLAINTEXT — the schema's pre-save hook hashes it.
+ * Who the seed accounts are: their ids, how to log in as them, and how they get their roles.
+ * Every other scenario file that needs one of these accounts imports its id from here. Two
+ * constraints before editing the credentials: they must stay fixed (the frontend's e2e login
+ * types them — keep every `NODE_SEED_*_PASSWORD` identical to the paired frontend's own `.env`
+ * copy), and the password stays PLAINTEXT — the schema's pre-save hook hashes it.
  *
  * See: docs/tools/demo-profile.md#the-two-seed-accounts
  */
+
+import { assignRole } from '@kernel/access/store';
+import { bootstrapAccessModel } from '@kernel/access/seed';
 
 /** The demo owner's id — 24-char hex, and a real ObjectId: its leading bytes date it to February 2024. */
 export const SEED_OWNER_ID = '65dd2bdb923652b7800fe180';
@@ -83,3 +86,26 @@ export const hasFallbackSeedPassword = (): boolean =>
     SEED_USER_PASSWORD === SEED_USER_PASSWORD_FALLBACK ||
     SEED_EDITOR_PASSWORD === SEED_EDITOR_PASSWORD_FALLBACK ||
     SEED_MODERATOR_PASSWORD === SEED_MODERATOR_PASSWORD_FALLBACK;
+
+/**
+ * The whole access model, seeded: one shop, the presets, and the seed accounts placed in it.
+ * Called by both `seedShop` and `seedBlank` — the two scenarios agree on who these accounts are.
+ *
+ * `root` is the shop's owner AND the installation's operator — two memberships, because they are
+ * two jobs. A request acts as one or the other depending on the key it is asking about, which is
+ * exactly the behaviour the platform/tenant split exists to produce, demonstrated by the account
+ * everybody logs in as. The two staff accounts each hold exactly one of the newer tenant roles,
+ * so each can be logged into and tried on its own — the whole point of adding them to experiment.
+ */
+export const seedAccessModel = (): Promise<void> =>
+    bootstrapAccessModel('The Demo Shop')
+        .then((tenant) =>
+            Promise.all([
+                assignRole(SEED_OWNER_ID, String(tenant._id), 'tenant', 'owner'),
+                assignRole(SEED_OWNER_ID, null, 'platform', 'operator'),
+                assignRole(SEED_USER_ID, String(tenant._id), 'tenant', 'customer'),
+                assignRole(SEED_EDITOR_ID, String(tenant._id), 'tenant', 'editor'),
+                assignRole(SEED_MODERATOR_ID, String(tenant._id), 'tenant', 'moderator')
+            ])
+        )
+        .then(() => undefined);

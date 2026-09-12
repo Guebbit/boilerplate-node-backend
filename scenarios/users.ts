@@ -4,12 +4,12 @@
  * needs a caller for, and the `customer` account is the shopper every scoping rule needs someone
  * to be scoped against. Alongside them, one account per newer tenant role — editor, moderator —
  * so each can be logged into and tried on its own rather than only read about. Ids and
- * credentials for all four come from `@kernel/seed-accounts`, since other files in this folder
+ * credentials for all four come from `@scenarios/accounts`, since other files in this folder
  * seed rows belonging to these people.
  *
  * Ten further customers (`SEED_CUSTOMER_IDS`) sit alongside them, purely so `./cart` and
  * `./orders` have more than one shopper to vary an order history across. None of them is
- * wired into `@kernel/seed-accounts` — there is no login promise attached to any of the ten, only
+ * wired into `@scenarios/accounts` — there is no login promise attached to any of the ten, only
  * to the four named accounts above. Cart lines live in `./cart`, not here.
  */
 
@@ -26,19 +26,19 @@ import {
     SEED_MODERATOR_EMAIL,
     SEED_MODERATOR_ID,
     SEED_MODERATOR_PASSWORD
-} from '@kernel/seed-accounts';
+} from '@scenarios/accounts';
 import userImages from './users-images.generated.json';
 import { makeUser } from '@modules/users/factories';
-import { upsertById, type SeedOutcome } from '@infrastructure/persistence/seed';
+import { insertIfAbsent, type SeedOutcome } from '@scenarios/seed';
 import { userRepository } from '@modules/users/repository';
 
 /**
- * Deterministic id for demo customer `index` — never `new Types.ObjectId()`, whose default is
+ * Deterministic id for seed customer `index` — never `new Types.ObjectId()`, whose default is
  * time-based and would reseed a different id on every run, breaking `scenario:apply`'s idempotent
- * upsert. Mirrors `./demo-catalog`'s `fillerProductId`, with its own prefix so the two id spaces
+ * upsert. Mirrors `./products-filler`'s `fillerProductId`, with its own prefix so the two id spaces
  * can never collide.
  */
-const demoCustomerId = (index: number): string => `67f0c2${index.toString(16).padStart(18, '0')}`;
+const seedCustomerId = (index: number): string => `67f0c2${index.toString(16).padStart(18, '0')}`;
 
 /**
  * The ten further customers, named by who they are rather than by index — `./cart` and
@@ -47,16 +47,16 @@ const demoCustomerId = (index: number): string => `67f0c2${index.toString(16).pa
  * and two orders apiece — see the comments where each is actually used.
  */
 export const SEED_CUSTOMER_IDS = {
-    amelia: demoCustomerId(0),
-    benjamin: demoCustomerId(1),
-    chloe: demoCustomerId(2),
-    daniel: demoCustomerId(3),
-    grace: demoCustomerId(4),
-    felix: demoCustomerId(5),
-    priya: demoCustomerId(6),
-    marcus: demoCustomerId(7),
-    harper: demoCustomerId(8),
-    isla: demoCustomerId(9)
+    amelia: seedCustomerId(0),
+    benjamin: seedCustomerId(1),
+    chloe: seedCustomerId(2),
+    daniel: seedCustomerId(3),
+    grace: seedCustomerId(4),
+    felix: seedCustomerId(5),
+    priya: seedCustomerId(6),
+    marcus: seedCustomerId(7),
+    harper: seedCustomerId(8),
+    isla: seedCustomerId(9)
 } as const;
 
 /**
@@ -158,13 +158,13 @@ const customerUsers = CUSTOMER_NAMES.map(([key, username], index) =>
 /** Every demo account: the named ones the e2e suite logs in as, then the customer base. */
 export const userFixtures = [...namedUsers, ...customerUsers];
 
-/** Seed this collection. Declared in `./index`; called by `scenarios/apply.ts`. */
+/** Seed this collection. Declared in `./index`'s `shopModules`; walked by `seedShop`. */
 export const seedUsersCollection = (): Promise<SeedOutcome[]> =>
-    Promise.all(userFixtures.map((user) => upsertById(userRepository, user)));
+    Promise.all(userFixtures.map((user) => insertIfAbsent(userRepository, user)));
 
 /**
  * Seed only the four named accounts — `blank`'s contribution to `users`. Called by
- * `scenarios/blank.ts`'s `seedBlankScenario`, never by `scenarios/apply.ts`.
+ * `scenarios/blank.ts`'s `seedBlank`, never by `scenarios/apply.ts`.
  */
 export const seedNamedUsersCollection = (): Promise<SeedOutcome[]> =>
-    Promise.all(namedUsers.map((user) => upsertById(userRepository, user)));
+    Promise.all(namedUsers.map((user) => insertIfAbsent(userRepository, user)));

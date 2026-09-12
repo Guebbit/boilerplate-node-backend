@@ -26,15 +26,10 @@ import {
     tenantBySlug
 } from '@kernel/access/store';
 import { roleModel } from '@kernel/access/models';
-import {
-    bootstrapAccessModel,
-    DEMO_TENANT_SLUG,
-    seedAccessModel,
-    seedPresetRoles
-} from '@kernel/access/seed';
-import { SEED_OWNER_ID, SEED_USER_ID } from '@kernel/seed-accounts';
+import { bootstrapAccessModel, DEPLOYMENT_TENANT_SLUG, seedPresetRoles } from '@kernel/access/seed';
+import { SEED_OWNER_ID, SEED_USER_ID, seedAccessModel } from '@scenarios/accounts';
 import { userRepository } from '@modules/users';
-import { demoModules } from '@scenarios/index';
+import { shopModules } from '@scenarios/index';
 import { PRESET_ROLES, wildcardKeyFor } from '@kernel/permissions';
 
 setupTestDb();
@@ -44,7 +39,7 @@ beforeEach(async () => {
 });
 
 /** The user rows the last describe compares against — seeded only where it needs them. */
-const seedUsers = () => demoModules.users.seed();
+const seedUsers = () => shopModules.users.seed();
 
 describe('the preset roles', () => {
     it('are seeded as editable rows, one per name', async () => {
@@ -278,7 +273,7 @@ describe('bootstrapAccessModel', () => {
     it('creates the shop and the presets, with no accounts', async () => {
         const tenant = await bootstrapAccessModel('Shop');
 
-        expect(tenant.slug).toBe(DEMO_TENANT_SLUG);
+        expect(tenant.slug).toBe(DEPLOYMENT_TENANT_SLUG);
         expect(await roleModel.countDocuments({ preset: true })).toBe(PRESET_ROLES.length + 1);
         expect(await membershipsOf(SEED_OWNER_ID)).toEqual([]);
     });
@@ -296,7 +291,7 @@ describe('the seeded model', () => {
     it('places the demo accounts, and gives root both jobs', async () => {
         await seedAccessModel();
 
-        const tenant = await tenantBySlug(DEMO_TENANT_SLUG);
+        const tenant = await tenantBySlug(DEPLOYMENT_TENANT_SLUG);
         const rootMemberships = await membershipsOf(SEED_OWNER_ID);
 
         // Two memberships for one person, because running a shop and operating the installation
@@ -327,7 +322,7 @@ describe('the seeded model', () => {
         await seedUsers();
         await seedAccessModel();
 
-        const tenant = await tenantBySlug(DEMO_TENANT_SLUG);
+        const tenant = await tenantBySlug(DEPLOYMENT_TENANT_SLUG);
         const [membership, published] = await Promise.all([
             membershipIn(SEED_OWNER_ID, String(tenant?._id), 'tenant'),
             userRepository.findById(SEED_OWNER_ID)

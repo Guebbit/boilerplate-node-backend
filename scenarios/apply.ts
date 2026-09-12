@@ -1,14 +1,15 @@
 /*
- * Demo data seeder.
+ * Scenario seeder.
  *
- * `scenario:apply` owns DATA; `db:sync` owns SCHEMA. `scenarios/index.ts` is the table of what to
- * seed; this file is the RUNNER — connection, production gate and the walk over that table,
- * nothing else. The upsert policy lives in `@infrastructure/persistence/seed`.
+ * `scenario:apply` owns DATA; `db:sync` owns SCHEMA. `scenarios/index.ts`'s `SCENARIOS` registry
+ * is the table of what to seed; this file is the RUNNER — connection, production gate and the
+ * walk over that table, nothing else. The insert-if-absent policy lives in
+ * `@scenarios/seed`.
  *
  * Runs on every container boot (see the compose `app` command → `npm run db:bootstrap`), so it
- * must be IDEMPOTENT (fixed `_id`s are upserted, not created, so a second run is a no-op) and
+ * must be IDEMPOTENT (fixed `_id`s are inserted only if absent, so a second run is a no-op) and
  * GATED (refuses to touch a production database). Note what idempotent means here:
- * `upsertById()` SKIPS a factory row whose `_id` already exists, it does not rewrite it —
+ * `insertIfAbsent()` SKIPS a factory row whose `_id` already exists, it does not rewrite it —
  * re-running this does NOT repair a row whose stored copy has since drifted from the one below;
  * `npm run scenario:apply:reset` is what does.
  *
@@ -17,19 +18,18 @@
  * the login.
  *
  * Usage:
- *   npm run scenario:apply          # upsert the rows
- *   npm run scenario:apply:reset    # empty the database first
+ *   npm run scenario:apply [scenario]        # insert the rows; scenario defaults to `shop`
+ *   npm run scenario:apply:reset [scenario]  # empty the database first
  */
 import 'dotenv/config';
 import { start, connection, emptyDatabase } from '@infrastructure/runtime/database';
 import { clearCache, stopCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
 import { runScript } from '../db/run-script';
-import { seedAllDemoModules } from '@scenarios/index';
-import { seedAccessModel } from '@kernel/access/seed';
+import { SCENARIOS, type ScenarioName } from '@scenarios/index';
 import { resolveTranslatables } from '@kernel/registry';
 import { setTranslatables } from '@modules/locales/module';
-import { hasFallbackSeedPassword } from '@kernel/seed-accounts';
+import { hasFallbackSeedPassword } from '@scenarios/accounts';
 import { enabledModules } from '../src/modules';
 
 /*
@@ -43,6 +43,8 @@ import { enabledModules } from '../src/modules';
 setTranslatables(resolveTranslatables(enabledModules));
 
 const reset = process.argv.includes('--reset');
+/** The one positional argument this CLI takes — everything else is a `--flag`. */
+const scenarioArgument = process.argv.slice(2).find((argument) => !argument.startsWith('--'));
 
 async function seed() {
     /* A boot-time seeder that can drop or overwrite a production database is a footgun. */
@@ -50,6 +52,14 @@ async function seed() {
         logger.warn('scenario:apply refused to run: NODE_ENV is production.');
         return;
     }
+
+    if (scenarioArgument !== undefined && !Object.hasOwn(SCENARIOS, scenarioArgument)) {
+        logger.warn(`scenario:apply refused to run: unknown scenario "${scenarioArgument}".`);
+        return;
+    }
+    // `Object.hasOwn` above narrows against `SCENARIOS`'s keys, not `scenarioArgument`'s own type —
+    // the cast states what the guard already proved.
+    const scenarioName = (scenarioArgument as ScenarioName | undefined) ?? 'shop';
 
     /*
      * Outside development/test, a still-public password is the one thing this refuses: a
@@ -76,22 +86,13 @@ async function seed() {
     }
 
     /*
-     * Every module in `scenarios/index.ts`'s table seeds its own collection. This runner names no
-     * domain: it only walks whatever that table lists. `tests/cross-cutting/scenario-fixtures.test.ts`
-     * refuses an entry left behind after the module it names is deleted.
-     *
-     * Mostly concurrent, and safe to be: no row is derived from another row's WRITE. An order
-     * embeds a product snapshot built from the catalogue's own factory, not read back from Mongo,
-     * and a cart references a user id rather than requiring the user row to exist first. The one
-     * exception — `products` needing `locales`' rows to already exist — is why `seedAllDemoModules`
-     * runs `locales` first rather than joining the batch; see its own docblock.
+     * `SCENARIOS[scenarioName]()` owns its whole seed — the access model included; see
+     * `scenarios/index.ts`'s own docblocks for how `shop` orders its concurrent module writes.
+     * This runner names no scenario internals: it only calls whatever the registry maps the name
+     * to. `tests/cross-cutting/scenario-fixtures.test.ts` refuses a `shopModules` entry left
+     * behind after the module it names is deleted.
      */
-    // The shop, the preset roles and the demo memberships first: a module's rows may be written
-    // in any order, but nothing can resolve a caller until there is a shop to be a member of. Not
-    // part of the concurrent batch below for that reason.
-    await seedAccessModel();
-
-    const results = await seedAllDemoModules();
+    const results = await SCENARIOS[scenarioName]();
 
     const created = results.filter((result) => result === 'created').length;
 
@@ -116,7 +117,7 @@ async function seed() {
     }
 
     logger.info(
-        `Seeding complete: ${created} created, ${results.length - created} already present.`
+        `Seeding "${scenarioName}" complete: ${created} created, ${results.length - created} already present.`
     );
 }
 

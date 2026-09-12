@@ -9,12 +9,12 @@
  */
 
 import { Types } from 'mongoose';
-import { SEED_USER_ID, SEED_EDITOR_ID, SEED_MODERATOR_ID } from '@kernel/seed-accounts';
+import { SEED_USER_ID, SEED_EDITOR_ID, SEED_MODERATOR_ID } from '@scenarios/accounts';
 import { SEED_CUSTOMER_IDS } from './users';
 import { SEED_PRODUCT_IDS } from './subjects';
 import { orderFixtures } from './orders';
 import { auditLogModel, type AuditLogDocument } from '@modules/audit-logs/model';
-import type { SeedOutcome } from '@infrastructure/persistence/seed';
+import type { SeedOutcome } from '@scenarios/seed';
 
 /** `now - days`, so every row reads as recent however long ago the demo was last seeded. */
 const daysAgo = (days: number): Date => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
@@ -86,9 +86,9 @@ export const auditLogFixtures: (Partial<AuditLogDocument> & { _id: Types.ObjectI
 ];
 
 /**
- * Seed this collection. Declared in `./index`; called by `scenarios/apply.ts`.
+ * Seed this collection. Declared in `./index`'s `shopModules`; walked by `seedShop`.
  *
- * No `upsertById` — that helper needs a repository with `findById`, and `auditLogRepository`
+ * No `insertIfAbsent` — that helper needs a repository with `findById`, and `auditLogRepository`
  * deliberately has none (see its own docblock: an audit trail is append-and-read, nothing else).
  * Written against `auditLogModel` instead, with the same skip-if-present policy by hand.
  */

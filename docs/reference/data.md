@@ -225,7 +225,7 @@ access — so it is the one collection whose index `db:sync` never reaches;
 | `tests/integration/scenarios/shop.test.ts` | Seeds the `shop` scenario against a real database, then reads the rows back **through the real serializers** and checks each one against the generated response schema for that entity — what makes the guarantee "the API would actually answer this" a test rather than a claim in a comment. Also asserts every declared `scenario.shop` guarantee holds. | [Contract Testing (Response)](../tools/contract-testing.md)            |
 
 The factories themselves are not here — each module's slice lives in `scenarios/<name>.ts`, and the
-two demo accounts are declared in `src/kernel/seed-accounts.ts`.
+seed accounts are declared in `scenarios/accounts.ts`.
 
 Two tests guard the schema half: `tests/integration/db/index-sync.test.ts` runs the reconciliation
 against a real database — from nothing, against drift, and twice over — and
