@@ -16,6 +16,7 @@ import { ORDER_CANCELLED } from '@modules/orders';
 import { USER_DELETED } from '@modules/users';
 import { router } from './routes';
 import { refundForOrder, detachUserId } from './services';
+import { validateBankTransferConfig } from './config';
 // Installs this module's event declarations (PAYMENT_SUCCEEDED, PAYMENT_FAILED).
 import './events';
 
@@ -43,6 +44,10 @@ export default {
             productionOnly: true
         }
     ],
+    // `NODE_BANK_TRANSFER_IBAN`/`_BIC` need `ibantools` to validate — a check `requiredConfig`
+    // cannot express — and `NODE_BANK_TRANSFER_IBAN` set with no `_BENEFICIARY` is a cross-field
+    // rule, not a per-variable one.
+    customCheck: validateBankTransferConfig,
     subscribe: () => {
         onDomainEvent(ORDER_CANCELLED, ({ orderId, refund }) =>
             refund ? refundForOrder(orderId) : undefined

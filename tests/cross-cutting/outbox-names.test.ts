@@ -130,8 +130,8 @@ it('publishes the set the pair agreed on', () => {
      * here and **not yet** in `tests/CrossCutting/OutboxNamesTest.php` in
      * boilerplate-php-laravel-backend: the admin "create a user, let them set their own password"
      * flow, the inactive-account reaper and the email second factor only exist on this backend so
-     * far — and neither does the pending-email-change notice. The other eight are the agreed,
-     * mirrored set.
+     * far — and neither does the pending-email-change notice, nor bank transfer, which the PHP
+     * twin has no equivalent feature for at all. The other eight are the agreed, mirrored set.
      */
     const agreed = [
         'account.delete-confirm',
@@ -145,7 +145,9 @@ it('publishes the set the pair agreed on', () => {
         'account.verify-request',
         'delivery.shipment-shipped',
         'feedback.contact',
-        'orders.order-confirm'
+        'orders.order-confirm',
+        'orders.order-transfer-expired',
+        'orders.order-transfer-instructions'
     ];
 
     expect(

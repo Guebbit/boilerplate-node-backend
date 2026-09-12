@@ -28,6 +28,7 @@ import { refundByOrder, refundForOrder } from './refunds';
 import { recordOfflinePayment } from './offline';
 import { getForOrder } from './view';
 import { detachUserId, findOwnPayments, reapAbandonedPayments } from './retention';
+import { listPaymentMethods } from '../config';
 
 /*
  * Every operation is published by name as well as through the object below, exactly as the single
@@ -48,6 +49,7 @@ export { recordOfflinePayment, type OfflinePaymentInput } from './offline';
 export { getForOrder, withActions } from './view';
 export { detachUserId, findOwnPayments, reapAbandonedPayments } from './retention';
 export { callerScope } from './scope';
+export { listPaymentMethods, type PaymentMethodInfo } from '../config';
 
 /** The module's one service handle. Named for the record it serves, like `paymentRepository`. */
 export const paymentService = {
@@ -62,5 +64,6 @@ export const paymentService = {
     recordOfflinePayment,
     detachUserId,
     findOwnPayments,
-    reapAbandonedPayments
+    reapAbandonedPayments,
+    listPaymentMethods
 };

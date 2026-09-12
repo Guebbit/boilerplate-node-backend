@@ -18,12 +18,14 @@ graph cannot see._
 flowchart LR
     payments["payments<br/><i>this module</i>"]
     account["account"]
+    cart["cart"]
     inventory["inventory"]
     orders["orders"]
     users["users"]
     webhooks["webhooks"]
 
     account --> payments
+    cart --> payments
     webhooks --> payments
     payments --> inventory
     payments --> orders
@@ -35,7 +37,7 @@ flowchart LR
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
-    class orders core;
+    class cart,orders core;
     class account,inventory,users,webhooks supporting;
     class payments centre;
 ```
@@ -188,6 +190,63 @@ The webhook is not on this diagram because it does not add an edge the diagram d
 have — it reaches the exact same `settlePayment` a sync does, with `succeeded` or `declined` as the
 only two states it ever reports.
 
+## Bank transfer
+
+At checkout the customer may choose `bank_transfer` instead of `card` — `GET /payments/methods`
+says whether this deployment offers it at all, which is only once `NODE_BANK_TRANSFER_BENEFICIARY`
+and `_IBAN` are both set.
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: checkout, paymentMethod = bank_transfer<br/>hold until payBy
+    pending --> paid: admin records the transfer<br/>POST /payments/order/:orderId/offline
+    pending --> paid: customer pays by card instead
+    pending --> cancelled: customer cancels
+    pending --> cancelled: sweep — payBy passed, no money
+    paid --> [*]
+    cancelled --> [*]
+```
+
+- **The order carries the chosen method as a preference, not a lock.** The card form stays offered
+  regardless, and a card payment settles through the ordinary pipeline above.
+- **The hold is longer, and the sweep needs no change to know it.** `cart`'s checkout hands
+  `inventoryService.reserveForOrder` an explicit window — `NODE_BANK_TRANSFER_HOLD_HOURS` (default
+  168, a week) instead of `NODE_RESERVATION_TTL_MINUTES` — and the same reservation sweep that
+  releases a 30-minute card hold releases this one too, since it only ever reads each hold's own
+  stored `expiresAt`. See [Inventory Reservations](./inventory-reservations.md#the-sweep).
+- **A week-long hold is free to take, so an account is capped.** `NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT`
+  (default 2) counts that account's own `pending` transfer orders; a third checkout is refused with
+  `CART_BANK_TRANSFER_LIMIT` before anything is written.
+- **`transferInstructions` is computed at read time, never frozen onto the order.** The
+  beneficiary/IBAN/BIC are deployment config, not order-specific data, so every response recomputes
+  them from the current environment — a later correction to a typo'd IBAN shows up on every still-
+  `pending` transfer order, not just new ones. Present only while `paymentMethod` is `bank_transfer`
+  and `status` is `pending`; `reference` is the order's own id, what the customer types into the
+  transfer's description so the incoming payment can be matched back.
+- **`orders`, not `payments`, computes `transferInstructions`.** `payments` already depends on
+  `orders` (see this page's neighbourhood), so the reverse import would cycle. The beneficiary/IBAN/
+  BIC getters live in `@infrastructure/adapters/bank-transfer.ts` instead — plain values, no
+  `ibantools` — so both modules can reach them without one depending on the other. See
+  [Libraries a module owns](../theory/modules.md#libraries-a-module-owns).
+- **Two emails, and a card timeout gets neither.** Checkout sends the instructions and the deadline
+  instead of the ordinary confirmation — there is nothing to confirm yet. The sweep's own expiry
+  sends a second one, but only when `paymentMethod` is `bank_transfer`: a card hold is thirty
+  minutes, over before anyone could have opened a confirmation email, so a card timeout stays
+  silent exactly as it does today.
+
+## Libraries
+
+`ibantools` is this module's alone — see [Package Dependencies](../tools/package-dependencies.md)
+for where it sits among everything else this repo depends on. Used once, at boot: it is what
+`customCheck` runs `NODE_BANK_TRANSFER_IBAN`/`_BIC` through before the deployment is allowed to
+advertise `bank_transfer` at all.
+
+| Library                      | Maintained    | What it costs you                                                              |
+| ---------------------------- | ------------- | ------------------------------------------------------------------------------ |
+| `ibantools` (chosen)         | active, typed | IBAN + BIC validation and formatting for every SEPA country, zero dependencies |
+| a hand-rolled mod-97 check   | —             | exactly the kind of validation `CLAUDE.md` rules out writing by hand           |
+| trusting the value unchecked | —             | a mistyped IBAN in `.env` sends every customer's money to the wrong account    |
+
 ## The pipeline
 
 Three entry points, one settlement. What differs between them is only how the provider was asked.
@@ -219,12 +278,17 @@ flowchart LR
 
 ## Configuration
 
-| Variable                                | Default | Meaning                                                                                                                                                                               |
-| --------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_PAYMENT_PROVIDER`                 | `fake`  | Which implementation under `providers/` answers. A name this build does not carry throws at boot rather than silently taking no payments                                              |
-| `NODE_PAYMENT_WEBHOOK_SECRET`           | —       | What `POST /payments/webhook` verifies deliveries against. With a live provider this is THEIR signing secret, and it is the only thing between an attacker and marking any order paid |
-| `NODE_DEFAULT_CURRENCY`                 | `EUR`   | ISO-4217, stamped on every payment document at creation                                                                                                                               |
-| `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` | `30`    | Days an attempt that never settled may sit untouched before `npm run reap:payments` deletes it. See Retention below.                                                                  |
+| Variable                                  | Default | Meaning                                                                                                                                                                               |
+| ----------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_PAYMENT_PROVIDER`                   | `fake`  | Which implementation under `providers/` answers. A name this build does not carry throws at boot rather than silently taking no payments                                              |
+| `NODE_PAYMENT_WEBHOOK_SECRET`             | —       | What `POST /payments/webhook` verifies deliveries against. With a live provider this is THEIR signing secret, and it is the only thing between an attacker and marking any order paid |
+| `NODE_DEFAULT_CURRENCY`                   | `EUR`   | ISO-4217, stamped on every payment document at creation                                                                                                                               |
+| `NODE_PAYMENT_ABANDONED_RETENTION_DAYS`   | `30`    | Days an attempt that never settled may sit untouched before `npm run reap:payments` deletes it. See Retention below.                                                                  |
+| `NODE_BANK_TRANSFER_BENEFICIARY`          | —       | The account name a transfer is made out to. `bank_transfer` is offered only once this and `_IBAN` are both set                                                                        |
+| `NODE_BANK_TRANSFER_IBAN`                 | —       | The account IBAN. Validated with `ibantools` at boot — a malformed value refuses to boot rather than silently advertising a dead account                                              |
+| `NODE_BANK_TRANSFER_BIC`                  | —       | The account's BIC/SWIFT, optional even once transfer is offered. Validated at boot when set                                                                                           |
+| `NODE_BANK_TRANSFER_HOLD_HOURS`           | `168`   | How long checkout holds stock for a `bank_transfer` order — a week, not `NODE_RESERVATION_TTL_MINUTES`'s thirty minutes                                                               |
+| `NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT` | `2`     | How many `pending` transfer orders one account may have at once, before checkout refuses a new one                                                                                    |
 
 The currency is stamped rather than looked up, so changing it affects new payments and leaves
 existing ones reading in the currency they were actually taken in. There is no conversion

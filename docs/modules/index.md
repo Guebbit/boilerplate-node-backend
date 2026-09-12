@@ -70,6 +70,7 @@ flowchart TD
     cart --> delivery
     cart --> inventory
     cart --> orders
+    cart --> payments
     cart --> products
     cart --> users
     delivery --> orders
@@ -101,10 +102,10 @@ flowchart TD
 |                 | Reaches                                                                 | Reached by                                                    |
 | --------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------- |
 | `account`       | audit-logs, cart, delivery, feedback, orders, payments, users, wishlist | cart                                                          |
-| `cart`          | account, delivery, inventory, orders, products, users                   | account, wishlist                                             |
+| `cart`          | account, delivery, inventory, orders, payments, products, users         | account, wishlist                                             |
 | `orders`        | inventory, products, users                                              | account, cart, delivery, payments, webhooks                   |
 | `users`         | —                                                                       | account, api-keys, cart, delivery, orders, payments, wishlist |
-| `payments`      | inventory, orders, users                                                | account, webhooks                                             |
+| `payments`      | inventory, orders, users                                                | account, cart, webhooks                                       |
 | `delivery`      | orders, users                                                           | account, cart                                                 |
 | `inventory`     | products                                                                | cart, orders, payments                                        |
 | `products`      | —                                                                       | cart, inventory, orders, wishlist                             |

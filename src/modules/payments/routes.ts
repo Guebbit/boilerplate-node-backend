@@ -1,9 +1,10 @@
 /**
  * @module
  * The payments route table. Everything below the auth wall is authenticated at the router level —
- * money is somebody's. The ONE route in front of it is the provider's webhook: its caller is a
- * machine with no account, authenticating by signing the raw body instead — session auth on top
- * would only stop deliveries arriving, not make it safer.
+ * money is somebody's. Two routes sit in front of it: the provider's webhook, whose caller is a
+ * machine with no account authenticating by signing the raw body instead (session auth on top
+ * would only stop deliveries arriving, not make it safer), and `GET /methods`, which is
+ * pre-purchase information exactly like `GET /delivery/methods`.
  *
  * Admin-only:    the refund and the offline record — a self-service withdrawal, or a self-reported
  *                "I paid", if left open to any caller, versus an intent or confirm locked to
@@ -34,6 +35,7 @@ import { postPaymentWebhook } from './controllers/post-payment-webhook';
 import { getPaymentByOrder } from './controllers/get-payment-by-order';
 import { postPaymentRefund } from './controllers/post-payment-refund';
 import { postPaymentOffline } from './controllers/post-payment-offline';
+import { getPaymentMethods } from './controllers/get-payment-methods';
 
 /** Express router for payment operations (intent, confirm, sync, webhook, read back). */
 export const router = Router();
@@ -41,6 +43,10 @@ export const router = Router();
 // POST /payments/webhook — the provider's own callback. MUST stay above the auth wall below.
 // `webhookLimiter`, not `credentialLimiters`: there is no session here to skip a success on.
 router.post('/webhook', webhookLimiter, postPaymentWebhook);
+
+// GET /payments/methods — public: which methods are offered is pre-purchase information, same
+// reasoning as GET /delivery/methods. MUST stay above the auth wall below.
+router.get('/methods', getPaymentMethods);
 
 // Every route from here down requires authentication — money is somebody's.
 router.use(getAuth, isAuth);

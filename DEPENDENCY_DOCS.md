@@ -109,7 +109,7 @@ Out of scope: the paired frontend could use the same page. Its own plan, if want
 - [x] `## Libraries` on `account-two-factor.md` (`otplib`), `account-sessions.md` (`jsonwebtoken`).
       `users.md` gets a note instead of a table — `bcrypt` is shared with `account`, so it stays a
       hand-kept row on the generated page rather than a module-specific alternatives table
-- [ ] `payments.md` gets `ibantools` when [OFFLINE_PAYMENTS 2](OFFLINE_PAYMENTS_2_BANK_TRANSFER.md) lands
+- [x] `payments.md` gets `ibantools` when [OFFLINE_PAYMENTS 2](OFFLINE_PAYMENTS_2_BANK_TRANSFER.md) lands — landed 2026-09-12, with no hand-kept row needed: single-module ownership put it straight on the generated page
 - [x] the two findings above — `mongodb`'s type-only pin is now explained on the page;
       `@guebbit/openapi-runnable-collections` moved to `devDependencies`
 - [x] `CLAUDE.md`, per the rule above

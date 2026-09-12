@@ -14,12 +14,20 @@ import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { orderService } from '@modules/orders/services';
 import { orderRepository, ORDER_CANCELLED } from '@modules/orders';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
+import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import * as auditPort from '@infrastructure/observability/audit';
 import * as analyticsPort from '@infrastructure/observability/analytics';
 import { ordersAuditActions } from '../../audit';
 import { ordersAnalyticsEvents } from '../../analytics';
 import { observePort } from '@tests/ports';
 import { asCustomer, asOwner } from '../../../../../tests/support/callers';
+
+// The queue, not the copy: `mail-copy.test.ts` pins what the email says.
+jest.mock('@infrastructure/adapters/mailer', () => ({
+    __esModule: true,
+    enqueueEmail: jest.fn()
+}));
+const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 /*
  * The audit port is REPLACED, not spied on: `jest.spyOn` cannot redefine the non-configurable
@@ -248,6 +256,49 @@ describe('cancelById — audit and analytics', () => {
         expect(analyticsSpy).not.toHaveBeenCalledWith(
             expect.objectContaining({ event: ordersAnalyticsEvents.ORDER_CANCELLED })
         );
+    });
+});
+
+describe('cancelById — the bank-transfer-expired email', () => {
+    it('sends it when a bank_transfer order times out with no context', async () => {
+        mockEnqueueEmail.mockClear();
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            paymentMethod: 'bank_transfer'
+        });
+
+        // Mirrors module.ts's RESERVATION_EXPIRED handler: admin scope, no CallerContext.
+        await orderService.cancelById(String(order._id), asOwner());
+
+        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+        const [envelope, template] = mockEnqueueEmail.mock.calls[0];
+        expect(envelope.to).toBe(user.email);
+        expect(template).toBe('orders.order-transfer-expired');
+    });
+
+    it('never sends it for a card order timing out — that hold is thirty minutes', async () => {
+        mockEnqueueEmail.mockClear();
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)], { paymentMethod: 'card' });
+
+        await orderService.cancelById(String(order._id), asOwner());
+
+        expect(mockEnqueueEmail).not.toHaveBeenCalled();
+    });
+
+    it("never sends it for the customer's own cancel, even of a bank_transfer order", async () => {
+        mockEnqueueEmail.mockClear();
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            paymentMethod: 'bank_transfer'
+        });
+
+        await orderService.cancelById(String(order._id), asUser(user), {}, testCallerContext);
+
+        expect(mockEnqueueEmail).not.toHaveBeenCalled();
     });
 });
 

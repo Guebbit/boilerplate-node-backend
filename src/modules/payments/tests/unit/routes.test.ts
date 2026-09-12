@@ -1,11 +1,12 @@
 /**
  * @module
  * The payments route table. Two rules, and both are security rules: everything below the auth wall
- * is authenticated at the router level — money is somebody's — while the provider's webhook sits
- * ABOVE it, because its caller is a machine that authenticates by signing the body. Exactly two
- * routes are additionally admin-only: the refund and the offline record, a self-service withdrawal
- * or a self-reported "I paid" if left open to any caller, versus an intent or confirm locked to
- * admins being a checkout nobody can complete.
+ * is authenticated at the router level — money is somebody's — while the provider's webhook and
+ * `GET /methods` sit ABOVE it: the webhook's caller is a machine that authenticates by signing the
+ * body, and which methods are offered is pre-purchase information nobody need sign in to read.
+ * Exactly two routes are additionally admin-only: the refund and the offline record, a self-service
+ * withdrawal or a self-reported "I paid" if left open to any caller, versus an intent or confirm
+ * locked to admins being a checkout nobody can complete.
  */
 
 import { routeSignatures, guardsOn } from '@tests/routes';
@@ -16,8 +17,11 @@ jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
 
 import { router } from '@modules/payments/routes';
 
-/** The one route in front of the auth wall — see this suite's docblock. */
+/** The one route in front of the auth wall that authenticates by signing its own body. */
 const WEBHOOK = 'POST /webhook';
+
+/** The other route in front of the auth wall — public, like `GET /delivery/methods`. */
+const METHODS = 'GET /methods';
 
 /** A route's guards without its handler, so two routes' guard lists can be compared directly. */
 const withoutHandler = (signature: string) => guardsOn(router, signature).slice(0, -1);
@@ -26,6 +30,7 @@ describe('payment routes', () => {
     it('mounts exactly the documented endpoints, in the documented order', () => {
         expect(routeSignatures(router)).toEqual([
             WEBHOOK,
+            METHODS,
             'POST /intent',
             'GET /order/:orderId',
             'POST /order/:orderId/refund',
@@ -35,12 +40,13 @@ describe('payment routes', () => {
         ]);
     });
 
-    it.each(routeSignatures(router).filter((signature) => signature !== WEBHOOK))(
-        '%s requires a session',
-        (signature) => {
-            expect(guardsOn(router, signature)).toContain('isAuth');
-        }
-    );
+    it.each(
+        routeSignatures(router).filter(
+            (signature) => signature !== WEBHOOK && signature !== METHODS
+        )
+    )('%s requires a session', (signature) => {
+        expect(guardsOn(router, signature)).toContain('isAuth');
+    });
 
     it('leaves the webhook unauthenticated, which is what lets the provider reach it', () => {
         // Not an oversight and not a weakening: a PSP has no account here, and the signature over
@@ -48,6 +54,11 @@ describe('payment routes', () => {
         // A session guard added on top of it would silently stop every delivery arriving.
         expect(guardsOn(router, WEBHOOK)).not.toContain('isAuth');
         expect(guardsOn(router, WEBHOOK)).not.toContain('getAuth');
+    });
+
+    it('leaves the methods list unauthenticated, same as GET /delivery/methods', () => {
+        expect(guardsOn(router, METHODS)).not.toContain('isAuth');
+        expect(guardsOn(router, METHODS)).not.toContain('getAuth');
     });
 
     it('carries a rate limit — the one budget this route has, since a signature is not one', () => {

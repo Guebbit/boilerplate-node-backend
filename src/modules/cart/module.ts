@@ -1,8 +1,10 @@
 /**
  * @module
  * The shopping cart: one document per user, priced against the live catalogue. Depends on
- * products, users and orders — a checkout is where a cart stops being a cart; products and users
- * reach back via domain events instead, keeping the import graph acyclic.
+ * products, users and orders — a checkout is where a cart stops being a cart — plus delivery and
+ * payments, to price shipping and to validate/size the chosen payment method against what the
+ * deployment actually offers. Products and users reach back via domain events instead, keeping
+ * the import graph acyclic.
  *
  * See: docs/modules/cart.md
  */

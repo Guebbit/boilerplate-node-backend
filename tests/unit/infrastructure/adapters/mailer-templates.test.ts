@@ -23,7 +23,12 @@ import {
     emailChangeNoticeEmail
 } from '@modules/account/emails';
 import { contactRequestEmail } from '@modules/feedback/emails';
-import { orderConfirmEmail, invoiceDocument } from '@modules/orders/emails';
+import {
+    orderConfirmEmail,
+    invoiceDocument,
+    bankTransferInstructionsEmail,
+    bankTransferExpiredEmail
+} from '@modules/orders/emails';
 import { shipmentShippedEmail } from '@modules/delivery/emails';
 
 describe('email templates', () => {
@@ -84,6 +89,16 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
             { quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } },
             { quantity: 1, product: { title: 'A whole ham', price: 42 } }
         ]
+    }),
+    'orders.order-transfer-instructions.ejs': bankTransferInstructionsEmail(
+        locale,
+        'Ada',
+        { items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }] },
+        { beneficiary: 'Guebbit Shop', iban: 'DE89370400440532013000', reference: 'an-order-id' },
+        new Date('2026-09-19T12:00:00.000Z')
+    ),
+    'orders.order-transfer-expired.ejs': bankTransferExpiredEmail(locale, {
+        items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }]
     }),
     'delivery.shipment-shipped.ejs': shipmentShippedEmail(locale, 'Ada', 'TRK-0000TEST'),
     'feedback.contact.ejs': contactRequestEmail(locale, {

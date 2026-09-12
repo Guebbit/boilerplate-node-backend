@@ -25,6 +25,19 @@
             "line": "{{title}} — {{quantity}} × {{price}}",
             "total": "Total: {{total}}"
         },
+        "email-transfer": {
+            "subject": "Complete your order by bank transfer",
+            "meta-title": "Bank transfer instructions",
+            "greeting": "Hello, {{name}}!",
+            "body": "Your order is reserved. Send the transfer below to complete it — include the reference so we can match your payment.",
+            "deadline": "We'll hold your order until {{payBy}}."
+        },
+        "email-transfer-expired": {
+            "subject": "Your order was cancelled — no transfer received",
+            "meta-title": "Order cancelled",
+            "greeting": "Hello!",
+            "body": "We didn't receive your bank transfer in time, so this order has been cancelled and its items released."
+        },
         "items-held": "This order's items cannot be changed while its stock is held or already sold.",
         "insufficient-stock": "Some items on this order are no longer available in the quantity requested — see `details.lines`."
     }

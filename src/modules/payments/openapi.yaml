@@ -4,6 +4,22 @@ info:
     version: '3.0.0'
 
 paths:
+    /payments/methods:
+        get:
+            tags: [Payments]
+            summary: List payment methods
+            description: Which methods this deployment offers, so the frontend hard-codes none. `card` is always present; `bank_transfer` only once its beneficiary and IBAN are configured. Public — like `GET /delivery/methods`, this is pre-purchase information.
+            operationId: listPaymentMethods
+            security: []
+            responses:
+                '200':
+                    description: The methods
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PaymentMethodsResponseEnvelope'
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /payments/intent:
         post:
             tags: [Payments]
@@ -481,6 +497,46 @@ components:
                         provider recognises `pm_card_visa` (succeeds), `pm_card_declined`,
                         `pm_card_authentication_required` and `pm_card_processing`; anything else
                         succeeds.
+
+        PaymentMethodOption:
+            type: object
+            additionalProperties: false
+            required: [id]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaymentMethodId'
+                holdHours:
+                    type: number
+                    minimum: 0
+                    description: >-
+                        How long checkout holds stock for an order choosing this method
+                        (`NODE_BANK_TRANSFER_HOLD_HOURS`). Present on `bank_transfer` only —
+                        `card`'s hold is `NODE_RESERVATION_TTL_MINUTES`, a different unit, owned
+                        by `inventory` rather than a deployment choice this module makes.
+
+        PaymentMethodsResponse:
+            type: object
+            additionalProperties: false
+            required: [methods]
+            properties:
+                methods:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/PaymentMethodOption'
+
+        PaymentMethodsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/PaymentMethodsResponse'
 
         RecordOfflinePaymentRequest:
             type: object

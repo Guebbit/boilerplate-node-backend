@@ -17,11 +17,11 @@ This file is the index. Each numbered file holds one category and ends with an `
 
 ## Start here
 
-| #   | File                                                             | What                                                      | Blocks                             | Status                   |
-| --- | ---------------------------------------------------------------- | --------------------------------------------------------- | ---------------------------------- | ------------------------ |
-| 1   | [Record by hand](OFFLINE_PAYMENTS_1_RECORD_BY_HAND.md)           | admin records an offline payment on a pending order       | 2, the offline rows of 3           | done, backend + frontend |
-| 2   | [Bank transfer at checkout](OFFLINE_PAYMENTS_2_BANK_TRANSFER.md) | customer picks transfer; the order waits days, not 30 min | the awaiting-transfer rows of 3    | decided, not done        |
-| 3   | [Realistic history](OFFLINE_PAYMENTS_3_REALISTIC_HISTORY.md)     | flows once per boot, restored from memory                 | deleting `scenarios/audit-logs.ts` | decided, not done        |
+| #   | File                                                             | What                                                      | Blocks                             | Status                         |
+| --- | ---------------------------------------------------------------- | --------------------------------------------------------- | ---------------------------------- | ------------------------------ |
+| 1   | [Record by hand](OFFLINE_PAYMENTS_1_RECORD_BY_HAND.md)           | admin records an offline payment on a pending order       | 2, the offline rows of 3           | done, backend + frontend       |
+| 2   | [Bank transfer at checkout](OFFLINE_PAYMENTS_2_BANK_TRANSFER.md) | customer picks transfer; the order waits days, not 30 min | the awaiting-transfer rows of 3    | backend done, frontend pending |
+| 3   | [Realistic history](OFFLINE_PAYMENTS_3_REALISTIC_HISTORY.md)     | flows once per boot, restored from memory                 | deleting `scenarios/audit-logs.ts` | decided, not done              |
 
 ## Order of work
 

@@ -4,15 +4,16 @@
 only one where a race can cost a customer money.
 
 ::: tip At a glance
-**Touches** — five modules, in a fixed order, and the order is the correctness.
-**Costs** — one order, one reservation, one emptied cart, one email.
+**Touches** — six modules, in a fixed order, and the order is the correctness.
+**Costs** — one order, one reservation, one emptied cart, one email — the confirmation, or the
+bank-transfer instructions when that is the method chosen.
 **Breaks if you change** — the sequence below, or the conditional cart clear at the end.
 :::
 
 ## Why this page exists
 
-[`cart`](./cart.md) declares six dependency edges, more than any other module, and every one of
-them is here. Reading the manifest tells you _that_ checkout is a customer of four contexts;
+[`cart`](./cart.md) declares seven dependency edges, more than any other module, and every one of
+them is here. Reading the manifest tells you _that_ checkout is a customer of five contexts;
 this page is _why_, and in what order.
 
 ## The sequence
@@ -22,19 +23,23 @@ whole design: a bad address or an unknown shipping method costs nothing, because
 and no order exists yet.
 
 ```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 42}}}%%
+%%{init: {'flowchart': {'nodeSpacing': 26, 'rankSpacing': 40}}}%%
 flowchart TD
-    A["1 · load the account<br/><i>users</i>"] --> B["2 · resolve the shipping method<br/><i>delivery — pure function</i>"]
-    B --> C["3 · resolve the address<br/><i>account — addressForCheckout</i>"]
-    C --> D["4 · join the lines against the catalogue<br/><i>products</i>"]
-    D --> E["5 · evaluate the rules<br/><i>cart/domain</i>"]
-    E --> F["6 · hold the units<br/><i>inventory — reserveForOrder</i>"]
-    F --> G["7 · write the order<br/><i>orders</i>"]
-    G --> H["8 · empty the cart, conditionally<br/><i>cart — on the __v it was read at</i>"]
-    H --> I["9 · queue the confirmation email"]
+    A["1 · load the account<br/><i>users</i>"] --> P["2 · validate the payment method<br/><i>payments — listPaymentMethods</i>"]
+    P --> Q["3 · the open-transfer cap<br/><i>orders — countOpenBankTransfers</i>"]
+    Q --> B["4 · resolve the shipping method<br/><i>delivery — pure function</i>"]
+    B --> C["5 · resolve the address<br/><i>account — addressForCheckout</i>"]
+    C --> D["6 · join the lines against the catalogue<br/><i>products</i>"]
+    D --> E["7 · evaluate the rules<br/><i>cart/domain</i>"]
+    E --> F["8 · hold the units<br/><i>inventory — reserveForOrder</i>"]
+    F --> G["9 · write the order<br/><i>orders</i>"]
+    G --> H["10 · empty the cart, conditionally<br/><i>cart — on the __v it was read at</i>"]
+    H --> I["11 · queue the email<br/><i>confirmation, or transfer instructions</i>"]
 
     R["refuse — nothing written"]
     A -.->|"no account"| R
+    P -.->|"method not offered"| R
+    Q -.->|"cap reached"| R
     B -.->|"unknown method"| R
     C -.->|"not the caller's address"| R
     D -.->|"product gone"| R
@@ -47,24 +52,25 @@ flowchart TD
     classDef read fill:#ccfbf1,stroke:#0f766e,color:#111827;
     classDef write fill:#ede9fe,stroke:#7c3aed,color:#111827;
     classDef bad fill:#fee2e2,stroke:#b91c1c,color:#111827;
-    class A,B,C,D,E read;
+    class A,P,Q,B,C,D,E read;
     class F,G,H,I write;
     class R,L,M bad;
 ```
 
-Steps 1–5 are reads and refusals. Steps 6–9 are the writes, and from step 6 onward a failure has
+Steps 1–7 are reads and refusals. Steps 8–11 are the writes, and from step 8 onward a failure has
 something to undo.
 
 ## What crosses each edge
 
-| Module                        | Edge                 | What checkout actually asks for                                                                                                                                       |
-| ----------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`users`](./users.md)         | `conformist`         | The account record. An order records the address it was placed from, so a checkout for an account that no longer exists is the one cart operation that can still 404. |
-| [`delivery`](./delivery.md)   | `published-language` | `findShippingMethod` and `priceShipping` — pure functions. The cart never learns that a shipment record exists.                                                       |
-| [`account`](./account.md)     | `customer-supplier`  | `addressForCheckout` — the one address this order ships to. The address CRUD stays behind that module's routes.                                                       |
-| [`products`](./products.md)   | `conformist`         | Catalogue documents, read as they are, to price lines and pre-flight availability.                                                                                    |
-| [`inventory`](./inventory.md) | `customer-supplier`  | `reserveForOrder` to hold the basket, and the hold given back when the cart race is lost. Checkout never touches a counter itself.                                    |
-| [`orders`](./orders.md)       | `customer-supplier`  | `create` — this is the one place an order is made outside the admin routes.                                                                                           |
+| Module                        | Edge                 | What checkout actually asks for                                                                                                                                                      |
+| ----------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [`users`](./users.md)         | `conformist`         | The account record. An order records the address it was placed from, so a checkout for an account that no longer exists is the one cart operation that can still 404.                |
+| [`payments`](./payments.md)   | `customer-supplier`  | `listPaymentMethods` — the same list `GET /payments/methods` answers, so checkout and that endpoint can never disagree about what this deployment offers.                            |
+| [`delivery`](./delivery.md)   | `published-language` | `findShippingMethod` and `priceShipping` — pure functions. The cart never learns that a shipment record exists.                                                                      |
+| [`account`](./account.md)     | `customer-supplier`  | `addressForCheckout` — the one address this order ships to. The address CRUD stays behind that module's routes.                                                                      |
+| [`products`](./products.md)   | `conformist`         | Catalogue documents, read as they are, to price lines and pre-flight availability.                                                                                                   |
+| [`inventory`](./inventory.md) | `customer-supplier`  | `reserveForOrder` to hold the basket — for as long as the chosen method's window says — and the hold given back when the cart race is lost. Checkout never touches a counter itself. |
+| [`orders`](./orders.md)       | `customer-supplier`  | `create`, and `countOpenBankTransfers` for the open-transfer cap — this is the one place an order is made outside the admin routes.                                                  |
 
 ::: tip The basket is mapped, not handed over
 `inventory` is given product ids and quantities, nothing else. Mapping the lines rather than passing
@@ -110,6 +116,6 @@ than a dashboard glance.
 
 - [`cart`](./cart.md) — the module this belongs to
 - [`orders`](./orders.md) — the status machine a checkout drops an order into
-- [Reservations](./inventory-reservations.md) — what the hold in step 6 actually is
+- [Reservations](./inventory-reservations.md) — what the hold in step 8 actually is
 - [Request Flow](../theory/request-flow.md) — how a request reaches a service at all
 - [Product Analytics](../tools/analytics.md) — the funnel these two events sit in

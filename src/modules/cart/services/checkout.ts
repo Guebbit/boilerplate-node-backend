@@ -11,6 +11,12 @@ import type { CastError } from 'mongoose';
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import {
+    bankTransferBeneficiary,
+    bankTransferBic,
+    bankTransferIbanFriendly,
+    bankTransferMaxOpenPerAccount
+} from '@infrastructure/adapters/bank-transfer';
+import {
     generateSuccess,
     generateReject,
     type ResponseSuccess,
@@ -22,6 +28,7 @@ import {
     orderRepository,
     orderService,
     orderConfirmEmail,
+    bankTransferInstructionsEmail,
     freezeOrderLines,
     retractOrder,
     sumLineItems,
@@ -32,6 +39,7 @@ import { userRepository } from '@modules/users';
 import { inventoryService } from '@modules/inventory';
 import { addressForCheckout, type AddressItem } from '@modules/account';
 import { findShippingMethod, priceShipping } from '@modules/delivery';
+import { paymentService } from '@modules/payments';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { cartAnalyticsEvents } from '../analytics';
@@ -77,11 +85,13 @@ const toShippingAddress = (address: AddressItem) => ({
  * @param userId - the caller's id
  * @param addressId - the shipping address's entry id, or `undefined` for the default/no address
  * @param shippingMethodId - the chosen shipping method's id, or `undefined` for none
+ * @param paymentMethod - the chosen payment method's id, or `undefined` for `card`
  */
 const runCheckout = async (
     userId: string,
     addressId: string | undefined,
-    shippingMethodId: string | undefined
+    shippingMethodId: string | undefined,
+    paymentMethod: string | undefined
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
     const user = await userRepository.findById(userId);
     if (!user) return generateReject(404, []);
@@ -89,6 +99,37 @@ const runCheckout = async (
     // The whole language chain for this checkout — both the snapshot each line freezes and,
     // further down, the confirmation email — decided once so the two cannot disagree.
     const buyerLocale = user.locale ?? getDefaultLocale();
+
+    /*
+     * Resolved before any stock moves, same as the shipping method below: an unoffered method
+     * refuses the checkout while nothing has been written yet. `GET /payments/methods`'
+     * own list is asked rather than re-checked here, so the two can never disagree about what
+     * this deployment offers.
+     */
+    const requestedMethod = paymentMethod ?? 'card';
+    const methodInfo = paymentService
+        .listPaymentMethods()
+        .find((method) => method.id === requestedMethod);
+    if (!methodInfo)
+        return generateReject(409, [
+            {
+                code: 'CART_PAYMENT_METHOD_NOT_AVAILABLE',
+                message: t('cart.payment-method-not-available')
+            }
+        ]);
+
+    /*
+     * The open-transfer cap: a week-long hold is otherwise free to take, so this is what stops
+     * one account hoarding stock across many uncompleted orders. Checked here, before anything
+     * is written, for the same reason every other pre-flight check in this function is.
+     */
+    if (requestedMethod === 'bank_transfer') {
+        const openTransfers = await orderRepository.countOpenBankTransfers(userId);
+        if (openTransfers >= bankTransferMaxOpenPerAccount())
+            return generateReject(409, [
+                { code: 'CART_BANK_TRANSFER_LIMIT', message: t('cart.bank-transfer-limit') }
+            ]);
+    }
 
     /*
      * Resolved before any stock moves: an unmatched name refuses the checkout while
@@ -185,6 +226,16 @@ const runCheckout = async (
     );
 
     /*
+     * `bank_transfer`'s hold is `methodInfo.holdHours`, converted to the unit
+     * `reserveForOrder` and `payBy` both want; `card` passes `undefined` through and gets
+     * `reserveForOrder`'s own default (`NODE_RESERVATION_TTL_MINUTES`) — nothing about the
+     * existing card flow's timing changes.
+     */
+    const holdMinutes = methodInfo.holdHours === undefined ? undefined : methodInfo.holdHours * 60;
+    const payBy =
+        holdMinutes === undefined ? undefined : new Date(Date.now() + holdMinutes * 60_000);
+
+    /*
      * The order is written first, and the units are held against it. Forced
      * rather than chosen: a hold is keyed by the order's id, and that key is what
      * makes reserving exactly once. It is also the safer half — an order that
@@ -195,6 +246,8 @@ const runCheckout = async (
         userId: new Types.ObjectId(user.id),
         email: user.email,
         items: orderItems,
+        paymentMethod: requestedMethod,
+        ...(payBy ? { payBy } : {}),
         ...(address ? { shippingAddress: toShippingAddress(address) } : {}),
         // The cost frozen against THESE lines' total — the free-above
         // rule prices the basket being bought, not a later edit of it.
@@ -215,7 +268,11 @@ const runCheckout = async (
      * payment lands or the hold ends, so an unpaid order no longer
      * removes stock from the world.
      */
-    const outcome = await inventoryService.reserveForOrder(String(order._id), toStockLines(joined));
+    const outcome = await inventoryService.reserveForOrder(
+        String(order._id),
+        toStockLines(joined),
+        holdMinutes
+    );
     if (!outcome.held) {
         // Nothing is held — the reserve rolled its own lines back — so only the order goes.
         await retractOrder(order, false);
@@ -237,8 +294,25 @@ const runCheckout = async (
          * Sent from the service, not the controller: only this point knows the order
          * stood. Same `buyerLocale` the snapshot above was frozen in, so the email and the
          * order it describes never quote two different languages.
+         *
+         * A `bank_transfer` order gets the instructions and deadline instead of a
+         * confirmation — there is nothing to confirm yet. `beneficiary`/`iban` narrow to
+         * `string` here because `methodInfo` already proved the method offered, which
+         * `bankTransferEnabled()` only answers `true` when both are set.
          */
-        const mail = orderConfirmEmail(buyerLocale, user.username, order);
+        const beneficiary = bankTransferBeneficiary();
+        const iban = bankTransferIbanFriendly();
+        const bic = bankTransferBic();
+        const mail =
+            requestedMethod === 'bank_transfer' && beneficiary && iban && payBy
+                ? bankTransferInstructionsEmail(
+                      buyerLocale,
+                      user.username,
+                      order,
+                      { beneficiary, iban, ...(bic ? { bic } : {}), reference: String(order._id) },
+                      payBy
+                  )
+                : orderConfirmEmail(buyerLocale, user.username, order);
         void enqueueEmail({ to: user.email, subject: mail.subject }, mail.template, mail.data);
         return generateSuccess<OrderDocument>(order);
     }
@@ -258,9 +332,10 @@ export const orderConfirm = (
     userId: string,
     context: CallerContext,
     addressId?: string,
-    shippingMethodId?: string
+    shippingMethodId?: string,
+    paymentMethod?: string
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
-    runCheckout(userId, addressId, shippingMethodId)
+    runCheckout(userId, addressId, shippingMethodId, paymentMethod)
         .catch((error: CastError | Error) => rejectDatabaseEnvelope('cart', error))
         .then((result) => {
             /*

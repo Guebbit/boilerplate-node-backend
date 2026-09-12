@@ -159,13 +159,16 @@ const levelFor = async (productId: string): Promise<InventoryLevel | null> => {
  *
  * @param orderId - the order the hold belongs to
  * @param lines - what it claims
+ * @param holdMinutes - how long the hold survives; `reservationTtlMinutes()` unless the caller
+ *   is checking out a method with its own window (`bank_transfer`'s is longer, in hours)
  * @returns `held`, or the lines that fell short with what is actually available
  */
 export const reserveForOrder = async (
     orderId: string,
-    lines: readonly StockLine[]
+    lines: readonly StockLine[],
+    holdMinutes: number = reservationTtlMinutes()
 ): Promise<ReserveOutcome> => {
-    const expiresAt = new Date(Date.now() + reservationTtlMinutes() * 60_000);
+    const expiresAt = new Date(Date.now() + holdMinutes * 60_000);
     const hold = await reservationRepository.insertHold(orderId, lines, expiresAt);
     // Already held — a retry, or a double-clicked button. The first call did the work.
     if (!hold) return { held: true };

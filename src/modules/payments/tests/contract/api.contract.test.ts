@@ -69,6 +69,19 @@ const paidOrder = async () => {
     return { bearer, order, paymentId };
 };
 
+describe('GET /payments/methods', () => {
+    it('matches the contract, unauthenticated included — methods are pre-purchase information', async () => {
+        const response = await api().get('/payments/methods');
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.methods.length).toBeGreaterThan(0);
+        expect(response.body.data.methods.map((method: { id: string }) => method.id)).toContain(
+            'card'
+        );
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
 describe('POST /payments/intent', () => {
     it('matches the contract for a fresh intent', async () => {
         const { bearer, order } = await authenticateWithOrder();

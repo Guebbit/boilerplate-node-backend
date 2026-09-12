@@ -64,7 +64,7 @@ const MODULE_EDGES = {
         'audit-logs',
         'feedback'
     ],
-    cart: ['account', 'delivery', 'inventory', 'orders', 'products', 'users'],
+    cart: ['account', 'delivery', 'inventory', 'orders', 'payments', 'products', 'users'],
     delivery: ['orders', 'users'],
     inventory: ['products'],
     observability: ['audit-logs'],

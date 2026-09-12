@@ -178,6 +178,16 @@ export interface AppModule {
     requiredConfig?: readonly RequiredConfig[];
 
     /**
+     * A boot-time check {@link RequiredConfig} cannot express — cross-field validation, or
+     * parsing a value through a library. Returns the offending variable names; an empty array
+     * means nothing is wrong. Collected into the same failure `assertRequiredConfig` throws
+     * (`@kernel/required-config`), so a module-owned check is reported the same way a
+     * declarative one is: named alongside every other mistake, not thrown from deep inside the
+     * module on the first request that needs the value.
+     */
+    customCheck?: () => string[];
+
+    /**
      * The states this module GUARANTEES a named scenario seeds, keyed by scenario name (currently
      * only `shop`). `scenarios/check.ts` fails the build until every key here is actually present
      * in what got seeded — declared here rather than only inside `scenarios/` so deleting a module

@@ -17,7 +17,9 @@ export { orderRepository } from './repository';
 export { retractOrder } from './services';
 export { ORDER_CANCELLED, ORDER_STATUS_CHANGED, ORDER_CREATED } from './events';
 // `cart` sends the confirmation itself: only the checkout has the recipient's locale in scope.
-export { orderConfirmEmail } from './emails';
+// A `bank_transfer` checkout sends `bankTransferInstructionsEmail` instead — there is nothing to
+// confirm yet, only what the customer still has to do.
+export { orderConfirmEmail, bankTransferInstructionsEmail } from './emails';
 // `cart`'s checkout freezes its own line snapshots the same way `create()` does — one builder,
 // not a second opinion on how a buyer's language gets embedded.
 export { freezeOrderLines } from './services';
