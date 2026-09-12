@@ -109,8 +109,12 @@ RESERVATION_EXPIRED → orders` pattern, direction reversed. Test:
 - [ ] D7 frontend: fix the two order assumptions; make the reorder spec assert the reordered line
 - [x] the shipping-total nit (`ownerShipped`'s comment) — fixed alongside D1, `b5891c9a`: the wrong
       count is deleted, not corrected, per [9](SCENARIOS_NEXT_9_SWEEP.md#how-to-treat-an-item)
-- [ ] the remaining nits (`snapshotOf`'s dropped fields, all-16-orders-share-one-`createdAt`,
-      `placekitten.com`)
+- [x] `snapshotOf`'s dropped fields — `categories`, `tags`, `thumbnailUrl`, `requiresShipping` now
+      frozen too, matching what a real checkout actually embeds
+- [x] all-16-orders-share-one-`createdAt` — `seedOrderDate` states it explicitly, 20 days apart
+      from 2024-01-01; the id scheme itself is unchanged
+- [x] `placekitten.com` (six sites) — a local `/images/system/placeholder-{product,user}.png`
+      (committed, matching `NODE_PENDING_IMAGE_URL`'s own convention), not a third-party host
 
 ## Answer
 
