@@ -63,7 +63,7 @@ data, which is OWASP's own #1 API risk
 | --------------------------- | ---------------------------------- | ---------------------------------------- |
 | Code to write               | **~0** — it already works this way | ~30–45 days, a third security-critical   |
 | Cross-tenant leak           | **Structurally impossible**        | One forgotten filter away, always        |
-| GDPR erasure for one client | **Drop a database**                | A careful cascade across ~22 collections |
+| GDPR erasure for one client | **Drop a database**                | A careful cascade across ~24 collections |
 | Data residency per client   | **Per-client, trivially**          | One region for everyone                  |
 | Noisy neighbour             | **Impossible**                     | Needs per-tenant rate limits             |
 | Cost per client             | One stack's RAM (~1–1.5 GB)        | Marginal                                 |
@@ -196,9 +196,9 @@ Until then, the answer to "should this be pooled multi-tenant?" is **no, on purp
 ## 10 · What we deliberately did not build
 
 **Pooled multi-tenancy** — one process, one database, every row tagged `tenantId`, a CASL filter on
-every read. It is real work: 4 of 16 modules would need a tenant-scoped read filter added
-(`products`, `orders`, `payments`, `locales` already have the machinery; twelve others don't), and
-only 6 of 22 Mongoose models carry an organisation column today.
+every read. It is real work: only 5 of 16 modules compile a scoped read filter today
+(`products`, `orders`, `payments`, `locales`, `delivery`) — the other eleven would need one added
+— and only 6 of 24 Mongoose models carry an organisation column.
 
 **A concrete example of what "declined, not merely undone" means:** the webhooks fan-out matches
 every enabled subscription against an event, unconditionally. That is correct in silo — there is
