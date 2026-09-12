@@ -7,7 +7,7 @@ import type { Request, Response } from 'express';
 import { MintApiKeyBody } from '@api/schemas.zod';
 import type { MintApiKeyRequest, ApiKeyCreated } from '@types';
 import { successResponse } from '@infrastructure/http/response';
-import { callerContextOf } from '@infrastructure/http/request';
+import { tenantCallerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { apiKeysService } from '../services';
 
@@ -24,7 +24,7 @@ export const mintApiKey = (
     if (!body) return;
 
     return apiKeysService
-        .mintApiKey(body, callerContextOf(request))
+        .mintApiKey(body, tenantCallerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
             // `refused` only reports the reject branch; a success result always carries the

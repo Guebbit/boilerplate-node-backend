@@ -12,7 +12,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import type { CallerContext } from '@infrastructure/http/request';
+import type { TenantCallerContext } from '@infrastructure/http/request';
 import type { PaginatedResult } from '@infrastructure/persistence/create-repository';
 import {
     webhookDeliveryRepository,
@@ -22,7 +22,6 @@ import {
 import type { WebhookDeliveryDocument } from '../model';
 import { attemptDelivery } from './attempt';
 import { webhooksAuditActions } from '../audit';
-import { tenantOf } from './context';
 
 /** What `GET /webhooks/deliveries` accepts, mirroring the query parameters `openapi.yaml` declares. */
 export interface DeliveryListFilters {
@@ -41,7 +40,7 @@ export interface DeliveryListFilters {
  * diverge without either the contract or the repository knowing about the other.
  */
 export const list = (
-    context: CallerContext,
+    context: TenantCallerContext,
     filters: DeliveryListFilters
 ): Promise<PaginatedResult<WebhookDeliveryDocument>> =>
     webhookDeliveryRepository.search(
@@ -51,7 +50,7 @@ export const list = (
             page: filters.page,
             pageSize: filters.pageSize
         },
-        { tenant: tenantOf(context) },
+        { tenant: context.caller.tenantId },
         WEBHOOK_DELIVERY_SORT
     );
 
@@ -68,10 +67,10 @@ export const list = (
  */
 export const replay = (
     id: string,
-    context: CallerContext
+    context: TenantCallerContext
 ): Promise<ResponseSuccess<WebhookDeliveryDocument> | ResponseReject> =>
     webhookDeliveryRepository.findById(id).then((delivery) => {
-        if (delivery?.tenant !== tenantOf(context))
+        if (delivery?.tenant !== context.caller.tenantId)
             return generateReject(404, [t('generic.error-not-found')]);
 
         return webhookSubscriptionRepository

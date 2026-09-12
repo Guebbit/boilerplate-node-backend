@@ -17,7 +17,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';
-import type { AuthContext, AuthorizationScope, Caller } from '@types';
+import type { AuthContext, AuthorizationScope, Caller, PlatformCaller, TenantCaller } from '@types';
 import {
     scopeOfKey,
     wildcardKeyFor,
@@ -254,10 +254,17 @@ const keysInScope = (roleName: string | null, scope: AuthorizationScope): readon
  * The `Caller` an `AuthContext` becomes in a named scope — the primitive {@link callerFor} and
  * {@link callerForSubject} both resolve to.
  *
+ * Overloaded on `scope`, because the argument already decides the arm: a literal `'tenant'` gets a
+ * `TenantCaller` whose `tenantId` is a `string`, so a caller built for a shop needs no narrowing
+ * back. A `scope` only known at runtime still gets the union.
+ *
  * @param context - the resolved session
  * @param scope - which of the two worlds this request acts in
  */
-export const callerInScope = (context: AuthContext, scope: AuthorizationScope): Caller => {
+export function callerInScope(context: AuthContext, scope: 'tenant'): TenantCaller;
+export function callerInScope(context: AuthContext, scope: 'platform'): PlatformCaller;
+export function callerInScope(context: AuthContext, scope: AuthorizationScope): Caller;
+export function callerInScope(context: AuthContext, scope: AuthorizationScope): Caller {
     if (scope === 'platform') {
         return {
             id: context.id,
@@ -275,7 +282,7 @@ export const callerInScope = (context: AuthContext, scope: AuthorizationScope): 
         scope,
         permissions: keysInScope(context.roles.tenant, scope)
     };
-};
+}
 
 /**
  * Which scope a SUBJECT's rows live in, read from the keys that declare it.

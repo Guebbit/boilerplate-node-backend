@@ -12,9 +12,9 @@
  * than in one route's integration test three layers down.
  */
 
-import type { AuthContext, Caller } from '@types';
+import type { AuthContext, Caller, TenantCaller } from '@types';
 import { anonymousCaller, callerInScope } from '@kernel/permissions';
-import type { CallerContext } from '@infrastructure/http/request';
+import type { CallerContext, TenantCallerContext } from '@infrastructure/http/request';
 
 /** The single shop every fixture belongs to. Multi-tenant behaviour is the conformance suite's. */
 export const TEST_TENANT_ID = 'shop';
@@ -94,7 +94,7 @@ export const testCallerContext: CallerContext = {
  * is built by asking `callerInScope(asOperator(), 'platform')`, which is rare enough to spell out
  * where it happens.
  */
-export const callerAs = (role: string, id?: string): Caller =>
+export const callerAs = (role: string, id?: string): TenantCaller =>
     callerInScope(asRole(role, id), 'tenant');
 
 /**
@@ -102,7 +102,7 @@ export const callerAs = (role: string, id?: string): Caller =>
  * anonymous default `testCallerContext` carries — the granter behind an `assignRole` call, for
  * one, since anonymous holds no key an elevated role could ever be a subset of.
  */
-export const callerContextAs = (role: string, id?: string): CallerContext => ({
+export const callerContextAs = (role: string, id?: string): TenantCallerContext => ({
     caller: callerAs(role, id),
     analyticsConsent: false
 });

@@ -10,7 +10,7 @@
  */
 
 import type { Request, Response } from 'express';
-import type { Caller } from '@types';
+import type { Caller, TenantCaller } from '@types';
 // `ParamsDictionary` is Express' default type for `request.params` (a `Record<string, string>`).
 // Naming it explicitly in generics keeps `request.params.id` typed instead of `any`.
 // i18next translation function — messages are resolved against the request's locale, which the
@@ -387,6 +387,47 @@ export const callerContextOf = (request: {
             request.authContext?.analyticsConsent === true ||
             (consentHeader !== undefined && parseFormBoolean(consentHeader) === true)
     };
+};
+
+/**
+ * A {@link CallerContext} whose caller is proven to be acting inside a shop.
+ *
+ * Exists so a tenant-only module's services can take `context.caller.tenantId` as a `string` and
+ * state that requirement in their signature, instead of each one narrowing the union back at
+ * runtime. `api-keys` and `webhooks` are entirely tenant-scoped — every key either declares
+ * `scope: tenant` in `shared/authorization-keys.yaml` — and both previously carried their own
+ * identical `tenantOf()` helper to do exactly that.
+ */
+export interface TenantCallerContext extends CallerContext {
+    caller: TenantCaller;
+}
+
+/**
+ * {@link callerContextOf}, for a route every one of whose permission keys is tenant-scoped.
+ *
+ * The ONE place the tenant-scope narrowing happens. `requirePermission` has already refused a
+ * platform caller on a tenant key by the time a controller runs, so the throw is unreachable
+ * through a correctly guarded route — it exists because that invariant lives in
+ * `shared/authorization-keys.yaml`, which no type can see, and because {@link STRANGER} (the
+ * fallback for a request no guard resolved) is deliberately platform-scoped.
+ *
+ * @param request - the same shape {@link callerContextOf} reads
+ * @throws Error when the caller is in platform scope — a route mounted without a tenant-key guard,
+ *   never anything a client can provoke
+ */
+export const tenantCallerContextOf = (
+    request: Parameters<typeof callerContextOf>[0]
+): TenantCallerContext => {
+    const context = callerContextOf(request);
+
+    if (context.caller.scope !== 'tenant') {
+        throw new Error(
+            '[request] tenantCallerContextOf on a platform-scope caller. This route is mounted ' +
+                'without a tenant-scoped `requirePermission`, so nothing proved a shop to act in.'
+        );
+    }
+
+    return { ...context, caller: context.caller };
 };
 
 /**

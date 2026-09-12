@@ -15,7 +15,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import type { CallerContext } from '@infrastructure/http/request';
+import type { TenantCallerContext } from '@infrastructure/http/request';
 import type { PaginatedResult } from '@infrastructure/persistence/create-repository';
 import type { CreateWebhookSubscriptionRequest, UpdateWebhookSubscriptionRequest } from '@types';
 import type { WebhookSubscriptionDocument } from '../model';
@@ -23,7 +23,6 @@ import { webhookSubscriptionRepository } from '../repository';
 import { mintRingSecret, removeRingSecret } from '../secrets';
 import { getWebhookSubscriptionCap } from '../config';
 import { webhooksAuditActions } from '../audit';
-import { tenantOf } from './context';
 
 /** A subscription alongside whichever plaintext secrets this call just minted — shown once. */
 export interface SubscriptionWithMintedSecrets {
@@ -36,10 +35,10 @@ export interface SubscriptionWithMintedSecrets {
 
 /** List this tenant's subscriptions, newest first, optionally filtered by `enabled`. */
 export const list = (
-    context: CallerContext,
+    context: TenantCallerContext,
     filters: { enabled?: boolean; page?: unknown; pageSize?: unknown }
 ): Promise<PaginatedResult<WebhookSubscriptionDocument>> => {
-    const scope: Record<string, unknown> = { tenant: tenantOf(context) };
+    const scope: Record<string, unknown> = { tenant: context.caller.tenantId };
     if (filters.enabled !== undefined) scope.enabled = filters.enabled;
     // No `searchable` spec on this repository (the admin list has no free-text filter — see
     // `../repository.ts`), so `scope` is the whole query; `filters` only carries page/pageSize.
@@ -82,7 +81,7 @@ const finalizeCreate = async (
     subscription: WebhookSubscriptionDocument,
     plaintext: string,
     tenant: string,
-    context: CallerContext
+    context: TenantCallerContext
 ): Promise<ResponseSuccess<SubscriptionWithMintedSecrets> | ResponseReject> => {
     const rank = await insertionRank(subscription._id, tenant);
     if (rank > getWebhookSubscriptionCap()) return rollbackOverCap(subscription);
@@ -114,9 +113,9 @@ const finalizeCreate = async (
  */
 export const create = (
     body: CreateWebhookSubscriptionRequest,
-    context: CallerContext
+    context: TenantCallerContext
 ): Promise<ResponseSuccess<SubscriptionWithMintedSecrets> | ResponseReject> => {
-    const tenant = tenantOf(context);
+    const tenant = context.caller.tenantId;
 
     return webhookSubscriptionRepository.count({ tenant }).then((count) => {
         if (count >= getWebhookSubscriptionCap())
@@ -144,10 +143,10 @@ export const create = (
 export const update = (
     id: string,
     body: UpdateWebhookSubscriptionRequest,
-    context: CallerContext
+    context: TenantCallerContext
 ): Promise<ResponseSuccess<SubscriptionWithMintedSecrets> | ResponseReject> =>
     webhookSubscriptionRepository.findById(id).then((subscription) => {
-        if (subscription?.tenant !== tenantOf(context))
+        if (subscription?.tenant !== context.caller.tenantId)
             return generateReject(404, [t('generic.error-not-found')]);
 
         if (body.url !== undefined) subscription.url = body.url;
@@ -196,10 +195,10 @@ export const update = (
 /** Permanently remove a subscription. Its delivery log is left in place — see `openapi.yaml`. */
 export const remove = (
     id: string,
-    context: CallerContext
+    context: TenantCallerContext
 ): Promise<ResponseSuccess<undefined> | ResponseReject> =>
     webhookSubscriptionRepository.findById(id).then((subscription) => {
-        if (subscription?.tenant !== tenantOf(context))
+        if (subscription?.tenant !== context.caller.tenantId)
             return generateReject(404, [t('generic.error-not-found')]);
 
         return webhookSubscriptionRepository.deleteOne(subscription).then(() => {

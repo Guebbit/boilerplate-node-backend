@@ -90,22 +90,30 @@ export interface AuthContext {
  * caller's is proven `null` — narrowing on `scope` is what lets a module read its shop's id with
  * no runtime check and no `!`.
  */
-export type Caller =
-    | {
-          scope: 'tenant';
-          /** The shop this request acts in — every tenant-scope caller has one, the compiler proves it. */
-          tenantId: string;
-          /** Who they are, when they are anyone. `null`/absent for a stranger. */
-          id?: string | null;
-          /** The permission keys the caller's role in that scope holds. */
-          permissions: readonly string[];
-      }
-    | {
-          scope: 'platform';
-          /** Platform scope is tenant-less by definition. */
-          tenantId: null;
-          /** Who they are, when they are anyone. `null`/absent for a stranger. */
-          id?: string | null;
-          /** The permission keys the caller's role in that scope holds. */
-          permissions: readonly string[];
-      };
+export type Caller = TenantCaller | PlatformCaller;
+
+/**
+ * A caller acting inside a shop. The arm is named so a function that only makes sense in tenant
+ * scope can DEMAND it — see `TenantCallerContext` — instead of accepting the whole union and
+ * narrowing it back at runtime.
+ */
+export interface TenantCaller {
+    scope: 'tenant';
+    /** The shop this request acts in — every tenant-scope caller has one, the compiler proves it. */
+    tenantId: string;
+    /** Who they are, when they are anyone. `null`/absent for a stranger. */
+    id?: string | null;
+    /** The permission keys the caller's role in that scope holds. */
+    permissions: readonly string[];
+}
+
+/** A caller acting over the installation itself, which has no shop to be scoped to. */
+export interface PlatformCaller {
+    scope: 'platform';
+    /** Platform scope is tenant-less by definition. */
+    tenantId: null;
+    /** Who they are, when they are anyone. `null`/absent for a stranger. */
+    id?: string | null;
+    /** The permission keys the caller's role in that scope holds. */
+    permissions: readonly string[];
+}
