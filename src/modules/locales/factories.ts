@@ -13,9 +13,9 @@ import {
     stripUndefined,
     type OverridesFor
 } from '@infrastructure/persistence/factories';
-import type { Language, LocaleEntry, Translation } from '@types';
+import type { Language, LocaleEntry } from '@types';
 import { deriveBaseLanguage } from './model';
-import type { LocaleDocument, LocaleEntryDocument, TranslationDocument } from './model';
+import type { LocaleDocument, LocaleEntryDocument } from './model';
 
 /** The fields `makeLocale` accepts, overriding what the schema would otherwise default. */
 export type LocaleOverrides = OverridesFor<Language> & {
@@ -69,33 +69,5 @@ export const makeLocaleEntry = ({
     ...fields
 }: LocaleEntryOverrides): LocaleEntryFixture => ({
     ...identityOf({ id, createdAt, updatedAt }),
-    ...stripUndefined({ ...fields })
-});
-
-/** The fields `makeTranslation` accepts, overriding what the schema would otherwise default. */
-export type TranslationOverrides = OverridesFor<Translation> & {
-    entityType: string;
-    entityId: string;
-    locale: string;
-};
-
-/** One entity's words in one language, ready for `translationRepository.create`. */
-export type TranslationFixture = Partial<TranslationDocument> & {
-    _id: Types.ObjectId;
-    entityType: string;
-    entityId: string;
-    locale: string;
-};
-
-/** Builds one translation-row fixture. `origin` defaults to `human`, same as the schema. */
-export const makeTranslation = ({
-    id,
-    createdAt,
-    updatedAt,
-    ...fields
-}: TranslationOverrides): TranslationFixture => ({
-    ...identityOf({ id, createdAt, updatedAt }),
-    fields: {},
-    origin: 'human',
     ...stripUndefined({ ...fields })
 });

@@ -46,7 +46,7 @@ const entityTypeUnknown = (entityType: string): ResponseReject =>
  * One locale slot's outcome, before any write happens — the whole batch validates before anything
  * writes, so a rejected slot never leaves a partial edit behind.
  */
-export type PlannedWrite =
+type PlannedWrite =
     | { locale: string; kind: 'upsert'; fields: TranslationFields; origin: TranslationOrigin }
     | { locale: string; kind: 'delete' };
 
@@ -129,7 +129,7 @@ const isRejection = (value: unknown): value is ResponseReject =>
  *
  * @returns the plan, or the first rejection encountered
  */
-export const planTranslationWrites = async (
+const planTranslationWrites = async (
     entityType: string,
     payload: UpsertTranslationsRequest
 ): Promise<{ fallbackLocale: string; planned: PlannedWrite[] } | ResponseReject> => {
@@ -162,7 +162,7 @@ export const planTranslationWrites = async (
  *
  * Never validates. A caller that skips {@link planTranslationWrites} first can corrupt data.
  */
-export const writePlannedTranslations = async (
+const writePlannedTranslations = async (
     entityType: string,
     entityId: string,
     fallbackLocale: string,
