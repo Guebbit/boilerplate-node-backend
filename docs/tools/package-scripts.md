@@ -125,9 +125,12 @@ for exactly which is which.
 
 ## Docs scripts
 
-| Script                                     | Job                                                 | Read more                               |
-| ------------------------------------------ | --------------------------------------------------- | --------------------------------------- |
-| `docs:dev` / `docs:build` / `docs:preview` | local docs authoring, production build, and preview | [Testing & Docs](./testing-and-docs.md) |
+| Script                                          | Job                                                                                                                   | Read more                                         |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `docs:dev` / `docs:build` / `docs:preview`      | local docs authoring, production build, and preview                                                                   | [Testing & Docs](./testing-and-docs.md)           |
+| `docs:graph` / `check:docs-graph`               | the module graph in `docs/modules/`, from the real import graph                                                       | [Reference: Scripts](../reference/scripts.md)     |
+| `docs:roles` / `check:docs-roles`               | the effective role matrix in `docs/demo-ecommerce/`                                                                   | [Reference: Scripts](../reference/scripts.md)     |
+| `docs:dependencies` / `check:docs-dependencies` | the two tables in [Package Dependencies](./package-dependencies.md), from `package.json` and who imports each package | [Package Dependencies](./package-dependencies.md) |
 
 ## Database & seed scripts
 

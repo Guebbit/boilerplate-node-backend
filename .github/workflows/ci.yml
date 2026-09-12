@@ -363,6 +363,11 @@ jobs:
         # generated from `holdsKey` and `shared/authorization-roles.yaml`, and a role edit that
         # nobody regenerated the page for fails here rather than leaving a table that quietly
         # describes a permission model the code no longer has.
+        #
+        # `check:docs-dependencies` is the same shape again, over `package.json`:
+        # `docs/tools/package-dependencies.md`'s tables are read off the manifest and the source
+        # tree's own imports, so an added, removed or re-owned dependency that nobody regenerated
+        # the page for fails here instead of leaving a page that quietly goes stale.
         runs-on: ubuntu-latest
         timeout-minutes: 10
         permissions:
@@ -381,6 +386,9 @@ jobs:
 
             - name: Check the role tables are current
               run: npm run check:docs-roles
+
+            - name: Check the dependency tables are current
+              run: npm run check:docs-dependencies
 
             - name: Check every path the docs cite still exists
               run: npm run check:docs-references

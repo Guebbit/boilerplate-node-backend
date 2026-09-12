@@ -133,6 +133,17 @@ same bar as removing all of them, is argued in
 No service, controller, contract or schema change. That is the property the registry exists to buy,
 and the reason `sms` is described everywhere as "a third handler and no other change".
 
+## Libraries
+
+`otplib` is `account`'s alone — see [Package Dependencies](../tools/package-dependencies.md) for
+where it sits among everything else this repo depends on.
+
+| Library                             | Maintained             | What it costs you                                                |
+| ----------------------------------- | ---------------------- | ---------------------------------------------------------------- |
+| `otplib` (chosen)                   | active, typed          | RFC 4226/6238 TOTP + HOTP, a QR-ready `keyuri`, nothing else     |
+| `speakeasy`                         | unmaintained for years | the same RFCs, but a security-relevant dependency nobody patches |
+| hand-rolled HMAC-SHA1 time-stepping | —                      | exactly the kind of crypto `CLAUDE.md` rules out writing by hand |
+
 ## Related pages
 
 - [`account`](./account.md) — the module this belongs to

@@ -60,6 +60,11 @@ const STEPS: readonly Step[] = [
         script: 'docs:roles',
         because:
             "docs/demo-ecommerce/index.md's role tables, asked of the permission evaluator rather than restated"
+    },
+    {
+        script: 'docs:dependencies',
+        because:
+            "docs/tools/package-dependencies.md's tables, read off package.json and who actually imports each package"
     }
 ];
 

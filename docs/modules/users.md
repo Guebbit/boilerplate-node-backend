@@ -109,6 +109,13 @@ so explicitly: a soft delete emits `admin.user.soft_deleted`, a hard one `admin.
 actions rather than one `admin.user.deleted`, so "was this request actually closed out" is
 answerable from the log alone, not from remembering which flag an admin clicked.
 
+## Libraries
+
+`bcrypt` is shared with [`account`](./account.md) — the only package on the generated
+[Package Dependencies](../tools/package-dependencies.md) page that two modules import, rather than
+one. Not module-owned per the ownership rule, so it stays a hand-kept row on that page instead of
+a `## Libraries` table naming alternatives here: nothing about the choice is specific to `users`.
+
 ## Related pages
 
 - [Modules overview](./index.md) — the whole context map
