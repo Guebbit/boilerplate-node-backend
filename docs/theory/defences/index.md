@@ -100,8 +100,6 @@ described in four places is a control that will be wrong in three of them.
 
 ## Every attack, A to Z
 
-<!-- BEGIN:attack-index -->
-
 | Attack                                         | Answered in                                                                                                |
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | 3-D Secure bypass                              | [Business logic, money and payments](business-logic.md#the-payment-provider)                               |
@@ -534,8 +532,6 @@ described in four places is a control that will be wrong in three of them.
 | XSS — stored                                   | [Client-side](client-side.md#script-execution-in-the-origin)                                               |
 | XSS — universal (UXSS)                         | [Client-side](client-side.md#script-execution-in-the-origin)                                               |
 | Zip slip                                       | [Files, uploads and paths](files-and-uploads.md#where-it-gets-stored-and-where-it-is-read-from)            |
-
-<!-- END:attack-index -->
 
 ## Standard references
 

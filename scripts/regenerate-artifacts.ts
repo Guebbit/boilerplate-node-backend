@@ -3,8 +3,7 @@
  * Rebuild every generated artifact this repo commits — `npm run regenerate`.
  *
  * Run it after changing anything a generator reads: a module's `openapi.yaml` or `asyncapi.yaml`,
- * `shared/contracts/asyncapi.workers.yaml`, a `probes.ts`, a defence page under
- * `docs/theory/defences/`.
+ * `shared/contracts/asyncapi.workers.yaml`, a `probes.ts`.
  * Usually you will not have to remember — `.husky/pre-commit` runs it with `--no-sync` and stages
  * what it produced, so `npm run complete` only ever VERIFIES.
  *
@@ -61,11 +60,6 @@ const STEPS: readonly Step[] = [
         script: 'docs:roles',
         because:
             "docs/demo-ecommerce/index.md's role tables, asked of the permission evaluator rather than restated"
-    },
-    {
-        script: 'docs:attacks',
-        because:
-            "docs/theory/defences/index.md's A-Z lookup, harvested from the defence pages so an anchor cannot go stale"
     }
 ];
 
