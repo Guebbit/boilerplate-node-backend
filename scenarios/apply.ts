@@ -29,6 +29,7 @@ import { seedAllDemoModules } from '@scenarios/index';
 import { seedAccessModel } from '@kernel/access/seed';
 import { resolveTranslatables } from '@kernel/registry';
 import { setTranslatables } from '@modules/locales/module';
+import { hasFallbackSeedPassword } from '@kernel/seed-accounts';
 import { enabledModules } from '../src/modules';
 
 /*
@@ -47,6 +48,23 @@ async function seed() {
     /* A boot-time seeder that can drop or overwrite a production database is a footgun. */
     if (process.env.NODE_ENV === 'production') {
         logger.warn('scenario:apply refused to run: NODE_ENV is production.');
+        return;
+    }
+
+    /*
+     * Outside development/test, a still-public password is the one thing this refuses: a
+     * reachable staging database seeded with `root@root.it` / `Demo-Admin1!` hands out both the
+     * shop owner and the platform operator to anyone who reads this repo. Development and test
+     * are exempt because that is the whole point of a fixed, documented demo login — `npm run
+     * demo` and CI both run there, and neither is reachable by anyone this refusal protects
+     * against.
+     */
+    const isDevelopmentOrTest =
+        process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
+    if (!isDevelopmentOrTest && hasFallbackSeedPassword()) {
+        logger.warn(
+            'scenario:apply refused to run: a seed account is still using its public fallback password outside development/test. Set every NODE_SEED_*_PASSWORD first.'
+        );
         return;
     }
 
