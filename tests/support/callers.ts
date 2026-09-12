@@ -34,7 +34,7 @@ const identity = (id: string) => ({
  * Someone acting in the shop, in the named role.
  *
  * @param role - a preset tenant role: `customer`, `manager`, `warehouse`, `support`, `editor`,
- * `translator`, `moderator` or `owner`
+ * `moderator` or `owner`
  */
 export const asRole = (role: string, id = 'test-user'): AuthContext => ({
     ...identity(id),
