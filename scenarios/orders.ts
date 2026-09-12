@@ -36,7 +36,14 @@ const snapshotOf = (productId: string): OrderSnapshotInput => {
         price: product.price,
         description: product.description,
         imageUrl: product.imageUrl,
+        thumbnailUrl: product.thumbnailUrl,
+        categories: product.categories,
+        tags: product.tags,
         active: product.active,
+        // Left to the schema's own `default: true` on every fixture, so the plain fixture
+        // object never carries a value for it — a real checkout freezes what the PERSISTED
+        // product actually has, which this restates rather than passing through as `undefined`.
+        requiresShipping: product.requiresShipping ?? true,
         createdAt: product.createdAt,
         updatedAt: product.updatedAt
     };
@@ -52,8 +59,18 @@ const line = (productId: string, quantity: number) => ({
  * Deterministic id for a seed history order at `index` — see `./users`'s `seedCustomerId` for why
  * this isn't `new Types.ObjectId()`. Its own prefix keeps this id space apart from every other
  * collection's.
+ *
+ * The prefix is fixed and the index moves only the id's LOW bytes, so `identityOf`'s
+ * id-derived `createdAt` (`objectId.getTimestamp()`, which reads the ObjectId's own high-byte
+ * timestamp) would be IDENTICAL for all sixteen orders this builds if `createdAt` were left
+ * unstated. `seedOrderDate` below states it explicitly instead, spreading these across 2024 the
+ * same way the named orders' own real-ObjectId-shaped ids already do.
  */
 const seedOrderId = (index: number): string => `67f0c4${index.toString(16).padStart(18, '0')}`;
+
+/** One of these sixteen orders' `createdAt` — 20 days apart, starting 2024-01-01. */
+const seedOrderDate = (index: number): Date =>
+    new Date(Date.UTC(2024, 0, 1) + index * 20 * 24 * 60 * 60 * 1000);
 
 /** The four test-critical orders — see the comment on each for the branch it exercises. */
 const namedOrders = [
@@ -141,6 +158,7 @@ const customerOrders = [
         userId: SEED_USER_ID,
         email: SEED_USER_EMAIL,
         status: OrderStatus.delivered,
+        createdAt: seedOrderDate(0),
         items: [
             line(SEED_PRODUCT_IDS.dogFoodStandard, 3),
             line(SEED_PRODUCT_IDS.dogBedPremium, 2),
@@ -153,6 +171,7 @@ const customerOrders = [
         userId: SEED_USER_ID,
         email: SEED_USER_EMAIL,
         status: OrderStatus.delivered,
+        createdAt: seedOrderDate(1),
         items: [
             line(fillerProductId(9), 5),
             line(fillerProductId(48), 2),
@@ -164,6 +183,7 @@ const customerOrders = [
         userId: SEED_USER_ID,
         email: SEED_USER_EMAIL,
         status: OrderStatus.delivered,
+        createdAt: seedOrderDate(2),
         items: [
             line(fillerProductId(31), 2),
             line(fillerProductId(64), 6),
@@ -194,6 +214,7 @@ const smallCustomerOrders = (
         userId: SEED_CUSTOMER_IDS[customer],
         email: SEED_CUSTOMER_EMAILS[customer],
         status: OrderStatus.delivered,
+        createdAt: seedOrderDate(3 + index),
         items: [line(fillerProductId(productIndex), quantity)]
     })
 );
@@ -263,6 +284,7 @@ const mediumCustomerOrders = MEDIUM_ORDERS.map(({ customer, lines }, index) =>
         userId: SEED_CUSTOMER_IDS[customer],
         email: SEED_CUSTOMER_EMAILS[customer],
         status: OrderStatus.delivered,
+        createdAt: seedOrderDate(10 + index),
         items: lines.map(([productIndex, quantity]) =>
             line(fillerProductId(productIndex), quantity)
         )
