@@ -72,4 +72,4 @@ in the registry above, not as a second seam.
 - [account](./account.md) — mounts the gate on `/signup` and `/reset`
 - [feedback](./feedback.md) — mounts the gate on `/contact`
 - [Security](../tools/security.md) — the rate-limit budgets this rung sits behind
-- [Web attack defences](../theory/web-attack-defences.md) — the whole ladder, and what each rung buys
+- [Web attack defences](../theory/defences/automation-and-abuse.md#the-ladder) — the whole ladder, and what each rung buys

@@ -60,7 +60,7 @@ export interface ProviderWebhookEvent {
  * paid: {@link PaymentProvider.parseWebhook} must verify the provider's signature over the raw
  * body and trust no payment status reported by the browser.
  *
- * See: docs/theory/web-attack-defences.md
+ * See: docs/theory/defences/business-logic.md
  */
 export interface PaymentProvider {
     /** The name persisted on each payment document, so a row says who handled it. */

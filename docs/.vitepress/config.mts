@@ -57,9 +57,70 @@ export default withMermaid(
                             { text: 'Clustering & Shutdown', link: '/theory/clustering' },
                             { text: 'Authorization', link: '/theory/authorization' },
                             { text: 'Tenancy', link: '/theory/tenancy' },
-                            { text: 'Web Attack Catalog', link: '/theory/web-attack-catalog' },
-                            { text: 'Web Attack Defences', link: '/theory/web-attack-defences' },
-                            { text: 'Data Protection', link: '/theory/data-protection' }
+                            { text: 'Data Protection', link: '/theory/data-protection' },
+                            {
+                                text: 'Web Attacks & Defences',
+                                link: '/theory/defences/',
+                                collapsed: true,
+                                items: [
+                                    { text: 'Injection', link: '/theory/defences/injection' },
+                                    { text: 'Client-side', link: '/theory/defences/client-side' },
+                                    {
+                                        text: 'Authentication',
+                                        link: '/theory/defences/authentication'
+                                    },
+                                    {
+                                        text: 'Authorization',
+                                        link: '/theory/defences/authorization'
+                                    },
+                                    {
+                                        text: 'Business logic & payments',
+                                        link: '/theory/defences/business-logic'
+                                    },
+                                    {
+                                        text: 'Files & uploads',
+                                        link: '/theory/defences/files-and-uploads'
+                                    },
+                                    { text: 'SSRF', link: '/theory/defences/ssrf' },
+                                    {
+                                        text: 'HTTP, proxies & caches',
+                                        link: '/theory/defences/http-and-caches'
+                                    },
+                                    {
+                                        text: 'Cryptography & secrets',
+                                        link: '/theory/defences/crypto-and-secrets'
+                                    },
+                                    {
+                                        text: 'Information disclosure',
+                                        link: '/theory/defences/disclosure'
+                                    },
+                                    {
+                                        text: 'Denial of service',
+                                        link: '/theory/defences/denial-of-service'
+                                    },
+                                    { text: 'Data layer', link: '/theory/defences/data-layer' },
+                                    {
+                                        text: 'Infrastructure',
+                                        link: '/theory/defences/infrastructure'
+                                    },
+                                    {
+                                        text: 'Supply chain',
+                                        link: '/theory/defences/supply-chain'
+                                    },
+                                    { text: 'API surface', link: '/theory/defences/api-surface' },
+                                    { text: 'Real-time', link: '/theory/defences/real-time' },
+                                    { text: 'Email', link: '/theory/defences/email' },
+                                    {
+                                        text: 'Human & social',
+                                        link: '/theory/defences/human-and-social'
+                                    },
+                                    { text: 'Runtime', link: '/theory/defences/runtime' },
+                                    {
+                                        text: 'Automation & abuse',
+                                        link: '/theory/defences/automation-and-abuse'
+                                    }
+                                ]
+                            }
                         ]
                     }
                 ],

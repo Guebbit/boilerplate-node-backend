@@ -3,7 +3,7 @@
 **Who may act, how strongly they proved it, and which rows they see.** Three separate questions,
 answered by three separate things — and confusing them is how a system ends up with forty roles.
 
-[Web attack defences](./web-attack-defences.md) covers keeping the wrong person out.
+[Web attack defences](./defences/) covers keeping the wrong person out.
 This page is about what the right person is allowed to do once they are in.
 
 ## The three axes

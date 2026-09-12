@@ -60,6 +60,11 @@ const STEPS: readonly Step[] = [
         script: 'docs:roles',
         because:
             "docs/demo-ecommerce/index.md's role tables, asked of the permission evaluator rather than restated"
+    },
+    {
+        script: 'docs:attacks',
+        because:
+            "docs/theory/defences/index.md's A-Z lookup, harvested from the defence pages so an anchor cannot go stale"
     }
 ];
 

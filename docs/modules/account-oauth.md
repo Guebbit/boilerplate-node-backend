@@ -2,7 +2,7 @@
 
 Signing in with somebody else's identity provider — the port, the CSRF handshake across the
 redirect, and the three outcomes a callback can have.
-[Web attack defences](../theory/web-attack-defences.md#the-perimeter-the-auth-waves-reviewed-clean)
+[Web attack defences](../theory/defences/authentication.md#federated-login)
 carries the same three defences as attack rows — the `state` cookie, the server-derived URIs, and the
 linking rule — naming what each one stops. This page is the mechanism behind them.
 
@@ -148,5 +148,5 @@ read it like any other method. It returns no access token: the frontend's
 - [Sessions](./account-sessions.md) — the session a callback mints, and `amr`
 - [Two-factor authentication](./account-two-factor.md) — the control this path skips
 - [`users`](./users.md) — `oauthAccounts` and the unique index behind it
-- [Web attack defences](../theory/web-attack-defences.md) — the same subsystem as attack rows
+- [Web attack defences](../theory/defences/authentication.md#federated-login) — the same subsystem as attack rows
 - [`payments` provider port](./payments-provider-port.md) — the port this one is shaped after
