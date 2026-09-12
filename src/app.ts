@@ -130,12 +130,20 @@ export const startServer = () => {
                 () =>
                     new Promise<Server>((resolve) => {
                         const port = environmentNumber('NODE_PORT', DEFAULT_PORT, 1);
+                        // Unset by default, which binds every interface — the shape every
+                        // profile but the demo one wants. `run-server.ts` sets it to loopback:
+                        // the demo profile's tokens are signed with a public, hard-coded secret,
+                        // so binding every interface would let anyone on the LAN mint one.
+                        const host = process.env.NODE_HOST?.trim();
                         logger.info('------------- SERVER START -------------');
-                        const server = app.listen(port, () => {
+                        const onListening = () => {
                             logger.info(`Server listening on port ${port}`);
                             activeServer = server;
                             resolve(server);
-                        });
+                        };
+                        const server = host
+                            ? app.listen(port, host, onListening)
+                            : app.listen(port, onListening);
                         /*
                          * After `listen`, because the server object is what carries them — and
                          * before the first request can arrive, because they bound how long one may

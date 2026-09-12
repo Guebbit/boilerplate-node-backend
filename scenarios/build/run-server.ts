@@ -21,6 +21,11 @@ import { enableDemoProfile } from '@infrastructure/adapters/demo-outbox';
 
 const REQUIRED_DEFAULTS: Record<string, string> = {
     NODE_ENV: 'development',
+    // Loopback only: this profile's tokens are signed with a public, hard-coded secret, and its
+    // control surface wipes the database on request — every interface would hand both to anyone
+    // on the LAN. `NODE_HOST=0.0.0.0 npm run demo` overrides it, the same way as `NODE_PORT`
+    // above, for the rare case of reaching it from another device.
+    NODE_HOST: '127.0.0.1',
     // Real secrets guard real tokens; a demo signs throwaway tokens for a throwaway database.
     NODE_TOKEN_ACCESS: 'demo-access-secret',
     NODE_TOKEN_REFRESH: 'demo-refresh-secret',
@@ -115,8 +120,8 @@ MongoMemoryServer.create()
         // of this one, on every port but the default.
         process.env.NODE_URL = `http://localhost:${process.env.NODE_PORT ?? '3000'}/`;
 
-        // The positive proof S1 relies on: this is the only call site in the whole codebase, so
-        // no copied `.env` can mount the control surface on a host that isn't this one.
+        // The only call site in the whole codebase, on purpose: no copied `.env` can mount the
+        // control surface on a host that isn't this one.
         enableDemoProfile();
 
         // Import AFTER the environment is shaped — `src/app.ts` boots itself on import, seeding
