@@ -91,6 +91,9 @@ const startCluster = ({
     Promise.all([MongoMemoryServer.create(), freePort()]).then(([mongo, port]) => {
         const child: ChildProcess = spawn('npx', ['tsx', 'src/cluster.ts'], {
             cwd: REPO_ROOT,
+            // A new process group, PGID == this PID: `stop()` below signals the whole group, not
+            // just this one process — see its own docblock for why that is the point.
+            detached: true,
             env: {
                 ...process.env,
                 /*
@@ -138,6 +141,27 @@ const startCluster = ({
         child.stdout?.on('data', capture);
         child.stderr?.on('data', capture);
 
+        /*
+         * Signals the whole process GROUP, not just `child` — which is `npx`, not the cluster
+         * primary two levels down, and never the workers `cluster.fork()` adds below that again.
+         * `child.kill()` alone only ever reaches `npx`; whether SIGTERM cascades from there to
+         * `tsx`, to the primary, and finally to every forked worker depends on each layer
+         * forwarding it, which this suite cannot rely on. `detached: true` above put `child` at
+         * the head of a fresh process group (PGID == its own PID), so `-child.pid` addresses
+         * every process in it — `npx`, `tsx`, the primary, and its workers — in one signal,
+         * however many layers deep the chain runs.
+         *
+         * Wrapped in `try`/`catch`: `process.kill` throws ESRCH when the group is already gone,
+         * which "already exited, nothing left to signal" always eventually is.
+         */
+        const signalGroup = (signal: NodeJS.Signals): void => {
+            try {
+                if (child.pid !== undefined) process.kill(-child.pid, signal);
+            } catch {
+                /* group already gone */
+            }
+        };
+
         const stop = (): Promise<void> =>
             new Promise<void>((resolve) => {
                 if (child.exitCode !== null || child.signalCode !== null) {
@@ -145,12 +169,21 @@ const startCluster = ({
                     return;
                 }
                 child.once('exit', () => resolve());
-                child.kill('SIGTERM');
-                // The primary drains its workers before exiting; past that it is not going to.
+                signalGroup('SIGTERM');
+                /*
+                 * The primary's own graceful cascade (`src/cluster.ts`'s `startPrimaryShutdown`)
+                 * has up to `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS` (15s default) to drain its workers
+                 * on its own; this waits past that before stepping in, so the normal path is the
+                 * primary finishing on its own, not this forcing it. The SIGKILL that follows
+                 * still goes to the whole group — not just the primary — so a worker the primary
+                 * hasn't gotten to yet dies too, rather than surviving as an orphan that keeps
+                 * `child.stdout`/`stderr` (inherited down the whole chain) from ever reaching EOF,
+                 * which is what left a passing test run unable to make Jest exit.
+                 */
                 setTimeout(() => {
-                    child.kill('SIGKILL');
+                    signalGroup('SIGKILL');
                     resolve();
-                }, 10_000).unref();
+                }, 20_000).unref();
             }).then(() => mongo.stop().then(() => undefined));
 
         return waitForListening(port, bootTimeoutMs).then(
