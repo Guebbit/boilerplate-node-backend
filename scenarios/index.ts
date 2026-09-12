@@ -105,3 +105,22 @@ export const SCENARIOS = {
 
 /** A name {@link SCENARIOS} actually knows how to seed. */
 export type ScenarioName = keyof typeof SCENARIOS;
+
+/**
+ * The scenario every caller falls back to when none was named — the shop, since a demo of an
+ * ecommerce boilerplate with no catalogue in it demonstrates nothing.
+ */
+export const DEFAULT_SCENARIO: ScenarioName = 'shop';
+
+/**
+ * Whether `name` is one {@link SCENARIOS} carries, narrowing it to {@link ScenarioName}.
+ *
+ * The registry owns this rather than each caller repeating `Object.hasOwn` and then casting: a
+ * bare `Object.hasOwn` narrows the TABLE, never the string handed in, so every caller that skipped
+ * this needed an `as ScenarioName` to say what it had already proved. Stated once, as a type
+ * guard, the callers need no cast at all.
+ *
+ * @param name - an unvalidated scenario name, from argv or a request body
+ */
+export const isScenarioName = (name: string): name is ScenarioName =>
+    Object.hasOwn(SCENARIOS, name);
