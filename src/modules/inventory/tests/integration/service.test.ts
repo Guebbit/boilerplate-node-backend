@@ -9,6 +9,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment } from '@tests/environment';
+import { observePort } from '@tests/ports';
 import { createProduct } from '@modules/products/tests/factories';
 import { productRepository } from '@modules/products';
 import { StockMovementReason } from '@types';
@@ -24,8 +25,22 @@ import {
 } from '../../service';
 import { reservationRepository } from '../../repository';
 import { reservationModel } from '../../model';
+import { inventoryAuditActions } from '../../audit';
+import * as auditPort from '@infrastructure/observability/audit';
+
+/*
+ * The audit port is REPLACED, not spied on: `jest.spyOn` cannot redefine the non-configurable
+ * getter a CommonJS namespace import exposes. See `tests/support/ports.ts` for the full reasoning.
+ */
+jest.mock('@infrastructure/observability/audit', () => ({
+    __esModule: true,
+    ...jest.requireActual('@infrastructure/observability/audit'),
+    emitAuditEvent: jest.fn()
+}));
 
 setupTestDb();
+
+afterEach(() => jest.restoreAllMocks());
 
 /** A syntactically valid order id, distinct per call — holds are keyed by one. */
 let orderCounter = 0;
@@ -155,19 +170,24 @@ describe('commitForOrder', () => {
         expect(await countersOf(String(product._id))).toEqual({ onHand: 7, reserved: 0 });
     });
 
-    it('is at most once — a second confirm commits nothing', async () => {
+    it('is at most once — a second confirm commits nothing, and raises no alarm', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
         const product = await createProduct({ onHand: 10 });
         const orderId = anOrderId();
         await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
 
         await commitForOrder(orderId);
+        auditSpy.mockClear();
         expect(await commitForOrder(orderId)).toBe(false);
 
         // Seven, not four: the reservation's status claim is what refuses the replay.
         expect(await countersOf(String(product._id))).toEqual({ onHand: 7, reserved: 0 });
+        // A redelivered settlement finding its own sale already on record is not an incident.
+        expect(auditSpy).not.toHaveBeenCalled();
     });
 
-    it('cannot commit a hold that was already released', async () => {
+    it('cannot commit a hold that was already released, and alarms it', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
         const product = await createProduct({ onHand: 10 });
         const orderId = anOrderId();
         await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
@@ -175,10 +195,36 @@ describe('commitForOrder', () => {
 
         expect(await commitForOrder(orderId)).toBe(false);
         expect(await countersOf(String(product._id))).toEqual({ onHand: 10, reserved: 0 });
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: inventoryAuditActions.ADMIN_COMMIT_ORPHANED,
+                outcome: 'failure',
+                actor_role: 'admin',
+                actor_user_id: 'system',
+                target_type: 'order',
+                target_id: orderId,
+                metadata: { reservationStatus: 'released' }
+            })
+        );
     });
 
-    it('does nothing for an order that never held anything', async () => {
-        expect(await commitForOrder(anOrderId())).toBe(false);
+    it('does nothing for an order that never held anything, and alarms it', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const product = await createProduct({ onHand: 10 });
+        const orderId = anOrderId();
+
+        expect(await commitForOrder(orderId)).toBe(false);
+
+        // No hold ever existed, so no counter had anything to move.
+        expect(await countersOf(String(product._id))).toEqual({ onHand: 10, reserved: 0 });
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: inventoryAuditActions.ADMIN_COMMIT_ORPHANED,
+                outcome: 'failure',
+                target_id: orderId,
+                metadata: { reservationStatus: 'none' }
+            })
+        );
     });
 });
 

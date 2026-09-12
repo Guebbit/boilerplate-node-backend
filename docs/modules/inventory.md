@@ -60,6 +60,11 @@ a provider webhook delivered twice — resolves to exactly one winner. That cond
 correctness of this module; there is no lock anywhere else holding it up.
 :::
 
+A paid order always commits its hold. `commitForOrder` finding no hold to claim is either a benign
+replay (already `committed`) or an incident — see
+[Reservations](./inventory-reservations.md#a-commit-with-no-hold-is-an-incident-not-a-no-op) for
+which is which, and what gets recorded.
+
 The ledger is not a reaction to a counter change, it is half of one. `stockmovements` rows are
 written by the same call that moves the counter, which is why there is no `product.stock_moved`
 event: an earlier version had one, and every mover had to remember to announce on every path — and

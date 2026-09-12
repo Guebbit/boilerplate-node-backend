@@ -31,6 +31,7 @@ import { RESERVATION_EXPIRED } from './events';
 import type { StockMovementDocument } from './model';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
 import { inventoryAuditActions } from './audit';
 
 /** A line being held or given back. Ids as strings — the repository converts. */
@@ -212,27 +213,62 @@ export const reserveForOrder = async (
  * logged rather than thrown: the money has already moved, so failing the request would misreport
  * the payment, and the refusal itself means the records need a human.
  *
+ * A missed claim is not automatically a no-op: a redelivered settlement finding the hold already
+ * `committed` is a benign replay, but finding it `released`/`expired`, or finding no reservation at
+ * all, means the order is paid and nothing is set aside for it. That case is alarmed — see
+ * `docs/modules/inventory-reservations.md` — rather than swallowed like the replay is.
+ *
  * @param orderId - the order that was paid for
  * @returns whether this call was the one that committed
  */
 export const commitForOrder = async (orderId: string): Promise<boolean> => {
     const hold = await reservationRepository.claimStatus(orderId, 'held', 'committed');
-    if (!hold) return false;
 
-    for (const { productId, quantity } of hold.items) {
-        const committed = await applyTransition(
-            StockMovementReason.commit,
-            String(productId),
-            quantity,
-            { reference: orderId }
-        );
-        if (!committed)
-            logger.error(
-                `Inventory: could not commit ${quantity} of product ${String(productId)} for order ${orderId} — the hold was claimed but the counters refused`
+    if (hold) {
+        for (const { productId, quantity } of hold.items) {
+            const committed = await applyTransition(
+                StockMovementReason.commit,
+                String(productId),
+                quantity,
+                { reference: orderId }
             );
+            if (!committed)
+                logger.error(
+                    `Inventory: could not commit ${quantity} of product ${String(productId)} for order ${orderId} — the hold was claimed but the counters refused`
+                );
+        }
+
+        return true;
     }
 
-    return true;
+    // The claim missed. Read what the reservation actually is, to tell a benign replay
+    // (already `committed`) from the two states meaning the order is paid with nothing held.
+    const existing = await reservationRepository.findByOrderId(orderId);
+    if (existing?.status === 'committed') return false;
+
+    const reservationStatus = existing?.status ?? 'none';
+    logger.error(
+        `Inventory: commitForOrder found no hold for order ${orderId} (reservation: ${reservationStatus}) — the order is paid but no units were set aside for it`
+    );
+    emitAuditEvent(
+        buildAuditEvent(
+            // No CallerContext exists on this path — the caller is a payment settlement, which may
+            // itself be running from a provider webhook with no human behind it. Same fallback
+            // `orders/services/cancel.ts` uses for its own no-context case.
+            { caller: callerForSubject(SYSTEM_ACTOR, 'Order'), analyticsConsent: false },
+            {
+                action: inventoryAuditActions.ADMIN_COMMIT_ORPHANED,
+                outcome: 'failure',
+                actor_role: 'admin',
+                actor_user_id: 'system',
+                target_type: 'order',
+                target_id: orderId,
+                metadata: { reservationStatus }
+            }
+        )
+    );
+
+    return false;
 };
 
 /**

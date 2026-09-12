@@ -163,9 +163,10 @@ export const settlePayment = (
              * Reached at most once per order: `succeeded` above is itself an at-most-once write
              * (terminal once applied), and this is the only call whose `succeeded` write can ever
              * be truthy — `paidOrder`'s own race no longer gates this, since a redelivered event
-             * can legitimately lose it while still being the one true settlement. The result is
-             * not checked: `false` means an expiry sweep beat the payment to the hold, which this
-             * module cannot fix and `inventory` logs — the customer has a paid order either way.
+             * can legitimately lose it while still being the one true settlement. The result is not
+             * checked: `false` covers both a harmless replay (the hold is already `committed`) and
+             * a hold an expiry sweep beat the payment to — the customer has a paid order either
+             * way, and `inventory` tells the two apart and alarms only the second.
              */
             await inventoryService.commitForOrder(orderId);
 

@@ -55,6 +55,21 @@ There is no transaction and no distributed lock holding this up. A single condit
 whole mechanism, which is why it survives a restart and a second worker.
 :::
 
+## A commit with no hold is an incident, not a no-op
+
+A paid order always commits its hold. When `commitForOrder`'s claim misses, that is one of two
+very different facts, and it tells them apart before deciding what to do:
+
+- the hold is already `committed` — a redelivered settlement, the sale already stands. Silent,
+  correctly: replaying it is not new information.
+- the hold is `released`/`expired`, or never existed — the order is paid and nothing was set aside
+  for it. Alarmed: an `admin.commit.orphaned` audit row, `outcome: 'failure'`, naming the order.
+
+The alarm only **records** the fact; nothing auto-compensates. A missing hold does not mean
+missing goods — the units are still on the shelf, just unreserved — so refunding on that signal
+alone would cancel a sale that may be perfectly fulfillable. A human reads the audit trail and
+decides.
+
 ## The ledger is half of the transition, not a reaction to it
 
 `stockmovements` rows are written **by the same call that moves the counter**. There is deliberately
