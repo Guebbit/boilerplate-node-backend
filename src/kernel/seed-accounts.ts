@@ -29,9 +29,12 @@ export const SEED_OWNER_EMAIL = 'root@root.it';
  * `NODE_SEED_ADMIN_PASSWORD` overrides it — spelled `ADMIN`, not `OWNER`, because it is shared
  * with the paired frontend's own `.env` and is not this file's to rename alone. The fallback is a
  * real demo value, not a placeholder, since this repo commits its `.env` in the clear and the demo
- * profile is never a production deployment.
+ * profile is never a production deployment. {@link hasFallbackSeedPassword} is what stops it
+ * reaching a database anyone but a developer or CI can see.
  */
-export const SEED_OWNER_PASSWORD = process.env.NODE_SEED_ADMIN_PASSWORD ?? 'Demo-Admin1!';
+const SEED_OWNER_PASSWORD_FALLBACK = 'Demo-Admin1!';
+export const SEED_OWNER_PASSWORD =
+    process.env.NODE_SEED_ADMIN_PASSWORD ?? SEED_OWNER_PASSWORD_FALLBACK;
 
 /** The demo user's login email. */
 export const SEED_USER_EMAIL = 'customer@example.com';
@@ -40,20 +43,25 @@ export const SEED_USER_EMAIL = 'customer@example.com';
  * The demo user's login password — PLAINTEXT; see the file header for why. `NODE_SEED_USER_PASSWORD`
  * overrides it, same reasoning as {@link SEED_OWNER_PASSWORD}.
  */
-export const SEED_USER_PASSWORD = process.env.NODE_SEED_USER_PASSWORD ?? 'Demo-User1!';
+const SEED_USER_PASSWORD_FALLBACK = 'Demo-User1!';
+export const SEED_USER_PASSWORD =
+    process.env.NODE_SEED_USER_PASSWORD ?? SEED_USER_PASSWORD_FALLBACK;
 
 /** The demo editor's login email. */
 export const SEED_EDITOR_EMAIL = 'editor@example.com';
 
 /** The demo editor's login password — PLAINTEXT; same reasoning as {@link SEED_OWNER_PASSWORD}. */
-export const SEED_EDITOR_PASSWORD = process.env.NODE_SEED_EDITOR_PASSWORD ?? 'Demo-Editor1!';
+const SEED_EDITOR_PASSWORD_FALLBACK = 'Demo-Editor1!';
+export const SEED_EDITOR_PASSWORD =
+    process.env.NODE_SEED_EDITOR_PASSWORD ?? SEED_EDITOR_PASSWORD_FALLBACK;
 
 /** The demo moderator's login email. */
 export const SEED_MODERATOR_EMAIL = 'moderator@example.com';
 
 /** The demo moderator's login password — PLAINTEXT; same reasoning as {@link SEED_OWNER_PASSWORD}. */
+const SEED_MODERATOR_PASSWORD_FALLBACK = 'Demo-Moderator1!';
 export const SEED_MODERATOR_PASSWORD =
-    process.env.NODE_SEED_MODERATOR_PASSWORD ?? 'Demo-Moderator1!';
+    process.env.NODE_SEED_MODERATOR_PASSWORD ?? SEED_MODERATOR_PASSWORD_FALLBACK;
 
 /** The logins for the demo accounts. */
 export const seedCredentials = {
@@ -62,3 +70,16 @@ export const seedCredentials = {
     editor: { email: SEED_EDITOR_EMAIL, password: SEED_EDITOR_PASSWORD },
     moderator: { email: SEED_MODERATOR_EMAIL, password: SEED_MODERATOR_PASSWORD }
 } as const;
+
+/**
+ * `true` when any seed account is still logging in with its committed, public fallback password
+ * — the four `Demo-*1!` values anyone can read in this file or `.env-example`. `scenario:apply`
+ * refuses to run when this is `true` outside development/test, so a reachable staging database
+ * never ends up handing out `root@root.it` / `Demo-Admin1!` as both the shop owner and the
+ * platform operator.
+ */
+export const hasFallbackSeedPassword = (): boolean =>
+    SEED_OWNER_PASSWORD === SEED_OWNER_PASSWORD_FALLBACK ||
+    SEED_USER_PASSWORD === SEED_USER_PASSWORD_FALLBACK ||
+    SEED_EDITOR_PASSWORD === SEED_EDITOR_PASSWORD_FALLBACK ||
+    SEED_MODERATOR_PASSWORD === SEED_MODERATOR_PASSWORD_FALLBACK;

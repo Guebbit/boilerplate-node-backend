@@ -3,7 +3,7 @@
  * The catalogue's combinatorial filler layer — plain nested-loop combinations over a handful of
  * hand-picked words, not a random generator. `tests/support/contract-data.ts` explains why this
  * repo doesn't reach for `@faker-js/faker` (ESM-only, breaks ts-jest); a demo catalogue that must
- * be byte-stable every time `assembleDemoDataset()` runs has even less reason to involve
+ * produce the same rows on every boot and every restore has even less reason to involve
  * randomness than a test file does. `./products` attaches an id and an image to each row; this
  * file only knows words.
  *

@@ -73,6 +73,30 @@ unique and TTL index along with the data until the process restarted. It now emp
 collection instead, and the demo tenant's `_id` is pinned so the cached deployment tenant id never
 strands after a restore. See [Data](docs/reference/data.md).
 
+### Breaking — security
+
+**The demo profile no longer mounts on `NODE_DEMO`.** The env var alone, on any non-production
+host, switched on an unauthenticated database wipe, mail diverted from SMTP, the fake OAuth
+provider and a skipped boot secrets gate. `npm run demo` now calls `enableDemoProfile()`
+in-process instead — the only call site in the codebase, so no copied `.env` can trigger it.
+`NODE_DEMO` is gone from `.env-example`; nothing replaces it.
+
+**The demo profile binds `127.0.0.1`, not every interface.** Its tokens are signed with a public,
+hard-coded secret. `NODE_HOST` overrides it, the same way as `NODE_PORT`.
+
+**`scenario:apply` refuses to run outside development/test when a seed account is still its
+public fallback password**, not only in production. A staging seed, a CI job, or the paired
+frontend's live e2e must set every `NODE_SEED_*_PASSWORD` first, or the seed silently no-ops.
+
+**The dev compose's app port and its Mongo port (which runs no authentication at all) publish on
+`127.0.0.1` by default**, not every interface. `NODE_HOST` overrides both, the same variable as
+the demo profile's own bind above.
+
+A dev volume created before this change still carries the pre-rename `translator` role and its
+account (see the `translator` → `editor` fold above) — `upsertById` skips a row whose `_id`
+already exists, so a boot with no `--reset` never repairs it. Dev volumes are disposable:
+`docker compose down -v` and the next boot seeds clean.
+
 ## [3.0.0] - 2026-08-23
 
 The release that made this API a **modular monolith with a domain layer**, and made its contract

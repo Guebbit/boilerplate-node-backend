@@ -7,21 +7,37 @@
  */
 import {
     clearDemoOutbox,
+    enableDemoProfile,
     isDemoMode,
     readDemoOutbox,
     recordDemoEmail
 } from '@infrastructure/adapters/demo-outbox';
+import { logger } from '@infrastructure/adapters/logger';
+
+/** Restored after every case, since it is read directly rather than through a test helper. */
+const originalNodeEnv = process.env.NODE_ENV;
 
 afterEach(() => {
     clearDemoOutbox();
-    delete process.env.NODE_DEMO;
+    enableDemoProfile(false);
+    process.env.NODE_ENV = originalNodeEnv;
 });
 
-it('is demo mode exactly when NODE_DEMO is the string true', () => {
-    delete process.env.NODE_DEMO;
+it('is demo mode exactly when enableDemoProfile() was called', () => {
     expect(isDemoMode()).toBe(false);
-    process.env.NODE_DEMO = 'true';
+    enableDemoProfile();
     expect(isDemoMode()).toBe(true);
+});
+
+it('refuses production even after enableDemoProfile(), and logs it', () => {
+    const error = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+    enableDemoProfile();
+    process.env.NODE_ENV = 'production';
+
+    expect(isDemoMode()).toBe(false);
+    expect(error).toHaveBeenCalledWith(
+        expect.objectContaining({ message: expect.stringContaining('production') })
+    );
 });
 
 it('records newest first, with primitive template variables as readable lines', () => {

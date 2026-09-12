@@ -921,8 +921,8 @@ export default tseslint.config(
                          * `scenarios/` — it mounts `POST /__test/restore`, which has to walk the
                          * same tables `scenarios/apply.ts` does. Nothing else may: that is what lets a
                          * production image omit `scenarios/` outright, since every OTHER file
-                         * reaching it would pull the whole folder into the bundle regardless of
-                         * `NODE_DEMO`.
+                         * reaching it would pull the whole folder into the bundle whether or not
+                         * `enableDemoProfile()` is ever called.
                          */
                         {
                             from: { element: { type: 'app', fileInternalPath: 'demo.ts' } },

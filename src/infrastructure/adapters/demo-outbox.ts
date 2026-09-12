@@ -5,12 +5,16 @@
  * the email, or it is nothing. So in demo mode the mailer records every send here instead of
  * talking to nodemailer, and the demo router (`src/app/demo.ts`) serves it at `GET
  * /__test/emails`. Infrastructure-tier on purpose: the mailer may not reach up into `app`, so the
- * sink lives beside it. Inert unless `NODE_DEMO=true`.
+ * sink lives beside it. Inert unless {@link enableDemoProfile} was called.
+ *
+ * `NODE_DEMO` used to gate this on its own — one wrong env var on any non-production host turned
+ * this into an unauthenticated database wipe, diverted mail and a skipped boot secrets gate.
+ * {@link enableDemoProfile} replaces it with a positive proof: nothing but
+ * `scenarios/build/run-server.ts` calls it, so no copied `.env` can switch it on by accident.
  */
 
 import type { SendMailOptions } from 'nodemailer';
 import type { Data } from 'ejs';
-import { environmentFlag } from '@infrastructure/runtime/environment';
 import { logger } from './logger';
 
 /** One recorded send, shaped for the e2e suite's outbox reader. */
@@ -27,25 +31,39 @@ export interface DemoOutboxEmail {
     lines: string[];
 }
 
+/** Set only by {@link enableDemoProfile}. Module-level: a restart clears it, same as the outbox. */
+let demoProfileEnabled = false;
+
 /**
- * `npm run demo` sets `NODE_DEMO`; nothing else does. Two conditions, not one:
- * `NODE_DEMO=true` alone must never be enough to mount `POST /__test/restore`, an
- * unauthenticated wipe of every collection. `NODE_ENV !== 'production'` closes it even if a
- * copied env file carries `NODE_DEMO` somewhere it shouldn't. Logs at `error` when the flag is
- * set but production still refused it — a fact whoever owns that deployment needs to hear, not
- * swallow.
+ * Mark this process as the demo profile — the only way {@link isDemoMode} can return `true`.
+ * Called once, in-process, by `scenarios/build/run-server.ts`, before `src/app.ts` (and
+ * everything it wires) is even imported. A handful of tests call it directly to exercise the
+ * demo surface without booting through that script; pass `false` to turn it back off, which
+ * every such test must do in its own cleanup so the flag cannot leak into the next one.
+ *
+ * @param enabled - defaults to `true`; pass `false` to disable.
+ */
+export const enableDemoProfile = (enabled = true): void => {
+    demoProfileEnabled = enabled;
+};
+
+/**
+ * `NODE_ENV !== 'production'` stays a second gate even though nothing but
+ * {@link enableDemoProfile} can request the demo profile now: `run-server.ts` only DEFAULTS
+ * `NODE_ENV` to `development`, it does not override a shell's own `NODE_ENV=production`, so this
+ * is what refuses that case rather than mounting anyway. Logs at `error` when it does — a fact
+ * whoever owns that deployment needs to hear, not swallow.
  */
 export const isDemoMode = (): boolean => {
-    const requested = environmentFlag('NODE_DEMO', false);
     const isProduction = process.env.NODE_ENV === 'production';
 
-    if (requested && isProduction)
+    if (demoProfileEnabled && isProduction)
         logger.error({
             message:
-                'NODE_DEMO=true was set in a production environment. Refusing to mount the demo profile.'
+                'enableDemoProfile() was called in a production environment. Refusing to mount the demo profile.'
         });
 
-    return requested && !isProduction;
+    return demoProfileEnabled && !isProduction;
 };
 
 /** Every send recorded this process. Module-level, not persisted: a restart clears it. */

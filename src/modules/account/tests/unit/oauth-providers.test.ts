@@ -8,14 +8,14 @@
 
 import { enabledProviders, resolveOAuthProvider } from '../../oauth/providers';
 import { FAKE_OAUTH_CODE, fakeOAuthProvider } from '../../oauth/providers/fake';
+import { enableDemoProfile } from '@infrastructure/adapters/demo-outbox';
 
 /** Every env var a provider's "configured" check reads, restored after each test. */
 const OAUTH_ENV_KEYS = [
     'NODE_OAUTH_GOOGLE_CLIENT_ID',
     'NODE_OAUTH_GOOGLE_CLIENT_SECRET',
     'NODE_OAUTH_GITHUB_CLIENT_ID',
-    'NODE_OAUTH_GITHUB_CLIENT_SECRET',
-    'NODE_DEMO'
+    'NODE_OAUTH_GITHUB_CLIENT_SECRET'
 ] as const;
 
 describe('the OAuth provider registry', () => {
@@ -33,6 +33,7 @@ describe('the OAuth provider registry', () => {
             if (originalEnvironment[key] === undefined) delete process.env[key];
             else process.env[key] = originalEnvironment[key];
         }
+        enableDemoProfile(false);
     });
 
     it('lists nothing when no credentials are set and the demo profile is off', () => {
@@ -61,7 +62,7 @@ describe('the OAuth provider registry', () => {
     it('lists fake only under the demo profile, with no credentials of its own', () => {
         expect(enabledProviders()).not.toContain('fake');
 
-        process.env.NODE_DEMO = 'true';
+        enableDemoProfile();
         expect(enabledProviders()).toContain('fake');
         expect(resolveOAuthProvider('fake')?.name).toBe('fake');
     });

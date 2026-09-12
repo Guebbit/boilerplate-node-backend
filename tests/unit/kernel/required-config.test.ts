@@ -6,12 +6,12 @@
  * environment, so a suite that left it alone would assert nothing at all.
  */
 import { assertRequiredConfig } from '@kernel/required-config';
+import { enableDemoProfile } from '@infrastructure/adapters/demo-outbox';
 import type { AppModule } from '@kernel/registry';
 
 /** The variables the gate reads, restored after each case so ordering cannot matter. */
 const TOUCHED = [
     'NODE_ENV',
-    'NODE_DEMO',
     'NODE_URL',
     'NODE_CORS_ORIGIN',
     'NODE_SMTP_HOST',
@@ -33,7 +33,6 @@ const original = new Map(TOUCHED.map((key) => [key, process.env[key]]));
 const configure = (): void => {
     process.env.NODE_ENV = 'development';
     process.env.NODE_URL = 'https://api.example.com/';
-    delete process.env.NODE_DEMO;
     delete process.env.NODE_SMTP_HOST;
     delete process.env.NODE_ANTIBOT_PROVIDER;
     delete process.env.NODE_ANTIBOT_EMAIL_POLICY;
@@ -43,6 +42,7 @@ afterEach(() => {
     for (const [key, value] of original)
         if (value === undefined) delete process.env[key];
         else process.env[key] = value;
+    enableDemoProfile(false);
 });
 
 describe('module-declared variables', () => {
@@ -168,7 +168,7 @@ describe('the environments that skip the gate', () => {
 
     it('passes in the demo profile, which boots off a copied .env-example', () => {
         process.env.NODE_ENV = 'development';
-        process.env.NODE_DEMO = 'true';
+        enableDemoProfile();
         delete process.env.NODE_URL;
 
         expect(() => assertRequiredConfig([])).not.toThrow();

@@ -17,14 +17,14 @@ It is also the lightest way for a human to get a working API for anything — a 
 
 ## The control surface
 
-`NODE_DEMO=true` (set by `npm run demo`, and by nothing else) additionally mounts two routes, before the 404 catch-all and inert in every other profile:
+`npm run demo` calls `enableDemoProfile()` in-process, before `src/app.ts` is even imported — the only call site, so no environment variable can switch this on. It additionally mounts two routes, before the 404 catch-all and inert in every other profile:
 
 | Route                  | What it does                                                                                                                                                                                                                                                                                                                                                                         |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `POST /__test/restore` | Empty every collection and reseed a named scenario from `scenarios/` — `{ "scenario": "shop" }` (the default, the full catalogue) or `{ "scenario": "blank" }` (roles, the four named accounts and locales only) — then clear the outbox, refresh the locale overlay and flush the cache. The deterministic start-of-spec state, in-process and fast enough to run once per e2e spec |
 | `GET /__test/emails`   | The emails the app "sent" since the last restore. In demo mode the mailer (`src/infrastructure/adapters/mailer.ts`) records to an in-memory outbox (`demo-outbox.ts`) instead of talking to SMTP, with the reset/verify token lifted out of the link — a password-reset spec is the token in the email, or it is nothing                                                             |
 
-The routes are unauthenticated on purpose: the profile only ever binds beside an in-memory database that `npm run demo` created seconds earlier. There is nothing to protect and no deployment that mounts them — `NODE_DEMO` is not read from any `.env` example, compose file or Dockerfile.
+The routes are unauthenticated on purpose: the profile only ever binds beside an in-memory database that `npm run demo` created seconds earlier. There is nothing to protect and no deployment that mounts them — `enableDemoProfile()` is called nowhere but `scenarios/build/run-server.ts`.
 
 ## The two seed accounts
 

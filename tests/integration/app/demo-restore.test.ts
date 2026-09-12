@@ -1,8 +1,8 @@
 /**
  * `src/app/demo.ts`'s `restoreScenario` for the `blank` scenario — harness infrastructure only,
  * against a real database. Exercised as a function call rather than over HTTP: `installDemo`'s
- * route is a thin wrapper around this, gated behind `NODE_DEMO` at import time, which this suite
- * has no reason to flip.
+ * route is a thin wrapper around this, gated behind `enableDemoProfile()` at import time, which
+ * this suite has no reason to call.
  *
  * Two cases below drive a restored database over real HTTP instead — the two defects
  * `emptyDatabase()` and the pinned `DEMO_TENANT_ID` exist to close, proven against the thing that
