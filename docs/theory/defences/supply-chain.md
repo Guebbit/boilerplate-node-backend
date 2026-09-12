@@ -30,11 +30,11 @@ it. Fewer dependencies is the primary defence; every row above is what is left o
 
 ## The build and the image
 
-| Attack                          | How it works                                   | This boilerplate                                                                                                         |
-| ------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Build-pipeline compromise       | an artefact altered after review               | The build stage IS the gate: `tsc --noEmit && eslint` must pass or no image is produced — `docker/Dockerfile.production` |
-| Base-image vulnerabilities      | outdated OS packages in the image              | Pinned to `node:25-alpine` by major only, so a rebuild picks up patches — and only a rebuild does.                       |
-| Unsigned / unverified artefacts | no signatures, no SBOM, no reproducible builds | 🚧 Coming soon — image signing and an SBOM are not wired in.                                                             |
+| Attack                          | How it works                                   | This boilerplate                                                                                                                                                                                                                                                               |
+| ------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Build-pipeline compromise       | an artefact altered after review               | The build stage IS the gate: `tsc --noEmit && eslint` must pass or no image is produced — `docker/Dockerfile.production`                                                                                                                                                       |
+| Base-image vulnerabilities      | outdated OS packages in the image              | Pinned to `node:25-alpine` by major only, so a rebuild picks up patches — and only a rebuild does.                                                                                                                                                                             |
+| Unsigned / unverified artefacts | no signatures, no SBOM, no reproducible builds | Not code this repo can hold — it lives in CI and the registry. Recipe: [Supply-chain provenance](../../tools/deployment-hardening.md#supply-chain-provenance-sbom-and-signing) — syft for the SBOM, cosign keyless for the signature, and sign the DIGEST rather than the tag. |
 
 ## Things served from elsewhere
 

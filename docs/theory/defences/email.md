@@ -30,10 +30,10 @@ else, this row is the note that says what the replacement has to do.
 
 ## Mail claiming to be this app
 
-| Attack         | How it works                                    | This boilerplate                                                                                                                                                                                  |
-| -------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Email spoofing | no SPF, DKIM or DMARC on the sending domain     | DNS records, not code — the deployment's and the domain owner's. `docs/tools/email-and-rendering.md` is where the requirement is stated, so it is not discovered after the first phishing report. |
-| Open relay     | a misconfigured SMTP server sends anyone's mail | No surface: this application is an SMTP CLIENT, never a server.                                                                                                                                   |
+| Attack         | How it works                                    | This boilerplate                                                                                                                                                                                                                 |
+| -------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Email spoofing | no SPF, DKIM or DMARC on the sending domain     | DNS records, not code — the domain owner's. The recipe, including why `p=reject` published too early destroys your own mail, is [Email authentication](../../tools/deployment-hardening.md#email-authentication-spf-dkim-dmarc). |
+| Open relay     | a misconfigured SMTP server sends anyone's mail | No surface: this application is an SMTP CLIENT, never a server.                                                                                                                                                                  |
 
 ## How much mail
 
