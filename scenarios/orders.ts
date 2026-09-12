@@ -19,6 +19,8 @@ import { SEED_CUSTOMER_EMAILS, SEED_CUSTOMER_IDS } from './users';
 import { makeOrder, type OrderSnapshotInput } from '@modules/orders/factories';
 import { insertIfAbsent, type SeedOutcome } from '@scenarios/seed';
 import { orderRepository } from '@modules/orders/repository';
+import { inventoryService } from '@modules/inventory';
+import { OrderStatus } from '@types';
 
 /** The catalogue row as it stands, reshaped into the snapshot an order item stores. */
 const snapshotOf = (productId: string): OrderSnapshotInput => {
@@ -53,30 +55,33 @@ const line = (productId: string, quantity: number) => ({
  */
 const seedOrderId = (index: number): string => `67f0c4${index.toString(16).padStart(18, '0')}`;
 
-/** The three test-critical orders — see the comment on each for the branch it exercises. */
+/** The four test-critical orders — see the comment on each for the branch it exercises. */
 const namedOrders = [
+    /* `delivered`, not `pending`: a real pending order holds stock and gets swept after 30
+     * minutes (`inventory/service.ts`), so a history order sitting in `pending` forever is a
+     * state the app itself can never reach. `order.ownerPending` below is the one order that
+     * gets to be `pending`, because it earns it with a real hold. */
     makeOrder({
         id: SEED_ORDER_IDS.ownerFirst,
         userId: SEED_OWNER_ID,
+        status: OrderStatus.delivered,
         /* Not the owner's current address. This order predates an email change and keeps the old
          * one, so "the order remembers where it was sent" is a property the dataset demonstrates
          * rather than a sentence in a comment. */
         email: 'oldpsw@root.it',
-        items: [
-            line(SEED_PRODUCT_IDS.dogFoodStandard, 1),
-            line(SEED_PRODUCT_IDS.scratchPostOutOfStock, 10)
-        ]
+        items: [line(SEED_PRODUCT_IDS.dogFoodStandard, 1)]
     }),
     /* The only fixture with shipping columns — added because the fixtures predate those columns
-     * and none demonstrated a chosen delivery method. */
+     * and none demonstrated a chosen delivery method. `shipped` matches the id's own name. */
     makeOrder({
         id: SEED_ORDER_IDS.ownerShipped,
         userId: SEED_OWNER_ID,
         email: SEED_OWNER_EMAIL,
+        status: OrderStatus.shipped,
         items: [line(SEED_PRODUCT_IDS.dogBedPremium, 20)],
-        /* `standard` costs 5 with `freeAbove: 100` (see `delivery/domain/rates`), and these lines
-         * total 1,540 — so 0, not 5, is what `priceShipping` decided at checkout. An order keeps
-         * the price it was charged, not the method's current rate card. */
+        /* `standard` costs 5, waived above `freeAbove` (`delivery/domain/rates`) — these lines
+         * clear that threshold, so 0, not 5, is what `priceShipping` decided at checkout. An
+         * order keeps the price it was charged, not the method's current rate card. */
         shippingMethod: 'standard',
         shippingCost: 0,
         /* Restates `./account`'s default address rather than importing it — an order's address is
@@ -94,19 +99,32 @@ const namedOrders = [
      * The soft-deleted order, and it sits on the NON-ADMIN account on purpose. The case it
      * exercises is "the owner cannot see their own soft-deleted order" — which ownership-only
      * scoping would wrongly allow, and which an admin-owned fixture could never catch. It also
-     * anchors the `customer` account's "large" history below: this is the FOURTH order, not the
-     * first.
+     * anchors the `customer` account's "large" history below: this is the FIFTH order, not the
+     * first. `cancelled`, not `pending`: the same unreachable-state reasoning as `ownerFirst`.
      */
     makeOrder({
         id: SEED_ORDER_IDS.userDeleted,
         userId: SEED_USER_ID,
         email: SEED_USER_EMAIL,
+        status: OrderStatus.cancelled,
         items: [line(SEED_PRODUCT_IDS.dogFoodStandard, 4)],
         /* Earlier than the `createdAt` this order's id encodes, i.e. deleted before it was
          * placed — left that way on purpose. The factories don't promise their three dates agree;
          * nothing reads them together, only the field's PRESENCE. See
          * `@infrastructure/persistence/factories`. */
         deletedAt: '2024-08-07T09:12:03.114Z'
+    }),
+    /*
+     * `order.ownerPending`'s subject — the one order the seed leaves genuinely `pending`, because
+     * it is the one order the seed gives a real hold to (see `seedOwnerPendingOrder` below).
+     * Every other order in this file is a snapshot the app never held stock for; this is the one
+     * this file cannot make that claim about, on purpose.
+     */
+    makeOrder({
+        id: SEED_ORDER_IDS.ownerPending,
+        userId: SEED_OWNER_ID,
+        email: SEED_OWNER_EMAIL,
+        items: [line(SEED_PRODUCT_IDS.dogFoodStandard, 2)]
     })
 ];
 
@@ -122,6 +140,7 @@ const customerOrders = [
         id: seedOrderId(0),
         userId: SEED_USER_ID,
         email: SEED_USER_EMAIL,
+        status: OrderStatus.delivered,
         items: [
             line(SEED_PRODUCT_IDS.dogFoodStandard, 3),
             line(SEED_PRODUCT_IDS.dogBedPremium, 2),
@@ -133,6 +152,7 @@ const customerOrders = [
         id: seedOrderId(1),
         userId: SEED_USER_ID,
         email: SEED_USER_EMAIL,
+        status: OrderStatus.delivered,
         items: [
             line(fillerProductId(9), 5),
             line(fillerProductId(48), 2),
@@ -143,6 +163,7 @@ const customerOrders = [
         id: seedOrderId(2),
         userId: SEED_USER_ID,
         email: SEED_USER_EMAIL,
+        status: OrderStatus.delivered,
         items: [
             line(fillerProductId(31), 2),
             line(fillerProductId(64), 6),
@@ -172,6 +193,7 @@ const smallCustomerOrders = (
         id: seedOrderId(3 + index),
         userId: SEED_CUSTOMER_IDS[customer],
         email: SEED_CUSTOMER_EMAILS[customer],
+        status: OrderStatus.delivered,
         items: [line(fillerProductId(productIndex), quantity)]
     })
 );
@@ -240,6 +262,7 @@ const mediumCustomerOrders = MEDIUM_ORDERS.map(({ customer, lines }, index) =>
         id: seedOrderId(10 + index),
         userId: SEED_CUSTOMER_IDS[customer],
         email: SEED_CUSTOMER_EMAILS[customer],
+        status: OrderStatus.delivered,
         items: lines.map(([productIndex, quantity]) =>
             line(fillerProductId(productIndex), quantity)
         )
@@ -255,13 +278,38 @@ export const orderFixtures = [
 ];
 
 /*
- * No seeded reservation: `scenarios/apply.ts` runs every module CONCURRENTLY, and
- * `reserveForOrder` would conditionally write the same PRODUCT document `./products` is
- * writing at that moment — a race it loses every time. It would also invent a state this path
- * never reaches: these rows are written straight to the collection, none went through
- * checkout, so every seeded product's `reserved` is honestly 0.
+ * No seeded reservation on any of the orders above: `scenarios/apply.ts` runs every module
+ * CONCURRENTLY, and `reserveForOrder` would conditionally write the same PRODUCT document
+ * `./products` is writing at that moment — a race it loses every time. It would also invent a
+ * state this path never reaches: these rows are written straight to the collection, none went
+ * through checkout, so every seeded product's `reserved` is honestly 0 for them.
+ *
+ * `order.ownerPending` is the one exception — see `seedOwnerPendingOrder` below, which runs
+ * strictly after `./products` has finished, once `seedShop` has resolved the same race for it.
  */
 
 /** Seed this collection. Declared in `./index`'s `shopModules`; walked by `seedShop`. */
 export const seedOrdersCollection = (): Promise<SeedOutcome[]> =>
     Promise.all(orderFixtures.map((order) => insertIfAbsent(orderRepository, order)));
+
+/**
+ * Give `order.ownerPending` its real hold, through the real `inventoryService.reserveForOrder` —
+ * not written by hand — so the row is exactly what an abandoned checkout leaves behind: an order
+ * document plus a reservation plus a `reserve` stock-movement row, all through the one code path
+ * that ever writes any of them. Idempotent the same way `reserveForOrder` always is: a rerun
+ * finds the hold already there and returns without moving a counter twice.
+ *
+ * Called by `seedShop`, never by `seedOrdersCollection` — it needs `./products`'s row to already
+ * exist, which `orderFixtures`'s own concurrent write cannot promise.
+ */
+export const seedOwnerPendingOrder = (): Promise<void> =>
+    inventoryService
+        .reserveForOrder(SEED_ORDER_IDS.ownerPending, [
+            { productId: SEED_PRODUCT_IDS.dogFoodStandard, quantity: 2 }
+        ])
+        .then((outcome) => {
+            if (!outcome.held)
+                throw new Error(
+                    `seedOwnerPendingOrder: could not hold stock for ${SEED_ORDER_IDS.ownerPending} — ${JSON.stringify(outcome.shortfalls)}`
+                );
+        });

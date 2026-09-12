@@ -16,7 +16,7 @@ import { seedAddressBooksCollection } from './account';
 import { seedAuditLogsCollection } from './audit-logs';
 import { seedCartsCollection } from './cart';
 import { seedLocalesCollection } from './locales';
-import { seedOrdersCollection } from './orders';
+import { seedOrdersCollection, seedOwnerPendingOrder } from './orders';
 import { seedProductsCollection, checkProductGuarantees } from './products';
 import { seedUsersCollection } from './users';
 import { seedWebhooksCollection } from './webhooks';
@@ -71,7 +71,8 @@ export const shopModules: Readonly<Record<string, ScenarioModule>> = {
 };
 
 /**
- * The `shop` scenario: the access model, then every `shopModules` entry's records.
+ * The `shop` scenario: the access model, then every `shopModules` entry's records, then
+ * `order.ownerPending`'s real stock hold.
  *
  * `locales` MUST finish first, not join the concurrent batch: `products.seed()` writes its rows'
  * `translations` through `planTranslations`/`writeTranslations`, and `planSlot`
@@ -81,6 +82,11 @@ export const shopModules: Readonly<Record<string, ScenarioModule>> = {
  * No other module reads another module's write, which is what keeps the rest of the table
  * concurrent. Nothing can resolve a caller until there is a shop to be a member of, which is why
  * the access model runs before either.
+ *
+ * `seedOwnerPendingOrder` MUST run last, after the concurrent batch, for the same reason in
+ * reverse: it holds real stock against `./products`'s row through the real
+ * `inventoryService.reserveForOrder`, which needs that row to already exist. Racing it into the
+ * concurrent batch would mean it sometimes finds no product to hold against.
  */
 export const seedShop = (): Promise<SeedOutcome[]> =>
     seedAccessModel().then(() =>
@@ -89,7 +95,9 @@ export const seedShop = (): Promise<SeedOutcome[]> =>
                 Object.entries(shopModules)
                     .filter(([name]) => name !== 'locales')
                     .map(([, scenarioModule]) => scenarioModule.seed())
-            ).then((restOutcomes) => [localeOutcomes, ...restOutcomes].flat())
+            ).then((restOutcomes) =>
+                seedOwnerPendingOrder().then(() => [localeOutcomes, ...restOutcomes].flat())
+            )
         )
     );
 

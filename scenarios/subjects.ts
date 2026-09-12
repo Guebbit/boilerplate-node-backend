@@ -39,14 +39,16 @@ export const SEED_PRODUCT_IDS = {
 } as const;
 
 /**
- * The three test-critical order ids, named by the branch each exercises —
+ * The four test-critical order ids, named by the branch each exercises —
  * `scenarios/orders.ts`'s own comments say which. `ownerShipped` is the only fixture with shipping
- * columns; `userDeleted` is the soft-deleted one.
+ * columns; `userDeleted` is the soft-deleted one; `ownerPending` is the one left `pending` with a
+ * real stock hold.
  */
 export const SEED_ORDER_IDS = {
     ownerFirst: '65de73a69ca05739be2b5e85',
     ownerShipped: '661c795a9e22bcbef63a5832',
-    userDeleted: '66b3f0c14d2e8a91c7d4a015'
+    userDeleted: '66b3f0c14d2e8a91c7d4a015',
+    ownerPending: '66d2a4c8d1b3e6f9a2c5d8e1'
 } as const;
 
 /**
