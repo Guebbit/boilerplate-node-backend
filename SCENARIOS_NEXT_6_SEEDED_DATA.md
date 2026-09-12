@@ -96,9 +96,16 @@ Do you use `NODE_WEBHOOK_DEMO_SINK_URL` today? If not, **C**. If yes, **B**.
       (`product.created`) rather than a direct call: `inventory` already imports `products`, so
       the reverse direction would cycle. `products` writes `onHand: 0` and emits; `inventory`'s
       one subscriber calls its own real `receive()`. Mirrors the existing `inventory →
-      RESERVATION_EXPIRED → orders` pattern, direction reversed. Test:
+RESERVATION_EXPIRED → orders` pattern, direction reversed. Test:
       `tests/contract/product-write.test.ts`
-- [ ] D5 per the answer
+- [x] D5 per the answer — an exact-hostname exemption on `resolveSafeWebhookTarget`
+      (`exemptHostname`), dev/test-only (`@modules/webhooks/config`'s `getWebhookDemoAllowedHost`),
+      boot refuses if set under production (`required-config.ts`'s `forbiddenUnderProduction`).
+      `webhook-delivery.ts` also had to pick `node:http` over `node:https` per target scheme —
+      the documented sink is plain HTTP, so the guard's checks alone weren't enough to make it
+      reachable. The seeded subscription's ring secret is now a fixed, documented plaintext
+      (`WEBHOOK_DEMO_SECRET`) instead of a minted one nothing could read back. Docs:
+      `docs/modules/webhooks.md#seeing-it-work`. Tests: `tests/fuzz/webhook-ssrf.fuzz.test.ts`
 - [ ] D7 frontend: fix the two order assumptions; make the reorder spec assert the reordered line
 - [x] the shipping-total nit (`ownerShipped`'s comment) — fixed alongside D1, `b5891c9a`: the wrong
       count is deleted, not corrected, per [9](SCENARIOS_NEXT_9_SWEEP.md#how-to-treat-an-item)

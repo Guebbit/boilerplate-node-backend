@@ -10,6 +10,7 @@ import { deliverWebhook } from '@infrastructure/adapters/webhook-delivery';
 import type { WebhookDeliverJobPayload } from '@types';
 import { webhookSubscriptionRepository, webhookDeliveryRepository } from '../repository';
 import { activeRingSecrets } from '../secrets';
+import { getWebhookDemoAllowedHost } from '../config';
 import { nextAttemptAt, shouldAutoDisable } from '../domain';
 import type { WebhookDeliveryDocument, WebhookSubscriptionDocument } from '../model';
 
@@ -106,7 +107,10 @@ export const attemptDelivery = (
         url: subscription.url,
         secrets,
         eventId: delivery.eventId,
-        payload: delivery.payload
+        payload: delivery.payload,
+        // `undefined` outside development/test, or with no sink configured — see the SSRF
+        // guard's own docblock for what this one exemption does and does not relax.
+        allowedInsecureHost: getWebhookDemoAllowedHost()
     }).then((result) =>
         result.success
             ? recordSuccess(delivery, result.statusCode, result.durationMs)

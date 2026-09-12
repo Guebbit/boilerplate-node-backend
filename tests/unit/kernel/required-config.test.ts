@@ -23,6 +23,7 @@ const TOUCHED = [
     'NODE_ANTIBOT_TURNSTILE_SITE_KEY',
     'NODE_ANTIBOT_TURNSTILE_SECRET',
     'NODE_ANTIBOT_EMAIL_POLICY',
+    'NODE_WEBHOOK_DEMO_SINK_URL',
     'SECRET'
 ] as const;
 
@@ -36,6 +37,7 @@ const configure = (): void => {
     delete process.env.NODE_SMTP_HOST;
     delete process.env.NODE_ANTIBOT_PROVIDER;
     delete process.env.NODE_ANTIBOT_EMAIL_POLICY;
+    delete process.env.NODE_WEBHOOK_DEMO_SINK_URL;
 };
 
 afterEach(() => {
@@ -203,6 +205,32 @@ describe('the antibot provider group', () => {
         configure();
         process.env.NODE_ANTIBOT_PROVIDER = 'altcha';
         process.env.NODE_ANTIBOT_ALTCHA_SECRET = 'an-altcha-signing-secret-value';
+
+        expect(() => assertRequiredConfig([])).not.toThrow();
+    });
+});
+
+describe('the webhook demo-sink exemption — forbidden, not required', () => {
+    it('accepts it set outside production', () => {
+        configure();
+        process.env.NODE_WEBHOOK_DEMO_SINK_URL = 'http://webhook-tester:8080';
+
+        expect(() => assertRequiredConfig([])).not.toThrow();
+    });
+
+    it('refuses to boot in production with it set', () => {
+        configure();
+        process.env.NODE_ENV = 'production';
+        process.env.NODE_CORS_ORIGIN = 'https://example.com';
+        process.env.NODE_WEBHOOK_DEMO_SINK_URL = 'http://webhook-tester:8080';
+
+        expect(() => assertRequiredConfig([])).toThrow(/NODE_WEBHOOK_DEMO_SINK_URL/);
+    });
+
+    it('accepts production with it unset', () => {
+        configure();
+        process.env.NODE_ENV = 'production';
+        process.env.NODE_CORS_ORIGIN = 'https://example.com';
 
         expect(() => assertRequiredConfig([])).not.toThrow();
     });

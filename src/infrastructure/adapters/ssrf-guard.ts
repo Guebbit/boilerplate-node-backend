@@ -30,6 +30,12 @@
  * tunneling is dead everywhere by now, but it costs nothing to judge it the same way as the other
  * two rather than carve out an exception.
  *
+ * One exact hostname may be exempted from the `https:` and private-address checks — see
+ * {@link resolveSafeWebhookTarget}'s `exemptHostname` parameter — for
+ * `@modules/webhooks/config`'s development/test-only demo sink. Parsing, credentials and DNS
+ * resolution are never exempted; this file has no idea what that hostname is or why it is
+ * exempt, only that its one caller decided so.
+ *
  * What this module does NOT do:
  *  - No redirect handling. A 3xx must not be followed without re-running this same check on the
  *    `Location` header, and the simplest correct answer — refuse every redirect outright — is
@@ -95,9 +101,10 @@ const stripBrackets = (hostname: string): string =>
  * reach {@link isAddressUnsafe} as `127.0.0.1` rather than slipping past it as an opaque hostname.
  * https://url.spec.whatwg.org/#concept-ipv4-parser
  *
+ * @param exemptHostname - see {@link resolveSafeWebhookTarget}'s own parameter
  * @throws {SsrfRefusedError} `invalid-url` | `insecure-scheme` | `credentials-in-url`
  */
-const parseWebhookUrl = (rawUrl: string): URL => {
+const parseWebhookUrl = (rawUrl: string, exemptHostname?: string): URL => {
     let parsed: URL;
     // eslint-disable-next-line no-restricted-syntax -- URL's constructor has no non-throwing form; an unparseable webhook URL is a refusal, not a crash
     try {
@@ -106,7 +113,10 @@ const parseWebhookUrl = (rawUrl: string): URL => {
         throw new SsrfRefusedError('invalid-url', `Not a valid URL: ${rawUrl}`);
     }
 
-    if (parsed.protocol !== 'https:')
+    const isExempt =
+        exemptHostname !== undefined && stripBrackets(parsed.hostname) === exemptHostname;
+
+    if (parsed.protocol !== 'https:' && !isExempt)
         throw new SsrfRefusedError(
             'insecure-scheme',
             `Webhook URL must use https:, got ${parsed.protocol}`
@@ -114,6 +124,8 @@ const parseWebhookUrl = (rawUrl: string): URL => {
 
     // Rejected outright rather than stripped: a subscription that embeds credentials is already
     // misconfigured, and silently dropping them would deliver to a URL the owner didn't intend.
+    // Never exempted, even for the demo host — a URL with embedded credentials is malformed input,
+    // not an insecure-transport choice, and the exemption only ever covers the latter.
     if (parsed.username || parsed.password)
         throw new SsrfRefusedError('credentials-in-url', 'Webhook URL must not embed credentials');
 
@@ -237,17 +249,27 @@ const buildPinnedLookup = (address: string): LookupFunction => {
  * with `Promise.resolve().then(...)` is what turns "throws sometimes, rejects sometimes" into
  * "always rejects".
  *
+ * @param exemptHostname - an exact hostname (case-sensitive; callers pass an already-lowercased
+ *   host) to exempt from the `https:` and private/unsafe-address checks, and ONLY those two —
+ *   parsing, credentials and DNS resolution still run in full. For `@modules/webhooks`'
+ *   development/test-only demo sink; absent for every other caller and every other call.
  * @throws {SsrfRefusedError} see {@link SsrfRefusalReason} for every reason this can refuse
  */
-export const resolveSafeWebhookTarget = (rawUrl: string): Promise<SafeWebhookTarget> =>
+export const resolveSafeWebhookTarget = (
+    rawUrl: string,
+    exemptHostname?: string
+): Promise<SafeWebhookTarget> =>
     Promise.resolve()
-        .then(() => stripBrackets(parseWebhookUrl(rawUrl).hostname))
+        .then(() => stripBrackets(parseWebhookUrl(rawUrl, exemptHostname).hostname))
         .then((hostname) =>
             resolveAllAddresses(hostname).then((addresses) => {
+                const isExempt = hostname === exemptHostname;
                 // Wrapped rather than passed by reference: `Array.prototype.find` calls its
                 // callback with (element, index, array), and a direct reference would silently
                 // feed the index in as a second, unused argument to `isAddressUnsafe`.
-                const unsafe = addresses.find((address) => isAddressUnsafe(address));
+                const unsafe = isExempt
+                    ? undefined
+                    : addresses.find((address) => isAddressUnsafe(address));
                 if (unsafe)
                     throw new SsrfRefusedError(
                         'unsafe-address',

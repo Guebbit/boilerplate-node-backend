@@ -7,15 +7,18 @@
  * error, a non-2xx response — resolves to a {@link WebhookDeliveryResult} with `success: false` and
  * a human-readable `.error`, so a worker can always write a delivery-log row, never crash on one.
  *
- * Built on `node:https` rather than a client library: the two properties this delivery cannot do
- * without — a custom `lookup` (DNS pinning, from `./ssrf-guard.ts`) and no automatic redirect
- * following — are exactly the two `node:https` gives directly. A 3xx response is read as a failed
+ * Built on `node:http`/`node:https` rather than a client library: the two properties this delivery
+ * cannot do without — a custom `lookup` (DNS pinning, from `./ssrf-guard.ts`) and no automatic
+ * redirect following — are exactly the two both give directly. A 3xx response is read as a failed
  * delivery below; it is never followed, which is what makes "refuse redirects entirely"
  * (`./ssrf-guard.ts`'s documented split) actually true rather than aspirational.
+ *
+ * `node:http` only ever runs for `./ssrf-guard.ts`'s one exempted development/test demo host —
+ * every other target already failed the `https:` check before a request module is even chosen.
  */
 
 import { request as httpsRequest } from 'node:https';
-import type { IncomingMessage } from 'node:http';
+import { request as httpRequest, type IncomingMessage } from 'node:http';
 import {
     resolveSafeWebhookTarget,
     SsrfRefusedError,
@@ -41,6 +44,8 @@ export interface WebhookDeliveryAttempt {
     payload: unknown;
     /** Overrides {@link DEFAULT_TIMEOUT_MS}. */
     timeoutMs?: number;
+    /** Passed straight through to `./ssrf-guard.ts`'s `resolveSafeWebhookTarget`. */
+    allowedInsecureHost?: string;
 }
 
 /** What happened, in the shape a delivery-log row is written from. */
@@ -64,18 +69,23 @@ interface RawResponse {
  * POST the signed body to a pinned target.
  *
  * node:https — https.request(options, callback): https://nodejs.org/api/https.html#httpsrequestoptions-callback
+ * (node:http's `request` takes the identical options shape for everything used here)
  *  - `lookup`: DNS pinning from `./ssrf-guard.ts` — the connection is made to the address that was
  *    already validated, not to whatever a second resolution would answer.
  *  - `hostname` stays the ORIGINAL host (not the pinned IP): TLS SNI and certificate hostname
  *    verification must check against the name the operator configured, only the IP the socket
- *    connects to is pinned.
+ *    connects to is pinned. Irrelevant to a plain `http:` request, but harmless to still pass.
  *  - `signal`: the hard total timeout — `request.destroy()` fires on abort, surfaced below as the
  *    request's `error` event with `err.name === 'AbortError'`.
  *  - No redirect handling: this call answers with whatever status the endpoint sent, 3xx included,
  *    and `deliverWebhook` below treats 3xx as a failure rather than a location to chase.
  *
+ * `url.protocol` decides `node:http` vs `node:https` — `./ssrf-guard.ts` has already refused
+ * every `http:` target except its one exempted demo host, so this never opens a plaintext
+ * connection anywhere else.
+ *
  * @param target - the pinned, already-validated destination from `resolveSafeWebhookTarget`
- * @param url - the parsed subscription URL, for the path/query/port `lookup` cannot supply
+ * @param url - the parsed subscription URL, for the scheme/path/query/port `lookup` cannot supply
  * @param headers - the three `webhook-*` headers from `signWebhookPayload`
  * @param body - the exact signed bytes
  * @param timeoutMs - hard total budget for connect + request + response headers
@@ -88,10 +98,12 @@ const postSignedPayload = (
     timeoutMs: number
 ): Promise<RawResponse> =>
     new Promise((resolve, reject) => {
-        const outgoingRequest = httpsRequest(
+        const isPlainHttp = url.protocol === 'http:';
+        const request = isPlainHttp ? httpRequest : httpsRequest;
+        const outgoingRequest = request(
             {
                 hostname: target.hostname,
-                port: url.port ? Number(url.port) : 443,
+                port: url.port ? Number(url.port) : isPlainHttp ? 80 : 443,
                 path: `${url.pathname}${url.search}`,
                 method: 'POST',
                 lookup: target.lookup,
@@ -137,7 +149,7 @@ export const deliverWebhook = (attempt: WebhookDeliveryAttempt): Promise<Webhook
     const startedAt = Date.now();
     const timeoutMs = attempt.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
-    return resolveSafeWebhookTarget(attempt.url)
+    return resolveSafeWebhookTarget(attempt.url, attempt.allowedInsecureHost)
         .then((target) => {
             const body = JSON.stringify(attempt.payload);
             const { headers } = signWebhookPayload({

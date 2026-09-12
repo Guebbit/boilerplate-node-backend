@@ -93,7 +93,22 @@ const invalidEmailPolicy = (): string[] => {
 };
 
 /**
- * Refuse to boot on a missing, truncated or still-placeholder required variable.
+ * The one variable in this file that must be ABSENT rather than present — the opposite of every
+ * other check here. `NODE_WEBHOOK_DEMO_SINK_URL` relaxes `@infrastructure/adapters/ssrf-guard` for
+ * one exact hostname (`@modules/webhooks/config`'s own `getWebhookDemoAllowedHost` already refuses
+ * to honour it outside development/test); this catches the case that check cannot: the variable
+ * SET under production, refused here regardless of whether a delivery would ever be attempted.
+ *
+ * @returns `['NODE_WEBHOOK_DEMO_SINK_URL']` when set under production, otherwise `[]`
+ */
+const forbiddenUnderProduction = (): string[] =>
+    process.env.NODE_ENV === 'production' && (process.env.NODE_WEBHOOK_DEMO_SINK_URL ?? '') !== ''
+        ? ['NODE_WEBHOOK_DEMO_SINK_URL']
+        : [];
+
+/**
+ * Refuse to boot on a missing, truncated or still-placeholder required variable — or on
+ * {@link forbiddenUnderProduction}'s one variable set where it must not be.
  *
  * Skipped under `NODE_ENV=test` and in the demo profile: a demo deployment that developers
  * routinely boot straight off a copied `.env-example` is not the placeholder-in-production risk
@@ -102,7 +117,8 @@ const invalidEmailPolicy = (): string[] => {
  * across every module — not the first one, which would mean N restarts to find N mistakes.
  *
  * @param appModules - the enabled module list, each contributing its own `requiredConfig`
- * @throws when any required variable fails its check outside `NODE_ENV=test`/the demo profile
+ * @throws when any required variable fails its check, or the forbidden one is set, outside
+ *   `NODE_ENV=test`/the demo profile
  */
 export const assertRequiredConfig = (appModules: AppModule[]): void => {
     if (process.env.NODE_ENV === 'test' || isDemoMode()) return;
@@ -117,9 +133,20 @@ export const assertRequiredConfig = (appModules: AppModule[]): void => {
         ...missingAntibotProviderSecrets(),
         ...invalidEmailPolicy()
     ];
+    const forbidden = forbiddenUnderProduction();
 
-    if (offending.length > 0)
-        throw new Error(
-            `Refusing to boot: these environment variables are missing, too short, or still set to their .env-example placeholder — ${offending.join(', ')}`
-        );
+    // Two different failure shapes ("absent" vs "present") get two clauses rather than one
+    // combined variable list, so the message still says which is wrong for which variable.
+    const problems = [
+        ...(offending.length > 0
+            ? [
+                  `missing, too short, or still set to their .env-example placeholder — ${offending.join(', ')}`
+              ]
+            : []),
+        ...(forbidden.length > 0
+            ? [`set, which must never happen here — ${forbidden.join(', ')}`]
+            : [])
+    ];
+
+    if (problems.length > 0) throw new Error(`Refusing to boot: ${problems.join('; ')}`);
 };
