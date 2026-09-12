@@ -26,6 +26,7 @@ flowchart LR
     orders --> inventory
     payments --> inventory
     inventory --> products
+    products -. "product.created" .-> inventory
     inventory -. "inventory.reservation_expired" .-> orders
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
