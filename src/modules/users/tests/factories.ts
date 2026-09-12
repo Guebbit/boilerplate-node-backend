@@ -1,9 +1,10 @@
 /**
  * @module
- * User factories that touch the test database, built on `../factories`'s plain-payload builder and
- * kept separate after two divergent `makeUser` copies once caused confusion. Passwords are plain
- * text until the model hashes on save — authenticate with `PLAIN_PASSWORD` — and defaulted fields
- * are left unset so `createUser()` exercises the real schema default. The password vocabulary
+ * User factories that touch the test database, built on `../factories`'s plain-payload builder.
+ * Kept separate so there is exactly one `makeUser`: this file only persists what that one returns.
+ * Passwords are plain text until the model hashes on save — authenticate with `PLAIN_PASSWORD` —
+ * and defaulted fields are left unset so `createUser()` exercises the real schema default. The
+ * password vocabulary
  * below is the whole set a test may need; `unit/factories.test.ts` is what proves each still plays
  * its part when the policy changes.
  */
