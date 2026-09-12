@@ -11,7 +11,7 @@ import path from 'node:path';
 import YAML from 'yaml';
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
-import { api, authenticateAsRole } from '@tests/http';
+import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
 import { localeRepository } from '@modules/locales/repository';
 import { makeLocale } from '@modules/locales/factories';
@@ -65,6 +65,39 @@ describe('POST /products', () => {
 
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
+    });
+
+    /*
+     * `products` never writes `onHand` itself — see `products/service.ts`'s `create()` — so this
+     * is the one test proving the opening count still reaches the document, through a real
+     * `receive()` movement rather than a direct field write. `owner`, not `editor`: reading the
+     * ledger back needs `inventory.read`, which the editor role does not hold.
+     */
+    it('gives the product its opening stock through a real receive movement', async () => {
+        const { bearer } = await authenticateAs('owner');
+
+        const response = await api()
+            .post('/products')
+            .set('Authorization', bearer)
+            .send({
+                price: 12,
+                onHand: 7,
+                translations: { en: { title: 'Cedar Chew Toy', description: 'Durable' } }
+            });
+
+        expect(response.status).toBe(201);
+        expect(response.body.data.onHand).toBe(7);
+        expect(response).toSatisfyApiSpec();
+
+        const movements = await api()
+            .get(`/inventory/movements?productId=${String(response.body.data.id)}`)
+            .set('Authorization', bearer);
+        expect(movements.body.data.items).toHaveLength(1);
+        expect(movements.body.data.items[0]).toMatchObject({
+            reason: 'receive',
+            onHandDelta: 7,
+            reservedDelta: 0
+        });
     });
 });
 

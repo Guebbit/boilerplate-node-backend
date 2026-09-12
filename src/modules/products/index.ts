@@ -26,7 +26,7 @@ export type { ProductSnapshot } from './model';
 export { productSchema, applyProductTransform, toProduct } from './model';
 
 /** Events this module emits. Importing the barrel is also what installs the payload declaration. */
-export { PRODUCT_DELETED } from './events';
+export { PRODUCT_DELETED, PRODUCT_CREATED } from './events';
 
 /*
  * The demo catalogue is NOT re-exported here, and never was reachable through this barrel: it

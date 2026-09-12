@@ -92,7 +92,12 @@ Do you use `NODE_WEBHOOK_DEMO_SINK_URL` today? If not, **C**. If yes, **B**.
       `cart-page.*`, …), including a real five-level-deep key
       (`static-pages.about.features.catalogue.title`) for the deep-nesting case the fixture
       demonstrates. The `it`/backend overlay pair already used real backend keys — untouched
-- [ ] D4 document the exemption now; opening `receive` rows come with OFFLINE_PAYMENTS 3
+- [x] D4 — `POST /products` writes the opening `receive` movement, through a domain event
+      (`product.created`) rather than a direct call: `inventory` already imports `products`, so
+      the reverse direction would cycle. `products` writes `onHand: 0` and emits; `inventory`'s
+      one subscriber calls its own real `receive()`. Mirrors the existing `inventory →
+      RESERVATION_EXPIRED → orders` pattern, direction reversed. Test:
+      `tests/contract/product-write.test.ts`
 - [ ] D5 per the answer
 - [ ] D7 frontend: fix the two order assumptions; make the reorder spec assert the reordered line
 - [x] the shipping-total nit (`ownerShipped`'s comment) — fixed alongside D1, `b5891c9a`: the wrong
