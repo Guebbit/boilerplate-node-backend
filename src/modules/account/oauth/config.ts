@@ -36,10 +36,20 @@ export const isOAuthProviderConfigured = (name: string): boolean => {
  * callback-confusion vector; deriving it here, the one place both the start and callback
  * controllers read it from, is what keeps that true.
  *
+ * Built through `URL` rather than concatenated, because this one has to be ABSOLUTE — a provider
+ * rejects a relative `redirect_uri`, and so does `new URL()` in anything that parses our own
+ * `Location` back. Concatenation made that depend on `NODE_URL` carrying a trailing slash:
+ * `https://api.example.com` with no slash produced `https://api.example.comaccount/oauth/…`, and
+ * `NODE_URL` unset produced a path with no leading slash. `URL` resolves both. The localhost
+ * fallback matches `oauthFrontendCallbackUrl` below and only ever applies where the boot-time
+ * `NODE_URL` check is skipped — which is `NODE_ENV=test`, and nothing else
+ * (`kernel/required-config.ts`).
+ *
  * @param provider - the registry key, matching `GET /account/oauth/:provider`'s route param
  */
 export const oauthRedirectUri = (provider: string): string =>
-    `${process.env.NODE_URL ?? ''}account/oauth/${provider}/callback`;
+    new URL(`account/oauth/${provider}/callback`, process.env.NODE_URL ?? 'http://localhost:3000/')
+        .href;
 
 /**
  * Where `GET /account/oauth/:provider/callback` sends the browser once it is done — the paired
