@@ -28,6 +28,13 @@ paths:
                   in: query
                   schema:
                       $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/OrderStatus'
+                - name: paymentMethod
+                  in: query
+                  description: >-
+                      Filter to orders placed with this method — the admin "awaiting transfer"
+                      view combines this with `status=pending`.
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaymentMethodId'
                 - name: notes
                   in: query
                   schema:
@@ -411,6 +418,8 @@ components:
                 # status is filtering their own orders, and staff see the same shape.
                 status:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/OrderStatus'
+                paymentMethod:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaymentMethodId'
                 notes:
                     type: string
 

@@ -33,7 +33,7 @@ const base = createRepository<OrderDocument>(orderModel, {
             // identifies which product an order line holds.
             productId: 'items.product._id'
         },
-        exact: { email: 'email', status: 'status' },
+        exact: { email: 'email', status: 'status', paymentMethod: 'paymentMethod' },
         // Staff-written text on the order, so the filter is only reachable by someone who sees it.
         regex: { notes: 'notes' }
     }
