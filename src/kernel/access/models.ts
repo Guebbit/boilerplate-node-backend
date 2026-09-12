@@ -21,7 +21,11 @@ import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import type { AuthorizationScope } from '@types';
 
-/** One shop. A single-tenant deployment has exactly one and never notices the others exist. */
+/**
+ * One shop — and this deployment holds exactly one, deliberately, because serving many clients is
+ * a deployment concern here rather than an application one. There are no others to notice: a
+ * second client gets a second stack and a second database. See docs/theory/tenancy.md.
+ */
 export interface TenantDocument extends Document {
     /** Stable, human-readable, and the thing a deployment names in configuration. */
     slug: string;

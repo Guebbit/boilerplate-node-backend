@@ -7,21 +7,8 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAsRole } from '@tests/http';
-import { ensureTenant } from '@kernel/access/store';
-import { DEMO_TENANT_SLUG } from '@kernel/access/seed';
 
 setupTestDb();
-
-/**
- * A subscription's `tenant` field is `context.caller.tenantId` (see `services/context.ts`), which
- * a real login only resolves once the deployment's shop exists — `resolveDeploymentTenantId`
- * caches `null` ("no shop") the first time it is asked otherwise, for the rest of this file. A
- * real deployment always has this from `npm run scenario:apply`'s `seedAccessModel()`; this suite has to
- * do the same, after `setupTestDb()`'s own `clearAll` (registered first) wipes it every test.
- */
-beforeEach(async () => {
-    await ensureTenant(DEMO_TENANT_SLUG, 'Contract test shop');
-});
 
 /** A subscription body pointed at a URL nothing ever calls — these tests never deliver anything. */
 const subscriptionBody = (overrides: Record<string, unknown> = {}) => ({

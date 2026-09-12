@@ -30,9 +30,11 @@ import { anonymousCaller, callerForSubject } from '@kernel/permissions';
  * over a collection that has no such field would match nothing and lock everybody out, so this
  * function is what lets one shop run the tenant-aware model and never notice it.
  *
- * A pooled deployment deletes this list and adds the column to whichever collections lack one.
- * Nothing else changes: the rules already carry the tenant, the guards already read it, and the
- * caller already carries it. See docs/theory/tenancy.md.
+ * Deleting this list is NOT what makes a deployment pooled, however much it looks like the one
+ * switch. It is the smallest part: most collections carry no organisation column, most modules
+ * never compile a scoped filter at all, and the webhooks fan-out matches every enabled
+ * subscription unconditionally. Emptying the set here would scope a minority of the reads and
+ * leave the rest quietly reading everything. See docs/theory/tenancy.md §10 for the real list.
  */
 const UNSTORED_FIELDS = new Set(['tenantId']);
 
