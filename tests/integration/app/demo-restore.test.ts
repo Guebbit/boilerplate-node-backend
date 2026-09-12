@@ -5,7 +5,7 @@
  * this suite has no reason to call.
  *
  * Two cases below drive a restored database over real HTTP instead — the two defects
- * `emptyDatabase()` and the pinned `DEMO_TENANT_ID` exist to close, proven against the thing that
+ * `emptyDatabase()` and the pinned `DEPLOYMENT_TENANT_ID` exist to close, proven against the thing that
  * broke (an index, a cached tenant id) rather than against the helper's own internals.
  */
 
@@ -18,7 +18,7 @@ import { productModel } from '@modules/products/model';
 import { orderModel } from '@modules/orders/model';
 import { localeModel } from '@modules/locales/model';
 import { roleModel } from '@kernel/access/models';
-import { DEMO_TENANT_ID } from '@kernel/access/seed';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 setupTestDb();
 
@@ -75,6 +75,6 @@ describe('a restore never strands the tenant cache', () => {
         const response = await api().get('/account/abilities').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.tenantId).toBe(DEMO_TENANT_ID);
+        expect(response.body.data.tenantId).toBe(DEPLOYMENT_TENANT_ID);
     });
 });

@@ -1,11 +1,11 @@
 /**
  * @module
  * The one-shop invariant `Caller`'s discriminated union exists to prove: a stranger, the system
- * actor, and any tenant-scope caller all carry the fixed `DEMO_TENANT_ID`, never `null` — `null` is
+ * actor, and any tenant-scope caller all carry the fixed `DEPLOYMENT_TENANT_ID`, never `null` — `null` is
  * platform scope, and only there.
  */
 import { anonymousCaller, callerInScope, SYSTEM_ACTOR } from '@kernel/permissions';
-import { DEMO_TENANT_ID } from '@kernel/access/seed';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { asOperator, asRole, TEST_TENANT_ID } from '../../support/callers';
 
 describe('anonymousCaller', () => {
@@ -13,13 +13,13 @@ describe('anonymousCaller', () => {
         const stranger = anonymousCaller();
 
         expect(stranger.scope).toBe('tenant');
-        expect(stranger.tenantId).toBe(DEMO_TENANT_ID);
+        expect(stranger.tenantId).toBe(DEPLOYMENT_TENANT_ID);
     });
 });
 
 describe('SYSTEM_ACTOR', () => {
     it('carries the one shop rather than no shop', () => {
-        expect(SYSTEM_ACTOR.tenantId).toBe(DEMO_TENANT_ID);
+        expect(SYSTEM_ACTOR.tenantId).toBe(DEPLOYMENT_TENANT_ID);
     });
 });
 

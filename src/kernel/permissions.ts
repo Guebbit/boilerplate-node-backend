@@ -24,7 +24,7 @@ import {
     WILDCARD_ACTION,
     WILDCARD_SUBJECT
 } from '@infrastructure/authorization/keys';
-import { DEMO_TENANT_ID } from '@kernel/access/tenant';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /** The action vocabulary, CASL's own. `manage` is the wildcard meaning any declared action. */
 export type PermissionAction = 'read' | 'create' | 'update' | 'delete' | 'manage';
@@ -163,7 +163,7 @@ export const permissionsOfRole = (name: string): readonly string[] => {
  * A value in the model rather than a null branch: `guest` is a role like any other, seeded from
  * `shared/authorization-roles.yaml`, so "what may a stranger do" is answered in the same file and
  * by the same evaluator as every other role. Tenant scope, because an unauthenticated request
- * never acts over the installation — a stranger still browses the one shop, `DEMO_TENANT_ID`.
+ * never acts over the installation — a stranger still browses the one shop, `DEPLOYMENT_TENANT_ID`.
  *
  * @throws Error if `shared/authorization-roles.yaml` ever moves `anonymous` out of tenant scope —
  *   the discriminated `Caller` union needs the literal, and this is what keeps it honest against
@@ -179,7 +179,7 @@ export const anonymousCaller = (): Caller => {
 
     return {
         id: null,
-        tenantId: DEMO_TENANT_ID,
+        tenantId: DEPLOYMENT_TENANT_ID,
         scope: 'tenant',
         permissions: ANONYMOUS_ROLE.permissions
     };
@@ -318,7 +318,7 @@ export const SYSTEM_ACTOR: AuthContext = {
     email: 'system@localhost',
     username: 'system',
     roles: { tenant: 'owner', platform: null },
-    tenantId: DEMO_TENANT_ID,
+    tenantId: DEPLOYMENT_TENANT_ID,
     authTime: 0,
     amr: [],
     analyticsConsent: false,

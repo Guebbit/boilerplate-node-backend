@@ -4,7 +4,7 @@
  * Give a fresh production database its shop and its preset roles — `npm run access:bootstrap`.
  *
  * The counterpart to `scenarios/apply.ts` that is actually safe in production: every write here is
- * an upsert keyed on the fixed `DEMO_TENANT_ID`/role name, so running this against an already-seeded
+ * an upsert keyed on the fixed `DEPLOYMENT_TENANT_ID`/role name, so running this against an already-seeded
  * database changes nothing, unlike `scenario:apply`'s demo accounts. No `NODE_ENV` guard is needed
  * for that reason — `scenario:apply` refuses under production precisely because IT is not idempotent
  * in the way this is.

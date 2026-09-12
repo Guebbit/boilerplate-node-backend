@@ -37,7 +37,7 @@ export interface AuthContext {
         platform: string | null;
     };
     /**
-     * The shop this person belongs to — the one shop every account belongs to, `DEMO_TENANT_ID`.
+     * The shop this person belongs to — the one shop every account belongs to, `DEPLOYMENT_TENANT_ID`.
      *
      * Read from the account and never from a request parameter, which is what makes a
      * cross-tenant read impossible to express by accident rather than merely discouraged.

@@ -31,7 +31,7 @@ export const tenantBySlug = (slug: string): Promise<TenantDocument | null> =>
 /**
  * Create a shop, or return the one already carrying that slug.
  *
- * `id` is optional and only `bootstrapAccessModel` passes one — the fixed `DEMO_TENANT_ID` every
+ * `id` is optional and only `bootstrapAccessModel` passes one — the fixed `DEPLOYMENT_TENANT_ID` every
  * deployment reads directly, so the row keeps the same id across an `emptyDatabase()` + reseed
  * cycle rather than minting a fresh one. `$setOnInsert` only, same as `slug`/`name` — an existing
  * tenant keeps its id even if a caller passed a different one.

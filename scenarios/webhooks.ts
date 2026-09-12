@@ -15,7 +15,7 @@
  */
 
 import { Types } from 'mongoose';
-import { DEMO_TENANT_ID } from '@kernel/access/seed';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { webhookSubscriptionRepository } from '@modules/webhooks/repository';
 import { mintRingSecret } from '@modules/webhooks/secrets';
 import type { WebhookSubscriptionDocument } from '@modules/webhooks/model';
@@ -43,7 +43,7 @@ export const seedWebhooksCollection = (): Promise<SeedOutcome[]> => {
     const { entry } = mintRingSecret();
     const fixture = {
         _id: new Types.ObjectId(WEBHOOK_SUBSCRIPTION_ID),
-        tenant: DEMO_TENANT_ID,
+        tenant: DEPLOYMENT_TENANT_ID,
         url: `${sinkBaseUrl.replace(/\/+$/, '')}/${WEBHOOK_SESSION_ID}`,
         description: 'Demo sink (webhook-tester)',
         eventTypes: ['*'],

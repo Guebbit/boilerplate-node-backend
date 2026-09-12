@@ -16,7 +16,8 @@ import { usersAuditActions } from '@modules/users/audit';
 import * as auditPort from '@infrastructure/observability/audit';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { assignRole } from '@kernel/access/store';
-import { DEMO_TENANT_ID, seedPresetRoles } from '@kernel/access/seed';
+import { seedPresetRoles } from '@kernel/access/seed';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
 import type { UserDocument } from '@modules/users';
 
@@ -590,7 +591,7 @@ describe('userService.remove', () => {
         // through the stored ROLE rows, so those need seeding too, not just the membership.
         await seedPresetRoles();
         const user = await createUser({ role: 'owner' });
-        await assignRole(user.id, DEMO_TENANT_ID, 'tenant', 'owner');
+        await assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'owner');
 
         const result = await userService.remove(user, true);
 

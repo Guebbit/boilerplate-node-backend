@@ -9,7 +9,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { membershipIn } from '@kernel/access/store';
-import { DEMO_TENANT_ID } from '@kernel/access/seed';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { grantAccess, GrantAccessError } from '../../../db/access-grant';
 
 setupTestDb();
@@ -20,7 +20,7 @@ describe('grantAccess', () => {
 
         await grantAccess('owner@example.com', 'owner', 'tenant');
 
-        const membership = await membershipIn(user.id, DEMO_TENANT_ID, 'tenant');
+        const membership = await membershipIn(user.id, DEPLOYMENT_TENANT_ID, 'tenant');
         expect(membership?.role).toBe('owner');
     });
 

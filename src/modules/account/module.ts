@@ -19,7 +19,7 @@ import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { registerAuthResolver } from '@kernel/authentication';
 import { rolesOf } from '@kernel/access/store';
-import { DEMO_TENANT_ID } from '@kernel/access/seed';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { onDomainEvent } from '@kernel/events';
 import { userRepository, USER_DELETED, USER_SETUP_REQUESTED } from '@modules/users';
 import { verifyAccessToken, verifyRefreshToken, type TokenData } from './session/jwt';
@@ -58,7 +58,7 @@ const resolve = (verify: (token: string) => Promise<TokenData>) => (token: strin
          */
         .then(({ user, claims }) =>
             (user
-                ? rolesOf(user.id, DEMO_TENANT_ID, {
+                ? rolesOf(user.id, DEPLOYMENT_TENANT_ID, {
                       // What the account itself says, for the account no membership names —
                       // an unseeded deployment, or a fixture written straight to the
                       // collection. A stored membership always wins over it. Platform has no
@@ -66,9 +66,9 @@ const resolve = (verify: (token: string) => Promise<TokenData>) => (token: strin
                       // scope, so an account with none there simply holds no platform role.
                       tenant: user.role ?? 'customer',
                       platform: null
-                  }).then((roles) => ({ tenantId: DEMO_TENANT_ID, roles }))
+                  }).then((roles) => ({ tenantId: DEPLOYMENT_TENANT_ID, roles }))
                 : Promise.resolve({
-                      tenantId: DEMO_TENANT_ID,
+                      tenantId: DEPLOYMENT_TENANT_ID,
                       roles: { tenant: 'customer', platform: null }
                   })
             ).then((membership) => ({ user, claims, membership }))
@@ -92,7 +92,7 @@ const resolve = (verify: (token: string) => Promise<TokenData>) => (token: strin
                        * `anonymousCaller()`.
                        */
                       roles: membership.roles,
-                      // The one shop this deployment is — `DEMO_TENANT_ID`, a fixed constant
+                      // The one shop this deployment is — `DEPLOYMENT_TENANT_ID`, a fixed constant
                       // rather than anything the request could name.
                       tenantId: membership.tenantId,
                       imageUrl: user.imageUrl,

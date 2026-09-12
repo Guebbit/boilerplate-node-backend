@@ -31,7 +31,7 @@ import { usersAuditActions } from './audit';
 import { USER_DELETED, USER_SETUP_REQUESTED } from './events';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import { assignRole, revokeRole, AccessInvariantError } from '@kernel/access/store';
-import { DEMO_TENANT_ID } from '@kernel/access/seed';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**
  * Validate user data for admin create/edit forms; returns UI-friendly error messages (empty means
@@ -124,7 +124,7 @@ export const create = (
                     ? Promise.resolve()
                     : assignRole(
                           String(user._id),
-                          DEMO_TENANT_ID,
+                          DEPLOYMENT_TENANT_ID,
                           'tenant',
                           data.role,
                           context.caller.permissions
@@ -264,7 +264,7 @@ export const update = (
                 ? Promise.resolve()
                 : assignRole(
                       String(savedUser._id),
-                      DEMO_TENANT_ID,
+                      DEPLOYMENT_TENANT_ID,
                       'tenant',
                       data.role,
                       context.caller.permissions
@@ -344,7 +344,7 @@ export const remove = (
     hardDelete = false
 ): Promise<ResponseSuccess<UserDocument> | ResponseSuccess<undefined> | ResponseReject> => {
     if (hardDelete)
-        return revokeRole(user.id, DEMO_TENANT_ID, 'tenant')
+        return revokeRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant')
             .then(() => emitDomainEvent(USER_DELETED, { userId: user.id }))
             .then(() => userRepository.deleteOne(user))
             .then(() => generateSuccess(undefined, 200, t('users.hard-deleted')))
