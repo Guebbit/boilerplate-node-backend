@@ -55,7 +55,9 @@ export const SHOP_SUBJECTS: Readonly<Record<string, string>> = {
     'product.softDeleted': SEED_PRODUCT_IDS.heaterSoftDeleted,
     'product.inactive': SEED_PRODUCT_IDS.bundleInactive,
     'product.outOfStock': SEED_PRODUCT_IDS.scratchPostOutOfStock,
-    'product.barebones': SEED_PRODUCT_IDS.barebones
+    'product.barebones': SEED_PRODUCT_IDS.barebones,
+    'product.inStock': SEED_PRODUCT_IDS.dogBedPremium,
+    'product.rich': SEED_PRODUCT_IDS.dogFoodStandard
 };
 
 /**

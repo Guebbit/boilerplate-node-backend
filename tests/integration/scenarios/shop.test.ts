@@ -124,6 +124,21 @@ describe('each subject names a row that really has the property', () => {
         expect(product?.description).toBe('');
     });
 
+    it('product.inStock is buyable once the flows have finished shopping', async () => {
+        const product = await productModel.findById(subjects['product.inStock']).exec();
+        expect(toProduct(product!).available).toBeGreaterThan(0);
+        expect(product?.active).toBe(true);
+    });
+
+    it('product.rich populates every optional field a detail page renders', async () => {
+        const product = await productModel.findById(subjects['product.rich']).exec();
+        expect(toProduct(product!).available).toBeGreaterThan(0);
+        expect(product?.description).toBeTruthy();
+        expect(product?.categories?.length).toBeGreaterThan(0);
+        expect(product?.tags?.length).toBeGreaterThan(0);
+        expect(product?.imageUrl).toBeTruthy();
+    });
+
     it('order.ownerPending is pending, the admin account owns it, and it holds real stock', async () => {
         const order = await orderModel.findById(subjects['order.ownerPending']).exec();
         expect(order?.status).toBe('pending');
