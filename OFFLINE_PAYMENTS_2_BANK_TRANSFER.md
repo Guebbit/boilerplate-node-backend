@@ -68,7 +68,11 @@ every customer's money to the wrong account.
   row in `scripts/docs/dependency-groups.ts`.
 - Used at boot only: normalise with `electronicFormatIBAN`, then `isValidIBAN`, and `isValidBIC`
   when `_BIC` is set. A bad value refuses the boot with the variable's name.
-- Also serves the display: `friendlyFormatIBAN` for the instructions the customer copies.
+- **Not** used for the display, on reflection: `friendlyFormatIBAN` would have made
+  `@infrastructure/adapters/bank-transfer.ts` — which `orders` also imports — a second importer,
+  costing `ibantools` the single-module ownership this section opens by claiming. The 4-character
+  grouping a customer expects to copy has no edge case a hand-rolled `replaceAll` gets wrong, so
+  `bankTransferIbanFriendly()` does that instead, entirely without the package.
 
 ## Work
 
@@ -92,11 +96,18 @@ Backend:
       case that generator exists to catch
 - [x] docs: `docs/modules/payments.md` and `docs/modules/inventory-reservations.md` — the per-method hold
 
-Frontend:
+Frontend (`boilerplate-vue-frontend`, commit `ff684015`):
 
-- [ ] checkout: a method choice, when `GET /payments/methods` offers more than card
-- [ ] order page: the instructions, the reference, the deadline — copyable
-- [ ] admin orders list: the "awaiting transfer" filter
+- [x] checkout: a method choice, when `GET /payments/methods` offers more than card —
+      `PaymentMethodSelector`, hidden entirely while only `card` is offered
+- [x] order page: the instructions, the reference, the deadline — copyable —
+      `TransferInstructionsPanel`, mounted beside `PaymentPanel` while `transferInstructions` is present
+- [x] admin orders list: the "awaiting transfer" filter — one checkbox toggling
+      `status=pending` + `paymentMethod=bank_transfer` together, needed the
+      `paymentMethod` filter added to `GET /orders` first (backend commit `62026402`)
+- [x] "Record offline payment" preset to `bank_transfer` — already true: file 1's own form
+      defaults to whichever method is first in the generated enum, and `bank_transfer` already
+      sorts first. Confirmed rather than changed.
 
 Tests:
 
