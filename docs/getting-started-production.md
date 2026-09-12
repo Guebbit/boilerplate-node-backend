@@ -16,6 +16,23 @@ themselves. This page is the short version; the compose file is the source of tr
 A production stack serves **one client organisation**. It is named, and the name picks up that
 client's configuration:
 
+```mermaid
+flowchart TD
+    Dir["mkdir clients/acme,\ncp .env-example clients/acme/.env"] --> Name["export COMPOSE_PROJECT_NAME=acme"]
+    Name --> Secrets["fill in every MUST SET value —\nboot refuses and names the first missing one"]
+    Secrets --> Up["docker compose up -d --build\n(-f docker-compose.production.yml)"]
+    Up --> Setup["setup runs once:\nindexes + the shop's row"]
+    Setup --> Running(["app, cron, database, cache, queue\npublished to 127.0.0.1 only"])
+    Running --> Proxy["reverse proxy terminates TLS\nin front — nothing in this repo does"]
+
+    classDef step fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef done fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef warn fill:#fef3c7,stroke:#d97706,color:#111827;
+    class Dir,Name,Secrets,Up,Setup step;
+    class Running done;
+    class Proxy warn;
+```
+
 ```bash
 mkdir -p clients/acme
 cp .env-example clients/acme/.env
