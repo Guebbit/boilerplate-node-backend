@@ -151,6 +151,9 @@ const customerUsers = CUSTOMER_NAMES.map(([key, username], index) =>
         // opted-in and not, and `root`/`customer` alone left the "granted" path exercised
         // by exactly one account.
         analyticsConsent: index % 2 === 0,
+        // marcus is `./audit-logs`'s banned customer — the only one of the ten seeded inactive,
+        // so that story beat matches a state the rest of the seed agrees with.
+        active: key === 'marcus' ? false : undefined,
         ...(index % 2 === 0 ? userImages.root : userImages.customer)
     })
 );

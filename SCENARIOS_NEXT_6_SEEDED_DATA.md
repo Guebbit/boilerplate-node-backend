@@ -55,8 +55,8 @@ Nits:
 
 Checked and clean: order totals and shipping; carts reference only active products and would check
 out; wishlists and address books; every product has `en` and `it` translations on active locales;
-editor and moderator memberships resolve to exactly their YAML keys; all five audit action names
-are still emitted; `blank` gives four working logins (also verified live).
+editor and moderator memberships resolve to exactly their YAML keys; `blank` gives four working
+logins (also verified live).
 
 ## Options for D1
 
@@ -83,9 +83,10 @@ Do you use `NODE_WEBHOOK_DEMO_SINK_URL` today? If not, **C**. If yes, **B**.
 - [x] D1 per the answer — `b5891c9a`: `makeOrder` takes `status`; history orders are
       `delivered`/`shipped`/`cancelled`; the out-of-stock line dropped; `order.ownerPending`
       added, holding real stock through `inventoryService.reserveForOrder`
-- [ ] D2 point each audit row at state that matches: the customer's own order; the real entry `_id`
-      with `target_type: 'locale_entry'`; marcus `active: false`; the refund row only with a
-      refunded payment (or drop it until OFFLINE_PAYMENTS 3); add `actor_scope`
+- [x] D2 — point each audit row at state that matches: the customer's own order; the real entry
+      `_id` with `target_type: 'locale_entry'`; marcus `active: false`; `actor_scope` added to
+      every row. The refund row is dropped, not repointed — nothing here seeds a payment; it
+      returns with OFFLINE_PAYMENTS 3
 - [ ] D3 seed a few real frontend keys; the frontend spec asserts one Spanish string next to one
       English fallback. Check which languages have a dictionary before seeding overrides for them
 - [ ] D4 document the exemption now; opening `receive` rows come with OFFLINE_PAYMENTS 3
