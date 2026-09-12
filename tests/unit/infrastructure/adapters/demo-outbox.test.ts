@@ -29,7 +29,7 @@ it('is demo mode exactly when enableDemoProfile() was called', () => {
     expect(isDemoMode()).toBe(true);
 });
 
-it('refuses production even after enableDemoProfile(), and logs it (T1)', () => {
+it('refuses production even after enableDemoProfile(), and logs it', () => {
     const error = jest.spyOn(logger, 'error').mockImplementation(() => logger);
     enableDemoProfile();
     process.env.NODE_ENV = 'production';

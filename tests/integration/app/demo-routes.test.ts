@@ -32,7 +32,7 @@ const testApp = () => {
     return app;
 };
 
-describe('the mount gate (T1)', () => {
+describe('the mount gate', () => {
     it('answers 404 when enableDemoProfile() was never called', async () => {
         // The real app, not `testApp()` above: `testApp()` calls `installDemo` directly, which
         // bypasses the gate this case exists to prove.
