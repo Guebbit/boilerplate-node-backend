@@ -111,11 +111,12 @@ The last row plus the checkout and refund rows cover all five audit entries — 
 
 Two things the plan did not foresee, decided at implementation:
 
-| Found                                                                    | Done                                                                                                                                     |
-| ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| a checkout EMPTIES the cart, so `scenarios/cart.ts`'s rows were wiped    | the four baskets are filled by the runner too, last, through `POST /cart`. `scenarios/cart.ts` deleted                                   |
-| `marcus` was seeded `active: false`, so the runner could not sign him in | seeded active; the owner bans him through `PUT /users/{id}` after his two orders, which is what produces the `admin.user.banned` row     |
-| `bank_transfer` was configured nowhere, so `order.awaitingTransfer` 409s | `.env-example`, `run-server.ts` and `tests/support/setup.ts` all name a beneficiary and IBAN; the runner refuses to build a shop without |
+| Found                                                                    | Done                                                                                                                                          |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| a checkout EMPTIES the cart, so `scenarios/cart.ts`'s rows were wiped    | the four baskets are filled by the runner too, last, through `POST /cart`. `scenarios/cart.ts` deleted                                        |
+| `marcus` was seeded `active: false`, so the runner could not sign him in | seeded active; the owner bans him through `PUT /users/{id}` after his two orders, which is what produces the `admin.user.banned` row          |
+| `bank_transfer` was configured nowhere, so `order.awaitingTransfer` 409s | `.env-example`, `run-server.ts` and `tests/support/setup.ts` all name a beneficiary and IBAN; the runner refuses to build a shop without      |
+| twelve logins left twelve refresh tokens on the user documents           | every caller ends with `POST /account/logout-all`. Shoppers first, then the ban, then the owner — a banned account cannot use its own session |
 
 ## Measured, 2026-09-13
 
@@ -137,4 +138,13 @@ date.
 - [x] Backdating capped at 80 days, inside the audit TTL — answered 2026-09-13
 - [ ] Veto any row under `## Decided` — none yet
 
-**Backend done 2026-09-13.** Frontend: SCENARIOS_NEXT 7's list lands in the same pass.
+**Backend and frontend both done 2026-09-13.** SCENARIOS_NEXT 7's list landed in the same pass —
+see its own file for the four deviations.
+
+The paired frontend's e2e suite is unchanged by this: 68 passing / 9 failing, spec for spec
+identical to the same run against the pre-change stack. Those nine are pre-existing and unrelated
+(a `POST /products` 422 on the create form, two `cy.type()`-on-two-elements in the translation
+tabs, three a11y violations, a locale switch). One environment trap cost an evening and is worth
+writing down: **a git worktree gets no `.env`**, it being gitignored — and without
+`NODE_CORS_ORIGIN` every browser request is blocked while Node-side tasks still succeed, so the
+backend logs `200`s for requests the app never received.
