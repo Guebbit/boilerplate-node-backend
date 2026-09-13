@@ -7,7 +7,7 @@
 
 import type { Types } from 'mongoose';
 import { localeCandidatesFor, resolveTranslations, runWithLocale } from '@infrastructure/i18n';
-import type { ProductSnapshot } from '@modules/products';
+import { resolveTaxRate, type ProductSnapshot } from '@modules/products';
 import type { OrderDocumentItem } from '../model';
 
 /**
@@ -71,9 +71,17 @@ export const freezeOrderLines = (
             // The picture is never frozen — `orderLineProductSchema` has nowhere to put it, and
             // dropping it here rather than leaving Mongoose's strict mode to ignore it on save
             // says so in the one place a reader of this function would look.
-            const { imageUrl: _imageUrl, thumbnailUrl: _thumbnailUrl, ...frozenProduct } = product;
+            //
+            // `taxClass` never rides along either — only the RATE it resolves to does, exactly
+            // like `onHand`/`reserved` are excluded above it. See `FrozenOrderLineProduct`.
+            const {
+                imageUrl: _imageUrl,
+                thumbnailUrl: _thumbnailUrl,
+                taxClass,
+                ...frozenProduct
+            } = product;
             return {
-                product: frozenProduct,
+                product: { ...frozenProduct, taxRate: resolveTaxRate(taxClass) },
                 quantity: quantities[index],
                 locale
             };

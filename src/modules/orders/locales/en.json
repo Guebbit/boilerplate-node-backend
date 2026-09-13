@@ -15,7 +15,20 @@
         "invoice": {
             "meta-title": "Invoice — order {{order}}",
             "title": "The order has been confirmed",
-            "line": "{{title}} — {{quantity}} × {{price}}"
+            "line": "{{title}} — {{quantity}} × {{price}}",
+            "vat": {
+                "column-description": "Description",
+                "column-quantity": "Qty",
+                "column-unit-price": "Unit price (gross)",
+                "column-net": "Net",
+                "column-rate": "VAT rate",
+                "column-tax": "VAT",
+                "column-gross": "Total",
+                "net-total": "Net total",
+                "tax-total": "VAT total",
+                "vat-number": "VAT number: {{number}}",
+                "vat-number-missing": "VAT number not configured"
+            }
         },
         "email-confirm": {
             "subject": "Order confirmed",

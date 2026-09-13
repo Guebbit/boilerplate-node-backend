@@ -17,21 +17,24 @@ import {
     toDate,
     type OverridesFor
 } from '@infrastructure/persistence/factories';
-import type { ProductSnapshot } from '@modules/products';
 import type { Id, Order, OrderItem, Product } from '@types';
-import type { OrderDocument } from './model';
+import type { FrozenOrderLineProduct, OrderDocument } from './model';
 
 /**
  * The product as it was when the order was placed — the generated `Product`, with the three
- * fields a snapshot must carry made required, and `onHand`/`reserved` dropped: the embedded
- * schema has no path for either, so a fixture that pinned one would silently lose it on write.
- * `createdAt`/`updatedAt` are the CATALOGUE row's, carried in explicitly: a subdocument's
- * timestamps stamp on insert regardless of the parent's `{ timestamps: false }`, which would
- * otherwise leave the snapshot dated to when the ORDER was placed rather than to the product row
- * it is a snapshot of.
+ * fields a snapshot must carry made required, `onHand`/`reserved` dropped (the embedded schema
+ * has no path for either, so a fixture that pinned one would silently lose it on write), and
+ * `taxClass` replaced by `taxRate` — an order line freezes the RESOLVED rate, never the class it
+ * came from, same as `freezeOrderLines` itself. `createdAt`/`updatedAt` are the CATALOGUE row's,
+ * carried in explicitly: a subdocument's timestamps stamp on insert regardless of the parent's
+ * `{ timestamps: false }`, which would otherwise leave the snapshot dated to when the ORDER was
+ * placed rather than to the product row it is a snapshot of.
  */
-export type OrderSnapshotInput = Omit<OverridesFor<Product>, 'onHand' | 'reserved'> &
-    Required<Pick<Product, 'id' | 'title' | 'price'>>;
+export type OrderSnapshotInput = Omit<OverridesFor<Product>, 'onHand' | 'reserved' | 'taxClass'> &
+    Required<Pick<Product, 'id' | 'title' | 'price'>> & {
+        /** The decimal VAT rate this line was actually charged. Absent means a pre-VAT fixture. */
+        taxRate?: number;
+    };
 
 /**
  * One line of an order: the snapshot, and how many were bought.
@@ -78,7 +81,7 @@ const toSnapshot = ({
     updatedAt,
     deletedAt,
     ...fields
-}: OrderSnapshotInput): ProductSnapshot => ({
+}: OrderSnapshotInput): FrozenOrderLineProduct => ({
     _id: new Types.ObjectId(id),
     title,
     price,

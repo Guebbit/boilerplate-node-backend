@@ -14,6 +14,9 @@ const TOUCHED = [
     'NODE_ENV',
     'NODE_URL',
     'NODE_CORS_ORIGIN',
+    'NODE_SHOP_COUNTRY',
+    'NODE_VAT_RATE_DEFAULT',
+    'NODE_VAT_RATE_REDUCED',
     'NODE_SMTP_HOST',
     'NODE_SMTP_USER',
     'NODE_SMTP_PASS',
@@ -34,6 +37,9 @@ const original = new Map(TOUCHED.map((key) => [key, process.env[key]]));
 const configure = (): void => {
     process.env.NODE_ENV = 'development';
     process.env.NODE_URL = 'https://api.example.com/';
+    process.env.NODE_SHOP_COUNTRY = 'IT';
+    process.env.NODE_VAT_RATE_DEFAULT = '0.22';
+    process.env.NODE_VAT_RATE_REDUCED = '0.1';
     delete process.env.NODE_SMTP_HOST;
     delete process.env.NODE_ANTIBOT_PROVIDER;
     delete process.env.NODE_ANTIBOT_EMAIL_POLICY;
@@ -126,6 +132,48 @@ describe('application-wide variables', () => {
         delete process.env.NODE_CORS_ORIGIN;
 
         expect(() => assertRequiredConfig([])).toThrow(/NODE_CORS_ORIGIN/);
+    });
+});
+
+describe('shop identity and VAT rates', () => {
+    it('refuses to boot with no NODE_SHOP_COUNTRY', () => {
+        configure();
+        delete process.env.NODE_SHOP_COUNTRY;
+
+        expect(() => assertRequiredConfig([])).toThrow(/NODE_SHOP_COUNTRY/);
+    });
+
+    it('refuses to boot with no NODE_VAT_RATE_DEFAULT or NODE_VAT_RATE_REDUCED', () => {
+        configure();
+        delete process.env.NODE_VAT_RATE_DEFAULT;
+        delete process.env.NODE_VAT_RATE_REDUCED;
+
+        expect(() => assertRequiredConfig([])).toThrow(
+            /NODE_VAT_RATE_DEFAULT.*NODE_VAT_RATE_REDUCED|NODE_VAT_RATE_REDUCED.*NODE_VAT_RATE_DEFAULT/
+        );
+    });
+
+    it.each(['abc', '1', '1.5', '-0.1'])(
+        'refuses a rate that does not parse into [0, 1) (%s)',
+        (rate) => {
+            configure();
+            process.env.NODE_VAT_RATE_DEFAULT = rate;
+
+            expect(() => assertRequiredConfig([])).toThrow(/NODE_VAT_RATE_DEFAULT/);
+        }
+    );
+
+    it('accepts a rate of exactly 0 — a shop that charges no VAT at all', () => {
+        configure();
+        process.env.NODE_VAT_RATE_DEFAULT = '0';
+
+        expect(() => assertRequiredConfig([])).not.toThrow();
+    });
+
+    it('accepts a fully configured shop', () => {
+        configure();
+
+        expect(() => assertRequiredConfig([])).not.toThrow();
     });
 });
 

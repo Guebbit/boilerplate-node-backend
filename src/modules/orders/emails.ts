@@ -7,9 +7,11 @@
  * through Puppeteer), so neither template resolves a key.
  */
 
+import type { TFunction } from 'i18next';
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
-import { orderTotal } from './domain';
+import { shopCountry, shopLegalName, shopVatNumber } from '@infrastructure/adapters/shop';
+import { orderTotal, orderTaxBreakdown } from './domain';
 import type { OrderTransferInstructions } from '@types';
 
 /**
@@ -128,15 +130,114 @@ export const bankTransferExpiredEmail = (locale: string, order: OrderLines): Ema
 };
 
 /**
- * What the invoice needs beyond the lines: the order's id, for the document title.
+ * What the invoice needs beyond the lines: the order's id, for the document title, and each
+ * line's frozen `taxRate` — the VAT figures themselves are recomputed fresh by
+ * {@link buildVatBlock}, same reasoning as `orderTotal` below.
  *
  * `id`, not `_id`. The order arrives from `orderRepository.findByIdScoped`, whose shape depends
  * on the caller's scope — an admin gets a hydrated document, an owner gets a transformed plain
- * object with `_id` already deleted. `id` is the half that resolves on both.
+ * object with `_id` already deleted. `id` is the half that resolves on both, and NEITHER has run
+ * through `applyOrderTransform`'s derived fields: this controller renders the raw document
+ * directly, without ever calling `.toJSON()`.
  */
 export interface InvoiceOrder extends OrderLines {
     id?: unknown;
+    items: {
+        quantity: number;
+        product: { title: string; price: number; taxRate?: number };
+    }[];
 }
+
+/** One row of the invoice's VAT table — a line's own figures, ready to interpolate as-is. */
+export interface InvoiceVatRow {
+    description: string;
+    quantity: number;
+    unitPrice: number;
+    netAmount: number;
+    /** Formatted here, not in the template — `0.22` becomes `"22%"` once, not on every render. */
+    taxRateLabel: string;
+    taxAmount: number;
+    grossAmount: number;
+}
+
+/**
+ * The invoice's VAT table and the shop's own legal identity — present only on an order that
+ * actually carries VAT figures. `undefined` renders no block at all, rather than one implying a
+ * rate that was never charged.
+ */
+export interface InvoiceVatBlock {
+    columns: {
+        description: string;
+        quantity: string;
+        unitPrice: string;
+        net: string;
+        rate: string;
+        tax: string;
+        gross: string;
+    };
+    rows: InvoiceVatRow[];
+    netTotalLabel: string;
+    netTotal: number;
+    taxTotalLabel: string;
+    taxTotal: number;
+    supplier: {
+        /** Absent when `NODE_SHOP_LEGAL_NAME` is unset — the template omits the row entirely. */
+        legalName?: string;
+        /** Pre-composed: names the VAT number, or says plainly that none is configured. */
+        vatNumberLine: string;
+        /** Absent when `NODE_SHOP_COUNTRY` is unset — should not happen once boot has passed. */
+        country?: string;
+    };
+}
+
+/**
+ * Builds the invoice's VAT table, recomputing the breakdown fresh from the order's frozen lines —
+ * same reasoning `orderTotal` already applies to the grand total in this file: the controller may
+ * hand this an untransformed document, so nothing here may assume a derived field was already
+ * computed. `undefined` on a pre-VAT order, which is the caller's signal to render no VAT block.
+ * @param t - this document's translator, already fixed to its locale
+ * @param order - the order the invoice is for
+ * @returns the VAT block, or `undefined` when the order carries no VAT figures
+ */
+const buildVatBlock = (t: TFunction, order: InvoiceOrder): InvoiceVatBlock | undefined => {
+    const breakdown = orderTaxBreakdown(order);
+    if (!breakdown) return undefined;
+
+    const rows = order.items.map((item, index) => ({
+        description: item.product.title,
+        quantity: item.quantity,
+        unitPrice: item.product.price,
+        netAmount: breakdown.lines[index].netAmount,
+        // A rate is a fraction (0.22); the invoice prints the percentage a customer expects.
+        taxRateLabel: `${Math.round((item.product.taxRate ?? 0) * 100)}%`,
+        taxAmount: breakdown.lines[index].taxAmount,
+        grossAmount: item.product.price * item.quantity
+    }));
+
+    return {
+        columns: {
+            description: t('orders.invoice.vat.column-description'),
+            quantity: t('orders.invoice.vat.column-quantity'),
+            unitPrice: t('orders.invoice.vat.column-unit-price'),
+            net: t('orders.invoice.vat.column-net'),
+            rate: t('orders.invoice.vat.column-rate'),
+            tax: t('orders.invoice.vat.column-tax'),
+            gross: t('orders.invoice.vat.column-gross')
+        },
+        rows,
+        netTotalLabel: t('orders.invoice.vat.net-total'),
+        netTotal: breakdown.netTotal,
+        taxTotalLabel: t('orders.invoice.vat.tax-total'),
+        taxTotal: breakdown.taxTotal,
+        supplier: {
+            legalName: shopLegalName(),
+            vatNumberLine: shopVatNumber()
+                ? t('orders.invoice.vat.vat-number', { number: shopVatNumber() })
+                : t('orders.invoice.vat.vat-number-missing'),
+            country: shopCountry()
+        }
+    };
+};
 
 /**
  * Render context for the invoice PDF.
@@ -158,6 +259,7 @@ export const invoiceDocument = (locale: string, order: InvoiceOrder): Record<str
                 quantity: item.quantity,
                 price: item.product.price
             })
-        )
+        ),
+        vat: buildVatBlock(t, order)
     };
 };

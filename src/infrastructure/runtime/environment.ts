@@ -1,12 +1,13 @@
 /**
  * @module
- * The two coercions every environment reader shares.
+ * The coercions every environment reader shares.
  *
  * Everything reads `process.env` where it is used, and lazily — a value set after import still
  * applies, and a test can set a variable without knowing which import order froze it. What is
- * centralised is the COERCION, because a variable is always a string and there are only two things
- * this app does with one it did not just use verbatim: read it as a number, or read it as a switch.
- * Both were written several ways, and two of the spellings answered `NaN`.
+ * centralised is the COERCION, because a variable is always a string and there are only a few
+ * things this app does with one it did not just use verbatim: read it as a whole number, as a
+ * decimal, or as a switch. Each was written several ways, and more than one spelling answered
+ * `NaN`.
  */
 
 /** Whole-string, base-10 integers only — no leading/trailing junk, no hex, no unit suffix. */
@@ -29,6 +30,22 @@ export const environmentNumber = (key: string, fallback: number, min?: number): 
 
     const parsed = Number.parseInt(raw, 10);
     return min !== undefined && parsed < min ? fallback : parsed;
+};
+
+/** Whole-string decimals only — an optional sign, digits, and an optional fractional part. */
+const DECIMAL = /^[+-]?\d+(\.\d+)?$/;
+
+/**
+ * A decimal number from the environment, or `fallback` when the variable is unusable — the same
+ * contract as {@link environmentNumber}, for a value that is not a whole number (a VAT rate, a
+ * ratio) rather than a count.
+ *
+ * @param key - the variable's name
+ * @param fallback - the value a deployment gets when it did not usably set one
+ */
+export const environmentDecimal = (key: string, fallback: number): number => {
+    const raw = process.env[key]?.trim();
+    return raw && DECIMAL.test(raw) ? Number.parseFloat(raw) : fallback;
 };
 
 /** The strings a deployment may write for "on", either case. */

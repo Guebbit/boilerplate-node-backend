@@ -646,6 +646,19 @@ components:
                     type: string
                     format: date-time
 
+        # Overrides the shop's default VAT rate for this product. Absent — most products — means
+        # the standard rate (`NODE_VAT_RATE_DEFAULT`) applies; every product resolves to SOME
+        # rate, this field only ever narrows it. `reduced` uses `NODE_VAT_RATE_REDUCED`; `zero`
+        # is always 0%, no configuration needed. The RESOLVED decimal rate, not this class, is
+        # what gets frozen onto an order line — see `OrderLineProduct.taxRate`.
+        TaxClass:
+            type: string
+            enum: [reduced, zero]
+            description: >-
+                A category of goods taxed below the shop's standard VAT rate — books, food,
+                medicine and similar, depending on the deployment's own jurisdiction. Absent means
+                the standard rate.
+
         Product:
             type: object
             additionalProperties: false
@@ -659,6 +672,12 @@ components:
                     type: number
                     format: double
                     minimum: 0
+                    description: >-
+                        Gross — what the customer pays, VAT included. Never net-of-tax: the invoice
+                        derives the net amount and the VAT amount FROM this, at whatever rate
+                        applies, rather than the other way around.
+                taxClass:
+                    $ref: '#/components/schemas/TaxClass'
                 # ── The two counters and the number derived from them ──────────────────────
                 #
                 # `onHand` is how many units exist; `reserved` is how many of those an open
@@ -791,6 +810,9 @@ components:
                     type: number
                     format: double
                     minimum: 0
+                    description: >-
+                        Gross — what the customer paid, VAT included, frozen at checkout. Same
+                        convention as `Product.price`.
                 description:
                     type: string
                 active:
@@ -815,6 +837,20 @@ components:
                 deletedAt:
                     type: string
                     format: date-time
+                # The decimal rate this line was actually taxed at, resolved from the product's
+                # `taxClass` and frozen here at checkout — a rate change in config must not
+                # re-state what a past order was charged. Absent on an order placed before VAT
+                # existed; never backfilled, and never re-resolved from the product's CURRENT
+                # tax class.
+                taxRate:
+                    type: number
+                    format: double
+                    minimum: 0
+                    maximum: 1
+                    description: >-
+                        The VAT rate this line was actually charged, as a decimal (0.22 for 22%).
+                        Frozen at checkout, same reasoning as `price`. Absent on an order placed
+                        before VAT existed.
 
         # The picture, resolved LIVE from the catalogue product `OrderItem.product.id` still
         # names — never frozen, so a hard-deleted or replaced image can never leak through order
@@ -854,6 +890,22 @@ components:
                         The product's picture, resolved live — `null` when the catalogue product
                         (`product.id`) has been hard-deleted. Never the terms of the sale, so it
                         is never frozen; see `OrderLineCurrent`.
+                # Both derived at serialization from `product.price`/`quantity`/`product.taxRate`
+                # — never stored — and both absent together with `product.taxRate`: a pre-VAT
+                # order renders no tax breakdown at all rather than implying a rate it never
+                # charged. See `src/modules/orders/domain/tax.ts`.
+                taxAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: VAT included in this line's total, at its own frozen `taxRate`.
+                netAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: This line's total excluding VAT — `price × quantity` minus `taxAmount`.
 
         # Shared by `Order.paymentMethod`, `CheckoutRequest.paymentMethod` and
         # `PaymentMethod.id` (`payments`' own module contract) — one enum, so a third method
@@ -939,6 +991,26 @@ components:
                     minimum: 0
                     description: Sum of `product.price × quantity` across every line item, plus `shippingCost` when the checkout chose a method.
                     example: 149.97
+                # Both derived at serialization from the lines' frozen `taxRate` — never stored —
+                # and both absent together on a pre-VAT order (any line missing `taxRate`), rather
+                # than rendering a partial or implied breakdown. See
+                # `src/modules/orders/domain/tax.ts`.
+                netTotal:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: Sum of every line's `netAmount` — the goods total excluding VAT. Absent on a pre-VAT order.
+                taxTotal:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: >-
+                        Every VAT collected on this order: the lines' own `taxAmount`, plus the VAT
+                        on `shippingCost` — apportioned pro-rata across the lines by value and
+                        taxed at each line's own rate, since delivery is taxed as ancillary to what
+                        it delivers. Absent on a pre-VAT order.
                 notes:
                     type: string
                     description: Optional order notes

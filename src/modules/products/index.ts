@@ -25,6 +25,13 @@ export type { ProductSnapshot } from './model';
 /** The mongoose schema and its serialization transform, for this module's own callers. */
 export { productSchema, applyProductTransform, toProduct } from './model';
 
+/**
+ * Resolves a product's `taxClass` into the decimal VAT rate it is charged. Published so `orders`
+ * can freeze the resolved rate onto an order line at checkout time — see `services/snapshot.ts`.
+ */
+export { resolveTaxRate } from './tax';
+export type { TaxClass } from './tax';
+
 /** Events this module emits. Importing the barrel is also what installs the payload declaration. */
 export { PRODUCT_DELETED, PRODUCT_CREATED } from './events';
 
