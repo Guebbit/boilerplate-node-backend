@@ -593,6 +593,7 @@ components:
                 verifiedAt:
                     type: string
                     format: date-time
+                    nullable: true
                 # Set only by `PUT /account` requesting a new address, cleared once
                 # `POST /account/email-change-confirm` proves it (or a second `PUT /account`
                 # naming the CURRENT address cancels it). Inlined rather than `$ref`ing `Email`:
