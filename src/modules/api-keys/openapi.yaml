@@ -1,0 +1,204 @@
+openapi: 3.0.3
+info:
+    title: api-keys — module contract
+    version: '1.0.0'
+
+paths:
+    /api-keys:
+        get:
+            tags: [ApiKeys]
+            summary: List this shop's machine-to-machine credentials
+            description: Never returns a credential's secret — that exists only in the response of the call that minted it.
+            operationId: listApiKeys
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+            responses:
+                '200':
+                    description: Credential list
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ApiKeysResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        post:
+            tags: [ApiKeys]
+            summary: Mint a machine-to-machine credential
+            description: |
+                Mints `sk_<prefix>_<secret>` and returns it in plaintext, once — the only response
+                that ever carries it. `permissions` must be a non-empty subset of the CALLER's own
+                currently-held tenant permissions: a key can never reach further than the person
+                who minted it, and that floor is re-checked on every request the key later makes,
+                not just at mint time — see `docs/tools/security.md#machine-to-machine-credentials`.
+            operationId: mintApiKey
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/MintApiKeyRequest'
+            responses:
+                '201':
+                    description: The minted credential, with its one-time secret
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ApiKeyCreatedEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /api-keys/{id}:
+        delete:
+            tags: [ApiKeys]
+            summary: Revoke a machine-to-machine credential
+            description: |
+                A soft state change, not a delete: `revokedAt` is stamped and every future
+                presentation of the credential is refused, but its row (and audit history) stays
+                readable. Immediate — there is no grace window.
+            operationId: revokeApiKey
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        # ---------- api-keys — the schemas only this module's paths reference. ----------
+        ApiKey:
+            type: object
+            additionalProperties: false
+            required: [id, name, publicPrefix, permissions, createdAt, updatedAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                name:
+                    type: string
+                publicPrefix:
+                    type: string
+                    description: The credential's non-secret prefix, e.g. `a1b2c3d4` — shown in a list so an operator can recognise which key is which.
+                permissions:
+                    type: array
+                    items: { type: string }
+                    minItems: 1
+                    description: The permission keys this credential was minted with. Re-floored against the minter's CURRENT permissions on every request; this is the snapshot taken at mint time.
+                lastUsedAt:
+                    type: string
+                    format: date-time
+                expiresAt:
+                    type: string
+                    format: date-time
+                revokedAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        ApiKeyCreated:
+            # Flat, not `allOf: [ApiKey, {...}]` — two sibling schemas each declaring
+            # `additionalProperties: false` is a well-known JSON Schema trap (see
+            # `webhooks/openapi.yaml`'s `WebhookSubscriptionCreated` for the same note): ajv
+            # validates the instance against EACH branch independently, so every field the OTHER
+            # branch owns reads as "additional" and the whole document fails. Restated flat instead.
+            type: object
+            additionalProperties: false
+            required: [id, name, publicPrefix, permissions, secret, createdAt, updatedAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                name:
+                    type: string
+                publicPrefix:
+                    type: string
+                permissions:
+                    type: array
+                    items: { type: string }
+                    minItems: 1
+                lastUsedAt:
+                    type: string
+                    format: date-time
+                expiresAt:
+                    type: string
+                    format: date-time
+                revokedAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+                secret:
+                    type: string
+                    description: The newly minted credential, in plaintext — `sk_<prefix>_<secret>`. Shown here once, on creation, and never again.
+
+        MintApiKeyRequest:
+            type: object
+            additionalProperties: false
+            required: [name, permissions]
+            properties:
+                name:
+                    type: string
+                    minLength: 1
+                    maxLength: 200
+                    description: A caller-chosen label — what this credential is for, shown back in the list.
+                permissions:
+                    type: array
+                    items: { type: string }
+                    minItems: 1
+                    description: The permission keys to mint this credential with. Must be a subset of the caller's own current permissions, or the request is refused with 422.
+                expiresAt:
+                    type: string
+                    format: date-time
+                    description: Optional. Once past, the credential is refused exactly like a revoked one.
+
+        ApiKeysResponse:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ApiKey' }
+                meta:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
+
+        ApiKeyCreatedEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess' }
+                status: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus' }
+                message: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage' }
+                data: { $ref: '#/components/schemas/ApiKeyCreated' }
+
+        ApiKeysResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess' }
+                status: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus' }
+                message: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage' }
+                data: { $ref: '#/components/schemas/ApiKeysResponse' }

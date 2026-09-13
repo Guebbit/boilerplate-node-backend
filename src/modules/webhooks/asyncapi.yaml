@@ -1,0 +1,212 @@
+# The webhooks module's async contract — the public event catalogue.
+#
+# A complete AsyncAPI document on its own (see `observability/asyncapi.yaml`'s header for why),
+# merged by the bundler into `asyncapi.yaml` AND `asyncapi.public.yaml` — this is a `shared`
+# section (`scripts/contracts/asyncapi-bundles.ts`), unlike the queue this module also owns
+# (`worker.webhook.deliver`, in `shared/contracts/asyncapi.workers.yaml`, backend-only). That
+# split IS the module's whole point: `GET /webhooks/events` serves this section straight out of
+# this very file, so the catalogue a subscriber reads and the events this module can actually fire
+# can never drift apart.
+#
+# `webhooks/module.ts` subscribes to each of these on the kernel's domain-event bus
+# (`order.status_changed` filtered by `to`, `order.created`, `order.cancelled`,
+# `payment.succeeded`, `payment.failed` — see `orders/events.ts` and `payments/events.ts`) and
+# republishes the ones a subscription's filter matches, signed, to the URL it names. The SIX names
+# below are the shop's worked example; a deployment with no orders declares its own here and
+# deletes this file along with the rest of the module.
+asyncapi: 3.0.0
+info:
+    title: Webhooks async contract
+    version: 1.0.0
+    description: The events a webhook subscription may receive.
+servers:
+    subscriberEndpoint:
+        # A VARIABLE server, not a fixed host: every subscription names its own HTTPS URL, so there
+        # is no one address this document can print. `asyncapi-servers`/`asyncapi-channel-servers`
+        # (`spectral.asyncapi.modules.yaml`) still pass, because the channels below DO bind to a
+        # declared server — it just resolves per subscription instead of per deployment.
+        #
+        # Not a server this application runs — the reverse of every other section's server: a
+        # subscriber genuinely subscribes to receive these, over a connection this application
+        # opens outbound.
+        host: '{subscriberHost}'
+        pathname: '{subscriberPath}'
+        protocol: https
+        variables:
+            subscriberHost:
+                default: example.com
+                description: Host (and port, when non-default) of a subscription's configured URL.
+            subscriberPath:
+                default: /webhooks/inbox
+                description: Path of a subscription's configured URL.
+channels:
+    order.created:
+        address: order.created
+        description: A new order was placed.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            OrderCreatedEvent:
+                $ref: '#/components/messages/OrderCreatedEvent'
+    order.paid:
+        address: order.paid
+        description: An order's payment settled.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            OrderPaidEvent:
+                $ref: '#/components/messages/OrderPaidEvent'
+    order.shipped:
+        address: order.shipped
+        description: An order was marked shipped.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            OrderShippedEvent:
+                $ref: '#/components/messages/OrderShippedEvent'
+    order.cancelled:
+        address: order.cancelled
+        description: An order was cancelled.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            OrderCancelledEvent:
+                $ref: '#/components/messages/OrderCancelledEvent'
+    payment.succeeded:
+        address: payment.succeeded
+        description: A payment settled successfully.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            PaymentSucceededEvent:
+                $ref: '#/components/messages/PaymentSucceededEvent'
+    payment.failed:
+        address: payment.failed
+        description: A payment attempt was declined.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            PaymentFailedEvent:
+                $ref: '#/components/messages/PaymentFailedEvent'
+operations:
+    webhookOrderCreated:
+        action: send
+        channel:
+            $ref: '#/channels/order.created'
+        summary: An order was written for the first time.
+        description: >-
+            Fired once per order, from both an admin create and a storefront checkout — see
+            `orders/services/crud.ts`'s `recordCreated`.
+        messages:
+            - $ref: '#/channels/order.created/messages/OrderCreatedEvent'
+    webhookOrderPaid:
+        action: send
+        channel:
+            $ref: '#/channels/order.paid'
+        summary: An order moved to the `paid` status.
+        description: >-
+            Derived from `order.status_changed` (`to: 'paid'`) rather than its own domain
+            event — see `orders/events.ts`: "listeners filter on `to`; the event doesn't know
+            who cares."
+        messages:
+            - $ref: '#/channels/order.paid/messages/OrderPaidEvent'
+    webhookOrderShipped:
+        action: send
+        channel:
+            $ref: '#/channels/order.shipped'
+        summary: An order moved to the `shipped` status.
+        description: Derived from `order.status_changed` filtered to `to = 'shipped'`, same as `order.paid`.
+        messages:
+            - $ref: '#/channels/order.shipped/messages/OrderShippedEvent'
+    webhookOrderCancelled:
+        action: send
+        channel:
+            $ref: '#/channels/order.cancelled'
+        summary: A cancel went through; stock is already back on the shelf.
+        description: One-to-one with the `order.cancelled` domain event — see `orders/events.ts`.
+        messages:
+            - $ref: '#/channels/order.cancelled/messages/OrderCancelledEvent'
+    webhookPaymentSucceeded:
+        action: send
+        channel:
+            $ref: '#/channels/payment.succeeded'
+        summary: A payment reached `succeeded`.
+        description: One-to-one with the `payment.succeeded` domain event — see `payments/events.ts`.
+        messages:
+            - $ref: '#/channels/payment.succeeded/messages/PaymentSucceededEvent'
+    webhookPaymentFailed:
+        action: send
+        channel:
+            $ref: '#/channels/payment.failed'
+        summary: A payment reached `declined`.
+        description: >-
+            One-to-one with the `payment.failed` domain event. Retryable with another method,
+            so this can fire more than once for the same order.
+        messages:
+            - $ref: '#/channels/payment.failed/messages/PaymentFailedEvent'
+components:
+    messages:
+        OrderCreatedEvent:
+            name: OrderCreatedEvent
+            title: Order created
+            payload:
+                $ref: '#/components/schemas/OrderIdPayload'
+        OrderPaidEvent:
+            name: OrderPaidEvent
+            title: Order paid
+            payload:
+                $ref: '#/components/schemas/OrderIdPayload'
+        OrderShippedEvent:
+            name: OrderShippedEvent
+            title: Order shipped
+            payload:
+                $ref: '#/components/schemas/OrderIdPayload'
+        OrderCancelledEvent:
+            name: OrderCancelledEvent
+            title: Order cancelled
+            payload:
+                $ref: '#/components/schemas/OrderCancelledPayload'
+        PaymentSucceededEvent:
+            name: PaymentSucceededEvent
+            title: Payment succeeded
+            payload:
+                $ref: '#/components/schemas/PaymentEventPayload'
+        PaymentFailedEvent:
+            name: PaymentFailedEvent
+            title: Payment failed
+            payload:
+                $ref: '#/components/schemas/PaymentEventPayload'
+    schemas:
+        OrderIdPayload:
+            type: object
+            required:
+                - orderId
+            properties:
+                orderId:
+                    type: string
+            additionalProperties: false
+        OrderCancelledPayload:
+            type: object
+            required:
+                - orderId
+                - refund
+            properties:
+                orderId:
+                    type: string
+                refund:
+                    type: boolean
+                    description: >-
+                        Whether the cancel carries a refund — a customer cancelling is owed their
+                        money, an operator cancelling may not be. See `orders/events.ts`.
+            additionalProperties: false
+        PaymentEventPayload:
+            type: object
+            required:
+                - paymentId
+                - orderId
+            properties:
+                paymentId:
+                    type: string
+                orderId:
+                    type: string
+            additionalProperties: false

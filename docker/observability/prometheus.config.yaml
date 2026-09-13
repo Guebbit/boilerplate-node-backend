@@ -1,0 +1,62 @@
+# Prometheus scrapes metrics and evaluates alert rules.
+# Why this file exists: Prometheus needs explicit scrape targets and alert wiring.
+# Local goal: scrape API + collector metrics and send alert results to Alertmanager.
+
+global:
+    # How often Prometheus pulls metrics from each target.
+    scrape_interval: 15s
+    # How often alert/recording rules are evaluated.
+    evaluation_interval: 15s
+
+# Load rule files mounted under /etc/prometheus/rules.
+rule_files:
+    - /etc/prometheus/rules/*.yml
+
+# Where firing alerts are sent after rule evaluation.
+alerting:
+    alertmanagers:
+        - static_configs:
+              - targets: ['alertmanager:9093']
+
+scrape_configs:
+    # Scrape app business + runtime metrics exposed on /observability/metrics.
+    - job_name: api
+      metrics_path: /observability/metrics
+      # /observability/metrics is no longer public: it exposes request volumes, error rates,
+      # latency percentiles and login success/failure counters, which is a map of how the service
+      # behaves and when it is weakest. Prometheus cannot hold a JWT — it has no way to log in or
+      # refresh one — so it authenticates with a static bearer credential, which is the mechanism
+      # `scrape_configs` provides for exactly this.
+      #
+      # This value must equal NODE_METRICS_TOKEN in the API's .env. It is a development default
+      # and belongs on the list of secrets to change before this faces anything, alongside
+      # NODE_TOKEN_ACCESS and NODE_TOKEN_REFRESH.
+      authorization:
+          type: Bearer
+          credentials: change-me-dev-metrics-token
+      # Prometheus has no access to `.env` and does no variable substitution, so this port is a
+      # literal and must be kept equal to NODE_PORT. Change NODE_PORT alone and the target goes
+      # DOWN with a connection error — which reads as "the API is down" rather than "the scrape
+      # config is stale".
+      static_configs:
+          - targets: ['app:3000']
+      relabel_configs:
+          # Give a stable, human-readable instance label in dashboards/alerts.
+          - source_labels: [__address__]
+            target_label: instance
+            replacement: api
+
+    # Scrape collector self-observability metrics (queue, exporter health, etc.).
+    - job_name: otel-collector
+      metrics_path: /metrics
+      static_configs:
+          - targets: ['otel-collector:8888']
+
+    # Scrape the metrics the collector *derives* from traces — the `traces_service_graph_request_*`
+    # family produced by its servicegraph connector. Separate port, separate job: 8888 answers
+    # "is the collector healthy", 8889 answers "what did it compute". Grafana's Tempo datasource
+    # reads these for its Service Graph tab (see `serviceMap` in grafana.datasources.yaml).
+    - job_name: otel-collector-spanmetrics
+      metrics_path: /metrics
+      static_configs:
+          - targets: ['otel-collector:8889']

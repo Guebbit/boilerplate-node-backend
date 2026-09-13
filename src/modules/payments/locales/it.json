@@ -1,0 +1,16 @@
+{
+    "payments": {
+        "order-not-found": "L'ordine da pagare non è stato trovato",
+        "order-not-payable": "Questo ordine non può essere pagato nel suo stato attuale.",
+        "not-found": "Nessun pagamento trovato",
+        "not-confirmable": "Questo pagamento non è in attesa di conferma.",
+        "declined": "Il pagamento è stato rifiutato dall'emittente della carta.",
+        "requires_action": "La tua banca deve confermare questo pagamento — segui la richiesta per completarlo.",
+        "processing": "Il pagamento è in corso — ti scriveremo appena sarà completato.",
+        "confirm-success": "Pagamento ricevuto — l'ordine è pagato.",
+        "not-refundable": "Questo pagamento non può essere rimborsato — nessun importo è arrivato, oppure è già stato restituito.",
+        "refund-success": "Pagamento rimborsato.",
+        "webhook-accepted": "Accettato.",
+        "webhook-unverified": "Non è stato possibile verificare questa notifica."
+    }
+}

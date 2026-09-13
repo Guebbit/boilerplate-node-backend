@@ -1,0 +1,132 @@
+openapi: 3.0.3
+info:
+    title: audit-logs — module contract
+    version: '2.0.0'
+
+paths:
+    /audit:
+        get:
+            tags: [Audit]
+            summary: The shop's own action history
+            description: |
+                A filtered, paged read over the same trail `GET /observability/audit` serves — but
+                scoped to one shop and reached with a role a shop actually has, not a platform one.
+                Newest first. `meta.totalItems` counts every entry matching the filters, not just
+                the page.
+
+                Requires `audit.read` — held by `manager`, `support` and `moderator` in the demo.
+            operationId: listAuditEntries
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: actor
+                  in: query
+                  schema: { type: string }
+                  description: Filter by actor user ID
+                - name: action
+                  in: query
+                  schema: { type: string }
+                  description: 'Filter by action name (e.g. order.created)'
+                - name: outcome
+                  in: query
+                  schema:
+                      type: string
+                      enum: [success, failure]
+                  description: Filter by outcome
+                - name: target
+                  in: query
+                  schema: { type: string }
+                  description: Filter by the id of the row the action was taken on (e.g. an order or a user)
+                - name: since
+                  in: query
+                  schema:
+                      type: string
+                      format: date-time
+                  description: Return events strictly after this ISO-8601 timestamp — an exclusive bound
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+            responses:
+                '200':
+                    description: Action history
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AuditEntryListResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        # ---------- audit-logs — the schemas only this module's paths reference. ----------
+        # Deliberately not `$ref`'d from `observability/openapi.yaml`'s `AuditEventItem`: modules
+        # here never reach into a sibling's contract fragment, only into the shared root — see
+        # `docs/theory/module-lifecycle.md`. The two shapes are kept in step by hand, the same way
+        # `auditLogRepository.search` already serves both endpoints from one collection.
+        AuditEntryItem:
+            type: object
+            additionalProperties: false
+            required: [actor_user_id, actor_role, action, outcome, timestamp, level]
+            properties:
+                actor_user_id: { type: string }
+                actor_role:
+                    type: string
+                    enum: [admin, user, anonymous]
+                actor_role_name:
+                    {
+                        type: string,
+                        description: 'The tenant role behind actor_role, e.g. moderator. Absent when the request never resolved one.'
+                    }
+                actor_scope:
+                    {
+                        type: string,
+                        enum: [tenant, platform],
+                        description: 'Which world this action happened in — a shop or the installation. Absent on a row recorded before this field existed.'
+                    }
+                action:
+                    {
+                        type: string,
+                        description: 'Dot-notation action name (e.g. order.created)'
+                    }
+                outcome:
+                    type: string
+                    enum: [success, failure]
+                ip: { type: string }
+                user_agent: { type: string }
+                request_id: { type: string }
+                trace_id: { type: string }
+                target_type: { type: string }
+                target_id: { type: string }
+                metadata:
+                    type: object
+                    additionalProperties: true
+                timestamp: { type: string, format: date-time }
+                level:
+                    type: string
+                    enum: [info, warn]
+
+        AuditEntryList:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AuditEntryItem' }
+                meta:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
+
+        AuditEntryListResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/AuditEntryList'

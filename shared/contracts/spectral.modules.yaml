@@ -1,0 +1,28 @@
+# Linting ONE module's contract, on its own — `npm run lint:openapi:modules`.
+#
+# `src/modules/<name>/openapi.yaml` is a complete OpenAPI document, which is what lets it be linted
+# and opened in an editor without the rest of the contract. What it is not is a complete API: the
+# tag list, the security schemes, the servers and the `info` prose describe the deployment, and they
+# are declared once in `shared/contracts/openapi.root.yaml` rather than restated by every module.
+#
+# So the rules turned off below are exactly the ones that ask a module to be the whole API. They
+# stay ON for the bundle — `npm run lint:openapi` runs `spectral.yaml` against `openapi.yaml`, where
+# a missing tag or an undeclared scheme is a real defect. Everything else, including the repo's own
+# operationId and envelope rules, applies here unchanged.
+
+extends:
+    - './spectral.yaml'
+
+rules:
+    # The tag list lives in the root. An operation tagged `Products` is correct; a module that
+    # redeclared `tags:` would be a second place the documentation grouping is decided.
+    operation-tag-defined: off
+
+    # `bearerAuth` is declared once, in the root's `components.securitySchemes`.
+    oas3-operation-security-defined: off
+
+    # Servers and the API description belong to the deployment, not to a domain. A module's `info`
+    # block exists only to make the file a valid document.
+    oas3-api-servers: off
+    info-contact: off
+    info-description: off

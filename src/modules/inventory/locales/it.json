@@ -1,0 +1,10 @@
+{
+    "inventory": {
+        "product-not-found": "Prodotto non trovato",
+        "receive-success": "Merce ricevuta — le unità sono a scaffale e disponibili.",
+        "adjust-success": "Giacenza corretta.",
+        "adjust-zero": "Una rettifica deve cambiare qualcosa — usa un numero positivo o negativo",
+        "below-reserved": "La rettifica lascerebbe meno unità di quante siano già impegnate da ordini aperti. Annulla qualche ordine, oppure rettifica di meno.",
+        "sweep-success": "Prenotazioni scadute rilasciate."
+    }
+}

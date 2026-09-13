@@ -1,0 +1,163 @@
+openapi: 3.0.3
+info:
+    title: antibot — module contract
+    version: '1.0.0'
+
+paths:
+    /antibot/config:
+        get:
+            tags: [Antibot]
+            summary: Read the active human-challenge provider's public parameters, and every rung's status
+            description: >
+                Rung 3 of the anti-automation ladder, plus a `rungs` summary of every other one.
+                Always answers 200; the default `none` provider reports an empty parameter map,
+                which means there is no widget to render and no token to send. Reachable with no
+                credential; guarding it behind a login would defeat signup, which has none yet.
+            operationId: getAntibotConfig
+            security: []
+            responses:
+                '200':
+                    description: The active provider and what the client needs to render it
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AntibotConfigEnvelope'
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /antibot/challenge:
+        get:
+            tags: [Antibot]
+            summary: Fetch work from a self-hosted human-challenge provider
+            description: >
+                Only a provider this server hosts itself (`altcha`) issues a challenge here; the
+                default `none` and any vendor-hosted provider answer 404, which is a truthful
+                statement about the deployment rather than an error. The shape is the provider's
+                own — pass it to its widget verbatim.
+            operationId: getAntibotChallenge
+            security: []
+            responses:
+                '200':
+                    description: A challenge to solve
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AntibotChallengeEnvelope'
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        # ---------- antibot — the schemas only this module's paths reference. ----------
+        AntibotConfigEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/AntibotConfig'
+
+        AntibotConfig:
+            type: object
+            additionalProperties: false
+            required: [provider, parameters, rungs]
+            properties:
+                provider:
+                    type: string
+                    description: >
+                        The active implementation's name (`none` by default). `none` means no
+                        challenge is required — send no token.
+                parameters:
+                    type: object
+                    additionalProperties:
+                        type: string
+                    description: >
+                        What the client needs to render this provider's widget — a site key, a
+                        script URL. Empty for `none`. Public by definition: everything here
+                        reaches the browser.
+                rungs:
+                    $ref: '#/components/schemas/AntibotRungs'
+
+        AntibotRungs:
+            type: object
+            additionalProperties: false
+            required: [identityBudgets, emailPolicy]
+            description: >
+                Every rung's status, not just rung 3's provider — one answer to "what is active on
+                this deployment" instead of asking each rung to publish its own.
+            properties:
+                identityBudgets:
+                    type: boolean
+                    description: >
+                        Rung 1 — always `true`. The identity/address/address-block budgets have no
+                        off switch.
+                emailPolicy:
+                    type: string
+                    enum: [off, disposable, mx]
+                    description: >
+                        Rung 2's active posture (`NODE_ANTIBOT_EMAIL_POLICY`). `off`, the default,
+                        means no address is ever refused.
+
+        AntibotChallengeEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/AntibotChallenge'
+
+        AntibotChallenge:
+            type: object
+            additionalProperties: false
+            required: [parameters, signature]
+            description: >
+                ALTCHA's challenge shape — the only self-hosted provider shipped. Another one
+                would change this schema, which is the point of declaring it rather than leaving
+                it free-form.
+            properties:
+                parameters:
+                    $ref: '#/components/schemas/AntibotChallengeParameters'
+                signature:
+                    type: string
+                    description: HMAC over the parameters, proving this server issued them.
+
+        AntibotChallengeParameters:
+            type: object
+            additionalProperties: false
+            required: [algorithm, nonce, salt, cost, keyLength, keyPrefix]
+            description: What the solver needs to derive the key the challenge asks for.
+            properties:
+                algorithm:
+                    type: string
+                    description: Key-derivation function, e.g. `PBKDF2/SHA-256`.
+                nonce:
+                    type: string
+                salt:
+                    type: string
+                cost:
+                    type: integer
+                    description: Iteration count — how much work solving takes.
+                keyLength:
+                    type: integer
+                keyPrefix:
+                    type: string
+                keySignature:
+                    type: string
+                memoryCost:
+                    type: integer
+                parallelism:
+                    type: integer
+                expiresAt:
+                    type: integer
+                    description: Unix seconds after which the challenge is refused, solved or not.

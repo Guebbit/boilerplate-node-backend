@@ -1,0 +1,30 @@
+name: Setup
+description: Set up Node and install dependencies — the two steps every job repeats.
+
+# Extracted because `ci.yml` deliberately runs many small parallel jobs (a red square names the
+# thing that broke) and pays for it in boilerplate: the same checkout/setup/install preamble in
+# every one. A composite action makes adding a job cheap, which is what stopped happening — five
+# gate checks reached `npm run complete` and never got a job of their own.
+#
+# The checkout stays in the caller: `commitlint` needs `fetch-depth: 0` to walk a commit range and
+# nothing else does, and hiding that behind an input would make the exception invisible.
+
+inputs:
+    node-version:
+        description: Node major version to install.
+        required: false
+        default: '22'
+
+runs:
+    using: composite
+    steps:
+        - name: Setup Node
+          uses: actions/setup-node@v4
+          with:
+              node-version: ${{ inputs.node-version }}
+              cache: npm
+              cache-dependency-path: package-lock.json
+
+        - name: Install dependencies
+          shell: bash
+          run: npm ci

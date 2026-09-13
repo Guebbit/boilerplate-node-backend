@@ -1,0 +1,57 @@
+/**
+ * @module
+ * The product catalogue: public read, admin write, soft delete with restore. Depends on nothing —
+ * a leaf module, and everything downstream (cart, orders, stock) is a statement about a product,
+ * which is what makes this the one model other contexts conform to. It stays a leaf by emitting
+ * `product.deleted` and `product.created` rather than importing a sibling directly.
+ *
+ * Not in the import graph: `onHand` and `reserved` are declared on this document and written ONLY
+ *   by `inventory`, including the opening count — `product.created` is how `inventory` (which
+ *   already imports this module) gives a new product its stock without this module importing back.
+ *   This module never moves either counter itself. See that module's docblock.
+ *
+ * See: docs/modules/products.md
+ */
+
+import path from 'node:path';
+import type { AppModule } from '@kernel/registry';
+import { router } from './routes';
+import { productRepository } from './repository';
+import './events';
+
+/** This module's manifest entry: routes, locales, the image target and the translatable fields. */
+export default {
+    name: 'products',
+    basePath: '/products',
+    /**
+     * The permission keys this module introduces. Deleting the module deletes them:
+     * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
+     * whose module is gone, and a module claiming one the file does not attribute to it.
+     */
+    permissions: [
+        'products.read',
+        'products.create',
+        'products.update',
+        'products.delete',
+        'products.manage'
+    ],
+    routes: router,
+    locales: path.join(__dirname, 'locales'),
+    imageTargets: { products: { writeback: productRepository.writebackImage } },
+    /*
+     * `title`/`description` are a translated product's DERIVED index column, not its own data —
+     * kept only so Mongo has something to sort and index on. `products` is both the collection a
+     * translation write updates and the cache tag it must clear.
+     */
+    translatables: {
+        product: { collection: 'products', fields: ['title', 'description'], cacheTag: 'products' }
+    },
+    /**
+     * The catalogue states the storefront and the repositories actually branch on.
+     * `scenarios/products.ts`'s `checkProductGuarantees` verifies these against what got seeded;
+     * `scenarios/check.ts` fails the build if one goes missing.
+     */
+    scenario: {
+        shop: ['product.softDeleted', 'product.inactive', 'product.outOfStock', 'product.barebones']
+    }
+} satisfies AppModule;

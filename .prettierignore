@@ -1,3 +1,33 @@
 api
 .prism
-.dev
+contract.bruno.yml
+contract.insomnia.json
+contract.mockoon.json
+contract.postman.json
+src/types/asyncapi.generated.ts
+
+# The REST contract. `redocly bundle` decides its layout now — 2-space, its own key order — and
+# `check:contracts-bundle` asserts the committed bytes equal a fresh run. Prettier reformatting it
+# afterwards would make that check fail on a file nobody edited. The MODULE documents it is built
+# from are formatted as normal.
+openapi.yaml
+
+# The mutation incremental cache. Committed on purpose — see the note in `.gitignore` and
+# `stryker.config.json` — and written by Stryker, not by anyone typing JSON. Same reasoning as the
+# file above: reformatting a file only a tool writes fails the check on a commit nobody made.
+reports/stryker-incremental.json
+
+# Working directories that belong to tooling rather than to this codebase, and to whoever is
+# running it rather than to this repo's formatting rules. Prettier scans the whole tree, so an
+# unformatted scratch directory here fails `prettier:check` — which is in `npm run complete`, which
+# the pre-commit hook runs. One person's working notes would otherwise block every commit in every
+# concurrent session, and the way out people find is `--no-verify`, which costs the whole gate.
+.claude/
+CLAUDE.md
+
+# The three shared authorization artefacts. Committed with identical bytes in the PHP twin, which
+# formats YAML with dprint rather than Prettier. Two formatters over one shared file is a silent
+# fork — the same reasoning that excludes the Spectral rulesets over there.
+shared/authorization-keys.yaml
+shared/authorization-roles.yaml
+shared/authorization-conformance.yaml

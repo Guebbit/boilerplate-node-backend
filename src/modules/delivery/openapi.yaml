@@ -1,0 +1,180 @@
+openapi: 3.0.3
+info:
+    title: delivery — module contract
+    version: '2.0.0'
+
+paths:
+    /delivery/methods:
+        get:
+            tags: [Delivery]
+            summary: List shipping methods
+            description: The shipping methods this shop offers — flat rates and free-above thresholds. Public, because what shipping costs is pre-purchase information; the authoritative pricing still happens at checkout, against the lines actually bought, so a client showing these numbers cannot commit the shop to a stale rate.
+            operationId: listShippingMethods
+            security: []
+            responses:
+                '200':
+                    description: The methods
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ShippingMethodsResponseEnvelope'
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /delivery/order/{orderId}:
+        get:
+            tags: [Delivery]
+            summary: Get the shipment behind an order
+            description: The parcel for one of the caller's orders — tracking code and whether it has arrived. Ownership is the order's, read through the same scope every order read uses. No parcel yet (the order has not reached `shipped`) is a 404 — absence is the answer.
+            operationId: getShipmentByOrder
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: orderId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: One of the caller's own orders
+            responses:
+                '200':
+                    description: The shipment
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ShipmentEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /delivery/advance:
+        post:
+            tags: [Delivery]
+            summary: Advance the fake courier
+            description: Every parcel currently `shipped` arrives — the order moves `shipped → delivered` through the same conditional write the rest of the status machine uses, then the shipment is stamped. Admin, and deliberately a button rather than a schedule — this repo has no cron, so an operator (or the demo) is the timer, exactly like the expired-token purge.
+            operationId: advanceCourier
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: How many parcels arrived
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CourierAdvanceResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        # ── Delivery module ─────────────────────────────────────────────────────
+        # Owned by src/modules/delivery. The methods are the checkout's selector; the shipment
+        # is the courier's record of one order's parcel.
+
+        ShippingMethod:
+            type: object
+            additionalProperties: false
+            required: [id, price]
+            properties:
+                id:
+                    type: string
+                    description: Stable id, frozen onto orders at checkout (standard, express, pickup).
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: Flat rate, in the shop's currency.
+                freeAbove:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: Items total at which this method becomes free. Absent — it never does.
+
+        ShippingMethodsResponse:
+            type: object
+            additionalProperties: false
+            required: [methods]
+            properties:
+                methods:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ShippingMethod'
+
+        ShippingMethodsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/ShippingMethodsResponse'
+
+        Shipment:
+            type: object
+            additionalProperties: false
+            required: [id, orderId, trackingCode, status]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                trackingCode:
+                    type: string
+                    description: The courier's handle on the parcel.
+                status:
+                    type: string
+                    enum: [shipped, delivered]
+                    description: The tail of the order's lifecycle, as the courier sees it.
+                deliveredAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        ShipmentEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/Shipment'
+
+        CourierAdvanceResponse:
+            type: object
+            additionalProperties: false
+            required: [advanced]
+            properties:
+                advanced:
+                    type: integer
+                    minimum: 0
+                    description: How many parcels arrived on this tick.
+
+        CourierAdvanceResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/CourierAdvanceResponse'

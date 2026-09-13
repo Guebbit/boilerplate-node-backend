@@ -1,0 +1,5 @@
+{
+    "api-keys": {
+        "permission-not-mintable": "One or more requested permissions are not yours to grant."
+    }
+}

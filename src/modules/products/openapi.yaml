@@ -1,0 +1,713 @@
+openapi: 3.0.3
+info:
+    title: products — module contract
+    version: '2.0.0'
+
+paths:
+    /products:
+        get:
+            tags: [Products]
+            summary: List products (paginated)
+            description: Returns a paginated list of products.
+            operationId: listProducts
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/TextParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdParam'
+                # Declared here as well as in SearchProductsRequest: the controller merges query
+                # and body, so `GET /products?category=x` and `POST /products/search {category}`
+                # are one filter reached two ways.
+                - name: category
+                  in: query
+                  required: false
+                  schema:
+                      type: string
+                - name: tag
+                  in: query
+                  required: false
+                  schema:
+                      type: string
+                - name: minPrice
+                  in: query
+                  required: false
+                  schema:
+                      type: number
+                      format: double
+                      minimum: 0
+                - name: maxPrice
+                  in: query
+                  required: false
+                  schema:
+                      type: number
+                      format: double
+                      minimum: 0
+                - name: title
+                  in: query
+                  schema:
+                      type: string
+                - name: active
+                  in: query
+                  schema:
+                      type: boolean
+            responses:
+                '200':
+                    description: Products page
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ProductsResponseEnvelope'
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        post:
+            tags: [Products]
+            summary: Create product
+            description: >-
+                Creates a new product with optional image upload. Words live in `translations`,
+                one entry per locale — the fallback locale (`NODE_FALLBACK_LOCALE`) MUST be
+                present and non-null, since a product with nothing to fall back to cannot exist.
+                See `PATCH /products/{id}` for the three-way table a locale entry follows.
+            operationId: createProduct
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateProductRequest'
+                    multipart/form-data:
+                        schema:
+                            $ref: '#/components/schemas/CreateProductRequestMultipart'
+            responses:
+                '201':
+                    description: Created product
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ProductEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        delete:
+            tags: [Products]
+            summary: Delete product
+            description: Deletes the product identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; a `true` from any source wins, so a `false` sent elsewhere does not cancel it.
+            operationId: deleteProduct
+            x-alias-of: deleteProductById
+            security:
+                - bearerAuth: []
+            # The flag is readable from the query here too, exactly as it is on the `{id}` form:
+            # one controller serves both, and `surface: 'delete'` reads params, query and body on
+            # whichever route it is mounted on. Declared rather than merely tolerated.
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/HardDeleteParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/DeleteProductRequest'
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /products/categories:
+        get:
+            tags: [Products]
+            summary: Catalogue facets
+            description: Every category and tag the PUBLIC catalogue carries, each with how many visible products hold it — what a storefront renders as filter chips. Sorted by count descending, then name. Counts follow the same visibility rule the listing does, so a chip can never lead to an empty page.
+            operationId: getCatalogueFacets
+            security: []
+            responses:
+                '200':
+                    description: Categories and tags with counts
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CatalogueFacetsEnvelope'
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /products/{id}:
+        # Same as /products/id={id}
+        get:
+            tags: [Products]
+            summary: Product details
+            description: Returns the full details of the product identified by `{id}`. Functionally equivalent to `GET /products?id={id}`.
+            operationId: getProductById
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: Product
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ProductEnvelope'
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        # Merges, unlike a replacing PUT — see `UpdateProductRequest.translations`.
+        patch:
+            tags: [Products]
+            summary: Edit product
+            description: |
+                Updates the product identified by `{id}` in the path, merging. Every field but
+                `translations` replaces the stored value when sent; `translations` merges one
+                locale at a time — three signals, and no way to mistake one for another:
+
+                | the body says      | the server does                        |
+                | ------------------- | --------------------------------------- |
+                | `"it"` absent       | leaves the Italian row exactly as it is |
+                | `"it": { … }`       | upserts the Italian row, replacing its fields whole |
+                | `"it": null`        | deletes the Italian row                 |
+
+                An empty translation object is a 422, never a delete — deletion is `null`, spent
+                deliberately: a cleared form field sends `""`, never `null`, so a mis-click can
+                never delete translated work. `null` on the fallback locale is a 422: deleting it
+                would leave the product with nothing to fall back to. A validation failure names
+                the locale in its pointer, e.g. `translations.it.title`.
+            operationId: updateProductById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateProductRequest'
+                    multipart/form-data:
+                        schema:
+                            $ref: '#/components/schemas/UpdateProductRequestMultipart'
+            responses:
+                '200':
+                    description: Updated product
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ProductEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        # Same as DELETE /products
+        delete:
+            tags: [Products]
+            summary: Delete product
+            description: Deletes the product identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. Functionally equivalent to `DELETE /products`.
+            operationId: deleteProductById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/HardDeleteParam'
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/HardDeleteRequest'
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    # The editor's own read: every language a product has, not the caller's resolved one.
+    /products/{id}/admin:
+        get:
+            tags: [Products]
+            summary: Product, every language at once
+            description: >-
+                Every language this product has a row for, plus its price/stock/image — the shape
+                the editor's form reads to populate its tabs. Unlike `GET /products/{id}`, this
+                does not resolve to one language and is never cached: it's the screen someone is
+                actively editing, the same reasoning `GET /locales/{locale}/entries` already
+                applies.
+            operationId: getProductAdmin
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: Product, every language
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ProductAdminEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    # Same as DELETE /products/{id}?hardDelete=true — the flag spelled in the path instead of
+    # in the query. Both reach the same handler; neither is the canonical one.
+    /products/{id}/hard:
+        delete:
+            tags: [Products]
+            summary: Permanently delete product
+            description: Permanently removes the product identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /products/{id}?hardDelete=true`.
+            operationId: hardDeleteProductById
+            x-alias-of: deleteProductById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    # Same as GET /products, but with JSON body, more suitable for DTOs and multi-language codegen
+    /products/search:
+        post:
+            tags: [Products]
+            summary: Search products (DTO-friendly)
+            description: Searches and filters products via a JSON request body. Functionally equivalent to `GET /products` with query parameters.
+            operationId: searchProducts
+            x-alias-of: listProducts
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SearchProductsRequest'
+            responses:
+                '200':
+                    description: Products search results
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ProductsResponseEnvelope'
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        # ---------- products — the schemas only this module's paths reference. ----------
+        ProductEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Product'
+
+        # One locale's words for a product. `title` mirrors `zodProductSchema`'s length rules,
+        # enforced per locale — see the write operations' descriptions.
+        ProductTranslationFields:
+            type: object
+            additionalProperties: false
+            required: [title]
+            properties:
+                title:
+                    type: string
+                description:
+                    type: string
+
+        ProductTranslationsWrite:
+            type: object
+            additionalProperties:
+                type: object
+                nullable: true
+                allOf:
+                    - $ref: '#/components/schemas/ProductTranslationFields'
+            description: >-
+                One or more locales, keyed by BCP 47 tag. A key absent from this map leaves that
+                locale untouched; a key mapped to an object upserts it; a key mapped to null
+                deletes it — never omission or an empty object, which are both errors. The
+                fallback locale (`NODE_FALLBACK_LOCALE`) MUST be present and non-null on create,
+                and MUST NOT be null on update.
+            example:
+                en:
+                    title: Orthopedic Memory Foam Dog Bed
+                    description: Extra support for joints during rest.
+                it:
+                    title: Cuccia ortopedica in memory foam
+                    description: Un supporto extra per le articolazioni durante il riposo.
+
+        # Flat rather than `allOf: [Product, {...}]`: two `additionalProperties: false` schemas
+        # composed with `allOf` each validate the WHOLE instance on their own, so the `Product`
+        # branch alone would reject `translations` regardless of what the second branch allows.
+        # `Product`'s own fields are restated here for that reason — the same trade-off
+        # `CreateProductRequestMultipart` already makes against `CreateProductRequest`.
+        ProductAdmin:
+            type: object
+            additionalProperties: false
+            required: [id, title, price, translations]
+            description: >-
+                A product with every language it has a row for, not just the caller's resolved
+                one — what the editor's form needs to populate its tabs. `title`/`description`
+                stay the resolved (fallback-locale-derived) values; `translations` is the
+                per-locale source.
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                title:
+                    type: string
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                onHand:
+                    type: integer
+                    minimum: 0
+                    readOnly: true
+                reserved:
+                    type: integer
+                    minimum: 0
+                    readOnly: true
+                available:
+                    type: integer
+                    minimum: 0
+                    readOnly: true
+                description:
+                    type: string
+                active:
+                    type: boolean
+                requiresShipping:
+                    type: boolean
+                    default: true
+                imageUrl:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                thumbnailUrl:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ThumbnailUrl'
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+                deletedAt:
+                    type: string
+                    format: date-time
+                translations:
+                    type: object
+                    additionalProperties:
+                        $ref: '#/components/schemas/ProductTranslationFields'
+
+        ProductAdminEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/ProductAdmin'
+
+        ProductsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/ProductsResponse'
+
+        # One value of `categories`/`tags`, with how many PUBLIC products carry it. Counts
+        # follow `publicScope` — a category held only by hidden products does not exist to the
+        # storefront, and a filter chip that finds nothing is worse than no chip.
+        FacetCount:
+            type: object
+            additionalProperties: false
+            required: [name, count]
+            properties:
+                name:
+                    type: string
+                count:
+                    type: integer
+                    minimum: 1
+
+        CatalogueFacetsResponse:
+            type: object
+            additionalProperties: false
+            required: [categories, tags]
+            properties:
+                categories:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/FacetCount'
+                tags:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/FacetCount'
+
+        CatalogueFacetsEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/CatalogueFacetsResponse'
+
+        SearchProductsRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                page:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Page'
+                pageSize:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PageSize'
+                text:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Text'
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                minPrice:
+                    type: number
+                    format: double
+                    minimum: 0
+                maxPrice:
+                    type: number
+                    format: double
+                    minimum: 0
+                category:
+                    type: string
+                tag:
+                    type: string
+                # A title fragment, and the only one of this pair a stranger can use.
+                title:
+                    type: string
+                # Admin-effective: a stranger sending `active: false` meets the visibility
+                # scope, which pins `active: true` for them, so the two clauses contradict
+                # and the page is empty rather than revealing the unlisted catalogue.
+                active:
+                    type: boolean
+
+        CreateProductRequest:
+            type: object
+            additionalProperties: false
+            required: [price, translations]
+            properties:
+                translations:
+                    $ref: '#/components/schemas/ProductTranslationsWrite'
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                # The opening count — the one place an ABSOLUTE stock number is honest, because
+                # a product being created has no prior value to race with and no history to
+                # contradict. Every later change is a signed `/inventory` transition.
+                #
+                # `readOnly: true` on `Product.onHand` is why this is spelled out here rather
+                # than inherited: the response field is read-only, the opening count is not.
+                #
+                # The demo default is declared for the same reason `active`'s is (see below): an
+                # undeclared default is one the paired frontend's mock has to guess at. `100`
+                # rather than `0` because a boilerplate demo's new product exists to be bought;
+                # a real shop lowers it to 0 and receives stock deliberately.
+                onHand:
+                    type: integer
+                    minimum: 0
+                    default: 100
+                # ---------- On `active`, and why it is declared here but not on the updates ----------
+                #
+                # `active` and `deletedAt` are INDEPENDENT. A record can be active or not regardless
+                # of whether it has been soft-deleted, and the two are stored separately. What they
+                # share is an effect, not a value: a non-admin sees a record only when it is active
+                # AND not soft-deleted (`publicScope()` in the products repository requires both).
+                # So a soft-deleted record behaves exactly like an inactive one from outside, while
+                # remaining a distinct state inside.
+                #
+                # The default is declared rather than left to each implementation. Undeclared, the
+                # API and the paired frontend's mock each pick their own, and the same request
+                # yields a publicly visible product against one and a hidden one against the
+                # other — a disagreement no contract test on either side can see.
+                #
+                # It appears on the CREATE bodies only. On an update, an omitted `active` means
+                # "leave it as it is" — a default there would silently republish a deactivated
+                # record on any unrelated edit.
+                active:
+                    type: boolean
+                    default: true
+                # Default true: most products are physical. false is a digital good — checkout
+                # never needs a shipping method for a cart made entirely of these.
+                requiresShipping:
+                    type: boolean
+                    default: true
+                imageUrl:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
+
+        CreateProductRequestMultipart:
+            type: object
+            additionalProperties: false
+            required: [price, translations]
+            properties:
+                # A multipart part carries no nested objects, only strings — so the translations
+                # map travels as a JSON-encoded string in this field, the same shape
+                # `ProductTranslationsWrite` describes, parsed before validation.
+                translations:
+                    type: string
+                    description: JSON-encoded `ProductTranslationsWrite`.
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                # The opening count — the one place an ABSOLUTE stock number is honest, because
+                # a product being created has no prior value to race with and no history to
+                # contradict. Every later change is a signed `/inventory` transition.
+                #
+                # `readOnly: true` on `Product.onHand` is why this is spelled out here rather
+                # than inherited: the response field is read-only, the opening count is not.
+                #
+                # The demo default is declared for the same reason `active`'s is (see below): an
+                # undeclared default is one the paired frontend's mock has to guess at. `100`
+                # rather than `0` because a boilerplate demo's new product exists to be bought;
+                # a real shop lowers it to 0 and receives stock deliberately.
+                onHand:
+                    type: integer
+                    minimum: 0
+                    default: 100
+                # Same default, same reasoning as `CreateProductRequest.active` above.
+                active:
+                    type: boolean
+                    default: true
+                requiresShipping:
+                    type: boolean
+                    default: true
+                imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
+                    type: string
+                    format: binary
+                    description: Optional product image
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
+
+        # PATCH /products/{id} — every field optional, since a merge may touch just one of them.
+        # No `id`: it travels in the path.
+        UpdateProductRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                translations:
+                    $ref: '#/components/schemas/ProductTranslationsWrite'
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                active:
+                    type: boolean
+                requiresShipping:
+                    type: boolean
+                imageUrl:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
+
+        UpdateProductRequestMultipart:
+            type: object
+            additionalProperties: false
+            properties:
+                # See `CreateProductRequestMultipart.translations` above — same JSON-string-in-a-
+                # field shape, same `ProductTranslationsWrite` contents.
+                translations:
+                    type: string
+                    description: JSON-encoded `ProductTranslationsWrite`.
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                active:
+                    type: boolean
+                requiresShipping:
+                    type: boolean
+                imageUpload:
+                    # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
+                    type: string
+                    format: binary
+                    description: Optional product image
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
+
+        DeleteProductRequest:
+            type: object
+            additionalProperties: false
+            required: [id]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                hardDelete:
+                    type: boolean
+                    default: false
+
+        ProductsResponse:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Product'
+                meta:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'

@@ -1,0 +1,55 @@
+# Loki stores logs indexed by labels.
+# Why this file exists: Loki needs explicit schema/storage setup even in local mode.
+# Local goal: single-process Loki with filesystem retention for quick debugging.
+
+auth_enabled: false
+
+server:
+    # HTTP API used by Grafana and Promtail.
+    http_listen_port: 3100
+    # gRPC internal API.
+    grpc_listen_port: 9096
+
+common:
+    # Single-node local setup, no distributed ring backend needed.
+    instance_addr: 127.0.0.1
+    path_prefix: /var/loki
+    storage:
+        filesystem:
+            chunks_directory: /var/loki/chunks
+            rules_directory: /var/loki/rules
+    replication_factor: 1
+    ring:
+        kvstore:
+            store: inmemory
+
+query_range:
+    results_cache:
+        cache:
+            embedded_cache:
+                # Small in-process cache keeps repeated queries snappy in dev.
+                enabled: true
+                max_size_mb: 100
+
+schema_config:
+    configs:
+        - from: 2020-10-24
+          store: tsdb
+          object_store: filesystem
+          schema: v13
+          index:
+              prefix: index_
+              period: 24h
+
+ruler:
+    # Enables Loki alerting rules to forward to Alertmanager when used.
+    alertmanager_url: http://alertmanager:9093
+
+limits_config:
+    # Keep one week of logs in local stack.
+    retention_period: 168h
+
+compactor:
+    working_directory: /var/loki/compactor
+    delete_request_store: filesystem
+    retention_enabled: true

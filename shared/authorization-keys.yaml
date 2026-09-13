@@ -1,0 +1,460 @@
+# Every permission key that exists, and the only place one may be introduced.
+#
+# Committed with identical bytes in `boilerplate-node-backend` and
+# `boilerplate-php-laravel-backend`. Neither repo's formatter touches it — see the exclusion in
+# `.prettierignore` / `dprint.json`, for the same reason `spectral.yaml` is excluded: two
+# formatters over one shared artefact is a silent fork.
+#
+# ROLES ARE DATA, PERMISSIONS ARE CODE. A deployment may create roles at runtime. It may never
+# invent a key, because a key nothing checks grants nothing while looking like it grants
+# something. Assignment validates against this file, not against a string.
+#
+# THE ONE INVARIANT, and the reason `scope` is a field rather than a naming convention:
+#   a bare key can never be satisfied by a platform-scope caller, and a `platform.` key can never
+#   be satisfied by a tenant-scope caller.
+# A platform operator administers shared reference data and is not a super-member. Mapping that
+# person onto the old `admin` boolean was one line to write and a total confidentiality failure.
+
+version: 1
+
+# CASL's action vocabulary, taken whole rather than invented. `manage` is its wildcard and means
+# *any action on that subject* — adopted with those exact semantics so the wildcard behaves the
+# same in both repositories.
+#
+# `write` is deliberately absent. It collapses create, update and delete into one key, and the
+# shop needs them apart: a support agent may update a user and may not delete one, a warehouse
+# operator may adjust stock and may not delete a product.
+actions:
+    - read
+    - create
+    - update
+    - delete
+    - manage
+
+# The two scopes. Never both, never derived from a flag — a caller resolves to exactly one.
+scopes:
+    tenant: Content belonging to one shop. Keys are bare.
+    platform: Shared operational data, across shops. Keys are prefixed `platform.`.
+
+# Wildcards, spelled here so nothing else has to special-case the strings.
+#
+# `all.manage` EXPANDS TO EVERY DECLARED KEY IN ITS OWN SCOPE, and that is a narrower reading than
+# CASL's, where `manage` on `all` is unbounded. The narrower one is deliberate: it makes
+# "a key no module declares grants nothing" true of the wildcard too, so a shop owner cannot edit
+# an audit row merely because nothing thought to forbid it. Adding a key is then the only way to
+# widen anybody, including the owner — which is the property that makes this file the whole model.
+wildcards:
+    subject: all # `all.manage` — every declared key in this scope, and only this scope
+    action: manage # `<subject>.manage` — any declared action on that subject
+
+# Step-up — the third axis, declared on the KEY rather than on a route.
+#
+# A key may carry `stepUp: critical | sensitive`, and `requirePermission` then demands that the
+# caller proved themselves within that window before it lets them through. The tiers are the ones
+# `REAUTH_TIME_CRITICAL` / `REAUTH_TIME_SENSITIVE` already name, so this adds a place to say WHICH
+# actions are worth a challenge, not a second mechanism for making one.
+#
+# On the key and not the route because the key is what the action IS: erasing somebody's account
+# deserves a fresh session wherever it is reached from, and a second route that reaches it would
+# otherwise have to remember. `amr` may also be named, so a future passkey tier is a line here
+# rather than a guard change — the reason `amr` was carried as a list rather than a boolean.
+
+# Conditions — the ABAC half, and the reason this is not pure RBAC.
+#
+# A key may carry `conditions`: a filter fragment that must ALSO hold of the row. It is the same
+# shape CASL takes as its third argument and the same shape both repositories already spread into
+# a query, which is what lets it be compiled INTO the read instead of checked after it.
+#
+# `$caller.<field>` is substituted from the resolved caller at request time. That is the whole
+# placeholder grammar; there is no expression language, on purpose.
+#
+# THE FIELD NAMES ARE THE MODEL'S, not either storage's. `active` and `userId` are what the rule
+# is ABOUT; one backend stores them under those names and the other under `active` and `user_id`,
+# and each maps this vocabulary onto its own columns on the way into a query. The shared artefact
+# is the condition set, and each backend generates its own query from it.
+#
+# Tenancy is NOT written here. Every tenant-scope rule has `tenantId: $caller.tenantId` injected
+# by the resolver, so no key can forget it and no request parameter can supply it.
+#
+# A key with no `conditions` is unconditional within its scope. Read the pairs below in that
+# light: `products.read` sees active, undeleted rows, `products.update` sees every row, and staff
+# get the second one — which is why the shop does not need a `products.read-drafts` key.
+#
+# `deletedAt: null` is on the narrow reads of the subjects that HAVE it — `Product`, `Locale` and
+# `Order`. A payment is a record of money moving and is never withdrawn from view, so it carries
+# no such column and no such condition; a rule naming a column the table lacks is a query that
+# throws rather than one that narrows.
+#
+# It is on the narrow reads and not the wide ones, and that asymmetry is the rule
+# somebody would otherwise have to remember: a soft-deleted row is gone for the audience it was
+# hidden from and still there for the staff who can restore it. Matching `null` covers a field
+# that is absent as well as one that is set to nothing, which is what an "unset to restore" write
+# leaves behind.
+
+# The keys themselves.
+#
+# `subject` is the CASL subject type the key authorises — the concrete thing a rule is about. The
+# key's own first segment is the resource FAMILY, which is plural and matches the module folder;
+# the subject is the singular type. They differ on purpose: `orders.read` is a permission,
+# `Order` is a thing.
+#
+# Modules absent from this list have no keys, and that is a decision rather than an omission:
+# `cart`, `wishlist` and `account` are *your own things*. What you may do with them follows from
+# being signed in, not from a role, and giving them keys would invite a role that grants access to
+# someone else's basket.
+keys:
+    # -- products ------------------------------------------------------------------------------
+    - key: products.read
+      module: products
+      subject: Product
+      action: read
+      scope: tenant
+      description: Read products. Inactive rows need a wider key, not this one.
+      conditions:
+          active: true
+          deletedAt: null
+    - key: products.create
+      module: products
+      subject: Product
+      action: create
+      scope: tenant
+      description: Add a product to the catalogue.
+    - key: products.update
+      module: products
+      subject: Product
+      action: update
+      scope: tenant
+      description: Change a product, including its price and its published state.
+    - key: products.delete
+      module: products
+      subject: Product
+      action: delete
+      scope: tenant
+      description: Remove a product. Separate from update because the blast radius is.
+    - key: products.manage
+      module: products
+      subject: Product
+      action: manage
+      scope: tenant
+      description: Any action on a product.
+
+    # -- orders --------------------------------------------------------------------------------
+    - key: orders.read
+      module: orders
+      subject: Order
+      action: read
+      scope: tenant
+      description: Read orders. Without a wider condition this is your own orders only.
+      conditions:
+          userId: $caller.id
+          deletedAt: null
+    - key: orders.create
+      module: orders
+      subject: Order
+      action: create
+      scope: tenant
+      description: Raise an order on someone else's behalf. Checking out is not this key.
+    - key: orders.update
+      module: orders
+      subject: Order
+      action: update
+      scope: tenant
+      description: Move an order along its status path.
+    - key: orders.delete
+      module: orders
+      subject: Order
+      action: delete
+      scope: tenant
+      description: Remove an order.
+    - key: orders.manage
+      module: orders
+      subject: Order
+      action: manage
+      scope: tenant
+      description: Any action on an order.
+
+    # -- payments ------------------------------------------------------------------------------
+    - key: payments.read
+      module: payments
+      subject: Payment
+      action: read
+      scope: tenant
+      description: Read payments. Without a wider condition this is your own payments only.
+      conditions:
+          userId: $caller.id
+    - key: payments.update
+      module: payments
+      subject: Payment
+      action: update
+      scope: tenant
+      description: Reconcile a payment against the provider, or return the money.
+      # Money leaving the shop. The one action here whose damage cannot be undone by another
+      # request.
+      stepUp: critical
+    - key: payments.manage
+      module: payments
+      subject: Payment
+      action: manage
+      scope: tenant
+      description: Any action on a payment.
+
+    # -- inventory -----------------------------------------------------------------------------
+    - key: inventory.read
+      module: inventory
+      subject: StockLevel
+      action: read
+      scope: tenant
+      description: Read stock levels and the movements behind them.
+    - key: inventory.create
+      module: inventory
+      subject: StockMovement
+      action: create
+      scope: tenant
+      description: Record a receipt or an adjustment. Stock never moves without one.
+    - key: inventory.manage
+      module: inventory
+      subject: StockLevel
+      action: manage
+      scope: tenant
+      description: Any action on stock.
+
+    # -- delivery ------------------------------------------------------------------------------
+    - key: delivery.read
+      module: delivery
+      subject: Shipment
+      action: read
+      scope: tenant
+      description: Read shipping methods and a shipment's progress.
+    - key: delivery.update
+      module: delivery
+      subject: Shipment
+      action: update
+      scope: tenant
+      description: Advance a consignment through the courier's steps.
+    - key: delivery.manage
+      module: delivery
+      subject: Shipment
+      action: manage
+      scope: tenant
+      description: Any action on a shipment.
+
+    # -- feedback ------------------------------------------------------------------------------
+    - key: feedback.read
+      module: feedback
+      subject: Feedback
+      action: read
+      scope: tenant
+      description: Read messages sent through the contact form.
+    - key: feedback.update
+      module: feedback
+      subject: Feedback
+      action: update
+      scope: tenant
+      description: Change a message's handling status.
+    - key: feedback.delete
+      module: feedback
+      subject: Feedback
+      action: delete
+      scope: tenant
+      description: Remove a message.
+    - key: feedback.manage
+      module: feedback
+      subject: Feedback
+      action: manage
+      scope: tenant
+      description: Any action on a message.
+
+    # -- locales -------------------------------------------------------------------------------
+    - key: locales.read
+      module: locales
+      subject: Locale
+      action: read
+      scope: tenant
+      description: Read locales and their dictionaries. Inactive ones need a wider key.
+      conditions:
+          active: true
+          deletedAt: null
+    - key: locales.create
+      module: locales
+      subject: Locale
+      action: create
+      scope: tenant
+      description: Add a locale.
+    - key: locales.update
+      module: locales
+      subject: Locale
+      action: update
+      scope: tenant
+      description: Change a locale or one of its entries.
+    - key: locales.delete
+      module: locales
+      subject: Locale
+      action: delete
+      scope: tenant
+      description: Remove a locale or one of its entries.
+    - key: locales.manage
+      module: locales
+      subject: Locale
+      action: manage
+      scope: tenant
+      description: Any action on a locale.
+
+    # A translation is its own subject, deliberately apart from `Locale`: a translator writes
+    # WORDS for an entity a locale is already active for, never the locale's own row. It is also
+    # apart from `Product`/whatever entity is translated, which is the whole point — a
+    # mistranslation can never become a mischanged price.
+    - key: translations.read
+      module: locales
+      subject: Translation
+      action: read
+      scope: tenant
+      description: Read an entity's translated fields, in the admin shape (every locale at once).
+    - key: translations.update
+      module: locales
+      subject: Translation
+      action: update
+      scope: tenant
+      description: >-
+          Write an entity's translated fields. Never grants a write on the entity itself — that is
+          `products.update`, and the two are stacked on the product write route precisely so one
+          alone cannot turn a rewording into a repricing.
+    - key: translations.manage
+      module: locales
+      subject: Translation
+      action: manage
+      scope: tenant
+      description: Any action on an entity's translated fields.
+
+    # -- users ---------------------------------------------------------------------------------
+    - key: users.read
+      module: users
+      subject: User
+      action: read
+      scope: tenant
+      description: Read other people's accounts. Reading your own is `account`, not a key.
+    - key: users.create
+      module: users
+      subject: User
+      action: create
+      scope: tenant
+      description: Create an account for someone else.
+    - key: users.update
+      module: users
+      subject: User
+      action: update
+      scope: tenant
+      description: Change someone else's account, including clearing their second factor.
+    - key: users.delete
+      module: users
+      subject: User
+      action: delete
+      scope: tenant
+      description: Erase someone else's account.
+      # Irreversible and about somebody else. A stolen session should not be able to reach it on
+      # the strength of a login that happened this morning.
+      stepUp: critical
+    - key: users.manage
+      module: users
+      subject: User
+      action: manage
+      scope: tenant
+      description: Any action on an account.
+
+    # -- account -------------------------------------------------------------------------------
+    # `account` is otherwise keyless on purpose — what you may do to your OWN record follows from
+    # being signed in. This one is the exception because it is not about your own record: it prunes
+    # expired credentials across every account, which is an operational lever.
+    - key: tokens.delete
+      module: account
+      subject: AccountToken
+      action: delete
+      scope: tenant
+      description: Remove expired tokens from every account. Operational, not self-service.
+
+    # -- audit-logs ----------------------------------------------------------------------------
+    - key: audit.read
+      module: audit-logs
+      subject: AuditLog
+      action: read
+      scope: tenant
+      description: Read the audit trail. There is no write key — nothing edits an audit row.
+
+    # -- webhooks --------------------------------------------------------------------------------
+    - key: webhooks.read
+      module: webhooks
+      subject: WebhookSubscription
+      action: read
+      scope: tenant
+      description: Read this shop's webhook subscriptions, delivery log and event catalogue.
+    - key: webhooks.create
+      module: webhooks
+      subject: WebhookSubscription
+      action: create
+      scope: tenant
+      description: Add a subscription, minting its first secret.
+    - key: webhooks.update
+      module: webhooks
+      subject: WebhookSubscription
+      action: update
+      scope: tenant
+      description: >-
+          Change a subscription, rotate or drop a secret from its ring, and replay a delivery. The
+          blast radius of all three is the same — a party this shop did not intend gets signed
+          deliveries — so they share one key.
+    - key: webhooks.delete
+      module: webhooks
+      subject: WebhookSubscription
+      action: delete
+      scope: tenant
+      description: Remove a subscription. Separate from update because the blast radius is.
+    - key: webhooks.manage
+      module: webhooks
+      subject: WebhookSubscription
+      action: manage
+      scope: tenant
+      description: Any action on a webhook subscription.
+
+    # -- api-keys --------------------------------------------------------------------------------
+    - key: apikeys.read
+      module: api-keys
+      subject: ApiKey
+      action: read
+      scope: tenant
+      description: List this shop's machine-to-machine credentials. Never returns a key's secret.
+    - key: apikeys.create
+      module: api-keys
+      subject: ApiKey
+      action: create
+      scope: tenant
+      description: >-
+          Mint a credential. Carries its own floor on top of this key: a credential can never hold
+          a permission the minter lacks.
+    - key: apikeys.delete
+      module: api-keys
+      subject: ApiKey
+      action: delete
+      scope: tenant
+      description: Revoke a credential. Soft and immediate; the row stays readable.
+    - key: apikeys.manage
+      module: api-keys
+      subject: ApiKey
+      action: manage
+      scope: tenant
+      description: Any action on a machine-to-machine credential.
+
+    # -- observability -------------------------------------------------------------------------
+    # The only platform-scope module in the boilerplate, and it is what makes the invariant
+    # testable here rather than only in a downstream project: health, metrics and the operational
+    # audit are about the INSTALLATION, not about one shop's content.
+    - key: platform.observability.read
+      module: observability
+      subject: ObservabilitySnapshot
+      action: read
+      scope: platform
+      description: Read health, metrics overview and the operational audit.
+    - key: platform.observability.manage
+      module: observability
+      subject: ObservabilitySnapshot
+      action: manage
+      scope: platform
+      description: Any action on operational data.
