@@ -8,6 +8,7 @@
 
 import { enabledProviders, resolveOAuthProvider } from '../../oauth/providers';
 import { FAKE_OAUTH_CODE, fakeOAuthProvider } from '../../oauth/providers/fake';
+import { generateCodeVerifier, codeChallengeOf } from '../../oauth/state';
 import { enableDemoProfile } from '@infrastructure/adapters/demo-outbox';
 
 /** Every env var a provider's "configured" check reads, restored after each test. */
@@ -73,16 +74,31 @@ describe('the OAuth provider registry', () => {
 });
 
 describe('fakeOAuthProvider', () => {
-    it('sends the browser straight to the callback, code and state carried along', () => {
-        const url = fakeOAuthProvider.authorizeUrl('the-state', 'https://api.test/callback');
+    it('sends the browser straight to the callback, code, challenge and state carried along', () => {
+        const url = fakeOAuthProvider.authorizeUrl(
+            'the-state',
+            'https://api.test/callback',
+            'the-challenge'
+        );
 
-        expect(url).toBe(`https://api.test/callback?code=${FAKE_OAUTH_CODE}&state=the-state`);
+        expect(url).toBe(
+            `https://api.test/callback?code=${FAKE_OAUTH_CODE}.the-challenge&state=the-state`
+        );
     });
 
-    it('resolves the fixed code to a deterministic, already-verified identity', async () => {
+    it('resolves a genuine round trip to a deterministic, already-verified identity', async () => {
+        const verifier = generateCodeVerifier();
+        const url = fakeOAuthProvider.authorizeUrl(
+            'the-state',
+            'https://api.test/callback',
+            codeChallengeOf(verifier)
+        );
+        const code = new URL(url).searchParams.get('code')!;
+
         const identity = await fakeOAuthProvider.exchangeCode(
-            FAKE_OAUTH_CODE,
-            'https://api.test/callback'
+            code,
+            'https://api.test/callback',
+            verifier
         );
 
         expect(identity.emailVerified).toBe(true);
@@ -92,7 +108,28 @@ describe('fakeOAuthProvider', () => {
 
     it('refuses any other code — no network call ever makes one up', async () => {
         await expect(
-            fakeOAuthProvider.exchangeCode('not-the-fixed-code', 'https://api.test/callback')
-        ).rejects.toThrow();
+            fakeOAuthProvider.exchangeCode(
+                'not-the-fixed-code.some-challenge',
+                'https://api.test/callback',
+                'irrelevant'
+            )
+        ).rejects.toThrow(/unrecognised code/);
+    });
+
+    it("refuses a verifier that doesn't hash to the challenge it was handed", async () => {
+        const url = fakeOAuthProvider.authorizeUrl(
+            'the-state',
+            'https://api.test/callback',
+            codeChallengeOf(generateCodeVerifier())
+        );
+        const code = new URL(url).searchParams.get('code')!;
+
+        await expect(
+            fakeOAuthProvider.exchangeCode(
+                code,
+                'https://api.test/callback',
+                generateCodeVerifier() // a DIFFERENT verifier than the one behind the challenge
+            )
+        ).rejects.toThrow(/PKCE verifier/);
     });
 });

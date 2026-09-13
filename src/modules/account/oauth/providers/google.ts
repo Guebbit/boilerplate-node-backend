@@ -50,22 +50,29 @@ const assertValidClaims = (claims: GoogleIdTokenClaims): void => {
 export const googleOAuthProvider: OAuthProvider = {
     name: PROVIDER_NAME,
 
-    authorizeUrl: (state, redirectUri) => {
+    authorizeUrl: (state, redirectUri, codeChallenge) => {
         const { clientId } = getOAuthCredentials(PROVIDER_NAME);
         // https://developers.google.com/identity/protocols/oauth2/web-server#httprest
+        // PKCE (RFC 7636): S256 is the only method offered — Google supports it, and the plain
+        // fallback exists only for clients too limited to hash, which this server is not.
+        // https://developers.google.com/identity/protocols/oauth2/native-app#step1-code-verifier
         const query = new URLSearchParams({
             client_id: clientId ?? '',
             redirect_uri: redirectUri,
             response_type: 'code',
             scope: 'openid email profile',
-            state
+            state,
+            code_challenge: codeChallenge,
+            code_challenge_method: 'S256'
         });
         return `https://accounts.google.com/o/oauth2/v2/auth?${query.toString()}`;
     },
 
-    exchangeCode: (code, redirectUri) => {
+    exchangeCode: (code, redirectUri, codeVerifier) => {
         const { clientId, clientSecret } = getOAuthCredentials(PROVIDER_NAME);
         // https://developers.google.com/identity/protocols/oauth2/web-server#exchange-authorization-code
+        // `code_verifier`: the PKCE secret behind the challenge `authorizeUrl` sent; Google
+        // hashes it and refuses the exchange unless it matches.
         return fetch('https://oauth2.googleapis.com/token', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -74,7 +81,8 @@ export const googleOAuthProvider: OAuthProvider = {
                 client_id: clientId ?? '',
                 client_secret: clientSecret ?? '',
                 redirect_uri: redirectUri,
-                grant_type: 'authorization_code'
+                grant_type: 'authorization_code',
+                code_verifier: codeVerifier
             })
         })
             .then((response) => {
