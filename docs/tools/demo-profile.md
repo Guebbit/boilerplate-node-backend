@@ -37,8 +37,9 @@ other scenario file, even though `users` owns the record.
 Several scenario files need a piece of them: `users` seeds the accounts, `account` seeds the address
 book an order ships to, `wishlist` seeds a row belonging to a person, and `flows/shop-history.ts`
 signs each of them in. Reaching into `@modules/users` for that would buy a `src/`-crossing import
-for six string literals that are pure data. Repeating the ids in four files is worse in the other
-direction: a drift is a dangling reference nothing catches until a demo renders an empty page.
+for six string literals that are pure data. Repeating the ids in each of those files is worse in
+the other direction: a drift is a dangling reference nothing catches until a demo renders an empty
+page.
 
 Note what is deliberately **not** shared: the account records. A sibling gets the handle it needs to
 name a person without taking on the shape of a user.

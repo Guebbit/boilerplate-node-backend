@@ -289,8 +289,8 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
         },
         imageUrl: {
             type: String,
-            // A local asset, not a third-party host: placekitten.com (the previous default) went
-            // dark, and picsum.photos would rot the same way. `/images/system/` is served by
+            // A local asset, never a third-party host: a remote placeholder service is one
+            // outage away from a catalogue of broken images. `/images/system/` is served by
             // `app/static-assets.ts`, the same as `NODE_PENDING_IMAGE_URL`'s own placeholder.
             default: process.env.NODE_DEFAULT_IMAGE_USER ?? '/images/system/placeholder-user.png'
         },

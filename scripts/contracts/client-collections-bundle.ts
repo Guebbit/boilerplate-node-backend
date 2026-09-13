@@ -16,8 +16,8 @@
  *      here can import a module's own fixtures (`scenarios/products.ts` and friends), because
  *      those pull in `@modules/*` code, which imports the generated `@api/` client — the same
  *      cycle `scripts/contracts/openapi-bundle.ts` had to stop importing `enabledModules` to
- *      avoid. A realistic title, price or description is no longer available here; `npm run demo`
- *      plus the API is how you see the whole shop.
+ *      avoid. A realistic title, price or description is out of reach here; `npm run demo` plus
+ *      the API is how you see the whole shop.
  *   3. What the contract cannot describe — each module's `probes.ts`, the requests that prove the
  *      API REJECTS things. A spec declares valid calls, so no generator can derive a bogus token.
  *
@@ -50,7 +50,7 @@ import { SEED_PRODUCT_IDS, SUBJECTS } from '../../scenarios/subjects';
 /**
  * What a generated request puts where an ORDER id belongs.
  *
- * Not a literal, and it cannot be one any more: the demo shop's orders are produced by driving
+ * Not a literal, and it cannot be one: the demo shop's orders are produced by driving
  * real checkouts (`scenarios/flows/`), so their ids are minted when the shop is built and differ
  * every time. Bruno, Insomnia and Postman all read `{{name}}` as a collection variable at send
  * time, so this hands the reader a slot to fill instead of an id that 404s. The orders section's

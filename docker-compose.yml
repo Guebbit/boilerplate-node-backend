@@ -116,8 +116,11 @@ services:
         #
         # `db:bootstrap` runs `db:sync` (indexes, reconciled against the schemas) then the seeder
         # (demo data) before the server starts, so a fresh `compose up` yields a populated, browsable
-        # stack instead of empty lists that read as "not wired". Both halves are idempotent, so every
-        # later boot is a no-op, and the seeder refuses to run when NODE_ENV=production.
+        # stack instead of empty lists that read as "not wired". `db:sync` is idempotent; the seeder
+        # is not — it builds the shop's order book by driving real checkouts — so it SKIPS a
+        # database that already holds anything and exits 0, which is what keeps a later boot from
+        # either duplicating the history or stopping the container. `scenario:apply:reset` rebuilds
+        # on purpose. The seeder also refuses to run when NODE_ENV=production.
         command:
             [
                 'sh',

@@ -217,9 +217,9 @@ const namedProducts = [
     }),
     /*
      * The minimal one — only `title` and `price`, so every optional field but the stock counter
-     * falls to the model's defaults, `imageUrl` included. The others are richly populated and can't catch a card or
-     * filter chip that wrongly assumes a description, category or image is present. Public on
-     * purpose, so it appears in every list the storefront actually renders.
+     * falls to the model's defaults, `imageUrl` included. The others are richly populated and
+     * can't catch a card or filter chip that wrongly assumes a description, category or image is
+     * present. Public on purpose, so it appears in every list the storefront actually renders.
      */
     makeUnstockedProduct({
         id: SEED_PRODUCT_IDS.barebones,

@@ -15,17 +15,18 @@ import { addressBookRepository } from '@modules/account/repository';
  * The two seeded books: the owner's (two entries) and the ordinary customer's (one).
  *
  * No pinned `_id` on the BOOK — `insertIfAbsentForOwner` keys on `userId`, so an id buys no
- * idempotency. Each ENTRY keeps one: those reach the wire, and a
- * "set as default" demo names the entry it moves the flag onto.
+ * idempotency. Each ENTRY keeps one: those reach the wire, and a "set as default" demo names the
+ * entry it moves the flag onto.
  */
 export const addressBookFixtures = [
     makeAddressBook({
         userId: SEED_OWNER_ID,
         items: [
             /*
-             * A shipped order restates (never references) a copy of this entry as its `shippingAddress`: an
-             * order's address is a snapshot that must be free to differ from the live book — sharing
-             * the literal would make them unable to disagree, which is what this fixture demonstrates.
+             * A shipped order restates (never references) a copy of this entry as its
+             * `shippingAddress`: an order's address is a snapshot that must be free to differ from
+             * the live book — sharing the literal would make them unable to disagree, which is what
+             * this fixture demonstrates.
              */
             {
                 id: '65dd2ce31f5b3a9e04c7b211',

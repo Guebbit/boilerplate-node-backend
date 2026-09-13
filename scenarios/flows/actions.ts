@@ -5,7 +5,8 @@
  *
  * Why they are wrappers and not a `service` call: every row these produce carries an audit entry,
  * an actor scope and a domain event, and those only come out right when the request travels the
- * real middleware stack. See `OFFLINE_PAYMENTS_3`'s "driven over HTTP or through services".
+ * real middleware stack — the authentication, the caller context and the rate limiters included.
+ * A service call would produce the order and none of its trail.
  */
 
 import type { Caller } from './client';
@@ -138,9 +139,9 @@ export const recordOfflinePayment = (
 /**
  * Move an order along the lifecycle as an operator would, one transition at a time.
  *
- * One request per step on purpose: `canTransition` refuses a jump, and the contract suite's own
- * `updateStatusIfIn(['pending'], 'shipped')` shortcut is exactly the thing this file must not
- * copy — see `OFFLINE_PAYMENTS_3`'s research table.
+ * One request per step on purpose: `canTransition` refuses a jump, and a shortcut that wrote the
+ * final status directly would skip every transition's own side effects — the shipment, the stock
+ * movement and the audit row that make this dataset worth more than a written one.
  *
  * @param owner - a caller holding `orders.update`
  * @param statuses - the transitions in order, e.g. `['processing', 'shipped']`

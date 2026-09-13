@@ -8,10 +8,10 @@
  * seed rows belonging to these people.
  *
  * Ten further customers (`SEED_CUSTOMER_IDS`) sit alongside them, purely so the flow runner has
- * more than one shopper to vary an order history across. None of them is
- * wired into `@scenarios/accounts` — there is no login promise attached to any of the ten, only
- * to the four named accounts above — the ten log in with `makeUser`'s own default password, which
- * is how `scenarios/flows/shop-history.ts` shops as them.
+ * more than one shopper to vary an order history across. None is wired into `@scenarios/accounts`
+ * — there is no login promise attached to any of the ten, only to the four named accounts above.
+ * They log in with `makeUser`'s own default password, which is how
+ * `scenarios/flows/shop-history.ts` shops as them.
  */
 
 import {
@@ -44,9 +44,8 @@ const seedCustomerId = (index: number): string => `67f0c2${index.toString(16).pa
 /**
  * The ten further customers, named by who they are rather than by index —
  * `scenarios/flows/shop-history.ts` reads these instead of repeating a hex string. Seven
- * (`amelia` through `priya`)
- * get one small order each and no cart row; three (`marcus`, `harper`, `isla`) get a fuller cart
- * and two orders apiece — see the comments where each is actually used.
+ * (`amelia` through `priya`) get one small order each and no cart row; three (`marcus`, `harper`,
+ * `isla`) get a fuller cart and two orders apiece — see the comments where each is actually used.
  */
 export const SEED_CUSTOMER_IDS = {
     amelia: seedCustomerId(0),
