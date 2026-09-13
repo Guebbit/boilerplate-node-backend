@@ -12,9 +12,10 @@
  * Fresh session: every route that moves money requires `requireFreshAuth(REAUTH_TIME_CRITICAL)` —
  *                a stolen access token proves nothing about how recently the holder typed their
  *                password.
- * Verified:      the two routes the customer drives directly also require `requireVerified` — an
- *                unproven address must not be able to pay and start receiving payment mail at an
- *                inbox nobody confirmed.
+ * Verified:      the three routes the customer drives directly also require the `cart.checkout`
+ *                key — an unproven address must not be able to pay and start receiving payment
+ *                mail at an inbox nobody confirmed. `cart` owns the key; `payments` mounts it, the
+ *                same as `products/routes.ts` mounts `locales`-owned `translations.*`.
  * Card testing:  `POST /:id/confirm` alone additionally carries the payment-velocity budgets — the
  *                confirm is where a card number is actually validated, `/intent` merely freezes a
  *                price. See `paymentConfirmAttemptLimiter`/`paymentConfirmDeclineLimiter`.
@@ -26,7 +27,6 @@ import {
     isAuth,
     requirePermission,
     requireFreshAuth,
-    requireVerified,
     REAUTH_TIME_CRITICAL
 } from '@kernel/middlewares/authorizations';
 import {
@@ -64,7 +64,7 @@ router.use(getAuth, isAuth);
 router.post(
     '/intent',
     requireFreshAuth(REAUTH_TIME_CRITICAL),
-    requireVerified,
+    requirePermission('cart.checkout'),
     idempotencyKey,
     postPaymentIntent
 );
@@ -101,7 +101,7 @@ router.post(
 router.post(
     '/:id/confirm',
     requireFreshAuth(REAUTH_TIME_CRITICAL),
-    requireVerified,
+    requirePermission('cart.checkout'),
     paymentConfirmAttemptLimiter,
     paymentConfirmDeclineLimiter,
     paymentDeclineChallengeGate,
@@ -113,4 +113,9 @@ router.post(
 // here: it is already idempotent by construction, keyed on the provider's own payment reference
 // rather than a client-supplied one, so a second sync call settles the same outcome, not a
 // second one.
-router.post('/:id/sync', requireFreshAuth(REAUTH_TIME_CRITICAL), requireVerified, postPaymentSync);
+router.post(
+    '/:id/sync',
+    requireFreshAuth(REAUTH_TIME_CRITICAL),
+    requirePermission('cart.checkout'),
+    postPaymentSync
+);

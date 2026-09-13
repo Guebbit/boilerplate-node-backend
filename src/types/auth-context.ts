@@ -59,14 +59,6 @@ export interface AuthContext {
      * need to read it.
      */
     analyticsConsent: boolean;
-    /**
-     * Whether the account's email is proven, read fresh from the document on every request, same
-     * reasoning as `analyticsConsent`: a verification landing mid-session (or a pending change
-     * completing) must gate the very next request, not wait for a new token.
-     * `requireVerified` (`kernel/middlewares/authorizations.ts`) is what reads this; nothing else
-     * should need to.
-     */
-    verified: boolean;
 }
 
 /**

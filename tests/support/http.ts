@@ -30,17 +30,17 @@ interface AuthenticatedTestUser {
  * access token. Going through the endpoint rather than signing a token by hand keeps these
  * tests honest: if login stops issuing usable tokens, every contract test fails.
  *
- * `verified: true` — this is the account most tests want: a logged-in caller free to use the
- * whole app, checkout and payment included. A test asserting UNVERIFIED behaviour builds its own
- * user with `createUser({ verified: false })` (`account`'s own suites do exactly that) rather than
- * fighting this default.
+ * `role: 'customer', verifiedAt: new Date()` — this is the account most tests want: a logged-in
+ * caller free to use the whole app, checkout and payment included. A test asserting UNVERIFIED
+ * behaviour builds its own user with `createUser({ role: 'unverified' })` (`account`'s own
+ * suites do exactly that) rather than fighting this default.
  */
 export const authenticateAs = async (
     role: 'owner' | 'user' = 'user'
 ): Promise<AuthenticatedTestUser> => {
     const user = await (role === 'owner'
-        ? createOwnerUser({ verified: true })
-        : createUser({ verified: true }));
+        ? createOwnerUser({ verifiedAt: new Date() })
+        : createUser({ role: 'customer', verifiedAt: new Date() }));
 
     return authenticateUser(user, role);
 };
@@ -62,7 +62,7 @@ export const authenticateAsRole = async (role: string): Promise<AuthenticatedTes
         role,
         email: `${role}@example.com`,
         username: role,
-        verified: true
+        verifiedAt: new Date()
     });
 
     return authenticateUser(user, role);

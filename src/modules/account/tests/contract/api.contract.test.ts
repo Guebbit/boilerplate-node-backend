@@ -179,12 +179,12 @@ describe('PUT /account', () => {
         // The account keeps its current, proven address until the new one is confirmed.
         expect(response.body.data.email).toBe(user.email);
         expect(response.body.data.pendingEmail).toBe('fresh-address@example.com');
-        expect(response.body.data.verified).toBe(true);
+        expect(response.body.data.verifiedAt).toBeDefined();
         expect(response).toSatisfyApiSpec();
     });
 
     it('cancels a pending change when the CURRENT address is restated', async () => {
-        const { user, bearer } = await loginWithCookie({ verified: true });
+        const { user, bearer } = await loginWithCookie({ verifiedAt: new Date() });
         await api()
             .put('/account')
             .set('Authorization', bearer)
@@ -569,7 +569,7 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
         });
 
         expect(response.status).toBe(201);
-        expect(response.body.data.verified).toBe(false);
+        expect(response.body.data.verifiedAt).toBeUndefined();
         expect(response).toSatisfyApiSpec();
 
         expect(await readVerifyToken(response.body.data.id)).toBeDefined();
@@ -588,11 +588,11 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
         expect(confirm).toSatisfyApiSpec();
 
         const stored = await userRepository.findById(user.id);
-        expect(stored?.verified).toBe(true);
+        expect(stored?.verifiedAt).toBeInstanceOf(Date);
     });
 
     it('matches the error contract when the account is already verified', async () => {
-        const { bearer } = await loginWithCookie({ verified: true });
+        const { bearer } = await loginWithCookie({ verifiedAt: new Date() });
 
         const response = await api().post('/account/verify-request').set('Authorization', bearer);
 
@@ -625,7 +625,7 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
 
 describe('PUT /account (email change) and /account/email-change-confirm', () => {
     it('notifies the OLD address and mails a link to the NEW one, the moment the change is requested', async () => {
-        const { user, bearer } = await loginWithCookie({ verified: true });
+        const { user, bearer } = await loginWithCookie({ verifiedAt: new Date() });
 
         const response = await api()
             .put('/account')
@@ -640,7 +640,7 @@ describe('PUT /account (email change) and /account/email-change-confirm', () => 
     });
 
     it('confirming the token swaps pendingEmail into email and re-verifies the account', async () => {
-        const { user, bearer } = await loginWithCookie({ verified: true });
+        const { user, bearer } = await loginWithCookie({ verifiedAt: new Date() });
         await api()
             .put('/account')
             .set('Authorization', bearer)
@@ -653,11 +653,11 @@ describe('PUT /account (email change) and /account/email-change-confirm', () => 
         expect(confirm).toSatisfyApiSpec();
         const stored = await userRepository.findById(user.id);
         expect(stored?.email).toBe('new-address@example.com');
-        expect(stored?.verified).toBe(true);
+        expect(stored?.verifiedAt).toBeInstanceOf(Date);
     });
 
     it('keeps authenticating under the OLD address until the token is spent', async () => {
-        const { user, bearer } = await loginWithCookie({ verified: true });
+        const { user, bearer } = await loginWithCookie({ verifiedAt: new Date() });
         await api()
             .put('/account')
             .set('Authorization', bearer)
@@ -683,7 +683,7 @@ describe('PUT /account (email change) and /account/email-change-confirm', () => 
     });
 
     it('revokes every other session on a confirmed email change', async () => {
-        const { user, bearer, jwtCookie } = await loginWithCookie({ verified: true });
+        const { user, bearer, jwtCookie } = await loginWithCookie({ verifiedAt: new Date() });
         await api()
             .put('/account')
             .set('Authorization', bearer)
@@ -709,7 +709,7 @@ describe('PUT /account (email change) and /account/email-change-confirm', () => 
     });
 
     it('an `email-change` token is refused by the plain verify-confirm', async () => {
-        const { bearer } = await loginWithCookie({ verified: true });
+        const { bearer } = await loginWithCookie({ verifiedAt: new Date() });
         await api()
             .put('/account')
             .set('Authorization', bearer)

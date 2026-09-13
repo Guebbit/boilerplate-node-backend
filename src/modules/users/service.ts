@@ -89,11 +89,13 @@ export const enqueueIfPending = (user: UserDocument): UserDocument => {
 
 /**
  * Create a new user document, with no email confirmation step — the self-service path is
- * `accountService.signup`. `verified` is hardcoded `true` since an operator typing the address is
- * the vouching. `password` is optional: left out, a random value nobody is told fills the
- * `required` field, and `sendSetupEmail: true` queues a setup mail (`USER_SETUP_REQUESTED`) until
- * a real one is set. Typed off `CreateUserRequest` rather than a hand-picked `Pick`, since a
- * hand-copied list is what silently dropped `active` from `update()` below.
+ * `accountService.signup`. `verifiedAt` is hardcoded `now` and `role` defaults `customer` — both
+ * ahead of `...data` so an operator naming a role explicitly still wins — since an operator typing
+ * the address in is the vouching (`shared/authorization-roles.yaml`'s "no unverified manager"
+ * rule). `password` is optional: left out, a random value nobody is told fills the `required`
+ * field, and `sendSetupEmail: true` queues a setup mail (`USER_SETUP_REQUESTED`) until a real one
+ * is set. Typed off `CreateUserRequest` rather than a hand-picked `Pick`, since a hand-copied list
+ * is what silently dropped `active` from `update()` below.
  */
 export const create = (
     data: CreateUserRequest & {
@@ -111,7 +113,7 @@ export const create = (
             : randomBytes(32).toString('hex');
 
     return userRepository
-        .create({ verified: true, ...data, password })
+        .create({ verifiedAt: new Date(), role: 'customer', ...data, password })
         .then((user) => {
             /*
              * The membership, not just the column — same reasoning as `update()`'s dual write below.

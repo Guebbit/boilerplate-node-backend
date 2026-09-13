@@ -86,15 +86,18 @@ export const userRepository: Repository<UserDocument> & {
              * deactivated accounts" and "show me deleted accounts" are different questions.
              */
             /*
-             * `role` and `verified` narrow a listing that already answers 403 to anyone who is
-             * not staff, which is what makes publishing them safe.
+             * `role` narrows a listing that already answers 403 to anyone who is not staff, which
+             * is what makes publishing it safe. `unverified` is now itself a role in that same
+             * vocabulary, so filtering on it is the replacement for the old boolean `verified`
+             * filter — a stricter question, since it also excludes an unproven address an operator
+             * already promoted to staff.
              *
-             * `role` is matched exactly, not as a regex: a role name is a closed vocabulary
+             * Matched exactly, not as a regex: a role name is a closed vocabulary
              * (`shared/authorization-roles.yaml`), so a partial match would answer for a role
              * nobody asked about.
              */
             exact: { role: 'role' },
-            booleans: { active: 'active', verified: 'verified' }
+            booleans: { active: 'active' }
         }
     }),
 
@@ -317,22 +320,44 @@ export const userRepository: Repository<UserDocument> & {
             .exec(),
 
     /**
-     * Link a provider identity to an account and mark it verified — atomic `$push`/`$set`, never
+     * Link a provider identity to an account and mark it verified — atomic `$push`, never
      * read-modify-write, same rule `tokens` follows: `oauthAccounts` is `select: false`, so the
-     * document `account/services/oauth.ts` already holds never carries the array to mutate in place.
-     * `verified` is set unconditionally: the provider vouching for the email is exactly the fact
-     * that already makes a fresh signup `verified: true`, so re-asserting it on an existing
-     * account is idempotent, never a downgrade. `timestamps: false` — linking a login method isn't
-     * a profile edit.
+     * document `account/services/oauth.ts` already holds never carries the array to mutate in
+     * place. Two atomic writes rather than one: the `$push` stays a plain update so Mongoose still
+     * assigns the new subdocument its `_id` the way every other push here does — an
+     * aggregation-pipeline update (needed for the second write's `$cond`) bypasses that casting
+     * entirely. The second write promotes `unverified` to `customer` and sets `verifiedAt`, both
+     * conditionally: `role` only when it is still exactly `unverified` (a staff account linking a
+     * second provider keeps its role), `verifiedAt` only when still unset (re-linking must not
+     * overwrite the true, earlier proof date with a later one).
+     * https://www.mongodb.com/docs/manual/reference/operator/update/#update-with-aggregation-pipeline
      */
     linkOAuthAccount: (userId: string, account: OAuthAccount) =>
         userModel
             .updateOne(
                 { _id: toObjectId(userId) },
-                { $push: { oauthAccounts: account }, $set: { verified: true } },
+                { $push: { oauthAccounts: account } },
                 { timestamps: false }
             )
             .exec()
+            .then(() =>
+                userModel
+                    .updateOne(
+                        { _id: toObjectId(userId) },
+                        [
+                            {
+                                $set: {
+                                    verifiedAt: { $ifNull: ['$verifiedAt', '$$NOW'] },
+                                    role: {
+                                        $cond: [{ $eq: ['$role', 'unverified'] }, 'customer', '$role']
+                                    }
+                                }
+                            }
+                        ],
+                        { timestamps: false }
+                    )
+                    .exec()
+            )
             .then(() => undefined),
 
     /**

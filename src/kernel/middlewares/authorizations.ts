@@ -44,6 +44,16 @@ import {
 } from '@infrastructure/observability/audit';
 
 /**
+ * The `errors[].code` locale key follows one rule everywhere in this codebase: `FORBIDDEN` reads
+ * `generic.error-forbidden`, `EMAIL_NOT_VERIFIED` reads `generic.error-email-not-verified`. One
+ * rule for both `requirePermission`'s own default and a key's `deniedCode` override
+ * (`kernel/permissions.ts`'s `PermissionKey`), so a new override needs nothing added to
+ * `locales/*.json` beyond the matching key.
+ */
+const errorLocaleKeyFor = (code: string): string =>
+    `generic.error-${code.toLowerCase().replaceAll('_', '-')}`;
+
+/**
  * Record a refusal before answering it, so a denied request always leaves a trail.
  *
  * Which route and which method are on every one of them, and are added here rather than at each
@@ -122,8 +132,7 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
                     imageUrl: user.imageUrl,
                     authTime: user.authTime,
                     amr: user.amr,
-                    analyticsConsent: user.analyticsConsent,
-                    verified: user.verified
+                    analyticsConsent: user.analyticsConsent
                 };
                 // Resolved once, here, so nothing below turns two role names into keys again.
                 request.caller = callerInScope(request.authContext, 'tenant');
@@ -212,6 +221,9 @@ export const requirePermission = (key: string) => {
     // explicitly, because `buildAuditEvent`'s default (`context.caller.scope`) is always
     // `'tenant'` and would misreport every platform-key refusal as a tenant one.
     const scope = scopeOfKey(key);
+    // `FORBIDDEN` unless the key names its own — see `PermissionKey.deniedCode`'s docblock.
+    const deniedCode = declared?.deniedCode ?? 'FORBIDDEN';
+    const deniedMessageKey = errorLocaleKeyFor(deniedCode);
 
     // Named, not anonymous: `tests/cross-cutting/write-routes-are-guarded.test.ts` and each
     // module's route sweep identify a guard by its function name, and a factory that returns an
@@ -294,7 +306,9 @@ export const requirePermission = (key: string) => {
                 actor_scope: scope,
                 metadata: { reason: 'missing_permission', permission: key }
             });
-            rejectResponse(response, 403);
+            rejectResponse(response, 403, [
+                { code: deniedCode, message: t(deniedMessageKey) }
+            ]);
             return;
         }
 
@@ -497,33 +511,3 @@ export const requireFreshAuthWhen =
         requireFreshAuth(maxAgeSeconds)(request, response, next);
     };
 
-/**
- * Reject with 403 unless the caller's email is verified. MUST run after `isAuth`.
- *
- * Mounted only where an unverified account is a risk worth refusing over, not on every route — a
- * boilerplate that shipped a verify flow and enforced it nowhere would teach the wrong default,
- * but a browsing, cart-filling, unverified account is a legitimate state. `cart`'s checkout and
- * `payments`' intent/confirm are the two mount points: where this app's money moves, which are
- * also the two `requireFreshAuth(REAUTH_TIME_CRITICAL)` already gates.
- *
- * 403, not 401: the caller IS who their token says, same distinction `requirePermission` draws — this is a
- * permission gap, not an identity one, and `EMAIL_NOT_VERIFIED` is what lets a client route to
- * "check your inbox" instead of a generic denial.
- *
- * @param request - must already carry `authContext`, set upstream by `getAuth`/`isAuth`
- * @param response - answered 401 with no caller at all, 403 for an unverified one
- * @param next - called only once a verified caller is confirmed
- */
-export const requireVerified = (request: Request, response: Response, next: NextFunction) => {
-    if (!request.authContext) {
-        rejectResponse(response, 401);
-        return;
-    }
-    if (!request.authContext.verified) {
-        rejectResponse(response, 403, [
-            { code: 'EMAIL_NOT_VERIFIED', message: t('generic.error-email-not-verified') }
-        ]);
-        return;
-    }
-    next();
-};

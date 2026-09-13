@@ -83,13 +83,13 @@ export const isLiveRefreshSession = (token: Token): boolean =>
     token.type === (TokenType.REFRESH as string) && !token.supersededAt;
 
 /**
- * The full user record shape backing Mongoose documents. `createdAt`, `updatedAt` and `deletedAt`
- * are omitted from the wire `User` contract and redeclared as `Date` below — the contract carries
- * ISO strings, the document carries real dates.
+ * The full user record shape backing Mongoose documents. `createdAt`, `updatedAt`, `deletedAt`,
+ * `twoFactorEnabledAt` and `verifiedAt` are omitted from the wire `User` contract and redeclared
+ * as `Date` below — the contract carries ISO strings, the document carries real dates.
  */
 export interface UserRecord extends Omit<
     User,
-    'createdAt' | 'updatedAt' | 'deletedAt' | 'twoFactorEnabledAt'
+    'createdAt' | 'updatedAt' | 'deletedAt' | 'twoFactorEnabledAt' | 'verifiedAt'
 > {
     /**
      * Hashed by the pre-save hook below before it ever reaches Mongo. Absent for an OAuth-only
@@ -124,6 +124,12 @@ export interface UserRecord extends Omit<
 
     /** Same ISO-string-vs-`Date` redeclaration as `createdAt`/`updatedAt` above. */
     twoFactorEnabledAt?: Date;
+
+    /**
+     * When the address was proven, or absent until it is — informational only, see the schema
+     * field's own doc comment. Same ISO-string-vs-`Date` redeclaration as `createdAt`/`updatedAt`.
+     */
+    verifiedAt?: Date | null;
 
     /** The user's refresh, reset and delete-confirmation tokens — see `Token` above. */
     tokens: Token[];
@@ -359,9 +365,14 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
          * one this build did not ship. `permissionsOfRole` is what refuses an unknown name, at the
          * point the caller is resolved, where the error can say which account is wrong.
          */
+        // `unverified`, not `customer`: an account starts able to browse and not to spend, and
+        // stays that way until `POST /account/verify-confirm` (or an OAuth signup a provider
+        // already vouched for) promotes it — see `shared/authorization-roles.yaml`. A row written
+        // before this field existed reads the same way, through `module.ts`'s `?? 'unverified'`
+        // fallback, never through this default.
         role: {
             type: String,
-            default: 'customer'
+            default: 'unverified'
         },
         /*
          * Whether the account is enabled — independent of `deletedAt`, matching `products`:
@@ -373,13 +384,17 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
             default: true
         },
         /*
-         * Whether the address is confirmed via the verify flow. Defaults `false` for self-signup,
-         * until `POST /account/verify-confirm` flips it; `userService.create` (admin path) sets it
-         * `true` since an operator typing the address in is the vouching. Informational only.
+         * WHEN the address was confirmed via the verify flow, or `null` until it is.
+         * Enforcement is the `role` column above (`unverified` holds no `cart.checkout`, see
+         * `shared/authorization-keys.yaml`) — this is the record of fact, kept because an account
+         * has one role field: the moment an operator grants a staff role to an unproven address,
+         * the role overwrites the only other evidence the address was never proven. Set by
+         * `completeEmailVerification`/`completeEmailChange`/`userRepository.linkOAuthAccount`;
+         * read by nothing.
          */
-        verified: {
-            type: Boolean,
-            default: false
+        verifiedAt: {
+            type: Date,
+            default: null
         },
         /*
          * The address a pending `PUT /account` email change is waiting to prove — see the field's
@@ -698,7 +713,7 @@ export const toUser = (document: UserDocument): User => ({
     username: document.username,
     ...(document.role === undefined ? {} : { role: document.role }),
     ...(document.active === undefined ? {} : { active: document.active }),
-    ...(document.verified === undefined ? {} : { verified: document.verified }),
+    ...(document.verifiedAt ? { verifiedAt: document.verifiedAt.toISOString() } : {}),
     ...(document.pendingEmail === undefined ? {} : { pendingEmail: document.pendingEmail }),
     ...(document.imageUrl === undefined ? {} : { imageUrl: document.imageUrl }),
     ...(document.thumbnailUrl === undefined ? {} : { thumbnailUrl: document.thumbnailUrl }),

@@ -73,7 +73,7 @@ const deliver = (
 /**
  * A code mailed to the account's verified address.
  *
- * Deliberately gated on `verified`: 2FA by email is only ever as strong as the mailbox behind it,
+ * Deliberately gated on `verifiedAt`: 2FA by email is only ever as strong as the mailbox behind it,
  * and an address nobody has proved control of is not a second factor at all. The destination is
  * read from the live record rather than frozen at enrollment — changing it is itself a
  * fresh-auth, re-verified action, so there is no second copy to keep in step.
@@ -88,7 +88,7 @@ export const emailMethod: TwoFactorMethodHandler = {
     available: () => isDemoMode() || Boolean(process.env.NODE_SMTP_HOST),
 
     eligibility: (user) =>
-        user.verified
+        user.verifiedAt
             ? { enrollable: true }
             : { enrollable: false, reason: t('account.two-factor.email-unverified') },
 

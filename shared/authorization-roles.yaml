@@ -20,19 +20,43 @@ version: 1
 
 roles:
     # -- tenant scope --------------------------------------------------------------------------
-    - name: customer
+    # `unverified` is what `customer` starts as, before the address is proven — one key thinner,
+    # nothing else different. Browsing, the basket, the wishlist, the address book and the account
+    # follow from being signed in and need no key either way, which is the "fails in the right
+    # direction" property the whole model was chosen for. See `cart.checkout`'s own description in
+    # `shared/authorization-keys.yaml` and docs/theory/authorization.md.
+    #
+    # THERE IS NO UNVERIFIED MANAGER. A role is something an operator GRANTS, and granting it IS
+    # the vouching — so every staff role below holds `cart.checkout` explicitly (`owner` via
+    # `all.manage`), and this is the only tenant role that may not.
+    - name: unverified
       scope: tenant
-      title: The customer
+      title: A signed-up account, address unproven
       description: >-
-          Someone buying things. Everything they may do to their own basket, wishlist, addresses
-          and account follows from being signed in and needs no key at all — what is listed here
-          is only what they may read of the SHOP.
+          What `customer` is minus the ability to spend. Assigned automatically at signup; the
+          verify flow promotes the account to `customer` once the address is proven, and an
+          operator may promote it to anything else at any time — granting a role is the vouching.
       permissions:
           - products.read
           - locales.read
           - delivery.read
           - orders.read
           - payments.read
+
+    - name: customer
+      scope: tenant
+      title: The customer
+      description: >-
+          Someone buying things. Everything they may do to their own basket, wishlist, addresses
+          and account follows from being signed in and needs no key at all — what is listed here
+          is only what they may read of the SHOP, plus the one key that lets them spend.
+      permissions:
+          - products.read
+          - locales.read
+          - delivery.read
+          - orders.read
+          - payments.read
+          - cart.checkout
 
     - name: manager
       scope: tenant
@@ -56,6 +80,8 @@ roles:
           - users.read
           - audit.read
           - webhooks.manage
+          # Shopping on a staff account is not a security event — see "no unverified manager" above.
+          - cart.checkout
 
     - name: warehouse
       scope: tenant
@@ -68,6 +94,7 @@ roles:
           - orders.read
           - inventory.manage
           - delivery.manage
+          - cart.checkout
 
     - name: support
       scope: tenant
@@ -82,6 +109,7 @@ roles:
           - orders.read
           - payments.read
           - audit.read
+          - cart.checkout
 
     - name: editor
       scope: tenant
@@ -97,6 +125,7 @@ roles:
           - products.manage
           - locales.manage
           - translations.manage
+          - cart.checkout
 
     - name: moderator
       scope: tenant
@@ -110,6 +139,7 @@ roles:
           - orders.manage
           - payments.manage
           - audit.read
+          - cart.checkout
 
     - name: owner
       scope: tenant

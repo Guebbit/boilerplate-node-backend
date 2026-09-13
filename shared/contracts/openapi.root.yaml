@@ -584,13 +584,15 @@ components:
                 # not a value — see the note on `CreateProductRequest.active`.
                 active:
                     type: boolean
-                # Whether the address has been confirmed through the verify-request /
-                # verify-confirm flow. Self-signup starts `false` and confirms by email;
-                # admin-created accounts start `true` because an operator vouches for the
-                # address. Informational only — no endpoint refuses an unverified account —
-                # so clients render it as a banner, not a wall.
-                verified:
-                    type: boolean
+                # WHEN the address was confirmed through the verify-request / verify-confirm flow,
+                # absent until it is. Self-signup starts absent and confirms by email;
+                # admin-created and OAuth accounts start set because an operator or the provider
+                # already vouches for the address. Informational only — enforcement is the `role`
+                # above (`unverified` holds no `cart.checkout`, see `GET /account/abilities`) — so
+                # a client renders this as a banner, never as a wall of its own.
+                verifiedAt:
+                    type: string
+                    format: date-time
                 # Set only by `PUT /account` requesting a new address, cleared once
                 # `POST /account/email-change-confirm` proves it (or a second `PUT /account`
                 # naming the CURRENT address cancels it). Inlined rather than `$ref`ing `Email`:

@@ -12,7 +12,7 @@ import { callerContextOf } from '@infrastructure/http/request';
 
 /**
  * GET /account — the authenticated user's full profile, read fresh from the users collection.
- * The JWT only carries id/email/username/admin; echoing it would silently drop `verified` and
+ * The JWT only carries id/email/username/admin; echoing it would silently drop `verifiedAt` and
  * `locale`, which the client's verify banner and saved-language flow need.
  */
 export const getAccount = (request: Request, response: Response): void => {

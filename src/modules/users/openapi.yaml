@@ -34,10 +34,6 @@ paths:
                   in: query
                   schema:
                       type: string
-                - name: verified
-                  in: query
-                  schema:
-                      type: boolean
             responses:
                 '200':
                     description: Users list page
@@ -315,13 +311,12 @@ components:
                 # "deleted".
                 active:
                     type: boolean
-                # Both narrow an ALREADY staff-only listing, which is what makes publishing
-                # them safe: the endpoint answers 403 to anyone without the key before a
-                # filter is read at all.
+                # Narrows an ALREADY staff-only listing, which is what makes publishing it safe:
+                # the endpoint answers 403 to anyone without the key before a filter is read at
+                # all. `role=unverified` is also how a caller now filters for an unproven address —
+                # the replacement for the old boolean `verified` filter.
                 role:
                     type: string
-                verified:
-                    type: boolean
 
         CreateUserRequest:
             type: object

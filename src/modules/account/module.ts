@@ -64,12 +64,12 @@ const resolve = (verify: (token: string) => Promise<TokenData>) => (token: strin
                       // collection. A stored membership always wins over it. Platform has no
                       // such column of its own: `memberships` is the sole authority for that
                       // scope, so an account with none there simply holds no platform role.
-                      tenant: user.role ?? 'customer',
+                      tenant: user.role ?? 'unverified',
                       platform: null
                   }).then((roles) => ({ tenantId: DEPLOYMENT_TENANT_ID, roles }))
                 : Promise.resolve({
                       tenantId: DEPLOYMENT_TENANT_ID,
-                      roles: { tenant: 'customer', platform: null }
+                      roles: { tenant: 'unverified', platform: null }
                   })
             ).then((membership) => ({ user, claims, membership }))
         )
@@ -82,9 +82,10 @@ const resolve = (verify: (token: string) => Promise<TokenData>) => (token: strin
                       username: user.username,
                       /*
                        * `rolesOf`'s membership lookup wins over both fallbacks. `tenant` falls
-                       * back to the account's own `role` column — `customer` is the default for a
-                       * row written before the field existed, the least-privileged answer and
-                       * therefore the safe one. `platform` has no column to fall back to at all:
+                       * back to the account's own `role` column — `unverified` is the default for
+                       * a row with none, the least-privileged answer and therefore the safe one:
+                       * after the verification-role migration, an absent role means a row the
+                       * migration did not see. `platform` has no column to fall back to at all:
                        * `memberships` is the sole authority for that scope, so no row there means
                        * no platform role, which is correct for almost everyone.
                        *
@@ -106,11 +107,7 @@ const resolve = (verify: (token: string) => Promise<TokenData>) => (token: strin
                       // consent WITHDRAWAL has to apply to the very next event, not wait for the
                       // caller to log in again. `?? false` for the same reason as `admin` above —
                       // the schema defaults it, but the contract-derived type doesn't know that.
-                      analyticsConsent: user.analyticsConsent ?? false,
-                      // Same "read fresh, never cache in the JWT" reasoning as `analyticsConsent`:
-                      // a signup token minted before the mailbox is confirmed must not keep
-                      // `requireVerified` open for its whole lifetime.
-                      verified: user.verified ?? false
+                      analyticsConsent: user.analyticsConsent ?? false
                   }
                 : undefined
         );

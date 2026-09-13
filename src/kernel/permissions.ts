@@ -26,8 +26,12 @@ import {
 } from '@infrastructure/authorization/keys';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
-/** The action vocabulary, CASL's own. `manage` is the wildcard meaning any declared action. */
-export type PermissionAction = 'read' | 'create' | 'update' | 'delete' | 'manage';
+/**
+ * The action vocabulary. `manage` is the wildcard meaning any declared action; `checkout` is the
+ * one addition beyond CASL's own CRUD set, `cart.checkout`'s action and nowhere else — see that
+ * key's own description in `shared/authorization-keys.yaml`.
+ */
+export type PermissionAction = 'read' | 'create' | 'update' | 'delete' | 'manage' | 'checkout';
 
 /** How recently a caller must have proved themselves to use a key that demands it. */
 export type StepUpTier = 'critical' | 'sensitive';
@@ -60,6 +64,15 @@ export interface PermissionKey {
      * resolved caller; there is no expression language beyond that.
      */
     conditions?: Record<string, unknown>;
+    /**
+     * The `errors[].code` a refusal of THIS key answers, in place of `requirePermission`'s generic
+     * `FORBIDDEN`. Absent for almost every key — a generic "you do not have permission" is the
+     * right answer everywhere the caller genuinely lacks a role. `cart.checkout` is the exception:
+     * the caller has a role, just not this key yet, and the actionable answer is "confirm your
+     * email", not a permissions error. The message is looked up as `generic.error-<code,
+     * kebab-cased>` — the same locale key `FORBIDDEN` itself resolves to via that same rule.
+     */
+    deniedCode?: string;
 }
 
 /** A role the seeders create, and the keys it holds. Roles are data; the keys they name are not. */
@@ -328,8 +341,7 @@ export const SYSTEM_ACTOR: AuthContext = {
     tenantId: DEPLOYMENT_TENANT_ID,
     authTime: 0,
     amr: [],
-    analyticsConsent: false,
-    verified: true
+    analyticsConsent: false
 };
 
 /**

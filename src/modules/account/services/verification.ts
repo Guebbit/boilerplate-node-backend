@@ -148,12 +148,23 @@ export const requestEmailVerificationFor = (
     // Credentials included: issuing the token pushes onto this document's `tokens`.
     userRepository.findByIdWithCredentials(userId).then((user) => {
         if (!user) return generateReject(404, [t('users.not-found')]);
-        if (user.verified) return generateReject(409, [t('account.verify.already-verified')]);
+        if (user.verifiedAt) return generateReject(409, [t('account.verify.already-verified')]);
 
         return requestEmailVerification(user, context).then(() =>
             generateSuccess(undefined, 200, t('account.verify.email-sent'))
         );
     });
+
+/**
+ * Marks the account's address proven, promoting `unverified` to `customer` in the same step —
+ * the verify flow's own vouching, the same reasoning `userRepository.linkOAuthAccount` applies to
+ * an OAuth link. Leaves any OTHER role untouched: an operator who staffed an unproven address
+ * (`shared/authorization-roles.yaml`'s "no unverified manager" rule) made that decision already.
+ */
+const markVerified = (user: UserDocument): void => {
+    user.verifiedAt = new Date();
+    if (user.role === 'unverified') user.role = 'customer';
+};
 
 /**
  * Spend a verification token and mark the account verified.
@@ -165,7 +176,7 @@ export const completeEmailVerification = (
     user: UserDocument,
     context: CallerContext
 ): Promise<UserDocument> => {
-    user.verified = true;
+    markVerified(user);
     return userRepository.save(user).then((saved) => {
         emitAuditEvent(
             buildAuditEvent(context, {
@@ -204,7 +215,7 @@ export const completeEmailChange = (
 
     user.email = newEmail;
     user.pendingEmail = undefined;
-    user.verified = true;
+    markVerified(user);
 
     return userRepository.save(user).then((saved) =>
         saved

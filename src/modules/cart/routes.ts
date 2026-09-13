@@ -5,11 +5,12 @@
  * A cart is somebody's, so the whole router is authenticated. `POST /checkout` is the one route
  * that also invalidates the `orders` and `products` response caches — the endpoints those caches
  * serve read differently once a checkout has spent stock and created an order — and requires a
- * FRESH, VERIFIED session on top of `isAuth` (`requireFreshAuth`, `requireVerified`): it is where
- * this app's money actually moves. `/all` is mounted ABOVE `/:productId`: Express matches in mount
- * order, so a `/:productId`-shaped route registered first would match the literal string `all` as
- * a product id. The same rule that mounts `/search` before `/:id` elsewhere, a different static
- * segment.
+ * FRESH session holding `cart.checkout` on top of `isAuth` (`requireFreshAuth`,
+ * `requirePermission('cart.checkout')`): it is where this app's money actually moves, and the key
+ * is the only one this module declares — see `shared/authorization-keys.yaml`. `/all` is mounted
+ * ABOVE `/:productId`: Express matches in mount order, so a `/:productId`-shaped route registered
+ * first would match the literal string `all` as a product id. The same rule that mounts `/search`
+ * before `/:id` elsewhere, a different static segment.
  */
 
 import { Router } from 'express';
@@ -17,7 +18,7 @@ import {
     getAuth,
     isAuth,
     requireFreshAuth,
-    requireVerified,
+    requirePermission,
     REAUTH_TIME_CRITICAL
 } from '@kernel/middlewares/authorizations';
 import { getCart } from './controllers/get-cart';
@@ -39,12 +40,12 @@ router.use(getAuth, isAuth);
 // GET /cart/summary
 router.get('/summary', getCartSummary);
 
-// POST /cart/checkout — money out. `requireVerified`: an unproven address must not be able to
+// POST /cart/checkout — money out. `cart.checkout`: an unproven address must not be able to
 // place an order and start receiving order mail at an inbox nobody has confirmed it owns.
 router.post(
     '/checkout',
     requireFreshAuth(REAUTH_TIME_CRITICAL),
-    requireVerified,
+    requirePermission('cart.checkout'),
     invalidateCache(['orders', 'products']),
     postCheckout
 );

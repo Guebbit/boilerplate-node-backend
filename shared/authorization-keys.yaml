@@ -24,12 +24,18 @@ version: 1
 # `write` is deliberately absent. It collapses create, update and delete into one key, and the
 # shop needs them apart: a support agent may update a user and may not delete one, a warehouse
 # operator may adjust stock and may not delete a product.
+#
+# `checkout` is the one addition beyond CASL's own vocabulary — `cart.checkout`'s action, and nowhere
+# else. It exists because CRUD has no verb for "spend the basket": `create` on `Cart` collided with
+# `orders.create` (raising an order on someone else's behalf) and `update` said nothing about what
+# changed. See `cart.checkout`'s own description below.
 actions:
     - read
     - create
     - update
     - delete
     - manage
+    - checkout
 
 # The two scopes. Never both, never derived from a flag — a caller resolves to exactly one.
 scopes:
@@ -99,9 +105,11 @@ wildcards:
 # `Order` is a thing.
 #
 # Modules absent from this list have no keys, and that is a decision rather than an omission:
-# `cart`, `wishlist` and `account` are *your own things*. What you may do with them follows from
-# being signed in, not from a role, and giving them keys would invite a role that grants access to
-# someone else's basket.
+# `wishlist` and `account` are *your own things*. What you may do with them follows from being
+# signed in, not from a role, and giving them keys would invite a role that grants access to
+# someone else's basket. `cart` is nearly the same — its one exception is `cart.checkout` below,
+# a fact about the ACCOUNT (has this address been proven?) rather than about the basket's
+# contents, which stay keyless.
 keys:
     # -- products ------------------------------------------------------------------------------
     - key: products.read
@@ -137,6 +145,25 @@ keys:
       action: manage
       scope: tenant
       description: Any action on a product.
+
+    # -- cart ----------------------------------------------------------------------------------
+    # `cart` otherwise declares no keys — see the note above on `keys` — because a basket is your
+    # own thing. This one exception is not about the basket's CONTENTS (still keyless: add, remove,
+    # set quantity) but about spending it, which is a fact about the ACCOUNT — an unproven address
+    # must not be able to place an order — and a fact about the account belongs on a key, not a
+    # route mount. `checkout`, not `create` on `Order`: `orders.create` already means "raise an
+    # order on someone else's behalf", and reusing it here would be the identical CASL tuple,
+    # indistinguishable once packed for the browser. See docs/theory/authorization.md.
+    - key: cart.checkout
+      module: cart
+      subject: Cart
+      action: checkout
+      scope: tenant
+      description: Spend the caller's own basket — place an order and start paying for it.
+      # The 403 keeps its specific wording rather than `requirePermission`'s generic one: a
+      # customer refused THIS key is being told to confirm their email, not that they lack
+      # permission in the abstract. `t('generic.error-<deniedCode, kebab-cased>')`.
+      deniedCode: EMAIL_NOT_VERIFIED
 
     # -- orders --------------------------------------------------------------------------------
     - key: orders.read

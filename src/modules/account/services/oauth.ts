@@ -97,7 +97,10 @@ const signupFromOAuth = (
             imageUrl: identity.imageUrl ?? process.env.NODE_DEFAULT_IMAGE_USER ?? '',
             // The provider vouches for this identity, same reasoning `userService.create`'s admin
             // path already applies to a typed-in address — no password, so no email loop either.
-            verified: true,
+            // `role` explicit, not the schema's `unverified` default: this account skips that
+            // state entirely, the same as an operator-created one.
+            verifiedAt: new Date(),
+            role: 'customer',
             active: true,
             locale: getCurrentLocale(),
             oauthAccounts: [{ provider, providerId: identity.providerId, connectedAt: new Date() }]

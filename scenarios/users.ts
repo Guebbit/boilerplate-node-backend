@@ -73,11 +73,11 @@ export const namedUsers = [
         password: SEED_OWNER_PASSWORD,
         role: 'owner',
         /*
-         * Overrides the schema's `verified: false`, which is right for self-signup — nobody has
+         * Overrides the schema's `unverified` default, which is right for self-signup — nobody has
          * vouched for the address yet — and wrong here. A seed account exists to be logged into,
          * not to demonstrate the "verify your email" nag banner to everyone who boots the demo.
          */
-        verified: true,
+        verifiedAt: new Date(),
         ...userImages.root
     }),
     makeUser({
@@ -85,7 +85,10 @@ export const namedUsers = [
         username: 'customer',
         email: SEED_USER_EMAIL,
         password: SEED_USER_PASSWORD,
-        verified: true,
+        // Explicit, not the schema default: a fresh signup starts `unverified`, and this account
+        // exists to shop, not to demonstrate that state.
+        role: 'customer',
+        verifiedAt: new Date(),
         // `<paired-frontend>/src/modules/cart/tests/e2e/analytics.cy.ts` logs in as this account
         // and asserts the backend fires `cart_item_added` — `emitAnalyticsEvent`'s consent gate
         // is opt-in, so this is the account that has opted in.
@@ -98,7 +101,7 @@ export const namedUsers = [
         email: SEED_EDITOR_EMAIL,
         password: SEED_EDITOR_PASSWORD,
         role: 'editor',
-        verified: true,
+        verifiedAt: new Date(),
         ...userImages.root
     }),
     makeUser({
@@ -107,7 +110,7 @@ export const namedUsers = [
         email: SEED_MODERATOR_EMAIL,
         password: SEED_MODERATOR_PASSWORD,
         role: 'moderator',
-        verified: true,
+        verifiedAt: new Date(),
         ...userImages.root
     })
 ];
@@ -155,7 +158,9 @@ const customerUsers = CUSTOMER_NAMES.map(([key, username], index) =>
         id: SEED_CUSTOMER_IDS[key],
         username,
         email: SEED_CUSTOMER_EMAILS[key],
-        verified: true,
+        // Explicit, not the schema default — see the named `customer` account's own comment above.
+        role: 'customer',
+        verifiedAt: new Date(),
         // Alternating, same as the image cycling below: a real customer base is a mix of
         // opted-in and not, and `root`/`customer` alone left the "granted" path exercised
         // by exactly one account.
