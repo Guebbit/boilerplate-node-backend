@@ -95,27 +95,43 @@ describe('seed row imageUrls', () => {
         expect(imageUrls.length).toBeGreaterThanOrEqual(5);
     });
 
-    it.each(imageUrls)('%s — is a URL path, not a filesystem path', (_label, url) => {
+    it('is a URL path, not a filesystem path', () => {
         // The original defect, stated directly. `path.sep` is deliberately not consulted: the
-        // rule is about URLs, so it holds identically on every platform.
-        expect(url).not.toMatch(/\\/);
+        // rule is about URLs, so it holds identically on every platform. One assertion over every
+        // row, not one test per row: `it.each` here produced hundreds of cases for a handful of
+        // distinct photos, all failing identically the moment one path style regresses.
+        const offenders = imageUrls.filter(([, url]) => url.includes('\\')).map(([label]) => label);
+
+        expect(offenders).toEqual([]);
     });
 
-    it.each(imageUrls)('%s — is rooted at the static mount', (_label, url) => {
+    it('is rooted at the static mount', () => {
         // A relative url would resolve against whatever page happened to reference it.
-        expect(url.startsWith('/')).toBe(true);
+        const offenders = imageUrls
+            .filter(([, url]) => !url.startsWith('/'))
+            .map(([label]) => label);
+
+        expect(offenders).toEqual([]);
     });
 
-    it.each(imageUrls)('%s — points at a file that ships with the repository', (_label, url) => {
+    it('points at a file that ships with the repository', () => {
         // The assertion that would have caught the bug even if the paths had been posix all
         // along: a row referencing an image nobody committed is just as broken.
-        expect(existsSync(path.join(PUBLIC_ROOT, url))).toBe(true);
+        const offenders = imageUrls
+            .filter(([, url]) => !existsSync(path.join(PUBLIC_ROOT, url)))
+            .map(([label]) => label);
+
+        expect(offenders).toEqual([]);
     });
 
-    it.each(imageUrls)('%s — lives under /images/seed/', (_label, url) => {
+    it('lives under /images/seed/', () => {
         // Seed images are repository content; everything else under `public/images/` is a
         // runtime upload that `.gitignore` drops. A row added outside `seed/` would be committed
         // by accident or ignored by accident, and both are worse than failing here.
-        expect(url.startsWith('/images/seed/')).toBe(true);
+        const offenders = imageUrls
+            .filter(([, url]) => !url.startsWith('/images/seed/'))
+            .map(([label]) => label);
+
+        expect(offenders).toEqual([]);
     });
 });
