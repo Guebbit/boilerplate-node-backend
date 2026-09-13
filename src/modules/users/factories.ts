@@ -19,9 +19,11 @@ import type { Token, UserDocument } from './model';
 /**
  * The password every unpinned fixture gets. Exported so a test that logs in types the same
  * string the builder wrote, rather than a hard-coded copy that drifts. Satisfies the real signup
- * policy (`CreateUserBody.shape.password`) so fixtures can exercise real signup flows.
+ * policy (`CreateUserBody.shape.password`) so fixtures can exercise real signup flows — and, since
+ * the breached-password check, is deliberately NOT one of the composition-valid strings in
+ * `breached-passwords/list.txt` (`Password1!` used to be the fixture and is a listed entry).
  */
-export const PLAIN_PASSWORD = 'Password1!';
+export const PLAIN_PASSWORD = 'Fx7$qLwZ9m!';
 
 /**
  * What a caller may pin; everything absent is left to the schema. Derived from the generated

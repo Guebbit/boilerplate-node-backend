@@ -13,6 +13,7 @@ import {
     credentialLimiters,
     signupLimiters,
     resetRequestLimiters,
+    passwordCheckLimiter,
     uploadLimiter,
     mfaChallengeLimiter,
     mfaSendLimiter,
@@ -37,6 +38,7 @@ import { postSignup } from './controllers/post-signup';
 import { postResetRequest } from './controllers/post-reset-request';
 import { postResetConfirm } from './controllers/post-reset-confirm';
 import { postPasswordChange } from './controllers/post-password-change';
+import { postPasswordCheck } from './controllers/post-password-check';
 import { postReauth } from './controllers/post-reauth';
 import { postLoginTwoFactor } from './controllers/post-login-2fa';
 import { postLoginTwoFactorSend } from './controllers/post-login-2fa-send';
@@ -159,6 +161,12 @@ router.post(
 
 // POST /account/password — change password by proving the current one (requires auth)
 router.post('/password', credentialLimiters, isAuth, postPasswordChange);
+
+// POST /account/password/check — advisory breach check, unauthenticated (signup needs it before
+// an account exists). `passwordCheckLimiter`, not `credentialLimiters`: this body carries no
+// email/username, so `credentialLimiters`' identity key would bucket every caller as `anonymous`
+// — one shared budget for the whole internet. Address-keyed instead, like `submissionLimiter`.
+router.post('/password/check', passwordCheckLimiter, postPasswordCheck);
 
 // POST /account/reauth — step-up: re-prove the password, refresh auth_time (requires auth)
 router.post('/reauth', credentialLimiters, isAuth, postReauth);

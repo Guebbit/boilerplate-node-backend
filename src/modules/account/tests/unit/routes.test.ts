@@ -91,6 +91,7 @@ describe('account routes — what is mounted', () => {
             'POST /reset',
             'POST /reset-confirm',
             'POST /password',
+            'POST /password/check',
             'POST /reauth',
             'GET /abilities',
             'GET /refresh',

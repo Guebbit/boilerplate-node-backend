@@ -110,6 +110,15 @@ export const DEFAULT_SUBMISSION_RATE_LIMIT_EMAIL_MAX = 5;
 export const DEFAULT_SUBMISSION_RATE_LIMIT_BLOCK_MAX = 20;
 
 /**
+ * Password-strength advisory checks allowed per window, per ADDRESS.
+ *
+ * A live meter fires on every debounced keystroke pause, so this is sized for a real typing
+ * session (a handful of edits) rather than a single submission — see `passwordCheckLimiter` for
+ * why it exists at all.
+ */
+export const DEFAULT_PASSWORD_CHECK_RATE_LIMIT_MAX = 20;
+
+/**
  * Image uploads allowed per window, per ADDRESS.
  *
  * Sized well above what one legitimate session needs (bulk product-image edits included) and well
@@ -383,6 +392,22 @@ export const loginChallengeGate: RequestHandler = (request, response, next) =>
 export const submissionLimiter: RequestHandler = rateLimit({
     ...limiterOptions(rateLimitStore('submissions'), true),
     limit: environmentNumber('NODE_SUBMISSION_RATE_LIMIT_MAX', DEFAULT_SUBMISSION_RATE_LIMIT_MAX, 1)
+});
+
+/**
+ * `POST /account/password/check`'s own budget — unauthenticated, and every call may trigger an
+ * outbound HIBP lookup, so it is an amplifier against HIBP and a free CPU sink without one.
+ * Shaped like `submissionLimiter`: keyed on the caller's address (the default `keyGenerator`),
+ * every request counts — a validation-only 200 is exactly what an amplifier farms, so
+ * `skipSuccessfulRequests` would bound nothing.
+ */
+export const passwordCheckLimiter: RequestHandler = rateLimit({
+    ...limiterOptions(rateLimitStore('password-check'), true),
+    limit: environmentNumber(
+        'NODE_PASSWORD_CHECK_RATE_LIMIT_MAX',
+        DEFAULT_PASSWORD_CHECK_RATE_LIMIT_MAX,
+        1
+    )
 });
 
 /**

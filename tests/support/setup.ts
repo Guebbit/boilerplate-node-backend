@@ -133,6 +133,19 @@ process.env.NODE_BANK_TRANSFER_IBAN ??= 'IT60X0542811101000000123456';
 process.env.NODE_RATE_LIMIT_REDIS_ENABLED ??= '0';
 
 /**
+ * Rung 2 of the breached-password check (`checkHibpRange`) is a REAL outbound call to
+ * `api.pwnedpasswords.com`. This project's own `.env` turns it on so the demo exercises it, but a
+ * suite must never depend on a live third party — it is slow enough to distort a race assertion
+ * (`auth-races.test.ts` saw its atomic-claim test flip under the added latency), and it fails for a
+ * reason that has nothing to do with the code under test the moment the runner has no egress.
+ *
+ * `??=`, not a plain assignment: `../unit/infrastructure/security/breached-passwords/index.test.ts`
+ * still turns it on inside individual cases, after this file has already run, to test rung 2 with
+ * a faked `fetch` — never a live call either way.
+ */
+process.env.NODE_PASSWORD_BREACH_HIBP ??= 'off';
+
+/**
  * The Prometheus scrape credential. `/observability/metrics` denies by default when this is
  * unset — an unauthenticated metrics endpoint is not a state to arrive at by forgetting a
  * variable — so the suite has to set one to reach it at all.

@@ -123,6 +123,13 @@ account (see the `translator` → `editor` fold above) — `upsertById` skips a 
 already exists, so a boot with no `--reset` never repairs it. Dev volumes are disposable:
 `docker compose down -v` and the next boot seeds clean.
 
+### Added
+
+- **`POST /account/password/check`** — unauthenticated, advisory-only breach lookup for a
+  candidate password (a bundled list, then the HIBP k-anonymity range API), so a signup form can
+  warn before the account exists. Additive; the four password-SET paths enforce the same two
+  checks server-side regardless of what this endpoint answers.
+
 ## [3.0.0] - 2026-08-23
 
 The release that made this API a **modular monolith with a domain layer**, and made its contract

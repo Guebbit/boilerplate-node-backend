@@ -9,6 +9,7 @@ import { Types } from 'mongoose';
 import { makeUser, PLAIN_PASSWORD } from '@modules/users/factories';
 import { zodUserSchema } from '@modules/users';
 import { createUserBodyPasswordMin } from '@api/schemas.zod';
+import { isInBundledBreachList } from '@infrastructure/security/breached-passwords';
 import {
     LEGACY_PASSWORD,
     MINIMAL_PASSWORD,
@@ -108,6 +109,17 @@ describe('the password vocabulary', () => {
         // Its whole job is to be the shortest legal value. A longer one silently stops testing
         // the boundary.
         expect(MINIMAL_PASSWORD).toHaveLength(createUserBodyPasswordMin);
+    });
+
+    it.each([
+        ['PLAIN_PASSWORD', PLAIN_PASSWORD],
+        ['REPLACEMENT_PASSWORD', REPLACEMENT_PASSWORD],
+        ['MINIMAL_PASSWORD', MINIMAL_PASSWORD]
+    ])('keeps %s off the bundled breach list', (_name, password) => {
+        // The signup/change/reset paths call `assertPasswordNotBreached` ahead of anything else —
+        // a fixture that collides with the list fails every test that signs up with it, and reads
+        // as an unrelated 422 rather than as this constant needing a new value.
+        expect(isInBundledBreachList(password)).toBe(false);
     });
 
     it('keeps every constant distinct', () => {

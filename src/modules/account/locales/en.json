@@ -6,6 +6,7 @@
         "signup": {
             "email-already-used": "Email was already used.",
             "password-dont-match": "Confirmation password must be the same of password.",
+            "password-breached": "This password has appeared in a data breach and can't be used. Please choose another one.",
             "terms-not-accepted": "You must accept the Terms of Service and Privacy Policy to register."
         },
         "reset": {

@@ -14,6 +14,7 @@ import bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { checkEmailPolicy } from '@infrastructure/adapters/antibot';
+import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
 import { deleteRequestEmail, resetRequestEmail, setupRequestEmail } from '../emails';
 import type { CastError } from 'mongoose';
 import { LoginBody } from '@api/schemas.zod';
@@ -410,54 +411,64 @@ export const signup = (
         });
 
     const outcome: Promise<ResponseSuccess<UserDocument> | ResponseReject> = parseResult.success
-        ? // Rung 2 of the anti-automation ladder — off by default, see `adapters/antibot`.
-          checkEmailPolicy(email).then((verdict) =>
-              verdict === 'refused'
-                  ? // Answer exactly like a genuine signup, from a document this call never
-                    // persists — a script gets nothing to iterate on. The unsaved-document check
-                    // is how the audit trail and the upload cleanup still tell the two apart.
-                    Promise.resolve(
-                        generateSuccess<UserDocument>(
-                            userRepository.build({
-                                email,
-                                username,
-                                imageUrl: imageUrl ?? '',
-                                thumbnailUrl,
-                                analyticsConsent,
-                                termsAccepted
-                            })
-                        )
+        ? // Ahead of the email-policy check and the DB lookup below: a breached password fails
+          // signup on its own, so there's nothing to gain from checking anything else first.
+          assertPasswordNotBreached(password).then((breachErrors) =>
+              breachErrors.length > 0
+                  ? Promise.resolve(generateReject(422, breachErrors))
+                  : // Rung 2 of the anti-automation ladder — off by default, see `adapters/antibot`.
+                    checkEmailPolicy(email).then((verdict) =>
+                        verdict === 'refused'
+                            ? // Answer exactly like a genuine signup, from a document this call
+                              // never persists — a script gets nothing to iterate on. The
+                              // unsaved-document check is how the audit trail and the upload
+                              // cleanup still tell the two apart.
+                              Promise.resolve(
+                                  generateSuccess<UserDocument>(
+                                      userRepository.build({
+                                          email,
+                                          username,
+                                          imageUrl: imageUrl ?? '',
+                                          thumbnailUrl,
+                                          analyticsConsent,
+                                          termsAccepted
+                                      })
+                                  )
+                              )
+                            : userRepository
+                                  .findOne({ email })
+                                  .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
+                                      if (user)
+                                          return generateReject(409, [
+                                              t('account.signup.email-already-used')
+                                          ]);
+                                      return userRepository
+                                          .create({
+                                              username,
+                                              email,
+                                              imageUrl: imageUrl ?? '',
+                                              thumbnailUrl,
+                                              pendingImageKey,
+                                              password,
+                                              analyticsConsent,
+                                              termsAccepted,
+                                              // The language they signed up in, kept for work
+                                              // that happens later without a request to read
+                                              // `Accept-Language` from — a queued email, a
+                                              // nightly job. Editable afterwards from the user
+                                              // endpoints.
+                                              locale: getCurrentLocale()
+                                          })
+                                          .then((createdUser) =>
+                                              generateSuccess<UserDocument>(
+                                                  userService.enqueueIfPending(createdUser)
+                                              )
+                                          );
+                                  })
+                                  .catch((error: CastError | Error) =>
+                                      rejectDatabaseEnvelope('auth', error)
+                                  )
                     )
-                  : userRepository
-                        .findOne({ email })
-                        .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
-                            if (user)
-                                return generateReject(409, [
-                                    t('account.signup.email-already-used')
-                                ]);
-                            return userRepository
-                                .create({
-                                    username,
-                                    email,
-                                    imageUrl: imageUrl ?? '',
-                                    thumbnailUrl,
-                                    pendingImageKey,
-                                    password,
-                                    analyticsConsent,
-                                    termsAccepted,
-                                    // The language they signed up in, kept for work that happens
-                                    // later without a request to read `Accept-Language` from — a
-                                    // queued email, a nightly job. Editable afterwards from the
-                                    // user endpoints.
-                                    locale: getCurrentLocale()
-                                })
-                                .then((createdUser) =>
-                                    generateSuccess<UserDocument>(
-                                        userService.enqueueIfPending(createdUser)
-                                    )
-                                );
-                        })
-                        .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error))
           )
         : Promise.resolve(generateReject(422, validationErrors(parseResult.error)));
 
