@@ -4,6 +4,12 @@
 <body>
 <main class="centered">
     <h1><%= title %></h1>
+
+    <% if (typeof meta !== 'undefined' && meta) { %>
+        <p><%= meta.numberLabel %></p>
+        <p><%= meta.dateLabel %></p>
+    <% } %>
+
     <ul>
         <% lines.forEach(function(line) { %>
             <li><%= line %></li>

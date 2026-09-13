@@ -42,6 +42,7 @@ export { cancelById, retryPendingEffects } from './cancel';
 export { detachUserId, anonymizeDueOrders } from './retention';
 export { callerScope, actorOf, withActions } from './scope';
 export { freezeOrderLines } from './snapshot';
+export { allocateInvoiceNumber } from './invoice-numbering';
 
 /** The service's public surface — every controller and cross-module caller goes through this. */
 export const orderService = {

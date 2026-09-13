@@ -110,7 +110,8 @@ export const makeOrder = ({
     paymentMethod,
     payBy,
     notes,
-    deletedAt
+    deletedAt,
+    invoiceNumber
 }: OrderOverrides = {}): OrderFixture => ({
     ...identityOf({ id, createdAt, updatedAt }),
     userId: new Types.ObjectId(userId),
@@ -140,6 +141,7 @@ export const makeOrder = ({
         paymentMethod,
         payBy: toDate(payBy),
         notes,
-        deletedAt: toDate(deletedAt)
+        deletedAt: toDate(deletedAt),
+        invoiceNumber
     })
 });

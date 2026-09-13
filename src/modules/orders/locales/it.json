@@ -16,6 +16,8 @@
             "meta-title": "Fattura — ordine {{order}}",
             "title": "L'ordine è stato confermato",
             "line": "{{title}} — {{quantity}} × {{price}}",
+            "number": "Fattura n. {{number}}",
+            "date": "Data: {{date}}",
             "vat": {
                 "column-description": "Descrizione",
                 "column-quantity": "Qtà",

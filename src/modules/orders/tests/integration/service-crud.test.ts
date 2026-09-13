@@ -87,6 +87,38 @@ describe('create', () => {
         expect(asSuccess(result).data!.email).toBe(user.email);
     });
 
+    it('assigns each new order its own sequential invoice number', async () => {
+        const user = await createUser();
+        const product = await createProduct({ title: 'Keyboard', price: 25 });
+
+        const first = asSuccess(
+            await create(
+                String(user._id),
+                user.email,
+                [{ productId: String(product._id), quantity: 1 }],
+                testCallerContext
+            )
+        ).data!;
+        const second = asSuccess(
+            await create(
+                String(user._id),
+                user.email,
+                [{ productId: String(product._id), quantity: 1 }],
+                testCallerContext
+            )
+        ).data!;
+
+        expect(first.invoiceNumber).toBeDefined();
+        expect(second.invoiceNumber).toBeDefined();
+        expect(first.invoiceNumber).not.toBe(second.invoiceNumber);
+
+        // Both minted the same run, so the same year and one apart — not merely "different".
+        const [firstYear, firstSeq] = first.invoiceNumber!.split('-').map(Number);
+        const [secondYear, secondSeq] = second.invoiceNumber!.split('-').map(Number);
+        expect(secondYear).toBe(firstYear);
+        expect(secondSeq).toBe(firstSeq + 1);
+    });
+
     it('stores a full product snapshot on each line', async () => {
         const { order, keyboard } = await seedOrder();
 

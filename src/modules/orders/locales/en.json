@@ -16,6 +16,8 @@
             "meta-title": "Invoice — order {{order}}",
             "title": "The order has been confirmed",
             "line": "{{title}} — {{quantity}} × {{price}}",
+            "number": "Invoice no. {{number}}",
+            "date": "Date: {{date}}",
             "vat": {
                 "column-description": "Description",
                 "column-quantity": "Qty",

@@ -30,6 +30,7 @@ import {
     orderConfirmEmail,
     bankTransferInstructionsEmail,
     freezeOrderLines,
+    allocateInvoiceNumber,
     retractOrder,
     sumLineItems,
     type OrderDocument
@@ -219,11 +220,16 @@ const runCheckout = async (
     // inferred: `ProductDocument`'s untyped `DocType` generic makes Mongoose's own `toObject()`
     // overload resolve to `any`; `Lean<ProductDocument>` is the plain shape it actually returns
     // at runtime.
-    const orderItems = await freezeOrderLines(
-        buyerLocale,
-        joined.map(({ product }) => product.toObject() as Lean<ProductDocument>),
-        joined.map(({ quantity }) => quantity)
-    );
+    // Run alongside the freeze rather than after it — the two are independent, and the number
+    // must exist by the time the order below is written, not by the time it is downloaded.
+    const [orderItems, invoiceNumber] = await Promise.all([
+        freezeOrderLines(
+            buyerLocale,
+            joined.map(({ product }) => product.toObject() as Lean<ProductDocument>),
+            joined.map(({ quantity }) => quantity)
+        ),
+        allocateInvoiceNumber()
+    ]);
 
     /*
      * `bank_transfer`'s hold is `methodInfo.holdHours`, converted to the unit
@@ -246,6 +252,7 @@ const runCheckout = async (
         userId: new Types.ObjectId(user.id),
         email: user.email,
         items: orderItems,
+        invoiceNumber,
         paymentMethod: requestedMethod,
         ...(payBy ? { payBy } : {}),
         ...(address ? { shippingAddress: toShippingAddress(address) } : {}),

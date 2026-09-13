@@ -43,6 +43,11 @@ describe('orderSchema — what an order must carry', () => {
         for (const path of ['notes', 'shippingMethod', 'deletedAt'])
             expect(requiredPaths(orderSchema)).not.toContain(path);
     });
+
+    it('leaves the invoice number optional — absent means a pre-feature order', () => {
+        expect(requiredPaths(orderSchema)).not.toContain('invoiceNumber');
+        expect(typeOf(orderSchema, 'invoiceNumber')).toBe('String');
+    });
 });
 
 describe('orderSchema — status', () => {

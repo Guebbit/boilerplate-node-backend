@@ -102,6 +102,7 @@ export interface OrderDocument
             | 'updatedAt'
             | 'deletedAt'
             | 'payBy'
+            | 'invoiceNumber'
             | 'transferInstructions'
         >,
         Document {
@@ -118,6 +119,13 @@ export interface OrderDocument
     updatedAt?: Date;
     /** When this order's stock hold ends — see the schema field's own comment. */
     payBy?: Date;
+    /**
+     * `{year}-{sequence}`, assigned once by `allocateInvoiceNumber` at order-creation time —
+     * never recomputed, unlike the VAT figures. Absent on an order that predates this field; it
+     * never gets one retroactively, since a number minted later could not honestly claim the
+     * order's actual place in the sequence.
+     */
+    invoiceNumber?: string;
     /**
      * Set alongside `userId` being unset, to `now + NODE_ORDER_PII_RETENTION_DAYS`.
      * `ops/reap-orders.ts` scrubs the order's remaining PII (email, shipping name/phone/
@@ -258,6 +266,15 @@ export const orderSchema = new Schema<OrderDocument>(
          */
         payBy: {
             type: Date
+        },
+        /*
+         * `{year}-{sequence}`, minted once by `allocateInvoiceNumber` (`./services/invoice-
+         * numbering`) at order-creation time — the order's `createdAt` IS the date of supply this
+         * number belongs to, so no separate invoice-date field exists. Absent on an order that
+         * predates this feature; never assigned retroactively.
+         */
+        invoiceNumber: {
+            type: String
         },
         /*
          * The address the order ships to — a SNAPSHOT, exactly like the product snapshots in
@@ -433,3 +450,28 @@ export const applyOrderTransform = applySerialization(orderSchema, {
  * Mongoose model for order CRUD operations.
  */
 export const orderModel = model<OrderDocument, OrderModel>('Order', orderSchema);
+
+/**
+ * One document per calendar year, holding the running invoice sequence — `_id` IS the year, so
+ * `repository.ts`'s atomic upsert addresses it directly, with no lookup first. Same convention as
+ * `LeaseDocument` (`@infrastructure/persistence/lease`). Lives here, not in `services/`: this
+ * module's one door for a persistence handle is `model.ts`/`repository.ts`, same as `orderModel`.
+ */
+export interface InvoiceCounterDocument extends Document<number> {
+    seq: number;
+}
+
+/** Mongoose model type for {@link InvoiceCounterDocument}. */
+export type InvoiceCounterModel = Model<InvoiceCounterDocument>;
+
+/** Invoice counter schema — incremented atomically by `repository.ts`'s `incrementInvoiceCounter`. */
+const invoiceCounterSchema = new Schema<InvoiceCounterDocument, InvoiceCounterModel>({
+    _id: { type: Number },
+    seq: { type: Number, required: true, default: 0 }
+});
+
+/** Invoice counter model. Collection name `invoicecounters`, Mongoose's default pluralization. */
+export const invoiceCounterModel = model<InvoiceCounterDocument, InvoiceCounterModel>(
+    'InvoiceCounter',
+    invoiceCounterSchema
+);

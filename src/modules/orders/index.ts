@@ -23,6 +23,9 @@ export { orderConfirmEmail, bankTransferInstructionsEmail } from './emails';
 // `cart`'s checkout freezes its own line snapshots the same way `create()` does — one builder,
 // not a second opinion on how a buyer's language gets embedded.
 export { freezeOrderLines } from './services';
+// `cart`'s checkout assigns its own invoice number at the same point, for the same reason: one
+// allocator, not a second opinion on when a number is minted.
+export { allocateInvoiceNumber } from './services';
 // `OrderDocumentItem` stays unpublished — tests derive order lines from a built product
 // (`tests/factories.ts`'s `toOrderItem`) instead of casting around the type.
 export type { OrderDocument } from './model';
