@@ -28,7 +28,7 @@ import { Types } from 'mongoose';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { webhookSubscriptionRepository } from '@modules/webhooks/repository';
 import { encryptRingSecret } from '@modules/webhooks/secrets';
-import type { WebhookSubscriptionDocument, WebhookSecretRingEntry } from '@modules/webhooks/model';
+import type { WebhookSubscriptionDocument } from '@modules/webhooks/model';
 import { insertIfAbsent, type SeedOutcome } from '@scenarios/seed';
 
 /** The fixed `_id` this subscription is upserted under, so re-seeding is a no-op like every other fixture. */
@@ -50,9 +50,6 @@ const WEBHOOK_DEMO_SECRET_ID = '7f3b8e21-4a6d-4c9f-9e12-3d5a7b8c9f01';
 export const WEBHOOK_DEMO_SECRET =
     'whsec_ZGVtby13ZWJob29rLXNlY3JldC1kby1ub3QtdXNlLWluLXByb2R1Y3Rpb24=';
 
-/** Every fixture here shares this timestamp, matching the rest of the scenario's convention. */
-const SEED_DATE = new Date('2026-01-01T00:00:00.000Z');
-
 /**
  * Seed the scenario's webhook subscription. Declared in `./index`'s `shopModules`; walked by
  * `seedShop`.
@@ -63,11 +60,15 @@ export const seedWebhooksCollection = (): Promise<SeedOutcome[]> => {
     const sinkBaseUrl = process.env.NODE_WEBHOOK_DEMO_SINK_URL;
     if (!sinkBaseUrl) return Promise.resolve([]);
 
-    const entry: WebhookSecretRingEntry = {
+    // `id`/`ciphertext` only — `createdAt` is the ring entry's own subdocument timestamp
+    // (`model.ts`'s `{ timestamps: { createdAt: true } }`) and stamps itself on insert.
+    const entry = {
         id: WEBHOOK_DEMO_SECRET_ID,
-        ciphertext: encryptRingSecret(WEBHOOK_DEMO_SECRET),
-        createdAt: SEED_DATE
+        ciphertext: encryptRingSecret(WEBHOOK_DEMO_SECRET)
     };
+    // No `createdAt`/`updatedAt`: the schema's own `{ timestamps: true }` stamps both on insert,
+    // same reasoning as the ring entry above. Cast because `fixture` is a plain literal, not a
+    // hydrated Mongoose document — `create()` builds one from it.
     const fixture = {
         _id: new Types.ObjectId(WEBHOOK_SUBSCRIPTION_ID),
         tenant: DEPLOYMENT_TENANT_ID,
@@ -76,9 +77,7 @@ export const seedWebhooksCollection = (): Promise<SeedOutcome[]> => {
         eventTypes: ['*'],
         enabled: true,
         consecutiveFailures: 0,
-        secrets: [entry],
-        createdAt: SEED_DATE,
-        updatedAt: SEED_DATE
+        secrets: [entry]
     } as WebhookSubscriptionDocument;
 
     return insertIfAbsent(webhookSubscriptionRepository, fixture).then((outcome) => [outcome]);

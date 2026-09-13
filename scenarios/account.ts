@@ -6,6 +6,7 @@
  * makes "an order remembers where it was sent" checkable against a book that can still change.
  */
 
+import { Types } from 'mongoose';
 import { SEED_OWNER_ID, SEED_USER_ID } from '@scenarios/accounts';
 import { type SeedOutcome, insertIfAbsentForOwner } from '@scenarios/seed';
 import { makeAddressBook } from '@modules/account/factories';
@@ -15,8 +16,8 @@ import { addressBookRepository } from '@modules/account/repository';
  * The two seeded books: the owner's (two entries) and the ordinary customer's (one).
  *
  * No pinned `_id` on the BOOK — `insertIfAbsentForOwner` keys on `userId`, so an id buys no
- * idempotency. Each ENTRY keeps one: those reach the wire, and a "set as default" demo names the
- * entry it moves the flag onto.
+ * idempotency. Each ENTRY needs one too — the contract requires it — but nothing looks one up by
+ * value, so each is minted fresh rather than hand-picked.
  */
 export const addressBookFixtures = [
     makeAddressBook({
@@ -29,7 +30,7 @@ export const addressBookFixtures = [
              * this fixture demonstrates.
              */
             {
-                id: '65dd2ce31f5b3a9e04c7b211',
+                id: new Types.ObjectId().toHexString(),
                 label: 'home',
                 fullName: 'Root Rootsson',
                 street: 'Via del Boilerplate 1',
@@ -41,7 +42,7 @@ export const addressBookFixtures = [
             },
             /* The second entry, and the one a "set as default" demo moves the flag onto. */
             {
-                id: '65dd2d1a2c6f4b8d15e9c322',
+                id: new Types.ObjectId().toHexString(),
                 label: 'office',
                 fullName: 'Root Rootsson',
                 street: 'Viale Guebbit 42',
@@ -61,7 +62,7 @@ export const addressBookFixtures = [
         userId: SEED_USER_ID,
         items: [
             {
-                id: '65de650b3d7e2c1a48f0b105',
+                id: new Types.ObjectId().toHexString(),
                 label: 'casa',
                 fullName: 'Gino Pino',
                 street: 'Via Pino 7',

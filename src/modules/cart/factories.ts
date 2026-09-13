@@ -1,12 +1,12 @@
 /**
  * @module
- * How a cart row is built. Pins an `_id` even though a cart is addressed by its owner
- * (`userId` is unique), purely so a demo fixture reads the same across runs. Ids arrive as
- * strings and leave as `ObjectId`s; a bare string would silently match nothing in Mongo.
+ * How a cart row is built. A cart is addressed by its owner — `userId` is unique, and no cart id
+ * reaches the wire — so this takes no `_id` override, unlike a factory for a row a caller can
+ * name directly. Ids arrive as strings and leave as `ObjectId`s; a bare string would silently
+ * match nothing in Mongo.
  */
 
 import { Types } from 'mongoose';
-import { identityOf, type FactoryIdentity } from '@infrastructure/persistence/factories';
 import type { CartItem, Id } from '@types';
 import type { CartDocument } from './model';
 
@@ -14,7 +14,7 @@ import type { CartDocument } from './model';
  * A line is the contract's `CartItem` — `{ productId, quantity }` — imported rather than restated.
  * `openapi.yaml` owns that shape, and the mock handlers in the paired frontend build the same one.
  */
-export interface CartOverrides extends FactoryIdentity {
+export interface CartOverrides {
     /** 24-char hex of the owning user. */
     userId: Id;
     /** Absent leaves the schema's `default: []` to apply. */
@@ -34,12 +34,11 @@ export type CartFixture = Partial<CartDocument> & Pick<CartDocument, 'userId'>;
  * Build a cart fixture from bare product ids and quantities, converting each id to the `ObjectId`
  * the schema stores.
  *
- * @param overrides - the owner, optional lines, and the identity fields `identityOf` reads
+ * @param overrides - the owner and optional lines
  * @returns a fixture ready for `cartRepository.create`
  */
-export const makeCart = ({ userId, items, ...identity }: CartOverrides): CartFixture => ({
+export const makeCart = ({ userId, items }: CartOverrides): CartFixture => ({
     userId: new Types.ObjectId(userId),
-    ...identityOf(identity),
     ...(items === undefined
         ? {}
         : {

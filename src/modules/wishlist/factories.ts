@@ -1,18 +1,17 @@
 /**
  * @module
  * How a wishlist row is built. Addressed by owner like the cart — `userId` is unique and no
- * wishlist id reaches the wire — but pins an `_id` anyway so a rebuilt dataset diffs cleanly; see
- * `../cart/factories`. A line is a bare product id, not a full `WishlistItem`, since a wishlist
- * answers "do I want this," not "how many."
+ * wishlist id reaches the wire — so this takes no `_id` override either; see `../cart/factories`.
+ * A line is a bare product id, not a full `WishlistItem`, since a wishlist answers "do I want
+ * this," not "how many."
  */
 
 import { Types } from 'mongoose';
-import { identityOf, type FactoryIdentity } from '@infrastructure/persistence/factories';
 import type { Id } from '@types';
 import type { WishlistDocument } from './model';
 
 /** What a caller may vary when building a wishlist fixture; everything else takes a schema default. */
-export interface WishlistOverrides extends FactoryIdentity {
+export interface WishlistOverrides {
     /** 24-char hex of the owning user. */
     userId: Id;
     /**
@@ -27,16 +26,11 @@ export type WishlistFixture = Partial<WishlistDocument> & Pick<WishlistDocument,
 
 /**
  * Build a wishlist fixture from bare product ids, wrapping each into the `{ productId }` shape.
- * @param overrides - owner, optional product ids, and identity fields `identityOf` reads
+ * @param overrides - the owner and optional product ids
  * @returns a fixture ready for `wishlistRepository.create`
  */
-export const makeWishlist = ({
-    userId,
-    productIds,
-    ...identity
-}: WishlistOverrides): WishlistFixture => ({
+export const makeWishlist = ({ userId, productIds }: WishlistOverrides): WishlistFixture => ({
     userId: new Types.ObjectId(userId),
-    ...identityOf(identity),
     ...(productIds === undefined
         ? {}
         : {

@@ -184,8 +184,6 @@ interface FillerCopy {
 
 /** One filler row's fields, before `./products` attaches an id and an image. */
 export interface FillerProduct {
-    /** Stable across regenerations — `${animal}-${type}-${tier}` slugs, human-readable in a diff. */
-    key: string;
     title: string;
     description: string;
     price: number;
@@ -223,7 +221,6 @@ export const FILLER_PRODUCTS: FillerProduct[] = ANIMALS.flatMap((animal, animalI
             };
 
             return {
-                key: `${animal.slug}-${type.slug}-${tier.slug}`,
                 title: en.title,
                 description: en.description,
                 price: Math.round(type.basePrice * tier.priceMultiplier) + animalIndex * 2,
