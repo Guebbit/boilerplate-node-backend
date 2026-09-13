@@ -213,6 +213,39 @@ export const setCacheValue = (
 };
 
 /**
+ * Claim the right to rebuild one stale entry — refresh-ahead's only mechanism.
+ *
+ * `SET key 1 NX EX seconds`: Redis grants the key to exactly one caller across every worker and
+ * replica; every other caller gets `null` back for the same window. https://redis.io/commands/set/
+ * (the `NX` + `EX` combination). No lock to release and no waiter: a claim that is never renewed
+ * simply expires, and the next reader past `staleAt` claims it instead.
+ *
+ * @param key - the entry's own cache key; the claim is namespaced under `refresh:` so it never
+ *   collides with, or gets deleted alongside, the entry it protects
+ * @param seconds - how long the claim stands before another caller may retry the rebuild
+ * @returns true for the one caller that won the claim, false for every other — including on any
+ *   Redis failure, so a flaky claim never doubles as a signal that a rebuild is in flight
+ */
+export const claimCacheRefresh = (key: string, seconds: number): Promise<boolean> =>
+    cacheConnection
+        .get()
+        .then((redisClient) => {
+            if (!redisClient) return false;
+
+            return redisClient
+                .set(prefix(`refresh:${key}`), '1', { NX: true, EX: seconds })
+                .then((result) => result === 'OK');
+        })
+        .catch((error) => {
+            logger.warn({
+                message: 'Redis refresh claim failed.',
+                key,
+                error: error instanceof Error ? error.message : String(error)
+            });
+            return false;
+        });
+
+/**
  * Remove every cached entry linked to the given tags — called after a successful write.
  *
  * No cross-instance broadcast needed: entries live in shared Redis, so one call invalidates them
