@@ -37,8 +37,11 @@ export interface OAuthProvider {
      * @param state - the CSRF token `../state.ts` minted for this attempt
      * @param redirectUri - where the provider must send the browser back — always
      *   server-derived (`../config.ts`), never taken from the request
+     * @param codeChallenge - `../state.ts#codeChallengeOf` of this attempt's PKCE verifier; sent
+     *   as `code_challenge` with `code_challenge_method=S256` so the code this call produces is
+     *   redeemable only by whoever holds the verifier — RFC 7636
      */
-    authorizeUrl(state: string, redirectUri: string): string;
+    authorizeUrl(state: string, redirectUri: string, codeChallenge: string): string;
 
     /**
      * Exchange an authorization code for the identity it names.
@@ -46,7 +49,9 @@ export interface OAuthProvider {
      * @param code - the `code` query param the provider's callback redirect carried
      * @param redirectUri - the SAME value passed to {@link authorizeUrl} — some providers
      *   validate the two match
+     * @param codeVerifier - the PKCE secret behind the challenge {@link authorizeUrl} sent; the
+     *   provider hashes it and refuses the exchange unless it matches
      * @throws when the exchange fails or the provider's answer cannot be parsed
      */
-    exchangeCode(code: string, redirectUri: string): Promise<OAuthIdentity>;
+    exchangeCode(code: string, redirectUri: string, codeVerifier: string): Promise<OAuthIdentity>;
 }

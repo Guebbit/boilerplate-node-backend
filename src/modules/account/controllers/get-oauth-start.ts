@@ -9,13 +9,19 @@ import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { rejectResponse } from '@infrastructure/http/response';
 import { resolveOAuthProvider } from '../oauth/providers';
-import { generateOAuthState, createStateCookie } from '../oauth/state';
+import {
+    generateOAuthState,
+    createStateCookie,
+    generateCodeVerifier,
+    codeChallengeOf,
+    createVerifierCookie
+} from '../oauth/state';
 import { oauthRedirectUri } from '../oauth/config';
 
 /**
  * GET /account/oauth/:provider
- * Starts an OAuth login: mints the CSRF `state`, sets it as a cookie, and redirects to the
- * provider's consent screen.
+ * Starts an OAuth login: mints the CSRF `state` and the PKCE verifier, sets both as cookies, and
+ * redirects to the provider's consent screen with the state and the verifier's challenge.
  */
 export const getOAuthStart = (request: Request, response: Response) => {
     const provider = resolveOAuthProvider(String(request.params.provider).toLowerCase());
@@ -28,5 +34,14 @@ export const getOAuthStart = (request: Request, response: Response) => {
 
     const state = generateOAuthState();
     createStateCookie(response, state);
-    response.redirect(302, provider.authorizeUrl(state, oauthRedirectUri(provider.name)));
+
+    const verifier = generateCodeVerifier();
+    createVerifierCookie(response, verifier);
+
+    const authorizeUrl = provider.authorizeUrl(
+        state,
+        oauthRedirectUri(provider.name),
+        codeChallengeOf(verifier)
+    );
+    response.redirect(302, authorizeUrl);
 };

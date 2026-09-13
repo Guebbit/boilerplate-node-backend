@@ -32,6 +32,15 @@ const setCookie = (
     return cookies.find((cookie) => cookie.startsWith(`${name}=`));
 };
 
+/**
+ * A start response's `state` and `verifier` cookies, as one `Cookie` request header — both are
+ * needed to redeem a callback since PKCE landed beside the CSRF check.
+ */
+const attemptCookies = (start: { headers: Record<string, unknown> }): string =>
+    [setCookie(start, 'oauth_state')!, setCookie(start, 'oauth_verifier')!]
+        .map((cookie) => cookie.split(';')[0])
+        .join('; ');
+
 describe('GET /account/oauth/providers', () => {
     it('lists the fake provider under the demo profile', async () => {
         const response = await api().get('/account/oauth/providers');
@@ -49,12 +58,13 @@ describe('GET /account/oauth/:provider', () => {
         expect(response.body.success).toBe(false);
     });
 
-    it('redirects to the consent step and sets the CSRF state cookie', async () => {
+    it('redirects to the consent step and sets the CSRF state and PKCE verifier cookies', async () => {
         const response = await api().get('/account/oauth/fake');
 
         expect(response.status).toBe(302);
         expect(response.headers.location).toContain('/account/oauth/fake/callback');
         expect(setCookie(response, 'oauth_state')).toBeTruthy();
+        expect(setCookie(response, 'oauth_verifier')).toBeTruthy();
     });
 });
 
@@ -86,14 +96,28 @@ describe('GET /account/oauth/:provider/callback', () => {
         expect(setCookie(response, 'oauth_state')).toMatch(/oauth_state=;/);
     });
 
+    it('answers 400 when the verifier cookie is missing, without ever reaching the token exchange', async () => {
+        const start = await api().get('/account/oauth/fake');
+        const stateCookie = setCookie(start, 'oauth_state')!.split(';')[0];
+        const callbackUrl = new URL(start.headers.location);
+
+        // The state cookie rides along, the verifier does not — the trap the build order warns
+        // about: this must fail closed, not silently redeem the code with no PKCE at all.
+        const response = await api()
+            .get(callbackUrl.pathname + callbackUrl.search)
+            .set('Cookie', stateCookie);
+
+        expect(response.status).toBe(400);
+        expect(setCookie(response, 'oauth_state')).toMatch(/oauth_state=;/);
+    });
+
     it('completes the round trip: session cookies set, user created, redirected to the frontend', async () => {
         const start = await api().get('/account/oauth/fake');
-        const stateCookie = setCookie(start, 'oauth_state')!;
         const callbackUrl = new URL(start.headers.location);
 
         const response = await api()
             .get(callbackUrl.pathname + callbackUrl.search)
-            .set('Cookie', stateCookie);
+            .set('Cookie', attemptCookies(start));
 
         expect(response.status).toBe(302);
         expect(response.headers.location).toBe('http://localhost:8080/oauth/callback');
@@ -108,13 +132,12 @@ describe('GET /account/oauth/:provider/callback', () => {
     it('logs the SAME account in on a second attempt rather than creating another one', async () => {
         for (let attempt = 0; attempt < 2; attempt += 1) {
             const start = await api().get('/account/oauth/fake');
-            const stateCookie = setCookie(start, 'oauth_state')!;
             const callbackUrl = new URL(start.headers.location);
             // Sequential on purpose: the second attempt only matters once the first has actually
             // landed — running them concurrently would test a race, not this.
             await api()
                 .get(callbackUrl.pathname + callbackUrl.search)
-                .set('Cookie', stateCookie);
+                .set('Cookie', attemptCookies(start));
         }
 
         const matches = await userRepository.count({ email: 'oauth.demo@example.com' });

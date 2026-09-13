@@ -13,7 +13,13 @@ import { rejectResponse } from '@infrastructure/http/response';
 import { logger } from '@infrastructure/adapters/logger';
 import { callerContextOf } from '@infrastructure/http/request';
 import { resolveOAuthProvider } from '../oauth/providers';
-import { stateMatches, destroyStateCookie, OAUTH_STATE_COOKIE } from '../oauth/state';
+import {
+    stateMatches,
+    destroyStateCookie,
+    destroyVerifierCookie,
+    OAUTH_STATE_COOKIE,
+    OAUTH_VERIFIER_COOKIE
+} from '../oauth/state';
 import { oauthRedirectUri, oauthFrontendCallbackUrl } from '../oauth/config';
 import { loginOrCreateFromOAuth, recordOAuthFailure, OAuthEmailUnverifiedError } from '../services';
 import { issueSession } from '../session/session';
@@ -44,6 +50,7 @@ export const getOAuthCallback = (request: Request, response: Response) => {
         recordOAuthFailure(context, providerName, reason);
         authOauthTotal.inc({ provider: providerName, status: 'failure' });
         destroyStateCookie(response);
+        destroyVerifierCookie(response);
         response.redirect(302, oauthFrontendCallbackUrl(reason));
     };
 
@@ -51,7 +58,21 @@ export const getOAuthCallback = (request: Request, response: Response) => {
         recordOAuthFailure(context, providerName, 'invalid_state');
         authOauthTotal.inc({ provider: providerName, status: 'failure' });
         destroyStateCookie(response);
+        destroyVerifierCookie(response);
         rejectResponse(response, 400, [t('account.oauth.invalid-state')]);
+        return;
+    }
+
+    // A missing verifier must fail closed, not silently redeem the code without PKCE: a provider
+    // that received no challenge at the start happily accepts an exchange with no verifier, so
+    // "no cookie" and "no PKCE" must never share a branch.
+    const verifier = cookies[OAUTH_VERIFIER_COOKIE];
+    if (typeof verifier !== 'string' || verifier.length === 0) {
+        recordOAuthFailure(context, providerName, 'invalid_verifier');
+        authOauthTotal.inc({ provider: providerName, status: 'failure' });
+        destroyStateCookie(response);
+        destroyVerifierCookie(response);
+        rejectResponse(response, 400, [t('account.oauth.invalid-verifier')]);
         return;
     }
 
@@ -66,12 +87,13 @@ export const getOAuthCallback = (request: Request, response: Response) => {
     }
 
     return provider
-        .exchangeCode(query.code, oauthRedirectUri(provider.name))
+        .exchangeCode(query.code, oauthRedirectUri(provider.name), verifier)
         .then((identity) => loginOrCreateFromOAuth(provider.name, identity, context))
         .then((user) => issueSession(response, user.id, undefined, [provider.name]))
         .then(() => {
             authOauthTotal.inc({ provider: providerName, status: 'success' });
             destroyStateCookie(response);
+            destroyVerifierCookie(response);
             response.redirect(302, oauthFrontendCallbackUrl());
         })
         .catch((error: unknown) => {
