@@ -77,7 +77,13 @@ describe('every route requiring a caller (contract-derived)', () => {
 });
 
 describe('every route requiring an admin (contract-derived)', () => {
-    const requiresAdmin = routes.filter((route) => route.guards.includes('requirePermissionGuard'));
+    // `cart.checkout` is excluded: it is the one key a plain `customer` holds by design (see
+    // `shared/authorization-roles.yaml`), so `authenticateAs('user')` below is genuinely allowed
+    // through its routes. The per-role sweep below already covers them correctly.
+    const requiresAdmin = routes.filter(
+        (route) =>
+            route.guards.includes('requirePermissionGuard') && route.permissionKey !== 'cart.checkout'
+    );
 
     it.each(requiresAdmin.map((route) => [signature(route), route] as const))(
         '%s matches the error contract for a non-admin',

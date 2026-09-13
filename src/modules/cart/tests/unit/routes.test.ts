@@ -1,7 +1,8 @@
 /**
  * @module
- * The cart route table. Every route is authenticated at the router level and none is keyed —
- * there is no operator view of someone else's cart. Mostly guards ORDER: `/summary`, `/checkout`,
+ * The cart route table. Every route is authenticated at the router level, and only `/checkout` is
+ * keyed — `cart.checkout`, an unproven address must not be able to spend, see
+ * `shared/authorization-keys.yaml`. Mostly guards ORDER: `/summary`, `/checkout`,
  * `/reorder/:orderId` and `/all` compete with `/:productId`, and Express takes the first match —
  * declared the other way round, `DELETE /cart/all` becomes a product lookup for id "all".
  */
@@ -49,16 +50,20 @@ describe('cart routes — authorization', () => {
         expect(guardsOn(router, signature)).toContain('isAuth');
     });
 
-    it('needs no permission key at all, by design', () => {
+    it('keys only /checkout, with cart.checkout — by design', () => {
         // A cart belongs to its owner and to nobody else; what you may do with your own basket
-        // follows from being signed in, not from a role — which is why `cart` declares no keys in
-        // `shared/authorization-keys.yaml`. If a keyed route is added, this fails and the addition
-        // gets looked at.
+        // follows from being signed in, not from a role. Spending it is the one exception — an
+        // unverified account may not — which is why `cart.checkout` is the only key this module
+        // declares in `shared/authorization-keys.yaml`. If a second keyed route is added, this
+        // fails and the addition gets looked at.
         const keyed = ALL.filter((signature) =>
             guardsOn(router, signature).includes('requirePermissionGuard')
         );
 
-        expect(keyed).toEqual([]);
+        expect(keyed).toEqual(['POST /checkout']);
+        expect(
+            routeTable(router).find(({ path }) => path === '/checkout')?.permissionKey
+        ).toBe('cart.checkout');
     });
 });
 

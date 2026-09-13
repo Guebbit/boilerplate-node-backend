@@ -218,7 +218,6 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: false,
         reason: 'the emailed email-change token is the credential'
     },
-    'cart POST /checkout': { requiresAuth: true, reason: "checking out the caller's own cart" },
     'cart POST /reorder/:orderId': {
         requiresAuth: true,
         reason: "copying one of the caller's own orders back into their own cart"
@@ -248,18 +247,6 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
     'wishlist DELETE /:productId': {
         requiresAuth: true,
         reason: "removing a product from the caller's own wishlist"
-    },
-    'payments POST /intent': {
-        requiresAuth: true,
-        reason: "freezing the price of the caller's own order-to-be"
-    },
-    'payments POST /:id/confirm': {
-        requiresAuth: true,
-        reason: "confirming the caller's own payment"
-    },
-    'payments POST /:id/sync': {
-        requiresAuth: true,
-        reason: "re-reading the caller's own payment from the provider after a challenge"
     },
     'payments POST /webhook': {
         requiresAuth: false,

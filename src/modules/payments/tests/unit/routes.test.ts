@@ -9,7 +9,7 @@
  * locked to admins being a checkout nobody can complete.
  */
 
-import { routeSignatures, guardsOn } from '@tests/routes';
+import { routeSignatures, routeTable, guardsOn } from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').securityMock()
@@ -74,9 +74,11 @@ describe('payment routes', () => {
     it('admin-guards the refund and the offline record, and nothing else', () => {
         // The two routes an operator drives instead of a customer's own checkout — money moving
         // back out, or a claim that money moved in some way the provider never saw.
-        const adminGuarded = routeSignatures(router).filter((signature) =>
-            guardsOn(router, signature).includes('requirePermissionGuard')
-        );
+        // `cart.checkout` is excluded: it gates the three customer-facing routes below and is the
+        // customer's own key, not an admin one — see the module docblock's "Verified" row.
+        const adminGuarded = routeTable(router)
+            .filter(({ permissionKey }) => permissionKey !== undefined && permissionKey !== 'cart.checkout')
+            .map(({ method, path }) => `${method} ${path}`);
 
         expect(adminGuarded).toEqual([
             'POST /order/:orderId/refund',
@@ -101,12 +103,12 @@ describe('payment routes', () => {
             'idempotencyKey'
         ]);
         // And that shared prefix is not trivially empty — the fresh-session closure and the
-        // verified check are both in there.
+        // cart.checkout check are both in there.
         expect(withoutHandler('POST /:id/sync')).toEqual([
             'getAuth',
             'isAuth',
             '(anonymous)',
-            'requireVerified'
+            'requirePermissionGuard'
         ]);
     });
 

@@ -57,7 +57,7 @@ describe('the declared keys and the modules that own them', () => {
             .map(([module]) => module)
             .toSorted();
 
-        expect(keyless).toEqual(['antibot', 'cart', 'wishlist']);
+        expect(keyless).toEqual(['antibot', 'wishlist']);
     });
 
     it('find every key somewhere, so the two lists are the same set', () => {
