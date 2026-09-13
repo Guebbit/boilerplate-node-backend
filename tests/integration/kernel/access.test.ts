@@ -27,7 +27,13 @@ import {
 } from '@kernel/access/store';
 import { roleModel } from '@kernel/access/models';
 import { bootstrapAccessModel, DEPLOYMENT_TENANT_SLUG, seedPresetRoles } from '@kernel/access/seed';
-import { SEED_OWNER_ID, SEED_USER_ID, seedAccessModel } from '@scenarios/accounts';
+import {
+    SEED_OWNER_ID,
+    SEED_USER_ID,
+    SEED_EDITOR_ID,
+    SEED_MODERATOR_ID,
+    seedAccessModel
+} from '@scenarios/accounts';
 import { userRepository } from '@modules/users';
 import { shopModules } from '@scenarios/index';
 import { PRESET_ROLES, wildcardKeyFor } from '@kernel/permissions';
@@ -306,9 +312,17 @@ describe('the seeded model', () => {
             { scope: 'tenant', role: 'owner' }
         ]);
 
-        const customer = await membershipIn(SEED_USER_ID, String(tenant?._id), 'tenant');
+        const [customer, editor, moderator] = await Promise.all([
+            membershipIn(SEED_USER_ID, String(tenant?._id), 'tenant'),
+            membershipIn(SEED_EDITOR_ID, String(tenant?._id), 'tenant'),
+            membershipIn(SEED_MODERATOR_ID, String(tenant?._id), 'tenant')
+        ]);
 
+        // Each of these two holds exactly one tenant role, unlike root's two jobs above — the
+        // whole point of adding them is a staff account that can be logged into on its own.
         expect(customer?.role).toBe('customer');
+        expect(editor?.role).toBe('editor');
+        expect(moderator?.role).toBe('moderator');
     });
 
     it('is idempotent, so a re-seed of a live database changes nothing', async () => {

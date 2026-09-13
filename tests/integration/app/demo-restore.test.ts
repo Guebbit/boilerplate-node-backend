@@ -19,14 +19,22 @@ import { orderModel } from '@modules/orders/model';
 import { localeModel } from '@modules/locales/model';
 import { roleModel } from '@kernel/access/models';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import { seedCredentials } from '@scenarios/accounts';
 
 setupTestDb();
 
 describe('the `blank` scenario', () => {
-    it('seeds only the four named accounts, roles and locales — no shop data', async () => {
+    it('seeds only the named accounts, roles and locales — no shop data', async () => {
         await restoreScenario('blank');
 
-        await expect(userModel.countDocuments()).resolves.toBe(4);
+        // Not a count: `seedCredentials` is the actual rule (exactly these logins, no filler user
+        // sneaking in), and it only grows if a fifth account is ever added.
+        const seededEmails = await userModel.find().distinct('email');
+        expect(seededEmails.toSorted()).toEqual(
+            Object.values(seedCredentials)
+                .map((credential) => credential.email)
+                .toSorted()
+        );
         await expect(roleModel.countDocuments()).resolves.toBeGreaterThan(0);
         await expect(localeModel.countDocuments()).resolves.toBeGreaterThan(0);
         await expect(productModel.countDocuments()).resolves.toBe(0);
