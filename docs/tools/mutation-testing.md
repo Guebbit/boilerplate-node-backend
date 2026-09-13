@@ -233,8 +233,10 @@ the estimate was doing real damage: 3186 of `src/modules/`'s 5489 mutants — 58
 scope — were being reported as `NoCoverage` by a run configured not to execute the tests that cover
 them.
 
-`stryker.deep.json` is the second measurement. Same `mutate` scope, same everything, plus
-`tests/integration/`. Run it with `npm run test:mutation:deep`.
+`stryker.deep.json` is the second measurement. The default `mutate` scope, plus
+`tests/integration/`, plus two files the default scope excludes entirely because nothing but an
+integration test covers them: `src/app/demo.ts` and `scenarios/check.ts`. Run it with
+`npm run test:mutation:deep`.
 
 Measured on `src/modules/products/repository.ts` — 196 mutants, a file with no unit tests at all
 and a thorough integration suite — on 2026-08-27:
@@ -947,11 +949,11 @@ Same mutator, three scopes, three schedules. They differ only in which tests the
 files they mutate — and, critically, each compares against its own baseline, because a score is
 only meaningful next to one measured the same way.
 
-| Run      | Config                | Tests it runs           | Mutates                           | When               | Baseline                      |
-| -------- | --------------------- | ----------------------- | --------------------------------- | ------------------ | ----------------------------- |
-| **unit** | `stryker.config.json` | unit + cross-cutting    | everything in `mutate`            | nightly, `--force` | `mutation-baseline.json`      |
-| **deep** | `stryker.deep.json`   | \+ `tests/integration/` | same, sharded by module in CI     | nightly, `--force` | `mutation-baseline-deep.json` |
-| **diff** | `stryker.deep.json`   | \+ `tests/integration/` | only the files the branch changed | every pull request | `mutation-baseline-deep.json` |
+| Run      | Config                | Tests it runs           | Mutates                                                                 | When               | Baseline                      |
+| -------- | --------------------- | ----------------------- | ----------------------------------------------------------------------- | ------------------ | ----------------------------- |
+| **unit** | `stryker.config.json` | unit + cross-cutting    | everything in `mutate`                                                  | nightly, `--force` | `mutation-baseline.json`      |
+| **deep** | `stryker.deep.json`   | \+ `tests/integration/` | the unit scope plus two integration-only files, sharded by module in CI | nightly, `--force` | `mutation-baseline-deep.json` |
+| **diff** | `stryker.deep.json`   | \+ `tests/integration/` | only the files the branch changed                                       | every pull request | `mutation-baseline-deep.json` |
 
 ### Why the nightlies always run in full
 
@@ -1108,7 +1110,7 @@ No `mutation-baseline.json` existed in this checkout at all until 2026-08-27 —
 | ------------- | ---------- | ---------- |
 | **All files** | **28.66%** | **51.57%** |
 
-That reads much lower than the last pre-rewrite measurement (65.69% / 72.22%, 2026-08-12) — expected, not a regression. Controllers, `module.ts`, `demo.ts` <!-- doc-paths:ignore --> (per-module then; moved to `demo/<name>.ts` since) and the runtime wiring had all fallen out of `mutate` scope at some point and only came back recently; this is the first time they were actually measured, and most have zero unit tests by design (`tests/contract`/`tests/integration` cover them instead — see [Reading a 0%](#reading-a-0--and-the-one-case-where-it-was-excluded-instead)). Per-area, that shows up as one area dragging the whole number down:
+That reads much lower than the last pre-rewrite measurement (65.69% / 72.22%, 2026-08-12) — expected, not a regression. Controllers, `module.ts`, `demo.ts` <!-- doc-paths:ignore --> (per-module then; moved to `scenarios/<name>.ts` since) and the runtime wiring had all fallen out of `mutate` scope at some point and only came back recently; this is the first time they were actually measured, and most have zero unit tests by design (`tests/contract`/`tests/integration` cover them instead — see [Reading a 0%](#reading-a-0--and-the-one-case-where-it-was-excluded-instead)). Per-area, that shows up as one area dragging the whole number down:
 
 | Area                  | Mutants | Total     | Covered | Note                                                                                        |
 | --------------------- | ------- | --------- | ------- | ------------------------------------------------------------------------------------------- |
@@ -1137,17 +1139,17 @@ and a floor moved twice is worse than a floor moved once.
 
 ## File map
 
-| Path                                 | Contents                                                                                       |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| `stryker.config.json`                | Scope (`mutate`), the narrowed Jest config, thresholds, concurrency, reporters                 |
-| `stryker.deep.json`                  | The same scope plus the integration suites — see [The deep run](#the-deep-run)                 |
-| `jest.config.mutation.js`            | The swc transform and `maxWorkers: 1` — see [the worker pool](#the-worker-pool-multiplication) |
-| `mutation-baseline.json`             | Per-file scores. Committed. The ratchet's memory. Absent until the first run.                  |
-| `scripts/mutation/baseline.ts`       | Ratchet logic — scoring, comparison, the "never lower" rule                                    |
-| `scripts/mutation/check-baseline.ts` | CLI for the two commands below                                                                 |
-| `.github/workflows/mutation.yml`     | Nightly schedule + dispatch, uploads the report even on failure                                |
-| `reports/mutation/index.html`        | Human-readable report (generated per run)                                                      |
-| `reports/mutation/mutation.json`     | Machine-readable report the ratchet reads                                                      |
+| Path                                 | Contents                                                                                                                        |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `stryker.config.json`                | Scope (`mutate`), the narrowed Jest config, thresholds, concurrency, reporters                                                  |
+| `stryker.deep.json`                  | The unit scope plus the integration suites, plus `src/app/demo.ts` and `scenarios/check.ts` — see [The deep run](#the-deep-run) |
+| `jest.config.mutation.js`            | The swc transform and `maxWorkers: 1` — see [the worker pool](#the-worker-pool-multiplication)                                  |
+| `mutation-baseline.json`             | Per-file scores. Committed. The ratchet's memory. Absent until the first run.                                                   |
+| `scripts/mutation/baseline.ts`       | Ratchet logic — scoring, comparison, the "never lower" rule                                                                     |
+| `scripts/mutation/check-baseline.ts` | CLI for the two commands below                                                                                                  |
+| `.github/workflows/mutation.yml`     | Nightly schedule + dispatch, uploads the report even on failure                                                                 |
+| `reports/mutation/index.html`        | Human-readable report (generated per run)                                                                                       |
+| `reports/mutation/mutation.json`     | Machine-readable report the ratchet reads                                                                                       |
 
 ## Commands
 

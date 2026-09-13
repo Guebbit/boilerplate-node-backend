@@ -32,7 +32,9 @@
         "src/kernel/**/*.ts",
         "src/modules/*/**/*.ts",
         "!src/modules/*/index.ts",
-        "!src/modules/*/tests/**"
+        "!src/modules/*/tests/**",
+        "src/app/demo.ts",
+        "scenarios/check.ts"
     ],
     "ignorePatterns": [
         "coverage/**",
