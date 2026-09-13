@@ -175,30 +175,33 @@ const startCluster = ({
          * stayed unexplained: the process that knew what went wrong was the one nobody was reading.
          */
         const output: string[] = [];
-        const capture = (chunk: Buffer | string): void => {
-            output.push(String(chunk));
-            if (output.length > MAX_CAPTURED_CHUNKS)
-                output.splice(0, output.length - MAX_CAPTURED_CHUNKS);
-        };
-        child.stdout?.on('data', capture);
-        child.stderr?.on('data', capture);
 
         /*
-         * `workersReady`, counted from the SAME two streams `capture` above already taps — a
-         * running total, not derived from `output`, since that array is trimmed and would
-         * silently undercount once boot chatter pushes an early ready line out of its window.
-         * `readyTail` carries the last few bytes across a chunk boundary so a marker split
-         * between two `data` events is not missed.
+         * `workersReady` is a running total, not derived from `output`: that array is trimmed, and
+         * would silently undercount once boot chatter pushed an early ready line out of its window.
+         *
+         * `readyTail` carries the end of each chunk forward so a marker split between two `data`
+         * events is still seen. It holds one character LESS than the marker, which is what keeps a
+         * marker that ended exactly on a chunk boundary from being counted a second time: a whole
+         * marker can never fit in the tail, and a split one always leaves at most that many
+         * characters behind.
          */
         let workersReady = 0;
         let readyTail = '';
-        const countReadyWorkers = (chunk: Buffer | string): void => {
-            const text = readyTail + String(chunk);
-            workersReady += text.split(WORKER_READY_MARKER).length - 1;
-            readyTail = text.slice(-WORKER_READY_MARKER.length);
+
+        const capture = (chunk: Buffer | string): void => {
+            const text = String(chunk);
+
+            output.push(text);
+            if (output.length > MAX_CAPTURED_CHUNKS)
+                output.splice(0, output.length - MAX_CAPTURED_CHUNKS);
+
+            const spanning = readyTail + text;
+            workersReady += spanning.split(WORKER_READY_MARKER).length - 1;
+            readyTail = spanning.slice(1 - WORKER_READY_MARKER.length);
         };
-        child.stdout?.on('data', countReadyWorkers);
-        child.stderr?.on('data', countReadyWorkers);
+        child.stdout?.on('data', capture);
+        child.stderr?.on('data', capture);
 
         /*
          * Signals the whole process GROUP, not just `child` — which is `npx`, not the cluster
