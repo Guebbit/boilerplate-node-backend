@@ -31,6 +31,7 @@ import { resolveTranslatables } from '@kernel/registry';
 import { setTranslatables } from '@modules/locales/module';
 import { productModel, toProduct } from '@modules/products/model';
 import { orderModel } from '@modules/orders/model';
+import { orderService } from '@modules/orders';
 import { paymentModel } from '@modules/payments/model';
 import { userModel } from '@modules/users/model';
 import { auditLogModel } from '@modules/audit-logs/model';
@@ -247,10 +248,13 @@ describe('conformance: a produced row parses as the response the API would serve
         const orders = await orderModel.find().exec();
         expect(orders.length).toBeGreaterThan(0);
 
-        for (const order of orders)
-            expect(() =>
-                CreateOrderResponse.shape.data.parse(wireShape(order.toJSON()))
-            ).not.toThrow();
+        // `withActions` — not a bare `.toJSON()` — is the real serialization boundary: it is
+        // also what resolves each line's `current` picture, live against the catalogue, which a
+        // stored order never carries. See `orders/services/current.ts`.
+        for (const order of orders) {
+            const wire = await orderService.withActions(order);
+            expect(() => CreateOrderResponse.shape.data.parse(wireShape(wire))).not.toThrow();
+        }
     });
 
     it('every user', async () => {

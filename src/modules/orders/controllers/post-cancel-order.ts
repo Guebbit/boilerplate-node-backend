@@ -24,7 +24,7 @@ export const postCancelOrder = (
     // `request.body` undefined rather than empty when there is nothing to parse.
     request: Request<{ id?: string }, unknown, CancelOrderRequest | undefined>,
     response: Response
-) =>
+): Promise<void> =>
     orderService
         .cancelById(
             String(request.params.id),
@@ -36,13 +36,13 @@ export const postCancelOrder = (
             if (refused(response, result)) return;
             // `ResponseSuccess.data` is optional at the type level for endpoints with no payload;
             // `cancelById` always resolves one on success, so this is exhaustiveness.
-            if (!result.data) return rejectResponse(response, 500, [t('generic.error-internal')]);
+            if (!result.data) {
+                rejectResponse(response, 500, [t('generic.error-internal')]);
+                return;
+            }
 
-            successResponse<Order>(
-                response,
-                orderService.withActions(result.data, request.authContext),
-                200,
-                result.message
-            );
+            return orderService.withActions(result.data, request.authContext).then((order) => {
+                successResponse<Order>(response, order, 200, result.message);
+            });
         })
         .catch(catchAs(response, 'postCancelOrder'));

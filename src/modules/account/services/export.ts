@@ -29,7 +29,7 @@ import {
     type UserDocument,
     type Token
 } from '@modules/users';
-import { orderRepository } from '@modules/orders';
+import { orderRepository, orderService } from '@modules/orders';
 import { paymentService } from '@modules/payments';
 import { findShipmentsForOrders } from '@modules/delivery';
 import { cartService } from '@modules/cart';
@@ -120,7 +120,7 @@ export interface AccountExportPayload {
     exportedAt: string;
     profile: UserDocument;
     addresses: Awaited<ReturnType<typeof addressesGet>>['addresses'];
-    orders: Awaited<ReturnType<typeof orderRepository.search>>['items'];
+    orders: Awaited<ReturnType<typeof orderService.search>>['items'];
     payments: ExportPayment[];
     shipments: Awaited<ReturnType<typeof findShipmentsForOrders>>;
     cart: { productId: string; quantity: number }[];
@@ -164,7 +164,7 @@ export const exportOwnData = (
         // sessions are both drawn from the same document.
         userRepository.findByIdWithCredentials(userId),
         addressesGet(userId),
-        orderRepository.search({ pageSize: EVERYTHING }, orderRepository.ownerScope(userId)),
+        orderService.search({ pageSize: EVERYTHING }, orderRepository.ownerScope(userId)),
         paymentService.findOwnPayments(userId),
         cartService.cartGet(userId),
         wishlistService.wishlistGet(userId),

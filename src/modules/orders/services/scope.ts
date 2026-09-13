@@ -11,6 +11,7 @@ import type { OrderDocument } from '../model';
 import { accessibleFilter } from '@kernel/access/query';
 import { orderActionsFor } from '../domain';
 import type { OrderActor } from '../domain';
+import { resolveCurrentImages } from './current';
 
 /**
  * Which orders a caller is allowed to read — the authorization boundary for order reads: own
@@ -33,18 +34,22 @@ export const actorOf = (authContext?: AuthContext): OrderActor =>
 /**
  * The single-order response body: the order as it serializes, plus what this caller may do to
  * it — explicit because the two read branches return different shapes, and `actions` must ride
- * on the wire shape or the schema's transform drops it.
- * @returns the serialized order carrying its `actions`
+ * on the wire shape or the schema's transform drops it. `async` for `resolveCurrentImages`'s
+ * `$in` lookup — the one thing here that isn't a synchronous transform.
+ * @returns the serialized order carrying its `actions` and each line's live `current` picture
  */
-export const withActions = (order: OrderDocument, authContext?: AuthContext): Order => {
+export const withActions = (order: OrderDocument, authContext?: AuthContext): Promise<Order> => {
     // `unknown` first, then one assertion: the scoped branch already hands back a normalized plain
     // object typed as a document, so neither shape can be spread without saying so once. The
     // second assertion states what the merge actually produces — the contract's wire shape — which
     // structural typing can't verify past the first `unknown` step.
     const serialized: unknown = typeof order.toJSON === 'function' ? order.toJSON() : order;
 
-    return {
-        ...(serialized as Record<string, unknown>),
-        actions: orderActionsFor(order.status, actorOf(authContext))
-    } as Order;
+    return resolveCurrentImages([serialized as Record<string, unknown>]).then(
+        ([resolved]) =>
+            ({
+                ...resolved,
+                actions: orderActionsFor(order.status, actorOf(authContext))
+            }) as Order
+    );
 };

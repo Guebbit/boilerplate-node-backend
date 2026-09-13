@@ -31,6 +31,7 @@ import { ORDER_CREATED, ORDER_STATUS_CHANGED } from '../events';
 import { orderRepository } from '../repository';
 import { canTransition, checkOrderLines, statusesReachableFrom } from '../domain';
 import { freezeOrderLines } from './snapshot';
+import { resolveCurrentImages } from './current';
 // `userId` is stored as an ObjectId, so writes have to coerce it. The rule (and its failure
 // mode on a malformed id) lives in the repository layer; this is the only import of it here.
 import { toObjectId } from '@infrastructure/persistence/create-repository';
@@ -50,14 +51,17 @@ export const search = (
     items: OrderDocument[];
     meta: PaginatedMeta;
 }> =>
-    orderRepository.search(search, scope).then((result) => {
-        if (context)
-            emitAnalyticsEvent({
-                ...buildAnalyticsBase(context),
-                event: ordersAnalyticsEvents.ORDERS_VIEWED
-            });
-        return result;
-    });
+    orderRepository.search(search, scope).then((result) =>
+        // One batched `$in` for the whole page, however many orders it holds — see `./current`.
+        resolveCurrentImages(result.items).then((items) => {
+            if (context)
+                emitAnalyticsEvent({
+                    ...buildAnalyticsBase(context),
+                    event: ordersAnalyticsEvents.ORDERS_VIEWED
+                });
+            return { items, meta: result.meta };
+        })
+    );
 
 /**
  * Get a single order by ID.

@@ -307,7 +307,7 @@ describe('withActions', () => {
         const user = await createUser();
         const order = await seedOrder(user);
 
-        const body = orderService.withActions(order, asUser(user));
+        const body = await orderService.withActions(order, asUser(user));
 
         expect(body.actions).toEqual({ transitions: ['cancelled'], cancel: true, pay: true });
     });
@@ -318,7 +318,7 @@ describe('withActions', () => {
         await orderService.cancelById(String(order._id), asOwner());
         const cancelled = await orderRepository.findById(String(order._id));
 
-        const body = orderService.withActions(cancelled!, asOwner());
+        const body = await orderService.withActions(cancelled!, asOwner());
 
         expect(body.actions).toEqual({ transitions: [], cancel: false, pay: false });
     });
@@ -327,11 +327,10 @@ describe('withActions', () => {
         const user = await createUser();
         const order = await seedOrder(user);
 
-        for (const caller of [asUser(user), asOwner()])
-            expect(
-                (orderService.withActions(order, caller).actions as { transitions: string[] })
-                    .transitions
-            ).not.toContain('paid');
+        for (const caller of [asUser(user), asOwner()]) {
+            const body = await orderService.withActions(order, caller);
+            expect((body.actions as { transitions: string[] }).transitions).not.toContain('paid');
+        }
     });
 
     it('carries the serialized order, not the document', async () => {
@@ -339,7 +338,7 @@ describe('withActions', () => {
         const user = await createUser();
         const order = await seedOrder(user);
 
-        const body = orderService.withActions(order, asUser(user));
+        const body = await orderService.withActions(order, asUser(user));
 
         expect(body.id).toBe(String(order._id));
         expect(body).not.toHaveProperty('_id');
