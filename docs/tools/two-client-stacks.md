@@ -154,6 +154,65 @@ Docker host hits neither):
   Both forms are legal Compose Specification; the second is only needed to work around this one
   tool.
 
+## When Compose stops being the answer
+
+**Not yet.** At twenty clients on one box, Kubernetes adds a control plane, an ingress controller,
+cert-manager, a secrets pipeline and a CNI — five more things to patch — to solve a problem Compose
+already solves. Two or three hosts running Compose behind one proxy each is a solved problem.
+
+Any **one** of these flips the answer:
+
+```mermaid
+flowchart TD
+    T1["A VPS reboot taking every<br/>client down is unacceptable"] --> K
+    T2["You deploy often enough that health-gated<br/>rollouts and one-command rollback pay"] --> K
+    T3["A contract demands isolation and resource<br/>guarantees Compose cannot demonstrate"] --> K
+    T4["A second engineer joins — declarative<br/>state instead of tribal knowledge"] --> K
+    K{"A trigger fired"} --> S["Pick the SHAPE: self-run k3s<br/>on your own VMs, or a managed<br/>control plane"]
+    S --> M["Move Mongo to a managed service FIRST"]
+```
+
+**k3s is not the hobbyist option.** It is a CNCF-certified conformant Kubernetes distribution,
+passing the same conformance suite as any other, shipped by SUSE as its supported edge product and
+run by telcos at fleet scale. Its CNCF status is Sandbox, accepted 19 Aug 2020 and never promoted —
+read that as governance inertia (it has a corporate owner and does not need CNCF's ladder), not
+immaturity. For context, the CNCF 2025 survey puts Kubernetes production use at 82%, with 79% of
+users on a managed service; managed share is roughly EKS 42% / GKE 27% / AKS 23%.
+
+The choice is the **shape**, not the vendor — which vendors offer which shape, in which regions,
+under which jurisdiction, is [Hosting](./hosting.md)'s capability matrix:
+
+| Shape                        | What you run                              | What you get                               |
+| ---------------------------- | ----------------------------------------- | ------------------------------------------ |
+| Self-run k3s on your own VMs | The control plane, upgrades, etcd backups | The cheapest option, any provider with VMs |
+| A managed control plane      | Only the workloads                        | Upgrades and control-plane HA done for you |
+
+### Every concept here already has a Compose-shaped ancestor
+
+This is why silo maps onto Kubernetes cleanly: the model does not change, only the machinery.
+
+| Compose today                          | Kubernetes later                                                                              |
+| -------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `docker compose -p acme`               | a **namespace** per client                                                                    |
+| `clients/acme/.env`                    | a **Helm** values file per client                                                             |
+| "don't let a client hog the box"       | **ResourceQuota** + **LimitRange** per namespace                                              |
+| separate stacks can't reach each other | **NetworkPolicy**                                                                             |
+| secrets in an untracked `.env`         | **Sealed Secrets** or **External Secrets Operator** — per-client secrets that can live in git |
+| Traefik's ACME resolver                | **cert-manager**                                                                              |
+| the app's `GET /` healthcheck          | a **liveness probe** — already there                                                          |
+| the one-shot `setup` service           | a **Job**, or a pre-upgrade Helm hook                                                         |
+| the `mongo-data` volume                | **StatefulSet** + **PersistentVolumeClaim**                                                   |
+
+**The last row is the one that genuinely hurts**, and it is the strongest argument for moving Mongo
+to a managed service _before_ moving to Kubernetes, not after. Running stateless app containers on
+k8s is ordinary; running stateful databases on it is a discipline of its own.
+
+Sources:
+[CNCF 2025 Annual Survey](https://www.cncf.io/announcements/2026/01/20/kubernetes-established-as-the-de-facto-operating-system-for-ai-as-production-use-hits-82-in-2025-cncf-annual-cloud-native-survey/) ·
+[CNCF k3s project page](https://www.cncf.io/projects/k3s/) ·
+[Rancher k3s](https://www.rancher.com/products/k3s) ·
+[k3s networking — Traefik by default](https://docs.k3s.io/networking/networking-services)
+
 ## Where to go next
 
 | You want to                                    | Read                                                             |

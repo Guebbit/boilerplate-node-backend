@@ -215,6 +215,10 @@ export default withMermaid(
                             { text: 'Docker & Podman', link: '/tools/docker-and-podman' },
                             { text: 'Two Client Stacks', link: '/tools/two-client-stacks' },
                             { text: 'Hosting', link: '/tools/hosting' },
+                            {
+                                text: 'External Services',
+                                link: '/tools/external-services'
+                            },
                             { text: 'Pairing & Ports', link: '/tools/pairing-and-ports' },
                             { text: 'Runtime', link: '/tools/runtime' },
                             { text: 'Internationalisation', link: '/tools/i18n' },

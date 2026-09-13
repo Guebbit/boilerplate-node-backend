@@ -69,6 +69,18 @@ link and anchor against the built site and fails the build if one doesn't exist.
 npm run check:docs-references
 ```
 
+## Bringing an old page up to this standard
+
+Over a hundred pages predate these rules, and a hundred-page rewrite is exactly the push this page
+warns against: a single sitting produces a hundred pages nobody re-read. So it is a trickle, and
+the trigger is deliberately not a schedule:
+
+> **You touched a module for another reason. Fix its doc page in the same sitting.**
+
+That way the page is reworked by whoever has the code fresh in their head, and the work rides along
+with a change that was happening anyway. This item is never "done" — only ever "next page off the
+list."
+
 ## What this page is not
 
 **Advisory, not enforced.** No linter checks a page's shape, on purpose: a rule that penalises a
