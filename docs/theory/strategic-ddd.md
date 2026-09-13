@@ -105,8 +105,10 @@ someone is tempted to add back:
 The twin makes the opposite call, and correctly: `boilerplate-php-laravel-backend` keeps its
 `dependsOn` edges because `ModuleRegistry::inDependencyOrder()` sorts the seeders with them —
 an `orders` row has foreign keys to a product and a user, so the graph decides who is written
-first. Mongo has no foreign keys and this repo seeds every module concurrently, which is why the
-same field is documentation here and load-bearing there.
+first. Mongo has no foreign keys, and this repo's own seeding order is a single explicit
+exception (`locales` finishes before the rest of `shopModules` runs concurrently — see
+`scenarios/index.ts`'s `seedShop`) stated in code, not carried as a `dependsOn` graph — which is
+why the same field is documentation here and load-bearing there.
 
 ### Reading the map
 

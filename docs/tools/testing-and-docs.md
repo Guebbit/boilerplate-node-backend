@@ -79,22 +79,22 @@ Plus slowest suites, slowest tests, per-module line coverage when `coverage/lcov
 
 Several things can hand you an entity, and it is reasonable to wonder whether that is too many. It is not: each answers a question the others cannot. The demo data itself has ONE home — this repo's module seeds — and the paired frontend consumes it by running this very backend (the [demo profile](./demo-profile.md)), so there is no second copy left to drift.
 
-| Source                            | Repo | What it is for                                                                                                                                                                                                                                                                                                                                                         |
-| --------------------------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `scenarios/<name>.ts`             | BE   | **The records themselves** — the demo catalogue, the two accounts, the order book. One per module, outside `src/` entirely; tabled by `scenarios/index.ts` and consumed by `scenario:apply`, which reads them back out through the table's `export`                                                                                                                    |
-| `src/modules/<name>/factories.ts` | BE   | **Arbitrary throwaway entities** — "give me _a_ product, I do not care which, and let me override one field". The opposite need to a fixed demo dataset. `make*` builds a payload; `src/modules/<name>/tests/factories.ts` beside it adds `create*`, which persists so the model's hooks run. The same builder the demo records use, which is why the two cannot drift |
-| `tests/support/contract-data.ts`  | BE   | **Payloads derived from the zod schemas**, valid and — uniquely — invalid, each violating exactly one declared constraint. The only source that can produce something the API is supposed to _reject_, which is what makes it a contract test rather than a factory                                                                                                    |
+| Source                            | Repo | What it is for                                                                                                                                                                                                                                                                                                                                                                                                   |
+| --------------------------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scenarios/<name>.ts`             | BE   | **The records themselves** — the demo catalogue, the named accounts, the address books and wishlists. One per module, outside `src/` entirely; tabled by `scenarios/index.ts`'s `shopModules` and walked by `scenario:apply`. Orders, payments, shipments and audit entries are deliberately absent from this table — `scenarios/flows/` PRODUCES those by driving the seeded shop, not by seeding rows for them |
+| `src/modules/<name>/factories.ts` | BE   | **Arbitrary throwaway entities** — "give me _a_ product, I do not care which, and let me override one field". The opposite need to a fixed demo dataset. `make*` builds a payload; `src/modules/<name>/tests/factories.ts` beside it adds `create*`, which persists so the model's hooks run. The same builder the demo records use, which is why the two cannot drift                                           |
+| `tests/support/contract-data.ts`  | BE   | **Payloads derived from the zod schemas**, valid and — uniquely — invalid, each violating exactly one declared constraint. The only source that can produce something the API is supposed to _reject_, which is what makes it a contract test rather than a factory                                                                                                                                              |
 
-Reading it as a shape: **one** hand-maintained dataset, checked against the API's own
-serializers by `tests/integration/scenarios/shop.test.ts` rather than published as a file — and
-**two** generators that exist because "some data" and "deliberately illegal data" are different
-questions from "the demo data". There used to be two mappers, one per runtime, over a shared file
-of facts. That is the drift this layout removed.
+Reading it as a shape: the demo records, checked against the API's own serializers by
+`tests/integration/scenarios/shop.test.ts` rather than published as a file — and the two
+generators that exist because "some data" and "deliberately illegal data" are different questions
+from "the demo data". There used to be two mappers, one per runtime, over a shared file of facts.
+That is the drift this layout removed.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 55}}}%%
 flowchart TB
-    subgraph one["One dataset, checked not published"]
+    subgraph one["The demo records, checked not published"]
         direction TB
         Seed["scenarios/*.ts<br/>the records, per module"]
         Seed --> Shop["shop.test.ts<br/>real seeders + real serializers"]

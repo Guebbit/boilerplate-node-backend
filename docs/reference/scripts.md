@@ -99,8 +99,8 @@ This backend and its frontend share a set of files byte-for-byte. These four kee
 
 ## Demo and data — `scenarios/`
 
-Outside `scripts/` entirely, alongside the factories it builds from — see
-[Data](./data.md#the-demo-dataset).
+Outside `scripts/` entirely, alongside the records it builds from — see
+[Data](./data.md#the-demo-records).
 
 | File                                      | What it is                                                                                                                                                                     | Read next                                        |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ |

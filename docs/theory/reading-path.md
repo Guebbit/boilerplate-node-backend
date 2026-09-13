@@ -63,12 +63,13 @@ no auto-registration, no magic.
 ### 3 · `src/kernel/registry.ts` — what a module _is_
 
 The thesis of the repository. A module is a **typed object**, not a folder convention: it declares
-its name, routes, locales, seeds and event subscriptions, and the registry calls what it declares.
+its name, routes, locales, scenario guarantees and event subscriptions, and the registry calls what
+it declares.
 
-**Take away:** every field on `AppModule` is read by something at boot — `basePath` and `routes` by
-`app/routes.ts`, `locales` by i18next, `subscribe` by `registerModules`, `seeds` by the seeding
-script. A field nothing reads is a comment with extra syntax, which is why several used to be here
-and are not.
+**Take away:** every field on `AppModule` is read by something — `basePath` and `routes` by
+`app/routes.ts`, `locales` by i18next, `subscribe` by `registerModules`, `scenario` by
+`scenarios/check.ts`'s guarantee comparison. A field nothing reads is a comment with extra syntax,
+which is why several used to be here and are not.
 
 ### 4 · `src/modules/products/module.ts` — one module, declared
 

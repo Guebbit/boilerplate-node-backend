@@ -126,4 +126,4 @@ stops touching card data. The service, the settlement and the contract's shape s
 - [`payments`](./payments.md) — the module this belongs to
 - [Layers](../theory/layers.md) — what a port is, and why it sits where it does
 - [Security](../tools/security.md) — what is never stored or logged
-- [Demo profile](../tools/demo-profile.md) — where the magic method references are used
+- [The Flow Runner](../tools/flow-runner.md) — where the magic method references are used

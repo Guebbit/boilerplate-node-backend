@@ -6,7 +6,7 @@
  * types them — keep every `NODE_SEED_*_PASSWORD` identical to the paired frontend's own `.env`
  * copy), and the password stays PLAINTEXT — the schema's pre-save hook hashes it.
  *
- * See: docs/tools/demo-profile.md#the-two-seed-accounts
+ * See: docs/tools/demo-profile.md#the-named-accounts
  */
 
 import { assignRole } from '@kernel/access/store';

@@ -153,5 +153,5 @@ is a 422 too — deleting it would leave the entity with nothing to fall back to
 - [Internationalisation](../tools/i18n.md) — the mechanism both tiers, and the translations collection, run on
 - [`products`](./products.md) — the one entity translatable today, and its own write surface
 - [Modules overview](./index.md) — the whole context map
-- [Demo profile](../tools/demo-profile.md) — the seeded languages and which square of the grid each covers
+- [The Flow Runner](../tools/flow-runner.md) — the seeded languages and which square of the grid each covers
 - [Request Input](../theory/request-input.md) — how a locale is negotiated
