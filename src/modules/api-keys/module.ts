@@ -47,7 +47,10 @@ const currentCallerOf = (apiKey: ApiKeyDocument): Promise<Caller | undefined> =>
         if (!user) return undefined;
 
         return rolesOf(apiKey.createdByUserId, apiKey.tenant, {
-            tenant: user.role ?? 'customer',
+            // `unverified`, not `customer` — same fallback `account/module.ts` resolves to, for
+            // the same reason: after the verification-role migration, an absent `role` means a
+            // row the migration did not see, and least-privileged is the safe answer.
+            tenant: user.role ?? 'unverified',
             platform: null
         }).then((roles) => ({
             id: apiKey.createdByUserId,
