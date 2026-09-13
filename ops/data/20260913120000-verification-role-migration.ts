@@ -21,8 +21,8 @@
  */
 import type { Db } from 'mongodb';
 
-export const up = (db: Db): Promise<void> =>
-    db
+export const up = (database: Db): Promise<void> =>
+    database
         .collection('users')
         .updateMany({ verified: { $exists: true } }, [
             {

@@ -1,13 +1,13 @@
 # Data changes
 
-One file per change: `<timestamp>-<slug>.ts`, exporting `up(db: Db): Promise<void>`. The filename
-is the order — no phase, no `down`.
+One file per change: `<timestamp>-<slug>.ts`, exporting `up(database: Db): Promise<void>`. The
+filename is the order — no phase, no `down`.
 
 ```ts
 import type { Db } from 'mongodb';
 
-export const up = (db: Db): Promise<void> =>
-    db
+export const up = (database: Db): Promise<void> =>
+    database
         .collection('users')
         .updateMany({ fullName: { $exists: true } }, [
             {
