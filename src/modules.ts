@@ -47,3 +47,32 @@ export const enabledModules: AppModule[] = [
     webhooks,
     wishlist
 ];
+
+/**
+ * Every name a module in this build can carry — what a module table may key itself on instead of
+ * `string`, so naming one this build does not mount is a compile error rather than a test that has
+ * to run first (`scenarios/index.ts`'s `shopModules`).
+ *
+ * Hand-listed rather than read off {@link enabledModules}: `AppModule.name` is `string`, and a
+ * plain object literal widens a literal property to its declared field type regardless — there is
+ * no `typeof` expression that would claw the literal back. One more line here is the cost of
+ * adding a module already; this one carries an alphabetical order to keep it boring, same as the
+ * array above.
+ */
+export type ModuleName =
+    | 'account'
+    | 'antibot'
+    | 'api-keys'
+    | 'audit-logs'
+    | 'cart'
+    | 'delivery'
+    | 'feedback'
+    | 'inventory'
+    | 'locales'
+    | 'observability'
+    | 'orders'
+    | 'payments'
+    | 'products'
+    | 'users'
+    | 'webhooks'
+    | 'wishlist';

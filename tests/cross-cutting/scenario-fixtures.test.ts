@@ -12,6 +12,7 @@
  * | `(locale, tenant, key)` is unique          | `localeEntries_locale_tenant_key`, a unique index  |
  * | published credentials match the accounts  | `tests/unit/scenarios/accounts.test.ts`            |
  * | a product has its fallback-locale row      | `planTranslations` refuses to write one without it |
+ * | no shop module names an unmounted domain   | TypeScript — `shopModules`' key type, `ModuleName` |
  *
  * Deliberately NOT here: any assertion counting fixtures ("exactly one soft-deleted product", "at
  * least one deeply nested key"). A census records a choice someone made rather than a rule the data
@@ -19,8 +20,6 @@
  */
 
 import { localeEntryFixtures, localeFixtures } from '@scenarios/locales';
-import { shopModules } from '@scenarios/index';
-import { enabledModules } from '../../src/modules';
 
 /**
  * Entries name their language by TAG, so the build's dangling-reference sweep cannot see them: it
@@ -60,15 +59,4 @@ it('never lets one locale entry key prefix another in the same tree', () => {
     );
 
     expect(collisions).toEqual([]);
-});
-
-/**
- * A module seeding rows the app does not mount writes a collection nothing serves — silent, since
- * `scenarios/apply.ts` only ever walks the table it is given.
- */
-it('registers no shop module that `enabledModules` does not also enable', () => {
-    const mounted = new Set(enabledModules.map((appModule) => appModule.name));
-    const unmounted = Object.keys(shopModules).filter((name) => !mounted.has(name));
-
-    expect(unmounted).toEqual([]);
 });

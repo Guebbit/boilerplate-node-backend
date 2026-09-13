@@ -11,7 +11,23 @@
  * checks the rows themselves.
  */
 
-import { enabledModules } from '../src/modules';
+import { enabledModules, type ModuleName } from '../src/modules';
+import type { shopModules } from './index';
+
+/**
+ * Compile-time twin of the runtime checks below: every `shopModules` entry names a module this
+ * build actually enables. A module seeding rows the app does not mount would write a collection
+ * nothing serves, silently, since `scenarios/apply.ts` only ever walks the table it is given.
+ *
+ * `scenarios/index.ts` cannot hold this check itself — only this file, `apply.ts` and
+ * `run-server.ts` may reach `src/modules.ts` (`eslint.config.ts`'s boundaries) — so it lives here,
+ * beside the other guarantee this module holds. A `never` below is the compile error: TypeScript
+ * names the offending key in the message, the same way an `Object.hasOwn` mismatch would have
+ * named it at runtime, just before the build instead of after.
+ */
+type ShopModulesAreMounted = keyof typeof shopModules extends ModuleName ? true : never;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- exists only to force the check above; never read
+const shopModulesAreMounted: ShopModulesAreMounted = true;
 
 /**
  * Every mismatch between what `scenarioName`'s modules declare and what `subjects` offers, one

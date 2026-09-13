@@ -6,8 +6,10 @@
  * can omit this whole folder and nothing under `src/` notices.
  *
  * Walked by `app/demo.ts` and `scenarios/apply.ts` — neither of which imports a module for any
- * other reason. `tests/cross-cutting/scenario-fixtures.test.ts` refuses a `shopModules` entry
- * whose name `enabledModules` does not also carry.
+ * other reason. `./check.ts` holds a compile-time twin of the module registry, refusing a
+ * `shopModules` entry whose name `enabledModules` does not also carry — this file cannot check
+ * that itself, since only `apply.ts`/`run-server.ts`/`check.ts` may reach `src/modules.ts`
+ * (`eslint.config.ts`'s boundaries).
  *
  * See: docs/tools/demo-profile.md
  */
@@ -39,8 +41,11 @@ export interface ScenarioModule {
  * Orders, payments, shipments, stock movements, reservations, carts and audit entries are
  * deliberately absent: those are what using the shop PRODUCES, and `./flows/shop-history.ts`
  * produces them by using it. See: docs/tools/demo-profile.md#how-a-scenario-is-built
+ *
+ * No type annotation, deliberately: one would widen every key to `string`, and `./check.ts`'s
+ * compile-time check reads the literal keys straight off `keyof typeof shopModules`.
  */
-export const shopModules: Readonly<Record<string, ScenarioModule>> = {
+export const shopModules = {
     account: {
         seed: seedAddressBooksCollection
     },
