@@ -16,9 +16,17 @@ import { translator } from '@infrastructure/i18n';
  * Built here rather than in the template, where it would be assembled from `process.env`
  * mid-markup. A template that only interpolates cannot reach for configuration, which is the
  * property that makes it renderable from a worker with nothing but the payload.
+ *
+ * Joined through `URL` when `NODE_URL` is set, same reasoning as `oauth/config.ts`'s
+ * `oauthRedirectUri`: concatenation depended on `NODE_URL` carrying a trailing slash, and without
+ * one produced `https://api.example.comaccount/…`. Unlike that one, this has no fallback host —
+ * a relative link in a mail body is merely useless without `NODE_URL`, not a wrong destination
+ * the way an OAuth redirect would be, so `NODE_URL` unset still returns the bare path.
  */
-const accountLink = (route: string, token: string): string =>
-    `${process.env.NODE_URL ?? ''}account/${route}/${token}`;
+const accountLink = (route: string, token: string): string => {
+    const path = `account/${route}/${token}`;
+    return process.env.NODE_URL ? new URL(path, process.env.NODE_URL).href : path;
+};
 
 /**
  * Email verification: the email carrying the one-time confirmation link. Shared by both

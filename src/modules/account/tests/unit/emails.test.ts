@@ -89,13 +89,28 @@ describe('account emails — the action links', () => {
     });
 
     it('joins the base URL without losing or doubling the separator', () => {
-        // `NODE_URL` is expected to carry its own trailing slash; the builder appends `account/`
-        // directly. Asserting the joined result rather than the pieces is what catches a
-        // "helpful" slash added on either side.
+        // Asserting the joined result rather than the pieces is what catches a "helpful" slash
+        // added on either side.
         const url = verifyRequestEmail('en', NAME, TOKEN).data.linkUrl as string;
 
         expect(url).not.toContain('//account/');
         expect(url.endsWith(`account/verify/${TOKEN}`)).toBe(true);
+    });
+
+    it('joins correctly even when NODE_URL carries no trailing slash', () => {
+        // Concatenation made this depend on `NODE_URL`'s own trailing slash — missing one used to
+        // produce `https://api.example.comaccount/verify/…`. `URL`-based joining resolves it
+        // either way, same reasoning as `oauth/config.ts`'s `oauthRedirectUri`.
+        const original = process.env.NODE_URL;
+        process.env.NODE_URL = 'https://api.example.com';
+
+        try {
+            expect(verifyRequestEmail('en', NAME, TOKEN).data.linkUrl).toBe(
+                `https://api.example.com/account/verify/${TOKEN}`
+            );
+        } finally {
+            if (original !== undefined) process.env.NODE_URL = original;
+        }
     });
 
     it('still produces a usable path when no base URL is configured', () => {
