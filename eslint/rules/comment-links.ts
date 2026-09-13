@@ -1,11 +1,6 @@
 /**
  * @module
- * Two comment-hygiene checks, sharing one walk over every comment in a file:
- *
- * `unstable` — a comment may point at a Markdown file under `docs/`, and at no other one in this
- * repo. A root-level plan, audit or handover doc is written for one change and deleted when that
- * change lands, taking every comment that named it down to a dangling pointer. `docs/` is the
- * only stable target, and the only one the docs build checks.
+ * One comment-hygiene check, over every comment in a file:
  *
  * `stale` — a comment citing a `.ts`/`.tsx` file is checked against the files that actually
  * exist, the same way `scripts/docs/check-references.ts` already checks every `docs/*.md` page —
@@ -14,9 +9,14 @@
  * like `--mutate '<path>.ts:10-40'`) is the author saying "this part varies", not naming a file,
  * and is skipped rather than flagged.
  *
- * External URLs are exempt from both — a link to a library's own documentation, or one landing on
- * a `.ts` file over there, is the thing the third-party-code rule asks for, and this repo does not
- * control whether it rots.
+ * External URLs are exempt — a link landing on a `.ts` file over there is the thing the
+ * third-party-code rule asks for, and this repo does not control whether it rots.
+ *
+ * Markdown is NOT checked here. A comment naming a root-level plan doc is still wrong, for the
+ * reason CLAUDE.md gives — such a doc is written for one change and deleted when it lands — but
+ * `.gitignore` now keeps those out of the repo entirely, which is the guard that actually holds:
+ * a pattern matching every way a doc can be named would refuse prose, and one matching a filename
+ * missed a bare `OFFLINE_PAYMENTS_3` anyway.
  *
  * Deliberately not type-aware: comments are not in the AST, so this walks the token stream.
  */
@@ -33,12 +33,6 @@ import {
 
 /** Anything that looks like a URL. Blanked before scanning, so their paths are never matched. */
 const URL_LIKE = /\w+:\/\/\S+|\bwww\.\S+/g;
-
-/** A Markdown filename, with whatever path it was given. */
-const MARKDOWN_REFERENCE = /(?:[\w./-]*\/)?[\w.-]+\.md\b/g;
-
-/** Stable Markdown targets: the docs tree, and the repo-root files that are permanent by convention. */
-const STABLE_MD_TARGET = /^(?:docs\/|\.?\/?(?:README|CHANGELOG|CLAUDE)\.md$)/;
 
 /**
  * One path segment of a `.ts`/`.tsx` reference: an ordinary word, or a `<placeholder>` standing in
@@ -83,15 +77,10 @@ export const commentLinks = {
     meta: {
         type: 'problem',
         docs: {
-            description:
-                'Comments may only reference Markdown under docs/, and a .ts/.tsx file that exists'
+            description: 'Comments may only reference a .ts/.tsx file that exists'
         },
         schema: [],
         messages: {
-            unstable:
-                '`{{reference}}` is not under `docs/`. A root-level plan or audit doc is deleted ' +
-                'when its change lands, leaving this comment pointing at nothing — link to a ' +
-                'page under `docs/`, or state the reason here instead.',
             stale:
                 '`{{reference}}` does not exist. A renamed or removed file leaves this comment ' +
                 'pointing at nothing — fix the reference, or wrap the varying part in ' +
@@ -103,15 +92,6 @@ export const commentLinks = {
             Program() {
                 for (const comment of context.sourceCode.getAllComments()) {
                     const text = comment.value.replaceAll(URL_LIKE, ' ');
-
-                    for (const match of text.matchAll(MARKDOWN_REFERENCE)) {
-                        if (STABLE_MD_TARGET.test(match[0])) continue;
-                        context.report({
-                            loc: comment.loc,
-                            messageId: 'unstable',
-                            data: { reference: match[0] }
-                        });
-                    }
 
                     for (const match of text.matchAll(TS_REFERENCE)) {
                         if (resolvesTsReference(match[0], context.filename)) continue;

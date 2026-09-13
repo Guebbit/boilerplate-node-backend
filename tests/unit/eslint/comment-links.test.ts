@@ -17,8 +17,8 @@ tester.run('comment-links', commentLinks as never, {
     valid: [],
     invalid: [
         {
-            code: '// See IMAGE_PIPELINE_PLAN.md for the failure-mode table.\nconst a = 1;',
-            errors: [{ messageId: 'unstable' }]
+            code: '// Built by src/infrastructure/adapters/no-such-file.ts.\nconst a = 1;',
+            errors: [{ messageId: 'stale' }]
         }
     ]
 });

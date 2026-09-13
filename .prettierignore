@@ -31,3 +31,13 @@ CLAUDE.md
 shared/authorization-keys.yaml
 shared/authorization-roles.yaml
 shared/authorization-conformance.yaml
+
+# The same working notes `.gitignore` excludes. Prettier does not read `.gitignore`, so without
+# this an untracked plan doc still fails `prettier:check` — a formatting gate on a file that is
+# not in the repo and never will be.
+#
+# `CLAUDE.md` is NOT re-included below, unlike in `.gitignore`: it is committed, but it was
+# already exempt from formatting above and must stay that way.
+/*.md
+!/README.md
+!/CHANGELOG.md
