@@ -1,28 +1,22 @@
 /*
- * Scenario seeder.
+ * Scenario seeder — `npm run scenario:apply`. Owns DATA; `db:sync` owns SCHEMA.
  *
- * `scenario:apply` owns DATA; `db:sync` owns SCHEMA. `scenarios/index.ts`'s `SCENARIOS` registry
- * is the table of what to seed; this file is the RUNNER — the gates, the connection and one call
- * into `buildScenario`, nothing else.
+ * The RUNNER, not the scenario: the gates, the connection, and one call into `buildScenario`.
+ * `scenarios/index.ts`'s registry is the table of what that builds.
  *
- * It BOOTS THE APPLICATION IN-PROCESS, which nothing under `scenarios/` used to do. A scenario is
- * no longer a set of rows to insert: `shop` writes its catalogue and then LIVES its history by
- * driving the real checkout, payment, shipping and refund endpoints (`scenarios/flows/`). Those
- * only exist behind the real middleware stack, so this runner puts the app behind a throwaway
- * loopback listener and calls it. `NODE_APP_NO_LISTEN` keeps `src/app.ts` from binding
- * `NODE_PORT` on the way in — a container boot runs this BEFORE the server it is seeding for.
- *
- * Runs on every container boot (see the compose `app` command → `npm run db:bootstrap`), so it
- * is GATED three ways: it refuses a production database, it refuses a still-public seed password
- * outside development/test, and — since driving a checkout twice makes two orders — it refuses a
- * database that already holds anything unless `--reset` says to empty it first.
- *
- * Passwords are given in PLAIN TEXT: the model's pre-save hook hashes them. Anything hashed by
- * hand here would drift from that hook, and its plaintext would be lost with no way to recover
- * the login.
+ * Boots the app in-process:  `shop` LIVES its history by driving the real checkout, payment,
+ *                            shipping and refund endpoints (`scenarios/flows/`), which exist only
+ *                            behind the real middleware stack. `NODE_APP_NO_LISTEN` keeps
+ *                            `src/app.ts` off `NODE_PORT` — a container boot runs this BEFORE the
+ *                            server it seeds for, so the flows get a loopback listener instead.
+ * Refuses production:        a boot-time seeder that can drop or overwrite one is a footgun.
+ * Refuses a public password: outside development/test, where a fixed demo login is the point.
+ * Refuses a non-empty one:   unless `--reset`. Driving a checkout twice makes two orders.
+ * Plain-text passwords:      the model's pre-save hook hashes them; a hash written by hand here
+ *                            would drift from that hook, its plaintext unrecoverable.
  *
  * Usage:
- *   npm run scenario:apply [scenario]          # seed an empty database; scenario defaults to `shop`
+ *   npm run scenario:apply [scenario]          # seed an empty database; defaults to `shop`
  *   npm run scenario:apply:reset [scenario]    # empty it first
  *   npm run scenario:apply -- --describe-to=x  # also write the accounts and subjects to `x`
  */
@@ -34,6 +28,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { runScript } from '../db/run-script';
 import { DEFAULT_SCENARIO, isScenarioName, buildScenario } from '@scenarios/index';
 import { hasFallbackSeedPassword, seedCredentials } from '@scenarios/accounts';
+import { DEMO_BANK_TRANSFER, SCRIPTED_RATE_LIMITS } from '@scenarios/rate-limits';
 
 /*
  * Read at IMPORT time by `src/app.ts`'s auto-start, so it has to be set before the dynamic import
@@ -42,6 +37,25 @@ import { hasFallbackSeedPassword, seedCredentials } from '@scenarios/accounts';
  */
 process.env.NODE_APP_NO_LISTEN = '1';
 
+/*
+ * OVERRIDES `.env`, which is the whole point: a deployment's budgets are sized for a person, and
+ * this makes several hundred requests from one address in seconds. Left alone, the auth rung
+ * refuses the shop owner's very first login and the build dies on a 429 that names none of this.
+ *
+ * Safe because of the production gate below — and because the limiters read `process.env` at
+ * request time, so this binds only the app this process is about to boot, for as long as the seed
+ * takes. `dotenv/config` above has already run and never overwrites a key that is present.
+ */
+Object.assign(process.env, SCRIPTED_RATE_LIMITS);
+
+/*
+ * Applied only where nothing is set, unlike the budgets above: a deployment that names its own
+ * beneficiary keeps it, and one that names none still gets a shop whose `order.awaitingTransfer`
+ * guarantee can hold.
+ */
+for (const [key, value] of Object.entries(DEMO_BANK_TRANSFER)) process.env[key] ??= value;
+
+/** `--reset`: empty the database before building, rather than refusing a non-empty one. */
 const reset = process.argv.includes('--reset');
 
 /** The one positional argument this CLI takes — everything else is a `--flag`. */
