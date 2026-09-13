@@ -55,7 +55,12 @@ const RAISED = [
     'NODE_SUBMISSION_RATE_LIMIT_MAX',
     'NODE_SUBMISSION_RATE_LIMIT_EMAIL_MAX',
     'NODE_SUBMISSION_RATE_LIMIT_BLOCK_MAX',
-    'NODE_UPLOAD_RATE_LIMIT_MAX'
+    'NODE_UPLOAD_RATE_LIMIT_MAX',
+    // `shop-history.ts` runs the `customer` account through a dozen `checkoutAndPay`s in one
+    // process — well past the human-sized 5-per-hour confirm budget — and one declined card on
+    // top of it. Without these two, the flow throws on its own retried-card case every run.
+    'NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX',
+    'NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX'
 ];
 
 /** Every budget raised to {@link SCRIPTED_MAX}, plus {@link PRIVATE_COUNTERS}. */
