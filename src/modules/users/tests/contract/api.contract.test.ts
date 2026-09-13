@@ -46,40 +46,32 @@ describe('GET /users', () => {
 const usernames = (response: { body: { data: { items: { username: string }[] } } }) =>
     response.body.data.items.map((user) => user.username);
 
-describe('GET /users — the role and verified filters', () => {
+describe('GET /users — the role filter', () => {
     /*
      * Every filter asserts a POSITIVE and a negative, and the positive is the load-bearing half.
      * An empty page satisfies any number of `not.toContain`, so a filter naming a column no
      * document has passes a negatives-only test while returning nothing — which is how `?admin=`
      * survived the move to roles, still filtering a field the migration had deleted.
      */
-    it('narrows to one role, and to the unverified', async () => {
+    it('narrows to one role, including the unverified default', async () => {
         // Asserted by membership, not by an exact list: the authenticated admin is a fixture this
         // test does not own, and pinning the whole page would break on any change to it.
         const { bearer } = await authenticateAs('owner');
-        await createUser({
-            username: 'plain-manager',
-            email: 'pm@example.com',
-            role: 'manager',
-            verified: true
-        });
-        // No `role`, so the schema's `customer` default applies — the other side of the filter.
-        await createUser({ username: 'plain-verified', email: 'pv@example.com', verified: true });
-        await createUser({
-            username: 'plain-unverified',
-            email: 'pu@example.com',
-            verified: false
-        });
+        await createUser({ username: 'plain-manager', email: 'pm@example.com', role: 'manager' });
+        await createUser({ username: 'plain-customer', email: 'pc@example.com', role: 'customer' });
+        // No `role`, so the schema's `unverified` default applies — the replacement for the old
+        // boolean `verified` filter (`?role=unverified`, see `repository.ts`).
+        await createUser({ username: 'plain-unverified', email: 'pu@example.com' });
 
         const managers = await api().get('/users?role=manager').set('Authorization', bearer);
         expect(managers.status).toBe(200);
         expect(usernames(managers)).toContain('plain-manager');
-        expect(usernames(managers)).not.toContain('plain-verified');
+        expect(usernames(managers)).not.toContain('plain-customer');
 
-        const unverified = await api().get('/users?verified=false').set('Authorization', bearer);
+        const unverified = await api().get('/users?role=unverified').set('Authorization', bearer);
         expect(unverified.status).toBe(200);
         expect(usernames(unverified)).toContain('plain-unverified');
-        expect(usernames(unverified)).not.toContain('plain-verified');
+        expect(usernames(unverified)).not.toContain('plain-customer');
     });
 });
 

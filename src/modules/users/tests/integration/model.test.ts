@@ -115,9 +115,9 @@ describe('user credential exposure', () => {
                 'termsAccepted',
                 'updatedAt',
                 'username',
-                // Whether the address is confirmed — in the `User` contract, and the client's
-                // cue for the "verify your email" banner.
-                'verified'
+                // WHEN the address was confirmed, or `null` until it is — in the `User` contract,
+                // informational only: the `role` column is what `cart.checkout` actually reads.
+                'verifiedAt'
             ]);
         });
 

@@ -126,7 +126,7 @@ describe('GET /account/oauth/:provider/callback', () => {
 
         const created = await userRepository.findOne({ email: 'oauth.demo@example.com' });
         expect(created).not.toBeNull();
-        expect(created?.verified).toBe(true);
+        expect(created?.verifiedAt).toBeInstanceOf(Date);
     });
 
     it('logs the SAME account in on a second attempt rather than creating another one', async () => {

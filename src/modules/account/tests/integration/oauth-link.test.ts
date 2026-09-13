@@ -76,7 +76,7 @@ describe('loginOrCreateFromOAuth — case 1: an already-linked identity', () => 
 
 describe('loginOrCreateFromOAuth — case 2: a verified email matching an existing account', () => {
     it('links the new identity onto the account and marks it verified', async () => {
-        const user = await createUser({ email: identity().email, verified: false });
+        const user = await createUser({ email: identity().email });
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
         const resolved = await loginOrCreateFromOAuth('google', identity(), testCallerContext);
@@ -93,7 +93,7 @@ describe('loginOrCreateFromOAuth — case 2: a verified email matching an existi
             })
         );
         const refreshed = await userRepository.findById(user.id);
-        expect(refreshed?.verified).toBe(true);
+        expect(refreshed?.verifiedAt).toBeInstanceOf(Date);
     });
 
     it('refuses to link when the provider does not vouch for the email, and changes nothing', async () => {
@@ -116,7 +116,7 @@ describe('loginOrCreateFromOAuth — case 3: a never-seen identity and email', (
         const created = await loginOrCreateFromOAuth('google', identity(), testCallerContext);
 
         expect(created.email).toBe(identity().email);
-        expect(created.verified).toBe(true);
+        expect(created.verifiedAt).toBeInstanceOf(Date);
         expect(created.active).toBe(true);
         const stored = await userRepository.findByIdWithCredentials(created.id);
         expect(stored?.password).toBeUndefined();

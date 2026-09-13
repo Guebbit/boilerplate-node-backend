@@ -716,8 +716,7 @@ describe('callerContextOf', () => {
                     tenantId: 'tenant-1',
                     authTime: 0,
                     amr: [],
-                    analyticsConsent: true,
-                    verified: false
+                    analyticsConsent: true
                 }
             })
         );

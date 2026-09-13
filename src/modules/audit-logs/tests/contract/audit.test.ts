@@ -18,7 +18,7 @@ setupTestDb();
  * route — same flow as `authenticateAs`, for a role that helper does not spell.
  */
 const authenticateInRole = async (role: string) => {
-    const user = await createUser({ role, verified: true });
+    const user = await createUser({ role, verifiedAt: new Date() });
     const response = await api()
         .post('/account/login')
         .send({ email: user.email, password: PLAIN_PASSWORD });

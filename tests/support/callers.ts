@@ -26,8 +26,7 @@ const identity = (id: string) => ({
     username: id,
     authTime: Math.floor(Date.now() / 1000),
     amr: ['pwd'] as readonly string[],
-    analyticsConsent: false,
-    verified: true
+    analyticsConsent: false
 });
 
 /**

@@ -52,14 +52,15 @@ describe('userSchema — what a user must carry', () => {
         expect(pattern.test('ada@example.com\nBcc: evil@attacker.test')).toBe(false);
     });
 
-    it('creates a user as a customer, active and unverified', () => {
-        // `customer` is the fail-safe direction and the only one: defaulting to a role that
-        // holds more — `owner` above all — is an account-creation privilege escalation.
-        // `verified: false` matters equally — a default of `true` makes the whole email
-        // verification flow decorative, since every new account already satisfies it.
-        expect(defaultOf(userSchema, 'role')).toBe('customer');
+    it('creates a user as unverified and active', () => {
+        // `unverified` is the fail-safe direction and the only one: defaulting to a role that
+        // holds more — `customer` and its `cart.checkout`, `owner` above all — is an
+        // account-creation privilege escalation. `verifiedAt: null` matters equally — a default
+        // that backdates it makes the whole email verification flow decorative, since every new
+        // account would already satisfy it.
+        expect(defaultOf(userSchema, 'role')).toBe('unverified');
         expect(defaultOf(userSchema, 'active')).toBe(true);
-        expect(defaultOf(userSchema, 'verified')).toBe(false);
+        expect(defaultOf(userSchema, 'verifiedAt')).toBeNull();
     });
 
     it('gives a new user the configured locale and avatar', () => {

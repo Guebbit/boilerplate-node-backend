@@ -117,15 +117,15 @@ describe('updateProfile', () => {
         expect(response.status).toBe(422);
 
         const stored = await userRepository.findByIdWithCredentials(user.id);
-        expect(stored?.role).toBe('customer');
+        expect(stored?.role).toBe('unverified');
         expect(stored?.active).toBe(true);
         // The password is untouched — the fixture's original still logs in.
         const login = await accountService.login(user.email, PLAIN_PASSWORD);
         expect(login.success).toBe(true);
     });
 
-    it('holds the new address as pendingEmail, and does not touch email or verified', async () => {
-        const user = await createUser({ email: 'before@example.com', verified: true });
+    it('holds the new address as pendingEmail, and does not touch email or verifiedAt', async () => {
+        const user = await createUser({ email: 'before@example.com', verifiedAt: new Date() });
 
         const response = asSuccess(
             await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext)
@@ -133,22 +133,22 @@ describe('updateProfile', () => {
 
         expect(response.data.email).toBe('before@example.com');
         expect(response.data.pendingEmail).toBe('after@example.com');
-        expect(response.data.verified).toBe(true);
+        expect(response.data.verifiedAt).toBeTruthy();
     });
 
     it('keeps the verification when the email is restated unchanged', async () => {
-        const user = await createUser({ email: 'same@example.com', verified: true });
+        const user = await createUser({ email: 'same@example.com', verifiedAt: new Date() });
 
         const response = asSuccess(
             await updateProfile(user.id, { email: 'same@example.com' }, testCallerContext)
         );
 
-        expect(response.data.verified).toBe(true);
+        expect(response.data.verifiedAt).toBeTruthy();
         expect(response.data.pendingEmail).toBeUndefined();
     });
 
     it('cancels a pending change when the CURRENT address is restated', async () => {
-        const user = await createUser({ email: 'before@example.com', verified: true });
+        const user = await createUser({ email: 'before@example.com', verifiedAt: new Date() });
         await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
 
         const response = asSuccess(
@@ -187,7 +187,7 @@ describe('updateProfile', () => {
 describe('completeEmailChange', () => {
     it('swaps pendingEmail into email, marks verified, clears pendingEmail, and revokes refresh tokens', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
-        const user = await createUser({ email: 'before@example.com', verified: true });
+        const user = await createUser({ email: 'before@example.com', verifiedAt: new Date() });
         await user.tokenAdd(TokenType.REFRESH, 60_000, 'live-session');
         await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
         const loaded = await userRepository.findByIdWithCredentials(user.id);
@@ -195,7 +195,7 @@ describe('completeEmailChange', () => {
         const saved = await completeEmailChange(loaded!, testCallerContext);
 
         expect(saved.email).toBe('after@example.com');
-        expect(saved.verified).toBe(true);
+        expect(saved.verifiedAt).toBeInstanceOf(Date);
         expect(saved.pendingEmail).toBeUndefined();
         const stored = await userRepository.findByIdWithCredentials(user.id);
         expect(stored?.email).toBe('after@example.com');
@@ -498,13 +498,13 @@ describe('requestEmailVerification', () => {
 describe('completeEmailVerification', () => {
     it('marks the account verified and audits it', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
-        const user = await createUser({ verified: false });
+        const user = await createUser({});
 
         const saved = await accountService.completeEmailVerification(user, testCallerContext);
 
-        expect(saved.verified).toBe(true);
+        expect(saved.verifiedAt).toBeInstanceOf(Date);
         const stored = await userRepository.findById(user.id);
-        expect(stored?.verified).toBe(true);
+        expect(stored?.verifiedAt).toBeInstanceOf(Date);
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: accountAuditActions.AUTH_EMAIL_VERIFY_COMPLETED,

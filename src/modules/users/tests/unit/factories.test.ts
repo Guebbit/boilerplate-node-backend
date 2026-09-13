@@ -48,18 +48,18 @@ describe('makeUser', () => {
     it('omits unspecified fields, leaving the schema"s defaults to apply', () => {
         const user = makeUser();
 
-        for (const field of ['role', 'verified', 'deletedAt', 'tokens'])
+        for (const field of ['role', 'verifiedAt', 'deletedAt', 'tokens'])
             expect(Object.hasOwn(user, field)).toBe(false);
     });
 
     it('keeps an explicit false rather than dropping it', () => {
-        // `active: false` and `verified: false` are the fixtures the deactivation and
-        // verification branches need, and both are falsy — which is exactly what a
-        // `stripUndefined` that tested truthiness instead of `undefined` would drop.
-        const user = makeUser({ active: false, verified: false });
+        // `active: false` is the fixture the deactivation branch needs, and it is falsy — which
+        // is exactly what a `stripUndefined` that tested truthiness instead of `undefined` would
+        // drop. `verifiedAt` has no analogous case: its only "explicit" value, `null`, is also
+        // the schema's own default, so there is nothing a truthiness check could wrongly strip.
+        const user = makeUser({ active: false });
 
         expect(user.active).toBe(false);
-        expect(user.verified).toBe(false);
     });
 
     it('converts a soft-delete timestamp from an ISO string', () => {

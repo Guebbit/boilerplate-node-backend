@@ -29,10 +29,10 @@ describe('userRepository', () => {
             expect(user.password).not.toBe(PLAIN_PASSWORD);
         });
 
-        it('sets the role to customer by default', async () => {
+        it('sets the role to unverified by default', async () => {
             const user = await userRepository.create(makeUser() as Partial<UserDocument>);
 
-            expect(user.role).toBe('customer');
+            expect(user.role).toBe('unverified');
         });
     });
 

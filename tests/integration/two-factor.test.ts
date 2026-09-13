@@ -68,7 +68,7 @@ const mailedCode = (): string => {
  * explicitly rather than depending on that default.
  */
 const authenticateVerified = async () => {
-    const user = await createUser({ verified: true, email: 'ada@example.com' });
+    const user = await createUser({ verifiedAt: new Date(), email: 'ada@example.com' });
     const login = await api()
         .post('/account/login')
         .send({ email: user.email, password: PLAIN_PASSWORD });
@@ -82,7 +82,7 @@ const authenticateVerified = async () => {
  * state. `authenticateAs` verifies by default, so this is the one place that opts out.
  */
 const authenticateUnverified = async () => {
-    const user = await createUser({ verified: false, email: 'unverified@example.com' });
+    const user = await createUser({ email: 'unverified@example.com' });
     const login = await api()
         .post('/account/login')
         .send({ email: user.email, password: PLAIN_PASSWORD });
