@@ -15,6 +15,9 @@
  * Verified:      the two routes the customer drives directly also require `requireVerified` — an
  *                unproven address must not be able to pay and start receiving payment mail at an
  *                inbox nobody confirmed.
+ * Card testing:  `POST /:id/confirm` alone additionally carries the payment-velocity budgets — the
+ *                confirm is where a card number is actually validated, `/intent` merely freezes a
+ *                price. See `paymentConfirmAttemptLimiter`/`paymentConfirmDeclineLimiter`.
  */
 
 import { Router } from 'express';
@@ -26,7 +29,12 @@ import {
     requireVerified,
     REAUTH_TIME_CRITICAL
 } from '@kernel/middlewares/authorizations';
-import { webhookLimiter } from '@infrastructure/http/middlewares/rate-limit';
+import {
+    webhookLimiter,
+    paymentConfirmAttemptLimiter,
+    paymentConfirmDeclineLimiter,
+    paymentDeclineChallengeGate
+} from '@infrastructure/http/middlewares/rate-limit';
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 import { postPaymentIntent } from './controllers/post-payment-intent';
 import { postPaymentConfirm } from './controllers/post-payment-confirm';
@@ -87,11 +95,16 @@ router.post(
     postPaymentOffline
 );
 
-// POST /payments/:id/confirm — the payment form's submit.
+// POST /payments/:id/confirm — the payment form's submit. The two velocity limiters and the
+// challenge gate sit between the identity guards and idempotencyKey, mirroring where
+// `credentialLimiters`/`loginChallengeGate` sit on `POST /account/login`.
 router.post(
     '/:id/confirm',
     requireFreshAuth(REAUTH_TIME_CRITICAL),
     requireVerified,
+    paymentConfirmAttemptLimiter,
+    paymentConfirmDeclineLimiter,
+    paymentDeclineChallengeGate,
     idempotencyKey,
     postPaymentConfirm
 );

@@ -101,6 +101,15 @@ process.env.NODE_UPLOAD_RATE_LIMIT_MAX ??= '1000';
 process.env.NODE_PAYMENT_WEBHOOK_RATE_LIMIT_MAX ??= '1000';
 
 /**
+ * `paymentConfirmAttemptLimiter`/`paymentConfirmDeclineLimiter` need the same treatment: keyed on
+ * the ACCOUNT rather than the address, so a suite that logs into one seeded account and confirms
+ * several payments would otherwise trip a 429 the fuzz suite's spec check does not expect — same
+ * failure mode `NODE_AUTH_RATE_LIMIT_MAX` exists to prevent above.
+ */
+process.env.NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX ??= '1000';
+process.env.NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX ??= '1000';
+
+/**
  * Bank transfer at checkout, which `GET /payments/methods` offers only where a deployment names
  * both of these. Set here rather than left to a developer's `.env`: the `shop` scenario declares
  * an `order.awaitingTransfer` guarantee, so a suite that builds it against an unconfigured
