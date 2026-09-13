@@ -35,6 +35,12 @@ a breaking change is one a generated client cannot absorb without being regenera
   field was declared `nullable`, which the PHP twin's type generator refuses rather than guesses;
   a client reads `scope` to know which world the rules are about, and `tenantId` only when there
   is a shop to name.
+- **`User.verified` is `User.verifiedAt` (nullable string date-time).** Enforcement moved off a
+  route guard (`requireVerified`) and onto the permission model: `cart.checkout` gates checkout
+  and the payments routes, held by every role except the new `unverified` — the role a fresh
+  signup starts as. `verifiedAt` is informational only, read by nothing server-side; a client
+  gating a checkout button must read `can('checkout', 'Cart')` off `GET /account/abilities`
+  instead of the old boolean. The `EMAIL_NOT_VERIFIED` error code and its message are unchanged.
 
 ### Breaking — deployment
 
