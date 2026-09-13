@@ -17,6 +17,14 @@ jest.mock('@infrastructure/observability/stream', () => ({
     streamObservabilityMetrics: jest.fn()
 }));
 
+// Only `stillHoldsKeyViaCookie` is replaced — the guards it sits beside stay real, so `guardsOn`
+// keeps reading their actual function names off the stack.
+jest.mock('@kernel/middlewares/authorizations', () => ({
+    ...jest.requireActual('@kernel/middlewares/authorizations'),
+    __esModule: true,
+    stillHoldsKeyViaCookie: jest.fn()
+}));
+
 /*
  * Only `getPrometheusMetrics` is replaced. `metricsRegistry` is the REAL one: every module
  * registers its counters against it at import time, so a stub registry makes `new Counter({
@@ -37,6 +45,7 @@ jest.mock('@infrastructure/adapters/logger', () => ({
 
 import { router } from '@modules/observability/routes';
 import { streamObservabilityMetrics } from '@infrastructure/observability/stream';
+import { stillHoldsKeyViaCookie } from '@kernel/middlewares/authorizations';
 import { getPrometheusMetrics, metricsRegistry } from '@infrastructure/observability/metrics-http';
 import { logger } from '@infrastructure/adapters/logger';
 
@@ -86,6 +95,9 @@ const fakeResponse = () => {
 
     return { response: asStub<Response>(response), recorded };
 };
+
+/** The cookie `requirePermissionViaCookie` already validated before the handler below ran. */
+const cookieRequest = () => asStub<Request>({ cookies: { jwt: 'cookie.jwt' } });
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -155,16 +167,35 @@ describe('observability routes — the two guard styles', () => {
 });
 
 describe('GET /observability/events — the inline stream handler', () => {
-    it('hands the raw response to the streamer, and writes nothing itself', () => {
+    it('hands the raw response and a recheck to the streamer, and writes nothing itself', () => {
         const { response, recorded } = fakeResponse();
 
-        handlerFor('GET /events')({} as Request, response);
+        handlerFor('GET /events')(cookieRequest(), response);
 
         // SSE owns the response for its lifetime: headers, keep-alives and the close. Anything
         // this handler sent first would end the stream before it began.
-        expect(streamObservabilityMetrics).toHaveBeenCalledWith(response);
+        expect(streamObservabilityMetrics).toHaveBeenCalledWith(response, expect.any(Function));
         expect(recorded.body).toBeUndefined();
         expect(recorded.status).toBeUndefined();
+    });
+
+    it('wires the recheck to the same key and the cookie the stream connected with', () => {
+        const { response } = fakeResponse();
+        const request = cookieRequest();
+        jest.mocked(stillHoldsKeyViaCookie).mockResolvedValueOnce(true);
+
+        handlerFor('GET /events')(request, response);
+        const [, recheck] = jest.mocked(streamObservabilityMetrics).mock.calls[0] as [
+            Response,
+            () => Promise<boolean>
+        ];
+        void recheck();
+
+        expect(stillHoldsKeyViaCookie).toHaveBeenCalledWith(
+            request,
+            'cookie.jwt',
+            'platform.observability.read'
+        );
     });
 });
 

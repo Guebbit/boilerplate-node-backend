@@ -23,6 +23,7 @@ import {
     isAuth,
     requirePermission,
     requirePermissionViaCookie,
+    stillHoldsKeyViaCookie,
     requireFreshAuth,
     requireFreshAuthWhen
 } from '@kernel/middlewares/authorizations';
@@ -578,6 +579,72 @@ describe('requirePermissionViaCookie', () => {
         await new Promise((resolve) => setImmediate(resolve));
 
         expect(response.status).toHaveBeenCalledWith(401);
+    });
+});
+
+/**
+ * `stillHoldsKeyViaCookie` — the same verdict as `requirePermissionViaCookie`, re-run outside the
+ * request lifecycle for the SSE stream's 30-second recheck. It never rejects: a resolver failure
+ * must fail the stream closed exactly like a role that no longer holds the key, since the stream
+ * cannot tell the two apart and must not hang waiting to find out.
+ */
+describe('stillHoldsKeyViaCookie', () => {
+    const adminUser = { ...asOwner('admin-1'), username: 'root', imageUrl: '/images/root.png' };
+
+    it('resolves true for a caller who still holds the key', async () => {
+        mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser as never);
+
+        await expect(
+            stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', WILDCARD)
+        ).resolves.toBe(true);
+    });
+
+    it('resolves false when the caller no longer holds the key', async () => {
+        mockedVerifyRefreshToken.mockResolvedValueOnce(asCustomer('user-1') as never);
+
+        await expect(
+            stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', WILDCARD)
+        ).resolves.toBe(false);
+    });
+
+    it('resolves false when the token no longer names anyone', async () => {
+        mockedVerifyRefreshToken.mockResolvedValueOnce(undefined as never);
+
+        await expect(
+            stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', WILDCARD)
+        ).resolves.toBe(false);
+    });
+
+    it('fails closed, not rejected, when the resolver itself throws', async () => {
+        // An expired token or a datastore outage — the stream must close, not hang on an
+        // unhandled rejection.
+        mockedVerifyRefreshToken.mockRejectedValueOnce(new Error('mongo is down'));
+
+        await expect(
+            stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', WILDCARD)
+        ).resolves.toBe(false);
+    });
+
+    it('audits the refusal the same way the connect-time guard does', async () => {
+        mockedVerifyRefreshToken.mockResolvedValueOnce(asCustomer('user-1') as never);
+
+        await stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', WILDCARD);
+
+        expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: coreAuditActions.SECURITY_FORBIDDEN,
+                actor_user_id: 'user-1',
+                outcome: 'failure'
+            })
+        );
+    });
+
+    it('does not audit a passing recheck', async () => {
+        mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser as never);
+
+        await stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', WILDCARD);
+
+        expect(mockedEmitAuditEvent).not.toHaveBeenCalled();
     });
 });
 

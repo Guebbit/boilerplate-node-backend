@@ -35,6 +35,7 @@ import {
 /** The intervals the module schedules, as documented in its own constants. */
 const UPDATE_INTERVAL_MS = 5000;
 const HEARTBEAT_INTERVAL_MS = 15_000;
+const REVERIFY_INTERVAL_MS = 30_000;
 
 interface FakeResponse {
     response: Response;
@@ -44,6 +45,8 @@ interface FakeResponse {
     status: jest.Mock;
     flushHeaders: jest.Mock;
     write: jest.Mock;
+    /** What a failed recheck calls to end the stream — asserted directly, not inferred. */
+    end: jest.Mock;
     /** Fires the `close` handler the module registered, as a real disconnect would. */
     disconnect: () => void;
 }
@@ -61,6 +64,7 @@ const makeResponse = (): FakeResponse => {
 
     const status = jest.fn();
     const flushHeaders = jest.fn();
+    const end = jest.fn();
     const write = jest.fn((frame: string) => {
         frames.push(frame);
         return true;
@@ -70,6 +74,7 @@ const makeResponse = (): FakeResponse => {
         status,
         flushHeaders,
         write,
+        end,
         setHeader: jest.fn((name: string, value: string) => {
             headers[name] = value;
         }),
@@ -85,6 +90,7 @@ const makeResponse = (): FakeResponse => {
         status,
         flushHeaders,
         write,
+        end,
         disconnect: () => {
             for (const handler of closeHandlers) handler();
         }
@@ -110,9 +116,10 @@ describe('the SSE metrics stream', () => {
     /** Responses opened by a test, disconnected afterwards so the module-level Set starts empty. */
     let opened: FakeResponse[] = [];
 
-    const open = () => {
+    /** Opens a stream whose recheck always passes, unless a test needs it to fail. */
+    const open = (reverify: () => Promise<boolean> = () => Promise.resolve(true)) => {
         const fake = makeResponse();
-        streamObservabilityMetrics(fake.response);
+        streamObservabilityMetrics(fake.response, reverify);
         opened.push(fake);
         return fake;
     };
@@ -273,6 +280,60 @@ describe('the SSE metrics stream', () => {
             expect(
                 events.filter((event) => event === 'observability.metrics.updated')
             ).toHaveLength(3);
+        });
+    });
+
+    describe('the permission recheck', () => {
+        it('does not recheck before the interval elapses', async () => {
+            const reverify = jest.fn(() => Promise.resolve(true));
+            open(reverify);
+
+            await jest.advanceTimersByTimeAsync(REVERIFY_INTERVAL_MS - 1);
+
+            expect(reverify).not.toHaveBeenCalled();
+        });
+
+        it('recheck every 30 seconds while it keeps passing', async () => {
+            const reverify = jest.fn(() => Promise.resolve(true));
+            open(reverify);
+
+            await jest.advanceTimersByTimeAsync(REVERIFY_INTERVAL_MS * 3);
+
+            expect(reverify).toHaveBeenCalledTimes(3);
+        });
+
+        it('ends the stream on the first failed recheck', async () => {
+            const reverify = jest.fn(() => Promise.resolve(false));
+            const fake = open(reverify);
+
+            await jest.advanceTimersByTimeAsync(REVERIFY_INTERVAL_MS);
+
+            expect(fake.end).toHaveBeenCalledTimes(1);
+        });
+
+        it('stops every timer once a recheck fails, not just the recheck itself', async () => {
+            const reverify = jest.fn(() => Promise.resolve(false));
+            const fake = open(reverify);
+            await jest.advanceTimersByTimeAsync(REVERIFY_INTERVAL_MS);
+            const writtenAtFailure = fake.frames.length;
+
+            await jest.advanceTimersByTimeAsync(UPDATE_INTERVAL_MS * 5);
+
+            // A revoked caller closes the stream — teardown must run even though `response.end()`
+            // on this stub never fires the 'close' handler a real socket would.
+            expect(fake.frames).toHaveLength(writtenAtFailure);
+            await expect(reportedClients()).resolves.toBe(0);
+        });
+
+        it('treats a rejected recheck the same as a failed one — fail closed', async () => {
+            const reverify = jest.fn(() => Promise.reject(new Error('resolver down')));
+            const fake = open(reverify);
+
+            await expect(
+                jest.advanceTimersByTimeAsync(REVERIFY_INTERVAL_MS)
+            ).resolves.toBeUndefined();
+
+            expect(fake.end).toHaveBeenCalledTimes(1);
         });
     });
 
