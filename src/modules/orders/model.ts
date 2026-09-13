@@ -371,7 +371,10 @@ const applyOrderTax = (serialized: Record<string, unknown>) => {
     const items = Array.isArray(serialized.items) ? serialized.items : [];
     // `orderTaxBreakdown` only reads `product.price`/`quantity`/`product.taxRate` — the same
     // narrowing `applyOrderTotals` above already relies on for `LineItem`.
-    const breakdown = orderTaxBreakdown({ items: items as TaxableLineItem[] });
+    const breakdown = orderTaxBreakdown({
+        items: items as TaxableLineItem[],
+        shippingCost: serialized.shippingCost
+    });
     if (!breakdown) return;
 
     for (const [index, item] of (items as Record<string, unknown>[]).entries()) {

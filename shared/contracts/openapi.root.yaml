@@ -985,7 +985,11 @@ components:
                     format: double
                     minimum: 0
                     readOnly: true
-                    description: Sum of every line's `taxAmount`. Absent on a pre-VAT order.
+                    description: >-
+                        Every VAT collected on this order: the lines' own `taxAmount`, plus the VAT
+                        on `shippingCost` — apportioned pro-rata across the lines by value and
+                        taxed at each line's own rate, since delivery is taxed as ancillary to what
+                        it delivers. Absent on a pre-VAT order.
                 notes:
                     type: string
                     description: Optional order notes

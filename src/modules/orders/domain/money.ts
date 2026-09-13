@@ -88,3 +88,33 @@ export const subtractMoney = (minuend: Money, subtrahend: Money): Money =>
  */
 export const scaleMoneyByRate = (amount: Money, rate: number): Money =>
     asMoney(Math.round(amount * rate));
+
+/**
+ * Splits an integer amount pro-rata across a set of weights (e.g. each order line's own gross
+ * value), so the parts always sum EXACTLY to `total` — the one thing a plain division can't
+ * promise once cents don't divide evenly. Flooring every share first guarantees no share
+ * overshoots; the leftover unit(s) that flooring leaves behind go to the LARGEST weight — the
+ * conventional choice — rather than an arbitrary one, or a share that silently vanishes.
+ *
+ * All weights zero (nothing to apportion onto) returns all-zero shares rather than dividing by
+ * zero — there is no meaningful split of a shipping charge across lines that are themselves free.
+ * @param total - the amount to split, in minor units
+ * @param weights - each recipient's share weight, in the same units — e.g. a line's own gross value
+ * @returns one share per weight, in the same order, summing exactly to `total`
+ */
+export const apportion = (total: Money, weights: readonly Money[]): Money[] => {
+    const totalWeight = addMoney(...weights);
+    if (totalWeight === NO_MONEY) return weights.map(() => NO_MONEY);
+
+    const shares = weights.map((weight) => asMoney(Math.floor((total * weight) / totalWeight)));
+    const remainder = subtractMoney(total, addMoney(...shares));
+    if (remainder === NO_MONEY) return shares;
+
+    // The largest weight absorbs the rounding remainder — first one found on a tie, deterministically.
+    let largestIndex = 0;
+    for (const [index, weight] of weights.entries())
+        if (weight > weights[largestIndex]) largestIndex = index;
+
+    shares[largestIndex] = addMoney(shares[largestIndex], remainder);
+    return shares;
+};

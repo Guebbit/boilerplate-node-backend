@@ -8,6 +8,7 @@
 
 import {
     addMoney,
+    apportion,
     scaleMoney,
     scaleMoneyByRate,
     subtractMoney,
@@ -44,6 +45,13 @@ export interface OrderTaxBreakdown {
 /** An order, as far as its VAT breakdown is concerned. */
 export interface OrderTaxInput {
     items: readonly TaxableLineItem[];
+    /**
+     * The shipping cost frozen at checkout. Delivery carries no rate of its own — it is taxed as
+     * ancillary to the goods it delivers — so this is apportioned pro-rata across the lines by
+     * their own gross value, then taxed at each line's own rate. `unknown` because it arrives as
+     * raw aggregate output; absent on an order that chose no delivery method.
+     */
+    shippingCost?: unknown;
 }
 
 /**
@@ -63,14 +71,23 @@ const frozenRate = (item: TaxableLineItem): number | undefined =>
 
 /**
  * Every VAT figure an order's response and invoice need, derived from each line's FROZEN price,
- * quantity and rate. A single line missing `taxRate` makes the WHOLE order pre-VAT — `undefined`,
- * rather than a partial breakdown that would imply a rate that was never actually charged.
- * @param items - the order's lines, as serialized (raw aggregate output)
+ * quantity and rate, plus shipping's own apportioned share. A single line missing `taxRate` makes
+ * the WHOLE order pre-VAT — `undefined`, rather than a partial breakdown that would imply a rate
+ * that was never actually charged.
+ * @param order - the order's lines and its frozen shipping cost
  * @returns the full breakdown, or `undefined` for a pre-VAT order
  */
-export const orderTaxBreakdown = ({ items }: OrderTaxInput): OrderTaxBreakdown | undefined => {
+export const orderTaxBreakdown = ({
+    items,
+    shippingCost
+}: OrderTaxInput): OrderTaxBreakdown | undefined => {
     const rates = items.map((item) => frozenRate(item));
     if (rates.includes(undefined)) return undefined;
+
+    const grossAmounts = items.map((item) =>
+        scaleMoney(toMinorUnits(item.product?.price), wholeCount(item.quantity))
+    );
+    const shippingShares = apportion(toMinorUnits(shippingCost), grossAmounts);
 
     let netTotal: Money = NO_MONEY;
     let taxTotal: Money = NO_MONEY;
@@ -78,12 +95,14 @@ export const orderTaxBreakdown = ({ items }: OrderTaxInput): OrderTaxBreakdown |
     const lines = items.map((item, index) => {
         // Every rate was checked present just above — proven, not merely assumed, so `!` applies.
         const rate = rates[index]!;
-        const gross = scaleMoney(toMinorUnits(item.product?.price), wholeCount(item.quantity));
+        const gross = grossAmounts[index];
         const tax = extractTax(gross, rate);
         const net = subtractMoney(gross, tax);
+        // Shipping's own apportioned slice, taxed at THIS line's rate — ancillary to the goods.
+        const shippingTax = extractTax(shippingShares[index], rate);
 
         netTotal = addMoney(netTotal, net);
-        taxTotal = addMoney(taxTotal, tax);
+        taxTotal = addMoney(taxTotal, tax, shippingTax);
         return { taxAmount: toDecimalAmount(tax), netAmount: toDecimalAmount(net) };
     });
 

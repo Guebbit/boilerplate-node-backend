@@ -10,8 +10,11 @@
 import fc from 'fast-check';
 import {
     addMoney,
+    apportion,
     NO_MONEY,
     scaleMoney,
+    scaleMoneyByRate,
+    subtractMoney,
     toDecimalAmount,
     toMinorUnits,
     wholeCount
@@ -175,5 +178,125 @@ describe('wholeCount', () => {
             }),
             RUN
         );
+    });
+});
+
+/** An arbitrary integer number of minor units — `Money` is a brand, not a constructible type. */
+const money = () => fc.integer({ min: 0, max: 10_000_000 }).map((n) => toMinorUnits(n / 100));
+
+describe('subtractMoney', () => {
+    it('is exact integer subtraction', () => {
+        fc.assert(
+            fc.property(money(), money(), (a, b) => {
+                expect(subtractMoney(a, b)).toBe(a - b);
+            }),
+            RUN
+        );
+    });
+
+    it('added back to the subtrahend reconstructs the minuend', () => {
+        fc.assert(
+            fc.property(money(), money(), (a, b) => {
+                expect(addMoney(subtractMoney(a, b), b)).toBe(a);
+            }),
+            RUN
+        );
+    });
+});
+
+describe('scaleMoneyByRate', () => {
+    it('returns a finite integer for any rate at all', () => {
+        fc.assert(
+            fc.property(
+                money(),
+                fc.double({ noNaN: true, noDefaultInfinity: true, min: -10, max: 10 }),
+                (amount, rate) => {
+                    const share = scaleMoneyByRate(amount, rate);
+
+                    expect(Number.isFinite(share)).toBe(true);
+                    expect(Number.isInteger(share)).toBe(true);
+                }
+            ),
+            RUN
+        );
+    });
+
+    it('charges nothing at a zero rate, and the whole amount at a rate of 1', () => {
+        fc.assert(
+            fc.property(money(), (amount) => {
+                expect(scaleMoneyByRate(amount, 0)).toBe(NO_MONEY);
+                expect(scaleMoneyByRate(amount, 1)).toBe(amount);
+            }),
+            RUN
+        );
+    });
+
+    it('is exact on a value known to be float-imprecise: 19.90 in cents times 0.22/1.22', () => {
+        // `19.9 * 100 === 1989.9999999999998` — the exact float dust VAT.md flags. `toMinorUnits`
+        // already rounds it away; this confirms a SECOND multiply (the rate) on the result stays
+        // exact too, rather than compounding the imprecision into an off-by-one cent.
+        const gross = toMinorUnits(19.9);
+        expect(gross).toBe(1990);
+        expect(scaleMoneyByRate(gross, 0.22 / 1.22)).toBe(359);
+    });
+});
+
+describe('apportion', () => {
+    it('always sums exactly to the total, for any split at all', () => {
+        fc.assert(
+            fc.property(
+                money(),
+                fc.array(money(), { minLength: 1, maxLength: 20 }),
+                (total, weights) => {
+                    const shares = apportion(total, weights);
+
+                    expect(addMoney(...shares)).toBe(total);
+                    expect(shares).toHaveLength(weights.length);
+                }
+            ),
+            RUN
+        );
+    });
+
+    it('never produces a negative share for a non-negative total and weights', () => {
+        fc.assert(
+            fc.property(money(), fc.array(money(), { maxLength: 20 }), (total, weights) => {
+                for (const share of apportion(total, weights))
+                    expect(share).toBeGreaterThanOrEqual(0);
+            }),
+            RUN
+        );
+    });
+
+    it('splits evenly when it divides evenly', () => {
+        const equalWeights = [toMinorUnits(1), toMinorUnits(1), toMinorUnits(1)];
+        expect(apportion(toMinorUnits(3), equalWeights)).toEqual([100, 100, 100]);
+    });
+
+    it('gives the whole remainder to the single largest weight on an uneven split', () => {
+        // 100 cents split 2:1 is 66.67/33.33 before rounding — floor gives 66/33, remainder 1
+        // goes to the larger share.
+        const shares = apportion(toMinorUnits(1), [toMinorUnits(2), toMinorUnits(1)]);
+        expect(shares).toEqual([67, 33]);
+    });
+
+    it('gives the whole amount to a single weight', () => {
+        expect(apportion(toMinorUnits(1), [toMinorUnits(1)])).toEqual([100]);
+    });
+
+    it('assigns every leftover cent to the same largest weight when there are more lines than cents', () => {
+        // 1 cent split across 3 equal lines: each floors to 0, and the single leftover cent goes
+        // to the first of the tied-largest weights — never split further, never dropped.
+        const equalWeights = [toMinorUnits(1), toMinorUnits(1), toMinorUnits(1)];
+        expect(apportion(toMinorUnits(0.01), equalWeights)).toEqual([1, 0, 0]);
+    });
+
+    it('returns all-zero shares when every weight is zero, rather than dividing by zero', () => {
+        const zeroWeights = [NO_MONEY, NO_MONEY, NO_MONEY];
+        expect(apportion(toMinorUnits(10), zeroWeights)).toEqual([0, 0, 0]);
+    });
+
+    it('returns an empty split for no weights at all', () => {
+        expect(apportion(toMinorUnits(10), [])).toEqual([]);
     });
 });

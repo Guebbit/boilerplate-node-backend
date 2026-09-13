@@ -87,3 +87,45 @@ describe('orderTaxBreakdown — a fully-VAT order', () => {
         expect(breakdown?.lines[0].netAmount).toBeGreaterThanOrEqual(0);
     });
 });
+
+describe('orderTaxBreakdown — shipping, apportioned pro-rata by line value', () => {
+    it("folds shipping's own tax into taxTotal, on top of the lines' own", () => {
+        // One line, so shipping's whole value is apportioned onto it: 5.00 shipping taxed at the
+        // line's own 22% is round(500 × 0.22/1.22) = 90 → 0.90, on top of the line's own 2.18.
+        const withoutShipping = orderTaxBreakdown({ items: [line(19.9, 1, 0.22)] });
+        const withShipping = orderTaxBreakdown({ items: [line(19.9, 1, 0.22)], shippingCost: 5 });
+
+        expect(withShipping?.taxTotal).toBeCloseTo((withoutShipping?.taxTotal ?? 0) + 0.9, 6);
+    });
+
+    it("never changes a line's own taxAmount/netAmount — shipping's tax is a total-only addition", () => {
+        const withShipping = orderTaxBreakdown({ items: [line(19.9, 1, 0.22)], shippingCost: 5 });
+
+        expect(withShipping?.lines).toEqual([{ taxAmount: 3.59, netAmount: 16.31 }]);
+    });
+
+    it("splits shipping's tax across lines by their own gross value, each at its own rate", () => {
+        // Two equal-value lines at different rates: shipping's 10.00 splits 50/50, each half
+        // (5.00) taxed at ITS line's own rate — not the same rate applied to the whole shipping fee.
+        const breakdown = orderTaxBreakdown({
+            items: [line(10, 1, 0.22), line(10, 1, 0)],
+            shippingCost: 10
+        });
+        const withoutShipping = orderTaxBreakdown({ items: [line(10, 1, 0.22), line(10, 1, 0)] });
+
+        // The zero-rated line contributes nothing extra; the standard-rated line's half of
+        // shipping (5.00) adds round(500 × 0.22/1.22) = 90 → 0.90.
+        expect(breakdown?.taxTotal).toBeCloseTo((withoutShipping?.taxTotal ?? 0) + 0.9, 6);
+    });
+
+    it('adds nothing for a checkout that chose no delivery method', () => {
+        const withUndefined = orderTaxBreakdown({ items: [line(19.9, 1, 0.22)] });
+        const withZero = orderTaxBreakdown({ items: [line(19.9, 1, 0.22)], shippingCost: 0 });
+
+        expect(withUndefined).toEqual(withZero);
+    });
+
+    it('is still undefined for a pre-VAT order, regardless of shipping', () => {
+        expect(orderTaxBreakdown({ items: [line(19.9, 1)], shippingCost: 5 })).toBeUndefined();
+    });
+});
