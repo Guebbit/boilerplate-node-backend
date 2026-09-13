@@ -104,14 +104,19 @@ stale, and the frontend's copy will look like it belongs to the _other_ backend.
 So pull both sides before concluding anything about pairing. A genuine fork is rare; a stale
 checkout is the ordinary explanation, and the two are indistinguishable from the message alone.
 
-### Seed credentials are matched by hand, on purpose
+### Seed credentials are published, not copied
 
-`NODE_SEED_ADMIN_PASSWORD` / `NODE_SEED_USER_PASSWORD` here must agree with the literals in the
-frontend's `boilerplate-vue-frontend/tests/support/e2e/accounts.ts`. Nothing enforces it, and that is a decision rather than
-an omission: divergence is not silent, because `cy.loginAs()` then cannot log in and the suite goes
-red on the next run. Routing those credentials through `cy.env()` instead would buy a clearer
-failure message at the cost of `before()`-hook ordering in every spec — worth revisiting only if
-someone actually runs e2e against a backend with `NODE_SEED_*` overridden.
+`NODE_SEED_ADMIN_PASSWORD` / `NODE_SEED_USER_PASSWORD` are resolved here and SERVED: the demo
+profile's `GET /__test/scenario` answers with every seeded login, and the frontend's
+`boilerplate-vue-frontend/tests/support/e2e/scenario.ts` reads them rather than keeping literals
+of its own. Override a
+password here and the paired suite follows on its next run, with nothing to edit on the other side.
+
+The live profile has no such route — a real deployment mounts no `/__test/*` — so it gets the same
+answer as a file: `scenario:apply --describe-to=<file>` writes exactly what the route serves, and
+`LIVE_RESET_COMMAND` carries a `{describeTo}` placeholder for it.
+
+See [Demo profile](./demo-profile.md#how-a-scenario-is-built).
 
 ## The shared-file list, and what earns a place on it
 
