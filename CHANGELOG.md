@@ -14,6 +14,14 @@ a breaking change is one a generated client cannot absorb without being regenera
   in the paired frontend read those three fields on an order. No deployment of this boilerplate
   had real order data yet, so the one-off script that would have stripped the leftover fields on
   existing rows was deleted unrun rather than kept as dead weight; new orders never write them.
+- **`OrderLineProduct` drops `imageUrl`/`thumbnailUrl`; `OrderItem` gains `current`.** The picture
+  is not a term of the sale, and freezing a url rather than the bytes never made it durable — the
+  file it names can be replaced or hard-deleted at any time. `current` resolves it LIVE from the
+  catalogue product instead: `{ imageUrl, thumbnailUrl? }`, or `null` once that product is gone,
+  which is what lets "buy again" tell a deleted product apart from one that never had a picture. A
+  client rendering an order's line image must read `items[].current`, not `items[].product`; a
+  `null` renders `NODE_DEFAULT_IMAGE_PRODUCT`'s placeholder, not an error. See
+  `docs/theory/defences/`.
 - **`User.admin` is `User.role`.** The boolean became a role NAME, because a boolean could only
   ever say "unrestricted or not" and the model now separates the shop from the installation: a
   person holds one role inside the tenant and, rarely, a second over the platform. The seeded

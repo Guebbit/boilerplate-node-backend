@@ -137,6 +137,11 @@ export type OrderModel = Model<OrderDocument>;
  * reused: the two counters describe the warehouse right now, and an order line must not be ABLE
  * to store them, not merely choose not to.
  *
+ * No `imageUrl`/`thumbnailUrl` either — the picture is not a term of the sale, and freezing a
+ * url rather than the bytes never made it durable: the file it names can be replaced or
+ * unlinked at any time. `./current` resolves it LIVE instead, from the catalogue id this schema
+ * still carries. See SECURITY_HOLES_7_STORAGE_QUOTA (decision 2).
+ *
  * `{ timestamps: true }`, matching `productSchema`: a subdocument stamps its own `createdAt`/
  * `updatedAt` on insert regardless of the parent's timestamps option, which is why
  * `orders/factories.ts` carries the catalogue row's own dates in explicitly rather than leaving
@@ -147,8 +152,6 @@ const orderLineProductSchema = new Schema(
         title: { type: String, required: true },
         price: { type: Number, required: true },
         description: { type: String },
-        imageUrl: { type: String },
-        thumbnailUrl: { type: String },
         categories: { type: [String] },
         tags: { type: [String] },
         active: { type: Boolean },

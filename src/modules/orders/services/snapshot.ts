@@ -67,9 +67,15 @@ export const freezeOrderLines = (
     quantities: readonly number[]
 ): Promise<OrderDocumentItem[]> =>
     resolveSnapshotProducts(locale, products).then((resolvedProducts) =>
-        resolvedProducts.map((product, index) => ({
-            product,
-            quantity: quantities[index],
-            locale
-        }))
+        resolvedProducts.map((product, index) => {
+            // The picture is never frozen — `orderLineProductSchema` has nowhere to put it, and
+            // dropping it here rather than leaving Mongoose's strict mode to ignore it on save
+            // says so in the one place a reader of this function would look.
+            const { imageUrl: _imageUrl, thumbnailUrl: _thumbnailUrl, ...frozenProduct } = product;
+            return {
+                product: frozenProduct,
+                quantity: quantities[index],
+                locale
+            };
+        })
     );
