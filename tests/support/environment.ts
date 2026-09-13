@@ -1,4 +1,20 @@
 /**
+ * Put every variable back as it was read: a value restored, a key that did not exist removed
+ * again — including one the body itself created.
+ *
+ * The distinction is the point: deleting a key that held a value, or leaving an empty string where
+ * there was no key, are both a changed environment for whatever reads it next.
+ *
+ * @param previous - variable name → the value it held, or `undefined` for "no key at all"
+ */
+const restore = (previous: ReadonlyMap<string, string | undefined>): void => {
+    for (const [key, value] of previous) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+    }
+};
+
+/**
  * Run a body with one environment variable set, and put the environment back afterwards.
  *
  * Every config value in this codebase is read lazily, at the point of use, PRECISELY so a test can
@@ -6,22 +22,21 @@
  * with the restore: a variable left changed leaks into every later case in the file, and the case
  * that fails is not the one that changed it.
  *
- * The restore is in a `finally` and distinguishes "was unset" from "was empty": deleting a key
- * that held a value, or leaving an empty string where there was no key, are both a changed
- * environment for whatever reads it next.
+ * @param key - the variable to set
+ * @param value - what to set it to
+ * @param body - what to run with it set
  */
 export const withEnvironment = async (
     key: string,
     value: string,
     body: () => Promise<void>
 ): Promise<void> => {
-    const previous = process.env[key];
+    const previous = new Map([[key, process.env[key]]]);
     process.env[key] = value;
     try {
         await body();
     } finally {
-        if (previous === undefined) delete process.env[key];
-        else process.env[key] = previous;
+        restore(previous);
     }
 };
 
@@ -36,7 +51,7 @@ export const withEnvironment = async (
  * @param body - what to run without them
  */
 export const withoutEnvironment = async (
-    keys: string[],
+    keys: readonly string[],
     body: () => Promise<void>
 ): Promise<void> => {
     const previous = new Map(keys.map((key) => [key, process.env[key]]));
@@ -44,6 +59,29 @@ export const withoutEnvironment = async (
     try {
         await body();
     } finally {
-        for (const [key, value] of previous) if (value !== undefined) process.env[key] = value;
+        restore(previous);
     }
+};
+
+/**
+ * {@link withoutEnvironment} for a whole FILE: every case starts with `keys` unset, and the
+ * worker's own values are back before the next file runs.
+ *
+ * For a suite whose subject IS the configuration — it drives these variables case by case, so
+ * wrapping each one in a body would be noise. Saved rather than merely deleted, for the same
+ * reason {@link withoutEnvironment} exists at all: the worker may have been given a value by
+ * `tests/support/setup.ts`, and `process.env` is shared by every suite that worker runs.
+ *
+ * @param keys - the variables this file owns for its duration
+ */
+export const withoutEnvironmentInThisFile = (keys: readonly string[]): void => {
+    const previous = new Map(keys.map((key) => [key, process.env[key]]));
+
+    beforeEach(() => {
+        for (const key of keys) delete process.env[key];
+    });
+
+    afterEach(() => {
+        restore(previous);
+    });
 };
