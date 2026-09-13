@@ -61,9 +61,9 @@ describe('cart routes — authorization', () => {
         );
 
         expect(keyed).toEqual(['POST /checkout']);
-        expect(
-            routeTable(router).find(({ path }) => path === '/checkout')?.permissionKey
-        ).toBe('cart.checkout');
+        expect(routeTable(router).find(({ path }) => path === '/checkout')?.permissionKey).toBe(
+            'cart.checkout'
+        );
     });
 });
 

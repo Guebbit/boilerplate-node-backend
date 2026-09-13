@@ -349,7 +349,11 @@ export const userRepository: Repository<UserDocument> & {
                                 $set: {
                                     verifiedAt: { $ifNull: ['$verifiedAt', '$$NOW'] },
                                     role: {
-                                        $cond: [{ $eq: ['$role', 'unverified'] }, 'customer', '$role']
+                                        $cond: [
+                                            { $eq: ['$role', 'unverified'] },
+                                            'customer',
+                                            '$role'
+                                        ]
                                     }
                                 }
                             }

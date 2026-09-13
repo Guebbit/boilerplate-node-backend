@@ -82,7 +82,8 @@ describe('every route requiring an admin (contract-derived)', () => {
     // through its routes. The per-role sweep below already covers them correctly.
     const requiresAdmin = routes.filter(
         (route) =>
-            route.guards.includes('requirePermissionGuard') && route.permissionKey !== 'cart.checkout'
+            route.guards.includes('requirePermissionGuard') &&
+            route.permissionKey !== 'cart.checkout'
     );
 
     it.each(requiresAdmin.map((route) => [signature(route), route] as const))(

@@ -77,7 +77,10 @@ describe('payment routes', () => {
         // `cart.checkout` is excluded: it gates the three customer-facing routes below and is the
         // customer's own key, not an admin one — see the module docblock's "Verified" row.
         const adminGuarded = routeTable(router)
-            .filter(({ permissionKey }) => permissionKey !== undefined && permissionKey !== 'cart.checkout')
+            .filter(
+                ({ permissionKey }) =>
+                    permissionKey !== undefined && permissionKey !== 'cart.checkout'
+            )
             .map(({ method, path }) => `${method} ${path}`);
 
         expect(adminGuarded).toEqual([

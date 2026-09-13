@@ -34,7 +34,9 @@ export const up = (database: Db): Promise<void> =>
                             '$role'
                         ]
                     },
-                    verifiedAt: { $cond: ['$verified', { $ifNull: ['$verifiedAt', '$createdAt'] }, null] }
+                    verifiedAt: {
+                        $cond: ['$verified', { $ifNull: ['$verifiedAt', '$createdAt'] }, null]
+                    }
                 }
             },
             { $unset: 'verified' }

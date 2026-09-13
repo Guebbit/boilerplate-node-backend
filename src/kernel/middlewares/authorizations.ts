@@ -306,9 +306,7 @@ export const requirePermission = (key: string) => {
                 actor_scope: scope,
                 metadata: { reason: 'missing_permission', permission: key }
             });
-            rejectResponse(response, 403, [
-                { code: deniedCode, message: t(deniedMessageKey) }
-            ]);
+            rejectResponse(response, 403, [{ code: deniedCode, message: t(deniedMessageKey) }]);
             return;
         }
 
@@ -510,4 +508,3 @@ export const requireFreshAuthWhen =
         }
         requireFreshAuth(maxAgeSeconds)(request, response, next);
     };
-
