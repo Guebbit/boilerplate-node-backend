@@ -72,7 +72,7 @@ const collectImageUrls = (): [label: string, url: string][] => {
         // Synchronous on purpose: `it.each` needs the list while the file is being collected, and
         // an async import would hand it a promise. ts-jest runs this suite as CommonJS, so a
         // `require` of a `.ts` module resolves in place.
-        // eslint-disable-next-line @typescript-eslint/no-require-imports -- synchronous load inside jest.isolateModules, see the note above
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- synchronous load needed while the file list is being collected, see the note above
         const loaded = require(seeds) as Record<string, unknown>;
         const name = file.replace(/\.ts$/, '');
         for (const [exported, value] of Object.entries(loaded))
@@ -87,9 +87,9 @@ const imageUrls = collectImageUrls();
 describe('seed row imageUrls', () => {
     it('collects a url from every row that has one', () => {
         // Guards the test itself: if the rows are restructured so the traversal above stops
-        // finding them, every assertion below would vacuously pass over an empty list. 132
-        // products (5 named + 126 combinatorial) and 2 users carry one today, drawing from a
-        // fixed pool of 27 physical files — the count here is far higher than 27, since most
+        // finding them, every assertion below would vacuously pass over an empty list. Every
+        // named and filler product, and every seeded user, carries one today, drawing from a
+        // fixed pool of physical files — the count here is far higher than that pool, since most
         // rows share a photo. The floor is deliberately low enough to survive a row being
         // retired and high enough to catch a broken walk.
         expect(imageUrls.length).toBeGreaterThanOrEqual(5);

@@ -173,7 +173,7 @@ module.exports = {
         {
             name: 'src-cannot-reach-scenarios',
             comment:
-                "scenarios/ imports a module's repository, model and factories directly — the inversion that lets a production image omit the folder outright, but only if nothing PRODUCTION under src/ reaches it, even transitively through a helper. src/app/demo.ts is the one file allowed to import it (it mounts the reset route that has to walk the same table scenarios/apply.ts does); src/app.ts and src/cluster.ts are exempted too, since the only way either reaches scenarios/ is by composing that same file. A co-located spec is exempted for an unrelated reason: it boots the real app over supertest, and every contract/integration test does that regardless of scenarios/ — a production image never ships tests/ either way.",
+                "scenarios/ imports a module's repository, model and factories directly — the inversion that lets a production image omit the folder outright, but only if nothing PRODUCTION under src/ reaches it, even transitively through a helper. src/app/demo.ts is the one file allowed to import it (it mounts POST /__test/restore, which has to walk the same table scenarios/apply.ts does); src/app.ts and src/cluster.ts are exempted too, since the only way either reaches scenarios/ is by composing that same file. A co-located spec is exempted for an unrelated reason: it boots the real app over supertest, and every contract/integration test does that regardless of scenarios/ — a production image never ships tests/ either way.",
             severity: 'error',
             from: {
                 path: '^src/',

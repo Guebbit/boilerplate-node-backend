@@ -1,7 +1,7 @@
 /**
  * @module
  * Contract tests for `GET /audit` — the one route this module owns. `authenticateAs` only spells
- * `admin`/`user`, so callers here log in directly as the two roles the endpoint actually
+ * `owner`/`user`, so callers here log in directly as the two roles the endpoint actually
  * distinguishes: a holder of `audit.read` and one who never gets past the guard.
  */
 

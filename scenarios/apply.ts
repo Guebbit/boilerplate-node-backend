@@ -155,7 +155,7 @@ async function seed() {
      * The flows wrote through the API, so most of this is already invalidated — but the module
      * fixtures underneath them went straight to Mongo, and those answers are still cached.
      *
-     * Fails open, deliberately (§9): seeding must succeed against a stack whose Redis is not up.
+     * Fails open, deliberately: seeding must succeed against a stack whose Redis is not up.
      * `reachable` is therefore read but never thrown on — it only decides which line gets
      * logged, so the fail-open is visible in the output instead of silently looking like a
      * cache that happened to be empty.

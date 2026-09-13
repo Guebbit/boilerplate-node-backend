@@ -27,7 +27,8 @@ import type { OrderDocument } from './model';
  * schema has no path for either, so a fixture that pinned one would silently lose it on write.
  * `createdAt`/`updatedAt` are the CATALOGUE row's, carried in explicitly: a subdocument's
  * timestamps stamp on insert regardless of the parent's `{ timestamps: false }`, which would
- * otherwise make every export non-deterministic.
+ * otherwise leave the snapshot dated to when the ORDER was placed rather than to the product row
+ * it is a snapshot of.
  */
 export type OrderSnapshotInput = Omit<OverridesFor<Product>, 'onHand' | 'reserved'> &
     Required<Pick<Product, 'id' | 'title' | 'price'>>;

@@ -1,6 +1,8 @@
 #!/usr/bin/env tsx
 /**
- * Rebuild every generated artifact this repo commits — `npm run regenerate`.
+ * Rebuild every generated artifact — `npm run regenerate`. Most of what it writes is gitignored
+ * (`api/`, `src/types/asyncapi.generated.ts`); the contract bundles and the docs pages the
+ * `docs:*` steps rewrite are the committed exceptions.
  *
  * Run it after changing anything a generator reads: a module's `openapi.yaml` or `asyncapi.yaml`,
  * `shared/contracts/asyncapi.workers.yaml`, a `probes.ts`.

@@ -1,9 +1,9 @@
 /**
  * @module
  * The `blank` scenario: harness infrastructure only — the access model, the four named accounts,
- * and the languages `products.ts` elsewhere depends on. No catalogue, no orders, no carts:
- * nothing here is shop-shaped. Behaviour e2e specs that create what they assert on restore into
- * this instead of `shop`.
+ * and the fallback locale a product a SPEC creates still needs active. No catalogue, no orders,
+ * no carts: nothing here is shop-shaped. Behaviour e2e specs that create what they assert restore
+ * into this instead of `shop`.
  */
 
 import type { SeedOutcome } from '@scenarios/seed';

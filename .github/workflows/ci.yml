@@ -158,10 +158,9 @@ jobs:
         # lint THIS repo's copy and pass, because a forked spec is still a valid spec. What nobody
         # could see was the fork itself.
         #
-        # Two of the ten sit at different paths in each repo (the seed identities are production
-        # seed data here and test scaffolding there; the realtime types are named for their
-        # generator here and their consumer there), which is why the list is path *pairs* rather
-        # than names — a same-path check could not express them, so they went unguarded longest.
+        # The async contract's shared half sits at a different path in each repo (this repo's
+        # `asyncapi.public.yaml` is the frontend's `asyncapi.yaml`), which is why the list is path
+        # *pairs* rather than names — a same-path check could not express that one.
         #
         # The sibling is checked out read-only, at its default branch: the question is whether this
         # PR agrees with what the frontend has actually shipped, not with some pinned older copy.

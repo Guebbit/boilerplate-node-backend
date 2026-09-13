@@ -139,6 +139,8 @@ const CUSTOMER_NAMES: [key: keyof typeof SEED_CUSTOMER_IDS, username: string][] 
  */
 export const SEED_CUSTOMER_EMAILS = Object.fromEntries(
     CUSTOMER_NAMES.map(([key, username]) => [key, `${username}@example.com`])
+    // `Object.fromEntries` widens to `Record<string, string>` — it has no way to know
+    // `CUSTOMER_NAMES` covers every key of `SEED_CUSTOMER_IDS` exactly once, which it does.
 ) as Record<keyof typeof SEED_CUSTOMER_IDS, string>;
 
 /**

@@ -8,8 +8,8 @@
  * correct with two racing callers; this asks whether it stays correct, and acceptable, with fifty.
  *
  * ── Why every virtual user shares one account ────────────────────────────────────────────────
- * Deliberate, and it is the interesting part. The demo dataset has two accounts, so fifty users
- * checking out as the same customer is exactly the contention this is looking for. If you would
+ * Deliberate, and it is the interesting part. Every VU signs in as the same seeded customer, so
+ * fifty users checking out at once is exactly the contention this is looking for. If you would
  * rather measure throughput than contention, sign each VU in as its own account — but then you are
  * measuring a different question, and the reservation logic stops being under test.
  *

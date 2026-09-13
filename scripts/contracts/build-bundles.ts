@@ -3,8 +3,8 @@
  * Rebuild the documents this repo publishes from their fragments — `npm run contracts:bundle`.
  *
  * Fragments are the source of truth; the bundles stay COMMITTED because they are what spectral,
- * orval, Prism, the seed runner and `check:spec-identity` read. `--check` asserts they are not
- * stale instead of rewriting them. Name bundles to narrow the run:
+ * orval, Prism and `check:spec-identity` read. `--check` asserts they are not stale instead of
+ * rewriting them. Name bundles to narrow the run:
  *
  *   npm run contracts:bundle -- openapi asyncapi
  *

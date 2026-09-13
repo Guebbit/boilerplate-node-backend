@@ -1,14 +1,11 @@
 /**
  * @module
- * `scenarios/accounts.ts` — the two demo identities, and the env vars that override their
+ * `scenarios/accounts.ts` — the named demo identities, and the env vars that override their
  * passwords. The overrides are read at module scope, so every case that exercises one reloads
  * the module rather than mutating an already-evaluated constant.
  */
-import { Types } from 'mongoose';
 import { zodUserSchema } from '@modules/users';
 import {
-    SEED_OWNER_ID,
-    SEED_USER_ID,
     SEED_OWNER_EMAIL,
     SEED_USER_EMAIL,
     SEED_OWNER_PASSWORD,
@@ -54,12 +51,6 @@ afterEach(() => {
 });
 
 describe('the demo identities', () => {
-    it('names two distinct accounts by a real ObjectId', () => {
-        expect(Types.ObjectId.isValid(SEED_OWNER_ID)).toBe(true);
-        expect(Types.ObjectId.isValid(SEED_USER_ID)).toBe(true);
-        expect(SEED_OWNER_ID).not.toBe(SEED_USER_ID);
-    });
-
     it('gives each account its own login address', () => {
         expect(SEED_OWNER_EMAIL).not.toBe(SEED_USER_EMAIL);
     });

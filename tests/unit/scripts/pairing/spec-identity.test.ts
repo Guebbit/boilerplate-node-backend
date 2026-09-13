@@ -138,7 +138,8 @@ describe('SHARED_FILES', () => {
 
     it('holds at least one pair whose paths differ between the repos', () => {
         // Guards the reason the list is pairs at all: if this ever became empty, the structure
-        // could quietly collapse back to single names and the demo dataset would fall out.
+        // could quietly collapse back to single names, and the async contract's cross-path pair
+        // (`asyncapi.public.yaml` here, `asyncapi.yaml` there) would go unrepresentable.
         expect(CROSS_PATH).toBeDefined();
         expect(CROSS_PATH.backend).not.toBe(CROSS_PATH.frontend);
     });
@@ -283,7 +284,7 @@ describe('formatSharedFileProblems', () => {
     });
 
     it('names both paths when a cross-path pair forks', () => {
-        // "dataset.json is forked" would send the reader to one of two files with no way to
+        // "asyncapi.yaml is forked" would send the reader to one of two files with no way to
         // tell which repo the other one is in.
         const here = root(sharedFiles(HERE));
         const there = root({ ...sharedFiles(THERE), [CROSS_PATH.frontend]: 'forked' });

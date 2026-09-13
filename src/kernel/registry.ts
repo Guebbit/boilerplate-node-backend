@@ -194,8 +194,7 @@ export interface AppModule {
      * directions. Declared here rather than only inside `scenarios/` so deleting a module deletes
      * its guarantees the same way {@link permissions} does.
      *
-     * Absent for a module with nothing to guarantee, which is most of them: `antibot`, `api-keys`,
-     * `feedback` and `observability` say nothing, on purpose.
+     * Absent for a module with nothing to guarantee, which is most of them, on purpose.
      */
     scenario?: Readonly<Record<string, readonly string[]>>;
 }

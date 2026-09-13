@@ -224,8 +224,8 @@ installSecurity(app);
 installRequestContext(app);
 installTelemetry(app);
 installStatic(app);
-// Demo control surface (reset + outbox) — inert outside `npm run demo`. Before installRoutes,
-// whose 404 catch-all would swallow anything mounted after it.
+// Demo control surface (/__test/restore, /__test/scenario, /__test/emails) — inert outside
+// `npm run demo`. Before installRoutes, whose 404 catch-all would swallow anything mounted after it.
 if (isDemoMode()) installDemo(app);
 installRoutes(app);
 installErrorHandling(app);
