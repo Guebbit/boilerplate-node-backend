@@ -370,6 +370,7 @@ components:
                     type: number
                     format: double
                     minimum: 0
+                    description: Gross — VAT included. Same convention as `Product.price`.
                 onHand:
                     type: integer
                     minimum: 0
@@ -529,6 +530,7 @@ components:
                     type: number
                     format: double
                     minimum: 0
+                    description: Gross — VAT included. Same convention as `Product.price`.
                 # The opening count — the one place an ABSOLUTE stock number is honest, because
                 # a product being created has no prior value to race with and no history to
                 # contradict. Every later change is a signed `/inventory` transition.
@@ -595,6 +597,7 @@ components:
                     type: number
                     format: double
                     minimum: 0
+                    description: Gross — VAT included. Same convention as `Product.price`.
                 # The opening count — the one place an ABSOLUTE stock number is honest, because
                 # a product being created has no prior value to race with and no history to
                 # contradict. Every later change is a signed `/inventory` transition.
@@ -643,6 +646,7 @@ components:
                     type: number
                     format: double
                     minimum: 0
+                    description: Gross — VAT included. Same convention as `Product.price`.
                 active:
                     type: boolean
                 requiresShipping:
@@ -671,6 +675,7 @@ components:
                     type: number
                     format: double
                     minimum: 0
+                    description: Gross — VAT included. Same convention as `Product.price`.
                 active:
                     type: boolean
                 requiresShipping:

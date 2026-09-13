@@ -656,6 +656,10 @@ components:
                     type: number
                     format: double
                     minimum: 0
+                    description: >-
+                        Gross — what the customer pays, VAT included. Never net-of-tax: the invoice
+                        derives the net amount and the VAT amount FROM this, at whatever rate
+                        applies, rather than the other way around.
                 # ── The two counters and the number derived from them ──────────────────────
                 #
                 # `onHand` is how many units exist; `reserved` is how many of those an open
@@ -788,6 +792,9 @@ components:
                     type: number
                     format: double
                     minimum: 0
+                    description: >-
+                        Gross — what the customer paid, VAT included, frozen at checkout. Same
+                        convention as `Product.price`.
                 description:
                     type: string
                 active:
