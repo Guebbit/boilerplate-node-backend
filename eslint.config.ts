@@ -433,7 +433,7 @@ export default tseslint.config(
      * https://github.com/gajus/eslint-plugin-jsdoc
      */
     {
-        files: ['src/**/*.ts'],
+        files: ['src/**/*.ts', 'scenarios/**/*.ts'],
         // Co-located module specs are exempt: their exports are fixtures for one file, not API.
         ignores: ['src/modules/*/tests/**/*.ts'],
 
@@ -526,7 +526,6 @@ export default tseslint.config(
         ignores: [
             'src/modules/*/model.ts',
             'src/modules/*/repository.ts',
-            'src/modules/*/demo.ts',
             'src/modules/**/tests/**'
         ],
         rules: {
@@ -629,8 +628,8 @@ export default tseslint.config(
      * ── The one door, and why it is stated as a file ──────────────────────────────────────────
      * A module publishes `index.ts` — its runtime API — and nothing else. `fileInternalPath`
      * names that file inside the target element, so the rule is about the door rather than about
-     * the path spelling that reaches it. A module's demo factories used to be the second door,
-     * `demo.ts`; they now live in `scenarios/`, a tier of its own — see below.
+     * the path spelling that reaches it. A scenario's fixtures are `scenarios/`'s own tier, not a
+     * second door on the module — see below.
      */
     {
         settings: {
