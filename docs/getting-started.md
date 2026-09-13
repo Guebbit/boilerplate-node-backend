@@ -35,7 +35,9 @@ On Podman, also set `CONTAINER_LOGS_PATH`, `PROMTAIL_CONFIG` and `CONTAINER_LOG_
 
 That is the whole setup. The `app` container runs `npm run db:bootstrap` before starting the server,
 so the database is indexed and seeded on first boot — you get demo products, users and orders
-rather than empty lists. Both halves are idempotent, so later boots are a no-op.
+rather than empty lists. `db:sync` is idempotent; the seeder skips a database that already holds
+anything, since it builds the order book by driving real checkouts and doing that twice would give
+the shop a second history. `npm run scenario:apply:reset` rebuilds it deliberately.
 
 ::: warning Use the scripts, not a bare `compose up`
 Each script passes its runtime's Promtail override with `-f`, which is what gives Promtail a host

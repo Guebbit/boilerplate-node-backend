@@ -101,6 +101,15 @@ process.env.NODE_UPLOAD_RATE_LIMIT_MAX ??= '1000';
 process.env.NODE_PAYMENT_WEBHOOK_RATE_LIMIT_MAX ??= '1000';
 
 /**
+ * Bank transfer at checkout, which `GET /payments/methods` offers only where a deployment names
+ * both of these. Set here rather than left to a developer's `.env`: the `shop` scenario declares
+ * an `order.awaitingTransfer` guarantee, so a suite that builds it against an unconfigured
+ * environment fails on a missing payment method rather than on anything it is testing.
+ */
+process.env.NODE_BANK_TRANSFER_BENEFICIARY ??= 'Guebbit Demo Shop';
+process.env.NODE_BANK_TRANSFER_IBAN ??= 'IT60X0542811101000000123456';
+
+/**
  * The limiters count IN MEMORY here, never in Redis.
  *
  * Not a preference — a requirement. `src/app.ts` imports `dotenv/config`, so `.env` reaches the

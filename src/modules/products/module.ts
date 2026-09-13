@@ -48,10 +48,21 @@ export default {
     },
     /**
      * The catalogue states the storefront and the repositories actually branch on.
-     * `scenarios/products.ts`'s `checkProductGuarantees` verifies these against what got seeded;
-     * `scenarios/check.ts` fails the build if one goes missing.
+     *
+     * Four are the hidden or empty ones; `inStock` and `rich` are the two ORDINARY rows a screen
+     * needs a subject for — anything buyable, and one with every optional field populated, which
+     * is what a detail page and a product form have to render to be worth auditing.
+     * `scenarios/subjects.ts` pins the row behind each, and
+     * `tests/integration/scenarios/shop.test.ts` checks each really has the property.
      */
     scenario: {
-        shop: ['product.softDeleted', 'product.inactive', 'product.outOfStock', 'product.barebones']
+        shop: [
+            'product.softDeleted',
+            'product.inactive',
+            'product.outOfStock',
+            'product.barebones',
+            'product.inStock',
+            'product.rich'
+        ]
     }
 } satisfies AppModule;

@@ -4,6 +4,22 @@ info:
     version: '3.0.0'
 
 paths:
+    /payments/methods:
+        get:
+            tags: [Payments]
+            summary: List payment methods
+            description: Which methods this deployment offers, so the frontend hard-codes none. `card` is always present; `bank_transfer` only once its beneficiary and IBAN are configured. Public — like `GET /delivery/methods`, this is pre-purchase information.
+            operationId: listPaymentMethods
+            security: []
+            responses:
+                '200':
+                    description: The methods
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PaymentMethodsResponseEnvelope'
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /payments/intent:
         post:
             tags: [Payments]
@@ -103,6 +119,54 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # Nothing to return: the payment never succeeded, or it is already refunded
                 # (`PAYMENT_NOT_REFUNDABLE`) — or `Idempotency-Key` names a request still in flight.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /payments/order/{orderId}/offline:
+        post:
+            tags: [Payments]
+            summary: Record a payment that arrived outside the provider
+            description: >-
+                An admin recording money the card provider never saw — cash at the counter, a
+                phone order paid by transfer, a bank transfer that landed. Writes the payment as
+                `manual` and runs it through the same settlement `POST /payments/{id}/confirm`
+                does: the order moves `pending → paid`, stock commits, and `ORDER_STATUS_CHANGED`
+                and `PAYMENT_SUCCEEDED` fire as usual. The amount is always the order's own total —
+                there is no partial or over-payment here, those are handled by hand, off-system.
+                Requires a session that has re-proved itself within the last few minutes — a
+                valid-but-stale token answers 401 with `errors[].code` `REAUTH_REQUIRED`, and the
+                caller re-authenticates and retries the same request.
+            operationId: recordOfflinePayment
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: orderId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: The order the money arrived for. Must still be `pending`
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RecordOfflinePaymentRequest'
+            responses:
+                '201':
+                    description: The payment, `succeeded`, with the order now `paid`
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PaymentEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # Order not pending (`PAYMENT_ORDER_NOT_PAYABLE`), a card charge already in flight
+                # at the provider (`PAYMENT_IN_FLIGHT` — recording money too could charge twice),
+                # or `Idempotency-Key` names a request still in flight.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -257,7 +321,7 @@ components:
         Payment:
             type: object
             additionalProperties: false
-            required: [id, orderId, amount, currency, status, provider]
+            required: [id, orderId, amount, currency, status, provider, method]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -289,7 +353,37 @@ components:
                         table: docs/modules/payments.md#status-transitions
                 provider:
                     type: string
-                    description: Which provider implementation handled it (`fake` in the demo).
+                    description: >-
+                        Which provider implementation handled it — `fake` in the demo, `manual` for
+                        a payment recorded by hand (`POST /payments/order/{orderId}/offline`), or a
+                        real PSP's name.
+                method:
+                    type: string
+                    enum: [card, bank_transfer, cash, other]
+                    description: >-
+                        How the money moved. `card` for anything that went through the provider
+                        port; the other three are set only by `POST
+                        /payments/order/{orderId}/offline`, from what the admin chose there.
+                reference:
+                    type: string
+                    maxLength: 120
+                    description: >-
+                        Free text identifying an offline payment — a bank transaction id, a receipt
+                        number. Set only by `POST /payments/order/{orderId}/offline`; absent from a
+                        card payment.
+                receivedAt:
+                    type: string
+                    format: date-time
+                    description: >-
+                        When the money actually arrived, as the admin recording it reported —
+                        possibly earlier than `createdAt`. Set only by `POST
+                        /payments/order/{orderId}/offline`; absent from a card payment.
+                refundedByHand:
+                    type: boolean
+                    description: >-
+                        `true` once a refunded `manual` payment has had its money returned to the
+                        customer outside this application — there is no provider to ask, so this is
+                        the admin's own record that it was done. Absent otherwise.
                 clientSecret:
                     type: string
                     description: >-
@@ -403,3 +497,61 @@ components:
                         provider recognises `pm_card_visa` (succeeds), `pm_card_declined`,
                         `pm_card_authentication_required` and `pm_card_processing`; anything else
                         succeeds.
+
+        PaymentMethodOption:
+            type: object
+            additionalProperties: false
+            required: [id]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaymentMethodId'
+                holdHours:
+                    type: number
+                    minimum: 0
+                    description: >-
+                        How long checkout holds stock for an order choosing this method
+                        (`NODE_BANK_TRANSFER_HOLD_HOURS`). Present on `bank_transfer` only —
+                        `card`'s hold is `NODE_RESERVATION_TTL_MINUTES`, a different unit, owned
+                        by `inventory` rather than a deployment choice this module makes.
+
+        PaymentMethodsResponse:
+            type: object
+            additionalProperties: false
+            required: [methods]
+            properties:
+                methods:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/PaymentMethodOption'
+
+        PaymentMethodsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/PaymentMethodsResponse'
+
+        RecordOfflinePaymentRequest:
+            type: object
+            additionalProperties: false
+            required: [method]
+            properties:
+                method:
+                    type: string
+                    enum: [bank_transfer, cash, other]
+                    description: How the money arrived. `card` is not offered here — that path is `POST /payments/intent`.
+                reference:
+                    type: string
+                    maxLength: 120
+                    description: A bank transaction id, a receipt number — whatever ties this record to the money.
+                receivedAt:
+                    type: string
+                    format: date-time
+                    description: When the money arrived. Must not be in the future. Defaults to now.

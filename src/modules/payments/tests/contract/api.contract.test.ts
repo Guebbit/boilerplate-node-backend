@@ -69,6 +69,19 @@ const paidOrder = async () => {
     return { bearer, order, paymentId };
 };
 
+describe('GET /payments/methods', () => {
+    it('matches the contract, unauthenticated included — methods are pre-purchase information', async () => {
+        const response = await api().get('/payments/methods');
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.methods.length).toBeGreaterThan(0);
+        expect(response.body.data.methods.map((method: { id: string }) => method.id)).toContain(
+            'card'
+        );
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
 describe('POST /payments/intent', () => {
     it('matches the contract for a fresh intent', async () => {
         const { bearer, order } = await authenticateWithOrder();
@@ -408,5 +421,78 @@ describe('POST /payments/order/{orderId}/refund', () => {
         expect(response).toSatisfyApiSpec();
         const payment = await paymentRepository.findById(paymentId);
         expect(payment!.status).toBe('succeeded');
+    });
+});
+
+describe('POST /payments/order/{orderId}/offline', () => {
+    it('matches the contract for recording money by hand', async () => {
+        const { bearer: adminBearer } = await authenticateAs('owner');
+        const { order } = await authenticateWithOrder();
+
+        const response = await api()
+            .post(`/payments/order/${String(order._id)}/offline`)
+            .set('Authorization', adminBearer)
+            .send({ method: 'cash', reference: 'till-1' });
+
+        expect(response.status).toBe(201);
+        expect(response.body.data.status).toBe('succeeded');
+        expect(response.body.data.provider).toBe('manual');
+        expect(response.body.data.method).toBe('cash');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('refuses the order`s own owner — recording by hand is admin-only', async () => {
+        const { bearer, order } = await authenticateWithOrder();
+
+        const response = await api()
+            .post(`/payments/order/${String(order._id)}/offline`)
+            .set('Authorization', bearer)
+            .send({ method: 'cash' });
+
+        expect(response.status).toBe(403);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for an order that does not exist', async () => {
+        const { bearer } = await authenticateAs('owner');
+
+        const response = await api()
+            .post(`/payments/order/${MISSING_ID}/offline`)
+            .set('Authorization', bearer)
+            .send({ method: 'cash' });
+
+        expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a method the contract does not allow', async () => {
+        const { bearer } = await authenticateAs('owner');
+        const { order } = await authenticateWithOrder();
+
+        const response = await api()
+            .post(`/payments/order/${String(order._id)}/offline`)
+            .set('Authorization', bearer)
+            .send({ method: 'crypto' });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for an order already paid', async () => {
+        const { bearer } = await authenticateAs('owner');
+        const { order } = await authenticateWithOrder();
+        await api()
+            .post(`/payments/order/${String(order._id)}/offline`)
+            .set('Authorization', bearer)
+            .send({ method: 'cash' });
+
+        const response = await api()
+            .post(`/payments/order/${String(order._id)}/offline`)
+            .set('Authorization', bearer)
+            .send({ method: 'cash' });
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
+        expect(response).toSatisfyApiSpec();
     });
 });

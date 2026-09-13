@@ -2,49 +2,72 @@
  * Scenario seeder.
  *
  * `scenario:apply` owns DATA; `db:sync` owns SCHEMA. `scenarios/index.ts`'s `SCENARIOS` registry
- * is the table of what to seed; this file is the RUNNER — connection, production gate and the
- * walk over that table, nothing else. The insert-if-absent policy lives in
- * `@scenarios/seed`.
+ * is the table of what to seed; this file is the RUNNER — the gates, the connection and one call
+ * into `buildScenario`, nothing else.
+ *
+ * It BOOTS THE APPLICATION IN-PROCESS, which nothing under `scenarios/` used to do. A scenario is
+ * no longer a set of rows to insert: `shop` writes its catalogue and then LIVES its history by
+ * driving the real checkout, payment, shipping and refund endpoints (`scenarios/flows/`). Those
+ * only exist behind the real middleware stack, so this runner puts the app behind a throwaway
+ * loopback listener and calls it. `NODE_APP_NO_LISTEN` keeps `src/app.ts` from binding
+ * `NODE_PORT` on the way in — a container boot runs this BEFORE the server it is seeding for.
  *
  * Runs on every container boot (see the compose `app` command → `npm run db:bootstrap`), so it
- * must be IDEMPOTENT (fixed `_id`s are inserted only if absent, so a second run is a no-op) and
- * GATED (refuses to touch a production database). Note what idempotent means here:
- * `insertIfAbsent()` SKIPS a factory row whose `_id` already exists, it does not rewrite it —
- * re-running this does NOT repair a row whose stored copy has since drifted from the one below;
- * `npm run scenario:apply:reset` is what does.
+ * is GATED three ways: it refuses a production database, it refuses a still-public seed password
+ * outside development/test, and — since driving a checkout twice makes two orders — it refuses a
+ * database that already holds anything unless `--reset` says to empty it first.
  *
  * Passwords are given in PLAIN TEXT: the model's pre-save hook hashes them. Anything hashed by
  * hand here would drift from that hook, and its plaintext would be lost with no way to recover
  * the login.
  *
  * Usage:
- *   npm run scenario:apply [scenario]        # insert the rows; scenario defaults to `shop`
- *   npm run scenario:apply:reset [scenario]  # empty the database first
+ *   npm run scenario:apply [scenario]          # seed an empty database; scenario defaults to `shop`
+ *   npm run scenario:apply:reset [scenario]    # empty it first
+ *   npm run scenario:apply -- --describe-to=x  # also write the accounts and subjects to `x`
  */
 import 'dotenv/config';
-import { start, connection, emptyDatabase } from '@infrastructure/runtime/database';
-import { clearCache, stopCache } from '@infrastructure/adapters/cache';
+import { writeFile } from 'node:fs/promises';
+import { emptyDatabase, isDatabaseEmpty } from '@infrastructure/runtime/database';
+import { clearCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
 import { runScript } from '../db/run-script';
-import { SCENARIOS, DEFAULT_SCENARIO, isScenarioName } from '@scenarios/index';
-import { resolveTranslatables } from '@kernel/registry';
-import { setTranslatables } from '@modules/locales/module';
-import { hasFallbackSeedPassword } from '@scenarios/accounts';
-import { enabledModules } from '../src/modules';
+import { DEFAULT_SCENARIO, isScenarioName, buildScenario } from '@scenarios/index';
+import { hasFallbackSeedPassword, seedCredentials } from '@scenarios/accounts';
 
 /*
- * `src/app.ts` does both of these the moment it is imported: importing THE registry pulls in
- * every module's `module.ts`, registering its `@infrastructure/i18n` ports — `locales/module.ts`'s
- * translation port, which `products.seed()` now needs. That alone registers the port, not the
- * `translatables` MANIFEST a write validates against; `locales` cannot collect that itself (the
- * same wall the port is built around), so it is built from `enabledModules` and handed in here too
- * — this runner starts no server, so it repeats `app.ts`'s two lines rather than importing it whole.
+ * Read at IMPORT time by `src/app.ts`'s auto-start, so it has to be set before the dynamic import
+ * below ever runs — and at the top level, so the cleanup path cannot import the app without it.
+ * This script wants the Express instance, never a bound `NODE_PORT`.
  */
-setTranslatables(resolveTranslatables(enabledModules));
+process.env.NODE_APP_NO_LISTEN = '1';
 
 const reset = process.argv.includes('--reset');
+
 /** The one positional argument this CLI takes — everything else is a `--flag`. */
 const scenarioArgument = process.argv.slice(2).find((argument) => !argument.startsWith('--'));
+
+/**
+ * `--describe-to=<file>`: where to write the JSON the demo profile's `GET /__test/scenario`
+ * serves — the accounts and the subject ids.
+ *
+ * A file rather than stdout, because `npm run` prints its own banner lines there and the paired
+ * frontend's live-profile reset has to parse what comes back. It is the only way a LIVE backend
+ * can describe its own dataset: `/__test/*` is never mounted on one.
+ */
+const describeTo = process.argv
+    .find((argument) => argument.startsWith('--describe-to='))
+    ?.slice('--describe-to='.length);
+
+/** The application, once {@link seed} has booted it — what the cleanup below has to shut down. */
+let application: typeof import('../src/app') | undefined;
+
+/** Import the app, connect everything a request needs, and hand back its Express instance. */
+const bootAppInProcess = () =>
+    import('../src/app').then((imported) => {
+        application = imported;
+        return imported.bootInfrastructure().then(() => imported.app);
+    });
 
 async function seed() {
     /* A boot-time seeder that can drop or overwrite a production database is a footgun. */
@@ -77,53 +100,64 @@ async function seed() {
         return;
     }
 
-    await start();
+    const app = await bootAppInProcess();
 
     if (reset) {
         await emptyDatabase();
         logger.info('Database emptied.');
+    } else if (!(await isDatabaseEmpty())) {
+        /*
+         * Warn and succeed, never throw: the compose `app` command is
+         * `npm run db:bootstrap && <start the server>`, so a non-zero exit here would stop a
+         * container whose database is already seeded from ever starting.
+         */
+        logger.info(
+            `Seeding skipped: the database already holds data. Use "npm run scenario:apply:reset ${scenarioName}" to rebuild it.`
+        );
+        return;
     }
 
     /*
-     * `SCENARIOS[scenarioName]()` owns its whole seed — the access model included; see
-     * `scenarios/index.ts`'s own docblocks for how `shop` orders its concurrent module writes.
-     * This runner names no scenario internals: it only calls whatever the registry maps the name
-     * to. `tests/cross-cutting/scenario-fixtures.test.ts` refuses a `shopModules` entry left
-     * behind after the module it names is deleted.
+     * `buildScenario` owns the whole scenario — the access model, every module's rows, the flow
+     * run against `app`, and the backdating pass after it. This runner names no scenario
+     * internals: it only calls whatever the registry maps the name to.
+     * `tests/cross-cutting/scenario-fixtures.test.ts` refuses a `shopModules` entry left behind
+     * after the module it names is deleted.
      */
-    const results = await SCENARIOS[scenarioName]();
-
-    const created = results.filter((result) => result === 'created').length;
+    const subjects = await buildScenario(scenarioName, app);
 
     /*
-     * This wrote straight to Mongo, so the API's own invalidation never ran and the cache is
-     * still holding pre-seed answers (usually empty lists). Drop them — otherwise `GET /products`
-     * keeps serving `[]` until the TTL expires. Only worth doing when something actually changed.
+     * The flows wrote through the API, so most of this is already invalidated — but the module
+     * fixtures underneath them went straight to Mongo, and those answers are still cached.
      *
      * Fails open, deliberately (§9): seeding must succeed against a stack whose Redis is not up.
      * `reachable` is therefore read but never thrown on — it only decides which line gets
      * logged, so the fail-open is visible in the output instead of silently looking like a
      * cache that happened to be empty.
      */
-    if (created > 0) {
-        const { deleted, reachable } = await clearCache();
-        if (reachable) logger.info(`Cache cleared after seeding: ${deleted} keys removed.`);
-        else
-            logger.warn(
-                'Cache NOT cleared after seeding: Redis is unreachable. Seeding succeeded, but ' +
-                    'pre-seed responses will keep being served until their TTL expires.'
-            );
+    const { deleted, reachable } = await clearCache();
+    if (reachable) logger.info(`Cache cleared after seeding: ${deleted} keys removed.`);
+    else
+        logger.warn(
+            'Cache NOT cleared after seeding: Redis is unreachable. Seeding succeeded, but ' +
+                'pre-seed responses will keep being served until their TTL expires.'
+        );
+
+    if (describeTo) {
+        await writeFile(
+            describeTo,
+            JSON.stringify({ scenario: scenarioName, accounts: seedCredentials, subjects }, null, 2)
+        );
+        logger.info(`Scenario description written to ${describeTo}.`);
     }
 
-    logger.info(
-        `Seeding "${scenarioName}" complete: ${created} created, ${results.length - created} already present.`
-    );
+    logger.info(`Seeding "${scenarioName}" complete.`);
 }
 
 /*
  * Cleanup lives in the runner's `finally`, not at the end of `seed()`: a throw partway through
- * would otherwise skip it and leave the Mongo and Redis sockets open, hanging the process. Both
- * closers are no-ops when their connection was never opened, which covers the production-gate
- * early return above.
+ * would otherwise skip it and leave the Mongo and Redis sockets open, hanging the process.
+ * `stopServer` closes everything `bootInfrastructure` opened, the locale-refresh interval
+ * included. Nothing to do when a gate returned before the app was ever imported.
  */
-void runScript(seed, () => Promise.all([connection.close(), stopCache()]));
+void runScript(seed, () => application?.stopServer() ?? Promise.resolve());

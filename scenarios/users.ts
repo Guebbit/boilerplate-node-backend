@@ -7,10 +7,11 @@
  * credentials for all four come from `@scenarios/accounts`, since other files in this folder
  * seed rows belonging to these people.
  *
- * Ten further customers (`SEED_CUSTOMER_IDS`) sit alongside them, purely so `./cart` and
- * `./orders` have more than one shopper to vary an order history across. None of them is
+ * Ten further customers (`SEED_CUSTOMER_IDS`) sit alongside them, purely so the flow runner has
+ * more than one shopper to vary an order history across. None of them is
  * wired into `@scenarios/accounts` — there is no login promise attached to any of the ten, only
- * to the four named accounts above. Cart lines live in `./cart`, not here.
+ * to the four named accounts above — the ten log in with `makeUser`'s own default password, which
+ * is how `scenarios/flows/shop-history.ts` shops as them.
  */
 
 import {
@@ -41,8 +42,9 @@ import { userRepository } from '@modules/users/repository';
 const seedCustomerId = (index: number): string => `67f0c2${index.toString(16).padStart(18, '0')}`;
 
 /**
- * The ten further customers, named by who they are rather than by index — `./cart` and
- * `./orders` read these instead of repeating a hex string. Seven (`amelia` through `priya`)
+ * The ten further customers, named by who they are rather than by index —
+ * `scenarios/flows/shop-history.ts` reads these instead of repeating a hex string. Seven
+ * (`amelia` through `priya`)
  * get one small order each and no cart row; three (`marcus`, `harper`, `isla`) get a fuller cart
  * and two orders apiece — see the comments where each is actually used.
  */
@@ -132,15 +134,21 @@ const CUSTOMER_NAMES: [key: keyof typeof SEED_CUSTOMER_IDS, username: string][] 
 ];
 
 /**
- * Each customer's email, keyed the same way as `SEED_CUSTOMER_IDS` — exported so `./cart`
- * and `./orders` can address an order to the right inbox without reconstructing it from the
- * username, which is DERIVED below and not itself part of the public contract.
+ * Each customer's email, keyed the same way as `SEED_CUSTOMER_IDS` — exported so the flow runner
+ * can sign each of them in without reconstructing an address from the username, which is DERIVED
+ * below and not itself part of the public contract.
  */
 export const SEED_CUSTOMER_EMAILS = Object.fromEntries(
     CUSTOMER_NAMES.map(([key, username]) => [key, `${username}@example.com`])
 ) as Record<keyof typeof SEED_CUSTOMER_IDS, string>;
 
-/** The generated customer base — verified accounts, alternating consent and avatar. */
+/**
+ * The generated customer base — verified, ACTIVE accounts, alternating consent and avatar.
+ *
+ * None is seeded banned, however much the demo needs a banned one: `marcus` shops first and is
+ * then banned by the owner through `PUT /users/{id}`, so the audit trail records the ban actually
+ * happening instead of a row asserting that it did.
+ */
 const customerUsers = CUSTOMER_NAMES.map(([key, username], index) =>
     makeUser({
         id: SEED_CUSTOMER_IDS[key],
@@ -151,9 +159,6 @@ const customerUsers = CUSTOMER_NAMES.map(([key, username], index) =>
         // opted-in and not, and `root`/`customer` alone left the "granted" path exercised
         // by exactly one account.
         analyticsConsent: index % 2 === 0,
-        // marcus is `./audit-logs`'s banned customer — the only one of the ten seeded inactive,
-        // so that story beat matches a state the rest of the seed agrees with.
-        active: key === 'marcus' ? false : undefined,
         ...(index % 2 === 0 ? userImages.root : userImages.customer)
     })
 );

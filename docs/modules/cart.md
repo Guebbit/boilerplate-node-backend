@@ -21,6 +21,7 @@ flowchart LR
     delivery["delivery"]
     inventory["inventory"]
     orders["orders"]
+    payments["payments"]
     products["products"]
     users["users"]
     wishlist["wishlist"]
@@ -31,6 +32,7 @@ flowchart LR
     cart --> delivery
     cart --> inventory
     cart --> orders
+    cart --> payments
     cart --> products
     cart --> users
     products -. "product.deleted" .-> cart
@@ -41,7 +43,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class orders,products core;
-    class account,delivery,inventory,users,wishlist supporting;
+    class account,delivery,inventory,payments,users,wishlist supporting;
     class cart centre;
 ```
 

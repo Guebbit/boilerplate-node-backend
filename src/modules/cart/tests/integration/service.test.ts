@@ -11,6 +11,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
+import { withEnvironment, withoutEnvironment } from '@tests/environment';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 
 // The queue, not the copy: what checkout owes the customer is that a confirmation was DISPATCHED
@@ -22,6 +23,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
+import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import {
     cartGet,
     cartGetForBadge,
@@ -735,6 +737,174 @@ describe('orderConfirm', () => {
         expect(error.code).toBe('CART_PRODUCT_UNAVAILABLE');
         expect(error.message).toBe(t('cart.product-unavailable'));
     });
+});
+
+/** Runs `body` with `bank_transfer` offered — both required env vars, restored afterwards. */
+const withBankTransferConfigured = (body: () => Promise<void>) =>
+    withEnvironment('NODE_BANK_TRANSFER_BENEFICIARY', 'Guebbit Shop', () =>
+        withEnvironment('NODE_BANK_TRANSFER_IBAN', 'DE89370400440532013000', body)
+    );
+
+describe('orderConfirm — paymentMethod', () => {
+    it('defaults to card, with no payBy', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        await cartItemSetById(user.id, String(product._id), 1);
+
+        await orderConfirm(user.id, testCallerContext);
+
+        const order = await orderRepository.findOne({ userId: user._id });
+        expect(order!.paymentMethod).toBe('card');
+        expect(order!.payBy).toBeUndefined();
+    });
+
+    it('refuses bank_transfer when this deployment has not configured it', () =>
+        // Explicitly unset: `tests/support/setup.ts` configures transfer for the whole worker, so
+        // "this deployment offers no transfer" is a state this case has to create.
+        withoutEnvironment(
+            ['NODE_BANK_TRANSFER_BENEFICIARY', 'NODE_BANK_TRANSFER_IBAN'],
+            async () => {
+                const user = await createUser();
+                const product = await createProduct();
+                await cartItemSetById(user.id, String(product._id), 1);
+
+                const result = await orderConfirm(
+                    user.id,
+                    testCallerContext,
+                    undefined,
+                    undefined,
+                    'bank_transfer'
+                );
+
+                expect(asReject(result).status).toBe(409);
+                expect(asReject(result).errors[0].code).toBe('CART_PAYMENT_METHOD_NOT_AVAILABLE');
+                await expect(orderRepository.count({ userId: user._id })).resolves.toBe(0);
+            }
+        ));
+
+    it(
+        'stamps paymentMethod and a payBy the configured hold-hours away',
+        () =>
+            withBankTransferConfigured(() =>
+                withEnvironment('NODE_BANK_TRANSFER_HOLD_HOURS', '48', async () => {
+                    const user = await createUser();
+                    const product = await createProduct();
+                    await cartItemSetById(user.id, String(product._id), 1);
+
+                    const before = Date.now();
+                    const result = await orderConfirm(
+                        user.id,
+                        testCallerContext,
+                        undefined,
+                        undefined,
+                        'bank_transfer'
+                    );
+
+                    expect(result.success).toBe(true);
+                    const order = await orderRepository.findOne({ userId: user._id });
+                    expect(order!.paymentMethod).toBe('bank_transfer');
+                    // A window, not an exact millisecond: the checkout itself takes some time
+                    // between `Date.now()` here and the write inside `runCheckout`.
+                    const expected = before + 48 * 60 * 60_000;
+                    expect(order!.payBy!.getTime()).toBeGreaterThanOrEqual(expected - 5000);
+                    expect(order!.payBy!.getTime()).toBeLessThanOrEqual(expected + 5000);
+                })
+            ),
+        10_000
+    );
+
+    it('serves transferInstructions on the still-pending order, with the order id as reference', () =>
+        withBankTransferConfigured(async () => {
+            const user = await createUser();
+            const product = await createProduct();
+            await cartItemSetById(user.id, String(product._id), 1);
+
+            await orderConfirm(user.id, testCallerContext, undefined, undefined, 'bank_transfer');
+
+            const stored = await orderRepository.findOne({ userId: user._id });
+            // `toJSON()`'s static type mirrors the stored document, not the transform this
+            // module's model wires in — the same `unknown`-typed handoff
+            // `postCheckout`'s own `toOrderResponse` uses for this boundary.
+            const raw: unknown = stored!.toJSON();
+            const serialized = raw as {
+                transferInstructions?: { beneficiary: string; iban: string; reference: string };
+            };
+            expect(serialized.transferInstructions).toEqual({
+                beneficiary: 'Guebbit Shop',
+                // Grouped into 4s for display — see `bankTransferIbanFriendly`.
+                iban: 'DE89 3704 0044 0532 0130 00',
+                reference: String(stored!._id)
+            });
+        }));
+
+    it('sends the transfer instructions email instead of the confirmation', () =>
+        withBankTransferConfigured(async () => {
+            mockEnqueueEmail.mockClear();
+            const user = await createUser();
+            const product = await createProduct();
+            await cartItemSetById(user.id, String(product._id), 1);
+
+            await orderConfirm(user.id, testCallerContext, undefined, undefined, 'bank_transfer');
+
+            expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+            const [envelope, template] = mockEnqueueEmail.mock.calls[0];
+            expect(envelope.to).toBe(user.email);
+            expect(template).toBe('orders.order-transfer-instructions');
+        }));
+
+    it('refuses a third open transfer order past the cap', () =>
+        withBankTransferConfigured(async () => {
+            const user = await createUser();
+            const product = await createProduct();
+            // Two open transfer orders already on the books — the default cap.
+            await createOrder(user, [toOrderItem(product)], {
+                status: 'pending',
+                paymentMethod: 'bank_transfer'
+            });
+            await createOrder(user, [toOrderItem(product)], {
+                status: 'pending',
+                paymentMethod: 'bank_transfer'
+            });
+            await cartItemSetById(user.id, String(product._id), 1);
+
+            const result = await orderConfirm(
+                user.id,
+                testCallerContext,
+                undefined,
+                undefined,
+                'bank_transfer'
+            );
+
+            expect(asReject(result).status).toBe(409);
+            expect(asReject(result).errors[0].code).toBe('CART_BANK_TRANSFER_LIMIT');
+            // Refused before anything moved — only the two pre-existing orders are on the books.
+            await expect(orderRepository.count({ userId: user._id })).resolves.toBe(2);
+        }));
+
+    it('does not count a paid transfer order against the cap', () =>
+        withBankTransferConfigured(async () => {
+            const user = await createUser();
+            const product = await createProduct();
+            await createOrder(user, [toOrderItem(product)], {
+                status: 'paid',
+                paymentMethod: 'bank_transfer'
+            });
+            await createOrder(user, [toOrderItem(product)], {
+                status: 'pending',
+                paymentMethod: 'bank_transfer'
+            });
+            await cartItemSetById(user.id, String(product._id), 1);
+
+            const result = await orderConfirm(
+                user.id,
+                testCallerContext,
+                undefined,
+                undefined,
+                'bank_transfer'
+            );
+
+            expect(result.success).toBe(true);
+        }));
 });
 
 describe('productRemoveFromCartsById', () => {

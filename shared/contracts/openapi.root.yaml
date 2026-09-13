@@ -749,6 +749,27 @@ components:
                 phone:
                     type: string
 
+        # What a pending `bank_transfer` order's owner (and staff) sees to complete it. Never
+        # frozen onto the order — the beneficiary/IBAN/BIC are deployment config, not
+        # order-specific data, so this is computed at read time from whatever the deployment
+        # currently has configured. `reference` IS order-specific: it is what the customer types
+        # into the transfer's own description field, so the money can be matched back.
+        OrderTransferInstructions:
+            type: object
+            additionalProperties: false
+            required: [beneficiary, iban, reference]
+            properties:
+                beneficiary:
+                    type: string
+                iban:
+                    type: string
+                bic:
+                    type: string
+                    description: Absent when the deployment has not configured one.
+                reference:
+                    type: string
+                    description: The order's own id — what the customer writes in the transfer's description, so an incoming payment can be matched back to this order.
+
         # `Product`, without `onHand`/`reserved`/`available`. An order line is a purchase-time
         # SNAPSHOT — the price, title and image a customer actually saw and bought — and those
         # three fields are the opposite of that: they describe the WAREHOUSE, right now, and
@@ -812,6 +833,16 @@ components:
                 # language it was bought in, regardless of the reader's own locale.
                 locale:
                     $ref: '#/components/schemas/Locale'
+
+        # Shared by `Order.paymentMethod`, `CheckoutRequest.paymentMethod` and
+        # `PaymentMethod.id` (`payments`' own module contract) — one enum, so a third method
+        # added later cannot land in one of the three and not the others.
+        PaymentMethodId:
+            type: string
+            enum: [card, bank_transfer]
+            description: >-
+                How an order is being paid for. A preference recorded at checkout, not a lock — a
+                card payment still settles normally regardless of this value.
 
         OrderStatus:
             type: string
@@ -904,6 +935,22 @@ components:
                 # users who keep no addresses — an address is not (yet) required to buy.
                 shippingAddress:
                     $ref: '#/components/schemas/OrderAddress'
+                # Absent on orders placed before this existed, and on order creation that isn't a
+                # checkout (the admin `POST /orders` path names no method).
+                paymentMethod:
+                    $ref: '#/components/schemas/PaymentMethodId'
+                # When this order's stock hold ends — `NODE_RESERVATION_TTL_MINUTES` for `card`,
+                # `NODE_BANK_TRANSFER_HOLD_HOURS` for `bank_transfer`. Past this with no payment,
+                # the sweep releases the stock and cancels the order. Absent once paid or
+                # cancelled: the hold is over either way, and on orders that predate this field.
+                payBy:
+                    type: string
+                    format: date-time
+                # Present only while `paymentMethod` is `bank_transfer` and `status` is `pending`
+                # — the window in which the customer still needs to act. Scoped to the order's
+                # owner and to staff; never served to another customer.
+                transferInstructions:
+                    $ref: '#/components/schemas/OrderTransferInstructions'
                 status:
                     $ref: '#/components/schemas/OrderStatus'
                 # Computed per CALLER, not stored: what this requester may do to this order right
@@ -1154,12 +1201,16 @@ paths:
         $ref: '../../src/modules/orders/openapi.yaml#/paths/~1orders~1{id}~1invoice'
 
     # ---------- payments ----------
+    /payments/methods:
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1methods'
     /payments/intent:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1intent'
     /payments/order/{orderId}:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1order~1{orderId}'
     /payments/order/{orderId}/refund:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1order~1{orderId}~1refund'
+    /payments/order/{orderId}/offline:
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1order~1{orderId}~1offline'
     /payments/{id}/confirm:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1{id}~1confirm'
     /payments/{id}/sync:

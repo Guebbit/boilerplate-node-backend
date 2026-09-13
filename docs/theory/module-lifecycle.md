@@ -41,6 +41,13 @@ edited, and forgetting that is silent, so `tests/cross-cutting/probes-are-wired.
 `probes.ts` on disk is missing from it. The import stays static: the compile-time deletion failure is
 stronger than a test, and this keeps both halves.
 
+A library exactly one module imports is that module's too, though it needs no entry anywhere:
+[Package Dependencies](../tools/package-dependencies.md) derives ownership straight from the
+import graph. Adding one means running the [vetting rules](../tools/dependency-vetting.md) first
+and writing a `## Libraries` section on the module's own page; removing the module removes the
+library from `package.json` in the same change, once nothing else has started importing it. See
+[Libraries a module owns](./modules.md#libraries-a-module-owns).
+
 A module's demo records live in `scenarios/<name>.ts`, tabled by `scenarios/index.ts` — a list,
 but not a hand-kept one of these six: adding an entry is optional (a module need not have demo
 data at all), and forgetting to remove one after deleting a module is caught by
@@ -120,6 +127,10 @@ owns; [Contract Ownership & Fragmentation](../api/contract-fragmentation.md) is 
 `wishlist` is the reference: it was the first module added after the registry existed, and its tree
 is exactly the list above minus the parts it does not need (no `index.ts`, since nothing imports it;
 no `audit.ts`; no `emails.ts`).
+
+A new `package.json` dependency this module alone needs is this module's, the moment nothing else
+imports it — no registry entry, just the vetting rules and a `## Libraries` section on the
+module's page. See [Libraries a module owns](./modules.md#libraries-a-module-owns).
 
 The manifest is the whole contract between the domain and the application:
 
@@ -289,6 +300,10 @@ rm -rf src/modules/<name>
 
 Deleting a module another one imports stops `tsc` on the importing file, naming the line. Either
 delete the dependant too, or drop the import.
+
+Drop any `package.json` dependency this module owned alone too — [Package
+Dependencies](../tools/package-dependencies.md), regenerated, shows which; a leftover reads as
+still owned by a module that no longer exists.
 
 ### 4 · The page
 

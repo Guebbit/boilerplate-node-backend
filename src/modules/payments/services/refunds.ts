@@ -3,6 +3,10 @@
  * Giving money back — the operator action (`refundByOrder`) and the `ORDER_CANCELLED` listener's
  * compensation (`refundForOrder`), both through the one conditional write (`performRefund`) that
  * makes a refund at-most-once. Nothing else in this module may move money out.
+ *
+ * `performRefund` dispatches on the PAYMENT's own `provider`, never on the deployment's configured
+ * one: a `manual` payment has no provider to ask, and a real PSP refund must go back to whichever
+ * provider actually took the money, even if the deployment has since switched to another.
  */
 
 import { t } from '@infrastructure/i18n';
@@ -45,6 +49,28 @@ export const performRefund = (
         .updateStatusIfIn(orderId, [REFUNDABLE_PAYMENT_STATUS], 'refunded')
         .then((payment) => {
             if (!payment) return null;
+
+            // Money recorded by hand has no provider to ask — the row moving to `refunded` IS the
+            // return; `refundedByHand` is the admin's own record that the cash actually went back.
+            if (payment.provider === 'manual')
+                return paymentRepository
+                    .updateStatusIfIn(orderId, ['refunded'], 'refunded', { refundedByHand: true })
+                    .then((updated) => {
+                        logger.info(
+                            `Payment for order ${orderId} marked refunded by hand (${payment.amount} ${payment.currency})`
+                        );
+                        if (context)
+                            emitAuditEvent(
+                                buildAuditEvent(context, {
+                                    action: paymentsAuditActions.ADMIN_PAYMENT_REFUNDED,
+                                    outcome: 'success',
+                                    target_type: 'order',
+                                    target_id: orderId
+                                })
+                            );
+                        return updated ?? payment;
+                    });
+
             if (!payment.providerRef) {
                 // Only a `succeeded` payment reaches here, and nothing can succeed before the
                 // provider has been asked for an intent — so this is a corrupted row, not a

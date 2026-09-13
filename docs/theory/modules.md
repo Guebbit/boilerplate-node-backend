@@ -323,6 +323,26 @@ name, subject, and every string the template interpolates), the controller hands
 `enqueueEmail`, and the job that reaches the worker is finished text. The workers import no i18n
 at all, and the templates interpolate rather than translate.
 
+## Libraries a module owns
+
+A `package.json` dependency is a bounded context's business the same way a collection is, once
+exactly one module imports it:
+
+- **The owner is whoever imports it.** One module → that module. Several → `infrastructure`,
+  behind an adapter, or the kernel — [the same line](#the-infrastructure-kernel-line) this page
+  already draws for a substrate concern.
+- **Another module needing it asks the owner's public `index.ts`**, not the library. If two
+  modules genuinely need the library itself, it moves down to `infrastructure` behind a port.
+- **Deleting a module removes the libraries it owned** from `package.json` — see
+  [Adding & Removing a Module](./module-lifecycle.md#removing-a-module).
+- **Adding one** runs the vetting rules in [Dependency Vetting](../tools/dependency-vetting.md)
+  first, same as any other dependency.
+
+None of this is hand-kept. [Package Dependencies](../tools/package-dependencies.md) derives who
+imports what straight from the source tree, and a module that owns one gets a `## Libraries`
+section on its own page — why this library, what was rejected — the same shape
+[`antibot`](../modules/antibot.md#choosing-a-provider) already uses to justify its provider choice.
+
 ## The manifest
 
 ```ts

@@ -33,7 +33,7 @@ import { paymentRepository } from '../repository';
  * @param orderUserId - the account id the order carries, or `undefined` once detached
  * @returns the id to persist on the payment, or `undefined` to persist none
  */
-const resolvePayerId = (orderUserId: string | undefined): Promise<string | undefined> => {
+export const resolvePayerId = (orderUserId: string | undefined): Promise<string | undefined> => {
     if (orderUserId === undefined) return Promise.resolve(undefined);
 
     return userRepository

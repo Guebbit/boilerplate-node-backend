@@ -11,7 +11,8 @@
  *
  * `intent.ts` starts a payment, `settlement.ts` is {@link settlePayment} — the whole choreography,
  * reached from the webhook AND the browser-driven paths, since two copies would drift and drifted
- * copies commit inventory twice — `refunds.ts` is the one place money moves back out, `view.ts`
+ * copies commit inventory twice — `refunds.ts` is the one place money moves back out, `offline.ts`
+ * records money the provider never saw and settles it through the same choreography, `view.ts`
  * reads a payment back with its `actions`, `retention.ts` is erasure/export/the abandoned sweep,
  * and `scope.ts` decides who may see what.
  */
@@ -24,8 +25,10 @@ import {
     applyWebhookSettlement
 } from './settlement';
 import { refundByOrder, refundForOrder } from './refunds';
+import { recordOfflinePayment } from './offline';
 import { getForOrder } from './view';
 import { detachUserId, findOwnPayments, reapAbandonedPayments } from './retention';
+import { listPaymentMethods } from '../config';
 
 /*
  * Every operation is published by name as well as through the object below, exactly as the single
@@ -42,9 +45,11 @@ export {
     applyWebhookSettlement
 } from './settlement';
 export { performRefund, refundByOrder, refundForOrder, REFUNDABLE_PAYMENT_STATUS } from './refunds';
+export { recordOfflinePayment, type OfflinePaymentInput } from './offline';
 export { getForOrder, withActions } from './view';
 export { detachUserId, findOwnPayments, reapAbandonedPayments } from './retention';
 export { callerScope } from './scope';
+export { listPaymentMethods, type PaymentMethodInfo } from '../config';
 
 /** The module's one service handle. Named for the record it serves, like `paymentRepository`. */
 export const paymentService = {
@@ -56,7 +61,9 @@ export const paymentService = {
     getForOrder,
     refundForOrder,
     refundByOrder,
+    recordOfflinePayment,
     detachUserId,
     findOwnPayments,
-    reapAbandonedPayments
+    reapAbandonedPayments,
+    listPaymentMethods
 };

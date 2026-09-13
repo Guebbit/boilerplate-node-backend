@@ -12,9 +12,14 @@ import request from 'supertest';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api } from '@tests/http';
 import { installDemo } from '@app/demo';
+import { installSecurity } from '@app/security';
+import { installRequestContext } from '@app/request-context';
+import { installRoutes } from '@app/routes';
+import { installErrorHandling } from '@app/error-handling';
 import { resolveTranslatables } from '@kernel/registry';
 import { setTranslatables } from '@modules/locales/module';
 import { productModel } from '@modules/products/model';
+import { orderModel } from '@modules/orders/model';
 import { enabledModules } from '../../../src/modules';
 
 setupTestDb();
@@ -25,10 +30,34 @@ setupTestDb();
 beforeAll(() => setTranslatables(resolveTranslatables(enabledModules)));
 afterAll(() => setTranslatables({}));
 
+/**
+ * A throwaway app carrying the demo surface and nothing else — enough for every case whose
+ * subject is the route HANDLER: the body validation and the status codes a caller sees.
+ */
 const testApp = () => {
     const app = express();
     app.use(express.json());
     installDemo(app);
+    return app;
+};
+
+/**
+ * The same, plus the whole API behind it.
+ *
+ * Needed by exactly one case below, and the reason is what the demo profile now is: building
+ * `shop` DRIVES the application — `POST /account/login`, `POST /cart/checkout` and two hundred
+ * more — against the app `installDemo` was handed. An app carrying only `/__test/*` answers 404
+ * to every one of them.
+ */
+const drivableApp = () => {
+    const app = express();
+    // The same four installs `src/app.ts` makes, in the same order — `installSecurity` is what
+    // parses a JSON body, so the flows' first login 500s without it.
+    installSecurity(app);
+    installRequestContext(app);
+    installDemo(app);
+    installRoutes(app);
+    installErrorHandling(app);
     return app;
 };
 
@@ -52,11 +81,13 @@ describe('POST /__test/restore', () => {
     });
 
     it('defaults to the shop scenario on an empty body', async () => {
-        const response = await request(testApp()).post('/__test/restore').send({});
+        const response = await request(drivableApp()).post('/__test/restore').send({});
 
         expect(response.status).toBe(204);
         await expect(productModel.countDocuments()).resolves.toBeGreaterThan(0);
-    }, 30_000);
+        // Orders are not seeded by anything: their presence is what says the flows really ran.
+        await expect(orderModel.countDocuments()).resolves.toBeGreaterThan(0);
+    }, 120_000);
 });
 
 describe('GET /__test/emails', () => {

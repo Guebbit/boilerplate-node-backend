@@ -73,6 +73,25 @@ unique and TTL index along with the data until the process restarted. It now emp
 collection instead, and the demo tenant's `_id` is pinned so the cached deployment tenant id never
 strands after a restore. See [Data](docs/reference/data.md).
 
+**The demo shop is built by using the app, so `scenario:apply` is no longer idempotent.** Its
+catalogue is still seeded, but its order book is produced by driving the real checkout, payment,
+shipping and refund endpoints — which is not a thing that can be run twice over the same database
+without giving the shop a second history. The seeder therefore refuses a database that already
+holds anything, logs why, and exits 0 so a container boot's `db:bootstrap && <start>` still starts.
+`npm run scenario:apply:reset` is how you rebuild on purpose. It also boots the application
+in-process now (on an ephemeral loopback port, never `NODE_PORT`), since the flows only exist
+behind the real middleware stack.
+
+| Before                                      | After                                                                                               |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `scenario:apply` upserts, always safe       | refuses a non-empty database; `--reset` empties first                                               |
+| order ids pinned in `scenarios/subjects.ts` | minted at build time; ask `GET /__test/scenario`, or chain a list request                           |
+| —                                           | `GET /__test/scenario` serves the scenario name, the seed logins, and a row id per guarantee name   |
+| —                                           | `scenario:apply --describe-to=<file>` writes that same JSON, for a live backend with no `/__test/*` |
+| `POST /__test/restore` reseeds              | replays the copy this process built at boot — ~12 ms for `shop`, down from 0.58 s                   |
+
+See [Demo profile](docs/tools/demo-profile.md#how-a-scenario-is-built).
+
 **`npm run seed:images` is `npm run scenario:images`.** Scenario-only code moved out of `src/`
 entirely (`scenarios/seed.ts`, `scenarios/accounts.ts`) and the two scripts that never shipped in
 the production image moved from `scenarios/build/` to `scenarios/run-server.ts` and

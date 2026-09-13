@@ -16,6 +16,7 @@ import { ORDER_CANCELLED } from '@modules/orders';
 import { USER_DELETED } from '@modules/users';
 import { router } from './routes';
 import { refundForOrder, detachUserId } from './services';
+import { validateBankTransferConfig } from './config';
 // Installs this module's event declarations (PAYMENT_SUCCEEDED, PAYMENT_FAILED).
 import './events';
 
@@ -28,7 +29,7 @@ export default {
      * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
      * whose module is gone, and a module claiming one the file does not attribute to it.
      */
-    permissions: ['payments.read', 'payments.update', 'payments.manage'],
+    permissions: ['payments.read', 'payments.create', 'payments.update', 'payments.manage'],
     routes: router,
     // The provider signs over the exact bytes it sent — relative to `basePath`, composed by the
     // app tier, so the mount point is stated once and the two cannot drift.
@@ -43,6 +44,10 @@ export default {
             productionOnly: true
         }
     ],
+    // `NODE_BANK_TRANSFER_IBAN`/`_BIC` need `ibantools` to validate — a check `requiredConfig`
+    // cannot express — and `NODE_BANK_TRANSFER_IBAN` set with no `_BENEFICIARY` is a cross-field
+    // rule, not a per-variable one.
+    customCheck: validateBankTransferConfig,
     subscribe: () => {
         onDomainEvent(ORDER_CANCELLED, ({ orderId, refund }) =>
             refund ? refundForOrder(orderId) : undefined
@@ -50,5 +55,14 @@ export default {
         // Detach, never delete: the payment survives the account.
         onDomainEvent(USER_DELETED, ({ userId }) => detachUserId(userId));
     },
-    locales: path.join(__dirname, 'locales')
+    locales: path.join(__dirname, 'locales'),
+    /**
+     * One refunded payment, reached the way a shop reaches one: an order paid by card, then
+     * cancelled by an operator, with this module's own `ORDER_CANCELLED` listener returning the
+     * money. Named so the admin's refunded-payment screen has a row to open.
+     *
+     * The id behind it is the ORDER's: `GET /payments/order/{orderId}` is the only read path a
+     * payment has, so a payment id would name a row no caller could fetch.
+     */
+    scenario: { shop: ['payment.refunded'] }
 } satisfies AppModule;

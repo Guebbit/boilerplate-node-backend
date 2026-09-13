@@ -45,15 +45,17 @@ export type OrderLineInput = Omit<OrderItem, 'product' | 'locale'> & {
 };
 
 /**
- * What a caller may pin, derived from the generated `Order`. The three totals are dropped, not
- * optional: they're required on the wire but never stored, so stating one would invent a column
- * the API never produced. `status` stays — it IS stored (`OrderDocument.status`, default
- * `OrderStatus.pending`) — so a fixture that needs a history order past `pending` can say so.
- * `items` is replaced because a line here takes a snapshot as DATA; see `OrderLineInput`.
+ * What a caller may pin, derived from the generated `Order`. The three totals and
+ * `transferInstructions` are dropped: all four are present on the wire but never stored — the
+ * totals are derived at serialization, `transferInstructions` is computed from deployment config
+ * — so stating one would invent a column the API never produced. `status` stays — it IS stored
+ * (`OrderDocument.status`, default `OrderStatus.pending`) — so a fixture that needs a history
+ * order past `pending` can say so. `items` is replaced because a line here takes a snapshot as
+ * DATA; see `OrderLineInput`.
  */
 export type OrderOverrides = Omit<
     OverridesFor<Order>,
-    'items' | 'totalItems' | 'totalQuantity' | 'totalPrice'
+    'items' | 'totalItems' | 'totalQuantity' | 'totalPrice' | 'transferInstructions'
 > & {
     /** 24-char hex of the person who placed it. */
     userId?: Id;
@@ -101,6 +103,8 @@ export const makeOrder = ({
     shippingMethod,
     shippingCost,
     shippingAddress,
+    paymentMethod,
+    payBy,
     notes,
     deletedAt
 }: OrderOverrides = {}): OrderFixture => ({
@@ -129,6 +133,8 @@ export const makeOrder = ({
         shippingMethod,
         shippingCost,
         shippingAddress,
+        paymentMethod,
+        payBy: toDate(payBy),
         notes,
         deletedAt: toDate(deletedAt)
     })

@@ -33,12 +33,13 @@ const toOrderResponse = (order: OrderDocument): Order => {
 export const postCheckout = (request: Request, response: Response) => {
     const userId = request.authContext!.id;
     // `?? {}` because a checkout without a body is legal and Express 5 leaves `body` undefined.
-    const { addressId, shippingMethodId } = (request.body ?? {}) as {
+    const { addressId, shippingMethodId, paymentMethod } = (request.body ?? {}) as {
         addressId?: string;
         shippingMethodId?: string;
+        paymentMethod?: string;
     };
     return cartService
-        .orderConfirm(userId, callerContextOf(request), addressId, shippingMethodId)
+        .orderConfirm(userId, callerContextOf(request), addressId, shippingMethodId, paymentMethod)
         .then((result) => {
             cartCheckoutTotal.inc({ status: result.success ? 'success' : 'failure' });
             if (refused(response, result)) return;

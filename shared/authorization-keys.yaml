@@ -182,6 +182,16 @@ keys:
       description: Read payments. Without a wider condition this is your own payments only.
       conditions:
           userId: $caller.id
+    - key: payments.create
+      module: payments
+      subject: Payment
+      action: create
+      scope: tenant
+      description: Record a payment that arrived outside the provider — cash, a transfer, by hand.
+      # Money the shop is now on the hook to have actually received. Same tier as payments.update:
+      # the admin's word is the only proof, and a stolen access token proves nothing about how
+      # recently its holder typed their password.
+      stepUp: critical
     - key: payments.update
       module: payments
       subject: Payment

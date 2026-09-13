@@ -24,3 +24,26 @@ export const withEnvironment = async (
         else process.env[key] = previous;
     }
 };
+
+/**
+ * {@link withEnvironment}'s opposite: run a body with these variables UNSET, then put them back.
+ *
+ * For the case whose subject is a deployment that configured nothing — which `process.env` alone
+ * cannot express once `tests/support/setup.ts` has given the whole worker a value, as it does for
+ * bank transfer so the `shop` scenario can hold its `order.awaitingTransfer` guarantee.
+ *
+ * @param keys - the variables to clear for the duration
+ * @param body - what to run without them
+ */
+export const withoutEnvironment = async (
+    keys: string[],
+    body: () => Promise<void>
+): Promise<void> => {
+    const previous = new Map(keys.map((key) => [key, process.env[key]]));
+    for (const key of keys) delete process.env[key];
+    try {
+        await body();
+    } finally {
+        for (const [key, value] of previous) if (value !== undefined) process.env[key] = value;
+    }
+};

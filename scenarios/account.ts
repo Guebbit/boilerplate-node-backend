@@ -1,7 +1,7 @@
 /**
  * @module
  * The address book's slice of the demo dataset. The admin keeps two entries so "exactly one
- * default" is observable; the ordinary customer keeps one, the common case. `./orders`
+ * default" is observable; the ordinary customer keeps one, the common case. The flow runner
  * freezes a copy of the owner's default entry as one order's `shippingAddress`, which is what
  * makes "an order remembers where it was sent" checkable against a book that can still change.
  */
@@ -14,7 +14,8 @@ import { addressBookRepository } from '@modules/account/repository';
 /**
  * The two seeded books: the owner's (two entries) and the ordinary customer's (one).
  *
- * No pinned `_id` on the BOOK — see `./cart`. Each ENTRY keeps one: those reach the wire, and a
+ * No pinned `_id` on the BOOK — `insertIfAbsentForOwner` keys on `userId`, so an id buys no
+ * idempotency. Each ENTRY keeps one: those reach the wire, and a
  * "set as default" demo names the entry it moves the flag onto.
  */
 export const addressBookFixtures = [
@@ -22,7 +23,7 @@ export const addressBookFixtures = [
         userId: SEED_OWNER_ID,
         items: [
             /*
-             * `./orders` restates (not imports) a copy of this entry as its `shippingAddress`: an
+             * A shipped order restates (never references) a copy of this entry as its `shippingAddress`: an
              * order's address is a snapshot that must be free to differ from the live book — sharing
              * the literal would make them unable to disagree, which is what this fixture demonstrates.
              */

@@ -95,6 +95,12 @@ When a hold is swept, `inventory.reservation_expired` is published — and
 from this module, and it is an event rather than an import precisely so the two mutually-aware
 domains stay acyclic.
 
+**The hold length is per-checkout, not a single constant.** `reserveForOrder` takes an optional
+window and falls back to `NODE_RESERVATION_TTL_MINUTES` only when the caller gives none — `cart`'s
+checkout hands it a longer one for a `bank_transfer` order (`NODE_BANK_TRANSFER_HOLD_HOURS`, a
+week by default). The sweep itself needed no change to honour this: it only ever reads each hold's
+own stored `expiresAt`, never a constant. See [Payments — Bank transfer](./payments.md#bank-transfer).
+
 ## The threshold, and its two readers
 
 `NODE_LOW_STOCK_THRESHOLD` (5 by default) has two readers that deliberately count **different

@@ -14,9 +14,9 @@ Contracts are edited at the leaves and generated everywhere else. The order is n
    (`src/types/asyncapi.generated.ts`, including `WORKER_CHANNELS`).
 4. **Hand the result to the paired frontend** — `npm run sync:frontend`.
 
-`npm run regenerate` runs all four in the only order that works, plus `docs:graph` and
-`docs:roles`. Prefer it over the individual scripts. The pre-commit hook runs it with `--no-sync`,
-so `npm run complete` only ever verifies — but a contract change is not finished until
+`npm run regenerate` runs all four in the only order that works, plus `docs:graph`, `docs:roles`
+and `docs:dependencies`. Prefer it over the individual scripts. The pre-commit hook runs it with
+`--no-sync`, so `npm run complete` only ever verifies — but a contract change is not finished until
 `sync:frontend` has actually run against the frontend checkout.
 
 See: `docs/api/contract-fragmentation.md`, `docs/api/regenerating.md`
@@ -74,6 +74,11 @@ Rules of thumb:
 - A tiny, obvious helper is cheaper to own than a dependency. The line is roughly: if it fits in a
   well-tested function and has no edge cases we'd get wrong, write it.
 - When a choice is close, present the options and the trade-off instead of silently picking.
+- **Write it down in the same change.** A new dependency gets its group and purpose in
+  `scripts/docs/dependency-groups.ts`; `npm run regenerate` rebuilds the page. A library only one
+  module imports is that module's: its page under `docs/modules/` says why it was chosen. A new
+  module gets its page, plus a `## Libraries` section if it brings one. Removing a module removes
+  what it owned.
 
 ## Scope
 

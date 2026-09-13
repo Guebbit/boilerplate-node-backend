@@ -9,6 +9,7 @@
 import { orderModel, applyOrderTransform } from './model';
 import type { OrderDocument, OrderPendingEffect } from './model';
 import type { PipelineStage, QueryFilter } from 'mongoose';
+import { OrderStatus } from '@types';
 import {
     createRepository,
     toObjectId,
@@ -32,7 +33,7 @@ const base = createRepository<OrderDocument>(orderModel, {
             // identifies which product an order line holds.
             productId: 'items.product._id'
         },
-        exact: { email: 'email', status: 'status' },
+        exact: { email: 'email', status: 'status', paymentMethod: 'paymentMethod' },
         // Staff-written text on the order, so the filter is only reachable by someone who sees it.
         regex: { notes: 'notes' }
     }
@@ -207,6 +208,21 @@ const clearPendingEffect = (orderId: string, effect: OrderPendingEffect): Promis
         .then(({ modifiedCount }) => modifiedCount > 0);
 
 /**
+ * How many of this account's orders are still `pending` on a `bank_transfer` — checkout's
+ * open-transfer cap. A week-long hold is otherwise free to take; this is what a third one refuses
+ * before it is even written.
+ *
+ * @param userId - the caller placing a new transfer order
+ * @returns the count of open transfer orders
+ */
+const countOpenBankTransfers = (userId: string): Promise<number> =>
+    orderModel.countDocuments({
+        userId: toObjectId(userId),
+        status: OrderStatus.pending,
+        paymentMethod: 'bank_transfer'
+    });
+
+/**
  * Unset `userId` on every order this account placed, and mark them for `ops/reap-orders.ts`
  * to scrub later — `users`' `USER_DELETED` listener. The order row is never touched otherwise:
  * it is the invoice, kept whole until `anonymizeAfter`.
@@ -310,6 +326,7 @@ export const orderRepository: Omit<Repository<OrderDocument>, 'search'> & {
     ) => Promise<OrderDocument | null>;
     findWithPendingEffects: (cutoff: Date, limit: number) => Promise<OrderDocument[]>;
     clearPendingEffect: (orderId: string, effect: OrderPendingEffect) => Promise<boolean>;
+    countOpenBankTransfers: (userId: string) => Promise<number>;
     detachUserId: (userId: string, anonymizeAfter: Date) => Promise<number>;
     scrubDueForAnonymization: (cutoff: Date) => Promise<number>;
 } = {
@@ -322,6 +339,7 @@ export const orderRepository: Omit<Repository<OrderDocument>, 'search'> & {
     updateStatusIfIn,
     findWithPendingEffects,
     clearPendingEffect,
+    countOpenBankTransfers,
     detachUserId,
     scrubDueForAnonymization
 };

@@ -19,6 +19,11 @@ import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import type { ProductSnapshot } from '@modules/products';
 import { applySerialization } from '@infrastructure/persistence/serialize';
+import {
+    bankTransferBeneficiary,
+    bankTransferBic,
+    bankTransferIbanFriendly
+} from '@infrastructure/adapters/bank-transfer';
 import { sumLineItems, orderTotal, type LineItem } from './domain/totals';
 import { OrderStatus } from '@types';
 import type { Order } from '@types';
@@ -65,9 +70,11 @@ export type OrderPendingEffect = 'refund';
 
 /**
  * Order Document interface: overrides the generated `Order`'s `userId`/`items`/`status`, and
- * redeclares `deletedAt` as `Date` (the contract types it as an ISO string). `totalItems`,
- * `totalQuantity` and `totalPrice` are omitted rather than inherited — required on the wire but
- * never persisted, so declaring them here would claim a stored field that doesn't exist.
+ * redeclares `deletedAt`/`payBy` as `Date` (the contract types both as ISO strings).
+ * `totalItems`, `totalQuantity`, `totalPrice` and `transferInstructions` are omitted rather than
+ * inherited — required or present on the wire but never persisted, so declaring them here would
+ * claim a stored field that doesn't exist; `applyOrderTransform` derives all four at
+ * serialization time.
  */
 export interface OrderDocument
     extends
@@ -83,6 +90,8 @@ export interface OrderDocument
             | 'createdAt'
             | 'updatedAt'
             | 'deletedAt'
+            | 'payBy'
+            | 'transferInstructions'
         >,
         Document {
     /**
@@ -96,6 +105,8 @@ export interface OrderDocument
     items: OrderDocumentItem[];
     createdAt?: Date;
     updatedAt?: Date;
+    /** When this order's stock hold ends — see the schema field's own comment. */
+    payBy?: Date;
     /**
      * Set alongside `userId` being unset, to `now + NODE_ORDER_PII_RETENTION_DAYS`.
      * `ops/reap-orders.ts` scrubs the order's remaining PII (email, shipping name/phone/
@@ -214,6 +225,24 @@ export const orderSchema = new Schema<OrderDocument>(
             min: 0
         },
         /*
+         * The customer's checkout choice — a preference, not a lock: a card payment still
+         * settles normally regardless of this value. Absent on orders placed before this
+         * existed, and on order creation that isn't a checkout.
+         */
+        paymentMethod: {
+            type: String,
+            enum: ['card', 'bank_transfer']
+        },
+        /*
+         * When this order's stock hold ends, stamped at checkout from the SAME duration handed
+         * to `inventoryService.reserveForOrder` — the two must never disagree, which is why
+         * neither is a second copy of the other's fallback. Absent once paid or cancelled: the
+         * hold is over either way, and on orders that predate this field.
+         */
+        payBy: {
+            type: Date
+        },
+        /*
          * The address the order ships to — a SNAPSHOT, exactly like the product snapshots in
          * `items`: an order keeps where it was going, not what the address book says today.
          * Absent on orders that predate the book and on checkouts by users who keep none;
@@ -317,9 +346,34 @@ const applyOrderTotals = (serialized: Record<string, unknown>) => {
 };
 
 /**
+ * `transferInstructions`, present only while a `bank_transfer` order is still `pending` — once
+ * paid or cancelled there is nothing left to act on. Read live from whatever the deployment
+ * currently has configured rather than frozen at checkout time: the beneficiary/IBAN/BIC are
+ * deployment config, not order-specific data, so a later change should show up on every
+ * still-pending order instead of staying locked to what was true when it was placed. `reference`
+ * IS order-specific — the order's own id, already renamed to `id` by the time `after` runs.
+ */
+const applyTransferInstructions = (serialized: Record<string, unknown>) => {
+    if (serialized.paymentMethod !== 'bank_transfer' || serialized.status !== OrderStatus.pending)
+        return;
+
+    const beneficiary = bankTransferBeneficiary();
+    const iban = bankTransferIbanFriendly();
+    if (!beneficiary || !iban) return;
+
+    const bic = bankTransferBic();
+    serialized.transferInstructions = {
+        beneficiary,
+        iban,
+        ...(bic ? { bic } : {}),
+        reference: String(serialized.id)
+    };
+};
+
+/**
  * Normalizes a serialized order: the shared `_id` → `id` and `__v` removal, plus this
- * collection's own two jobs — cleaning up the embedded items and deriving the totals.
- * Exported so aggregate results (which bypass `toJSON`) can be mapped
+ * collection's own jobs — cleaning up the embedded items, deriving the totals, and computing
+ * `transferInstructions`. Exported so aggregate results (which bypass `toJSON`) can be mapped
  * through the same logic — see `normalize` in @infrastructure/persistence/create-repository.
  */
 export const applyOrderTransform = applySerialization(orderSchema, {
@@ -330,6 +384,7 @@ export const applyOrderTransform = applySerialization(orderSchema, {
     after: (serialized) => {
         applyOrderItems(serialized);
         applyOrderTotals(serialized);
+        applyTransferInstructions(serialized);
     }
 });
 

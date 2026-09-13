@@ -13,6 +13,8 @@
         "insufficient-stock": "Some items are no longer available in the quantity you asked for — see `details.lines`.",
         "address-not-found": "The selected shipping address was not found.",
         "shipping-method-not-found": "The chosen shipping method does not exist.",
-        "shipping-not-applicable": "Your cart contains only digital products, which do not need a shipping method."
+        "shipping-not-applicable": "Your cart contains only digital products, which do not need a shipping method.",
+        "payment-method-not-available": "The chosen payment method is not offered by this shop.",
+        "bank-transfer-limit": "You already have too many orders awaiting a bank transfer. Complete or cancel one before placing another."
     }
 }

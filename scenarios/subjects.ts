@@ -1,15 +1,17 @@
 /**
  * @module
  * The named ids and credentials a consumer that cannot import module code still needs to point at
- * a specific seeded row — a generated API client collection today, `GET /__test/scenario` once
- * built. Import-free by construction: `scripts/contracts/client-collections-bundle.ts` runs inside
- * `npm run contracts:bundle`, before `api/` exists, so anything it reads has to resolve without
- * pulling in a module's code (which imports the generated `@api/` client — see
- * `scripts/contracts/openapi-bundle.ts` for the cycle that broke `npm ci` the same way).
+ * a specific seeded row: a generated API client collection, and `GET /__test/scenario`'s
+ * `subjects`. Import-free by construction —
+ * `scripts/contracts/client-collections-bundle.ts` runs inside `npm run contracts:bundle`, before
+ * `api/` exists, so anything it reads has to resolve without pulling in a module's code (which
+ * imports the generated `@api/` client — see `scripts/contracts/openapi-bundle.ts` for the cycle
+ * that broke `npm ci` the same way).
  *
- * `scenarios/products.ts` and `scenarios/orders.ts` import their own pinned ids from here instead
- * of stating them locally, so each id has exactly one source rather than one the fixture uses and
- * a second a reader like the collections generator has to keep in sync by hand.
+ * ONLY PINNED ROWS LIVE HERE. Orders, payments and shipments are produced by driving the app
+ * (`scenarios/flows/`), so their ids are minted at boot and recorded by the runner instead;
+ * `scenarios/index.ts`'s `buildScenario` merges the two into one map. A consumer that wants an
+ * order id asks `GET /__test/scenario`, or chains a list request — it cannot be a literal.
  */
 
 import {
@@ -24,10 +26,10 @@ import {
 /**
  * The catalogue ids, named by what each row is for.
  *
- * `scenarios/products.ts`, `./cart`, `./wishlist` and `./orders` read these instead of repeating a
- * hex string. Each name states the row's product and the branch it exists to exercise, so intent
- * like "only visible products are saved" is checkable by eye where a raw id would just be a claim
- * in a comment.
+ * `scenarios/products.ts`, `./wishlist` and `./flows/shop-history.ts` read these instead of
+ * repeating a hex string. Each name states the row's product and the branch it exists to
+ * exercise, so intent like "only visible products are saved" is checkable by eye where a raw id
+ * would just be a claim in a comment.
  */
 export const SEED_PRODUCT_IDS = {
     dogFoodStandard: '65dc8a99604c307b702b5ccc',
@@ -39,17 +41,24 @@ export const SEED_PRODUCT_IDS = {
 } as const;
 
 /**
- * The four test-critical order ids, named by the branch each exercises —
- * `scenarios/orders.ts`'s own comments say which. `ownerShipped` is the only fixture with shipping
- * columns; `userDeleted` is the soft-deleted one; `ownerPending` is the one left `pending` with a
- * real stock hold.
+ * The `shop` scenario's PINNED subjects: one row id per guarantee a module declares in its own
+ * `module.ts` (`AppModule.scenario`).
+ *
+ * The answer to the manifest's question. `tests/integration/scenarios/shop.test.ts` holds the two
+ * equal in both directions, so a guarantee declared and never pinned fails the suite, and so does
+ * a subject left behind after the module that wanted it was deleted.
+ *
+ * Only `products` appears: every other guarantee names a row the flows produce, and those ids
+ * exist only once a process has actually run them.
  */
-export const SEED_ORDER_IDS = {
-    ownerFirst: '65de73a69ca05739be2b5e85',
-    ownerShipped: '661c795a9e22bcbef63a5832',
-    userDeleted: '66b3f0c14d2e8a91c7d4a015',
-    ownerPending: '66d2a4c8d1b3e6f9a2c5d8e1'
-} as const;
+export const SHOP_SUBJECTS: Readonly<Record<string, string>> = {
+    'product.softDeleted': SEED_PRODUCT_IDS.heaterSoftDeleted,
+    'product.inactive': SEED_PRODUCT_IDS.bundleInactive,
+    'product.outOfStock': SEED_PRODUCT_IDS.scratchPostOutOfStock,
+    'product.barebones': SEED_PRODUCT_IDS.barebones,
+    'product.inStock': SEED_PRODUCT_IDS.dogBedPremium,
+    'product.rich': SEED_PRODUCT_IDS.dogFoodStandard
+};
 
 /**
  * The owner and the ordinary user — id, login and, where seeded, one representative row — the pair
@@ -64,9 +73,5 @@ export const SUBJECTS = {
         id: SEED_PRODUCT_IDS.dogFoodStandard,
         softDeletedId: SEED_PRODUCT_IDS.heaterSoftDeleted,
         inactiveId: SEED_PRODUCT_IDS.bundleInactive
-    },
-    order: {
-        id: SEED_ORDER_IDS.ownerFirst,
-        deletedId: SEED_ORDER_IDS.userDeleted
     }
 } as const;

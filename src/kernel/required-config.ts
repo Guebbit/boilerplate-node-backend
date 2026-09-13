@@ -131,7 +131,8 @@ export const assertRequiredConfig = (appModules: AppModule[]): void => {
         ...declared.filter((entry) => applies(entry) && fails(entry)).map(({ key }) => key),
         ...missingSmtpCompanions(),
         ...missingAntibotProviderSecrets(),
-        ...invalidEmailPolicy()
+        ...invalidEmailPolicy(),
+        ...appModules.flatMap((appModule) => appModule.customCheck?.() ?? [])
     ];
     const forbidden = forbiddenUnderProduction();
 

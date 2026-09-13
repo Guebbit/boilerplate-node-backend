@@ -7,9 +7,10 @@
  */
 
 import { callerForSubject, isUnrestricted, SYSTEM_ACTOR } from '@kernel/permissions';
-import { t } from '@infrastructure/i18n';
+import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import { environmentNumber } from '@infrastructure/runtime/environment';
+import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { OrderStatus } from '@types';
 import type { AuthContext } from '@types';
 import type { OrderDocument } from '../model';
@@ -20,6 +21,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { inventoryService } from '@modules/inventory';
+import { userRepository } from '@modules/users';
 import { emitDomainEvent } from '@kernel/events';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -29,6 +31,7 @@ import { ordersAuditActions } from '../audit';
 import { ORDER_CANCELLED } from '../events';
 import { orderRepository } from '../repository';
 import { statusesLeadingTo } from '../domain';
+import { bankTransferExpiredEmail } from '../emails';
 import { getById } from './crud';
 import { callerScope, actorOf } from './scope';
 
@@ -114,6 +117,25 @@ export const cancelById = (
                     caller: callerForSubject(SYSTEM_ACTOR, 'Order'),
                     analyticsConsent: false
                 };
+
+                /*
+                 * The customer's answer to "what happened to my order" — sent only for the
+                 * sweep's own expiry, and only for a transfer: a `card` hold is thirty minutes,
+                 * over before anyone has read a confirmation email, and a customer's own cancel
+                 * needs no explanation of itself.
+                 */
+                if (isSystemExpiry && order.paymentMethod === 'bank_transfer') {
+                    const buyer = order.userId
+                        ? await userRepository.findById(String(order.userId))
+                        : null;
+                    const locale = buyer?.locale ?? getDefaultLocale();
+                    const mail = bankTransferExpiredEmail(locale, order);
+                    void enqueueEmail(
+                        { to: order.email, subject: mail.subject },
+                        mail.template,
+                        mail.data
+                    );
+                }
 
                 emitAuditEvent(
                     buildAuditEvent(emitContext, {

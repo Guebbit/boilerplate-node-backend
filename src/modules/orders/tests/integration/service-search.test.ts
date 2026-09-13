@@ -134,6 +134,27 @@ describe('orderService.search', () => {
         expect(result.items).toHaveLength(1);
     });
 
+    it('filters by paymentMethod — the admin "awaiting transfer" view', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 10 });
+
+        await createOrder(user, [toOrderItem(product, 1)], {
+            status: 'pending',
+            paymentMethod: 'bank_transfer'
+        });
+        await createOrder(user, [toOrderItem(product, 1)], {
+            status: 'pending',
+            paymentMethod: 'card'
+        });
+
+        const result = await orderService.search({
+            paymentMethod: 'bank_transfer',
+            status: 'pending'
+        });
+
+        expect(result.items).toHaveLength(1);
+    });
+
     it('filters by order id', async () => {
         const user = await createUser();
         const product = await createProduct({ price: 10 });

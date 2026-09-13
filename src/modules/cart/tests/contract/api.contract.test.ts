@@ -11,6 +11,7 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
+import { withEnvironment, withoutEnvironment } from '@tests/environment';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
@@ -296,6 +297,48 @@ describe('POST /cart/checkout', () => {
         ]);
         expect(response).toSatisfyApiSpec();
     });
+
+    it('matches the error contract for an unoffered payment method', () =>
+        // Explicitly unset: `tests/support/setup.ts` configures transfer for the whole worker, so
+        // "this deployment offers no transfer" is a state this case has to create.
+        withoutEnvironment(
+            ['NODE_BANK_TRANSFER_BENEFICIARY', 'NODE_BANK_TRANSFER_IBAN'],
+            async () => {
+                const { bearer } = await authenticateWithCart();
+
+                const response = await api()
+                    .post('/cart/checkout')
+                    .set('Authorization', bearer)
+                    .send({ paymentMethod: 'bank_transfer' });
+
+                expect(response.status).toBe(409);
+                expect(response.body.errors[0].code).toBe('CART_PAYMENT_METHOD_NOT_AVAILABLE');
+                expect(response).toSatisfyApiSpec();
+            }
+        ));
+
+    it('matches the contract for a bank_transfer checkout, transferInstructions included', () =>
+        withEnvironment('NODE_BANK_TRANSFER_BENEFICIARY', 'Guebbit Shop', () =>
+            withEnvironment('NODE_BANK_TRANSFER_IBAN', 'DE89370400440532013000', async () => {
+                const { bearer } = await authenticateWithCart();
+
+                const response = await api()
+                    .post('/cart/checkout')
+                    .set('Authorization', bearer)
+                    .send({ paymentMethod: 'bank_transfer' });
+
+                expect(response.status).toBe(201);
+                expect(response.body.data.order.paymentMethod).toBe('bank_transfer');
+                expect(response.body.data.order.payBy).toEqual(expect.any(String));
+                expect(response.body.data.order.transferInstructions).toEqual({
+                    beneficiary: 'Guebbit Shop',
+                    // Grouped into 4s for display — see `bankTransferIbanFriendly`.
+                    iban: 'DE89 3704 0044 0532 0130 00',
+                    reference: response.body.data.order.id
+                });
+                expect(response).toSatisfyApiSpec();
+            })
+        ));
 });
 
 describe('POST /cart/reorder/{orderId}', () => {

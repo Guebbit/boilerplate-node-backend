@@ -1,10 +1,12 @@
 /**
  * @module
  * The payments route table. Two rules, and both are security rules: everything below the auth wall
- * is authenticated at the router level — money is somebody's — while the provider's webhook sits
- * ABOVE it, because its caller is a machine that authenticates by signing the body. Exactly one
- * route is additionally admin-only: the refund, a self-service withdrawal if left open to any
- * caller, versus an intent or confirm locked to admins being a checkout nobody can complete.
+ * is authenticated at the router level — money is somebody's — while the provider's webhook and
+ * `GET /methods` sit ABOVE it: the webhook's caller is a machine that authenticates by signing the
+ * body, and which methods are offered is pre-purchase information nobody need sign in to read.
+ * Exactly two routes are additionally admin-only: the refund and the offline record, a self-service
+ * withdrawal or a self-reported "I paid" if left open to any caller, versus an intent or confirm
+ * locked to admins being a checkout nobody can complete.
  */
 
 import { routeSignatures, guardsOn } from '@tests/routes';
@@ -15,8 +17,11 @@ jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
 
 import { router } from '@modules/payments/routes';
 
-/** The one route in front of the auth wall — see this suite's docblock. */
+/** The one route in front of the auth wall that authenticates by signing its own body. */
 const WEBHOOK = 'POST /webhook';
+
+/** The other route in front of the auth wall — public, like `GET /delivery/methods`. */
+const METHODS = 'GET /methods';
 
 /** A route's guards without its handler, so two routes' guard lists can be compared directly. */
 const withoutHandler = (signature: string) => guardsOn(router, signature).slice(0, -1);
@@ -25,20 +30,23 @@ describe('payment routes', () => {
     it('mounts exactly the documented endpoints, in the documented order', () => {
         expect(routeSignatures(router)).toEqual([
             WEBHOOK,
+            METHODS,
             'POST /intent',
             'GET /order/:orderId',
             'POST /order/:orderId/refund',
+            'POST /order/:orderId/offline',
             'POST /:id/confirm',
             'POST /:id/sync'
         ]);
     });
 
-    it.each(routeSignatures(router).filter((signature) => signature !== WEBHOOK))(
-        '%s requires a session',
-        (signature) => {
-            expect(guardsOn(router, signature)).toContain('isAuth');
-        }
-    );
+    it.each(
+        routeSignatures(router).filter(
+            (signature) => signature !== WEBHOOK && signature !== METHODS
+        )
+    )('%s requires a session', (signature) => {
+        expect(guardsOn(router, signature)).toContain('isAuth');
+    });
 
     it('leaves the webhook unauthenticated, which is what lets the provider reach it', () => {
         // Not an oversight and not a weakening: a PSP has no account here, and the signature over
@@ -46,6 +54,11 @@ describe('payment routes', () => {
         // A session guard added on top of it would silently stop every delivery arriving.
         expect(guardsOn(router, WEBHOOK)).not.toContain('isAuth');
         expect(guardsOn(router, WEBHOOK)).not.toContain('getAuth');
+    });
+
+    it('leaves the methods list unauthenticated, same as GET /delivery/methods', () => {
+        expect(guardsOn(router, METHODS)).not.toContain('isAuth');
+        expect(guardsOn(router, METHODS)).not.toContain('getAuth');
     });
 
     it('carries a rate limit — the one budget this route has, since a signature is not one', () => {
@@ -58,14 +71,17 @@ describe('payment routes', () => {
         expect(routeSignatures(router).indexOf(WEBHOOK)).toBe(0);
     });
 
-    it('admin-guards the refund, and only the refund', () => {
-        // The one route that moves money back out. Everything else is the customer's own
-        // checkout, which they must be able to complete themselves.
+    it('admin-guards the refund and the offline record, and nothing else', () => {
+        // The two routes an operator drives instead of a customer's own checkout — money moving
+        // back out, or a claim that money moved in some way the provider never saw.
         const adminGuarded = routeSignatures(router).filter((signature) =>
             guardsOn(router, signature).includes('requirePermissionGuard')
         );
 
-        expect(adminGuarded).toEqual(['POST /order/:orderId/refund']);
+        expect(adminGuarded).toEqual([
+            'POST /order/:orderId/refund',
+            'POST /order/:orderId/offline'
+        ]);
     });
 
     it('guards the sync exactly as it guards the confirm, plus the idempotency key confirm alone carries', () => {
@@ -90,13 +106,17 @@ describe('payment routes', () => {
         ]);
     });
 
-    it('declares the refund before the bare /:id routes', () => {
-        // `/order/:orderId/refund` is three segments and `/:id/confirm` is two, so they cannot
-        // collide today. The ordering is the convention this module states, and asserting it
-        // stops a two-segment admin route added later from being shadowed.
+    it('declares the refund and the offline record before the bare /:id routes', () => {
+        // `/order/:orderId/refund` and `/order/:orderId/offline` are three segments and
+        // `/:id/confirm` is two, so they cannot collide today. The ordering is the convention this
+        // module states, and asserting it stops a two-segment admin route added later from being
+        // shadowed.
         const paths = routeSignatures(router);
 
         expect(paths.indexOf('POST /order/:orderId/refund')).toBeLessThan(
+            paths.indexOf('POST /:id/confirm')
+        );
+        expect(paths.indexOf('POST /order/:orderId/offline')).toBeLessThan(
             paths.indexOf('POST /:id/confirm')
         );
     });

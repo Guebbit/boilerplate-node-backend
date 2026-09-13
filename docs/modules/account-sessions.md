@@ -192,6 +192,17 @@ the account holder should see or be able to revoke on their own. The housekeepin
 (`runTokenCleanup`) removes them once the grace window has long passed, alongside ordinarily
 expired tokens — see `tokenRemoveExpired` in [`users`](./users.md)'s repository.
 
+## Libraries
+
+`jsonwebtoken` is `account`'s alone — see [Package Dependencies](../tools/package-dependencies.md)
+for where it sits among everything else this repo depends on.
+
+| Library                  | Maintained    | What it costs you                                                                      |
+| ------------------------ | ------------- | -------------------------------------------------------------------------------------- |
+| `jsonwebtoken` (chosen)  | active, typed | the one signing algorithm this app actually uses (`HS256`), a small, well-worn surface |
+| `jose`                   | active, typed | a broader JOSE/JWK toolkit — more than a same-secret access/refresh pair needs         |
+| hand-rolled HMAC signing | —             | exactly the kind of crypto `CLAUDE.md` rules out writing by hand                       |
+
 ## Related pages
 
 - [`account`](./account.md) — the module this belongs to

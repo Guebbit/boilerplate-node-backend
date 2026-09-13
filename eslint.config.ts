@@ -871,7 +871,7 @@ export default tseslint.config(
                          * the one door above grants a sibling module — see the element descriptor
                          * above for why that trade is fine here specifically. It also reaches its
                          * own files freely, the same way `infrastructure` and `kernel` do below —
-                         * `scenarios/cart.ts` reads `scenarios/products.ts`'s filler ids directly.
+                         * `scenarios/wishlist.ts` reads `scenarios/products.ts`'s filler ids directly.
                          */
                         {
                             from: { element: { type: 'scenarios' } },

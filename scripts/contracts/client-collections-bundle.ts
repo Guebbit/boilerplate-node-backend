@@ -45,7 +45,18 @@ import { probes as cartProbes } from '../../src/modules/cart/probes';
 import { probes as ordersProbes } from '../../src/modules/orders/probes';
 import { probes as productsProbes } from '../../src/modules/products/probes';
 import { probes as wishlistProbes } from '../../src/modules/wishlist/probes';
-import { SEED_ORDER_IDS, SEED_PRODUCT_IDS, SUBJECTS } from '../../scenarios/subjects';
+import { SEED_PRODUCT_IDS, SUBJECTS } from '../../scenarios/subjects';
+
+/**
+ * What a generated request puts where an ORDER id belongs.
+ *
+ * Not a literal, and it cannot be one any more: the demo shop's orders are produced by driving
+ * real checkouts (`scenarios/flows/`), so their ids are minted when the shop is built and differ
+ * every time. Bruno, Insomnia and Postman all read `{{name}}` as a collection variable at send
+ * time, so this hands the reader a slot to fill instead of an id that 404s. The orders section's
+ * own first probe is the request that fills it.
+ */
+const ORDER_ID_VARIABLE = '{{orderId}}';
 
 /** The four tools, and the order this file names them in. */
 const COLLECTION_TOOLS = ['bruno', 'insomnia', 'mockoon', 'postman'] as const;
@@ -79,7 +90,7 @@ const values: ValueSources = {
         username: 'new-shopper',
         productId: SUBJECTS.product.id,
         userId: SUBJECTS.user.id,
-        orderId: SUBJECTS.order.id,
+        orderId: ORDER_ID_VARIABLE,
         quantity: 2,
         admin: false,
         active: true,
@@ -117,9 +128,8 @@ const values: ValueSources = {
         if (name !== 'id') return undefined;
 
         if (template.startsWith('/products')) return SUBJECTS.product.id;
-        if (template.startsWith('/orders')) return SUBJECTS.order.id;
+        if (template.startsWith('/orders')) return ORDER_ID_VARIABLE;
         if (template.startsWith('/users')) return SUBJECTS.user.id;
-        if (template.startsWith('/feedback')) return SUBJECTS.order.id;
         return SUBJECTS.owner.id;
     },
 
@@ -136,10 +146,11 @@ const values: ValueSources = {
         seedUserPassword: SUBJECTS.user.password,
         seedUserId: SUBJECTS.user.id,
         seedProductId: SUBJECTS.product.id,
-        seedOrderId: SUBJECTS.order.id,
         seedSoftDeletedProductId: SEED_PRODUCT_IDS.heaterSoftDeleted,
         seedInactiveProductId: SEED_PRODUCT_IDS.bundleInactive,
-        seedDeletedOrderId: SEED_ORDER_IDS.userDeleted
+        // Both resolve to a collection variable rather than an id — see ORDER_ID_VARIABLE.
+        seedOrderId: ORDER_ID_VARIABLE,
+        seedDeletedOrderId: '{{deletedOrderId}}'
     }
 };
 

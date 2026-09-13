@@ -10,6 +10,13 @@ import type { Probe } from '@guebbit/openapi-runnable-collections';
 /** The scoping cases the OpenAPI contract cannot express on its own. */
 export const probes: Probe[] = [
     {
+        name: 'Probe: the ids for every request below',
+        why: `Order ids are not fixed. The demo dataset produces its order book by driving real checkouts, so every id is minted when the shop is built and differs from the last build — nothing generated here can name one. Send this first, then set the collection's \`orderId\` variable to any id it returns, and \`deletedOrderId\` to the one the non-admin account owns. \`npm run demo\`'s \`GET /__test/scenario\` answers the same question by name.`,
+        method: 'GET',
+        path: '/orders?pageSize=10',
+        auth: 'bearer'
+    },
+    {
         name: 'Probe: the owner asking for their own soft-deleted order',
         why: `The dataset puts its one soft-deleted order on the NON-admin user for exactly this case, and the case is subtle: ownership-only scoping would allow it, and correct scoping refuses. Log in as the non-admin first (see the account probes), then send this — it must not return the order. An admin token on the same URL must.`,
         method: 'GET',

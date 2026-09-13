@@ -12,52 +12,43 @@
  * See: docs/tools/demo-profile.md
  */
 
+import type { Express } from 'express';
 import { seedAddressBooksCollection } from './account';
-import { seedAuditLogsCollection } from './audit-logs';
-import { seedCartsCollection } from './cart';
 import { seedLocalesCollection } from './locales';
-import { seedOrdersCollection, seedOwnerPendingOrder } from './orders';
-import { seedProductsCollection, checkProductGuarantees } from './products';
+import { seedProductsCollection } from './products';
 import { seedUsersCollection } from './users';
 import { seedWebhooksCollection } from './webhooks';
 import { seedWishlistsCollection } from './wishlist';
 import { seedBlank } from './blank';
 import { seedAccessModel } from './accounts';
+import { SHOP_SUBJECTS } from './subjects';
+import { withLoopbackServer } from './flows/loopback';
+import { driveShopHistory } from './flows/shop-history';
+import { backdateHistory } from './flows/backdate';
 import type { SeedOutcome } from '@scenarios/seed';
 
 /** One module's `shop` registration: how to seed it. */
 export interface ScenarioModule {
     /** Write this module's slice of the `shop` scenario. Called only by {@link seedShop}. */
     seed: () => Promise<SeedOutcome[]>;
-
-    /**
-     * Which of this module's `scenario.shop` guarantees (its own `module.ts`) the currently
-     * seeded database actually satisfies. Absent for a module that declares none —
-     * `scenarios/check.ts` only calls this for a module whose manifest lists something.
-     */
-    checkGuarantees?: () => Promise<string[]>;
 }
 
-/** Every module with `shop` fixtures. */
+/**
+ * Every module with `shop` fixtures — the rows that exist BEFORE anybody uses the shop.
+ *
+ * Orders, payments, shipments, stock movements, reservations, carts and audit entries are
+ * deliberately absent: those are what using the shop PRODUCES, and `./flows/shop-history.ts`
+ * produces them by using it. See `OFFLINE_PAYMENTS_3`.
+ */
 export const shopModules: Readonly<Record<string, ScenarioModule>> = {
     account: {
         seed: seedAddressBooksCollection
     },
-    'audit-logs': {
-        seed: seedAuditLogsCollection
-    },
-    cart: {
-        seed: seedCartsCollection
-    },
     locales: {
         seed: seedLocalesCollection
     },
-    orders: {
-        seed: seedOrdersCollection
-    },
     products: {
-        seed: seedProductsCollection,
-        checkGuarantees: checkProductGuarantees
+        seed: seedProductsCollection
     },
     users: {
         seed: seedUsersCollection
@@ -71,8 +62,7 @@ export const shopModules: Readonly<Record<string, ScenarioModule>> = {
 };
 
 /**
- * The `shop` scenario: the access model, then every `shopModules` entry's records, then
- * `order.ownerPending`'s real stock hold.
+ * The `shop` scenario's STARTING rows: the access model, then every `shopModules` entry.
  *
  * `locales` MUST finish first, not join the concurrent batch: `products.seed()` writes its rows'
  * `translations` through `planTranslations`/`writeTranslations`, and `planSlot`
@@ -83,10 +73,8 @@ export const shopModules: Readonly<Record<string, ScenarioModule>> = {
  * concurrent. Nothing can resolve a caller until there is a shop to be a member of, which is why
  * the access model runs before either.
  *
- * `seedOwnerPendingOrder` MUST run last, after the concurrent batch, for the same reason in
- * reverse: it holds real stock against `./products`'s row through the real
- * `inventoryService.reserveForOrder`, which needs that row to already exist. Racing it into the
- * concurrent batch would mean it sometimes finds no product to hold against.
+ * A shop seeded and never driven has an empty catalogue shelf — every product starts at
+ * `onHand: 0` and takes delivery from {@link buildScenario}'s flow run.
  */
 export const seedShop = (): Promise<SeedOutcome[]> =>
     seedAccessModel().then(() =>
@@ -95,11 +83,27 @@ export const seedShop = (): Promise<SeedOutcome[]> =>
                 Object.entries(shopModules)
                     .filter(([name]) => name !== 'locales')
                     .map(([, scenarioModule]) => scenarioModule.seed())
-            ).then((restOutcomes) =>
-                seedOwnerPendingOrder().then(() => [localeOutcomes, ...restOutcomes].flat())
-            )
+            ).then((restOutcomes) => [localeOutcomes, ...restOutcomes].flat())
         )
     );
+
+/** One named, whole-database state: the rows it starts from, and the history it then lives. */
+interface Scenario {
+    /** Write the starting rows. Assumes an empty database — the caller owns emptying it. */
+    seed: () => Promise<SeedOutcome[]>;
+
+    /**
+     * Drive the application until the shop has a past, against a base URL that is already
+     * listening. Absent for a scenario with nothing to live through.
+     */
+    drive?: (baseUrl: string) => Promise<{
+        subjects: Record<string, string>;
+        ages: Record<string, number>;
+    }>;
+
+    /** Guarantee name → row id, for the rows {@link Scenario.seed} pinned rather than produced. */
+    subjects: Readonly<Record<string, string>>;
+}
 
 /**
  * The named, whole-database scenarios this repo can seed. `scenarios/apply.ts` and
@@ -107,9 +111,9 @@ export const seedShop = (): Promise<SeedOutcome[]> =>
  * in exactly one place.
  */
 export const SCENARIOS = {
-    shop: seedShop,
-    blank: seedBlank
-} satisfies Record<string, () => Promise<SeedOutcome[]>>;
+    shop: { seed: seedShop, drive: driveShopHistory, subjects: SHOP_SUBJECTS },
+    blank: { seed: seedBlank, subjects: {} }
+} satisfies Record<string, Scenario>;
 
 /** A name {@link SCENARIOS} actually knows how to seed. */
 export type ScenarioName = keyof typeof SCENARIOS;
@@ -132,3 +136,36 @@ export const DEFAULT_SCENARIO: ScenarioName = 'shop';
  */
 export const isScenarioName = (name: string): name is ScenarioName =>
     Object.hasOwn(SCENARIOS, name);
+
+/**
+ * Seed a scenario into the CURRENTLY EMPTY database and, where it has one, live its history:
+ * drive the real flows against a throwaway loopback listener, then move each order into the past.
+ *
+ * One function rather than three exported steps because the three have exactly one legitimate
+ * order, and it is not obvious: nothing can be driven before the rows exist, and nothing can be
+ * backdated before it has been driven.
+ *
+ * @param name - which scenario
+ * @param app - the Express application, for the loopback listener the flows are driven against.
+ *              Optional: a scenario with no history to live needs no app at all, which is what
+ *              lets `blank` be built by a caller that has not assembled one
+ * @returns every subject the scenario offers — its pinned ids merged with the flow-produced ones
+ * @throws {Error} when the scenario has flows to drive and no app was given
+ */
+export const buildScenario = (
+    name: ScenarioName,
+    app?: Express
+): Promise<Readonly<Record<string, string>>> => {
+    const { seed, drive, subjects }: Scenario = SCENARIOS[name];
+
+    if (drive && !app)
+        throw new Error(`scenario "${name}" lives its history over HTTP and needs the Express app`);
+
+    return seed()
+        .then(() => (drive && app ? withLoopbackServer(app, drive) : undefined))
+        .then((history) =>
+            history
+                ? backdateHistory(history.ages).then(() => ({ ...subjects, ...history.subjects }))
+                : subjects
+        );
+};

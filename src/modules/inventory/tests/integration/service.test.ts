@@ -115,6 +115,38 @@ describe('reserveForOrder', () => {
         expect(await countersOf(String(product._id))).toEqual({ onHand: 10, reserved: 3 });
     });
 
+    it('holds for the caller-given window instead of NODE_RESERVATION_TTL_MINUTES, when given one', async () => {
+        const product = await createProduct({ onHand: 10 });
+        const orderId = anOrderId();
+        const before = Date.now();
+
+        await reserveForOrder(
+            orderId,
+            [{ productId: String(product._id), quantity: 1 }],
+            60 * 24 * 7
+        );
+
+        const hold = await reservationRepository.findByOrderId(orderId);
+        // A week, not the default 30 minutes — the whole point of a caller-given window.
+        const expected = before + 7 * 24 * 60 * 60_000;
+        expect(hold!.expiresAt.getTime()).toBeGreaterThanOrEqual(expected - 5000);
+        expect(hold!.expiresAt.getTime()).toBeLessThanOrEqual(expected + 5000);
+    });
+
+    it('falls back to NODE_RESERVATION_TTL_MINUTES when no window is given', () =>
+        withEnvironment('NODE_RESERVATION_TTL_MINUTES', '45', async () => {
+            const product = await createProduct({ onHand: 10 });
+            const orderId = anOrderId();
+            const before = Date.now();
+
+            await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 1 }]);
+
+            const hold = await reservationRepository.findByOrderId(orderId);
+            const expected = before + 45 * 60_000;
+            expect(hold!.expiresAt.getTime()).toBeGreaterThanOrEqual(expected - 5000);
+            expect(hold!.expiresAt.getTime()).toBeLessThanOrEqual(expected + 5000);
+        }));
+
     /*
      * Surfaced by mutation testing: replacing the duplicate-key check in `insertHold` with `true`
      * survived every test. Swallowing any error into `null` makes `reserveForOrder` read it as

@@ -10,6 +10,7 @@
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
 import { orderTotal } from './domain';
+import type { OrderTransferInstructions } from '@types';
 
 /**
  * The minimum either document needs from an order: a title and a price per line.
@@ -55,6 +56,71 @@ export const orderConfirmEmail = (
                     price: item.product.price
                 })
             ),
+            total: t('orders.email-confirm.total', { total: orderTotal(order) }),
+            footer: t('email.footer')
+        }
+    };
+};
+
+/**
+ * The instructions and deadline for a `bank_transfer` checkout, sent instead of
+ * {@link orderConfirmEmail} — there is nothing to confirm yet, only what the customer still has
+ * to do. `payBy` is formatted with `Intl.DateTimeFormat` in the recipient's own language rather
+ * than a hand-rolled date string, the same `node:` standard-library-first rule that keeps this
+ * repo away from a date-formatting dependency.
+ */
+export const bankTransferInstructionsEmail = (
+    locale: string,
+    name: string,
+    order: OrderLines,
+    instructions: OrderTransferInstructions,
+    payBy: Date
+): EmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'orders.order-transfer-instructions',
+        subject: t('orders.email-transfer.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('orders.email-transfer.meta-title'),
+            pageMetaLinks: [],
+            greeting: t('orders.email-transfer.greeting', { name }),
+            body: t('orders.email-transfer.body'),
+            beneficiary: instructions.beneficiary,
+            iban: instructions.iban,
+            // Not a conditional spread: `undefined` here still reads as "unset" to the
+            // template's `typeof bic !== "undefined"` guard, and a bare key keeps this object a
+            // plain literal `tests/cross-cutting/mail-copy.test.ts` can read statically.
+            bic: instructions.bic,
+            reference: instructions.reference,
+            deadline: t('orders.email-transfer.deadline', {
+                payBy: new Intl.DateTimeFormat(locale, {
+                    dateStyle: 'long',
+                    timeStyle: 'short'
+                }).format(payBy)
+            }),
+            total: t('orders.email-confirm.total', { total: orderTotal(order) }),
+            footer: t('email.footer')
+        }
+    };
+};
+
+/**
+ * The sweep cancelling a `bank_transfer` order whose deadline passed with no money — the
+ * customer's answer to "what happened to my order". Never sent for a `card` order timing out:
+ * that hold is thirty minutes and nobody has read a confirmation email by then.
+ */
+export const bankTransferExpiredEmail = (locale: string, order: OrderLines): EmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'orders.order-transfer-expired',
+        subject: t('orders.email-transfer-expired.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('orders.email-transfer-expired.meta-title'),
+            pageMetaLinks: [],
+            greeting: t('orders.email-transfer-expired.greeting'),
+            body: t('orders.email-transfer-expired.body'),
             total: t('orders.email-confirm.total', { total: orderTotal(order) }),
             footer: t('email.footer')
         }

@@ -52,5 +52,25 @@ export default {
         // Detach, never delete: the order survives the account.
         onDomainEvent(USER_DELETED, ({ userId }) => detachUserId(userId));
     },
-    locales: path.join(__dirname, 'locales')
+    locales: path.join(__dirname, 'locales'),
+    /**
+     * The order states the storefront and the admin both have a screen for.
+     *
+     * Every one is PRODUCED, not seeded — `scenarios/flows/shop-history.ts` reaches each by
+     * driving the endpoints a person would, so the ids are minted at boot and served by
+     * `GET /__test/scenario`. `tests/integration/scenarios/shop.test.ts` holds this list equal to
+     * what the runner actually recorded, in both directions.
+     */
+    scenario: {
+        shop: [
+            'order.ownerPending',
+            'order.paid',
+            'order.shipped',
+            'order.delivered',
+            'order.cancelled',
+            'order.softDeleted',
+            'order.paidOffline',
+            'order.awaitingTransfer'
+        ]
+    }
 } satisfies AppModule;
