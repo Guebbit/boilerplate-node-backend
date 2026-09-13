@@ -20,12 +20,16 @@ import {
 } from '@infrastructure/http/middlewares/cache';
 import * as cache from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
-import { cacheInvalidationFailuresTotal } from '@infrastructure/observability/metrics-cache';
+import {
+    cacheInvalidationFailuresTotal,
+    cacheRequestsTotal
+} from '@infrastructure/observability/metrics-cache';
 
 jest.mock('@infrastructure/adapters/cache', () => ({
     getCacheValue: jest.fn(),
     setCacheValue: jest.fn(),
-    invalidateCacheTags: jest.fn()
+    invalidateCacheTags: jest.fn(),
+    claimCacheRefresh: jest.fn()
 }));
 
 // The size gate logs the entry it refuses; silence it so a passing run is quiet.
@@ -163,6 +167,18 @@ const storeThrough = async (body: unknown, seconds = 60) => {
     response.json(body);
 };
 
+/** An entry still inside its soft TTL — the ordinary HIT path. */
+const freshEnvelope = (body: unknown) =>
+    JSON.stringify({ status: 200, body, staleAt: Date.now() + 60_000 });
+
+/** An entry past its soft TTL but still inside Redis' own `ttl + grace` window. */
+const staleEnvelope = (body: unknown) =>
+    JSON.stringify({ status: 200, body, staleAt: Date.now() - 1000 });
+
+/** A plain `GET /products` request — the refresh-ahead cases below don't care about the key. */
+const staleGetRequest = () =>
+    asStub<Request>({ method: 'GET', originalUrl: '/products', query: {}, locale: 'en' });
+
 describe('setCache', () => {
     beforeEach(() => {
         jest.clearAllMocks();
@@ -172,7 +188,7 @@ describe('setCache', () => {
 
     it('returns a cached response when Redis has a match', async () => {
         mockedCache.getCacheValue.mockResolvedValue(
-            JSON.stringify({ status: 200, body: { success: true } })
+            JSON.stringify({ status: 200, body: { success: true }, staleAt: Date.now() + 60_000 })
         );
 
         const middleware = setCache(60, { tags: ['products'], keyParameters: ['page'] });
@@ -241,10 +257,11 @@ describe('setCache', () => {
         response.statusCode = 201;
         response.json({ success: true, data: [] });
 
+        // Redis holds the entry past its soft expiry: 120s TTL + min(60, 120)s grace.
         expect(mockedCache.setCacheValue).toHaveBeenCalledWith(
             'GET:/products?:user:507f1f77bcf86cd799439011:en',
-            JSON.stringify({ status: 201, body: { success: true, data: [] } }),
-            120,
+            expect.stringContaining('"status":201,"body":{"success":true,"data":[]}'),
+            180,
             ['products']
         );
     });
@@ -265,14 +282,17 @@ describe('setCache', () => {
         await middleware(request, response, jest.fn() as NextFunction);
 
         // The browser must not be told to hold it longer than the server will
-        expect(headers['cache-control']).toBe('public, max-age=30');
+        expect(headers['cache-control']).toBe(
+            'public, max-age=30, stale-while-revalidate=60, stale-if-error=300'
+        );
 
         response.json({ success: true });
 
+        // Grace is clamped the same way: min(60, 30) = 30, so Redis holds it for 60s total.
         expect(mockedCache.setCacheValue).toHaveBeenCalledWith(
             expect.any(String),
             expect.any(String),
-            30,
+            60,
             ['products']
         );
     });
@@ -287,11 +307,15 @@ describe('setCache', () => {
     // translated `message` / `errors` copy, so a cache that does not key on it hands an Italian
     // body to the next English caller of the same URL.
     it.each([
-        ['guest', {} as Partial<Request>, 'public, max-age=30'],
+        [
+            'guest',
+            {} as Partial<Request>,
+            'public, max-age=30, stale-while-revalidate=60, stale-if-error=300'
+        ],
         [
             'authenticated',
             { authContext: { id: '507f1f77bcf86cd799439011' } } as Partial<Request>,
-            'private, max-age=30'
+            'private, max-age=30, stale-while-revalidate=60, stale-if-error=300'
         ]
     ])(
         'varies a %s response on Authorization and Accept-Language',
@@ -575,6 +599,178 @@ describe('setCache', () => {
         // stop: unchecked, setCache would call response.set('Cache-Control', …) right here.
         expect(headers['cache-control']).toBe('no-store');
         expect(mockedCache.getCacheValue).not.toHaveBeenCalled();
+    });
+});
+
+/*
+ * Refresh-ahead: past the soft `staleAt`, exactly one caller rebuilds and everyone else keeps
+ * reading their own stale body — the pattern the module doc calls "serve the old value, let
+ * exactly one caller rebuild it". `HIT`/`MISS` above already cover "nothing has expired yet" and
+ * "nothing is cached at all"; what is new here is the branch in between.
+ */
+describe('refresh-ahead (stale-while-revalidate)', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        process.env.NODE_REDIS_CACHE_DEV_TTL_MAX = '0';
+    });
+
+    it('serves a HIT without attempting a claim while still within the soft TTL', async () => {
+        mockedCache.getCacheValue.mockResolvedValue(freshEnvelope({ ok: true }));
+        const { response, headers } = createResponse();
+
+        await setCache(60, { tags: ['products'], keyParameters: [] })(
+            staleGetRequest(),
+            response,
+            jest.fn() as NextFunction
+        );
+
+        expect(headers['x-cache']).toBe('HIT');
+        expect(mockedCache.claimCacheRefresh).not.toHaveBeenCalled();
+        expect(response.json).toHaveBeenCalledWith({ ok: true });
+    });
+
+    it('claims the rebuild and runs the controller when the claim is won', async () => {
+        mockedCache.getCacheValue.mockResolvedValue(staleEnvelope({ old: true }));
+        mockedCache.claimCacheRefresh.mockResolvedValue(true);
+        const { response, headers } = createResponse();
+        const next = jest.fn() as NextFunction;
+
+        await setCache(60, { tags: ['products'], keyParameters: [] })(
+            staleGetRequest(),
+            response,
+            next
+        );
+
+        // The claim window is the grace window: min(60, 60) = 60.
+        expect(mockedCache.claimCacheRefresh).toHaveBeenCalledWith(expect.any(String), 60);
+        expect(headers['x-cache']).toBe('REFRESH');
+        expect(next).toHaveBeenCalledTimes(1);
+
+        // The claimer answers with a FRESH body — nobody, including this caller, ever receives
+        // the stale one once a rebuild has been claimed.
+        response.statusCode = 200;
+        response.json({ fresh: true });
+
+        expect(mockedCache.setCacheValue).toHaveBeenCalledWith(
+            expect.any(String),
+            expect.stringContaining('"fresh":true'),
+            120,
+            ['products']
+        );
+    });
+
+    it('serves the stale body from its own key when the claim is lost', async () => {
+        mockedCache.getCacheValue.mockResolvedValue(staleEnvelope({ old: true }));
+        mockedCache.claimCacheRefresh.mockResolvedValue(false);
+        const { response, headers } = createResponse();
+        const next = jest.fn() as NextFunction;
+
+        await setCache(60, { tags: ['products'], keyParameters: [] })(
+            staleGetRequest(),
+            response,
+            next
+        );
+
+        expect(headers['x-cache']).toBe('STALE');
+        expect(next).not.toHaveBeenCalled();
+        expect(response.json).toHaveBeenCalledWith({ old: true });
+        expect(mockedCache.setCacheValue).not.toHaveBeenCalled();
+    });
+
+    // No stale body survives past Redis' own TTL (`ttl + grace`) — nothing left to serve, so a
+    // hard expiry is indistinguishable from a key that was never written.
+    it('falls through to MISS when the entry is hard-expired', async () => {
+        mockedCache.getCacheValue.mockResolvedValue(undefined);
+        const { response, headers } = createResponse();
+        const next = jest.fn() as NextFunction;
+
+        await setCache(60, { tags: ['products'], keyParameters: [] })(
+            staleGetRequest(),
+            response,
+            next
+        );
+
+        expect(headers['x-cache']).toBe('MISS');
+        expect(mockedCache.claimCacheRefresh).not.toHaveBeenCalled();
+        expect(next).toHaveBeenCalledTimes(1);
+    });
+
+    // A fixed 60s grace would hand back most of what the dev TTL ceiling just took — an
+    // out-of-band write's stale answer would then survive almost as long as production's full
+    // hour, rather than the few seconds the ceiling promises.
+    it('clamps the grace window to the resolved TTL outside production', async () => {
+        process.env.NODE_REDIS_CACHE_DEV_TTL_MAX = '10';
+        mockedCache.getCacheValue.mockResolvedValue(undefined);
+        const { response } = createResponse();
+
+        await setCache(3600, { tags: ['products'], keyParameters: [] })(
+            staleGetRequest(),
+            response,
+            jest.fn() as NextFunction
+        );
+
+        response.statusCode = 200;
+        response.json({ ok: true });
+
+        // ttl clamped to 10, grace clamped to min(60, 10) = 10 → Redis TTL 10 + 10 = 20.
+        expect(mockedCache.setCacheValue).toHaveBeenCalledWith(
+            expect.any(String),
+            expect.any(String),
+            20,
+            ['products']
+        );
+    });
+
+    it('advertises the fixed stale-while-revalidate and stale-if-error windows', async () => {
+        mockedCache.getCacheValue.mockResolvedValue(undefined);
+        const { response, headers } = createResponse();
+
+        await setCache(60, { tags: ['products'], keyParameters: [] })(
+            staleGetRequest(),
+            response,
+            jest.fn() as NextFunction
+        );
+
+        expect(headers['cache-control']).toBe(
+            'public, max-age=60, stale-while-revalidate=60, stale-if-error=300'
+        );
+    });
+
+    it('counts every outcome under its own label', async () => {
+        const incSpy = jest.spyOn(cacheRequestsTotal, 'inc');
+
+        mockedCache.getCacheValue.mockResolvedValue(freshEnvelope({}));
+        await setCache(60, { tags: ['products'], keyParameters: [] })(
+            staleGetRequest(),
+            createResponse().response,
+            jest.fn() as NextFunction
+        );
+        expect(incSpy).toHaveBeenCalledWith({ result: 'hit' });
+
+        mockedCache.getCacheValue.mockResolvedValue(undefined);
+        await setCache(60, { tags: ['products'], keyParameters: [] })(
+            staleGetRequest(),
+            createResponse().response,
+            jest.fn() as NextFunction
+        );
+        expect(incSpy).toHaveBeenCalledWith({ result: 'miss' });
+
+        mockedCache.getCacheValue.mockResolvedValue(staleEnvelope({}));
+        mockedCache.claimCacheRefresh.mockResolvedValue(true);
+        await setCache(60, { tags: ['products'], keyParameters: [] })(
+            staleGetRequest(),
+            createResponse().response,
+            jest.fn() as NextFunction
+        );
+        expect(incSpy).toHaveBeenCalledWith({ result: 'refresh' });
+
+        mockedCache.claimCacheRefresh.mockResolvedValue(false);
+        await setCache(60, { tags: ['products'], keyParameters: [] })(
+            staleGetRequest(),
+            createResponse().response,
+            jest.fn() as NextFunction
+        );
+        expect(incSpy).toHaveBeenCalledWith({ result: 'stale' });
     });
 });
 
