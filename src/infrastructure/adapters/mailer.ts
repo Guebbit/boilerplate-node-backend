@@ -67,7 +67,43 @@ export const emailTemplatesDirectory = (): string =>
 export const templateFile = (templateName: string): string =>
     path.resolve(emailTemplatesDirectory(), `${templateName}.ejs`);
 
-/** The memoised SMTP transport. See {@link getTransporter}. */
+/**
+ * How this deployment treats an email.
+ *
+ * `smtp`    hand it to the configured mail server.
+ * `log`     render it and log the send, opening no socket — nodemailer's own `jsonTransport`.
+ * `outbox`  keep it in memory, where `GET /__test/emails` can read it back.
+ *
+ * The pattern is Laravel's `MAIL_MAILER` and Symfony's `MAILER_DSN`: one named setting rather
+ * than a condition per caller. No `none`, deliberately — it would differ from `log` only by
+ * skipping the render, and the render is where a template bug surfaces.
+ */
+export type MailTransport = 'smtp' | 'log' | 'outbox';
+
+/** {@link MailTransport}, as a set, so an unknown `NODE_MAIL_TRANSPORT` falls through to SMTP. */
+const MAIL_TRANSPORTS = new Set<string>(['smtp', 'log', 'outbox']);
+
+/**
+ * Which transport this process uses, resolved per send.
+ *
+ * Two safety rails sit ABOVE the setting, because neither is a preference a deployment gets to
+ * express. The demo profile's outbox IS its control surface — `GET /__test/emails` is how the
+ * paired e2e suite reads a reset token — so a `.env` naming `smtp` must not quietly empty it. And
+ * a test run must never open a socket whatever the environment says, or the suite delivers real
+ * mail using the real credentials `dotenv` just loaded.
+ *
+ * Below those, `NODE_MAIL_TRANSPORT` decides, and SMTP is what a deployment that says nothing
+ * gets — the behaviour every existing caller already had.
+ */
+export const resolveMailTransport = (): MailTransport => {
+    if (isDemoMode()) return 'outbox';
+    if (process.env.NODE_ENV === 'test') return 'log';
+
+    const named = process.env.NODE_MAIL_TRANSPORT?.trim();
+    return named && MAIL_TRANSPORTS.has(named) ? (named as MailTransport) : 'smtp';
+};
+
+/** The memoised transport. See {@link getTransporter}. */
 let transport: Transporter | undefined;
 
 /**
@@ -80,11 +116,13 @@ export const resetTransporter = (): void => {
 };
 
 /**
- * The SMTP transport, built on first use and reused: nodemailer pools connections, so a
- * per-email transport would pay the TCP + TLS + AUTH handshake every time. LAZY rather than
- * module-scope, so the environment is read when first needed, not frozen at import. Under
- * `NODE_ENV=test` it's nodemailer's `jsonTransport`, which opens no socket — without it the
- * suite would deliver actual mail using real `.env` credentials.
+ * The transport, built on first use and reused: nodemailer pools connections, so a per-email
+ * transport would pay the TCP + TLS + AUTH handshake every time. LAZY rather than module-scope,
+ * so the environment is read when first needed, not frozen at import — which is also what lets
+ * {@link resetTransporter} hand a suite a fresh one after it varies the configuration.
+ *
+ * `log` is nodemailer's own `jsonTransport`: it renders and returns the message, and opens no
+ * socket.
  *
  * See: docs/tools/email-and-rendering.md#smtp-configuration
  */
@@ -97,7 +135,7 @@ const getTransporter = (): Transporter => {
     transport =
         // Two calls rather than one with a ternary argument: `createTransport` is overloaded per
         // transport kind, and a union argument matches no single overload.
-        process.env.NODE_ENV === 'test'
+        resolveMailTransport() === 'log'
             ? createTransport({ jsonTransport: true })
             : createTransport({
                   // Hostname this client announces in the SMTP EHLO greeting. Some strict servers
@@ -143,8 +181,9 @@ export const nodemailer = (
     templateName: string,
     data: Data
 ): Promise<SentMessageInfo> => {
-    // Demo profile: no SMTP exists; record the send where the e2e suite can read it instead.
-    if (isDemoMode()) {
+    // The outbox keeps the message where `GET /__test/emails` can read it, and renders nothing:
+    // the paired suite asserts on the template NAME and the data, never on the HTML.
+    if (resolveMailTransport() === 'outbox') {
         recordDemoEmail(request, templateName, data);
         return Promise.resolve({ messageId: 'demo-outbox' });
     }

@@ -21,7 +21,13 @@ jest.mock('nodemailer', () => ({
     createTransport: (options: unknown) => createTransportMock(options)
 }));
 
-import { nodemailer, resetTransporter } from '@infrastructure/adapters/mailer';
+import {
+    nodemailer,
+    resetTransporter,
+    resolveMailTransport
+} from '@infrastructure/adapters/mailer';
+import { enableDemoProfile } from '@infrastructure/adapters/demo-outbox';
+import { withoutEnvironmentInThisFile } from '@tests/environment';
 
 /**
  * The options the module handed to `createTransport` for a given environment.
@@ -156,5 +162,53 @@ describe('credentials and identity', () => {
         });
 
         expect(options.name).toBe('');
+    });
+});
+
+/**
+ * Which transport a process uses, as `NODE_MAIL_TRANSPORT` and the two rails above it decide.
+ *
+ * The rails are the point: a deployment may state a preference, but it may not state one that
+ * empties the demo profile's outbox or lets a test run reach a real mail server.
+ */
+describe('resolveMailTransport', () => {
+    /** Every variable these cases drive, so each starts from "this deployment said nothing". */
+    withoutEnvironmentInThisFile(['NODE_MAIL_TRANSPORT', 'NODE_ENV']);
+
+    afterEach(() => {
+        enableDemoProfile(false);
+    });
+
+    it('sends over SMTP when the deployment names nothing', () => {
+        expect(resolveMailTransport()).toBe('smtp');
+    });
+
+    it.each(['smtp', 'log', 'outbox'] as const)('honours a named %s transport', (named) => {
+        process.env.NODE_MAIL_TRANSPORT = named;
+
+        expect(resolveMailTransport()).toBe(named);
+    });
+
+    it('falls back to SMTP for a name it does not know, rather than dropping the mail', () => {
+        process.env.NODE_MAIL_TRANSPORT = 'carrier-pigeon';
+
+        expect(resolveMailTransport()).toBe('smtp');
+    });
+
+    it('keeps the demo profile on its outbox whatever the deployment asked for', () => {
+        // `GET /__test/emails` is the paired suite's only way to read a reset token. A `.env`
+        // naming SMTP must not quietly empty it.
+        process.env.NODE_MAIL_TRANSPORT = 'smtp';
+        enableDemoProfile();
+
+        expect(resolveMailTransport()).toBe('outbox');
+    });
+
+    it('refuses to let a test run reach a real mail server', () => {
+        // Losing this is not a failing test, it is mail leaving the building.
+        process.env.NODE_ENV = 'test';
+        process.env.NODE_MAIL_TRANSPORT = 'smtp';
+
+        expect(resolveMailTransport()).toBe('log');
     });
 });

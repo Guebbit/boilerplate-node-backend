@@ -27,6 +27,31 @@ flowchart LR
     Send -.OTel span.-> Tempo
 ```
 
+### Which transport, and who decides
+
+One named setting rather than a condition per caller — the pattern Laravel spells `MAIL_MAILER`
+and Symfony `MAILER_DSN`.
+
+| `NODE_MAIL_TRANSPORT` | What happens to the message                                                           |
+| --------------------- | ------------------------------------------------------------------------------------- |
+| `smtp` _(default)_    | Handed to the server configured below.                                                |
+| `log`                 | Rendered, and the send is logged. No socket is opened — nodemailer's `jsonTransport`. |
+| `outbox`              | Kept in memory, where `GET /__test/emails` reads it back.                             |
+
+There is no `none`: it would differ from `log` only by skipping the render, and the render is
+where a broken template surfaces.
+
+Two cases are **not** a deployment's to set, and sit above the variable:
+
+- **The demo profile always uses its outbox.** `GET /__test/emails` is its control surface — the
+  paired e2e suite reads a password-reset token out of it — so a `.env` naming `smtp` must not
+  quietly empty it.
+- **A test run always uses `log`.** `dotenv/config` has already loaded real credentials by the
+  time a suite starts; without this rail a stray test delivers actual mail with them.
+
+`scenarios/apply.ts` sets `log` for the same reason a staging box would: seeding PLACES orders, so
+every one of them wants to email a recipient the seeder invented.
+
 ### SMTP configuration
 
 | Env var          | Meaning                                                   |

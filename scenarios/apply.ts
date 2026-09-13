@@ -49,6 +49,17 @@ process.env.NODE_APP_NO_LISTEN = '1';
 Object.assign(process.env, SCRIPTED_RATE_LIMITS);
 
 /*
+ * A seed PLACES orders, and every one of them wants to email a confirmation — to addresses this
+ * file invented. Against a deployment with a mail server configured that is thirty real send
+ * attempts to fictional recipients, which is both noise and a reputation risk that belongs to
+ * nobody. `log` renders each one (so a broken template still fails here) and opens no socket.
+ *
+ * Overridden rather than defaulted, same as the budgets above: `.env` naming a real mail server
+ * is exactly the case this protects against.
+ */
+process.env.NODE_MAIL_TRANSPORT = 'log';
+
+/*
  * Applied only where nothing is set, unlike the budgets above: a deployment that names its own
  * beneficiary keeps it, and one that names none still gets a shop whose `order.awaitingTransfer`
  * guarantee can hold.
