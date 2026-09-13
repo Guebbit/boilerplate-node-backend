@@ -71,6 +71,10 @@ let demoApp: Express | undefined;
  * exact cost this file's split from `src/modules/*` exists to avoid. `DEFAULT_SCENARIO` is applied
  * here for the same reason: a static import of it would load the registry everywhere.
  *
+ * Empties the database itself, and only on the path that actually builds: `buildScenario` assumes
+ * an empty one, so the emptying belongs to the build rather than to every caller — a replay's own
+ * emptying is `restoreDatabaseCopy`'s.
+ *
  * @param name - the scenario to build, or `undefined` for the registry's `DEFAULT_SCENARIO`
  * @throws {UnknownScenarioError} for a name `SCENARIOS` does not carry
  * @throws {Error} when the scenario has flows to drive and `installDemo` never handed over an app
@@ -83,22 +87,26 @@ const buildOnce = (name: string | undefined): Promise<ScenarioCopy> =>
         const known = copies.get(requested);
         if (known) return known;
 
-        return scenarios.buildScenario(requested, demoApp).then((subjects) =>
-            captureDatabase().then((database) => {
-                const copy = { name: requested, database, subjects };
-                copies.set(requested, copy);
-                return copy;
-            })
-        );
+        return emptyDatabase()
+            .then(() => scenarios.buildScenario(requested, demoApp))
+            .then((subjects) =>
+                captureDatabase().then((database) => {
+                    const copy = { name: requested, database, subjects };
+                    copies.set(requested, copy);
+                    return copy;
+                })
+            );
     });
 
 /**
  * Empty every collection and put `scenario` back — built the first time, replayed after that.
  *
+ * One emptying per restore, and it is `restoreDatabaseCopy`'s own: whichever branch
+ * {@link buildOnce} took, what lands here is a copy to write over a cleared database.
+ *
  * Never `dropDatabase()`: that clears each model's index build along with the data, so the next
  * write racing an unbuilt unique index would succeed where it should have been refused — see
- * `emptyDatabase`'s own docblock. Always empties first, even at boot: free on a fresh in-memory
- * database, and it is what lets this take a bare name instead of a caller-supplied flag.
+ * `emptyDatabase`'s own docblock.
  *
  * Serialised through {@link restoreQueue} rather than run as called: `installDemo` has no queue of
  * its own, and two overlapping restores emptying and reseeding the same collections concurrently
@@ -108,14 +116,8 @@ const buildOnce = (name: string | undefined): Promise<ScenarioCopy> =>
  * @throws {UnknownScenarioError} for a name `SCENARIOS` does not carry
  */
 const runRestore = (scenario: string | undefined): Promise<void> =>
-    emptyDatabase()
-        .then(() => buildOnce(scenario))
+    buildOnce(scenario)
         .then((copy) =>
-            /*
-             * A replay, or the build's own rows read straight back. `buildOnce` wrote into the
-             * database this just emptied when it BUILT, so replaying its copy over the top is a
-             * no-op on the first restore and the whole job on every one after it.
-             */
             restoreDatabaseCopy(copy.database).then(() => {
                 currentScenario = copy.name;
             })
@@ -155,7 +157,7 @@ export const restoreScenario = (scenario?: string): Promise<void> => {
  * `accounts` comes from `scenarios/accounts.ts` as the `NODE_SEED_*` overrides resolved it, so the
  * paired frontend never keeps a second copy of a password. `subjects` merges the pinned ids with
  * the ones the flow runner recorded at boot — which is the only way an order id can be published
- * at all now that orders are produced rather than written.
+ * at all, since orders are produced rather than written.
  */
 const describeScenario = (): Promise<Record<string, unknown>> =>
     import('@scenarios/accounts').then((accounts) => ({
