@@ -354,7 +354,10 @@ export const userRepository: Repository<UserDocument> & {
                                 }
                             }
                         ],
-                        { timestamps: false }
+                        // Mongoose refuses an array (aggregation-pipeline) update by default —
+                        // `updatePipeline: true` is the documented opt-in, not a workaround.
+                        // https://mongoosejs.com/docs/api/query.html#Query.prototype.updateOne()
+                        { timestamps: false, updatePipeline: true }
                     )
                     .exec()
             )
