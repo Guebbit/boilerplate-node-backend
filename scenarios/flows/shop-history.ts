@@ -222,10 +222,13 @@ const plannedDemand = (): Map<string, number> => {
  * Put every product's opening stock on the shelf — `POST /inventory/receipts`, before anyone can
  * buy anything, since the catalogue seeds at `onHand: 0`.
  *
- * Each receipt is the catalogue's own opening figure PLUS what the flows are about to buy, so the
- * shop's stock levels after a boot are the ones `scenarios/products.ts` describes rather than
- * those minus a history. The out-of-stock subject gets no receipt at all — that is the whole
- * reason it is in the catalogue.
+ * Each receipt is the catalogue's own opening figure PLUS what the flows are about to buy, so a
+ * shelf is never left at the figure `scenarios/products.ts` describes MINUS a history — which
+ * would be the one number in the shop nothing explains. The named rows' demand is overstated (see
+ * {@link plannedDemand}), so theirs settle a little above their figure rather than exactly on it.
+ *
+ * The out-of-stock subject gets no receipt at all — that is the whole reason it is in the
+ * catalogue.
  *
  * @param owner - a caller holding `inventory.create`
  */
@@ -310,6 +313,26 @@ const signOutEveryone = (callers: Caller[]): Promise<void> =>
     );
 
 /**
+ * The signed-in caller shopping as `who` — the customer base's own entry, or `owner` for the one
+ * basket that belongs to the shop owner.
+ *
+ * A throw rather than a silent skip: a name with no session behind it means this file and
+ * `scenarios/users.ts` have drifted, and an order quietly never placed would surface weeks later
+ * as a missing row with nothing pointing at the cause.
+ *
+ * @param base - every filler shopper, as {@link signInCustomerBase} signed them in
+ * @param owner - the shop owner's own caller
+ * @param who - a `SEED_CUSTOMER_IDS` key, or `'owner'`
+ * @throws {Error} when nothing signed in under that name
+ */
+const shopperFor = (base: ReadonlyMap<string, Caller>, owner: Caller, who: string): Caller => {
+    const shopper = who === 'owner' ? owner : base.get(who);
+    if (!shopper) throw new Error(`shop history: no signed-in caller for "${who}"`);
+
+    return shopper;
+};
+
+/**
  * Refuse to seed a shop the `order.awaitingTransfer` guarantee cannot hold in.
  *
  * Bank transfer is offered only once the deployment names a beneficiary and an IBAN
@@ -345,16 +368,16 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
     await requireBankTransfer(owner);
     await openEveryShelf(owner);
 
-    const ages: Record<string, number> = {};
     const subjects: Record<string, string> = {};
 
     /*
-     * Ages run oldest to newest as orders are placed, so the shop's history reads as a shop's
-     * does — a steady trickle rather than everything on one afternoon. The two orders still
-     * holding stock are excluded below and stay dated today.
+     * Every order that will be moved into the past, in the sequence it was placed — which is what
+     * lets the ages below run oldest to newest, so the shop's history reads as a shop's does: a
+     * steady trickle rather than everything on one afternoon. The two orders still holding stock
+     * never pass through here and stay dated today.
      */
     const placed: string[] = [];
-    const age = (orderId: string): string => {
+    const dated = (orderId: string): string => {
         placed.push(orderId);
         return orderId;
     };
@@ -362,11 +385,9 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
     // ── The customer base's volume, and the `customer` account's own long history ──────────────
     const base = await signInCustomerBase(baseUrl);
     for (const { customer: who, lines } of FILLER_ORDERS) {
-        const shopper = base.get(who);
-        if (!shopper) throw new Error(`shop history: no signed-in caller for "${who}"`);
-        const orderId = age(
+        const orderId = dated(
             await checkoutAndPay(
-                shopper,
+                shopperFor(base, owner, who),
                 lines.map(([index, quantity]) => ({ productId: fillerProductId(index), quantity }))
             )
         );
@@ -374,34 +395,34 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
     }
 
     for (const lines of CUSTOMER_ORDERS) {
-        const orderId = age(await checkoutAndPay(customer, lines));
+        const orderId = dated(await checkoutAndPay(customer, lines));
         await advanceOrder(owner, orderId, ['processing', 'shipped']);
     }
 
     // The one named row that has to be delivered rather than in transit — placed before the tick.
-    subjects['order.delivered'] = age(await checkoutAndPay(customer, DOG_FOOD(1)));
+    subjects['order.delivered'] = dated(await checkoutAndPay(customer, DOG_FOOD(1)));
     await advanceOrder(owner, subjects['order.delivered'], ['processing', 'shipped']);
 
     // One tick delivers every parcel above. Everything shipped after this line stays in transit.
     await advanceCourier(owner);
 
     // ── The named rows, each a branch the storefront or the admin actually has a screen for ────
-    subjects['order.paid'] = age(await checkoutAndPay(customer, DOG_FOOD(2)));
+    subjects['order.paid'] = dated(await checkoutAndPay(customer, DOG_FOOD(2)));
 
     // A card refused, then the same order paid with another — the retry the payment form offers.
-    const retried = age(await checkout(customer, DOG_FOOD(1)));
+    const retried = dated(await checkout(customer, DOG_FOOD(1)));
     const retriedPayment = await openPayment(customer, retried);
     await submitCard(customer, retriedPayment, CARD.declined);
     await submitCard(customer, retriedPayment, CARD.visa);
 
     // A 3-D Secure challenge: `requires_action`, finished at the provider, then reported back.
-    const challenged = age(await checkout(customer, DOG_FOOD(1)));
+    const challenged = dated(await checkout(customer, DOG_FOOD(1)));
     const challengedPayment = await openPayment(customer, challenged);
     await submitCard(customer, challengedPayment, CARD.challenge);
     await syncPayment(customer, challengedPayment);
 
     // Cancelled by the customer before paying — the stock comes back.
-    subjects['order.cancelled'] = age(await checkout(customer, DOG_FOOD(2)));
+    subjects['order.cancelled'] = dated(await checkout(customer, DOG_FOOD(2)));
     await cancelOrder(customer, subjects['order.cancelled']);
 
     /*
@@ -409,7 +430,7 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
      * The subject is the ORDER's id, not the payment's, because `GET /payments/order/{orderId}`
      * is the only way to read a payment back — a payment id would name a row nothing can fetch.
      */
-    subjects['payment.refunded'] = age(await checkoutAndPay(customer, DOG_FOOD(1)));
+    subjects['payment.refunded'] = dated(await checkoutAndPay(customer, DOG_FOOD(1)));
     await cancelOrder(owner, subjects['payment.refunded']);
 
     /*
@@ -417,12 +438,12 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
      * "the owner cannot see their own soft-deleted order", which ownership-only scoping would
      * wrongly allow and an admin-owned row could never catch.
      */
-    subjects['order.softDeleted'] = age(await checkoutAndPay(customer, DOG_FOOD(1)));
+    subjects['order.softDeleted'] = dated(await checkoutAndPay(customer, DOG_FOOD(1)));
     await softDeleteOrder(owner, subjects['order.softDeleted']);
 
     // Money that arrived at the counter — recorded by hand, settled through the same path a card
     // payment takes.
-    subjects['order.paidOffline'] = age(await checkout(customer, DOG_FOOD(1)));
+    subjects['order.paidOffline'] = dated(await checkout(customer, DOG_FOOD(1)));
     await recordOfflinePayment(owner, subjects['order.paidOffline'], 'cash');
 
     /*
@@ -430,7 +451,7 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
      * already been and gone — this is the one parcel in transit. `standard` shipping against a
      * basket well over the free-above threshold, so what it froze is 0 rather than the rate card.
      */
-    subjects['order.shipped'] = age(
+    subjects['order.shipped'] = dated(
         await checkout(owner, [{ productId: SEED_PRODUCT_IDS.dogBedPremium, quantity: 20 }], {
             shippingMethodId: 'standard'
         })
@@ -449,8 +470,7 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
 
     /* The baskets people are still shopping with — after every checkout, which empties one. */
     for (const [who, lines] of CARTS) {
-        const shopper = who === 'owner' ? owner : base.get(who);
-        if (!shopper) throw new Error(`shop history: no signed-in caller for "${who}"`);
+        const shopper = shopperFor(base, owner, who);
         for (const line of lines) await shopper.call('POST', '/cart', line);
     }
 
@@ -466,8 +486,12 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
     await signOutEveryone([owner]);
 
     /* Spread the placed orders evenly from `OLDEST_DAYS` ago up to yesterday. */
-    for (const [index, orderId] of placed.entries())
-        ages[orderId] = Math.round(OLDEST_DAYS * (1 - index / placed.length));
+    const ages = Object.fromEntries(
+        placed.map((orderId, index) => [
+            orderId,
+            Math.round(OLDEST_DAYS * (1 - index / placed.length))
+        ])
+    );
 
     return { subjects, ages };
 };

@@ -23,7 +23,7 @@ import { seedBlank } from './blank';
 import { seedAccessModel } from './accounts';
 import { SHOP_SUBJECTS } from './subjects';
 import { withLoopbackServer } from './flows/loopback';
-import { driveShopHistory } from './flows/shop-history';
+import { driveShopHistory, type ShopHistory } from './flows/shop-history';
 import { backdateHistory } from './flows/backdate';
 import type { SeedOutcome } from '@scenarios/seed';
 
@@ -38,7 +38,7 @@ export interface ScenarioModule {
  *
  * Orders, payments, shipments, stock movements, reservations, carts and audit entries are
  * deliberately absent: those are what using the shop PRODUCES, and `./flows/shop-history.ts`
- * produces them by using it. See `OFFLINE_PAYMENTS_3`.
+ * produces them by using it. See: docs/tools/demo-profile.md#how-a-scenario-is-built
  */
 export const shopModules: Readonly<Record<string, ScenarioModule>> = {
     account: {
@@ -76,7 +76,7 @@ export const shopModules: Readonly<Record<string, ScenarioModule>> = {
  * A shop seeded and never driven has an empty catalogue shelf — every product starts at
  * `onHand: 0` and takes delivery from {@link buildScenario}'s flow run.
  */
-export const seedShop = (): Promise<SeedOutcome[]> =>
+const seedShop = (): Promise<SeedOutcome[]> =>
     seedAccessModel().then(() =>
         shopModules.locales.seed().then((localeOutcomes) =>
             Promise.all(
@@ -96,10 +96,7 @@ interface Scenario {
      * Drive the application until the shop has a past, against a base URL that is already
      * listening. Absent for a scenario with nothing to live through.
      */
-    drive?: (baseUrl: string) => Promise<{
-        subjects: Record<string, string>;
-        ages: Record<string, number>;
-    }>;
+    drive?: (baseUrl: string) => Promise<ShopHistory>;
 
     /** Guarantee name → row id, for the rows {@link Scenario.seed} pinned rather than produced. */
     subjects: Readonly<Record<string, string>>;
