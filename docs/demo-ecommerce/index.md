@@ -115,17 +115,18 @@ The roles above after the evaluator has had them: `manage` expanded into its mod
 keys, and the `guest` baseline folded in. This is what a route guard and a listing
 actually answer.
 
-| Role        | products | orders  | payments | inventory | delivery | feedback | locales | users   | account | audit-logs | webhooks | api-keys | observability |
-| ----------- | -------- | ------- | -------- | --------- | -------- | -------- | ------- | ------- | ------- | ---------- | -------- | -------- | ------------- |
-| `guest`     | r        | —       | —        | —         | r        | —        | r       | —       | —       | —          | —        | —        | —             |
-| `customer`  | r        | r       | r        | —         | r        | —        | r       | —       | —       | —          | —        | —        | —             |
-| `manager`   | **all**  | **all** | r        | r         | r        | r        | **all** | r       | —       | r          | **all**  | —        | —             |
-| `warehouse` | r        | r       | —        | **all**   | **all**  | —        | r       | —       | —       | —          | —        | —        | —             |
-| `support`   | r        | r       | r        | —         | r        | **all**  | r       | ru      | —       | r          | —        | —        | —             |
-| `editor`    | **all**  | —       | —        | —         | r        | —        | **all** | —       | —       | —          | —        | —        | —             |
-| `moderator` | r        | **all** | **all**  | —         | r        | —        | r       | **all** | —       | r          | —        | —        | —             |
-| `owner`     | **all**  | **all** | **all**  | **all**   | **all**  | **all**  | **all** | **all** | d       | r          | **all**  | **all**  | —             |
-| `operator`  | —        | —       | —        | —         | —        | —        | —       | —       | —       | —          | —        | —        | **all**       |
+| Role         | products | cart     | orders  | payments | inventory | delivery | feedback | locales | users   | account | audit-logs | webhooks | api-keys | observability |
+| ------------ | -------- | -------- | ------- | -------- | --------- | -------- | -------- | ------- | ------- | ------- | ---------- | -------- | -------- | ------------- |
+| `guest`      | r        | —        | —       | —        | —         | r        | —        | r       | —       | —       | —          | —        | —        | —             |
+| `unverified` | r        | —        | r       | r        | —         | r        | —        | r       | —       | —       | —          | —        | —        | —             |
+| `customer`   | r        | checkout | r       | r        | —         | r        | —        | r       | —       | —       | —          | —        | —        | —             |
+| `manager`    | **all**  | checkout | **all** | r        | r         | r        | r        | **all** | r       | —       | r          | **all**  | —        | —             |
+| `warehouse`  | r        | checkout | r       | —        | **all**   | **all**  | —        | r       | —       | —       | —          | —        | —        | —             |
+| `support`    | r        | checkout | r       | r        | —         | r        | **all**  | r       | ru      | —       | r          | —        | —        | —             |
+| `editor`     | **all**  | checkout | —       | —        | —         | r        | —        | **all** | —       | —       | —          | —        | —        | —             |
+| `moderator`  | r        | checkout | **all** | **all**  | —         | r        | —        | r       | **all** | —       | r          | —        | —        | —             |
+| `owner`      | **all**  | checkout | **all** | **all**  | **all**   | **all**  | **all**  | **all** | **all** | d       | r          | **all**  | **all**  | —             |
+| `operator`   | —        | —        | —       | —        | —         | —        | —        | —       | —       | —       | —          | —        | —        | **all**       |
 
 **all** — every key that module declares · `r` read · `c` create · `u` update · `d` delete · — nothing
 
