@@ -12,7 +12,6 @@
 # committed copy that disagrees with a fresh run fails the build:
 #
 #   npm run contracts:bundle   -> the specs and the frontend's analytics names
-#   npm run seed:export        -> the demo dataset
 #   npm run gen:asyncapi       -> the realtime types
 #   npm run gen:api            -> the orval client
 #

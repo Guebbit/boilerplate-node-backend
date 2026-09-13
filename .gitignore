@@ -12,10 +12,10 @@ docs/.vitepress/cache
 # Uploaded images. `public/` is served by express.static (src/app.ts), so anything a user uploads
 # lands in a tracked directory — committing it would publish strangers' files with the repo.
 # `seed/` and `system/` are negated because those ARE repository content: `seed/` holds the demo
-# images `scenarios/apply.ts` references, `system/` holds the pending-image placeholders the digest
-# pipeline serves while a job is in flight (see docs/tools/image-processing.md). Keeping both in
-# their own directories is what lets this stay stable lines instead of a list of filenames to
-# maintain.
+# images `scenarios/products.ts` and `users.ts` reference, `system/` holds the pending-image
+# placeholders the digest pipeline serves while a job is in flight (see
+# docs/tools/image-processing.md). Keeping both in their own directories is what lets this stay
+# stable lines instead of a list of filenames to maintain.
 public/images/*
 !public/images/seed/
 !public/images/system/
@@ -65,14 +65,7 @@ contract.postman.json
 src/types/asyncapi.generated.ts
 
 # Root-level Markdown is WORKING NOTES: a plan, an audit, a handover, written for one change and
-# deleted when it lands. None of it is the repo's documentation — that lives in `docs/`, where
-# the site build and `check:docs-references` can hold it to account.
-#
-# Ignored rather than trusted to discipline, because the failure is silent: a plan doc committed
-# once is a page nobody maintains and nothing checks, and `git add .` in a dirty tree is all it
-# takes. The three below are the repo's own, and stay.
-#
-# A leading slash on purpose — `docs/**/*.md` and every module's README must not match.
+# deleted when it lands.
 /*.md
 !/README.md
 !/CHANGELOG.md

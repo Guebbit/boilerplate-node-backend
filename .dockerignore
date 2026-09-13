@@ -27,12 +27,14 @@ reports
 .stryker-tmp
 .tmp
 
-# Generated API-client collections for Bruno, Insomnia and Mockoon: ~900 KB of developer tooling
-# rebuilt by `npm run contracts:collections`. Only `tests/cross-cutting/contract-bundles.test.ts`
-# reads them, and the image build runs no tests — `npm run build` is type-check plus lint.
+# Generated API-client collections for Bruno, Insomnia, Mockoon and Postman: ~900 KB of developer
+# tooling rebuilt by `npm run contracts:bundle -- bruno insomnia mockoon postman`. Only
+# `tests/cross-cutting/contract-bundles.test.ts` reads them, and the image build runs no tests —
+# `npm run build` is type-check plus lint.
 contract.bruno.yml
 contract.insomnia.json
 contract.mockoon.json
+contract.postman.json
 
 # Logs
 *.log

@@ -1,6 +1,6 @@
 # Seed images
 
-The demo images `scenarios/apply.ts` points its products and users at. They are **repository
+The demo images `scenarios/products.ts` and `users.ts` point their products and users at. They are **repository
 content**, not runtime data: they are committed, and the seeders' `imageUrl`/`thumbnailUrl`s
 reference them by name.
 
