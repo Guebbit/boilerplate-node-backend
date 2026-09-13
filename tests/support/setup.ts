@@ -119,6 +119,16 @@ process.env.NODE_BANK_TRANSFER_BENEFICIARY ??= 'Guebbit Demo Shop';
 process.env.NODE_BANK_TRANSFER_IBAN ??= 'IT60X0542811101000000123456';
 
 /**
+ * The shop's own jurisdiction and its two VAT rates — required in production, and `products/tax.ts`
+ * resolves real tax arithmetic from them, so a suite asserting an actual amount needs a real pair
+ * here rather than the code's own `0.22`/`0.1` fallback (which would pass silently even if a
+ * test's expectation and the fallback happened to agree by coincidence).
+ */
+process.env.NODE_SHOP_COUNTRY ??= 'IT';
+process.env.NODE_VAT_RATE_DEFAULT ??= '0.22';
+process.env.NODE_VAT_RATE_REDUCED ??= '0.10';
+
+/**
  * The limiters count IN MEMORY here, never in Redis.
  *
  * Not a preference — a requirement. `src/app.ts` imports `dotenv/config`, so `.env` reaches the

@@ -155,6 +155,15 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
             required: true
         },
         /*
+         * Absent means the shop's standard rate — `resolveTaxRate` (`./tax`) never returns "no
+         * rate", it only narrows which one. `enum` matches the contract's `TaxClass` exactly, so
+         * an invalid value fails at the database layer as well as at validation.
+         */
+        taxClass: {
+            type: String,
+            enum: ['reduced', 'zero']
+        },
+        /*
          * `onHand` (units that exist) and `reserved` (units an open order has claimed) — not a
          * single `stock` column, which would have to be decremented at order time and so remove
          * unpaid units from the world rather than merely reserve them. `available` derives from
@@ -289,6 +298,7 @@ export const toProduct = (document: ProductDocument): Product => {
         title: document.title,
         price: document.price,
         available: Math.max(0, onHand - reserved),
+        ...(document.taxClass === undefined ? {} : { taxClass: document.taxClass }),
         ...(document.onHand === undefined ? {} : { onHand: document.onHand }),
         ...(document.reserved === undefined ? {} : { reserved: document.reserved }),
         ...(document.description === undefined ? {} : { description: document.description }),

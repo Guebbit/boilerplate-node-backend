@@ -371,6 +371,8 @@ components:
                     format: double
                     minimum: 0
                     description: Gross — VAT included. Same convention as `Product.price`.
+                taxClass:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
                 onHand:
                     type: integer
                     minimum: 0
@@ -531,6 +533,8 @@ components:
                     format: double
                     minimum: 0
                     description: Gross — VAT included. Same convention as `Product.price`.
+                taxClass:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
                 # The opening count — the one place an ABSOLUTE stock number is honest, because
                 # a product being created has no prior value to race with and no history to
                 # contradict. Every later change is a signed `/inventory` transition.
@@ -598,6 +602,8 @@ components:
                     format: double
                     minimum: 0
                     description: Gross — VAT included. Same convention as `Product.price`.
+                taxClass:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
                 # The opening count — the one place an ABSOLUTE stock number is honest, because
                 # a product being created has no prior value to race with and no history to
                 # contradict. Every later change is a signed `/inventory` transition.
@@ -647,6 +653,8 @@ components:
                     format: double
                     minimum: 0
                     description: Gross — VAT included. Same convention as `Product.price`.
+                taxClass:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
                 active:
                     type: boolean
                 requiresShipping:
@@ -676,6 +684,8 @@ components:
                     format: double
                     minimum: 0
                     description: Gross — VAT included. Same convention as `Product.price`.
+                taxClass:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
                 active:
                     type: boolean
                 requiresShipping:

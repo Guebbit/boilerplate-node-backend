@@ -18,11 +18,39 @@ import type { AppModule, RequiredConfig } from '@kernel/registry';
  * relative links, so every password-reset mail and OAuth callback points nowhere — a failure that
  * surfaces as a support ticket, never as an error. `NODE_CORS_ORIGIN` is checked in production
  * only, where its `http://localhost:8080` fallback (`app/security.ts`) cannot be the right answer.
+ *
+ * `NODE_SHOP_COUNTRY`/`NODE_VAT_RATE_DEFAULT`/`NODE_VAT_RATE_REDUCED` belong to no module for the
+ * same reason `NODE_URL` doesn't: `products` resolves a rate, `orders` freezes and prints one, and
+ * neither owns the shop's own jurisdiction or its two VAT rates. `minLength` only catches empty —
+ * {@link invalidVatRateConfig} range-checks the two rates themselves.
  */
 const APP_REQUIRED_CONFIG: readonly RequiredConfig[] = [
     { key: 'NODE_URL', minLength: 1 },
-    { key: 'NODE_CORS_ORIGIN', minLength: 1, productionOnly: true }
+    { key: 'NODE_CORS_ORIGIN', minLength: 1, productionOnly: true },
+    { key: 'NODE_SHOP_COUNTRY', minLength: 1 },
+    { key: 'NODE_VAT_RATE_DEFAULT', minLength: 1 },
+    { key: 'NODE_VAT_RATE_REDUCED', minLength: 1 }
 ];
+
+/** A decimal rate is valid VAT config only inside `[0, 1)` — 1 (100%) or more is certainly a typo. */
+const isValidVatRate = (raw: string): boolean => {
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) && parsed >= 0 && parsed < 1;
+};
+
+/**
+ * `minLength` above only catches an EMPTY `NODE_VAT_RATE_DEFAULT`/`_REDUCED` — this catches one
+ * that is set to something that isn't a rate at all, `2.2` or `abc`, which would otherwise reach
+ * `resolveTaxRate` and silently misprice every invoice. Only flags a variable that IS set: an
+ * absent one is already named by the `minLength` check above, and naming it twice would just be
+ * confusing. Same reasoning as {@link invalidEmailPolicy} below: refuse at boot, not at the first sale.
+ * @returns the offending variable names; empty when both are unset or parse as a rate in `[0, 1)`
+ */
+const invalidVatRateConfig = (): string[] =>
+    ['NODE_VAT_RATE_DEFAULT', 'NODE_VAT_RATE_REDUCED'].filter((key) => {
+        const raw = process.env[key];
+        return !!raw && !isValidVatRate(raw);
+    });
 
 /**
  * The mailer's companions to `NODE_SMTP_HOST` — the ones a transport cannot authenticate or
@@ -132,6 +160,7 @@ export const assertRequiredConfig = (appModules: AppModule[]): void => {
         ...missingSmtpCompanions(),
         ...missingAntibotProviderSecrets(),
         ...invalidEmailPolicy(),
+        ...invalidVatRateConfig(),
         ...appModules.flatMap((appModule) => appModule.customCheck?.() ?? [])
     ];
     const forbidden = forbiddenUnderProduction();

@@ -643,6 +643,19 @@ components:
                     type: string
                     format: date-time
 
+        # Overrides the shop's default VAT rate for this product. Absent — most products — means
+        # the standard rate (`NODE_VAT_RATE_DEFAULT`) applies; every product resolves to SOME
+        # rate, this field only ever narrows it. `reduced` uses `NODE_VAT_RATE_REDUCED`; `zero`
+        # is always 0%, no configuration needed. The RESOLVED decimal rate, not this class, is
+        # what gets frozen onto an order line — see `OrderLineProduct.taxRate`.
+        TaxClass:
+            type: string
+            enum: [reduced, zero]
+            description: >-
+                A category of goods taxed below the shop's standard VAT rate — books, food,
+                medicine and similar, depending on the deployment's own jurisdiction. Absent means
+                the standard rate.
+
         Product:
             type: object
             additionalProperties: false
@@ -660,6 +673,8 @@ components:
                         Gross — what the customer pays, VAT included. Never net-of-tax: the invoice
                         derives the net amount and the VAT amount FROM this, at whatever rate
                         applies, rather than the other way around.
+                taxClass:
+                    $ref: '#/components/schemas/TaxClass'
                 # ── The two counters and the number derived from them ──────────────────────
                 #
                 # `onHand` is how many units exist; `reserved` is how many of those an open
