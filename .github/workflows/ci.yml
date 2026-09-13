@@ -472,9 +472,11 @@ jobs:
 
             - name: Per-module test report
               # Reads the JSON the run just wrote and prints the rollup into the job log, so a
-              # red build names the MODULE before anyone opens an artifact.
+              # red build names the MODULE before anyone opens an artifact. `mkdir -p` first:
+              # jest's --outputFile does not create its parent directory, and reports/ is
+              # gitignored, so a fresh checkout has none.
               if: always()
-              run: npm run test:unit:report && npm run test:report
+              run: mkdir -p reports && npm run test:unit:report && npm run test:report
 
             - name: Upload test report
               if: always()
