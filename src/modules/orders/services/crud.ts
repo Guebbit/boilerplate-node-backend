@@ -32,6 +32,7 @@ import { orderRepository } from '../repository';
 import { canTransition, checkOrderLines, statusesReachableFrom } from '../domain';
 import { freezeOrderLines } from './snapshot';
 import { resolveCurrentImages } from './current';
+import { allocateInvoiceNumber } from './invoice-numbering';
 // `userId` is stored as an ObjectId, so writes have to coerce it. The rule (and its failure
 // mode on a malformed id) lives in the repository layer; this is the only import of it here.
 import { toObjectId } from '@infrastructure/persistence/create-repository';
@@ -184,12 +185,17 @@ export const create = async (
             : generateReject(404, [t('products.not-found')]);
 
     // Resolved into the buyer's language only now the lines are known good — translation must
-    // never gate a purchase, so it runs strictly after the availability verdict above.
-    const orderItems = await freezeOrderLines(
-        buyerLocale,
-        resolvedItems.map(({ product }) => product!),
-        resolvedItems.map(({ item }) => item.quantity)
-    );
+    // never gate a purchase, so it runs strictly after the availability verdict above. The
+    // invoice number is allocated alongside: the two are independent, and it must exist by the
+    // time the order below is written, not by the time it is downloaded.
+    const [orderItems, invoiceNumber] = await Promise.all([
+        freezeOrderLines(
+            buyerLocale,
+            resolvedItems.map(({ product }) => product!),
+            resolvedItems.map(({ item }) => item.quantity)
+        ),
+        allocateInvoiceNumber()
+    ]);
 
     /*
      * Write the order, then hold its units — a hold is keyed by the order it belongs to, so
@@ -201,7 +207,8 @@ export const create = async (
     const order = await orderRepository.create({
         userId: toObjectId(userId),
         email,
-        items: orderItems
+        items: orderItems,
+        invoiceNumber
     });
 
     const outcome = await inventoryService.reserveForOrder(

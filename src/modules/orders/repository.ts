@@ -6,7 +6,7 @@
  * below.
  */
 
-import { orderModel, applyOrderTransform } from './model';
+import { orderModel, applyOrderTransform, invoiceCounterModel } from './model';
 import type { OrderDocument, OrderPendingEffect } from './model';
 import type { PipelineStage, QueryFilter } from 'mongoose';
 import { OrderStatus } from '@types';
@@ -299,6 +299,28 @@ const scrubDueForAnonymization = (cutoff: Date): Promise<number> => {
 };
 
 /**
+ * Atomically bumps the invoice sequence for `year` and returns the new value — one
+ * `findOneAndUpdate` upsert with `$inc`, so two callers racing the same year still get distinct,
+ * contiguous numbers. Mongo serializes concurrent writes to the same document; this is what makes
+ * that guarantee do the work instead of a read-then-increment in application code.
+ * https://www.mongodb.com/docs/manual/reference/method/db.collection.findOneAndUpdate/
+ *
+ * @param year - the UTC calendar year the sequence belongs to
+ * @returns the sequence number just allocated (1 for the year's first invoice)
+ */
+const incrementInvoiceCounter = (year: number): Promise<number> =>
+    invoiceCounterModel
+        .findOneAndUpdate(
+            { _id: year },
+            { $inc: { seq: 1 } },
+            // Upsert creates the year's row on its first invoice; `returnDocument: 'after'` hands
+            // back the incremented value rather than the pre-update one.
+            { upsert: true, returnDocument: 'after' }
+        )
+        .exec()
+        .then((counter) => counter.seq);
+
+/**
  * `search` is narrower than the base signature (no caller-supplied sort — the pipeline fixes it),
  * so it is omitted from the base contract rather than intersected with it.
  *
@@ -329,6 +351,7 @@ export const orderRepository: Omit<Repository<OrderDocument>, 'search'> & {
     countOpenBankTransfers: (userId: string) => Promise<number>;
     detachUserId: (userId: string, anonymizeAfter: Date) => Promise<number>;
     scrubDueForAnonymization: (cutoff: Date) => Promise<number>;
+    incrementInvoiceCounter: (year: number) => Promise<number>;
 } = {
     ...base,
     aggregate,
@@ -341,5 +364,6 @@ export const orderRepository: Omit<Repository<OrderDocument>, 'search'> & {
     clearPendingEffect,
     countOpenBankTransfers,
     detachUserId,
-    scrubDueForAnonymization
+    scrubDueForAnonymization,
+    incrementInvoiceCounter
 };

@@ -130,15 +130,17 @@ export const bankTransferExpiredEmail = (locale: string, order: OrderLines): Ema
 };
 
 /**
- * What the invoice needs beyond the lines: the order's id, for the document title, and each
- * line's frozen `taxRate` — the VAT figures themselves are recomputed fresh by
- * {@link buildVatBlock}, same reasoning as `orderTotal` below.
+ * What the invoice needs beyond the lines: the order's id, for the document title, each line's
+ * frozen `taxRate` — the VAT figures themselves are recomputed fresh by {@link buildVatBlock},
+ * same reasoning as `orderTotal` below — and the two fields Art. 226 requires, `invoiceNumber`
+ * and `createdAt`, printed together by {@link buildInvoiceMeta}.
  *
  * `id`, not `_id`. The order arrives from `orderRepository.findByIdScoped`, whose shape depends
  * on the caller's scope — an admin gets a hydrated document, an owner gets a transformed plain
  * object with `_id` already deleted. `id` is the half that resolves on both, and NEITHER has run
  * through `applyOrderTransform`'s derived fields: this controller renders the raw document
- * directly, without ever calling `.toJSON()`.
+ * directly, without ever calling `.toJSON()` — which is also why `createdAt` below is a real
+ * `Date`, not yet the ISO string an HTTP response would show.
  */
 export interface InvoiceOrder extends OrderLines {
     id?: unknown;
@@ -146,7 +148,45 @@ export interface InvoiceOrder extends OrderLines {
         quantity: number;
         product: { title: string; price: number; taxRate?: number };
     }[];
+    /** Absent on an order that predates sequential invoice numbering. */
+    invoiceNumber?: string;
+    /** This invoice's date of supply — the moment `invoiceNumber` was assigned. */
+    createdAt?: Date;
 }
+
+/** The invoice number and its date of supply, printed together or not at all. */
+export interface InvoiceMeta {
+    numberLabel: string;
+    dateLabel: string;
+}
+
+/**
+ * The invoice-number-and-date block EU VAT Directive 2006/112/EC Art. 226 requires — gated as one
+ * unit on `invoiceNumber` being present, same as {@link buildVatBlock} gates its own block on a
+ * frozen rate: a date with no number would misrepresent an order that predates full compliance
+ * metadata as if it had one. `createdAt` IS the date of supply, since the number is assigned at
+ * the same moment — see `OrderDocument.invoiceNumber`.
+ * @param locale - the document's language, for formatting the date
+ * @param t - this document's translator, already fixed to `locale`
+ * @param order - the order the invoice is for
+ * @returns the meta block, or `undefined` on an order with no invoice number
+ */
+const buildInvoiceMeta = (
+    locale: string,
+    t: TFunction,
+    order: InvoiceOrder
+): InvoiceMeta | undefined => {
+    if (!order.invoiceNumber || !order.createdAt) return undefined;
+
+    return {
+        numberLabel: t('orders.invoice.number', { number: order.invoiceNumber }),
+        // `Intl.DateTimeFormat`, not a hand-rolled date string — same standard-library-first rule
+        // `bankTransferInstructionsEmail`'s `deadline` above already follows.
+        dateLabel: t('orders.invoice.date', {
+            date: new Intl.DateTimeFormat(locale, { dateStyle: 'long' }).format(order.createdAt)
+        })
+    };
+};
 
 /** One row of the invoice's VAT table — a line's own figures, ready to interpolate as-is. */
 export interface InvoiceVatRow {
@@ -260,6 +300,7 @@ export const invoiceDocument = (locale: string, order: InvoiceOrder): Record<str
                 price: item.product.price
             })
         ),
-        vat: buildVatBlock(t, order)
+        vat: buildVatBlock(t, order),
+        meta: buildInvoiceMeta(locale, t, order)
     };
 };

@@ -1039,6 +1039,14 @@ components:
                 payBy:
                     type: string
                     format: date-time
+                # `{year}-{sequence}`, assigned once at order-creation time — never recomputed.
+                # `createdAt` below IS this invoice's date of supply, which is why there is no
+                # separate invoice-date field. Absent on an order created before this field
+                # existed; it is never assigned retroactively.
+                invoiceNumber:
+                    type: string
+                    readOnly: true
+                    example: '2026-000041'
                 # Present only while `paymentMethod` is `bank_transfer` and `status` is `pending`
                 # — the window in which the customer still needs to act. Scoped to the order's
                 # owner and to staff; never served to another customer.
