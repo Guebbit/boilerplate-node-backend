@@ -772,11 +772,11 @@ components:
                     type: string
                     description: The order's own id — what the customer writes in the transfer's description, so an incoming payment can be matched back to this order.
 
-        # `Product`, without `onHand`/`reserved`/`available`. An order line is a purchase-time
-        # SNAPSHOT — the price, title and image a customer actually saw and bought — and those
-        # three fields are the opposite of that: they describe the WAREHOUSE, right now, and
-        # publishing them on every past order republished live stock as if it were history.
-        # `id`/`title`/`price` stay `required`, same as `Product` itself.
+        # `Product`, without `onHand`/`reserved`/`available`, and without an image — see
+        # `OrderLineCurrent`. An order line is a purchase-time SNAPSHOT — the price and title a
+        # customer actually bought — and those two fields are the opposite of that: they describe
+        # the WAREHOUSE, right now, and publishing them on every past order republished live stock
+        # as if it were history. `id`/`title`/`price` stay `required`, same as `Product` itself.
         OrderLineProduct:
             type: object
             additionalProperties: false
@@ -797,10 +797,6 @@ components:
                 requiresShipping:
                     type: boolean
                     default: true
-                imageUrl:
-                    $ref: '#/components/schemas/ImageUrl'
-                thumbnailUrl:
-                    $ref: '#/components/schemas/ThumbnailUrl'
                 categories:
                     type: array
                     items:
@@ -819,10 +815,24 @@ components:
                     type: string
                     format: date-time
 
+        # The picture, resolved LIVE from the catalogue product `OrderItem.product.id` still
+        # names — never frozen, so a hard-deleted or replaced image can never leak through order
+        # history. `null` means the product no longer exists; that is what lets "buy again" tell
+        # a deleted product apart from one that simply never had a picture. See SECURITY_HOLES_7.
+        OrderLineCurrent:
+            type: object
+            additionalProperties: false
+            required: [imageUrl]
+            properties:
+                imageUrl:
+                    $ref: '#/components/schemas/ImageUrl'
+                thumbnailUrl:
+                    $ref: '#/components/schemas/ThumbnailUrl'
+
         OrderItem:
             type: object
             additionalProperties: false
-            required: [product, quantity, locale]
+            required: [product, quantity, locale, current]
             properties:
                 product:
                     $ref: '#/components/schemas/OrderLineProduct'
@@ -835,6 +845,14 @@ components:
                 # language it was bought in, regardless of the reader's own locale.
                 locale:
                     $ref: '#/components/schemas/Locale'
+                current:
+                    nullable: true
+                    allOf:
+                        - $ref: '#/components/schemas/OrderLineCurrent'
+                    description: >-
+                        The product's picture, resolved live — `null` when the catalogue product
+                        (`product.id`) has been hard-deleted. Never the terms of the sale, so it
+                        is never frozen; see `OrderLineCurrent`.
 
         # Shared by `Order.paymentMethod`, `CheckoutRequest.paymentMethod` and
         # `PaymentMethod.id` (`payments`' own module contract) — one enum, so a third method

@@ -81,17 +81,37 @@ flowchart TD
 
 ## Quick map
 
-| Tier           | Folder               | Main job                                                               |
-| -------------- | -------------------- | ---------------------------------------------------------------------- |
-| App            | `src/app`            | assembles this application; the only tier allowed to know every domain |
-| Registry       | `src/modules.ts`     | the enabled module list — the one file that names every domain         |
-| Modules        | `src/modules/*`      | one domain each, top to bottom; `index.ts` is its only public surface  |
-| Kernel         | `src/kernel`         | the module system only: registry, event bus, auth port, the guard      |
-| Infrastructure | `src/infrastructure` | technical substrate, Express and Mongoose included — see below         |
+| Tier           | Folder               | Main job                                                                  |
+| -------------- | -------------------- | ------------------------------------------------------------------------- |
+| App            | `src/app`            | assembles this application; the only tier allowed to know every domain    |
+| Registry       | `src/modules.ts`     | the enabled module list — the one file that names every domain            |
+| Modules        | `src/modules/*`      | one domain each, top to bottom; `index.ts` is its only public surface     |
+| Kernel         | `src/kernel`         | the module system only: registry, event bus, auth port, the guard         |
+| Infrastructure | `src/infrastructure` | technical substrate, Express and Mongoose included — see below            |
+| Scenarios      | `scenarios/`         | the demo records and the flow runner — outside `src/` entirely, see below |
 
 Four tiers, one alias each — `@app/*`, `@modules/*`, `@kernel/*`, `@infrastructure/*` — so every import
 line says which boundary it crosses. [Modules](./modules.md) has the full picture and the reasoning,
 including why these two are named `kernel` and `infrastructure` rather than `platform` and `core`.
+
+### `scenarios/` — a fifth tier, one direction only
+
+`scenarios/` is outside `src/` entirely and inverts the usual rule: it imports a module's
+repository, model and factories directly — `@modules/<name>/repository`, never the barrel — which
+is exactly what `src/` itself may never do to a sibling. That inversion is what lets a production
+image omit the whole folder: nothing under `src/` reaches into it, so nothing there notices its
+absence.
+
+Enforced from both sides. `eslint-plugin-boundaries` (element type `'scenarios'`) gives it its own
+policies rather than folding it into `modules`, and `.dependency-cruiser.cjs`'s
+`src-cannot-reach-scenarios` rule is the reverse direction: no file under `src/` may import
+`scenarios/` at all, with exactly one exception — `src/app/demo.ts`, which mounts
+`POST /__test/restore` and has to walk the same tables `scenarios/apply.ts` does. `src/app.ts` and
+`src/cluster.ts` are exempted too, but only because the sole way either reaches `scenarios/` is by
+composing that one file.
+
+See [The Flow Runner](../tools/flow-runner.md) and [Data](../reference/data.md#the-demo-records)
+for what actually lives there.
 
 Inside a module, the layer files are `routes.ts`, `controllers/*`, `service.ts`, `repository.ts`,
 `model.ts`, plus `module.ts` (its manifest) and `index.ts` (its barrel).
@@ -188,8 +208,8 @@ is: `audit.ts` (the actions it emits), `metrics.ts` (its Prometheus counters), `
 domain events) and `locales/` (its copy, in every language it ships). None of these is enumerated
 anywhere central — `audit.ts`, `metrics.ts` and `events.ts` register or augment themselves, while
 `locales` is declared in the manifest so the i18n boot can walk the registry without naming a
-domain. A module's slice of the demo dataset lives in `demo/<name>.ts` instead, deliberately
-outside this list — see [Data](../reference/data.md#the-demo-dataset).
+domain. A module's slice of the demo records lives in `scenarios/<name>.ts` instead, deliberately
+outside this list — see [Data](../reference/data.md#the-demo-records).
 
 A module carries one of these only when it has something to declare, so they are not a per-module
 tax: the real spread is thirty files across thirteen modules, and `observability` has none of them.

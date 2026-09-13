@@ -51,8 +51,10 @@ describe('google provider configuration', () => {
 });
 
 describe('googleOAuthProvider.authorizeUrl', () => {
-    it('points at the consent screen with the client id, redirect and state carried along', () => {
-        const url = new URL(googleOAuthProvider.authorizeUrl('the-state', REDIRECT_URI));
+    it('points at the consent screen with the client id, redirect, state and PKCE challenge carried along', () => {
+        const url = new URL(
+            googleOAuthProvider.authorizeUrl('the-state', REDIRECT_URI, 'the-challenge')
+        );
 
         expect(url.origin + url.pathname).toBe('https://accounts.google.com/o/oauth2/v2/auth');
         expect(url.searchParams.get('client_id')).toBe(CLIENT_ID);
@@ -60,6 +62,8 @@ describe('googleOAuthProvider.authorizeUrl', () => {
         expect(url.searchParams.get('response_type')).toBe('code');
         expect(url.searchParams.get('state')).toBe('the-state');
         expect(url.searchParams.get('scope')).toContain('email');
+        expect(url.searchParams.get('code_challenge')).toBe('the-challenge');
+        expect(url.searchParams.get('code_challenge_method')).toBe('S256');
     });
 });
 
@@ -85,7 +89,11 @@ describe('googleOAuthProvider.exchangeCode', () => {
     it('resolves the identity from the ID token claims', async () => {
         mockTokenResponse(idToken(validClaims));
 
-        const identity = await googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI);
+        const identity = await googleOAuthProvider.exchangeCode(
+            'a-code',
+            REDIRECT_URI,
+            'the-verifier'
+        );
 
         expect(identity).toEqual({
             providerId: 'google-subject-1',
@@ -100,51 +108,55 @@ describe('googleOAuthProvider.exchangeCode', () => {
         mockTokenResponse(idToken({ ...validClaims, iss: 'accounts.google.com' }));
 
         await expect(
-            googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI)
+            googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
         ).resolves.toMatchObject({ providerId: 'google-subject-1' });
     });
 
     it('rejects a token naming a different audience', async () => {
         mockTokenResponse(idToken({ ...validClaims, aud: 'someone-elses-client-id' }));
 
-        await expect(googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI)).rejects.toThrow(
-            /audience/
-        );
+        await expect(
+            googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
+        ).rejects.toThrow(/audience/);
     });
 
     it('rejects an unrecognised issuer', async () => {
         mockTokenResponse(idToken({ ...validClaims, iss: 'https://evil.example.com' }));
 
-        await expect(googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI)).rejects.toThrow(
-            /issuer/
-        );
+        await expect(
+            googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
+        ).rejects.toThrow(/issuer/);
     });
 
     it('rejects an expired token', async () => {
         mockTokenResponse(idToken({ ...validClaims, exp: Math.floor(Date.now() / 1000) - 60 }));
 
-        await expect(googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI)).rejects.toThrow(
-            /expired/
-        );
+        await expect(
+            googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
+        ).rejects.toThrow(/expired/);
     });
 
     it('rejects a response with no id_token at all', async () => {
         mockTokenResponse(undefined);
 
-        await expect(googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI)).rejects.toThrow();
+        await expect(
+            googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
+        ).rejects.toThrow();
     });
 
     it('rejects when Google answers with a non-2xx status', async () => {
         jest.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 400 } as Response);
 
-        await expect(googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI)).rejects.toThrow();
+        await expect(
+            googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
+        ).rejects.toThrow();
     });
 
     it('treats an unverified email as unverified, not merely absent', async () => {
         mockTokenResponse(idToken({ ...validClaims, email_verified: false }));
 
         await expect(
-            googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI)
+            googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
         ).resolves.toMatchObject({ emailVerified: false });
     });
 });

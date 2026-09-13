@@ -280,6 +280,54 @@ describe('setCacheValue tag index', () => {
     });
 });
 
+/**
+ * The refresh-ahead claim: `SET key 1 NX EX seconds`. `NX` is what makes exactly one caller win —
+ * node-redis answers `'OK'` to that one and `null` to everyone else contending for the same key.
+ */
+describe('claimCacheRefresh', () => {
+    beforeEach(() => {
+        process.env.NODE_REDIS_URL = 'redis://localhost:6379';
+        mockConnect.mockImplementation(() => Promise.resolve());
+    });
+
+    it('wins the claim when Redis grants the NX write', async () => {
+        mockSet.mockImplementation(() => Promise.resolve('OK'));
+
+        await expect(freshCache().claimCacheRefresh('GET:/products', 60)).resolves.toBe(true);
+
+        expect(mockSet).toHaveBeenCalledWith(
+            expect.stringContaining(':refresh:GET:/products'),
+            '1',
+            {
+                NX: true,
+                EX: 60
+            }
+        );
+    });
+
+    it('loses the claim when another caller already holds it', async () => {
+        // NX refuses the write and node-redis answers null, not an error — a contended claim is
+        // the expected case under real traffic, not a failure.
+        mockSet.mockImplementation(() => Promise.resolve(null));
+
+        await expect(freshCache().claimCacheRefresh('GET:/products', 60)).resolves.toBe(false);
+    });
+
+    it('loses the claim, rather than rejecting, when Redis fails', async () => {
+        mockSet.mockImplementation(() => Promise.reject(new Error('connection reset')));
+
+        await expect(freshCache().claimCacheRefresh('GET:/products', 60)).resolves.toBe(false);
+    });
+
+    it('loses the claim when caching is switched off, without connecting', async () => {
+        delete process.env.NODE_REDIS_URL;
+        delete process.env.NODE_REDIS_PORT;
+
+        await expect(freshCache().claimCacheRefresh('GET:/products', 60)).resolves.toBe(false);
+        expect(mockConnect).not.toHaveBeenCalled();
+    });
+});
+
 // ─── The connection ──────────────────────────────────────────────────────────
 /**
  * The lifecycle rules themselves live in `adapters/managed-connection.ts` and are tested there

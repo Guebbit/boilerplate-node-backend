@@ -17,6 +17,7 @@ import {
     validationErrors
 } from '@infrastructure/http/response';
 import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
+import { imageStore } from '@infrastructure/adapters/image-store';
 import { zodUserSchema, TokenType, hashToken } from './model';
 import type { UserDocument } from './model';
 import type { CreateUserRequest, SearchUsersRequest, UpdateUserByIdRequest } from '@types';
@@ -234,7 +235,11 @@ export const update = (
             if (data.role !== undefined) user.role = data.role;
             if (data.active !== undefined) user.active = data.active;
             // The three travel as one unit, all produced by the same `readUploadedImage` call on
-            // the controller — set together whenever a new upload replaces the image.
+            // the controller — set together whenever a new upload replaces the image. The old url
+            // is captured before the overwrite so `updateSavedUser` can delete it once the new one
+            // is durably saved — mirrors `products/service.ts`'s `update`.
+            const oldImageUrl = user.imageUrl;
+            const imageReplaced = Boolean(data.imageUrl) && oldImageUrl !== data.imageUrl;
             if (data.imageUrl !== undefined) {
                 user.imageUrl = data.imageUrl;
                 user.thumbnailUrl = data.thumbnailUrl;
@@ -249,7 +254,7 @@ export const update = (
             if (data.analyticsConsent !== undefined) user.analyticsConsent = data.analyticsConsent;
             if (password) user.password = password;
 
-            return updateSavedUser(user, data, context);
+            return updateSavedUser(user, data, context, imageReplaced ? oldImageUrl : undefined);
         }
     );
 };
@@ -257,13 +262,23 @@ export const update = (
 /**
  * The save-and-react half of {@link update}, split out so the breach check above it reads as one
  * idea rather than the start of an even longer function.
+ *
+ * @param oldImageUrl - the image the update just replaced, or `undefined` when the avatar was
+ *   not touched. Deleted only after the save succeeds — bytes removed ahead of a write that then
+ *   fails would leave a row pointing at a 404.
  */
 const updateSavedUser = (
     user: UserDocument,
     data: Pick<UpdateUserByIdRequest, 'active' | 'role'>,
-    context: CallerContext
+    context: CallerContext,
+    oldImageUrl?: string
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     return userRepository.save(user).then((savedUser) => {
+        // Only after the save: the old avatar is unreachable the moment the field is overwritten.
+        const imageCleanup: Promise<void> = oldImageUrl
+            ? imageStore.remove(oldImageUrl).then(() => undefined)
+            : Promise.resolve();
+
         /*
          * Deactivation ends every live session. Defense in depth on top of
          * `findAuthenticatableById`, which already blocks a
@@ -298,6 +313,7 @@ const updateSavedUser = (
 
         return revoke
             .then(() => membership)
+            .then(() => imageCleanup)
             .then(() => generateSuccess(enqueueIfPending(savedUser)))
             .catch(rejectAccessInvariant);
     });
@@ -373,6 +389,7 @@ export const remove = (
         return revokeRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant')
             .then(() => emitDomainEvent(USER_DELETED, { userId: user.id }))
             .then(() => userRepository.deleteOne(user))
+            .then(() => imageStore.remove(user.imageUrl))
             .then(() => generateSuccess(undefined, 200, t('users.hard-deleted')))
             .catch(rejectAccessInvariant);
 

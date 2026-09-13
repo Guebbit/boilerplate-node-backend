@@ -49,14 +49,18 @@ describe('github provider configuration', () => {
 });
 
 describe('githubOAuthProvider.authorizeUrl', () => {
-    it('points at the consent screen with the client id, redirect and state carried along', () => {
-        const url = new URL(githubOAuthProvider.authorizeUrl('the-state', REDIRECT_URI));
+    it('points at the consent screen with the client id, redirect, state and PKCE challenge carried along', () => {
+        const url = new URL(
+            githubOAuthProvider.authorizeUrl('the-state', REDIRECT_URI, 'the-challenge')
+        );
 
         expect(url.origin + url.pathname).toBe('https://github.com/login/oauth/authorize');
         expect(url.searchParams.get('client_id')).toBe(CLIENT_ID);
         expect(url.searchParams.get('redirect_uri')).toBe(REDIRECT_URI);
         expect(url.searchParams.get('state')).toBe('the-state');
         expect(url.searchParams.get('scope')).toContain('user:email');
+        expect(url.searchParams.get('code_challenge')).toBe('the-challenge');
+        expect(url.searchParams.get('code_challenge_method')).toBe('S256');
     });
 });
 
@@ -78,7 +82,11 @@ describe('githubOAuthProvider.exchangeCode', () => {
             .mockResolvedValueOnce(jsonResponse(user))
             .mockResolvedValueOnce(jsonResponse(emails));
 
-        const identity = await githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI);
+        const identity = await githubOAuthProvider.exchangeCode(
+            'a-code',
+            REDIRECT_URI,
+            'the-verifier'
+        );
 
         expect(identity).toEqual({
             providerId: '42',
@@ -96,7 +104,7 @@ describe('githubOAuthProvider.exchangeCode', () => {
             .mockResolvedValueOnce(jsonResponse(emails));
 
         await expect(
-            githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI)
+            githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
         ).resolves.toMatchObject({ name: 'ada' });
     });
 
@@ -109,7 +117,7 @@ describe('githubOAuthProvider.exchangeCode', () => {
             );
 
         await expect(
-            githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI)
+            githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
         ).resolves.toMatchObject({ emailVerified: false });
     });
 
@@ -121,9 +129,9 @@ describe('githubOAuthProvider.exchangeCode', () => {
                 jsonResponse([{ email: 'ada@example.com', primary: false, verified: true }])
             );
 
-        await expect(githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI)).rejects.toThrow(
-            /primary/
-        );
+        await expect(
+            githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
+        ).rejects.toThrow(/primary/);
     });
 
     it('rejects when the token exchange carries an error instead of a token', async () => {
@@ -131,7 +139,9 @@ describe('githubOAuthProvider.exchangeCode', () => {
             jsonResponse({ error: 'bad_verification_code' })
         );
 
-        await expect(githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI)).rejects.toThrow();
+        await expect(
+            githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
+        ).rejects.toThrow();
     });
 
     it('rejects when the profile call answers with a non-2xx status', async () => {
@@ -142,6 +152,8 @@ describe('githubOAuthProvider.exchangeCode', () => {
             .mockResolvedValueOnce(jsonResponse({}, false))
             .mockResolvedValueOnce(jsonResponse(emails));
 
-        await expect(githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI)).rejects.toThrow();
+        await expect(
+            githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
+        ).rejects.toThrow();
     });
 });

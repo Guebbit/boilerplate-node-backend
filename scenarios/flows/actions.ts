@@ -181,3 +181,27 @@ export const cancelOrder = (caller: Caller, orderId: string, refund?: boolean): 
  */
 export const softDeleteOrder = (owner: Caller, orderId: string): Promise<void> =>
     owner.call('DELETE', `/orders/${orderId}`).then(() => undefined);
+
+/**
+ * Replace a product's picture — a plain JSON `PATCH`, not the multipart upload route: the
+ * contract accepts `imageUrl` as a string directly, so this needs no file to actually decode.
+ * The point is the CHANGE, not the picture — an order placed against the old `imageUrl` must
+ * resolve this new one live, never the one the buyer originally saw.
+ *
+ * @param owner - a caller holding `products.update`
+ */
+export const replaceProductImage = (
+    owner: Caller,
+    productId: string,
+    imageUrl: string
+): Promise<void> =>
+    owner.call('PATCH', `/products/${productId}`, { imageUrl }).then(() => undefined);
+
+/**
+ * Hard-delete a product — the row is gone, not merely hidden. An order line that named it keeps
+ * the id and resolves `current: null` from then on; see SECURITY_HOLES_7_STORAGE_QUOTA.
+ *
+ * @param owner - a caller holding `products.delete`
+ */
+export const hardDeleteProduct = (owner: Caller, productId: string): Promise<void> =>
+    owner.call('DELETE', `/products/${productId}/hard`).then(() => undefined);

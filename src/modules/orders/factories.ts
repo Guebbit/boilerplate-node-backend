@@ -38,9 +38,12 @@ export type OrderSnapshotInput = Omit<OverridesFor<Product>, 'onHand' | 'reserve
  *
  * `locale` is optional here, unlike the contract's `OrderItem`: a fixture usually doesn't care
  * which language a snapshot claims to be resolved into, so `makeOrder` defaults it to
- * `getDefaultLocale()` rather than making every caller state it.
+ * `getDefaultLocale()` rather than making every caller state it. `current` is dropped for the
+ * same reason the totals are dropped from `OrderOverrides` below: present on the wire, but
+ * resolved live at read time — `orderLineProductSchema` has nowhere to store it, so a fixture
+ * that pinned one would silently lose it on write.
  */
-export type OrderLineInput = Omit<OrderItem, 'product' | 'locale'> & {
+export type OrderLineInput = Omit<OrderItem, 'product' | 'locale' | 'current'> & {
     product: OrderSnapshotInput;
     locale?: string;
 };

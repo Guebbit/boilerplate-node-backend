@@ -23,3 +23,18 @@ export const cacheInvalidationFailuresTotal = new Counter({
     labelNames: ['tag'] as const,
     registers: [metricsRegistry]
 });
+
+/**
+ * `setCache` lookups by outcome — the only hit/miss signal this cache has. Without it, how big a
+ * stampede's herd actually gets is arithmetic from traffic estimates, never an observed number.
+ *
+ * `hit`: fresh. `stale`: past soft expiry, served from the old body. `refresh`: past soft expiry,
+ * this caller won the rebuild claim. `miss`: nothing cached at all.
+ */
+export const cacheRequestsTotal = new Counter({
+    name: 'cache_requests_total',
+    help: 'HTTP cache lookups by outcome: hit, miss, stale (served old), or refresh (rebuilding).',
+    // Bounded by construction: the four literals setCache's own branches produce.
+    labelNames: ['result'] as const,
+    registers: [metricsRegistry]
+});

@@ -48,22 +48,28 @@ const githubApiGet = <T>(path: string, accessToken: string): Promise<T> =>
 export const githubOAuthProvider: OAuthProvider = {
     name: PROVIDER_NAME,
 
-    authorizeUrl: (state, redirectUri) => {
+    authorizeUrl: (state, redirectUri, codeChallenge) => {
         const { clientId } = getOAuthCredentials(PROVIDER_NAME);
         // https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps
+        // PKCE (RFC 7636), supported by GitHub since July 2025 — S256 only, same reasoning as
+        // the Google adapter's.
+        // https://github.blog/changelog/2025-07-14-pkce-support-for-oauth-and-github-app-authentication/
         const query = new URLSearchParams({
             client_id: clientId ?? '',
             redirect_uri: redirectUri,
             scope: 'read:user user:email',
-            state
+            state,
+            code_challenge: codeChallenge,
+            code_challenge_method: 'S256'
         });
         return `https://github.com/login/oauth/authorize?${query.toString()}`;
     },
 
-    exchangeCode: (code, redirectUri) => {
+    exchangeCode: (code, redirectUri, codeVerifier) => {
         const { clientId, clientSecret } = getOAuthCredentials(PROVIDER_NAME);
         // https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#2-users-are-redirected-back-to-your-site-by-github
         // `Accept: application/json` — GitHub answers form-encoded by default; this asks for JSON instead.
+        // `code_verifier`: the PKCE secret behind the challenge `authorizeUrl` sent.
         return fetch('https://github.com/login/oauth/access_token', {
             method: 'POST',
             headers: {
@@ -74,7 +80,8 @@ export const githubOAuthProvider: OAuthProvider = {
                 code,
                 client_id: clientId ?? '',
                 client_secret: clientSecret ?? '',
-                redirect_uri: redirectUri
+                redirect_uri: redirectUri,
+                code_verifier: codeVerifier
             })
         })
             .then((response) => {

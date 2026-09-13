@@ -78,7 +78,7 @@ flowchart LR
 Four ideas carry the whole repository:
 
 1. **A module is a value, not a convention.** Every domain declares what it needs — routes,
-   locales, seeds, event subscriptions, contract fragments — in one typed object. `src/modules.ts`
+   locales, scenario guarantees, event subscriptions, contract fragments — in one typed object. `src/modules.ts`
    lists them, and the registry validates the dependency graph at boot rather than at the first 500. Adding a domain is one folder plus one line; removing it is `rm -rf` plus that line.
 2. **The contract is an output, not a document.** `openapi.yaml` is assembled from per-module
    fragments and generates the typed client and Zod schemas that both repositories import.
@@ -99,7 +99,8 @@ Four ideas carry the whole repository:
 | `src/app`            | assembly: routes, security, error handling, telemetry, workers |
 | `api/`               | generated types and Zod schemas — never edited by hand         |
 | `shared/`            | contract fragments and EJS email templates                     |
-| `db/`                | index sync and seeds                                           |
+| `db/`                | index sync and one-off data scripts                            |
+| `scenarios/`         | the demo records and the flow runner, outside `src/` entirely  |
 
 ---
 

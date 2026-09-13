@@ -11,18 +11,8 @@ import { successResponse } from '@infrastructure/http/response';
 import { catchAs, refused } from '@infrastructure/http/controller';
 import { cartCheckoutTotal } from '../metrics';
 import { callerContextOf } from '@infrastructure/http/request';
-import type { OrderDocument } from '@modules/orders';
-import type { CheckoutResponse, Order } from '@types';
-
-/**
- * The order as `CheckoutResponse` declares it. `toJSON()`'s static type mirrors the stored
- * document, not the transform `orders/model.ts` wires into the schema (`_id` → `id`, totals
- * derived) — the same `unknown`-typed handoff `orderService.withActions` uses for this boundary.
- */
-const toOrderResponse = (order: OrderDocument): Order => {
-    const serialized: unknown = order.toJSON();
-    return serialized as Order;
-};
+import { orderService } from '@modules/orders';
+import type { CheckoutResponse } from '@types';
 
 /**
  * POST /cart/checkout
@@ -30,7 +20,7 @@ const toOrderResponse = (order: OrderDocument): Order => {
  * `cart_checkout_total` increments once per call, before `refused()`, on both outcomes —
  * a failed checkout is still a result the business metric must record.
  */
-export const postCheckout = (request: Request, response: Response) => {
+export const postCheckout = (request: Request, response: Response): Promise<void> => {
     const userId = request.authContext!.id;
     // `?? {}` because a checkout without a body is legal and Express 5 leaves `body` undefined.
     const { addressId, shippingMethodId, paymentMethod } = (request.body ?? {}) as {
@@ -45,11 +35,16 @@ export const postCheckout = (request: Request, response: Response) => {
             if (refused(response, result)) return;
 
             // `refused` narrows on `success` but not `result`'s type; `data` is always set here.
-            successResponse<CheckoutResponse>(
-                response,
-                { order: toOrderResponse(result.data!), message: t('orders.creation-success') },
-                201
-            );
+            // `withActions` is the one place an `OrderDocument` becomes the wire shape — it also
+            // resolves each line's live `current` picture, which a bare `.toJSON()` here would
+            // leave off the response entirely.
+            return orderService.withActions(result.data!, request.authContext).then((order) => {
+                successResponse<CheckoutResponse>(
+                    response,
+                    { order, message: t('orders.creation-success') },
+                    201
+                );
+            });
         })
         .catch((error: Error) => {
             // A thrown error is a failed checkout too — record it before delegating.

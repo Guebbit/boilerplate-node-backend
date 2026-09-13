@@ -11,16 +11,45 @@
  */
 
 import type { NextFunction, Request, Response } from 'express';
-import { getCacheValue, invalidateCacheTags, setCacheValue } from '@infrastructure/adapters/cache';
+import {
+    claimCacheRefresh,
+    getCacheValue,
+    invalidateCacheTags,
+    setCacheValue
+} from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
-import { cacheInvalidationFailuresTotal } from '@infrastructure/observability/metrics-cache';
+import {
+    cacheInvalidationFailuresTotal,
+    cacheRequestsTotal
+} from '@infrastructure/observability/metrics-cache';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 
-/** Enough to replay an HTTP response verbatim: the status code and the serialized body. */
+/**
+ * Enough to replay an HTTP response verbatim, plus the refresh-ahead soft expiry.
+ *
+ * `staleAt` (epoch ms) is when the entry stops being a HIT and starts being servable-but-stale —
+ * strictly before Redis' own TTL, which is `ttl + grace` (see {@link armCacheWrite}) so the bytes
+ * are still there to serve during the grace window.
+ */
 interface CachedResponse {
     status: number;
     body: unknown;
+    staleAt: number;
 }
+
+/**
+ * How long a shared cache (edge) or this server (origin) may keep serving a stale entry while one
+ * rebuild is in flight — RFC 5861's `stale-while-revalidate`, and the same number both layers use
+ * so they agree on what "stale" means. See docs/tools/redis-cache.md#refresh-ahead.
+ */
+const STALE_WHILE_REVALIDATE_SECONDS = 60;
+
+/**
+ * How long a shared cache may serve the last good copy instead of an error page during a 5xx or
+ * an unreachable origin — RFC 5861's `stale-if-error`. Advertised only; nothing server-side reads
+ * this, since an origin that is down cannot also be the one enforcing it.
+ */
+const STALE_IF_ERROR_SECONDS = 300;
 
 /**
  * Longest TTL allowed outside production, in seconds — the bound on how long a write that bypassed
@@ -204,20 +233,23 @@ const getCacheKey = (request: Request, sortedKeyParameters: readonly string[], k
 };
 
 /**
- * Make a cache-MISS response write itself to Redis as it is sent.
+ * Make a cache-MISS (or claimed-REFRESH) response write itself to Redis as it is sent.
  *
  * Wraps `response.json` rather than hooking `finish`: `json` is the one place that already has the
  * parsed body in hand, so nothing has to re-derive it from the wire bytes later.
  *
  * @param response - the response whose `json` method is being overridden
  * @param cacheKey - key this response will be stored under, on success
- * @param ttl - TTL to pass to `setCacheValue`
+ * @param ttl - soft TTL: how long the new entry counts as a HIT
+ * @param graceSeconds - stale-but-servable window past `ttl` — the Redis entry itself lives for
+ *   `ttl + graceSeconds`, clamped by the caller to at most `ttl` (see {@link setCache})
  * @param tags - invalidation tags to pass to `setCacheValue`
  */
 const armCacheWrite = (
     response: Response,
     cacheKey: string,
     ttl: number,
+    graceSeconds: number,
     tags?: string[]
 ): void => {
     const responseJson = response.json.bind(response);
@@ -226,9 +258,11 @@ const armCacheWrite = (
         if (response.statusCode >= 200 && response.statusCode < 300) {
             const payload = serializeCachedResponse(cacheKey, {
                 status: response.statusCode,
-                body
+                body,
+                staleAt: Date.now() + ttl * 1000
             });
-            if (payload !== undefined) void setCacheValue(cacheKey, payload, ttl, tags);
+            if (payload !== undefined)
+                void setCacheValue(cacheKey, payload, ttl + graceSeconds, tags);
         }
 
         return responseJson(body);
@@ -282,14 +316,17 @@ export const setCache = (seconds = 0, options: CacheOptions) => {
             );
 
         // Keep browser/proxy cache headers aligned with the server-side Redis cache policy —
-        // unless the route asked for revalidation, which decouples the two on purpose.
+        // unless the route asked for revalidation, which decouples the two on purpose. The two
+        // `stale-*` directives are advertised as fixed constants (see their declarations above),
+        // not the resolved/clamped `ttl` — a shared cache in front of this server is the one
+        // thing that can absorb a guest-scope stampede before it ever reaches Node.
         const scope = request.authContext ? 'private' : 'public';
         response.set(
             'Cache-Control',
             cacheableRead
                 ? options.browserRevalidate
                     ? `${scope}, no-cache`
-                    : `${scope}, max-age=${ttl}`
+                    : `${scope}, max-age=${ttl}, stale-while-revalidate=${STALE_WHILE_REVALIDATE_SECONDS}, stale-if-error=${STALE_IF_ERROR_SECONDS}`
                 : 'no-store'
         );
 
@@ -317,22 +354,50 @@ export const setCache = (seconds = 0, options: CacheOptions) => {
             return;
         }
 
+        // The grace window clamped to the resolved TTL: outside production `ttl` may already be
+        // clamped to seconds (see resolveCacheTtl), and a fixed 60s grace would hand back most of
+        // what that clamp just took — an out-of-band write could still serve a stale answer for
+        // nearly a minute after it landed.
+        const graceSeconds = Math.min(STALE_WHILE_REVALIDATE_SECONDS, ttl);
+
         const cacheKey = getCacheKey(request, sortedKeyParameters, options.keyAs);
         return getCacheValue(cacheKey).then((raw) => {
             const cachedResponse = raw === undefined ? undefined : parseCachedResponse(raw);
 
-            // Fast path: Redis already has a response for this exact request.
-            if (cachedResponse) {
+            // Nothing cached — hard-expired, invalidated, or never written. Same as today.
+            if (!cachedResponse) {
+                response.set('x-cache', 'MISS');
+                cacheRequestsTotal.inc({ result: 'miss' });
+                armCacheWrite(response, cacheKey, ttl, graceSeconds, options.tags);
+                next();
+                return;
+            }
+
+            // Fast path: still within the soft TTL.
+            if (Date.now() < cachedResponse.staleAt) {
                 response.set('x-cache', 'HIT');
+                cacheRequestsTotal.inc({ result: 'hit' });
                 response.status(cachedResponse.status).json(cachedResponse.body);
                 return;
             }
 
-            response.set('x-cache', 'MISS');
-            armCacheWrite(response, cacheKey, ttl, options.tags);
+            // Past the soft TTL: exactly one caller, across every worker and replica, rebuilds —
+            // everyone else reads back their OWN key's stale body rather than wait. Nobody ever
+            // receives the rebuilder's response object, so this cannot leak across callers (see
+            // the trap note on getCacheScope above `armCacheWrite`'s docblock).
+            return claimCacheRefresh(cacheKey, graceSeconds).then((wonClaim) => {
+                if (!wonClaim) {
+                    response.set('x-cache', 'STALE');
+                    cacheRequestsTotal.inc({ result: 'stale' });
+                    response.status(cachedResponse.status).json(cachedResponse.body);
+                    return;
+                }
 
-            // No cache hit, so continue to the controller and let it generate a fresh response.
-            next();
+                response.set('x-cache', 'REFRESH');
+                cacheRequestsTotal.inc({ result: 'refresh' });
+                armCacheWrite(response, cacheKey, ttl, graceSeconds, options.tags);
+                next();
+            });
         });
     };
 };

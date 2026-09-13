@@ -21,7 +21,10 @@ import type { Order } from '@types';
  * post-query would make the status depend on who asked. Checking first keeps the answer at 404
  * regardless of role.
  */
-export const getOrderItem = (request: Request<{ id?: string }>, response: Response) => {
+export const getOrderItem = (
+    request: Request<{ id?: string }>,
+    response: Response
+): Promise<void> | void => {
     if (!isValidObjectId(request.params.id)) {
         rejectResponse(response, 404, [t('orders.not-found')]);
         return;
@@ -36,7 +39,9 @@ export const getOrderItem = (request: Request<{ id?: string }>, response: Respon
             }
             // The body carries what THIS caller may do to the order, so the client renders its
             // controls from the server's answer rather than from a copy of the lifecycle.
-            successResponse<Order>(response, orderService.withActions(order, request.authContext));
+            return orderService.withActions(order, request.authContext).then((resolved) => {
+                successResponse<Order>(response, resolved);
+            });
         })
         .catch(catchAs(response, 'getOrderItem'));
 };

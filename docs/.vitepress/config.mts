@@ -223,6 +223,7 @@ export default withMermaid(
                             { text: 'Runtime', link: '/tools/runtime' },
                             { text: 'Internationalisation', link: '/tools/i18n' },
                             { text: 'Demo profile', link: '/tools/demo-profile' },
+                            { text: 'The Flow Runner', link: '/tools/flow-runner' },
                             { text: 'Security', link: '/tools/security' },
                             {
                                 text: 'Deployment Hardening',

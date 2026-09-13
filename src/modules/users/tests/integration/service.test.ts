@@ -29,6 +29,19 @@ jest.mock('@infrastructure/observability/audit', () => ({
     emitAuditEvent: jest.fn()
 }));
 
+/**
+ * Mock the image store, not the filesystem underneath it — same reasoning as
+ * `products/tests/integration/service.test.ts`: the service owes its collaborator only a
+ * *stored-image handle* (`imageUrl`).
+ */
+jest.mock('@infrastructure/adapters/image-store', () => ({
+    imageStore: { remove: jest.fn().mockResolvedValue(true) }
+}));
+
+const { imageStore } = jest.requireMock<{ imageStore: { remove: jest.Mock } }>(
+    '@infrastructure/adapters/image-store'
+);
+
 setupTestDb();
 
 describe('userService.validateData', () => {
@@ -430,6 +443,46 @@ describe('userService.updateById', () => {
         expect(result.status).toBe(404);
     });
 
+    it('updates the imageUrl and removes the old avatar from the store', async () => {
+        const user = await createUser({ imageUrl: '/images/old-avatar.jpg' });
+        const id = user._id.toString();
+
+        await userService.updateById(id, { imageUrl: '/images/new-avatar.jpg' }, testCallerContext);
+
+        // The OLD avatar goes, and it goes by its stored url — see `products`' identical case.
+        expect(imageStore.remove).toHaveBeenCalledWith('/images/old-avatar.jpg');
+        expect(imageStore.remove).not.toHaveBeenCalledWith('/images/new-avatar.jpg');
+    });
+
+    /* The avatar is only replaced when a new one arrives; every other edit must leave it alone. */
+    it('keeps the avatar when an update carries no imageUrl', async () => {
+        const user = await createUser({ imageUrl: '/images/keep-avatar.jpg' });
+        const id = user._id.toString();
+
+        const result = await userService.updateById(
+            id,
+            { username: 'renamed-once-more' },
+            testCallerContext
+        );
+
+        expect(imageStore.remove).not.toHaveBeenCalled();
+        expect((result as { data: UserDocument }).data.imageUrl).toBe('/images/keep-avatar.jpg');
+    });
+
+    /* Re-submitting the same url is not a replacement — deleting here would delete the live avatar. */
+    it('keeps the avatar when the update repeats the current imageUrl', async () => {
+        const user = await createUser({ imageUrl: '/images/same-avatar.jpg' });
+        const id = user._id.toString();
+
+        await userService.updateById(
+            id,
+            { imageUrl: '/images/same-avatar.jpg' },
+            testCallerContext
+        );
+
+        expect(imageStore.remove).not.toHaveBeenCalled();
+    });
+
     it('actually deactivates the account, not just the USER_DEACTIVATED event', async () => {
         const user = await createUser();
         const id = user._id.toString();
@@ -560,6 +613,29 @@ describe('userService.removeById', () => {
 
         expect(result.success).toBe(false);
         expect((result as ResponseReject).status).toBe(404);
+    });
+
+    /* Hard delete is the only path that destroys bytes; the row is gone, so nothing else can. */
+    it('removes the avatar from the store on a hard delete', async () => {
+        const user = await createUser({ imageUrl: '/images/doomed-avatar.jpg' });
+        const id = user._id.toString();
+
+        await userService.removeById(id, true);
+
+        expect(imageStore.remove).toHaveBeenCalledWith('/images/doomed-avatar.jpg');
+    });
+
+    /**
+     * A soft delete is reversible — calling `removeById` again on an already-deleted user
+     * restores it — so deleting the avatar would restore a user with a broken one.
+     */
+    it('keeps the avatar on a soft delete', async () => {
+        const user = await createUser({ imageUrl: '/images/survives-avatar.jpg' });
+        const id = user._id.toString();
+
+        await userService.removeById(id, false);
+
+        expect(imageStore.remove).not.toHaveBeenCalled();
     });
 });
 

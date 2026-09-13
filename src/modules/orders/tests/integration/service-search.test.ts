@@ -8,6 +8,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
+import { productRepository } from '@modules/products';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import * as orderService from '@modules/orders/services';
 import type { OrderDocument } from '@modules/orders';
@@ -19,6 +20,23 @@ type OrderWithTotals = OrderDocument & {
     totalQuantity: number;
     totalPrice: number;
 };
+
+/**
+ * An order line as `resolveCurrentImages` leaves it — `current` isn't on `OrderDocumentItem`,
+ * since nothing stores it; it's attached at the serialization boundary. See
+ * `../../services/current`.
+ */
+interface ItemWithCurrent {
+    product: { id: string };
+    current: { imageUrl: string; thumbnailUrl?: string } | null;
+}
+
+/**
+ * Narrows a search result's item to what `resolveCurrentImages` attached — a single cast from
+ * `unknown`, not the double `as unknown as` the field's absence from `OrderDocumentItem` would
+ * otherwise force at every call site.
+ */
+const currentOf = (item: unknown): ItemWithCurrent['current'] => (item as ItemWithCurrent).current;
 
 /*
  * `totalItems`, `totalQuantity` and `totalPrice` are not stored — `applyOrderTransform` derives
@@ -238,5 +256,51 @@ describe('orderService.search', () => {
         expect(result.items).toHaveLength(0);
         expect(result.meta.totalItems).toBe(0);
         expect(result.meta.totalPages).toBe(0);
+    });
+});
+
+/*
+ * SECURITY_HOLES_7_STORAGE_QUOTA decision 2: the order line no longer freezes an image, so
+ * `current` is resolved LIVE from the catalogue product every read — the three branches that
+ * matter are unchanged, replaced-since-purchase, and gone.
+ */
+describe('orderService.search — current (live) image', () => {
+    it('resolves the live imageUrl for an unchanged product', async () => {
+        const user = await createUser();
+        const product = await createProduct({ imageUrl: '/images/original.jpg' });
+
+        await createOrder(user, [toOrderItem(product, 1)]);
+
+        const { items } = await orderService.search({});
+
+        expect(currentOf(items[0].items[0])).toEqual({ imageUrl: '/images/original.jpg' });
+    });
+
+    it('resolves the NEW imageUrl when the product changed since the order was placed', async () => {
+        const user = await createUser();
+        const product = await createProduct({ imageUrl: '/images/at-purchase.jpg' });
+
+        await createOrder(user, [toOrderItem(product, 1)]);
+
+        // The catalogue row changes after the order exists — the order line itself carries no
+        // image at all to go stale, so this can only ever show the live one.
+        product.imageUrl = '/images/replaced.jpg';
+        await productRepository.save(product);
+
+        const { items } = await orderService.search({});
+
+        expect(currentOf(items[0].items[0])).toEqual({ imageUrl: '/images/replaced.jpg' });
+    });
+
+    it('resolves null once the product has been hard-deleted', async () => {
+        const user = await createUser();
+        const product = await createProduct({ imageUrl: '/images/doomed.jpg' });
+
+        await createOrder(user, [toOrderItem(product, 1)]);
+        await productRepository.deleteOne(product);
+
+        const { items } = await orderService.search({});
+
+        expect(currentOf(items[0].items[0])).toBeNull();
     });
 });

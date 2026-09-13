@@ -106,7 +106,8 @@ checkout is the ordinary explanation, and the two are indistinguishable from the
 
 ### Seed credentials are published, not copied
 
-`NODE_SEED_ADMIN_PASSWORD` / `NODE_SEED_USER_PASSWORD` are resolved here and SERVED: the demo
+`NODE_SEED_ADMIN_PASSWORD` / `NODE_SEED_USER_PASSWORD` / `NODE_SEED_EDITOR_PASSWORD` /
+`NODE_SEED_MODERATOR_PASSWORD` are resolved here and SERVED: the demo
 profile's `GET /__test/scenario` answers with every seeded login, and the frontend's
 `boilerplate-vue-frontend/tests/support/e2e/scenario.ts` reads them rather than keeping literals
 of its own. Override a

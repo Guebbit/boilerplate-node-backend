@@ -26,6 +26,7 @@ flowchart TD
     Root --> Dev["Dev tooling<br/><i>scripts · eslint · .husky</i>"]
     Root --> Jobs["Scheduled jobs<br/><i>ops/</i>"]
     Root --> Data["Data<br/><i>db/ · index sync · seeds</i>"]
+    Root --> Scenarios["scenarios/<br/><i>demo records &amp; flows</i>"]
     Root --> Tests["tests/"]
 
     Src --> Infra["infrastructure/<br/><i>substrate</i>"]
@@ -38,7 +39,7 @@ flowchart TD
     classDef side fill:#ede9fe,stroke:#7c3aed,color:#111827;
     class Root entry;
     class Src,Infra,Kernel,Modules,App code;
-    class Contracts,Ops,Dev,Jobs,Data,Tests side;
+    class Contracts,Ops,Dev,Jobs,Data,Scenarios,Tests side;
 ```
 
 | Page                                      | Covers                                                                                                        |
@@ -48,7 +49,7 @@ flowchart TD
 | [Infrastructure](./src-infrastructure.md) | `src/infrastructure/` — adapters, http, observability, persistence, runtime                                   |
 | [Modules](./src-modules.md)               | The file shapes a module is built from, and which module has which                                            |
 | [Contracts](./contracts.md)               | `openapi.yaml`, `asyncapi.yaml`, `shared/contracts/`, generated `api/`, collection exports, Spectral rulesets |
-| [Data](./data.md)                         | `db/` — the index sync, the demo dataset, cache tools                                                         |
+| [Data](./data.md)                         | `db/` — the index sync, cache tools, and `scenarios/` — the demo records and the flow runner                  |
 | [Scripts & Hooks](./scripts.md)           | `scripts/`, `ops/`, `eslint/rules/`, `.husky/`                                                                |
 | [Tests](./tests.md)                       | `tests/`, the co-located module suites, `tests/load/`                                                         |
 | [Ops & Assets](./ops.md)                  | `docker/`, `.github/`, compose files, `public/`                                                               |

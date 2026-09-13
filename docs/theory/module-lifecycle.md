@@ -116,7 +116,7 @@ src/modules/<name>/
     factories.ts                   how its test/demo records are built
     tests/unit/ · tests/contract/  co-located, deleted with the module
 
-scenarios/<name>.ts                its demo records — outside src/, see the demo dataset section
+scenarios/<name>.ts                its demo records — outside src/, see tools/demo-profile.md
 ```
 
 Everything at that root is a layer or a self-registering slot; everything that is a **subject**
@@ -187,8 +187,8 @@ already — nothing below applies.
 Write `openapi.yaml`, add the domain to `MODULE_SECTIONS`, and add its paths to the root's index. Do
 the same for `ASYNC_SECTION_ORDER` if you wrote an `asyncapi.yaml`. An `analytics.ts` needs no entry
 anywhere — the name is swept off disk. A `scenarios/<name>.ts`, if the domain has demo data, needs
-one line in `scenarios/index.ts`'s table; the dataset itself is published from a real seeding run
-rather than assembled from a list.
+one line in `scenarios/index.ts`'s table — the rows themselves are produced by seeding the catalogue
+and driving the real endpoints at boot, not assembled from a committed list.
 
 An `asyncapi.yaml` costs one decision the others do not: whether the domain also belongs in
 `SHARED_SECTIONS`. It does if a browser can reach the channels — an SSE stream, a websocket — and it
@@ -215,8 +215,8 @@ npm run contracts:bundle -- bruno insomnia mockoon postman
 ```
 
 `contract.{bruno,insomnia,mockoon,postman}.*` land at the repo root, untracked, built from the committed
-`openapi.yaml` and the demo dataset. They are generated and never hand-edited — a request the
-contract cannot describe belongs in that module's `probes.ts`.
+`openapi.yaml` and `scenarios/subjects.ts`'s example ids. They are generated and never hand-edited —
+a request the contract cannot describe belongs in that module's `probes.ts`.
 
 ### 5 · The page
 

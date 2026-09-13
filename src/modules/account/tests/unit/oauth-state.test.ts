@@ -1,10 +1,16 @@
 /**
  * @module
- * The OAuth CSRF handshake — `oauth/state.ts`. Pure functions only: cookie plumbing is exercised
- * end to end by the integration/contract suites, this covers the comparison and the token shape.
+ * The OAuth CSRF and PKCE handshakes — `oauth/state.ts`. Pure functions only: cookie plumbing is
+ * exercised end to end by the integration/contract suites, this covers the comparison and both
+ * token shapes.
  */
 
-import { generateOAuthState, stateMatches } from '../../oauth/state';
+import {
+    generateOAuthState,
+    stateMatches,
+    generateCodeVerifier,
+    codeChallengeOf
+} from '../../oauth/state';
 
 describe('generateOAuthState', () => {
     it('mints a hex string with 128 bits of entropy', () => {
@@ -39,5 +45,37 @@ describe('stateMatches', () => {
 
     it('rejects two empty cookies rather than treating them as matching', () => {
         expect(stateMatches('', '')).toBe(false);
+    });
+});
+
+describe('generateCodeVerifier', () => {
+    it('mints a base64url string with 256 bits of entropy', () => {
+        const verifier = generateCodeVerifier();
+
+        expect(verifier).toMatch(/^[\w-]{43}$/);
+    });
+
+    it('never repeats across calls', () => {
+        expect(generateCodeVerifier()).not.toBe(generateCodeVerifier());
+    });
+});
+
+describe('codeChallengeOf', () => {
+    it('is deterministic — the same verifier always hashes to the same challenge', () => {
+        const verifier = generateCodeVerifier();
+
+        expect(codeChallengeOf(verifier)).toBe(codeChallengeOf(verifier));
+        expect(codeChallengeOf(verifier)).toMatch(/^[\w-]{43}$/);
+    });
+
+    it('differs for a different verifier', () => {
+        expect(codeChallengeOf('verifier-a')).not.toBe(codeChallengeOf('verifier-b'));
+    });
+
+    it("matches RFC 7636's own worked example", () => {
+        // https://www.rfc-editor.org/rfc/rfc7636#appendix-B
+        expect(codeChallengeOf('dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk')).toBe(
+            'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM'
+        );
     });
 });

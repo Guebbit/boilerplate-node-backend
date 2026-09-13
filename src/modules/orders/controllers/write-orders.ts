@@ -29,7 +29,7 @@ export const writeOrders = (
         CreateOrderRequest | UpdateOrderRequest | UpdateOrderByIdRequest
     >,
     response: Response
-) => {
+): Promise<void> => {
     // One declaration instead of reading `request.params.id` and the body separately — see
     // docs/theory/request-input.md. Orders carry no multipart variant, so nothing needs decoding.
     const { id } = readInput(request, { surface: 'write', ids: ['id'] });
@@ -58,17 +58,17 @@ export const writeOrders = (
                 if (refused(response, result)) return;
                 // `ResponseSuccess.data` is optional at the type level for endpoints with no
                 // payload; `create` always resolves one on success, so this is exhaustiveness.
-                if (!result.data)
-                    return rejectResponse(response, 500, [t('generic.error-internal')]);
+                if (!result.data) {
+                    rejectResponse(response, 500, [t('generic.error-internal')]);
+                    return;
+                }
 
                 // The confirmation mail is `orderService.create`'s — it is a fact about the order,
                 // not about the request that asked for one. See `CallerContext.locale`.
                 orderCreatedTotal.inc();
-                successResponse<Order>(
-                    response,
-                    orderService.withActions(result.data, request.authContext),
-                    201
-                );
+                return orderService.withActions(result.data, request.authContext).then((order) => {
+                    successResponse<Order>(response, order, 201);
+                });
             })
             .catch(catchAs(response, 'createOrder'));
     }
@@ -90,12 +90,14 @@ export const writeOrders = (
             if (refused(response, result)) return;
             // `ResponseSuccess.data` is optional at the type level for endpoints with no payload;
             // `updateById` always resolves one on success, so this is exhaustiveness.
-            if (!result.data) return rejectResponse(response, 500, [t('generic.error-internal')]);
+            if (!result.data) {
+                rejectResponse(response, 500, [t('generic.error-internal')]);
+                return;
+            }
 
-            successResponse<Order>(
-                response,
-                orderService.withActions(result.data, request.authContext)
-            );
+            return orderService.withActions(result.data, request.authContext).then((order) => {
+                successResponse<Order>(response, order);
+            });
         })
         .catch(catchAs(response, 'writeOrder'));
 };

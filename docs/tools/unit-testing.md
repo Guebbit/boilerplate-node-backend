@@ -83,9 +83,9 @@ This second point is also why `@faker-js/faker` (ESM-only from v10) can't be imp
 | `tests/unit/middlewares/**`                                       | Cache, request logging                                                                              |
 | `tests/unit/infrastructure/**`                                    | Adapters (cache, logger, mailer, queue), HTTP helpers, observability                                |
 | `tests/unit/kernel/**`                                            | The module registry and the domain event bus                                                        |
-| `tests/unit/jobs/**`, `tests/unit/db/**`, `tests/unit/scripts/**` | Scheduled jobs, the seed runner and `db/` wrappers, the repo-hygiene scripts                        |
+| `tests/unit/jobs/**`, `tests/unit/db/**`, `tests/unit/scripts/**` | Scheduled jobs, `db/` wrappers, the repo-hygiene scripts                                            |
+| `tests/unit/scenarios/**`                                         | The scenario registry's own logic — the guarantee checker, the named accounts, seed-row images      |
 | `tests/support/**`                                                | Harness and helpers — never collected as specs                                                      |
-| `tests/support/factories/*`                                       | `makeX()`/`createX()` pairs per entity                                                              |
 | `tests/support/setup-test-db.ts`, `tests/support/database.ts`     | The `mongodb-memory-server` lifecycle                                                               |
 | `tests/support/setup.ts`                                          | Global Jest setup (rate-limit override, i18next init, system-mongod detection)                      |
 | `tsconfig.jest.json`                                              | The Jest-specific TypeScript config, see above                                                      |

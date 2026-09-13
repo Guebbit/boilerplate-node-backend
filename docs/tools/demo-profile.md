@@ -29,17 +29,64 @@ It is also the lightest way for a human to get a working API for anything — a 
 
 The routes are unauthenticated on purpose: the profile only ever binds beside an in-memory database that `npm run demo` created seconds earlier. There is nothing to protect and no deployment that mounts them — `enableDemoProfile()` is called nowhere but `scenarios/run-server.ts`.
 
-## The two seed accounts
+Not mounted at all when `enableDemoProfile()` was never called — every route 404s, same as a path
+that does not exist.
+
+### Bodies and status codes
+
+`POST /__test/restore`:
+
+```
+→ { "scenario": "shop" }        // or omit the body entirely for the same default
+← 204, no body
+
+→ { "scenario": "not-a-real-name" }
+← 400 { "success": false, "message": "unknown scenario: \"not-a-real-name\"" }
+
+→ { "scenario": 42 }            // not even a string
+← 400 { "success": false, "message": "unknown scenario: 42" }
+```
+
+A build failure mid-restore answers `500 { "success": false }` with the real cause only in the
+server log, never the response — the same reasoning as every other unhandled failure this API
+answers.
+
+`GET /__test/scenario`:
+
+```
+← 200
+{
+  "scenario": "shop",
+  "accounts": {
+    "owner": { "email": "root@root.it", "password": "Demo-Admin1!" },
+    "user": { "email": "customer@example.com", "password": "Demo-User1!" },
+    "editor": { "...": "..." },
+    "moderator": { "...": "..." }
+  },
+  "subjects": { "order.paid": "<minted id>", "product.outOfStock": "<minted id>", "...": "..." }
+}
+```
+
+`GET /__test/emails`:
+
+```
+← 200 { "emails": [] }                          // nothing sent since the last restore
+← 200 { "emails": [{ "to": "...", "subject": "...", "...": "..." }] }
+```
+
+## The named accounts
 
 Their ids and credentials live in `scenarios/accounts.ts` — outside `src/` entirely, like every
-other scenario file, even though `users` owns the record.
+other scenario file, even though `users` owns the record. Four of them, one per tenant role worth
+trying on its own: `owner` (who is also the platform operator — `root@root.it`), `user` (the
+ordinary customer — `customer@example.com`), `editor` (`editor@example.com`) and `moderator`
+(`moderator@example.com`).
 
 Several scenario files need a piece of them: `users` seeds the accounts, `account` seeds the address
 book an order ships to, `wishlist` seeds a row belonging to a person, and `flows/shop-history.ts`
 signs each of them in. Reaching into `@modules/users` for that would buy a `src/`-crossing import
-for six string literals that are pure data. Repeating the ids in each of those files is worse in
-the other direction: a drift is a dangling reference nothing catches until a demo renders an empty
-page.
+for what is otherwise pure data. Repeating the ids in each of those files is worse in the other
+direction: a drift is a dangling reference nothing catches until a demo renders an empty page.
 
 Note what is deliberately **not** shared: the account records. A sibling gets the handle it needs to
 name a person without taking on the shape of a user.
@@ -47,8 +94,9 @@ name a person without taking on the shape of a user.
 ::: warning Two things not to change
 **The credentials must stay fixed.** `cy.loginAs()` in the paired frontend types them into a real
 login form. Everything else about the dataset can move; these are the part a human reads off a
-page and types. The passwords are overridable via `NODE_SEED_ADMIN_PASSWORD`/
-`NODE_SEED_USER_PASSWORD` — change both `.env` files together, never one alone.
+page and types. Each password is overridable — `NODE_SEED_ADMIN_PASSWORD` for the owner,
+`NODE_SEED_USER_PASSWORD`, `NODE_SEED_EDITOR_PASSWORD`, `NODE_SEED_MODERATOR_PASSWORD` — change
+both `.env` files together, never one alone.
 
 **The password is stored plaintext on purpose.** `userSchema`'s pre-save hook hashes it on the way
 in, so a hash written there would drift from that hook and lose its plaintext. It never reaches a
@@ -90,6 +138,12 @@ The same `buildScenario` runs behind `npm run scenario:apply` against a real dat
 the application in-process for exactly this reason. It refuses a database that already holds
 anything unless `--reset` is given: seeding on top of a shop that already has a past would give it
 a second one.
+
+`blank` is the other named scenario — harness infrastructure only (the access model, the named
+accounts, the fallback locale), no catalogue and no history to drive. It is for a behaviour e2e
+spec that CREATES what it then asserts on, rather than reading a furnished shop's own rows: `npm
+run scenario:apply -- blank` seeds it against a real database exactly like `shop` does, and
+`{ "scenario": "blank" }` on `POST /__test/restore` selects it here.
 
 ### Row ids are not literals
 

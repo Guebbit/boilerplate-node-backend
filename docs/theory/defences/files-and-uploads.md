@@ -78,6 +78,34 @@ general burst brake — `infrastructure/http/middlewares/rate-limit.ts#uploadLim
 ceiling is `NODE_MAX_UPLOAD_BYTES` (5 MB), and `requestTimeout` bounds how long a client may take
 to send it — see [Denial of service](denial-of-service.md#holding-a-resource).
 
+## Stored file lifetime
+
+An unbounded upload route isn't the only way to fill a disk — a bounded one still leaks if nothing
+ever deletes what it replaces. Lifetime follows the DOCUMENT that references the file, not a
+counter: three rules, applied identically to a product's `imageUrl` and a user's avatar.
+
+```mermaid
+flowchart LR
+    A[New image fills a role] -->|old bytes now unreachable| B[Delete the OLD image]
+    C[Container hard-deleted] -->|nothing will ever name it again| D[Delete its images]
+    E[Container soft-deleted] -->|a restore needs them| F[Keep them]
+```
+
+| Attack                        | How it works                                                          | This boilerplate                                                                                                                                                                                                          |
+| ------------------------------ | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Orphaned files never reclaimed | replacing an image forever, or deleting the row, leaves the old bytes | `imageStore.remove(old)` runs after the save that overwrote a role's `imageUrl`, and again on a HARD delete — never on a soft delete, which is a restore waiting to happen. Bounds one account to its one CURRENT image, not every image it ever held — `products/service.ts`, `users/service.ts`. |
+
+`imageStore.remove` also refuses anything it did not write as a main image — a remote url, a path
+outside the public root, or any path in a subdirectory of `images/` — which is what keeps it from
+ever deleting the shared placeholder or a committed demo fixture by the same call. A crash between
+the save and the unlink leaks one file; rare enough, and bounded enough by the rule above, that no
+reconciliation sweep exists for it.
+
+An order line does not participate in any of this: it never stored an image to begin with. It
+keeps the catalogue product's id and resolves the picture LIVE, `null` once that product is gone —
+so a hard delete can free a product's image without leaving a broken link in someone's order
+history. See `orders/services/current.ts`.
+
 ## Related
 
 - [Injection](injection.md) — the path-building half of this family
