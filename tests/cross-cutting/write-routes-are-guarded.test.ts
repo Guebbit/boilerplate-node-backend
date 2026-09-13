@@ -142,6 +142,10 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: true,
         reason: "changing the caller's own password, proving the current one"
     },
+    'account POST /password/check': {
+        requiresAuth: false,
+        reason: 'advisory breach check — signup needs it before an account exists'
+    },
     'account POST /reauth': {
         requiresAuth: true,
         reason: "re-proving the caller's own password to refresh their session's freshness"

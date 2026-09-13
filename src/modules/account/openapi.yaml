@@ -126,6 +126,30 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /account/password/check:
+        post:
+            tags: [Auth]
+            summary: Check a candidate password's breach status
+            description: Advisory only — never blocks anything itself. Reports whether a CANDIDATE password (not yet required to satisfy `PasswordNew`) matches a known-breached password, so a signup or password-change form can warn before submission. Unauthenticated, since signup needs it before an account exists. The four password-SET paths remain the actual gate, checked again server-side regardless of what this endpoint answered.
+            operationId: checkPasswordBreached
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PasswordCheckRequest'
+            responses:
+                '200':
+                    description: The candidate's breach status
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PasswordCheckEnvelope'
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /account/reauth:
         post:
             tags: [Auth]
@@ -1344,6 +1368,49 @@ components:
             properties:
                 password:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+
+        PasswordCheckRequest:
+            type: object
+            additionalProperties: false
+            required: [password]
+            properties:
+                password:
+                    type: string
+                    minLength: 1
+                    description: A CANDIDATE password, not `PasswordNew` — this runs while someone is still typing, so it accepts anything non-empty rather than the contract's own composition rule.
+
+        PasswordCheck:
+            type: object
+            additionalProperties: false
+            required: [breached]
+            properties:
+                breached:
+                    type: boolean
+                    description: >-
+                        Whether the candidate matches a known-breached password — the bundled list
+                        or, when enabled, the HIBP range lookup. Advisory: the four password-SET
+                        paths are the actual gate, not this field.
+                count:
+                    type: integer
+                    minimum: 0
+                    description: >-
+                        How many times HIBP has seen this exact password. Present only when HIBP
+                        is what caught it — never for a bundled-list hit, and never when rung 2 is
+                        disabled or unreachable.
+
+        PasswordCheckEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/PasswordCheck'
 
         VerifyEmailConfirmRequest:
             type: object

@@ -16,6 +16,7 @@ import {
     type ResponseErrorItem,
     validationErrors
 } from '@infrastructure/http/response';
+import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
 import { zodUserSchema, TokenType, hashToken } from './model';
 import type { UserDocument } from './model';
 import type { CreateUserRequest, SearchUsersRequest, UpdateUserByIdRequest } from '@types';
@@ -210,33 +211,56 @@ export const update = (
      */
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
-    if (data.email !== undefined) user.email = data.email;
-    if (data.username !== undefined) user.username = data.username;
-    /*
-     * The column AND the membership. `role` on the user row is what this module publishes — a
-     * staff list has to show it — while the membership is what authorization is decided from, and
-     * writing only the first is a change that appears to take and does nothing. One caller writes
-     * both, which is what keeps them from disagreeing; the membership write is chained after the
-     * save so a role change that cannot be stored fails the request rather than half-applying.
-     */
-    if (data.role !== undefined) user.role = data.role;
-    if (data.active !== undefined) user.active = data.active;
-    // The three travel as one unit, all produced by the same `readUploadedImage` call on the
-    // controller — set together whenever a new upload replaces the image.
-    if (data.imageUrl !== undefined) {
-        user.imageUrl = data.imageUrl;
-        user.thumbnailUrl = data.thumbnailUrl;
-        user.pendingImageKey = data.pendingImageKey;
-    }
-    // The preference that outlives the request — see the `locale` field on the user schema.
-    if (data.locale !== undefined) user.locale = data.locale;
-    if (data.phone !== undefined) user.phone = data.phone;
-    if (data.website !== undefined) user.website = data.website;
-    // Absent leaves the stored choice alone, same as every field above; only an explicit boolean
-    // changes it.
-    if (data.analyticsConsent !== undefined) user.analyticsConsent = data.analyticsConsent;
-    if (data.password && data.password.trim().length > 0) user.password = data.password;
+    const password = data.password && data.password.trim().length > 0 ? data.password : undefined;
 
+    // Checked before any field is assigned: a breached password fails the whole update, and
+    // nothing else here is worth mutating first.
+    return (password ? assertPasswordNotBreached(password) : Promise.resolve([])).then(
+        (breachErrors) => {
+            if (breachErrors.length > 0) return generateReject(422, breachErrors);
+
+            if (data.email !== undefined) user.email = data.email;
+            if (data.username !== undefined) user.username = data.username;
+            /*
+             * The column AND the membership. `role` on the user row is what this module publishes
+             * — a staff list has to show it — while the membership is what authorization is
+             * decided from, and writing only the first is a change that appears to take and does
+             * nothing. One caller writes both, which is what keeps them from disagreeing; the
+             * membership write is chained after the save so a role change that cannot be stored
+             * fails the request rather than half-applying.
+             */
+            if (data.role !== undefined) user.role = data.role;
+            if (data.active !== undefined) user.active = data.active;
+            // The three travel as one unit, all produced by the same `readUploadedImage` call on
+            // the controller — set together whenever a new upload replaces the image.
+            if (data.imageUrl !== undefined) {
+                user.imageUrl = data.imageUrl;
+                user.thumbnailUrl = data.thumbnailUrl;
+                user.pendingImageKey = data.pendingImageKey;
+            }
+            // The preference that outlives the request — see the `locale` field on the user schema.
+            if (data.locale !== undefined) user.locale = data.locale;
+            if (data.phone !== undefined) user.phone = data.phone;
+            if (data.website !== undefined) user.website = data.website;
+            // Absent leaves the stored choice alone, same as every field above; only an explicit
+            // boolean changes it.
+            if (data.analyticsConsent !== undefined) user.analyticsConsent = data.analyticsConsent;
+            if (password) user.password = password;
+
+            return updateSavedUser(user, data, context);
+        }
+    );
+};
+
+/**
+ * The save-and-react half of {@link update}, split out so the breach check above it reads as one
+ * idea rather than the start of an even longer function.
+ */
+const updateSavedUser = (
+    user: UserDocument,
+    data: Pick<UpdateUserByIdRequest, 'active' | 'role'>,
+    context: CallerContext
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     return userRepository.save(user).then((savedUser) => {
         /*
          * Deactivation ends every live session. Defense in depth on top of

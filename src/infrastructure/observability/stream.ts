@@ -29,6 +29,14 @@ const sseClients = new Set<Response>();
 const UPDATE_INTERVAL_MS = 5000;
 
 /**
+ * How often an open stream re-proves its caller still holds the permission that opened it.
+ * Revocation lands on the very next request everywhere else in this codebase; a stream has no next
+ * request until this closes it. Cheap to run this often only because the endpoint is admin-only —
+ * concurrent streams number in the handful.
+ */
+const REVERIFY_INTERVAL_MS = 30_000;
+
+/**
  * Lightweight keep-alive ping to prevent proxies/load-balancers from closing idle SSE streams.
  * Reverse proxies commonly drop connections after 30-60s of silence, and the client cannot tell
  * an idle stream from a dead one; 15s stays comfortably under the usual thresholds.
@@ -95,9 +103,19 @@ const writeMetricsEvent = (response: Response, eventName: ObservabilityChannel) 
 
 /**
  * Opens an SSE stream on the given response: sets headers, sends an immediate snapshot,
- * then schedules periodic updates and heartbeats, cleaning up all intervals on close.
+ * then schedules periodic updates, heartbeats and a permission recheck, cleaning up all intervals
+ * on close.
+ *
+ * @param response - the response to hold open and stream frames into
+ * @param reverify - re-answers "does this caller still hold the permission that opened the
+ *   stream", polled every {@link REVERIFY_INTERVAL_MS}. Kept a plain callback, not a specific auth
+ *   call, so this module stays agnostic of how a caller is authenticated — the route wires it to
+ *   `kernel/middlewares/authorizations.ts#stillHoldsKeyViaCookie`.
  */
-export const streamObservabilityMetrics = (response: Response) => {
+export const streamObservabilityMetrics = (
+    response: Response,
+    reverify: () => Promise<boolean>
+) => {
     response.status(200);
     // The MIME type that makes this an SSE stream — it is what tells the browser's `EventSource`
     // to parse frames incrementally instead of waiting for the body to end.
@@ -128,12 +146,26 @@ export const streamObservabilityMetrics = (response: Response) => {
         writeMetricsEvent(response, OBSERVABILITY_CHANNELS.HEARTBEAT);
     }, HEARTBEAT_INTERVAL_MS);
 
+    // The permission recheck. Fails closed on a rejection too — an error is not "still allowed" —
+    // so `reverify` throwing is not required to behave any differently from it resolving `false`.
+    const reverifyInterval = setInterval(() => {
+        void reverify()
+            .catch(() => false)
+            .then((allowed) => {
+                if (!allowed) {
+                    response.end();
+                    teardown();
+                }
+            });
+    }, REVERIFY_INTERVAL_MS);
+
     // Cleanup when the client disconnects to avoid memory leaks and stale intervals.
     // Both are essential: uncleared intervals would keep writing to a dead socket forever, and
     // an un-deleted Set entry would pin the whole Response object in memory.
     const teardown = () => {
         clearInterval(updatesInterval);
         clearInterval(heartbeatInterval);
+        clearInterval(reverifyInterval);
         sseClients.delete(response);
     };
 

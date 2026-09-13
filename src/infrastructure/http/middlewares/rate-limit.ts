@@ -110,6 +110,15 @@ export const DEFAULT_SUBMISSION_RATE_LIMIT_EMAIL_MAX = 5;
 export const DEFAULT_SUBMISSION_RATE_LIMIT_BLOCK_MAX = 20;
 
 /**
+ * Password-strength advisory checks allowed per window, per ADDRESS.
+ *
+ * A live meter fires on every debounced keystroke pause, so this is sized for a real typing
+ * session (a handful of edits) rather than a single submission — see `passwordCheckLimiter` for
+ * why it exists at all.
+ */
+export const DEFAULT_PASSWORD_CHECK_RATE_LIMIT_MAX = 20;
+
+/**
  * Image uploads allowed per window, per ADDRESS.
  *
  * Sized well above what one legitimate session needs (bulk product-image edits included) and well
@@ -126,6 +135,30 @@ export const DEFAULT_UPLOAD_RATE_LIMIT_MAX = 20;
  * state.
  */
 export const DEFAULT_PAYMENT_WEBHOOK_RATE_LIMIT_MAX = 60;
+
+/**
+ * Confirm attempts allowed per ACCOUNT per hour — see `paymentConfirmAttemptLimiter`.
+ *
+ * The blunt cap on the whole intent→confirm loop: a payment can be re-confirmed with a different
+ * `paymentMethodRef` after a decline, so this bounds the loop itself regardless of outcome.
+ */
+export const DEFAULT_PAYMENT_CONFIRM_RATE_LIMIT_MAX = 5;
+
+/**
+ * Declines allowed per ACCOUNT per hour — see `paymentConfirmDeclineLimiter`.
+ *
+ * The accurate signal the attempt budget above is not: a person retries a flaky card two or three
+ * times, a card tester retries many different ones. Matches Stripe's own published Radar rule
+ * ("block after 3 declines from an IP"), keyed here on the account instead.
+ */
+export const DEFAULT_PAYMENT_DECLINE_RATE_LIMIT_MAX = 3;
+
+/**
+ * Window, in ms, for both payment-velocity budgets — fixed at one hour rather than
+ * `NODE_RATE_LIMIT_WINDOW_MS`, the same reasoning as `mfaChallengeLimiter`'s own window: the
+ * duration is part of what the budget means, not an artefact of the shared browsing window.
+ */
+const PAYMENT_VELOCITY_WINDOW_MS = 60 * 60 * 1000;
 
 /**
  * Requests allowed per window, per api-key CREDENTIAL — see `apiKeyLimiter`.
@@ -362,6 +395,22 @@ export const submissionLimiter: RequestHandler = rateLimit({
 });
 
 /**
+ * `POST /account/password/check`'s own budget — unauthenticated, and every call may trigger an
+ * outbound HIBP lookup, so it is an amplifier against HIBP and a free CPU sink without one.
+ * Shaped like `submissionLimiter`: keyed on the caller's address (the default `keyGenerator`),
+ * every request counts — a validation-only 200 is exactly what an amplifier farms, so
+ * `skipSuccessfulRequests` would bound nothing.
+ */
+export const passwordCheckLimiter: RequestHandler = rateLimit({
+    ...limiterOptions(rateLimitStore('password-check'), true),
+    limit: environmentNumber(
+        'NODE_PASSWORD_CHECK_RATE_LIMIT_MAX',
+        DEFAULT_PASSWORD_CHECK_RATE_LIMIT_MAX,
+        1
+    )
+});
+
+/**
  * The signup budgets — identity, address and address-block, none of them skipping success.
  *
  * `credentialLimiters` is the wrong shape for `POST /account/signup`: `skipSuccessfulRequests`
@@ -572,6 +621,89 @@ export const apiKeyLimiter: RequestHandler = rateLimitOn(
     DEFAULT_API_KEY_RATE_LIMIT_MAX,
     { keyGenerator: (request) => request.credentialId! }
 );
+
+/**
+ * Who a payment-velocity budget is keyed on: the authenticated account.
+ *
+ * `identityOf` (the credential budgets' key) reads the request BODY, the wrong place here — the
+ * account confirming a payment is in `authContext`, resolved by `getAuth` before either limiter
+ * below runs (`payments/routes.ts` mounts them after `router.use(getAuth, isAuth)`), so the `!` is
+ * a fact `isAuth` already proved, not a suppression.
+ */
+const accountIdOf = (request: Request): string => request.authContext!.id;
+
+/**
+ * Attempts against `POST /payments/:id/confirm`, keyed on the account — see
+ * `DEFAULT_PAYMENT_CONFIRM_RATE_LIMIT_MAX`. Counts every attempt regardless of outcome, unlike the
+ * credential budgets: a checkout that never fails a password check can still burn through many
+ * card numbers on one intent.
+ */
+export const paymentConfirmAttemptLimiter: RequestHandler = rateLimit({
+    ...limiterOptions(rateLimitStore('payments-confirm-attempts'), true),
+    windowMs: PAYMENT_VELOCITY_WINDOW_MS,
+    limit: environmentNumber(
+        'NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX',
+        DEFAULT_PAYMENT_CONFIRM_RATE_LIMIT_MAX,
+        1
+    ),
+    keyGenerator: accountIdOf
+});
+
+/**
+ * Where express-rate-limit stores the decline limiter's counter on `request` —
+ * {@link paymentDeclineChallengeGate} is the only reader, the same arrangement as
+ * `IDENTITY_RATE_LIMIT_PROPERTY`.
+ */
+const PAYMENT_DECLINE_RATE_LIMIT_PROPERTY = 'paymentDeclineRateLimit';
+
+/**
+ * Declines against `POST /payments/:id/confirm`, keyed on the account — see
+ * `DEFAULT_PAYMENT_DECLINE_RATE_LIMIT_MAX`. `skipSuccessfulRequests` spends the budget on a
+ * genuine decline only: `requestWasSuccessful` reads `request.paymentConfirmDeclined`, set by the
+ * controller, rather than the stock `statusCode < 400` check — this route's OTHER 409,
+ * `PAYMENT_ORDER_NOT_PAYABLE`, is a race, not a decline, and must not spend it.
+ */
+export const paymentConfirmDeclineLimiter: RequestHandler = rateLimit({
+    ...limiterOptions(rateLimitStore('payments-confirm-declines'), true),
+    windowMs: PAYMENT_VELOCITY_WINDOW_MS,
+    limit: environmentNumber(
+        'NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX',
+        DEFAULT_PAYMENT_DECLINE_RATE_LIMIT_MAX,
+        1
+    ),
+    skipSuccessfulRequests: true,
+    keyGenerator: accountIdOf,
+    requestWasSuccessful: (request) => !request.paymentConfirmDeclined,
+    requestPropertyName: PAYMENT_DECLINE_RATE_LIMIT_PROPERTY
+});
+
+/**
+ * Whether this confirm attempt's account has at least one PRIOR decline already on record this
+ * window. Missing rate-limit info (the decline limiter didn't run, or a store error let the
+ * request through) reads as "not yet" — same fail-open reasoning as `identityBudgetMostlySpent`.
+ *
+ * `info.remaining` already reflects THIS request's own provisional count — express-rate-limit
+ * increments before the outcome is known, then undoes it later if `requestWasSuccessful` says so —
+ * so `remaining` is one lower than the prior-decline count alone would read. The threshold is
+ * `limit - 1`, not `limit`, to cancel that provisional count out.
+ */
+const hasAPriorDecline = (request: Request): boolean => {
+    // Same cast as `identityBudgetMostlySpent`: the property name is chosen at runtime
+    // (`requestPropertyName`), which the `Request` augmentation cannot describe.
+    const info = (request as Request & Record<string, RateLimitInfo | undefined>)[
+        PAYMENT_DECLINE_RATE_LIMIT_PROPERTY
+    ];
+    if (!info) return false;
+    return info.remaining < info.limit - 1;
+};
+
+/**
+ * Mounted after `paymentConfirmDeclineLimiter`: passes an account's first confirm attempt through
+ * untouched, delegates to `humanChallengeGate` once that account has at least one decline already
+ * on record. A no-op until a human-challenge provider is configured, like every other mount of it.
+ */
+export const paymentDeclineChallengeGate: RequestHandler = (request, response, next) =>
+    hasAPriorDecline(request) ? humanChallengeGate(request, response, next) : next();
 
 /**
  * Guards the Prometheus scrape endpoint with a static bearer credential — Prometheus cannot hold a

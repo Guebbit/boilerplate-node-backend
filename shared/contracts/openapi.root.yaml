@@ -1071,6 +1071,8 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1abilities'
     /account/password:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1password'
+    /account/password/check:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1password~1check'
     /account/reauth:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1reauth'
     /account/logout:

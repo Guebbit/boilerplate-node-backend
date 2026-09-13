@@ -216,7 +216,12 @@ export const securityMock = () => {
         webhookLimiter: labelled('webhookLimiter'),
         // Same shape as `webhookLimiter`: a single closure, run from inside `getAuth`'s
         // credential branch rather than mounted on any one route.
-        apiKeyLimiter: labelled('apiKeyLimiter')
+        apiKeyLimiter: labelled('apiKeyLimiter'),
+        // Same shape again: each a single closure mounted directly on `POST /:id/confirm` rather
+        // than an array. `paymentDeclineChallengeGate` needs no entry here — like
+        // `loginChallengeGate`, it is a declared arrow function and already arrives named.
+        paymentConfirmAttemptLimiter: labelled('paymentConfirmAttemptLimiter'),
+        paymentConfirmDeclineLimiter: labelled('paymentConfirmDeclineLimiter')
     };
 };
 

@@ -308,6 +308,37 @@ export const requirePermission = (key: string) => {
 };
 
 /**
+ * Resolves the refresh cookie's caller and checks `key`, auditing a refusal exactly as
+ * {@link requirePermissionViaCookie} answers one — shared by that connect-time guard and by
+ * {@link stillHoldsKeyViaCookie}'s periodic recheck of an already-open stream, so the two can never
+ * disagree about who holds `key`.
+ *
+ * Rejects exactly when `resolveRefreshToken` does — a forged or expired token — and leaves that
+ * distinct from "resolved to nobody, or resolved but lacks the key" on purpose: the two callers
+ * below disagree about what a resolver failure should mean (401 to a connecting client; fail-closed
+ * to an already-open stream that cannot be told apart from a revoked one), so only they may decide.
+ *
+ * @param request - only for the audit trail; never re-authenticated from it
+ * @param refreshToken - the `jwt` cookie value
+ * @param key - the permission key to check
+ * @returns the resolved user when they hold `key`, otherwise `undefined`
+ */
+const resolveKeyHolderViaCookie = (request: Request, refreshToken: string, key: string) =>
+    resolveRefreshToken(refreshToken).then((user) => {
+        const allowed = user !== undefined && holdsKey(callerFor(user, key), key);
+
+        if (!allowed) {
+            auditRefusal(request, {
+                action: coreAuditActions.SECURITY_FORBIDDEN,
+                actor_user_id: user?.id ?? 'anonymous',
+                metadata: { reason: 'missing_permission', permission: key }
+            });
+        }
+
+        return allowed ? user : undefined;
+    });
+
+/**
  * {@link requirePermission} for endpoints a BROWSER opens without being able to set a header —
  * SSE, via `EventSource`, which cannot send `Authorization`. The refresh cookie is the credential,
  * verified as `GET /account/refresh` verifies it: signature *and* presence on the user document,
@@ -337,16 +368,9 @@ export const requirePermissionViaCookie = (key: string) => {
             return;
         }
 
-        resolveRefreshToken(refreshToken)
+        resolveKeyHolderViaCookie(request, refreshToken, key)
             .then((user) => {
-                const allowed = user !== undefined && holdsKey(callerFor(user, key), key);
-
-                if (!allowed) {
-                    auditRefusal(request, {
-                        action: coreAuditActions.SECURITY_FORBIDDEN,
-                        actor_user_id: user?.id ?? 'anonymous',
-                        metadata: { reason: 'missing_permission', permission: key }
-                    });
+                if (!user) {
                     rejectResponse(response, 403, [
                         { code: 'FORBIDDEN', message: t('generic.error-forbidden') }
                     ]);
@@ -364,6 +388,30 @@ export const requirePermissionViaCookie = (key: string) => {
             );
     };
 };
+
+/**
+ * {@link requirePermissionViaCookie}'s check, re-run outside the request lifecycle — for the one
+ * stream that connects via that guard and then stays open. Revocation lands on the next request
+ * everywhere else in this codebase; a stream has no next request until something closes it, so
+ * `streamObservabilityMetrics` calls this every 30 seconds and ends the stream on `false`.
+ *
+ * Fails closed: a resolver error (an expired token, a datastore outage) answers `false`, the same
+ * as a role that no longer holds `key` — indistinguishable from outside, and both mean the stream
+ * stops.
+ *
+ * @param request - the request that opened the stream, kept only for the audit trail
+ * @param refreshToken - the `jwt` cookie value captured when the stream connected
+ * @param key - the permission key to re-check
+ * @returns whether the caller still holds `key`
+ */
+export const stillHoldsKeyViaCookie = (
+    request: Request,
+    refreshToken: string,
+    key: string
+): Promise<boolean> =>
+    resolveKeyHolderViaCookie(request, refreshToken, key)
+        .then((user) => user !== undefined)
+        .catch(() => false);
 
 /**
  * The two step-up tiers, read through `environmentNumber` exactly like the token TTLs are.

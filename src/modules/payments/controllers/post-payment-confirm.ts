@@ -33,6 +33,9 @@ export const postPaymentConfirm = (request: Request<{ id?: string }>, response: 
         .then((result) => {
             const declined =
                 !result.success && result.errors.some(({ code }) => code === 'PAYMENT_DECLINED');
+            // Read by the decline-budget limiter's `requestWasSuccessful` (rate-limit.ts) so it
+            // spends its budget on a genuine decline only, never on the route's other 409.
+            request.paymentConfirmDeclined = declined;
             // Counted outcomes only: not-found/race rejections aren't confirm attempts. In flight
             // is counted as its own label rather than folded into either — a spike in challenges
             // is a different incident from a spike in declines.

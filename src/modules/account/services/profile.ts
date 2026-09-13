@@ -25,6 +25,7 @@ import {
     validationErrors
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
+import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
 import {
     zodUserSchema,
     userRepository,
@@ -94,16 +95,22 @@ export const passwordChange = (
 
     if (errors.length > 0) return Promise.resolve(generateReject(422, errors));
 
-    user.password = password;
-    return userRepository
-        .save(user)
-        .then((savedUser) =>
-            savedUser
-                .tokenRemoveAll(TokenType.REFRESH)
-                .catch(() => undefined)
-                .then(() => generateSuccess<UserDocument>(savedUser))
-        )
-        .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
+    // One check for both callers: `passwordResetChange` and `passwordChangeWithCurrent` both
+    // funnel through this function.
+    return assertPasswordNotBreached(password).then((breachErrors) => {
+        if (breachErrors.length > 0) return generateReject(422, breachErrors);
+
+        user.password = password;
+        return userRepository
+            .save(user)
+            .then((savedUser) =>
+                savedUser
+                    .tokenRemoveAll(TokenType.REFRESH)
+                    .catch(() => undefined)
+                    .then(() => generateSuccess<UserDocument>(savedUser))
+            )
+            .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
+    });
 };
 
 /**

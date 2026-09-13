@@ -101,6 +101,15 @@ process.env.NODE_UPLOAD_RATE_LIMIT_MAX ??= '1000';
 process.env.NODE_PAYMENT_WEBHOOK_RATE_LIMIT_MAX ??= '1000';
 
 /**
+ * `paymentConfirmAttemptLimiter`/`paymentConfirmDeclineLimiter` need the same treatment: keyed on
+ * the ACCOUNT rather than the address, so a suite that logs into one seeded account and confirms
+ * several payments would otherwise trip a 429 the fuzz suite's spec check does not expect — same
+ * failure mode `NODE_AUTH_RATE_LIMIT_MAX` exists to prevent above.
+ */
+process.env.NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX ??= '1000';
+process.env.NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX ??= '1000';
+
+/**
  * Bank transfer at checkout, which `GET /payments/methods` offers only where a deployment names
  * both of these. Set here rather than left to a developer's `.env`: the `shop` scenario declares
  * an `order.awaitingTransfer` guarantee, so a suite that builds it against an unconfigured
@@ -122,6 +131,19 @@ process.env.NODE_BANK_TRANSFER_IBAN ??= 'IT60X0542811101000000123456';
  * talking to that Redis is a suite whose result depends on who else is running.
  */
 process.env.NODE_RATE_LIMIT_REDIS_ENABLED ??= '0';
+
+/**
+ * Rung 2 of the breached-password check (`checkHibpRange`) is a REAL outbound call to
+ * `api.pwnedpasswords.com`. This project's own `.env` turns it on so the demo exercises it, but a
+ * suite must never depend on a live third party — it is slow enough to distort a race assertion
+ * (`auth-races.test.ts` saw its atomic-claim test flip under the added latency), and it fails for a
+ * reason that has nothing to do with the code under test the moment the runner has no egress.
+ *
+ * `??=`, not a plain assignment: `../unit/infrastructure/security/breached-passwords/index.test.ts`
+ * still turns it on inside individual cases, after this file has already run, to test rung 2 with
+ * a faked `fetch` — never a live call either way.
+ */
+process.env.NODE_PASSWORD_BREACH_HIBP ??= 'off';
 
 /**
  * The Prometheus scrape credential. `/observability/metrics` denies by default when this is
