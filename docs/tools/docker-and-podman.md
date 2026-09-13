@@ -67,6 +67,23 @@ flowchart LR
 | Dev workflow        | bind mount source code into `/app`, keep `node_modules` inside the container, switch between single-worker and clustered dev commands         |
 | Podman support      | `compose:restart`, `compose:rebuild` and `compose:kill` run `${CONTAINER_ENGINE:-podman} compose`; export `CONTAINER_ENGINE=docker` to switch |
 
+### After a new dependency: rebuild, don't just restart
+
+`node_modules` lives in an ANONYMOUS VOLUME mounted over `/app/node_modules`, so the bind-mounted
+source never shadows the container's own install. That volume is filled from the image **once**,
+when the container is first created, and is reused afterwards — so a dependency added to
+`package.json` is invisible to a container started with `compose:restart`, and the app crash-loops
+on `Cannot find module '<name>'` while every other service reports healthy.
+
+```sh
+npm run compose:rebuild      # down -v, build --no-cache, up -d — drops the database too
+# or, keeping the data:
+podman compose build app && podman compose rm -sf app && podman volume prune -f && podman compose up -d app
+```
+
+The symptom is specific enough to recognise: `MODULE_NOT_FOUND` for a package that `ls node_modules`
+on the host clearly shows, raised from inside `/app`.
+
 ## Container reference
 
 ### App runtime
