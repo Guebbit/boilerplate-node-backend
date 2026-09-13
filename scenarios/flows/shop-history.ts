@@ -256,12 +256,12 @@ const signInCustomerBase = (baseUrl: string): Promise<Map<string, Caller>> =>
     ).then((entries) => new Map(entries));
 
 /**
- * The admin edits the audit trail exists to show: a catalogue row, a dictionary entry, and a ban.
+ * The two catalogue edits the audit trail exists to show: a price, and a dictionary entry.
  *
- * Runs last, after every order: `marcus` places two of them, and banning him first would leave
- * the history saying an inactive account went shopping.
+ * Runs after every order — an operator edits a shop that already has customers, and an audit row
+ * dated before the orders it sits among would read as a shop edited before it opened.
  */
-const driveAdminEdits = async (owner: Caller): Promise<void> => {
+const driveCatalogueEdits = async (owner: Caller): Promise<void> => {
     await owner.call('PATCH', `/products/${SEED_PRODUCT_IDS.dogFoodStandard}`, {
         // A price change is the edit an operator makes most, and the one an audit reader most
         // wants to see a trail for.
@@ -272,11 +272,18 @@ const driveAdminEdits = async (owner: Caller): Promise<void> => {
     await owner.call('PUT', '/locales/it/entries/65e0200a9a7d4b2e1c0f3101', {
         value: 'Sessione scaduta. Effettua di nuovo l’accesso.'
     });
+};
 
-    /*
-     * The ban. `PUT /users/{id}` validates the whole identity, not just the field being changed,
-     * so the row is read back first — which is also what an admin screen does before it saves.
-     */
+/**
+ * Ban `marcus`, so the trail carries the one action a moderator screen exists for.
+ *
+ * Last of all, and after every shopper has signed out: he places two of the orders above, and a
+ * banned account cannot use the session it placed them with.
+ *
+ * `PUT /users/{id}` validates the whole identity rather than the field being changed, so the row
+ * is read back first — which is also what an admin screen does before it saves.
+ */
+const banOneCustomer = async (owner: Caller): Promise<void> => {
     const banned = await owner.call<{ username: string; email: string }>(
         'GET',
         `/users/${SEED_CUSTOMER_IDS.marcus}`
@@ -287,6 +294,20 @@ const driveAdminEdits = async (owner: Caller): Promise<void> => {
         active: false
     });
 };
+
+/**
+ * Every caller signs out of every device — `POST /account/logout-all`.
+ *
+ * Not housekeeping: a login writes a refresh token onto the user document, and twelve accounts
+ * signed in at build time would ship twelve phantom sessions in the demo dataset. They are an
+ * artifact of HOW the shop was built, not part of the story it tells — the customer who ordered
+ * in March is not still logged in — and the paired frontend's sessions screen counts what it
+ * finds.
+ */
+const signOutEveryone = (callers: Caller[]): Promise<void> =>
+    Promise.all(callers.map((caller) => caller.call('POST', '/account/logout-all'))).then(
+        () => undefined
+    );
 
 /**
  * Refuse to seed a shop the `order.awaitingTransfer` guarantee cannot hold in.
@@ -433,7 +454,16 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
         for (const line of lines) await shopper.call('POST', '/cart', line);
     }
 
-    await driveAdminEdits(owner);
+    await driveCatalogueEdits(owner);
+
+    /*
+     * Everyone signs out, then the owner bans `marcus` and signs out himself. The ORDER is the
+     * point: a ban lands on an account that is no longer holding a session, and the owner is the
+     * last one able to act.
+     */
+    await signOutEveryone([customer, ...base.values()]);
+    await banOneCustomer(owner);
+    await signOutEveryone([owner]);
 
     /* Spread the placed orders evenly from `OLDEST_DAYS` ago up to yesterday. */
     for (const [index, orderId] of placed.entries())
