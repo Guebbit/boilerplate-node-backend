@@ -47,7 +47,7 @@ export const ensureTenant = (slug: string, name: string, id?: string): Promise<T
                     ...(id ? { _id: new Types.ObjectId(id) } : {})
                 }
             },
-            { new: true, upsert: true }
+            { returnDocument: 'after', upsert: true }
         )
         .exec() as Promise<TenantDocument>;
 
@@ -152,7 +152,7 @@ export const assignRole = (
             .findOneAndUpdate(
                 { userId, tenantId, scope },
                 { $set: { role: roleName.toLowerCase() } },
-                { new: true, upsert: true }
+                { returnDocument: 'after', upsert: true }
             )
             .exec() as Promise<MembershipDocument>;
     });
