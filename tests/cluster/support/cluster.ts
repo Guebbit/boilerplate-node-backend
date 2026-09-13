@@ -74,6 +74,48 @@ const waitForListening = (port: number, timeoutMs: number): Promise<void> => {
 };
 
 /**
+ * `src/app.ts`'s own boot line, once per worker — the signal {@link waitForWorkers} counts.
+ * `startServer` logs it after the worker's `.listen()` call is acknowledged by the primary, which
+ * is the only per-worker "ready" event this black-box harness can observe from outside the process.
+ */
+const WORKER_READY_MARKER = 'Server listening on port';
+
+/**
+ * Resolves once `workers` distinct {@link WORKER_READY_MARKER} lines have appeared in the child's
+ * output, or rejects after `timeoutMs`.
+ *
+ * `waitForListening` alone proves only that ONE worker is up: the primary starts dispatching to a
+ * worker the moment IT registers its listener, before every other worker has finished forking and
+ * doing the same. A burst fired that early lands entirely on whichever worker got there first —
+ * indistinguishable from a real per-process-counter bug from the outside. `rate-limit.test.ts`'s
+ * "gives each worker its own budget" case found exactly this: `waitForListening` alone let it burst
+ * a still-single-worker cluster and read the result as the bug it exists to catch.
+ *
+ * @param countReady - reads how many ready markers have been seen so far, live
+ */
+const waitForWorkers = (
+    workers: number,
+    timeoutMs: number,
+    countReady: () => number
+): Promise<void> => {
+    const deadline = Date.now() + timeoutMs;
+
+    const attempt = (): Promise<void> => {
+        if (countReady() >= workers) return Promise.resolve();
+        if (Date.now() > deadline)
+            return Promise.reject(
+                new Error(
+                    `Only ${String(countReady())}/${String(workers)} workers reported listening within ${String(timeoutMs)}ms`
+                )
+            );
+
+        return new Promise<void>((resolve) => setTimeout(resolve, 100)).then(attempt);
+    };
+
+    return attempt();
+};
+
+/**
  * Boot a cluster of `workers` processes with `env` layered over the defaults.
  *
  * Its own in-memory Mongo, because the workers connect over TCP from another process and cannot be
@@ -142,6 +184,23 @@ const startCluster = ({
         child.stderr?.on('data', capture);
 
         /*
+         * `workersReady`, counted from the SAME two streams `capture` above already taps — a
+         * running total, not derived from `output`, since that array is trimmed and would
+         * silently undercount once boot chatter pushes an early ready line out of its window.
+         * `readyTail` carries the last few bytes across a chunk boundary so a marker split
+         * between two `data` events is not missed.
+         */
+        let workersReady = 0;
+        let readyTail = '';
+        const countReadyWorkers = (chunk: Buffer | string): void => {
+            const text = readyTail + String(chunk);
+            workersReady += text.split(WORKER_READY_MARKER).length - 1;
+            readyTail = text.slice(-WORKER_READY_MARKER.length);
+        };
+        child.stdout?.on('data', countReadyWorkers);
+        child.stderr?.on('data', countReadyWorkers);
+
+        /*
          * Signals the whole process GROUP, not just `child` — which is `npx`, not the cluster
          * primary two levels down, and never the workers `cluster.fork()` adds below that again.
          * `child.kill()` alone only ever reaches `npx`; whether SIGTERM cascades from there to
@@ -186,16 +245,18 @@ const startCluster = ({
                 }, 20_000).unref();
             }).then(() => mongo.stop().then(() => undefined));
 
-        return waitForListening(port, bootTimeoutMs).then(
-            () => ({ port, stop }),
-            (error: unknown) =>
-                stop().then(() => {
-                    const reason = error instanceof Error ? error.message : String(error);
-                    throw new Error(
-                        `${reason}\nThe child's last output:\n${output.join('') || '(nothing — it wrote neither stdout nor stderr)'}`
-                    );
-                })
-        );
+        return waitForListening(port, bootTimeoutMs)
+            .then(() => waitForWorkers(workers, bootTimeoutMs, () => workersReady))
+            .then(
+                () => ({ port, stop }),
+                (error: unknown) =>
+                    stop().then(() => {
+                        const reason = error instanceof Error ? error.message : String(error);
+                        throw new Error(
+                            `${reason}\nThe child's last output:\n${output.join('') || '(nothing — it wrote neither stdout nor stderr)'}`
+                        );
+                    })
+            );
     });
 
 /**
