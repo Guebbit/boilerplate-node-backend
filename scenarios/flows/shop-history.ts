@@ -31,9 +31,11 @@ import {
     CARD,
     checkout,
     checkoutAndPay,
+    hardDeleteProduct,
     openPayment,
     receiveStock,
     recordOfflinePayment,
+    replaceProductImage,
     softDeleteOrder,
     submitCard,
     syncPayment,
@@ -214,6 +216,9 @@ const plannedDemand = (): Map<string, number> => {
     // shop, and a shelf one unit short is a checkout that fails three hundred requests into a boot.
     add({ productId: SEED_PRODUCT_IDS.dogFoodStandard, quantity: 40 });
     add({ productId: SEED_PRODUCT_IDS.dogBedPremium, quantity: 30 });
+    // The three `current`-image demo rows below, each bought alone once and again inside
+    // `order.mixedImageStates` — two units apiece.
+    for (const index of [121, 122, 123]) add({ productId: fillerProductId(index), quantity: 2 });
 
     return demand;
 };
@@ -458,6 +463,38 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
     );
     await submitCard(owner, await openPayment(owner, subjects['order.shipped']), CARD.visa);
     await advanceOrder(owner, subjects['order.shipped'], ['processing', 'shipped']);
+
+    /*
+     * SECURITY_HOLES_7_STORAGE_QUOTA (decision 2): an order line resolves its picture LIVE
+     * against the catalogue product it still names, never a frozen one — so the branch that
+     * matters here is what happened to the CATALOGUE ROW after these were bought, not the order.
+     * Three products, three fates, plus one order that buys all three at once so a single
+     * response shows every branch side by side. The catalogue edits run AFTER every checkout
+     * below, so none of these orders is placed against an already-deleted product.
+     */
+    subjects['order.imageUnchanged'] = dated(
+        await checkoutAndPay(customer, [{ productId: fillerProductId(121), quantity: 1 }])
+    );
+    subjects['order.imageReplaced'] = dated(
+        await checkoutAndPay(customer, [{ productId: fillerProductId(122), quantity: 1 }])
+    );
+    subjects['order.productDeleted'] = dated(
+        await checkoutAndPay(customer, [{ productId: fillerProductId(123), quantity: 1 }])
+    );
+    subjects['order.mixedImageStates'] = dated(
+        await checkoutAndPay(customer, [
+            { productId: fillerProductId(121), quantity: 1 },
+            { productId: fillerProductId(122), quantity: 1 },
+            { productId: fillerProductId(123), quantity: 1 }
+        ])
+    );
+    // 121 gets no edit at all — `order.imageUnchanged` is the control the other two contrast with.
+    await replaceProductImage(
+        owner,
+        fillerProductId(122),
+        '/images/system/placeholder-product.png'
+    );
+    await hardDeleteProduct(owner, fillerProductId(123));
 
     /*
      * The two rows that stay dated TODAY, because both are still holding stock against a
