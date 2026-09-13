@@ -25,8 +25,19 @@ import {
     bankTransferIbanFriendly
 } from '@infrastructure/adapters/bank-transfer';
 import { sumLineItems, orderTotal, type LineItem } from './domain/totals';
+import { orderTaxBreakdown, type TaxableLineItem } from './domain/tax';
 import { OrderStatus } from '@types';
 import type { Order } from '@types';
+
+/**
+ * `ProductSnapshot` minus `taxClass`, plus the resolved `taxRate` — same reasoning as
+ * `ProductSnapshot` itself omitting `onHand`/`reserved`: an order line freezes the RESOLVED rate,
+ * never the class it came from, so the class must not even be reachable to store here.
+ */
+export type FrozenOrderLineProduct = Omit<ProductSnapshot, 'taxClass'> & {
+    /** The decimal VAT rate this line was actually charged — see the schema field's own comment. */
+    taxRate?: number;
+};
 
 /**
  * A single item stored inside an order document. Uses `ProductSnapshot` rather than OpenAPI's
@@ -48,7 +59,7 @@ export interface OrderDocumentItem {
      * the catalogue says today — and not what the WAREHOUSE says today either, which is why the
      * embedded schema is its own, narrower than the catalogue's.
      */
-    product: ProductSnapshot;
+    product: FrozenOrderLineProduct;
     quantity: number;
     /**
      * The language `product.title`/`description` were resolved into, frozen alongside them —
@@ -153,7 +164,13 @@ const orderLineProductSchema = new Schema(
         tags: { type: [String] },
         active: { type: Boolean },
         requiresShipping: { type: Boolean },
-        deletedAt: { type: Date }
+        deletedAt: { type: Date },
+        /*
+         * The decimal rate this line was actually charged, resolved from the product's `taxClass`
+         * at freeze time (`services/snapshot.ts`) — never the class itself, and never re-resolved
+         * from the product's CURRENT class. Absent on an order placed before VAT existed.
+         */
+        taxRate: { type: Number, min: 0, max: 1 }
     },
     { timestamps: true }
 );
@@ -346,6 +363,26 @@ const applyOrderTotals = (serialized: Record<string, unknown>) => {
 };
 
 /**
+ * Derives each line's `taxAmount`/`netAmount` and the order's `netTotal`/`taxTotal` from the
+ * lines' frozen `taxRate` — added onto the already-normalized items `applyOrderItems` produced.
+ * Adds nothing at all on a pre-VAT order (any line missing `taxRate`): see `orderTaxBreakdown`.
+ */
+const applyOrderTax = (serialized: Record<string, unknown>) => {
+    const items = Array.isArray(serialized.items) ? serialized.items : [];
+    // `orderTaxBreakdown` only reads `product.price`/`quantity`/`product.taxRate` — the same
+    // narrowing `applyOrderTotals` above already relies on for `LineItem`.
+    const breakdown = orderTaxBreakdown({ items: items as TaxableLineItem[] });
+    if (!breakdown) return;
+
+    for (const [index, item] of (items as Record<string, unknown>[]).entries()) {
+        item.taxAmount = breakdown.lines[index].taxAmount;
+        item.netAmount = breakdown.lines[index].netAmount;
+    }
+    serialized.netTotal = breakdown.netTotal;
+    serialized.taxTotal = breakdown.taxTotal;
+};
+
+/**
  * `transferInstructions`, present only while a `bank_transfer` order is still `pending` — once
  * paid or cancelled there is nothing left to act on. Read live from whatever the deployment
  * currently has configured rather than frozen at checkout time: the beneficiary/IBAN/BIC are
@@ -384,6 +421,7 @@ export const applyOrderTransform = applySerialization(orderSchema, {
     after: (serialized) => {
         applyOrderItems(serialized);
         applyOrderTotals(serialized);
+        applyOrderTax(serialized);
         applyTransferInstructions(serialized);
     }
 });

@@ -9,7 +9,7 @@
 
 import { Types } from 'mongoose';
 import { registerTranslationPort, type TranslationPort } from '@infrastructure/i18n';
-import { resolveSnapshotProducts } from '../../services/snapshot';
+import { freezeOrderLines, resolveSnapshotProducts } from '../../services/snapshot';
 
 /** A port double whose methods are jest mocks by default, overridable per test. */
 const fakePort = (overrides: Partial<TranslationPort> = {}): TranslationPort => ({
@@ -86,5 +86,57 @@ describe('resolveSnapshotProducts', () => {
 
         expect(result._id).toBe(id);
         expect(result._id).toBeInstanceOf(Types.ObjectId);
+    });
+});
+
+describe('freezeOrderLines — the VAT rate', () => {
+    const ORIGINAL_DEFAULT = process.env.NODE_VAT_RATE_DEFAULT;
+    const ORIGINAL_REDUCED = process.env.NODE_VAT_RATE_REDUCED;
+
+    afterEach(() => {
+        process.env.NODE_VAT_RATE_DEFAULT = ORIGINAL_DEFAULT;
+        process.env.NODE_VAT_RATE_REDUCED = ORIGINAL_REDUCED;
+        registerTranslationPort(undefined);
+    });
+
+    it("resolves an absent taxClass to the shop's default rate", async () => {
+        process.env.NODE_VAT_RATE_DEFAULT = '0.22';
+        registerTranslationPort(fakePort());
+
+        const [item] = await freezeOrderLines(
+            'en',
+            [{ _id: new Types.ObjectId(), title: 'Dog Bed', price: 10 }],
+            [1]
+        );
+
+        expect(item.product.taxRate).toBe(0.22);
+    });
+
+    it('resolves "reduced" to the reduced rate, not the default', async () => {
+        process.env.NODE_VAT_RATE_DEFAULT = '0.22';
+        process.env.NODE_VAT_RATE_REDUCED = '0.1';
+        registerTranslationPort(fakePort());
+
+        const [item] = await freezeOrderLines(
+            'en',
+            [{ _id: new Types.ObjectId(), title: 'Book', price: 10, taxClass: 'reduced' }],
+            [1]
+        );
+
+        expect(item.product.taxRate).toBe(0.1);
+    });
+
+    it('never carries `taxClass` on the frozen line — only the resolved rate', () => {
+        // The type-level guarantee (`FrozenOrderLineProduct` omits it) restated at runtime: an
+        // order line must not even be able to hold the class it came from.
+        registerTranslationPort(fakePort());
+
+        return freezeOrderLines(
+            'en',
+            [{ _id: new Types.ObjectId(), title: 'Book', price: 10, taxClass: 'reduced' }],
+            [1]
+        ).then(([item]) => {
+            expect(item.product).not.toHaveProperty('taxClass');
+        });
     });
 });

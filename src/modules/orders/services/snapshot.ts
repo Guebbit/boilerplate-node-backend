@@ -7,7 +7,7 @@
 
 import type { Types } from 'mongoose';
 import { localeCandidatesFor, resolveTranslations, runWithLocale } from '@infrastructure/i18n';
-import type { ProductSnapshot } from '@modules/products';
+import { resolveTaxRate, type ProductSnapshot } from '@modules/products';
 import type { OrderDocumentItem } from '../model';
 
 /**
@@ -67,9 +67,15 @@ export const freezeOrderLines = (
     quantities: readonly number[]
 ): Promise<OrderDocumentItem[]> =>
     resolveSnapshotProducts(locale, products).then((resolvedProducts) =>
-        resolvedProducts.map((product, index) => ({
-            product,
-            quantity: quantities[index],
-            locale
-        }))
+        resolvedProducts.map((product, index) => {
+            // `taxClass` never rides along on the frozen snapshot — only the RATE it resolves to
+            // does, exactly like `onHand`/`reserved` are excluded above it. See
+            // `FrozenOrderLineProduct`.
+            const { taxClass, ...catalogueFields } = product;
+            return {
+                product: { ...catalogueFields, taxRate: resolveTaxRate(taxClass) },
+                quantity: quantities[index],
+                locale
+            };
+        })
     );

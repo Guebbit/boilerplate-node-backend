@@ -15,7 +15,20 @@
         "invoice": {
             "meta-title": "Fattura — ordine {{order}}",
             "title": "L'ordine è stato confermato",
-            "line": "{{title}} — {{quantity}} × {{price}}"
+            "line": "{{title}} — {{quantity}} × {{price}}",
+            "vat": {
+                "column-description": "Descrizione",
+                "column-quantity": "Qtà",
+                "column-unit-price": "Prezzo unitario (lordo)",
+                "column-net": "Imponibile",
+                "column-rate": "Aliquota IVA",
+                "column-tax": "IVA",
+                "column-gross": "Totale",
+                "net-total": "Totale imponibile",
+                "tax-total": "Totale IVA",
+                "vat-number": "Partita IVA: {{number}}",
+                "vat-number-missing": "Partita IVA non configurata"
+            }
         },
         "email-confirm": {
             "subject": "Ordine confermato",

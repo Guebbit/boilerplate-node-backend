@@ -838,6 +838,20 @@ components:
                 deletedAt:
                     type: string
                     format: date-time
+                # The decimal rate this line was actually taxed at, resolved from the product's
+                # `taxClass` and frozen here at checkout — a rate change in config must not
+                # re-state what a past order was charged. Absent on an order placed before VAT
+                # existed; never backfilled, and never re-resolved from the product's CURRENT
+                # tax class.
+                taxRate:
+                    type: number
+                    format: double
+                    minimum: 0
+                    maximum: 1
+                    description: >-
+                        The VAT rate this line was actually charged, as a decimal (0.22 for 22%).
+                        Frozen at checkout, same reasoning as `price`. Absent on an order placed
+                        before VAT existed.
 
         OrderItem:
             type: object
@@ -855,6 +869,22 @@ components:
                 # language it was bought in, regardless of the reader's own locale.
                 locale:
                     $ref: '#/components/schemas/Locale'
+                # Both derived at serialization from `product.price`/`quantity`/`product.taxRate`
+                # — never stored — and both absent together with `product.taxRate`: a pre-VAT
+                # order renders no tax breakdown at all rather than implying a rate it never
+                # charged. See `src/modules/orders/domain/tax.ts`.
+                taxAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: VAT included in this line's total, at its own frozen `taxRate`.
+                netAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: This line's total excluding VAT — `price × quantity` minus `taxAmount`.
 
         # Shared by `Order.paymentMethod`, `CheckoutRequest.paymentMethod` and
         # `PaymentMethod.id` (`payments`' own module contract) — one enum, so a third method
@@ -940,6 +970,22 @@ components:
                     minimum: 0
                     description: Sum of `product.price × quantity` across every line item, plus `shippingCost` when the checkout chose a method.
                     example: 149.97
+                # Both derived at serialization from the lines' frozen `taxRate` — never stored —
+                # and both absent together on a pre-VAT order (any line missing `taxRate`), rather
+                # than rendering a partial or implied breakdown. See
+                # `src/modules/orders/domain/tax.ts`.
+                netTotal:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: Sum of every line's `netAmount` — the goods total excluding VAT. Absent on a pre-VAT order.
+                taxTotal:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: Sum of every line's `taxAmount`. Absent on a pre-VAT order.
                 notes:
                     type: string
                     description: Optional order notes

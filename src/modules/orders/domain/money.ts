@@ -64,3 +64,27 @@ export const wholeCount = (count: unknown): number => {
  */
 export const scaleMoney = (amount: Money, count: unknown): Money =>
     asMoney(amount * wholeCount(count));
+
+/**
+ * Subtract one amount from another — exact integer subtraction, same reasoning as {@link addMoney}.
+ * @param minuend - the starting amount
+ * @param subtrahend - the amount to take away
+ * @returns `minuend - subtrahend`
+ */
+export const subtractMoney = (minuend: Money, subtrahend: Money): Money =>
+    asMoney(minuend - subtrahend);
+
+/**
+ * Take a fractional share of an amount — a tax rate applied to a gross or net figure. Unlike
+ * {@link scaleMoney} (an exact whole-count repeat), a rate multiply is inherently fractional, so
+ * this is the one place VAT arithmetic rounds: half-up, to the nearest minor unit.
+ *
+ * Half-up rounds a negative result TOWARD +∞ (`Math.round(-0.5) === -0`, not `-1`) — harmless
+ * today, since every amount here is `min: 0` and there are no refunds. Revisit this the day a
+ * credit note needs to take a share of a negative amount.
+ * @param amount - the amount to take a share of
+ * @param rate - the share, as a decimal (0.22 for 22%)
+ * @returns the share, rounded to the nearest minor unit
+ */
+export const scaleMoneyByRate = (amount: Money, rate: number): Money =>
+    asMoney(Math.round(amount * rate));

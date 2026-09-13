@@ -22,3 +22,7 @@ export {
     orderActionsFor
 } from './lifecycle';
 export type { OrderActor } from './lifecycle';
+
+/** The VAT breakdown an order's response and invoice both derive from its frozen lines. */
+export { orderTaxBreakdown } from './tax';
+export type { OrderTaxBreakdown, LineTaxBreakdown, TaxableLineItem } from './tax';
