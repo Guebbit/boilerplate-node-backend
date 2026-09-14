@@ -21,7 +21,6 @@ import {
     registerLocaleDirectories
 } from '@infrastructure/i18n';
 import { registerValidationMessages } from '@infrastructure/http/validation-messages';
-import { usePreinstalledMongodBinary } from '@infrastructure/runtime/mongodb-memory-binary';
 
 /**
  * 10x the live default (`DEFAULT_RATE_LIMIT_MAX` in src/infrastructure/http/middlewares/rate-limit.ts, currently 100).
@@ -191,8 +190,6 @@ process.env.NODE_PAYMENT_WEBHOOK_SECRET ??= 'test-payment-webhook-secret';
  * testing the deployment check rather than the factor.
  */
 process.env.NODE_SMTP_HOST ??= 'smtp.test.invalid';
-
-usePreinstalledMongodBinary();
 
 /**
  * WARNING: it's async — and it runs in `setupFiles`, i.e. BEFORE the test file imports anything.

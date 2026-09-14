@@ -5,6 +5,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 // `globalSetup` is loaded outside jest's normal module resolution, where `moduleNameMapper` does
 // not apply — the alias resolves at `tsc`/`eslint` time but fails at jest's own runtime.
 import { logger } from '../../src/infrastructure/adapters/logger';
+import { usePreinstalledMongodBinary } from '../../src/infrastructure/runtime/mongodb-memory-binary';
 
 /**
  * The one handle `globalSetup` has to hand `globalTeardown`. Jest runs both in the same process but
@@ -152,6 +153,11 @@ const sweepDeadInstances = async (mongoRoot: string): Promise<void> => {
  * which jest runs in this same process.
  */
 const globalSetup = async () => {
+    // Must run HERE, in the main process, and not in `setup.ts`: the env vars it sets are read by
+    // `MongoMemoryServer.create()` below, and `setup.ts` runs per worker — after this server has
+    // already started, in a process that cannot reach it.
+    usePreinstalledMongodBinary();
+
     const root = instanceDataRoot();
     await sweepDeadInstances(path.join(TEST_TMP_ROOT, 'mongo'));
     await rm(root, { recursive: true, force: true });
