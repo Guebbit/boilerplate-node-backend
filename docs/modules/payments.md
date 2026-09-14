@@ -183,7 +183,7 @@ payment's own `provider` field — never the deployment's currently configured o
 older payment still reaches the provider that actually took the money even after a deployment
 switches to another.
 
-Requires `payments.create`, the same fresh-session tier as a refund (`payments.update`) — an
+Requires `payments.any.create`, the same fresh-session tier as a refund (`payments.any.update`) — an
 admin's own word that money arrived is exactly as consequential as one that it left.
 
 The webhook is not on this diagram because it does not add an edge the diagram doesn't already

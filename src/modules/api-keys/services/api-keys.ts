@@ -1,8 +1,8 @@
 /**
  * @module
  * Credential CRUD: list, mint (validates the subset, mints, audits), revoke (soft, audits).
- * Tenant-scoped throughout — every read and write narrows to `context.caller.tenantId`, which an
- * `apikeys.read`/`apikeys.manage` caller always carries (both keys are `scope: tenant` in
+ * Tenant-scoped throughout — every read and write narrows to `context.caller.tenantId`, which any
+ * `apikeys.*` caller always carries (every key in the family is `scope: tenant` in
  * `shared/authorization-keys.yaml`, and `Caller.tenantId` is null only in platform scope).
  */
 

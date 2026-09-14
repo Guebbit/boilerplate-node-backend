@@ -53,11 +53,11 @@ flowchart TD
 
     subgraph TENANT["tenant scope"]
         M["<b>Member</b>"] -->|has| RT["<b>Role</b>"]
-        RT -->|holds| KT["permission keys<br/><i>knowledge.read</i>"]
+        RT -->|holds| KT["permission keys<br/><i>knowledge.any.read</i>"]
     end
     subgraph PLATFORM["platform scope"]
         PO["<b>PlatformOperator</b>"] -->|has| RP["<b>Role</b>"]
-        RP -->|holds| KP["platform.* keys<br/><i>platform.taxonomy.merge</i>"]
+        RP -->|holds| KP["platform.* keys<br/><i>platform.taxonomy.any.merge</i>"]
     end
 
     KT --> C["<b>one Caller</b><br/>id · tenantId · scope · permissions"]
@@ -89,24 +89,34 @@ it decides what to render, never what is allowed, and every request is re-evalua
 ### The key grammar, and the invariant it exists for
 
 ```
-tenant scope     <family>.<action>             knowledge.read · tasks.write · members.invite
-platform scope   platform.<family>.<action>    platform.taxonomy.merge
-wildcards        <family>.manage               any action in that family
-                 all.manage                    everything in this scope — never both scopes
+tenant scope     <family>.<breadth>.<action>             knowledge.any.read · tasks.self.update
+platform scope   platform.<family>.<breadth>.<action>    platform.taxonomy.any.merge
+wildcards        all.manage                              everything in this scope
+                 platform.all.manage                      — never both scopes
 ```
 
-**A `manage` key expands over its FAMILY — the key's own prefix — and never over the module that
-declares it.** One module may own two families: `locales` declares both `locales.*` and
-`translations.*`, and expanding over the module once let `translations.manage` delete a language.
-The family may span more than one subject, and that is fine and intended: `inventory.read` is
-about a `StockLevel` and `inventory.create` about a `StockMovement`, so expanding over the subject
-instead would leave a warehouse unable to record the movement it exists to record.
+**Breadth is always written, never implied.** `orders.self.read` is the caller's own orders,
+`orders.any.read` is everyone's, `products.any.create` has no owner to scope by and still says so.
+A key you can grep for by shape beats a key you have to know the default of — the tradeoff is that
+`any` is noise on most of the file, since most families have no owner to be `self` about in the
+first place.
 
-**A family needs a concrete WRITE key for its `manage` to be answerable.** "Holds every concrete
-key in the family" reduces to "holds the read" when read is the only concrete key there is — which
-is how a read-only credential role once satisfied a guard asking for `apikeys.manage` and could
-mint credentials. Such a family now fails closed: only the literal key, or the scope wildcard,
-grants it. Declare the write key rather than relying on the collapse.
+**There is no per-family `manage` any more.** A wildcard that expanded to "every action a family
+declares" made a wide read reachable only by also handing out delete — the fix this model exists
+to demonstrate, on `orders`/`payments`: the support desk needed to read an order that was never
+its own, and the only way to say that was `orders.manage`, which also grants deleting it. Breadth
+on the key itself says "read everyone's, change nothing" directly, with no wildcard involved.
+
+**The one wildcard that survives is the SCOPE wildcard, `all.manage`.** It expands to every key
+DECLARED in the caller's scope — never to CASL's own unbounded `manage`, so a key nothing declares
+grants nothing even to the wildcard. `platform.observability.any.read` and nothing else declares a
+platform key, so `platform.all.manage` is, today, exactly that one key plus nothing.
+
+**A family needs a concrete key for every action a route asks about.** `apikeys` once declared
+only a read and a `manage`, so "holds every concrete key in the family" reduced to "holds the
+read" — a read-only role satisfied a guard meant for a minter. The fix generalised: `manage` is
+gone, so every action a route can gate on is its own declared key, and there is no collapse left
+to have.
 
 **Tenant keys are bare; platform keys are always prefixed.** That asymmetry is the whole safety
 property:
@@ -141,7 +151,7 @@ enforced per key.
   so a key that grants more returns more without anybody editing a fragment.
 - **`GET /account/abilities`** publishes the packed rules; the frontend evaluates _those_, not a
   copy of them.
-- Route guards take a KEY. `users.delete` and `payments.update` carry `stepUp: critical`, and the
+- Route guards take a KEY. `users.any.delete` and `payments.any.update` carry `stepUp: critical`, and the
   guard demands the fresh session and audits that it did.
 
 **Where the boilerplate stops short, on purpose.** It ships one shop, so most collections carry no

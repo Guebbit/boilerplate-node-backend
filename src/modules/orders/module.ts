@@ -32,11 +32,11 @@ export default {
      * whose module is gone, and a module claiming one the file does not attribute to it.
      */
     permissions: [
-        'orders.read',
-        'orders.create',
-        'orders.update',
-        'orders.delete',
-        'orders.manage'
+        'orders.self.read',
+        'orders.any.read',
+        'orders.any.create',
+        'orders.any.update',
+        'orders.any.delete'
     ],
     routes: router,
     /*

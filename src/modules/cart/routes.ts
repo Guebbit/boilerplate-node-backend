@@ -5,8 +5,8 @@
  * A cart is somebody's, so the whole router is authenticated. `POST /checkout` is the one route
  * that also invalidates the `orders` and `products` response caches — the endpoints those caches
  * serve read differently once a checkout has spent stock and created an order — and requires a
- * FRESH session holding `cart.checkout` on top of `isAuth` (`requireFreshAuth`,
- * `requirePermission('cart.checkout')`): it is where this app's money actually moves, and the key
+ * FRESH session holding `cart.self.checkout` on top of `isAuth` (`requireFreshAuth`,
+ * `requirePermission('cart.self.checkout')`): it is where this app's money actually moves, and the key
  * is the only one this module declares — see `shared/authorization-keys.yaml`. `/all` is mounted
  * ABOVE `/:productId`: Express matches in mount order, so a `/:productId`-shaped route registered
  * first would match the literal string `all` as a product id. The same rule that mounts `/search`
@@ -40,12 +40,12 @@ router.use(getAuth, isAuth);
 // GET /cart/summary
 router.get('/summary', getCartSummary);
 
-// POST /cart/checkout — money out. `cart.checkout`: an unproven address must not be able to
+// POST /cart/checkout — money out. `cart.self.checkout`: an unproven address must not be able to
 // place an order and start receiving order mail at an inbox nobody has confirmed it owns.
 router.post(
     '/checkout',
     requireFreshAuth(REAUTH_TIME_CRITICAL),
-    requirePermission('cart.checkout'),
+    requirePermission('cart.self.checkout'),
     invalidateCache(['orders', 'products']),
     postCheckout
 );

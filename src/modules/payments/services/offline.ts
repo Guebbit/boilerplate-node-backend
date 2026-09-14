@@ -41,7 +41,7 @@ export interface OfflinePaymentInput {
  * Record a payment that arrived outside the provider, and settle it exactly as a card payment
  * would.
  *
- * The order lookup is unscoped: this is an operator action reached only once `payments.create` has
+ * The order lookup is unscoped: this is an operator action reached only once `payments.any.create` has
  * already been checked at the route, not a customer reading their own order.
  *
  * @param orderId - the order the money arrived for

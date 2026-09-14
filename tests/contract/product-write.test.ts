@@ -71,7 +71,7 @@ describe('POST /products', () => {
      * `products` never writes `onHand` itself — see `products/service.ts`'s `create()` — so this
      * is the one test proving the opening count still reaches the document, through a real
      * `receive()` movement rather than a direct field write. `owner`, not `editor`: reading the
-     * ledger back needs `inventory.read`, which the editor role does not hold.
+     * ledger back needs `inventory.any.read`, which the editor role does not hold.
      */
     it('gives the product its opening stock through a real receive movement', async () => {
         const { bearer } = await authenticateAs('owner');
@@ -117,10 +117,10 @@ describe('PATCH /products/{id}', () => {
         expect(response).toSatisfyApiSpec();
     });
 
-    // The write route stacks `products.update` AND `translations.manage`. No preset role holds one
-    // without the other any more, so the "one key alone refuses" half of this cannot be exercised
-    // over HTTP today — `shared/authorization-conformance.yaml` asserts it at the ability layer
-    // instead ("the dictionary keys do not update a price, even together").
+    // The write route stacks `products.any.update` AND `translations.any.update`. No preset role
+    // holds one without the other any more, so the "one key alone refuses" half of this cannot be
+    // exercised over HTTP today — `shared/authorization-conformance.yaml` asserts it at the
+    // ability layer instead ("the dictionary keys do not update a price, even together").
     it('lets the editor change a price', async () => {
         const { bearer } = await authenticateAsRole('editor');
         const product = await createProduct({ title: 'Bed', price: 10 });

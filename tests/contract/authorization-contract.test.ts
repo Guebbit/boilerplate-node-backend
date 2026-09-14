@@ -15,8 +15,8 @@
  * resolves to cannot change a 401/403 outcome — a route where it did would be the defect this
  * sweep exists to catch.
  *
- * WHY THIS MATTERS: a route guarded by the wrong key (`users.manage` where the role file grants
- * `users.read`) makes an ALLOWED role 403 where it should not be — a bug the single-generic-caller
+ * WHY THIS MATTERS: a route guarded by the wrong key (`users.any.update` where the role file only
+ * grants `users.any.read`) makes an ALLOWED role 403 where it should not be — a bug the single-generic-caller
  * version of this sweep could never see, because that caller was always refused everywhere. Asking
  * `holdsKey` the same question the guard itself asks is what makes "should this role reach this
  * route" a fact the test derives from the model, rather than one somebody has to keep in sync by
@@ -77,13 +77,13 @@ describe('every route requiring a caller (contract-derived)', () => {
 });
 
 describe('every route requiring an admin (contract-derived)', () => {
-    // `cart.checkout` is excluded: it is the one key a plain `customer` holds by design (see
+    // `cart.self.checkout` is excluded: it is the one key a plain `customer` holds by design (see
     // `shared/authorization-roles.yaml`), so `authenticateAs('user')` below is genuinely allowed
     // through its routes. The per-role sweep below already covers them correctly.
     const requiresAdmin = routes.filter(
         (route) =>
             route.guards.includes('requirePermissionGuard') &&
-            route.permissionKey !== 'cart.checkout'
+            route.permissionKey !== 'cart.self.checkout'
     );
 
     it.each(requiresAdmin.map((route) => [signature(route), route] as const))(

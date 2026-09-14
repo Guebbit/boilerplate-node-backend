@@ -20,7 +20,7 @@ export default {
      * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
      * whose module is gone, and a module claiming one the file does not attribute to it.
      */
-    permissions: ['feedback.read', 'feedback.update', 'feedback.delete', 'feedback.manage'],
+    permissions: ['feedback.any.read', 'feedback.any.update', 'feedback.any.delete'],
     routes: router,
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

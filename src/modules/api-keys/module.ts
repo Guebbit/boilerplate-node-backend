@@ -108,5 +108,5 @@ export default {
      * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
      * whose module is gone.
      */
-    permissions: ['apikeys.read', 'apikeys.create', 'apikeys.delete', 'apikeys.manage']
+    permissions: ['apikeys.any.read', 'apikeys.any.create', 'apikeys.any.delete']
 } satisfies AppModule;

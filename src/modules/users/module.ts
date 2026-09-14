@@ -25,7 +25,7 @@ export default {
      * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
      * whose module is gone, and a module claiming one the file does not attribute to it.
      */
-    permissions: ['users.read', 'users.create', 'users.update', 'users.delete', 'users.manage'],
+    permissions: ['users.any.read', 'users.any.create', 'users.any.update', 'users.any.delete'],
     routes: router,
     locales: path.join(__dirname, 'locales'),
     /*

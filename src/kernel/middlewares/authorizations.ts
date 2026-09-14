@@ -211,7 +211,7 @@ const challengeForFreshAuth = (response: Response, maxAgeSeconds: number): void 
  * by a key no module owns would otherwise answer 403 to everyone and look like a permissions
  * problem for as long as nobody tried it.
  *
- * @param key - the permission key this route requires, e.g. `products.update`
+ * @param key - the permission key this route requires, e.g. `products.any.update`
  * @throws Error at mount time when no module declares the key
  */
 export const requirePermission = (key: string) => {

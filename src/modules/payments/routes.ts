@@ -12,7 +12,7 @@
  * Fresh session: every route that moves money requires `requireFreshAuth(REAUTH_TIME_CRITICAL)` —
  *                a stolen access token proves nothing about how recently the holder typed their
  *                password.
- * Verified:      the three routes the customer drives directly also require the `cart.checkout`
+ * Verified:      the three routes the customer drives directly also require the `cart.self.checkout`
  *                key — an unproven address must not be able to pay and start receiving payment
  *                mail at an inbox nobody confirmed. `cart` owns the key; `payments` mounts it, the
  *                same as `products/routes.ts` mounts `locales`-owned `translations.*`.
@@ -64,7 +64,7 @@ router.use(getAuth, isAuth);
 router.post(
     '/intent',
     requireFreshAuth(REAUTH_TIME_CRITICAL),
-    requirePermission('cart.checkout'),
+    requirePermission('cart.self.checkout'),
     idempotencyKey,
     postPaymentIntent
 );
@@ -74,23 +74,23 @@ router.get('/order/:orderId', getPaymentByOrder);
 
 // POST /payments/order/:orderId/refund — the operator returns the money, order untouched.
 /*
- * No `requireFreshAuth` here: `payments.update` carries `stepUp: critical` in
+ * No `requireFreshAuth` here: `payments.any.update` carries `stepUp: critical` in
  * `shared/authorization-keys.yaml`, so the guard demands the fresh session and audits that it did.
  * The tier belongs to the ACTION — money leaving the shop — rather than to this one route, and a
  * second route reaching the same key would otherwise have to remember.
  */
 router.post(
     '/order/:orderId/refund',
-    requirePermission('payments.update'),
+    requirePermission('payments.any.update'),
     idempotencyKey,
     postPaymentRefund
 );
 
 // POST /payments/order/:orderId/offline — the admin recording money by hand. Same `stepUp`
-// arrangement as the refund: `payments.create` carries it in `shared/authorization-keys.yaml`.
+// arrangement as the refund: `payments.any.create` carries it in `shared/authorization-keys.yaml`.
 router.post(
     '/order/:orderId/offline',
-    requirePermission('payments.create'),
+    requirePermission('payments.any.create'),
     idempotencyKey,
     postPaymentOffline
 );
@@ -101,7 +101,7 @@ router.post(
 router.post(
     '/:id/confirm',
     requireFreshAuth(REAUTH_TIME_CRITICAL),
-    requirePermission('cart.checkout'),
+    requirePermission('cart.self.checkout'),
     paymentConfirmAttemptLimiter,
     paymentConfirmDeclineLimiter,
     paymentDeclineChallengeGate,
@@ -116,6 +116,6 @@ router.post(
 router.post(
     '/:id/sync',
     requireFreshAuth(REAUTH_TIME_CRITICAL),
-    requirePermission('cart.checkout'),
+    requirePermission('cart.self.checkout'),
     postPaymentSync
 );

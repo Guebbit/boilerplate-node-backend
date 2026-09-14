@@ -194,7 +194,7 @@ describe('GET /observability/events — the inline stream handler', () => {
         expect(stillHoldsKeyViaCookie).toHaveBeenCalledWith(
             request,
             'cookie.jwt',
-            'platform.observability.read'
+            'platform.observability.any.read'
         );
     });
 });

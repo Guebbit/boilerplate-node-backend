@@ -3,7 +3,7 @@
  * Route table for inventory. Every route is staff's — the customer-facing half of this module is
  * deliberately not a route at all: a shopper learns about stock from `available` on the product
  * they are looking at — but not every route needs the same key: `manager` reads levels without
- * moving stock, `warehouse` moves stock through `inventory.create`.
+ * moving stock, `warehouse` moves stock through `inventory.any.create`.
  *
  * See: docs/modules/inventory.md
  */
@@ -26,19 +26,20 @@ export const router = Router();
 router.use(getAuth, isAuth);
 
 // GET /inventory/levels — the stock board, scarcest first
-router.get('/levels', requirePermission('inventory.read'), getInventoryLevels);
+router.get('/levels', requirePermission('inventory.any.read'), getInventoryLevels);
 
 // GET /inventory/movements — the ledger, newest first
-router.get('/movements', requirePermission('inventory.read'), getStockMovements);
+router.get('/movements', requirePermission('inventory.any.read'), getStockMovements);
 
-// POST /inventory/receipts — a supplier delivery lands. `inventory.create`: the key stock never
+// POST /inventory/receipts — a supplier delivery lands. `inventory.any.create`: the key stock never
 // moves without — see `shared/authorization-keys.yaml`.
-router.post('/receipts', requirePermission('inventory.create'), postReceipt);
+router.post('/receipts', requirePermission('inventory.any.create'), postReceipt);
 
 // POST /inventory/adjustments — a stocktake correction, signed
-router.post('/adjustments', requirePermission('inventory.create'), postAdjustment);
+router.post('/adjustments', requirePermission('inventory.any.create'), postAdjustment);
 
 // POST /inventory/reservations/sweep — the expiry tick; an operator is the cron, running as
-// `SYSTEM_ACTOR`, which is unrestricted in the shop — kept on the wide key since no preset role
-// is meant to reach it directly.
-router.post('/reservations/sweep', requirePermission('inventory.manage'), postReservationsSweep);
+// `SYSTEM_ACTOR`, which is unrestricted in the shop. `sweep`, not `manage`: no preset role is
+// meant to reach it directly, and CRUD has no verb for "clear expired holds on a schedule" — see
+// `shared/authorization-keys.yaml`.
+router.post('/reservations/sweep', requirePermission('inventory.any.sweep'), postReservationsSweep);

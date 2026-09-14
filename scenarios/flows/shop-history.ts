@@ -235,7 +235,7 @@ const plannedDemand = (): Map<string, number> => {
  * The out-of-stock subject gets no receipt at all — that is the whole reason it is in the
  * catalogue.
  *
- * @param owner - a caller holding `inventory.create`
+ * @param owner - a caller holding `inventory.any.create`
  */
 const openEveryShelf = async (owner: Caller): Promise<void> => {
     const demand = plannedDemand();

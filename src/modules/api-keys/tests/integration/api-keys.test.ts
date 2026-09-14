@@ -47,10 +47,10 @@ beforeEach(() => seedPresetRoles());
 describe('mint — the subset boundary', () => {
     it('refuses a permission the caller does not hold', async () => {
         const user = await createRealUser('mint-under');
-        const context = contextFor(String(user._id), ['apikeys.read']);
+        const context = contextFor(String(user._id), ['apikeys.any.read']);
 
         const result = await mint(
-            { name: 'partner integration', permissions: ['apikeys.read', 'orders.manage'] },
+            { name: 'partner integration', permissions: ['apikeys.any.read', 'orders.any.read'] },
             context
         );
 
@@ -61,24 +61,27 @@ describe('mint — the subset boundary', () => {
 
     it('mints when every requested key is held, and returns the plaintext once', async () => {
         const user = await createRealUser('mint-ok');
-        const context = contextFor(String(user._id), ['apikeys.read', 'apikeys.manage']);
+        const context = contextFor(String(user._id), ['apikeys.any.read', 'apikeys.any.create']);
 
         const result = await mint(
-            { name: 'partner integration', permissions: ['apikeys.read'] },
+            { name: 'partner integration', permissions: ['apikeys.any.read'] },
             context
         );
 
         expect(result.success).toBe(true);
         if (!result.data) throw new Error('unreachable — asserted above');
         expect(result.data.secret.startsWith('sk_')).toBe(true);
-        expect(result.data.permissions).toEqual(['apikeys.read']);
+        expect(result.data.permissions).toEqual(['apikeys.any.read']);
     });
 
     it('lets a wildcard-holder mint a key naming one specific key beneath it', async () => {
         const user = await createRealUser('mint-wildcard');
         const context = contextFor(String(user._id), permissionsOfRole('owner'));
 
-        const result = await mint({ name: 'from owner', permissions: ['orders.read'] }, context);
+        const result = await mint(
+            { name: 'from owner', permissions: ['orders.self.read'] },
+            context
+        );
 
         expect(result.success).toBe(true);
     });
@@ -92,13 +95,13 @@ describe('the credential-resolve path — re-floored at every use, not just at m
 
         const mintContext = contextFor(userId, permissionsOfRole('owner'));
         const minted = await mint(
-            { name: 'about to be demoted', permissions: ['apikeys.read'] },
+            { name: 'about to be demoted', permissions: ['apikeys.any.read'] },
             mintContext
         );
         if (!minted.data) throw new Error('setup failed: mint was refused');
 
         const beforeDemotion = await resolveCredential(minted.data.secret);
-        expect(beforeDemotion?.caller.permissions).toContain('apikeys.read');
+        expect(beforeDemotion?.caller.permissions).toContain('apikeys.any.read');
 
         // `customer` holds none of the api-keys keys — the demotion this test is about.
         await assignRole(userId, TEST_TENANT_ID, 'tenant', 'customer');
@@ -106,13 +109,13 @@ describe('the credential-resolve path — re-floored at every use, not just at m
         const afterDemotion = await resolveCredential(minted.data.secret);
         // Still a real, resolvable credential (not revoked, not expired) — just holding nothing
         // now, which is the point: the DOCUMENT never changed, only what it re-floors against did.
-        expect(afterDemotion?.caller.permissions).not.toContain('apikeys.read');
+        expect(afterDemotion?.caller.permissions).not.toContain('apikeys.any.read');
     });
 
     it('carries the credential id for the audit trail, display-shaped, never the secret', async () => {
         const user = await createRealUser('display-id');
-        const context = contextFor(String(user._id), ['apikeys.read']);
-        const minted = await mint({ name: 'named', permissions: ['apikeys.read'] }, context);
+        const context = contextFor(String(user._id), ['apikeys.any.read']);
+        const minted = await mint({ name: 'named', permissions: ['apikeys.any.read'] }, context);
         if (!minted.data) throw new Error('setup failed: mint was refused');
 
         const resolved = await resolveCredential(minted.data.secret);
@@ -125,8 +128,11 @@ describe('the credential-resolve path — re-floored at every use, not just at m
 describe('revoke', () => {
     it('makes the credential unresolvable immediately', async () => {
         const user = await createRealUser('to-revoke');
-        const context = contextFor(String(user._id), ['apikeys.read']);
-        const minted = await mint({ name: 'short-lived', permissions: ['apikeys.read'] }, context);
+        const context = contextFor(String(user._id), ['apikeys.any.read']);
+        const minted = await mint(
+            { name: 'short-lived', permissions: ['apikeys.any.read'] },
+            context
+        );
         if (!minted.data) throw new Error('setup failed: mint was refused');
 
         await revoke(minted.data.id, context);
@@ -136,8 +142,11 @@ describe('revoke', () => {
 
     it('is idempotent — revoking an already-revoked key still succeeds', async () => {
         const user = await createRealUser('double-revoke');
-        const context = contextFor(String(user._id), ['apikeys.read']);
-        const minted = await mint({ name: 'short-lived', permissions: ['apikeys.read'] }, context);
+        const context = contextFor(String(user._id), ['apikeys.any.read']);
+        const minted = await mint(
+            { name: 'short-lived', permissions: ['apikeys.any.read'] },
+            context
+        );
         if (!minted.data) throw new Error('setup failed: mint was refused');
 
         await revoke(minted.data.id, context);
@@ -155,7 +164,7 @@ describe('an expired credential', () => {
             name: 'already expired',
             publicPrefix,
             hash,
-            permissions: ['apikeys.read'],
+            permissions: ['apikeys.any.read'],
             createdByUserId: 'irrelevant-for-this-check',
             expiresAt: new Date(Date.now() - 1000)
         } as never);
@@ -172,7 +181,7 @@ describe('touchLastUsed', () => {
             name: 'freshly minted',
             publicPrefix,
             hash,
-            permissions: ['apikeys.read'],
+            permissions: ['apikeys.any.read'],
             createdByUserId: 'irrelevant-for-this-check'
         } as never);
         expect(apiKey.lastUsedAt).toBeUndefined();

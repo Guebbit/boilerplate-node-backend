@@ -65,7 +65,7 @@ router.post(
     '/',
     getAuth,
     isAuth,
-    requirePermission('locales.create'),
+    requirePermission('locales.any.create'),
     invalidateCache(['locales']),
     createLocale
 );
@@ -73,7 +73,7 @@ router.put(
     '/:locale',
     getAuth,
     isAuth,
-    requirePermission('locales.update'),
+    requirePermission('locales.any.update'),
     invalidateCache(['locales']),
     updateLocale
 );
@@ -81,27 +81,27 @@ router.delete(
     '/:locale',
     getAuth,
     isAuth,
-    requirePermission('locales.delete'),
+    requirePermission('locales.any.delete'),
     invalidateCache(['locales']),
     deleteLocale
 );
 
 // Uncached on purpose — see the controller for why the editing screen is the one read that is not.
-// `locales.update`, not `locales.read`: every visitor holds the read key — it is how the shop
+// `locales.any.update`, not `locales.self.read`: every visitor holds the read key — it is how the shop
 // renders in their language — and this is the EDITING screen, which lists every string including
 // the ones no page has asked for yet.
 router.get(
     '/:locale/entries',
     getAuth,
     isAuth,
-    requirePermission('locales.update'),
+    requirePermission('locales.any.update'),
     getLocaleEntries
 );
 router.post(
     '/:locale/entries',
     getAuth,
     isAuth,
-    requirePermission('locales.create'),
+    requirePermission('locales.any.create'),
     invalidateCache(['locales']),
     createLocaleEntry
 );
@@ -110,7 +110,7 @@ router.put(
     '/:locale/entries',
     getAuth,
     isAuth,
-    requirePermission('locales.update'),
+    requirePermission('locales.any.update'),
     invalidateCache(['locales']),
     replaceLocaleEntries
 );
@@ -118,7 +118,7 @@ router.patch(
     '/:locale/entries',
     getAuth,
     isAuth,
-    requirePermission('locales.update'),
+    requirePermission('locales.any.update'),
     invalidateCache(['locales']),
     mergeLocaleEntries
 );
@@ -127,7 +127,7 @@ router.put(
     '/:locale/entries/:entryId',
     getAuth,
     isAuth,
-    requirePermission('locales.update'),
+    requirePermission('locales.any.update'),
     invalidateCache(['locales']),
     updateLocaleEntry
 );
@@ -135,7 +135,7 @@ router.delete(
     '/:locale/entries/:entryId',
     getAuth,
     isAuth,
-    requirePermission('locales.delete'),
+    requirePermission('locales.any.delete'),
     invalidateCache(['locales']),
     deleteLocaleEntry
 );
@@ -151,13 +151,13 @@ router.get(
     '/translations/:entityType/:id',
     getAuth,
     isAuth,
-    requirePermission('translations.read'),
+    requirePermission('translations.any.read'),
     getEntityTranslations
 );
 router.patch(
     '/translations/:entityType/:id',
     getAuth,
     isAuth,
-    requirePermission('translations.update'),
+    requirePermission('translations.any.update'),
     upsertEntityTranslations
 );

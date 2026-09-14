@@ -34,16 +34,16 @@ router.post('/search', cacheProductsSearch, getProducts);
 // GET /products — public
 router.get('/', cacheProductsSearch, getProducts);
 
-// POST /products — admin only (create). Two keys: `products.create` for the record itself,
-// `translations.update` since the same write always carries every language's copy alongside it.
+// POST /products — admin only (create). Two keys: `products.any.create` for the record itself,
+// `translations.any.update` since the same write always carries every language's copy alongside it.
 // Both are required: neither key alone completes this write, which is what stops a rewording
 // from becoming a repricing.
 router.post(
     '/',
     uploadLimiter,
     isAuth,
-    requirePermission('products.create'),
-    requirePermission('translations.update'),
+    requirePermission('products.any.create'),
+    requirePermission('translations.any.update'),
     invalidateCache(['products']),
     upload.single('imageUpload'),
     createProduct
@@ -53,7 +53,7 @@ router.post(
 router.delete(
     '/',
     isAuth,
-    requirePermission('products.delete'),
+    requirePermission('products.any.delete'),
     invalidateCache(['products']),
     deleteProducts
 );
@@ -74,8 +74,8 @@ router.patch(
     '/:id',
     uploadLimiter,
     isAuth,
-    requirePermission('products.update'),
-    requirePermission('translations.update'),
+    requirePermission('products.any.update'),
+    requirePermission('translations.any.update'),
     invalidateCache(['products']),
     upload.single('imageUpload'),
     updateProduct
@@ -86,8 +86,8 @@ router.patch(
 router.get(
     '/:id/admin',
     isAuth,
-    requirePermission('products.update'),
-    requirePermission('translations.read'),
+    requirePermission('products.any.update'),
+    requirePermission('translations.any.read'),
     getProductAdmin
 );
 
@@ -95,7 +95,7 @@ router.get(
 router.delete(
     '/:id',
     isAuth,
-    requirePermission('products.delete'),
+    requirePermission('products.any.delete'),
     invalidateCache(['products']),
     deleteProducts
 );
@@ -104,7 +104,7 @@ router.delete(
 router.delete(
     '/:id/hard',
     isAuth,
-    requirePermission('products.delete'),
+    requirePermission('products.any.delete'),
     invalidateCache(['products']),
     routeFlag('hardDelete'),
     deleteProducts

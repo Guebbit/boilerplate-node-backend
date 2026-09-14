@@ -137,6 +137,30 @@ account (see the `translator` → `editor` fold above) — `upsertById` skips a 
 already exists, so a boot with no `--reset` never repairs it. Dev volumes are disposable:
 `docker compose down -v` and the next boot seeds clean.
 
+### Breaking — authorization
+
+**Every permission key is spelled `<family>.<breadth>.<action>` now, breadth always written.**
+`orders.read` was ambiguous about whose orders; `orders.self.read` and `orders.any.read` are two
+different keys, and a role states which one it holds instead of reaching a wider read through the
+family's `manage` wildcard — which is also gone, 12 keys, one per family. The defect this forces a
+fix for: the support desk and the warehouse could not read an order or a payment that was never
+their own without also being handed `orders.manage`'s delete. `orders.any.read` and
+`payments.any.read` say "read everyone's, change nothing" directly.
+
+| Before                                                                  | After                                                                                                                                    |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `orders.read` / `payments.read` (own rows only)                         | `orders.self.read` / `payments.self.read` — same condition, new name                                                                     |
+| `orders.manage` / `payments.manage` / 10 other per-family `manage` keys | gone — every role that held one now holds the concrete keys it always reduced to, spelled `any`                                          |
+| no way to read every order without also holding delete                  | `orders.any.read` / `payments.any.read` — new, unconditional, granted to `support` and `warehouse`                                       |
+| `inventory.manage` (guarded `POST /inventory/reservations/sweep`)       | `inventory.any.sweep` — a new action, since CRUD has no verb for the expiry tick; granted to nobody, reachable only through `all.manage` |
+
+A shop that edited its own roles holds the old spellings in its `roles` collection —
+`ops/data/20260914000000-authz-key-standard-migration.ts` rewrites every stored document, renamed
+keys one-for-one and deleted `manage` keys into the exact concrete set they used to expand to. No
+role's actual capability changes, except the two the fix targets. `GET /account/abilities` and the
+generated client are unaffected: `permissions` was already `string[]`, never an enum. See
+[Authorization](docs/theory/authorization.md#the-key-grammar-and-the-invariant-it-exists-for).
+
 ### Added
 
 - **`POST /account/password/check`** — unauthenticated, advisory-only breach lookup for a

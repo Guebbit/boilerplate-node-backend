@@ -2,9 +2,9 @@
  * @module
  * Subscription CRUD: list, create (mints the ring's first secret), update (fields plus the two
  * secret-ring actions), remove. Tenant-scoped throughout — every read and write narrows to
- * `context.caller.tenantId`, which a `webhooks.read`/`webhooks.manage` caller always carries (both
- * keys are `scope: tenant` in `shared/authorization-keys.yaml`, and `Caller.tenantId` is null only
- * in platform scope — see its own doc comment).
+ * `context.caller.tenantId`, which any `webhooks.*` caller always carries (every key in the family
+ * is `scope: tenant` in `shared/authorization-keys.yaml`, and `Caller.tenantId` is null only in
+ * platform scope — see its own doc comment).
  */
 
 import { t } from '@infrastructure/i18n';

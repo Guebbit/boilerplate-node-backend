@@ -1,7 +1,7 @@
 /**
  * @module
  * The cart route table. Every route is authenticated at the router level, and only `/checkout` is
- * keyed — `cart.checkout`, an unproven address must not be able to spend, see
+ * keyed — `cart.self.checkout`, an unproven address must not be able to spend, see
  * `shared/authorization-keys.yaml`. Mostly guards ORDER: `/summary`, `/checkout`,
  * `/reorder/:orderId` and `/all` compete with `/:productId`, and Express takes the first match —
  * declared the other way round, `DELETE /cart/all` becomes a product lookup for id "all".
@@ -50,10 +50,10 @@ describe('cart routes — authorization', () => {
         expect(guardsOn(router, signature)).toContain('isAuth');
     });
 
-    it('keys only /checkout, with cart.checkout — by design', () => {
+    it('keys only /checkout, with cart.self.checkout — by design', () => {
         // A cart belongs to its owner and to nobody else; what you may do with your own basket
         // follows from being signed in, not from a role. Spending it is the one exception — an
-        // unverified account may not — which is why `cart.checkout` is the only key this module
+        // unverified account may not — which is why `cart.self.checkout` is the only key this module
         // declares in `shared/authorization-keys.yaml`. If a second keyed route is added, this
         // fails and the addition gets looked at.
         const keyed = ALL.filter((signature) =>
@@ -62,7 +62,7 @@ describe('cart routes — authorization', () => {
 
         expect(keyed).toEqual(['POST /checkout']);
         expect(routeTable(router).find(({ path }) => path === '/checkout')?.permissionKey).toBe(
-            'cart.checkout'
+            'cart.self.checkout'
         );
     });
 });

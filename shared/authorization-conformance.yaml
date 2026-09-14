@@ -30,7 +30,7 @@ cases:
     # =============================================================================================
 
     - name: a platform operator cannot read a shop's content
-      caller: { id: op_1, scope: platform, tenantId: null, permissions: [platform.observability.manage] }
+      caller: { id: op_1, scope: platform, tenantId: null, permissions: [platform.observability.any.read] }
       action: read
       subject: Order
       resource: { tenantId: shop_1, userId: usr_1 }
@@ -51,7 +51,7 @@ cases:
       expect: deny
 
     - name: a platform operator can read platform operational data
-      caller: { id: op_1, scope: platform, tenantId: null, permissions: [platform.observability.manage] }
+      caller: { id: op_1, scope: platform, tenantId: null, permissions: [platform.observability.any.read] }
       action: read
       subject: ObservabilitySnapshot
       resource: {}
@@ -98,14 +98,14 @@ cases:
     # These two are the same invariant reached by a mis-seeded role rather than by a wildcard: a
     # concrete key from the wrong scope must be INERT, not merely unreachable through a route.
     - name: a tenant caller holding a platform key by mistake is still denied
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [platform.observability.read] }
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [platform.observability.any.read] }
       action: read
       subject: ObservabilitySnapshot
       resource: {}
       expect: deny
 
     - name: a platform caller holding a bare key by mistake is still denied
-      caller: { id: op_1, scope: platform, tenantId: null, permissions: [products.read] }
+      caller: { id: op_1, scope: platform, tenantId: null, permissions: [products.self.read] }
       action: read
       subject: Product
       resource: { tenantId: shop_1, active: true }
@@ -137,56 +137,75 @@ cases:
       expect: allow
 
     - name: a manager cannot update a product belonging to another shop
-      caller: { id: usr_2, scope: tenant, tenantId: shop_1, permissions: [products.manage] }
+      caller: { id: usr_2, scope: tenant, tenantId: shop_1, permissions: [products.any.update] }
       action: update
       subject: Product
       resource: { tenantId: shop_2, active: true }
       expect: deny
 
     - name: the same person, member of two shops, is one caller in one of them at a time
-      caller: { id: usr_2, scope: tenant, tenantId: shop_2, permissions: [products.manage] }
+      caller: { id: usr_2, scope: tenant, tenantId: shop_2, permissions: [products.any.update] }
       action: update
       subject: Product
       resource: { tenantId: shop_2, active: true }
       expect: allow
 
     # =============================================================================================
-    # Ownership. `orders.read` and `payments.read` are your own rows, and nothing widens them by
-    # accident.
+    # Ownership. `orders.self.read` and `payments.self.read` are your own rows, and nothing widens
+    # them by accident — `orders.any.read` and `payments.any.read` are the separate, explicit keys
+    # for everyone's.
     # =============================================================================================
 
     - name: a customer cannot read someone else's order
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [orders.read, payments.read] }
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [orders.self.read, payments.self.read] }
       action: read
       subject: Order
       resource: { tenantId: shop_1, userId: usr_2 }
       expect: deny
 
     - name: a customer can read their own order
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [orders.read, payments.read] }
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [orders.self.read, payments.self.read] }
       action: read
       subject: Order
       resource: { tenantId: shop_1, userId: usr_1 }
       expect: allow
 
     - name: a customer cannot read someone else's payment
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [payments.read] }
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [payments.self.read] }
       action: read
       subject: Payment
       resource: { tenantId: shop_1, userId: usr_2 }
       expect: deny
 
     - name: a caller with no id cannot read an order by owning nothing
-      caller: { id: null, scope: tenant, tenantId: shop_1, permissions: [orders.read] }
+      caller: { id: null, scope: tenant, tenantId: shop_1, permissions: [orders.self.read] }
       action: read
       subject: Order
       resource: { tenantId: shop_1, userId: null }
       expect: deny
 
-    - name: a manager reads any order in their shop, because orders.manage carries no owner condition
-      caller: { id: usr_3, scope: tenant, tenantId: shop_1, permissions: [orders.manage] }
+    # The fix AUTHZ_STAFF_ORDER_VISIBILITY.md exists for: `orders.any.read` and `payments.any.read`
+    # carry no owner condition, so the support desk and the warehouse can read an order or a
+    # payment that is never their own — without the family's old `manage` wildcard, which would
+    # also have handed them delete.
+    - name: a caller holding orders.any.read reads an order that is not their own
+      caller: { id: usr_3, scope: tenant, tenantId: shop_1, permissions: [orders.any.read] }
       action: read
       subject: Order
+      resource: { tenantId: shop_1, userId: usr_2 }
+      expect: allow
+
+    - name: orders.any.read alone does not let that caller delete the order
+      caller: { id: usr_3, scope: tenant, tenantId: shop_1, permissions: [orders.any.read] }
+      action: delete
+      subject: Order
+      resource: { tenantId: shop_1, userId: usr_2 }
+      expect: deny
+
+    - name: a caller holding payments.any.read reads a payment that is not their own
+      caller: { id: usr_4, scope: tenant, tenantId: shop_1, permissions: [payments.any.read] }
+      action: read
+      subject: Payment
       resource: { tenantId: shop_1, userId: usr_2 }
       expect: allow
 
@@ -195,35 +214,35 @@ cases:
     # =============================================================================================
 
     - name: a guest cannot read an inactive product
-      caller: { id: null, scope: tenant, tenantId: shop_1, permissions: [products.read, locales.read] }
+      caller: { id: null, scope: tenant, tenantId: shop_1, permissions: [products.self.read, locales.self.read] }
       action: read
       subject: Product
       resource: { tenantId: shop_1, active: false }
       expect: deny
 
     - name: a guest can read a published product
-      caller: { id: null, scope: tenant, tenantId: shop_1, permissions: [products.read, locales.read] }
+      caller: { id: null, scope: tenant, tenantId: shop_1, permissions: [products.self.read, locales.self.read] }
       action: read
       subject: Product
       resource: { tenantId: shop_1, active: true }
       expect: allow
 
     - name: a signed-in customer sees exactly what a guest sees of the catalogue
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [products.read] }
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [products.self.read] }
       action: read
       subject: Product
       resource: { tenantId: shop_1, active: false }
       expect: deny
 
-    - name: a manager reads an inactive product, because products.manage carries no condition
-      caller: { id: usr_3, scope: tenant, tenantId: shop_1, permissions: [products.manage] }
+    - name: products.any.read reads an inactive product, unlike products.self.read
+      caller: { id: usr_3, scope: tenant, tenantId: shop_1, permissions: [products.any.read] }
       action: read
       subject: Product
       resource: { tenantId: shop_1, active: false }
       expect: allow
 
     - name: a guest cannot read an inactive locale
-      caller: { id: null, scope: tenant, tenantId: shop_1, permissions: [locales.read] }
+      caller: { id: null, scope: tenant, tenantId: shop_1, permissions: [locales.self.read] }
       action: read
       subject: Locale
       resource: { tenantId: shop_1, active: false }
@@ -234,98 +253,90 @@ cases:
     # =============================================================================================
 
     - name: the support desk may update an account
-      caller: { id: usr_4, scope: tenant, tenantId: shop_1, permissions: [users.read, users.update] }
+      caller: { id: usr_4, scope: tenant, tenantId: shop_1, permissions: [users.any.read, users.any.update] }
       action: update
       subject: User
       resource: { tenantId: shop_1 }
       expect: allow
 
     - name: the support desk may not erase an account
-      caller: { id: usr_4, scope: tenant, tenantId: shop_1, permissions: [users.read, users.update] }
+      caller: { id: usr_4, scope: tenant, tenantId: shop_1, permissions: [users.any.read, users.any.update] }
       action: delete
       subject: User
       resource: { tenantId: shop_1 }
       expect: deny
 
     - name: the warehouse may record a stock movement
-      caller: { id: usr_5, scope: tenant, tenantId: shop_1, permissions: [inventory.manage] }
+      caller: { id: usr_5, scope: tenant, tenantId: shop_1, permissions: [inventory.any.create] }
       action: create
       subject: StockMovement
       resource: { tenantId: shop_1 }
       expect: allow
 
     - name: the warehouse may not delete a product
-      caller: { id: usr_5, scope: tenant, tenantId: shop_1, permissions: [products.read, inventory.manage, delivery.manage] }
+      caller:
+          {
+              id: usr_5,
+              scope: tenant,
+              tenantId: shop_1,
+              permissions: [products.self.read, inventory.any.read, inventory.any.create, delivery.any.read, delivery.any.update]
+          }
       action: delete
       subject: Product
       resource: { tenantId: shop_1, active: true }
       expect: deny
 
     - name: the warehouse may not change a price
-      caller: { id: usr_5, scope: tenant, tenantId: shop_1, permissions: [products.read, inventory.manage, delivery.manage] }
+      caller:
+          {
+              id: usr_5,
+              scope: tenant,
+              tenantId: shop_1,
+              permissions: [products.self.read, inventory.any.read, inventory.any.create, delivery.any.read, delivery.any.update]
+          }
       action: update
       subject: Product
       resource: { tenantId: shop_1, active: true }
       expect: deny
 
     - name: a customer may not advance a consignment
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [delivery.read, products.read] }
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [delivery.any.read, products.self.read] }
       action: update
       subject: Shipment
       resource: { tenantId: shop_1 }
       expect: deny
 
     - name: the warehouse may advance a consignment
-      caller: { id: usr_5, scope: tenant, tenantId: shop_1, permissions: [delivery.manage] }
+      caller: { id: usr_5, scope: tenant, tenantId: shop_1, permissions: [delivery.any.update] }
       action: update
       subject: Shipment
       resource: { tenantId: shop_1 }
       expect: allow
 
     # =============================================================================================
-    # `manage` is CASL's wildcard and means any action. `read` is not a subset of anything else.
+    # `read` is not a subset of anything else, and there is no key for an action a family never
+    # declared — not even for the caller who holds the scope wildcard.
     # =============================================================================================
 
-    - name: manage on a subject grants every action on that subject
-      caller: { id: usr_3, scope: tenant, tenantId: shop_1, permissions: [feedback.manage] }
-      action: delete
-      subject: Feedback
-      resource: { tenantId: shop_1 }
-      expect: allow
-
-    - name: manage grants only the actions its module declares, so a payment cannot be deleted
-      caller: { id: usr_3, scope: tenant, tenantId: shop_1, permissions: [payments.manage] }
-      action: delete
-      subject: Payment
-      resource: { tenantId: shop_1, userId: usr_2 }
-      expect: deny
-
-    - name: manage grants the actions its module does declare
-      caller: { id: usr_3, scope: tenant, tenantId: shop_1, permissions: [payments.manage] }
-      action: update
-      subject: Payment
-      resource: { tenantId: shop_1, userId: usr_2 }
-      expect: allow
-
-    - name: manage on one subject grants nothing on another
-      caller: { id: usr_3, scope: tenant, tenantId: shop_1, permissions: [feedback.manage] }
-      action: read
-      subject: User
-      resource: { tenantId: shop_1 }
-      expect: deny
-
     - name: read does not imply update
-      caller: { id: usr_4, scope: tenant, tenantId: shop_1, permissions: [feedback.read] }
+      caller: { id: usr_4, scope: tenant, tenantId: shop_1, permissions: [feedback.any.read] }
       action: update
       subject: Feedback
       resource: { tenantId: shop_1 }
       expect: deny
 
     - name: there is no write key, so update and delete are answered separately
-      caller: { id: usr_4, scope: tenant, tenantId: shop_1, permissions: [feedback.read, feedback.update] }
+      caller: { id: usr_4, scope: tenant, tenantId: shop_1, permissions: [feedback.any.read, feedback.any.update] }
       action: delete
       subject: Feedback
       resource: { tenantId: shop_1 }
+      expect: deny
+
+    - name: a payment cannot be deleted, because no key grants it — not even the scope wildcard
+      caller: { id: usr_3, scope: tenant, tenantId: shop_1, permissions: [all.manage] }
+      action: delete
+      subject: Payment
+      resource: { tenantId: shop_1, userId: usr_2 }
       expect: deny
 
     # =============================================================================================
@@ -346,8 +357,8 @@ cases:
       resource: { tenantId: shop_1 }
       expect: deny
 
-    - name: an audit row can be read by a holder of audit.read
-      caller: { id: usr_3, scope: tenant, tenantId: shop_1, permissions: [audit.read] }
+    - name: an audit row can be read by a holder of audit.any.read
+      caller: { id: usr_3, scope: tenant, tenantId: shop_1, permissions: [audit.any.read] }
       action: read
       subject: AuditLog
       resource: { tenantId: shop_1 }
@@ -363,7 +374,8 @@ cases:
     # =============================================================================================
     # The editor. Everything the shop says and shows, in every registered language: the catalogue
     # record, the dictionary, and the words on a translatable entity — nothing about stock, an
-    # order, or a person.
+    # order, or a person. Spelled out in full because there is no `manage` wildcard any more —
+    # this is exactly `shared/authorization-roles.yaml`'s `editor` grant.
     # =============================================================================================
 
     - name: an editor may add a product
@@ -372,7 +384,19 @@ cases:
               id: usr_7,
               scope: tenant,
               tenantId: shop_1,
-              permissions: [products.manage, locales.manage, translations.manage]
+              permissions:
+                  [
+                      products.any.read,
+                      products.any.create,
+                      products.any.update,
+                      products.any.delete,
+                      locales.any.read,
+                      locales.any.create,
+                      locales.any.update,
+                      locales.any.delete,
+                      translations.any.read,
+                      translations.any.update
+                  ]
           }
       action: create
       subject: Product
@@ -385,7 +409,19 @@ cases:
               id: usr_7,
               scope: tenant,
               tenantId: shop_1,
-              permissions: [products.manage, locales.manage, translations.manage]
+              permissions:
+                  [
+                      products.any.read,
+                      products.any.create,
+                      products.any.update,
+                      products.any.delete,
+                      locales.any.read,
+                      locales.any.create,
+                      locales.any.update,
+                      locales.any.delete,
+                      translations.any.read,
+                      translations.any.update
+                  ]
           }
       action: read
       subject: Product
@@ -398,7 +434,19 @@ cases:
               id: usr_7,
               scope: tenant,
               tenantId: shop_1,
-              permissions: [products.manage, locales.manage, translations.manage]
+              permissions:
+                  [
+                      products.any.read,
+                      products.any.create,
+                      products.any.update,
+                      products.any.delete,
+                      locales.any.read,
+                      locales.any.create,
+                      locales.any.update,
+                      locales.any.delete,
+                      translations.any.read,
+                      translations.any.update
+                  ]
           }
       action: read
       subject: Order
@@ -411,7 +459,19 @@ cases:
               id: usr_7,
               scope: tenant,
               tenantId: shop_1,
-              permissions: [products.manage, locales.manage, translations.manage]
+              permissions:
+                  [
+                      products.any.read,
+                      products.any.create,
+                      products.any.update,
+                      products.any.delete,
+                      locales.any.read,
+                      locales.any.create,
+                      locales.any.update,
+                      locales.any.delete,
+                      translations.any.read,
+                      translations.any.update
+                  ]
           }
       action: read
       subject: User
@@ -422,27 +482,27 @@ cases:
     # The dictionary keys ON THEIR OWN — `locales.*` and `translations.*` without `products.*`.
     #
     # No shipped role holds exactly this set: `translator` was folded into `editor`, which also
-    # carries `products.manage`. The guarantees below are about the KEYS rather than about anybody
+    # carries the product keys. The guarantees below are about the KEYS rather than about anybody
     # who holds them, so they are what a deployment cutting a words-only role gets back, and they
     # are the reason such a role remains expressible at all.
     # =============================================================================================
 
-    - name: locales.manage registers a language
-      caller: { id: usr_8, scope: tenant, tenantId: shop_1, permissions: [locales.manage] }
+    - name: locales.any.create registers a language
+      caller: { id: usr_8, scope: tenant, tenantId: shop_1, permissions: [locales.any.create] }
       action: create
       subject: Locale
       resource: { tenantId: shop_1 }
       expect: allow
 
-    - name: locales.manage reads a draft language nobody has published yet
-      caller: { id: usr_8, scope: tenant, tenantId: shop_1, permissions: [locales.manage] }
+    - name: locales.any.read reads a draft language nobody has published yet
+      caller: { id: usr_8, scope: tenant, tenantId: shop_1, permissions: [locales.any.read] }
       action: read
       subject: Locale
       resource: { tenantId: shop_1, active: false }
       expect: allow
 
-    - name: locales.manage does not add a product
-      caller: { id: usr_8, scope: tenant, tenantId: shop_1, permissions: [locales.manage] }
+    - name: locales.any.create does not add a product
+      caller: { id: usr_8, scope: tenant, tenantId: shop_1, permissions: [locales.any.create] }
       action: create
       subject: Product
       resource: { tenantId: shop_1 }
@@ -454,29 +514,28 @@ cases:
               id: usr_8,
               scope: tenant,
               tenantId: shop_1,
-              permissions: [locales.manage, translations.manage]
+              permissions: [locales.any.update, translations.any.update]
           }
       action: update
       subject: Product
       resource: { tenantId: shop_1, active: true }
       expect: deny
 
-    - name: translations.read reads a product's translations
-      caller: { id: usr_8, scope: tenant, tenantId: shop_1, permissions: [translations.read] }
+    - name: translations.any.read reads a product's translations
+      caller: { id: usr_8, scope: tenant, tenantId: shop_1, permissions: [translations.any.read] }
       action: read
       subject: Translation
       resource: { tenantId: shop_1 }
       expect: allow
 
-    - name: translations.manage is scoped, so it does not itself satisfy an unbounded manage check
-      caller: { id: usr_8, scope: tenant, tenantId: shop_1, permissions: [translations.manage] }
-      action: manage
-      subject: Translation
-      resource: { tenantId: shop_1 }
-      expect: deny
-
-    - name: an editor holding only products.manage may not read a translation
-      caller: { id: usr_7, scope: tenant, tenantId: shop_1, permissions: [products.manage] }
+    - name: an editor holding only the product keys may not read a translation
+      caller:
+          {
+              id: usr_7,
+              scope: tenant,
+              tenantId: shop_1,
+              permissions: [products.any.read, products.any.create, products.any.update, products.any.delete]
+          }
       action: read
       subject: Translation
       resource: { tenantId: shop_1 }
@@ -484,94 +543,146 @@ cases:
 
     # =============================================================================================
     # The moderator. Accounts, orders and payments — and the audit trail those three write to.
+    # Spelled out in full for the same reason the editor's cases are: this is exactly
+    # `shared/authorization-roles.yaml`'s `moderator` grant.
     # =============================================================================================
 
     - name: a moderator may ban an account
-      caller: { id: usr_9, scope: tenant, tenantId: shop_1, permissions: [users.manage, orders.manage, payments.manage, audit.read] }
+      caller:
+          {
+              id: usr_9,
+              scope: tenant,
+              tenantId: shop_1,
+              permissions:
+                  [
+                      users.any.read, users.any.create, users.any.update, users.any.delete,
+                      orders.any.read, orders.any.create, orders.any.update, orders.any.delete,
+                      payments.any.read, payments.any.create, payments.any.update,
+                      audit.any.read
+                  ]
+          }
       action: update
       subject: User
       resource: { tenantId: shop_1 }
       expect: allow
 
     - name: a moderator may read any order, not only their own
-      caller: { id: usr_9, scope: tenant, tenantId: shop_1, permissions: [users.manage, orders.manage, payments.manage, audit.read] }
+      caller:
+          {
+              id: usr_9,
+              scope: tenant,
+              tenantId: shop_1,
+              permissions:
+                  [
+                      users.any.read, users.any.create, users.any.update, users.any.delete,
+                      orders.any.read, orders.any.create, orders.any.update, orders.any.delete,
+                      payments.any.read, payments.any.create, payments.any.update,
+                      audit.any.read
+                  ]
+          }
       action: read
       subject: Order
       resource: { tenantId: shop_1, userId: usr_2 }
       expect: allow
 
     - name: a moderator may refund a payment
-      caller: { id: usr_9, scope: tenant, tenantId: shop_1, permissions: [users.manage, orders.manage, payments.manage, audit.read] }
+      caller:
+          {
+              id: usr_9,
+              scope: tenant,
+              tenantId: shop_1,
+              permissions:
+                  [
+                      users.any.read, users.any.create, users.any.update, users.any.delete,
+                      orders.any.read, orders.any.create, orders.any.update, orders.any.delete,
+                      payments.any.read, payments.any.create, payments.any.update,
+                      audit.any.read
+                  ]
+          }
       action: update
       subject: Payment
       resource: { tenantId: shop_1, userId: usr_2 }
       expect: allow
 
     - name: a moderator may read the action history
-      caller: { id: usr_9, scope: tenant, tenantId: shop_1, permissions: [users.manage, orders.manage, payments.manage, audit.read] }
+      caller:
+          {
+              id: usr_9,
+              scope: tenant,
+              tenantId: shop_1,
+              permissions:
+                  [
+                      users.any.read, users.any.create, users.any.update, users.any.delete,
+                      orders.any.read, orders.any.create, orders.any.update, orders.any.delete,
+                      payments.any.read, payments.any.create, payments.any.update,
+                      audit.any.read
+                  ]
+          }
       action: read
       subject: AuditLog
       resource: { tenantId: shop_1 }
       expect: allow
 
     - name: a moderator may not change what a product costs
-      caller: { id: usr_9, scope: tenant, tenantId: shop_1, permissions: [users.manage, orders.manage, payments.manage, audit.read] }
+      caller:
+          {
+              id: usr_9,
+              scope: tenant,
+              tenantId: shop_1,
+              permissions:
+                  [
+                      users.any.read, users.any.create, users.any.update, users.any.delete,
+                      orders.any.read, orders.any.create, orders.any.update, orders.any.delete,
+                      payments.any.read, payments.any.create, payments.any.update,
+                      audit.any.read
+                  ]
+          }
       action: update
       subject: Product
       resource: { tenantId: shop_1, active: true }
       expect: deny
 
     # =============================================================================================
-    # A `manage` key expands over its own FAMILY, never over the module that declares it.
-    #
-    # `locales` declares two families — `locales.*` and `translations.*` — and expanding over the
-    # module let a translations key grant locale writes: a role documented as reading the
-    # dictionary could delete a language from it. These pin the boundary in both directions.
+    # `locales` declares two families — `locales.*` and `translations.*` — sharing one module but
+    # naming two different subjects. Nothing connects them: holding one grants nothing on the
+    # other's subject. `inventory` is the same shape one level down — one family, two SUBJECTS
+    # (`StockLevel`, `StockMovement`) — and holding the read on one grants nothing on the other.
     # =============================================================================================
 
-    - name: translations.manage does not reach the dictionary it writes against
-      caller: { id: usr_10, scope: tenant, tenantId: shop_1, permissions: [translations.manage] }
+    - name: translations.any.update does not reach the dictionary it writes against
+      caller: { id: usr_10, scope: tenant, tenantId: shop_1, permissions: [translations.any.update] }
       action: delete
       subject: Locale
       resource: { tenantId: shop_1 }
       expect: deny
 
-    - name: translations.manage does grant the write it is named for
-      caller: { id: usr_10, scope: tenant, tenantId: shop_1, permissions: [translations.manage] }
-      action: update
-      subject: Translation
-      resource: { tenantId: shop_1 }
-      expect: allow
-
-    - name: locales.manage does not reach an entity's translated words
-      caller: { id: usr_11, scope: tenant, tenantId: shop_1, permissions: [locales.manage] }
+    - name: locales.any.update does not reach an entity's translated words
+      caller: { id: usr_11, scope: tenant, tenantId: shop_1, permissions: [locales.any.update] }
       action: update
       subject: Translation
       resource: { tenantId: shop_1 }
       expect: deny
 
-    - name: a manage key still expands across its own family's differing subjects
-      # `inventory.read` is about a StockLevel and `inventory.create` about a StockMovement — one
-      # family, two subjects. Expanding over the SUBJECT rather than the family would have left a
-      # warehouse unable to record the movement it is hired to record.
-      caller: { id: usr_12, scope: tenant, tenantId: shop_1, permissions: [inventory.manage] }
+    - name: inventory.any.read does not grant recording a movement
+      # `inventory.any.read` is about a StockLevel and `inventory.any.create` about a
+      # StockMovement — one family, two subjects, and no key reaches across.
+      caller: { id: usr_12, scope: tenant, tenantId: shop_1, permissions: [inventory.any.read] }
       action: create
       subject: StockMovement
       resource: { tenantId: shop_1 }
-      expect: allow
+      expect: deny
 
     - name: a credential reader may not mint one
-      # The escalation this pair exists to refuse: `apikeys` once declared only read and manage, so
-      # "holds every concrete key in the family" reduced to "holds the read" and a read-only role
-      # passed a guard asking for manage. Concrete write keys are what make the question answerable.
-      caller: { id: usr_13, scope: tenant, tenantId: shop_1, permissions: [apikeys.read] }
+      # The escalation this pair guards against: a caller holding only the family's read must not
+      # pass a check for its write, however that check is spelled.
+      caller: { id: usr_13, scope: tenant, tenantId: shop_1, permissions: [apikeys.any.read] }
       action: create
       subject: ApiKey
       resource: { tenantId: shop_1 }
       expect: deny
 
     - name: a webhook reader may not delete a subscription
-      caller: { id: usr_14, scope: tenant, tenantId: shop_1, permissions: [webhooks.read] }
+      caller: { id: usr_14, scope: tenant, tenantId: shop_1, permissions: [webhooks.any.read] }
       action: delete
       subject: WebhookSubscription
       resource: { tenantId: shop_1 }

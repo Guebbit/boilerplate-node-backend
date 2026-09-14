@@ -105,7 +105,7 @@ is the schema and the service call.
 
 ### 7 · `src/modules/products/service.ts` — the domain decision
 
-Where "a caller holding `products.update` sees deleted products, the public does not" lives.
+Where "a caller holding `products.any.update` sees deleted products, the public does not" lives.
 Services take decisions; they do not touch Express (no `request`, no `response`) and do not write
 Mongo queries.
 

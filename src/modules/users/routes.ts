@@ -22,7 +22,7 @@ import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 export const router = Router();
 
 // Every route below needs a caller, but not the SAME key — `manager` reads and `support` reads
-// and updates, and a router-wide `users.manage` gate made both unreachable no matter what the
+// and updates, and a router-wide gate on one key made the other unreachable no matter what the
 // role file granted. Each mount below states the one key its own action needs.
 router.use(getAuth, isAuth);
 
@@ -30,15 +30,15 @@ router.use(getAuth, isAuth);
 const cacheUsersSearch = searchCache('users', searchUsersKeyParameters);
 
 // POST /users/search — must come before /:id to avoid matching "search" as an id
-router.post('/search', requirePermission('users.read'), cacheUsersSearch, getUsers);
+router.post('/search', requirePermission('users.any.read'), cacheUsersSearch, getUsers);
 
 // GET /users
-router.get('/', requirePermission('users.read'), cacheUsersSearch, getUsers);
+router.get('/', requirePermission('users.any.read'), cacheUsersSearch, getUsers);
 
 // POST /users (create)
 router.post(
     '/',
-    requirePermission('users.create'),
+    requirePermission('users.any.create'),
     uploadLimiter,
     invalidateCache(['users', 'account']),
     upload.single('imageUpload'),
@@ -48,7 +48,7 @@ router.post(
 // PUT /users — id in body (update)
 router.put(
     '/',
-    requirePermission('users.update'),
+    requirePermission('users.any.update'),
     uploadLimiter,
     invalidateCache(['users', 'account']),
     upload.single('imageUpload'),
@@ -58,7 +58,7 @@ router.put(
 // DELETE /users — id in body
 router.delete(
     '/',
-    requirePermission('users.delete'),
+    requirePermission('users.any.delete'),
     invalidateCache(['users', 'account']),
     deleteUsers
 );
@@ -66,7 +66,7 @@ router.delete(
 // GET /users/:id
 router.get(
     '/:id',
-    requirePermission('users.read'),
+    requirePermission('users.any.read'),
     setCache(3600, { tags: ['users'], keyParameters: [] }),
     getUserItem
 );
@@ -74,7 +74,7 @@ router.get(
 // PUT /users/:id (update)
 router.put(
     '/:id',
-    requirePermission('users.update'),
+    requirePermission('users.any.update'),
     uploadLimiter,
     invalidateCache(['users', 'account']),
     upload.single('imageUpload'),
@@ -84,7 +84,7 @@ router.put(
 // DELETE /users/:id — soft delete unless ?hardDelete=true
 router.delete(
     '/:id',
-    requirePermission('users.delete'),
+    requirePermission('users.any.delete'),
     invalidateCache(['users', 'account']),
     deleteUsers
 );
@@ -92,7 +92,7 @@ router.delete(
 // DELETE /users/:id/hard — the same operation, with the flag spelled in the path
 router.delete(
     '/:id/hard',
-    requirePermission('users.delete'),
+    requirePermission('users.any.delete'),
     invalidateCache(['users', 'account']),
     routeFlag('hardDelete'),
     deleteUsers
@@ -100,10 +100,10 @@ router.delete(
 
 // DELETE /users/:id/2fa — admin-assisted 2FA recovery, no code required. The one deliberate
 // exception to "prove the factor to remove it" — see the controller's own comment. Clearing a
-// second factor is `users.update`'s own description in `shared/authorization-keys.yaml`.
+// second factor is `users.any.update`'s own description in `shared/authorization-keys.yaml`.
 router.delete(
     '/:id/2fa',
-    requirePermission('users.update'),
+    requirePermission('users.any.update'),
     invalidateCache(['users', 'account']),
     deleteUserTwoFactor
 );

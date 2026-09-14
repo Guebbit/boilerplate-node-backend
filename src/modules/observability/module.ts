@@ -25,7 +25,7 @@ export default {
      * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
      * whose module is gone, and a module claiming one the file does not attribute to it.
      */
-    permissions: ['platform.observability.read', 'platform.observability.manage'],
+    permissions: ['platform.observability.any.read'],
     routes: router,
     /*
      * `.env-example` ships `change-me-dev-metrics-token`, which

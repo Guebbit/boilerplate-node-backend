@@ -36,17 +36,22 @@ router.get('/', cacheOrdersSearch, getOrders);
 // replay the SAME order rather than mint a second one.
 router.post(
     '/',
-    requirePermission('orders.create'),
+    requirePermission('orders.any.create'),
     idempotencyKey,
     invalidateCache(['orders', 'products']),
     writeOrders
 );
 
 // PUT /orders — admin, id in body (update)
-router.put('/', requirePermission('orders.update'), invalidateCache(['orders']), writeOrders);
+router.put('/', requirePermission('orders.any.update'), invalidateCache(['orders']), writeOrders);
 
 // DELETE /orders — admin, id in body
-router.delete('/', requirePermission('orders.delete'), invalidateCache(['orders']), deleteOrders);
+router.delete(
+    '/',
+    requirePermission('orders.any.delete'),
+    invalidateCache(['orders']),
+    deleteOrders
+);
 
 // POST /orders/:id/cancel — the one order write a customer can make (owner or admin;
 // the service's conditional write carries the caller's scope)
@@ -63,12 +68,17 @@ router.get(
 router.get('/:id', setCache(3600, { tags: ['orders'], keyParameters: [] }), getOrderItem);
 
 // PUT /orders/:id — admin only (update)
-router.put('/:id', requirePermission('orders.update'), invalidateCache(['orders']), writeOrders);
+router.put(
+    '/:id',
+    requirePermission('orders.any.update'),
+    invalidateCache(['orders']),
+    writeOrders
+);
 
 // DELETE /orders/:id — admin only (soft delete unless ?hardDelete=true)
 router.delete(
     '/:id',
-    requirePermission('orders.delete'),
+    requirePermission('orders.any.delete'),
     invalidateCache(['orders']),
     deleteOrders
 );
@@ -76,7 +86,7 @@ router.delete(
 // DELETE /orders/:id/hard — the same operation, with the flag spelled in the path
 router.delete(
     '/:id/hard',
-    requirePermission('orders.delete'),
+    requirePermission('orders.any.delete'),
     invalidateCache(['orders']),
     routeFlag('hardDelete'),
     deleteOrders

@@ -152,7 +152,7 @@ describe('membership across tenants', () => {
             name: 'manager',
             scope: 'tenant',
             tenantId: String(shop._id),
-            permissions: ['products.read'],
+            permissions: ['products.self.read'],
             preset: false
         });
 
@@ -160,7 +160,7 @@ describe('membership across tenants', () => {
         // narrower, and every other shop still gets the preset.
         const scoped = await roleFor('manager', 'tenant', String(shop._id));
 
-        expect(scoped?.permissions).toEqual(['products.read']);
+        expect(scoped?.permissions).toEqual(['products.self.read']);
     });
 });
 
@@ -180,7 +180,7 @@ describe('the invariants', () => {
         // The single most common way these systems fail: a role editor that lets a support agent
         // hand somebody the keys they do not have themselves.
         await expect(
-            assignRole('person-1', String(shop._id), 'tenant', 'owner', ['feedback.read'])
+            assignRole('person-1', String(shop._id), 'tenant', 'owner', ['feedback.any.read'])
         ).rejects.toThrow(/privilege-escalation/);
     });
 
@@ -244,7 +244,7 @@ describe('the invariants', () => {
             name: 'curator',
             scope: 'tenant',
             tenantId: String(shop._id),
-            permissions: ['products.read'],
+            permissions: ['products.self.read'],
             preset: false
         });
         await assignRole('person-1', String(shop._id), 'tenant', 'curator');

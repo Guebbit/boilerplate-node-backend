@@ -17,6 +17,6 @@ export const router = Router();
 
 router.use(getAuth, isAuth);
 
-router.get('/', requirePermission('apikeys.read'), listApiKeys);
-router.post('/', requirePermission('apikeys.create'), mintApiKey);
-router.delete('/:id', requirePermission('apikeys.delete'), revokeApiKey);
+router.get('/', requirePermission('apikeys.any.read'), listApiKeys);
+router.post('/', requirePermission('apikeys.any.create'), mintApiKey);
+router.delete('/:id', requirePermission('apikeys.any.delete'), revokeApiKey);

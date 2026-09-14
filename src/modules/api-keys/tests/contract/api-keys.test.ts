@@ -31,7 +31,7 @@ describe('GET /api-keys', () => {
         expect(response).toSatisfyApiSpec();
     });
 
-    it('403s a role holding neither apikeys.read nor apikeys.manage', async () => {
+    it('403s a role holding no apikeys key at all', async () => {
         const { bearer } = await authenticateAsRole('customer');
 
         const response = await api().get('/api-keys').set('Authorization', bearer);
@@ -45,7 +45,7 @@ describe('GET /api-keys', () => {
         await api()
             .post('/api-keys')
             .set('Authorization', bearer)
-            .send({ name: 'partner integration', permissions: ['orders.read'] });
+            .send({ name: 'partner integration', permissions: ['orders.self.read'] });
 
         const response = await api().get('/api-keys').set('Authorization', bearer);
 
@@ -65,12 +65,12 @@ describe('POST /api-keys', () => {
         const response = await api()
             .post('/api-keys')
             .set('Authorization', bearer)
-            .send({ name: 'partner integration', permissions: ['orders.read'] });
+            .send({ name: 'partner integration', permissions: ['orders.self.read'] });
 
         expect(response.status).toBe(201);
         expect(typeof response.body.data.secret).toBe('string');
         expect(response.body.data.secret.startsWith('sk_')).toBe(true);
-        expect(response.body.data.permissions).toEqual(['orders.read']);
+        expect(response.body.data.permissions).toEqual(['orders.self.read']);
         expect(response).toSatisfyApiSpec();
     });
 
@@ -82,7 +82,7 @@ describe('POST /api-keys', () => {
         const response = await api()
             .post('/api-keys')
             .set('Authorization', bearer)
-            .send({ name: 'over-reaching', permissions: ['platform.observability.read'] });
+            .send({ name: 'over-reaching', permissions: ['platform.observability.any.read'] });
 
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
@@ -100,13 +100,13 @@ describe('POST /api-keys', () => {
         expect(response).toSatisfyApiSpec();
     });
 
-    it('403s a role holding neither apikeys.read nor apikeys.manage', async () => {
+    it('403s a role holding no apikeys key at all', async () => {
         const { bearer } = await authenticateAsRole('customer');
 
         const response = await api()
             .post('/api-keys')
             .set('Authorization', bearer)
-            .send({ name: 'partner integration', permissions: ['orders.read'] });
+            .send({ name: 'partner integration', permissions: ['orders.self.read'] });
 
         expect(response.status).toBe(403);
         expect(response).toSatisfyApiSpec();
@@ -119,7 +119,7 @@ describe('DELETE /api-keys/:id', () => {
         const created = await api()
             .post('/api-keys')
             .set('Authorization', bearer)
-            .send({ name: 'short-lived', permissions: ['orders.read'] });
+            .send({ name: 'short-lived', permissions: ['orders.self.read'] });
 
         const response = await api()
             .delete(`/api-keys/${String(created.body.data.id)}`)

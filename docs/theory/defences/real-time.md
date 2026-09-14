@@ -5,7 +5,7 @@ assumption every HTTP guard quietly relies on: **that authorization is decided o
 A socket is authorized once and then lives for hours, during which the role can change, the token
 can be revoked, and the messages keep arriving.
 
-One surface here: `GET /observability/events`, Server-Sent Events, `platform.observability.read`
+One surface here: `GET /observability/events`, Server-Sent Events, `platform.observability.any.read`
 only. SSE rather than WebSocket is itself the design decision most of this page rests on.
 
 ## Why SSE, and why that closes half the family
@@ -18,12 +18,12 @@ parallel set for the upgrade handshake.
 
 ## Opening the stream
 
-| Attack                         | How it works                                          | This boilerplate                                                                                                                                                                                                                                                              |
-| ------------------------------ | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Unauthenticated upgrade        | the handshake skips the middleware chain              | `requirePermissionViaCookie('platform.observability.read')` verifies the refresh cookie the way `GET /account/refresh` does — signature AND presence on the user document, so a revoked token is rejected — `kernel/middlewares/authorizations.ts#requirePermissionViaCookie` |
-| Missing origin check           | any site can open the connection                      | `EventSource` is subject to CORS, and the allowlist is explicit rather than reflected — a foreign origin cannot read the stream — `app/security.ts`                                                                                                                           |
-| Cross-site WebSocket hijacking | a cookie-authenticated upgrade with no `Origin` check | No surface: there is no WebSocket upgrade. The CORS answer above is what stands in for it.                                                                                                                                                                                    |
-| Unencrypted `ws://`            | plaintext traffic, no `wss://`                        | Not this repo's layer — TLS terminates at the reverse proxy the production compose file requires by binding to loopback — `docker-compose.production.yml`                                                                                                                     |
+| Attack                         | How it works                                          | This boilerplate                                                                                                                                                                                                                                                                  |
+| ------------------------------ | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unauthenticated upgrade        | the handshake skips the middleware chain              | `requirePermissionViaCookie('platform.observability.any.read')` verifies the refresh cookie the way `GET /account/refresh` does — signature AND presence on the user document, so a revoked token is rejected — `kernel/middlewares/authorizations.ts#requirePermissionViaCookie` |
+| Missing origin check           | any site can open the connection                      | `EventSource` is subject to CORS, and the allowlist is explicit rather than reflected — a foreign origin cannot read the stream — `app/security.ts`                                                                                                                               |
+| Cross-site WebSocket hijacking | a cookie-authenticated upgrade with no `Origin` check | No surface: there is no WebSocket upgrade. The CORS answer above is what stands in for it.                                                                                                                                                                                        |
+| Unencrypted `ws://`            | plaintext traffic, no `wss://`                        | Not this repo's layer — TLS terminates at the reverse proxy the production compose file requires by binding to loopback — `docker-compose.production.yml`                                                                                                                         |
 
 **Why this one endpoint authenticates by cookie** rather than by the `Authorization: Bearer`
 header every other route uses: the browser's `EventSource` cannot set headers. The cookie is
