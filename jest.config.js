@@ -27,14 +27,30 @@ const readEnvFile = () => {
 };
 
 /**
+ * Measured peak RSS of one jest worker over the 98-suite unit run, rounded up —
+ * docs/tools/mutation-testing.md#jest-worker-count. The upper end (905 MB) is used so the RAM cap
+ * below stays a cap, not an optimistic guess.
+ */
+const JEST_WORKER_PEAK_MB = 905;
+
+/**
+ * Headroom left unclaimed for the OS, the docker stack (Mongo/Redis/RabbitMQ) and an editor —
+ * everything on the machine that is not a jest worker.
+ */
+const OS_RESERVE_MB = 4096;
+
+/**
  * How many jest workers to run.
  *
  * Jest's own default (`logical CPUs - 1`) counts cores for a workload bounded by memory, and the
- * OOM killer then takes workers mid-run while every test still passes. The safe number is a
- * property of the machine, so it lives in `.env` — measurements in
- * docs/tools/mutation-testing.md#jest-worker-count.
+ * OOM killer then takes workers mid-run while every test still passes — measurements in
+ * docs/tools/mutation-testing.md#jest-worker-count. The safe number is a property of the machine,
+ * so an explicit `JEST_WORKERS` in `.env` always wins; unset, it is computed from the machine
+ * rather than assumed, so a weaker or a stronger box than the one the CPU heuristic was tuned on
+ * both get a number sized to what they actually have.
  *
- * @returns `JEST_WORKERS` when set, otherwise `logical CPUs - 2`
+ * @returns `JEST_WORKERS` when set, otherwise the lower of `logical CPUs - 2` and free RAM
+ *   divided by one worker's peak RSS
  */
 const resolveMaxWorkers = () => {
     // A real environment variable wins over the file, so a one-off run can go lower without
@@ -43,8 +59,11 @@ const resolveMaxWorkers = () => {
     const configured = Number(setting?.trim());
     if (Number.isInteger(configured) && configured > 0) return configured;
 
-    // At least one, or a single-core container would compute zero workers and run nothing.
-    return Math.max(1, os.cpus().length - 2);
+    const cpuCap = os.cpus().length - 2;
+    const ramCap = Math.floor((os.totalmem() / 1024 / 1024 - OS_RESERVE_MB) / JEST_WORKER_PEAK_MB);
+
+    // At least one, or a single-core, low-memory container would compute zero and run nothing.
+    return Math.max(1, Math.min(cpuCap, ramCap));
 };
 
 /**

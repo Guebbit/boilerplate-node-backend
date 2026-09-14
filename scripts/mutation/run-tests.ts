@@ -19,10 +19,22 @@
  */
 import { spawn } from 'node:child_process';
 import { rm } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 
 /** The repo root — the working directory every spawned jest inherits. */
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
+
+/**
+ * Measured peak RSS of one Stryker/jest worker during a mutation run, rounded up —
+ * docs/tools/mutation-testing.md#the-worker-pool-multiplication. The ceiling for this run is RAM,
+ * not cores, which is why the default below is computed from it instead of copying `jest`'s
+ * CPU-only heuristic.
+ */
+const STRYKER_WORKER_PEAK_MB = 2900;
+
+/** Headroom left unclaimed for the OS, the docker stack and an editor. */
+const OS_RESERVE_MB = 4096;
 
 /** Where jest's in-memory Mongo data directories live. Outside the sandbox, deliberately. */
 const TEST_TMP_BASE = path.join(REPO_ROOT, '.tmp');
@@ -51,12 +63,35 @@ const positiveInteger = (value: string | undefined): number | undefined => {
     return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
 };
 
-const concurrency = positiveInteger(process.env.STRYKER_CONCURRENCY);
+/**
+ * How many Stryker workers to run.
+ *
+ * `STRYKER_CONCURRENCY` always wins. Unset, the safe number is computed from this machine rather
+ * than left to `stryker.config.json`'s committed `concurrency: 4` — a number sized for a
+ * contributor's laptop, not necessarily this one.
+ * See docs/tools/mutation-testing.md#the-worker-pool-multiplication.
+ *
+ * @returns `STRYKER_CONCURRENCY` when set, otherwise the lower of `logical CPUs - 1` and free RAM
+ *   divided by one worker's peak RSS
+ */
+const resolveConcurrency = (): number => {
+    const configured = positiveInteger(process.env.STRYKER_CONCURRENCY);
+    if (configured) return configured;
+
+    const cpuCap = os.cpus().length - 1;
+    const ramCap = Math.floor(
+        (os.totalmem() / 1024 / 1024 - OS_RESERVE_MB) / STRYKER_WORKER_PEAK_MB
+    );
+    // At least one, or a single-core, low-memory machine would compute zero and run nothing.
+    return Math.max(1, Math.min(cpuCap, ramCap));
+};
+
+const concurrency = resolveConcurrency();
 const heapMb = positiveInteger(process.env.STRYKER_WORKER_HEAP_MB);
 
 const strykerArguments = [
     'run',
-    ...(concurrency && !wasPassed('--concurrency') ? ['--concurrency', String(concurrency)] : []),
+    ...(wasPassed('--concurrency') ? [] : ['--concurrency', String(concurrency)]),
     ...passthrough
 ];
 
@@ -81,7 +116,7 @@ const main = async () => {
     await rm(TEST_TMP_BASE, { recursive: true, force: true });
 
     console.log(
-        `[mutation] concurrency=${concurrency ?? 'stryker.config.json'} ` +
+        `[mutation] concurrency=${concurrency} ` +
             `heap=${heapMb ? `${heapMb} MB` : 'node default (derived from total RAM)'} ` +
             `scratch=${TEST_TMP_BASE}`
     );
