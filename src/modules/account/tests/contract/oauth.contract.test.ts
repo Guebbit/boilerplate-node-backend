@@ -9,6 +9,7 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api } from '@tests/http';
+import { setCookie, cookieHeader } from '@tests/cookies';
 import { userRepository } from '@modules/users';
 import { enableDemoProfile } from '@infrastructure/adapters/demo-outbox';
 
@@ -22,24 +23,12 @@ afterAll(() => {
     enableDemoProfile(false);
 });
 
-/** One named cookie's full `Set-Cookie` value, or `undefined` if the response set none by that name. */
-const setCookie = (
-    response: { headers: Record<string, unknown> },
-    name: string
-): string | undefined => {
-    const raw = response.headers['set-cookie'] ?? [];
-    const cookies = Array.isArray(raw) ? raw : [raw as string];
-    return cookies.find((cookie) => cookie.startsWith(`${name}=`));
-};
-
 /**
  * A start response's `state` and `verifier` cookies, as one `Cookie` request header — both are
  * needed to redeem a callback since PKCE landed beside the CSRF check.
  */
 const attemptCookies = (start: { headers: Record<string, unknown> }): string =>
-    [setCookie(start, 'oauth_state')!, setCookie(start, 'oauth_verifier')!]
-        .map((cookie) => cookie.split(';')[0])
-        .join('; ');
+    cookieHeader(start, 'oauth_state', 'oauth_verifier');
 
 describe('GET /account/oauth/providers', () => {
     it('lists the fake provider under the demo profile', async () => {
