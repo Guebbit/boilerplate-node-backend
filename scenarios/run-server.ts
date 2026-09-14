@@ -14,14 +14,29 @@
  *
  *   NODE_PORT=3101 npm run demo
  *
+ * Point `NODE_TEST_MONGO_URI` at a compose Mongo instead and the shop persists across restarts —
+ * see `startEphemeralMongo`. Several instances then share that one database, which several
+ * in-memory instances never did; do not combine the two without meaning to.
+ *
  * See: docs/tools/demo-profile.md
  */
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { enableDemoProfile } from '@infrastructure/adapters/demo-outbox';
-import { usePreinstalledMongodBinary } from '@infrastructure/runtime/mongodb-memory-binary';
+import { startEphemeralMongo, type EphemeralMongo } from '@infrastructure/runtime/ephemeral-mongo';
 import { DEMO_BANK_TRANSFER, SCRIPTED_RATE_LIMITS } from './rate-limits';
 
-usePreinstalledMongodBinary();
+/**
+ * Actually starts an in-process `mongod` — the half `startEphemeralMongo` cannot do itself, since
+ * `mongodb-memory-server` is a devDependency `src/` may not reach. `tests/support/
+ * ephemeral-mongod.ts` is the same logic for the test suites; this profile keeps its own copy
+ * rather than importing it, because `scenarios/` may not reach `tests/` either
+ * (`eslint-plugin-boundaries`).
+ */
+const startInProcessMongod = (): Promise<EphemeralMongo> =>
+    MongoMemoryServer.create().then((server) => ({
+        uri: server.getUri(),
+        stop: () => server.stop().then(() => undefined)
+    }));
 
 const REQUIRED_DEFAULTS: Record<string, string> = {
     NODE_ENV: 'development',
@@ -79,15 +94,15 @@ const waitUntilListening = (port: string): Promise<void> => {
     return poll();
 };
 
-MongoMemoryServer.create()
-    .then((mongod) => {
+startEphemeralMongo({ startInProcess: startInProcessMongod })
+    .then((mongo) => {
         // The consumers of this profile end it with a signal — the paired frontend's shard runner
-        // and `start-server-and-test` both send SIGTERM. Without this, the process dies and the
-        // instance's data directory stays behind under the temp dir (~200 MB per boot); `stop()`
-        // is the only thing that removes it.
+        // and `start-server-and-test` both send SIGTERM. Without this, the process dies and an
+        // in-memory instance's data directory stays behind under the temp dir (~200 MB per boot);
+        // `stop()` is the only thing that removes it. A no-op on the external-Mongo path.
         for (const signal of ['SIGTERM', 'SIGINT'] as const)
             process.once(signal, () => {
-                void mongod
+                void mongo
                     .stop()
                     .catch(() => undefined)
                     .then(() => process.exit(0));
@@ -96,7 +111,13 @@ MongoMemoryServer.create()
         for (const [key, value] of Object.entries(REQUIRED_DEFAULTS))
             process.env[key] = process.env[key]?.trim() ? process.env[key] : value;
         for (const key of FORCED_ABSENT) process.env[key] = '';
-        process.env.NODE_DB_URI = mongod.getUri('demo');
+
+        // Always the `demo` database, regardless of source: a stable name is what lets the
+        // external-Mongo path (`NODE_TEST_MONGO_URI`) persist across restarts instead of scattering
+        // across a freshly named database every boot.
+        const databaseUri = new URL(mongo.uri);
+        databaseUri.pathname = '/demo';
+        process.env.NODE_DB_URI = databaseUri.toString();
         // Always derived, never defaulted-when-unset like the block above: a checked-in `.env`'s
         // `NODE_URL` names the SINGLE-instance developer setup (:3000), and this profile's whole
         // point is several instances on several ports (see this file's own module doc) — the
@@ -115,9 +136,7 @@ MongoMemoryServer.create()
         return import('../src/app')
             .then(() => waitUntilListening(port))
             .then(() => {
-                console.log(
-                    `[demo] API listening on :${port} — in-memory Mongo, seeded, cache/queue disabled.`
-                );
+                console.log(`[demo] API listening on :${port} — seeded, cache/queue disabled.`);
             });
     })
     .catch((error: unknown) => {

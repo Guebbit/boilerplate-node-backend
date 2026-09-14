@@ -10,10 +10,13 @@
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { mkdir, rm } from 'node:fs/promises';
 import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
-import { MongoMemoryServer } from 'mongodb-memory-server';
+import { startEphemeralMongo } from '@infrastructure/runtime/ephemeral-mongo';
+import { startInProcessMongod } from '@tests/ephemeral-mongod';
 
 const REPO_ROOT = path.join(__dirname, '../../..');
 
@@ -119,7 +122,10 @@ const waitForWorkers = (
  * Boot a cluster of `workers` processes with `env` layered over the defaults.
  *
  * Its own in-memory Mongo, because the workers connect over TCP from another process and cannot be
- * handed this one's mongoose connection.
+ * handed this one's mongoose connection. Given its own `dbPath` under the repo's `.tmp/`, one per
+ * boot: left unset, `mongodb-memory-server` falls back to `os.tmpdir()`, escaping the ownership
+ * `tests/support/global-setup.ts`'s own dbpath spends forty lines establishing — ~200 MB per boot
+ * landing in a shared `/tmp` instead.
  */
 const startCluster = ({
     workers,
@@ -129,138 +135,156 @@ const startCluster = ({
     workers: number;
     env?: Record<string, string>;
     bootTimeoutMs?: number;
-}): Promise<Cluster> =>
-    Promise.all([MongoMemoryServer.create(), freePort()]).then(([mongo, port]) => {
-        const child: ChildProcess = spawn('npx', ['tsx', 'src/cluster.ts'], {
-            cwd: REPO_ROOT,
-            // A new process group, PGID == this PID: `stop()` below signals the whole group, not
-            // just this one process — see its own docblock for why that is the point.
-            detached: true,
-            env: {
-                ...process.env,
-                /*
-                 * NOT `test`: `src/app.ts` skips its own `startServer()` under `NODE_ENV=test`, so
-                 * a cluster booted that way forks workers that mount the app and never listen.
-                 */
-                NODE_ENV: 'development',
-                NODE_PORT: String(port),
-                PORT: String(port),
-                NODE_DB_URI: mongo.getUri(),
-                NODE_TOKEN_ACCESS: 'cluster-suite-access-secret',
-                NODE_TOKEN_REFRESH: 'cluster-suite-refresh-secret',
-                /*
-                 * `NODE_ENV: 'development'` above means `assertRequiredConfig` runs for real —
-                 * unlike every other suite, which sets `NODE_ENV=test` and skips it. A local `.env`
-                 * (via `dotenv/config` in `src/app.ts`) supplies these on a dev machine; CI has none,
-                 * so the child refuses to boot without them (`src/kernel/required-config.ts`).
-                 */
-                NODE_URL: `http://127.0.0.1:${String(port)}`,
-                NODE_TOTP_ENCRYPTION_KEY: 'cluster-suite-totp-encryption-key',
-                NODE_WEBHOOK_SECRET_ENCRYPTION_KEY: 'cluster-suite-webhook-secret-encryption-key',
-                /*
-                 * Clustering is OFF by default — `NODE_ENABLE_CLUSTERING` gates the fork, and
-                 * `NODE_CLUSTER_WORKERS` alone does nothing. Without this the child is a single
-                 * process, and every assertion about crossing workers passes for the wrong reason.
-                 */
-                NODE_ENABLE_CLUSTERING: '1',
-                NODE_CLUSTER_WORKERS: String(workers),
-                ...env
-            },
-            stdio: ['ignore', 'pipe', 'pipe']
-        });
+}): Promise<Cluster> => {
+    const dbPath = path.join(REPO_ROOT, '.tmp', 'cluster-mongo', randomUUID());
 
-        /*
-         * Kept so a boot failure can say WHY. Discarding the child's output made every failure here
-         * read as a bare 60-second timeout with no cause attached, which is how a red `cluster` job
-         * stayed unexplained: the process that knew what went wrong was the one nobody was reading.
-         */
-        const output: string[] = [];
+    return mkdir(dbPath, { recursive: true })
+        .then(() =>
+            Promise.all([
+                startEphemeralMongo({ dbPath, startInProcess: startInProcessMongod }),
+                freePort()
+            ])
+        )
+        .then(([mongo, port]) => {
+            const child: ChildProcess = spawn('npx', ['tsx', 'src/cluster.ts'], {
+                cwd: REPO_ROOT,
+                // A new process group, PGID == this PID: `stop()` below signals the whole group, not
+                // just this one process — see its own docblock for why that is the point.
+                detached: true,
+                env: {
+                    ...process.env,
+                    /*
+                     * NOT `test`: `src/app.ts` skips its own `startServer()` under `NODE_ENV=test`,
+                     * so a cluster booted that way forks workers that mount the app and never listen.
+                     */
+                    NODE_ENV: 'development',
+                    NODE_PORT: String(port),
+                    PORT: String(port),
+                    NODE_DB_URI: mongo.uri,
+                    NODE_TOKEN_ACCESS: 'cluster-suite-access-secret',
+                    NODE_TOKEN_REFRESH: 'cluster-suite-refresh-secret',
+                    /*
+                     * `NODE_ENV: 'development'` above means `assertRequiredConfig` runs for real —
+                     * unlike every other suite, which sets `NODE_ENV=test` and skips it. A local
+                     * `.env` (via `dotenv/config` in `src/app.ts`) supplies these on a dev machine;
+                     * CI has none, so the child refuses to boot without them
+                     * (`src/kernel/required-config.ts`).
+                     */
+                    NODE_URL: `http://127.0.0.1:${String(port)}`,
+                    NODE_TOTP_ENCRYPTION_KEY: 'cluster-suite-totp-encryption-key',
+                    NODE_WEBHOOK_SECRET_ENCRYPTION_KEY:
+                        'cluster-suite-webhook-secret-encryption-key',
+                    /*
+                     * Clustering is OFF by default — `NODE_ENABLE_CLUSTERING` gates the fork, and
+                     * `NODE_CLUSTER_WORKERS` alone does nothing. Without this the child is a single
+                     * process, and every assertion about crossing workers passes for the wrong reason.
+                     */
+                    NODE_ENABLE_CLUSTERING: '1',
+                    NODE_CLUSTER_WORKERS: String(workers),
+                    ...env
+                },
+                stdio: ['ignore', 'pipe', 'pipe']
+            });
 
-        /*
-         * `workersReady` is a running total, not derived from `output`: that array is trimmed, and
-         * would silently undercount once boot chatter pushed an early ready line out of its window.
-         *
-         * `readyTail` carries the end of each chunk forward so a marker split between two `data`
-         * events is still seen. It holds one character LESS than the marker, which is what keeps a
-         * marker that ended exactly on a chunk boundary from being counted a second time: a whole
-         * marker can never fit in the tail, and a split one always leaves at most that many
-         * characters behind.
-         */
-        let workersReady = 0;
-        let readyTail = '';
+            /*
+             * Kept so a boot failure can say WHY. Discarding the child's output made every failure
+             * here read as a bare 60-second timeout with no cause attached, which is how a red
+             * `cluster` job stayed unexplained: the process that knew what went wrong was the one
+             * nobody was reading.
+             */
+            const output: string[] = [];
 
-        const capture = (chunk: Buffer | string): void => {
-            const text = String(chunk);
+            /*
+             * `workersReady` is a running total, not derived from `output`: that array is trimmed,
+             * and would silently undercount once boot chatter pushed an early ready line out of its
+             * window.
+             *
+             * `readyTail` carries the end of each chunk forward so a marker split between two `data`
+             * events is still seen. It holds one character LESS than the marker, which is what keeps
+             * a marker that ended exactly on a chunk boundary from being counted a second time: a
+             * whole marker can never fit in the tail, and a split one always leaves at most that
+             * many characters behind.
+             */
+            let workersReady = 0;
+            let readyTail = '';
 
-            output.push(text);
-            if (output.length > MAX_CAPTURED_CHUNKS)
-                output.splice(0, output.length - MAX_CAPTURED_CHUNKS);
+            const capture = (chunk: Buffer | string): void => {
+                const text = String(chunk);
 
-            const spanning = readyTail + text;
-            workersReady += spanning.split(WORKER_READY_MARKER).length - 1;
-            readyTail = spanning.slice(1 - WORKER_READY_MARKER.length);
-        };
-        child.stdout?.on('data', capture);
-        child.stderr?.on('data', capture);
+                output.push(text);
+                if (output.length > MAX_CAPTURED_CHUNKS)
+                    output.splice(0, output.length - MAX_CAPTURED_CHUNKS);
 
-        /*
-         * Signals the whole process GROUP, not just `child` — which is `npx`, not the cluster
-         * primary two levels down, and never the workers `cluster.fork()` adds below that again.
-         * `child.kill()` alone only ever reaches `npx`; whether SIGTERM cascades from there to
-         * `tsx`, to the primary, and finally to every forked worker depends on each layer
-         * forwarding it, which this suite cannot rely on. `detached: true` above put `child` at
-         * the head of a fresh process group (PGID == its own PID), so `-child.pid` addresses
-         * every process in it — `npx`, `tsx`, the primary, and its workers — in one signal,
-         * however many layers deep the chain runs.
-         *
-         * Wrapped in `try`/`catch`: `process.kill` throws ESRCH when the group is already gone,
-         * which "already exited, nothing left to signal" always eventually is.
-         */
-        const signalGroup = (signal: NodeJS.Signals): void => {
-            try {
-                if (child.pid !== undefined) process.kill(-child.pid, signal);
-            } catch {
-                /* group already gone */
-            }
-        };
+                const spanning = readyTail + text;
+                workersReady += spanning.split(WORKER_READY_MARKER).length - 1;
+                readyTail = spanning.slice(1 - WORKER_READY_MARKER.length);
+            };
+            child.stdout?.on('data', capture);
+            child.stderr?.on('data', capture);
 
-        const stop = (): Promise<void> =>
-            new Promise<void>((resolve) => {
-                if (child.exitCode !== null || child.signalCode !== null) {
-                    resolve();
-                    return;
+            /*
+             * Signals the whole process GROUP, not just `child` — which is `npx`, not the cluster
+             * primary two levels down, and never the workers `cluster.fork()` adds below that again.
+             * `child.kill()` alone only ever reaches `npx`; whether SIGTERM cascades from there to
+             * `tsx`, to the primary, and finally to every forked worker depends on each layer
+             * forwarding it, which this suite cannot rely on. `detached: true` above put `child` at
+             * the head of a fresh process group (PGID == its own PID), so `-child.pid` addresses
+             * every process in it — `npx`, `tsx`, the primary, and its workers — in one signal,
+             * however many layers deep the chain runs.
+             *
+             * Wrapped in `try`/`catch`: `process.kill` throws ESRCH when the group is already gone,
+             * which "already exited, nothing left to signal" always eventually is.
+             */
+            const signalGroup = (signal: NodeJS.Signals): void => {
+                try {
+                    if (child.pid !== undefined) process.kill(-child.pid, signal);
+                } catch {
+                    /* group already gone */
                 }
-                child.once('exit', () => resolve());
-                signalGroup('SIGTERM');
-                /*
-                 * The primary's own graceful cascade (`src/cluster.ts`'s `startPrimaryShutdown`)
-                 * has up to `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS` (15s default) to drain its workers
-                 * on its own; this waits past that before stepping in, so the normal path is the
-                 * primary finishing on its own, not this forcing it. The SIGKILL that follows
-                 * still goes to the whole group — not just the primary — so a worker the primary
-                 * hasn't gotten to yet dies too, rather than surviving as an orphan that keeps
-                 * `child.stdout`/`stderr` (inherited down the whole chain) from ever reaching EOF,
-                 * which is what left a passing test run unable to make Jest exit.
-                 */
-                setTimeout(() => {
-                    signalGroup('SIGKILL');
-                    resolve();
-                }, 20_000).unref();
-            }).then(() => mongo.stop().then(() => undefined));
+            };
 
-        return waitForListening(port, bootTimeoutMs)
-            .then(() => waitForWorkers(workers, bootTimeoutMs, () => workersReady))
-            .then(
-                () => ({ port, stop }),
-                (error: unknown) =>
-                    stop().then(() => {
-                        const reason = error instanceof Error ? error.message : String(error);
-                        throw new Error(
-                            `${reason}\nThe child's last output:\n${output.join('') || '(nothing — it wrote neither stdout nor stderr)'}`
-                        );
-                    })
-            );
-    });
+            const stop = (): Promise<void> =>
+                new Promise<void>((resolve) => {
+                    if (child.exitCode !== null || child.signalCode !== null) {
+                        resolve();
+                        return;
+                    }
+                    child.once('exit', () => resolve());
+                    signalGroup('SIGTERM');
+                    /*
+                     * The primary's own graceful cascade (`src/cluster.ts`'s `startPrimaryShutdown`)
+                     * has up to `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS` (15s default) to drain its workers
+                     * on its own; this waits past that before stepping in, so the normal path is the
+                     * primary finishing on its own, not this forcing it. The SIGKILL that follows
+                     * still goes to the whole group — not just the primary — so a worker the primary
+                     * hasn't gotten to yet dies too, rather than surviving as an orphan that keeps
+                     * `child.stdout`/`stderr` (inherited down the whole chain) from ever reaching EOF,
+                     * which is what left a passing test run unable to make Jest exit.
+                     */
+                    setTimeout(() => {
+                        signalGroup('SIGKILL');
+                        resolve();
+                    }, 20_000).unref();
+                })
+                    .then(() => mongo.stop())
+                    // The dbPath directory is this boot's own, unlike the shared jest-instance root
+                    // `global-setup.ts` owns — nothing else sweeps it, so `stop()` must.
+                    .then(() => rm(dbPath, { recursive: true, force: true }));
+
+            return waitForListening(port, bootTimeoutMs)
+                .then(() => waitForWorkers(workers, bootTimeoutMs, () => workersReady))
+                .then(
+                    () => ({ port, stop }),
+                    (error: unknown) =>
+                        stop().then(() => {
+                            const reason = error instanceof Error ? error.message : String(error);
+                            throw new Error(
+                                `${reason}\nThe child's last output:\n${output.join('') || '(nothing — it wrote neither stdout nor stderr)'}`
+                            );
+                        })
+                );
+        });
+};
 
 /**
  * Boot a cluster, hand it to `use`, and stop it however that ends.
