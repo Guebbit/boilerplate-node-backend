@@ -57,7 +57,7 @@
         "test:cluster": "jest --config jest.config.cluster.js",
         "bench": "autocannon -c 20 -d 30 -l http://localhost:${NODE_PORT:-3000}/products",
         "bench:search": "autocannon -c 20 -d 30 -l -m POST -H 'Content-Type: application/json' -b '{\"text\":\"a\"}' http://localhost:${NODE_PORT:-3000}/products/search",
-        "setup:mongod": "docker create --name mongo-temp mongo:latest && docker cp mongo-temp:/usr/bin/mongod /tmp/mongod && docker rm mongo-temp",
+        "setup:mongod": "${CONTAINER_ENGINE:-podman} create --name mongo-temp mongo:latest && ${CONTAINER_ENGINE:-podman} cp mongo-temp:/usr/bin/mongod /tmp/mongod && ${CONTAINER_ENGINE:-podman} rm mongo-temp",
         "db:sync": "tsx db/sync-indexes.ts",
         "db:data": "tsx db/apply-data.ts",
         "scenario:apply": "tsx scenarios/apply.ts",
