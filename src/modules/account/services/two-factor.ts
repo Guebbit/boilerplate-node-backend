@@ -43,6 +43,7 @@ import type {
 } from '@types';
 import { accountAuditActions } from '../audit';
 import { findLiveToken, spendLiveToken } from './tokens';
+import { resendTooSoon } from '../cooldown';
 import {
     DELIVERED_CODE_RESEND_SECONDS,
     availableTwoFactorMethods,
@@ -317,15 +318,9 @@ export const setupTwoFactorMethod = (
         .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
 };
 
-/** The 429 a client turns into a countdown — `details.retryAfter` is the same number `resendAfter` promised. */
+/** This flow's code and copy bound onto the shared builder, so both call sites stay one argument. */
 const tooSoon = (seconds: number): ResponseReject =>
-    generateReject(429, [
-        {
-            code: RESEND_TOO_SOON_CODE,
-            message: t('account.two-factor.resend-too-soon'),
-            details: { retryAfter: seconds }
-        }
-    ]);
+    resendTooSoon(RESEND_TOO_SOON_CODE, t('account.two-factor.resend-too-soon'), seconds);
 
 /**
  * `POST /account/2fa/methods/{method}/confirm` — arms the pending method against a code the

@@ -8,6 +8,7 @@
 import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import type { TwoFactorMethodRecord } from '@modules/users';
 import { getTotpEncryptionKey } from '../session/config';
+import { cooldownRemaining } from '../cooldown';
 
 /** Digits in a delivered code — six, the length every authenticator app has taught people to expect. */
 const DELIVERED_CODE_DIGITS = 6;
@@ -45,7 +46,8 @@ export const generateDeliveredCode = (): string =>
         .padStart(DELIVERED_CODE_DIGITS, '0');
 
 /**
- * Whether another delivery of this method is allowed yet.
+ * Whether another delivery of this method is allowed yet — this method's anchor and window
+ * handed to the shared {@link cooldownRemaining}, which the verification re-send uses too.
  *
  * @param entry - the method entry, whose `codeSentAt` anchors the cooldown
  * @param now - the clock, injectable for tests
@@ -54,11 +56,7 @@ export const generateDeliveredCode = (): string =>
 export const deliveryCooldownRemaining = (
     entry: TwoFactorMethodRecord,
     now: Date = new Date()
-): number => {
-    if (!entry.codeSentAt) return 0;
-    const elapsed = (now.getTime() - entry.codeSentAt.getTime()) / 1000;
-    return Math.max(0, Math.ceil(DELIVERED_CODE_RESEND_SECONDS - elapsed));
-};
+): number => cooldownRemaining(entry.codeSentAt, DELIVERED_CODE_RESEND_SECONDS, now);
 
 /** Stamp a freshly minted code onto the entry, replacing whatever was in flight. */
 export const armDeliveredCode = (
