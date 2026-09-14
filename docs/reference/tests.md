@@ -308,6 +308,29 @@ No assertions live here. These are what the suites are built from.
 | `tests/support/race.ts`             | The concurrency harness: fire N requests at one instant and assert on the whole set of outcomes.                                               | [Concurrency Testing](../tools/concurrency-testing.md)             |
 | `tests/support/i18n-boot.ts`        | Reproduces the import ordering the app forces — module first, i18next second — so a test hits the same initialisation the app does.            | [Request Flow](../theory/request-flow.md)                          |
 
+### Never block the event loop in a test
+
+A test may not call `spawnSync`, `execSync`, or anything else that blocks jest's event loop, and
+this is not a style preference.
+
+`tests/support/global-setup.ts` starts one `mongod` per jest instance and pipes its stdout into
+**jest's own main process**. Nothing else reads it. A blocking call stops that reading, the pipe
+buffer fills, and `mongod` blocks part-way through writing a log line while it holds its logging
+latch — at which point the server stops answering anyone, its listener included.
+
+```mermaid
+flowchart LR
+    A["a test calls spawnSync"] --> B["jest's event loop is blocked"]
+    B --> C["mongod's stdout pipe is no longer drained"]
+    C --> D["pipe buffer fills — 128 KiB"]
+    D --> E["mongod blocks mid-log, holding the logging latch"]
+    E --> F["listener stops accepting; every connection thread waits"]
+    F --> G["the child waits on answers that never come — deadlock"]
+```
+
+A seed or a boot logs enough for this to happen within seconds. Spawn asynchronously and `await`
+the result: `tests/integration/scenarios/apply.test.ts` is the worked example.
+
 ## `tests/audit/` — prompts, not tests
 
 The one directory here Jest never runs. These are markdown prompts driven by hand against an LLM,
