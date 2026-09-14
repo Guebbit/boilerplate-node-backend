@@ -56,6 +56,27 @@ describe('GET /orders — the filters it now publishes', () => {
             String(pending._id)
         ]);
     });
+
+    // `id` is a batch filter now — Tier A. `userId`/`productId` were deliberately left scalar, so
+    // a repeated key there must still 422 rather than silently reading the first value.
+    it('filters by a batch of ids, and still 422s a repeated userId — the filter that stayed scalar', async () => {
+        const { bearer, user } = await authenticateAs('owner');
+        const product = await createProduct();
+        const target = await createOrder(user, [toOrderItem(product, 1)]);
+        await createOrder(user, [toOrderItem(product, 1)]);
+
+        const byId = await api()
+            .get(`/orders?id=${String(target._id)}`)
+            .set('Authorization', bearer);
+        expect(byId.status).toBe(200);
+        expect(byId.body.data.items.map((o: { id: string }) => o.id)).toEqual([String(target._id)]);
+
+        const repeatedUserId = await api()
+            .get('/orders?userId=a&userId=b')
+            .set('Authorization', bearer);
+        expect(repeatedUserId.status).toBe(422);
+        expect(repeatedUserId).toSatisfyApiSpec();
+    });
 });
 
 describe('GET /orders', () => {

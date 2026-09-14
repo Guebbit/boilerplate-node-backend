@@ -109,8 +109,19 @@ const buildWhere = (filters: object, spec: SearchSpec): Record<string, unknown> 
     const bag = filters as Record<string, unknown>;
     const where: Record<string, unknown> = {};
 
-    for (const [key, path] of Object.entries(spec.objectIds ?? {}))
-        if (isPresent(bag[key])) where[path] = toObjectId(String(bag[key]).trim());
+    // A batch read: `$in` for an array, equality for a scalar. `toObjectId` still throws per
+    // element on a malformed id — a bad id in a batch is a 422 about that request, not a silently
+    // empty page. An empty array is "no filter" here too; the contract's `minItems: 1` is the
+    // real guard, this is belt and braces for `ops/` scripts that reach the repository directly.
+    for (const [key, path] of Object.entries(spec.objectIds ?? {})) {
+        const value = bag[key];
+        if (Array.isArray(value)) {
+            const ids = value
+                .filter((entry) => isPresent(entry))
+                .map((entry) => toObjectId(String(entry).trim()));
+            if (ids.length > 0) where[path] = { $in: ids };
+        } else if (isPresent(value)) where[path] = toObjectId(String(value).trim());
+    }
 
     for (const [key, path] of Object.entries(spec.exact ?? {}))
         if (isPresent(bag[key])) where[path] = String(bag[key]).trim();

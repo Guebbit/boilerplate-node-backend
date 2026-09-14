@@ -181,7 +181,7 @@ describe('orderService.search', () => {
         await createOrder(user, [toOrderItem(product, 2)]);
 
         const result = await orderService.search({
-            id: target._id.toString()
+            id: [target._id.toString()]
         });
 
         expect(result.items).toHaveLength(1);

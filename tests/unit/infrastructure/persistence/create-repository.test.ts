@@ -60,6 +60,29 @@ describe('buildWhere — objectIds', () => {
         expect((where._id as Types.ObjectId).toString()).toBe(id);
         expect((where.userId as Types.ObjectId).toString()).toBe(userId);
     });
+
+    it('emits $in for an array, coercing every element', () => {
+        const a = '65de646a44f861fd83c13f13';
+        const b = '65de646a44f861fd83c13f14';
+        const where = buildWhere({ id: [a, b] });
+
+        expect(where._id).toEqual({ $in: [new Types.ObjectId(a), new Types.ObjectId(b)] });
+    });
+
+    it('drops blank elements before coercing an array', () => {
+        const id = '65de646a44f861fd83c13f13';
+        const where = buildWhere({ id: [id, '', '   '] });
+
+        expect(where._id).toEqual({ $in: [new Types.ObjectId(id)] });
+    });
+
+    it('treats an empty array as no filter, same as an absent one', () => {
+        expect(buildWhere({ id: [] })).toEqual({});
+    });
+
+    it('throws on a malformed element inside an array', () => {
+        expect(() => buildWhere({ id: ['not-an-object-id'] })).toThrow();
+    });
 });
 
 describe('buildWhere — exact', () => {

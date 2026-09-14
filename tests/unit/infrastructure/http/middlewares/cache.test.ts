@@ -407,6 +407,14 @@ describe('setCache', () => {
             );
         });
 
+        // `?id=a&id=b` and `?id=b&id=a` are one question — unsorted, they would mint two cache
+        // entries for it. The controller never sees this: a HIT answers straight from here.
+        it('gives two orderings of an array parameter one key', async () => {
+            expect(await keyFor({ id: ['a', 'b'] }, ['id'])).toBe(
+                await keyFor({ id: ['b', 'a'] }, ['id'])
+            );
+        });
+
         // Absent is not the same request as present-but-blank: the schemas treat them alike, but
         // the key does not assume that on their behalf.
         it('distinguishes an absent parameter from a blank one', async () => {

@@ -53,8 +53,11 @@ export const createSearchController = <TSchema extends ZodType, TResult>({
     const handler = {
         [operation](request: Request, response: Response) {
             // readInput: merges params/query/body into one object, per the `search` surface's
-            // rules — see docs/theory/request-input.md.
-            const input = readInput(request, { surface: 'search', ids: ['id'] });
+            // rules — see docs/theory/request-input.md. `id` is a batch filter (an array), so it
+            // goes through `stringArrays`, not `ids` — `ids` collapses a repeated key to its first
+            // entry, which is correct for `update`/`delete` (one row) but would silently turn
+            // `?id=a&id=b` into `?id=a` here.
+            const input = readInput(request, { surface: 'search', stringArrays: ['id'] });
             // extendInput: the module's own overlay — coercions or request-derived values a plain
             // field list can't express.
             const merged = extendInput ? { ...input, ...extendInput(input, request) } : input;
