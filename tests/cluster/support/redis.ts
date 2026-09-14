@@ -80,6 +80,15 @@ export const startRedis = (): Promise<TestRedis> => {
     const provided = process.env.NODE_TEST_REDIS_URL?.trim();
     if (provided) return Promise.resolve({ url: provided, stop: () => Promise.resolve() });
 
+    if (!containerEngineAvailable())
+        return Promise.reject(
+            new Error(
+                `No ${ENGINE} found on PATH. Set NODE_TEST_REDIS_URL to an already-listening Redis ` +
+                    '— the only option inside a container, which cannot start its own — or make a ' +
+                    'container engine available (CONTAINER_ENGINE, default podman).'
+            )
+        );
+
     const name = `node-backend-cluster-redis-${randomUUID().slice(0, 8)}`;
 
     return freePort()

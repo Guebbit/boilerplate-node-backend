@@ -5,9 +5,10 @@ The real API, booted self-contained and disposable:
 ```sh
 npm run demo               # :3000 — in-memory Mongo, seeded, cache/queue disabled
 NODE_PORT=3101 npm run demo   # several run side by side; each owns its own database
+NODE_TEST_MONGO_URI=mongodb://127.0.0.1:27017 npm run demo   # a compose Mongo instead; persists
 ```
 
-One process, no Docker: `scenarios/run-server.ts` starts a `mongodb-memory-server` (the same dependency the test suite already uses), points `NODE_DB_URI` at it, force-disables Redis and RabbitMQ — a supported deployment shape that `/observability/health` reports as `disabled` rather than as an error — raises the rate limits to the test allowance, and boots `src/app.ts` exactly as any other profile would. Kill the process and nothing survives it.
+One process, no Docker by default: `scenarios/run-server.ts` resolves a Mongo through `startEphemeralMongo()` — the same resolver the test suites use — points `NODE_DB_URI` at the `demo` database on it, force-disables Redis and RabbitMQ — a supported deployment shape that `/observability/health` reports as `disabled` rather than as an error — raises the rate limits to the test allowance, and boots `src/app.ts` exactly as any other profile would. Unset `NODE_TEST_MONGO_URI`, kill the process, and nothing survives it; set it, and the shop is still there on the next boot.
 
 The shop it serves is not a set of rows somebody wrote. It is [built by using the application](#how-a-scenario-is-built) — the catalogue is seeded, and then the orders, payments, shipments, refunds and audit entries are produced by driving the real endpoints at boot.
 
@@ -157,5 +158,5 @@ lists equal in both directions.
 ## What it deliberately is not
 
 - **Not the full stack.** Cache and queue run `disabled`, so invalidation behaviour and the queue-backed email/PDF paths are not exercised. That is the live profile's job — the frontend's `test:e2e:live` against `compose:restart`, which its CI requires on every PR.
-- **Not persistent.** `scenario:apply` against the compose stack is the path that survives a restart; this one is a fresh world per process, which is precisely what makes it a test fixture. A live backend never mounts `/__test/*` at all — `scenario:apply --describe-to=<file>` writes the same JSON `GET /__test/scenario` serves, which is how the frontend's live e2e profile learns the same ids.
+- **Not persistent, by default.** A fresh world per process is what makes the default shape a test fixture. Pointing `NODE_TEST_MONGO_URI` at a compose Mongo trades that for a shop that survives a restart — the same trade `scenario:apply` against the compose stack makes — at the cost of every instance sharing one `demo` database rather than each owning its own; do not run several this way at once. A live backend never mounts `/__test/*` at all — `scenario:apply --describe-to=<file>` writes the same JSON `GET /__test/scenario` serves, which is how the frontend's live e2e profile learns the same ids.
 - **Not a mock.** Nothing here imitates anything: same routes, same validators, same serializers, same visibility rules as production. When a demo-profile answer surprises you, believe it — that is the API.

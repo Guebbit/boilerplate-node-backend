@@ -1,18 +1,20 @@
 import { mkdir, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
-import { MongoMemoryServer } from 'mongodb-memory-server';
-// A relative path, not the `@infrastructure` alias every other file in this directory uses:
-// `globalSetup` is loaded outside jest's normal module resolution, where `moduleNameMapper` does
-// not apply — the alias resolves at `tsc`/`eslint` time but fails at jest's own runtime.
-import { logger } from '../../src/infrastructure/adapters/logger';
-import { usePreinstalledMongodBinary } from '../../src/infrastructure/runtime/mongodb-memory-binary';
+// Relative paths, not the `@infrastructure`/`@tests` aliases every other file in this directory
+// uses: `globalSetup` is loaded outside jest's normal module resolution, where `moduleNameMapper`
+// does not apply — an alias resolves at `tsc`/`eslint` time but fails at jest's own runtime.
+import {
+    startEphemeralMongo,
+    type EphemeralMongo
+} from '../../src/infrastructure/runtime/ephemeral-mongo';
+import { startInProcessMongod } from './ephemeral-mongod';
 
 /**
  * The one handle `globalSetup` has to hand `globalTeardown`. Jest runs both in the same process but
  * as separate modules, so `globalThis` is the only channel — `process.env` carries strings only.
  */
 export interface TestGlobals {
-    __testMongoServer?: MongoMemoryServer;
+    __testMongoServer?: EphemeralMongo;
 }
 
 /**
@@ -43,58 +45,6 @@ export const TEST_TMP_ROOT =
 /** This instance's own slice of it, holding the one server {@link globalSetup} starts. */
 export const instanceDataRoot = (): string =>
     path.join(TEST_TMP_ROOT, 'mongo', String(process.pid));
-
-/**
- * How long `MongoMemoryServer.create()` gets before its stall is treated as a hang rather than a
- * slow first-time download.
- *
- * `mongodb-memory-server`'s own lock around `~/.cache/mongodb-binaries` (shared machine-wide, not
- * owned by this repo) has no timeout of its own: it polls every 3s for a pid it read from the lock
- * file to die. If that pid belonged to a process that was killed rather than exited — an OOM, a
- * Stryker worker SIGKILL, a cancelled session — and the number has since been reused by anything
- * else on the machine, the wait never ends, silently, with no test output at all.
- */
-const CREATE_SERVER_TIMEOUT_MS = 120_000;
-
-/**
- * Starts the server, giving up after {@link CREATE_SERVER_TIMEOUT_MS} rather than stalling silently.
- *
- * The loser of the race is CANCELLED, not abandoned. A bare `setTimeout` inside a `Promise.race`
- * keeps running after the race settles, and a pending timer holds jest's event loop open: the run
- * finishes, then sits there for the full two minutes before the process exits. `clearTimeout` in
- * `finally` is what keeps the guard from costing more than the hang it guards against.
- *
- * Exits rather than throws, because `mongodb-memory-server`'s lock-poll `setInterval` would keep
- * the loop alive past the rejection anyway — reporting the error and then hanging is not better
- * than hanging.
- *
- * @param dbPath - the data directory the server should use; must already exist
- * @returns the started server
- */
-const createServer = (dbPath: string): Promise<MongoMemoryServer> => {
-    let timer: NodeJS.Timeout | undefined;
-
-    const timeout = new Promise<never>((_resolve, reject) => {
-        timer = setTimeout(
-            () =>
-                reject(
-                    new Error(
-                        `MongoMemoryServer did not start within ${CREATE_SERVER_TIMEOUT_MS}ms. ` +
-                            'This is a stall, not a slow download — check for a stale lock file ' +
-                            'under ~/.cache/mongodb-binaries/ and delete it.'
-                    )
-                ),
-            CREATE_SERVER_TIMEOUT_MS
-        );
-    });
-
-    return Promise.race([MongoMemoryServer.create({ instance: { dbPath } }), timeout])
-        .catch((error: unknown) => {
-            logger.error(error);
-            process.exit(1);
-        })
-        .finally(() => clearTimeout(timer));
-};
 
 /**
  * Whether a pid is still running.
@@ -153,23 +103,20 @@ const sweepDeadInstances = async (mongoRoot: string): Promise<void> => {
  * which jest runs in this same process.
  */
 const globalSetup = async () => {
-    // Must run HERE, in the main process, and not in `setup.ts`: the env vars it sets are read by
-    // `MongoMemoryServer.create()` below, and `setup.ts` runs per worker — after this server has
-    // already started, in a process that cannot reach it.
-    usePreinstalledMongodBinary();
-
     const root = instanceDataRoot();
     await sweepDeadInstances(path.join(TEST_TMP_ROOT, 'mongo'));
     await rm(root, { recursive: true, force: true });
     await mkdir(root, { recursive: true });
     process.env.NODE_TEST_MONGO_ROOT = root;
 
-    // `dbPath` must already exist — mongodb-memory-server reads the directory before starting
+    // `dbPath` must already exist — mongodb-memory-server reads the directory before starting.
+    // Ignored when `NODE_TEST_MONGO_URI` is already set: `startEphemeralMongo` then skips starting
+    // one at all.
     const dbPath = path.join(root, 'server');
     await mkdir(dbPath, { recursive: true });
 
-    const server = await createServer(dbPath);
-    process.env.NODE_TEST_MONGO_URI = server.getUri();
+    const server = await startEphemeralMongo({ dbPath, startInProcess: startInProcessMongod });
+    process.env.NODE_TEST_MONGO_URI = server.uri;
     (globalThis as TestGlobals).__testMongoServer = server;
 };
 
