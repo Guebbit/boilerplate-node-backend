@@ -15,6 +15,7 @@ import type { CastError } from 'mongoose';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { authSignupTotal } from '../metrics';
 import { callerContextOf } from '@infrastructure/http/request';
+import { issueSession } from '../session/session';
 import { sendVerificationEmail } from '../services';
 import { toUser } from '@modules/users';
 import { logAntibotRefusal } from '@infrastructure/http/middlewares/antibot-log';
@@ -95,7 +96,22 @@ export const postSignup = (
              * 201 does not wait on the queue.
              */
             void sendVerificationEmail(data, callerContextOf(request));
-            successResponse<User>(response, toUser(data), 201);
+
+            /*
+             * Signed in from here, as `unverified`: the role model says an unproven address
+             * browses freely and is stopped at `cart.checkout`, so making the new account log in
+             * again to reach that state was the old verification-as-a-gate model, not this one.
+             *
+             * Cookies only, and the body stays `User` — the frontend's `GET /account/refresh`
+             * bootstrap mints the access token, exactly as it does after the OAuth callback. That
+             * also keeps rung 2's refused 201 byte-identical in the BODY; only the absence of
+             * Set-Cookie distinguishes it, which is as close as indistinguishability gets once
+             * signup issues a session at all. Rung 2 is off by default, and the 409 for an
+             * address in use already leaks existence.
+             */
+            return issueSession(response, data.id).then(() => {
+                successResponse<User>(response, toUser(data), 201);
+            });
         })
         .catch((error: CastError | Error) => {
             authSignupTotal.inc({ status: 'failure' });

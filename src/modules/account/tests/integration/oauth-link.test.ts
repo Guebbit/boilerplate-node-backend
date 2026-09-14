@@ -12,7 +12,11 @@ import { userRepository } from '@modules/users';
 import * as auditPort from '@infrastructure/observability/audit';
 import * as analyticsPort from '@infrastructure/observability/analytics';
 import { observePort } from '@tests/ports';
-import { loginOrCreateFromOAuth, OAuthEmailUnverifiedError } from '../../services/oauth';
+import {
+    loginOrCreateFromOAuth,
+    OAuthEmailUnverifiedError,
+    OAuthAccountUnverifiedError
+} from '../../services/oauth';
 import { accountAuditActions } from '../../audit';
 import { accountAnalyticsEvents } from '../../analytics';
 import type { OAuthIdentity } from '../../oauth/providers/port';
@@ -75,8 +79,8 @@ describe('loginOrCreateFromOAuth — case 1: an already-linked identity', () => 
 });
 
 describe('loginOrCreateFromOAuth — case 2: a verified email matching an existing account', () => {
-    it('links the new identity onto the account and marks it verified', async () => {
-        const user = await createUser({ email: identity().email });
+    it('links the new identity onto the account', async () => {
+        const user = await createUser({ email: identity().email, verifiedAt: new Date() });
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
         const resolved = await loginOrCreateFromOAuth('google', identity(), testCallerContext);
@@ -92,12 +96,10 @@ describe('loginOrCreateFromOAuth — case 2: a verified email matching an existi
                 actor_user_id: user.id
             })
         );
-        const refreshed = await userRepository.findById(user.id);
-        expect(refreshed?.verifiedAt).toBeInstanceOf(Date);
     });
 
     it('refuses to link when the provider does not vouch for the email, and changes nothing', async () => {
-        const user = await createUser({ email: identity().email });
+        const user = await createUser({ email: identity().email, verifiedAt: new Date() });
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
         await expect(
@@ -105,6 +107,28 @@ describe('loginOrCreateFromOAuth — case 2: a verified email matching an existi
         ).rejects.toBeInstanceOf(OAuthEmailUnverifiedError);
 
         expect(await oauthAccountsOf(user.id)).toEqual([]);
+        expect(auditSpy).not.toHaveBeenCalled();
+    });
+
+    /*
+     * Pre-account-takeover. The attacker holds `victim@example.com` with their own password and
+     * cannot prove it; the victim arrives through the provider. Linking here would hand them an
+     * account the attacker still has the password to — so BOTH sides must have proved the
+     * address, and the victim's way in is the reset, which proves the same mailbox.
+     */
+    it('refuses to link onto an account that never proved the address itself', async () => {
+        const user = await createUser({ email: identity().email });
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        await expect(
+            loginOrCreateFromOAuth('google', identity(), testCallerContext)
+        ).rejects.toBeInstanceOf(OAuthAccountUnverifiedError);
+
+        expect(await oauthAccountsOf(user.id)).toEqual([]);
+        // Not promoted on the way out either: the refusal must leave the squatted account exactly
+        // as unproven as it was.
+        const refreshed = await userRepository.findById(user.id);
+        expect(refreshed?.verifiedAt ?? null).toBeNull();
         expect(auditSpy).not.toHaveBeenCalled();
     });
 });

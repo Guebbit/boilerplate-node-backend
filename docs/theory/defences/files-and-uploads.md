@@ -91,8 +91,8 @@ flowchart LR
     E[Container soft-deleted] -->|a restore needs them| F[Keep them]
 ```
 
-| Attack                        | How it works                                                          | This boilerplate                                                                                                                                                                                                          |
-| ------------------------------ | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Attack                         | How it works                                                          | This boilerplate                                                                                                                                                                                                                                                                                   |
+| ------------------------------ | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Orphaned files never reclaimed | replacing an image forever, or deleting the row, leaves the old bytes | `imageStore.remove(old)` runs after the save that overwrote a role's `imageUrl`, and again on a HARD delete — never on a soft delete, which is a restore waiting to happen. Bounds one account to its one CURRENT image, not every image it ever held — `products/service.ts`, `users/service.ts`. |
 
 `imageStore.remove` also refuses anything it did not write as a main image — a remote url, a path

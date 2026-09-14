@@ -3,8 +3,8 @@
  * OAuth login/signup — the OAuth counterpart to `./authentication.ts`'s `login`/`signup`, one
  * layer above `../oauth/`'s provider mechanics (which know nothing about `UserDocument` or
  * audit/analytics — see that folder's own files). Three outcomes only: an already-linked identity
- * logs in, a verified email links a NEW identity onto an existing password account, and anything
- * else signs up a fresh, password-less user.
+ * logs in, an email BOTH sides call verified links a NEW identity onto an existing password
+ * account, and anything else signs up a fresh, password-less user.
  */
 
 import { getCurrentLocale } from '@infrastructure/i18n';
@@ -26,6 +26,24 @@ export class OAuthEmailUnverifiedError extends Error {
     constructor(email: string) {
         super(`OAuth email not verified for account linking: ${email}`);
         this.name = 'OAuthEmailUnverifiedError';
+    }
+}
+
+/**
+ * The provider vouches for this identity, and its email matches an existing account — but that
+ * ACCOUNT never proved the address itself. Refusing the link here is what stops a
+ * pre-account-takeover: an attacker registers `victim@example.com` with their own password, the
+ * victim later signs in with the provider, and without this check they land on the squatter's
+ * account with the squatter's password still on it.
+ *
+ * The victim's way in is the password reset, which proves the same mailbox and marks it verified
+ * — see `profile.ts#passwordResetChange`. The callback controller turns this into an
+ * `?error=account_unverified` redirect.
+ */
+export class OAuthAccountUnverifiedError extends Error {
+    constructor(email: string) {
+        super(`Existing account has not proved its own address, refusing OAuth link: ${email}`);
+        this.name = 'OAuthAccountUnverifiedError';
     }
 }
 
@@ -140,6 +158,8 @@ const signupFromOAuth = (
  * @param context - for the audit/analytics emitted here
  * @throws {@link OAuthEmailUnverifiedError} when an existing account matches by email but the
  *   provider does not vouch for it
+ * @throws {@link OAuthAccountUnverifiedError} when it matches an account that never proved that
+ *   address itself
  */
 export const loginOrCreateFromOAuth = (
     provider: string,
@@ -158,6 +178,10 @@ export const loginOrCreateFromOAuth = (
                 if (!byEmail) return signupFromOAuth(provider, identity, context);
 
                 if (!identity.emailVerified) throw new OAuthEmailUnverifiedError(identity.email);
+
+                // Both sides must have proved the address, not just the provider — see
+                // `OAuthAccountUnverifiedError`.
+                if (!byEmail.verifiedAt) throw new OAuthAccountUnverifiedError(identity.email);
 
                 return linkToExistingAccount(byEmail, provider, identity, context);
             });

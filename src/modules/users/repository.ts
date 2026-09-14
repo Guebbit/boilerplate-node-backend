@@ -320,17 +320,14 @@ export const userRepository: Repository<UserDocument> & {
             .exec(),
 
     /**
-     * Link a provider identity to an account and mark it verified — atomic `$push`, never
-     * read-modify-write, same rule `tokens` follows: `oauthAccounts` is `select: false`, so the
-     * document `account/services/oauth.ts` already holds never carries the array to mutate in
-     * place. Two atomic writes rather than one: the `$push` stays a plain update so Mongoose still
-     * assigns the new subdocument its `_id` the way every other push here does — an
-     * aggregation-pipeline update (needed for the second write's `$cond`) bypasses that casting
-     * entirely. The second write promotes `unverified` to `customer` and sets `verifiedAt`, both
-     * conditionally: `role` only when it is still exactly `unverified` (a staff account linking a
-     * second provider keeps its role), `verifiedAt` only when still unset (re-linking must not
-     * overwrite the true, earlier proof date with a later one).
-     * https://www.mongodb.com/docs/manual/reference/operator/update/#update-with-aggregation-pipeline
+     * Link a provider identity to an account — atomic `$push`, never read-modify-write, same rule
+     * `tokens` follows: `oauthAccounts` is `select: false`, so the document
+     * `account/services/oauth.ts` already holds never carries the array to mutate in place.
+     *
+     * The link vouches for NOTHING. It used to also set `verifiedAt` and promote `unverified`,
+     * on the provider's word — which is the pre-account-takeover this repo now refuses:
+     * `loginOrCreateFromOAuth` only ever reaches here for an account that already proved the
+     * address itself, so there is nothing left for a second write to promote.
      */
     linkOAuthAccount: (userId: string, account: OAuthAccount) =>
         userModel
@@ -340,31 +337,6 @@ export const userRepository: Repository<UserDocument> & {
                 { timestamps: false }
             )
             .exec()
-            .then(() =>
-                userModel
-                    .updateOne(
-                        { _id: toObjectId(userId) },
-                        [
-                            {
-                                $set: {
-                                    verifiedAt: { $ifNull: ['$verifiedAt', '$$NOW'] },
-                                    role: {
-                                        $cond: [
-                                            { $eq: ['$role', 'unverified'] },
-                                            'customer',
-                                            '$role'
-                                        ]
-                                    }
-                                }
-                            }
-                        ],
-                        // Mongoose refuses an array (aggregation-pipeline) update by default —
-                        // `updatePipeline: true` is the documented opt-in, not a workaround.
-                        // https://mongoosejs.com/docs/api/query.html#Query.prototype.updateOne()
-                        { timestamps: false, updatePipeline: true }
-                    )
-                    .exec()
-            )
             .then(() => undefined),
 
     /**

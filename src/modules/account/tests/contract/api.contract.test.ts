@@ -10,6 +10,7 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
+import { setCookie, cookieHeader } from '@tests/cookies';
 import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
@@ -55,10 +56,7 @@ const loginWithCookie = async (overrides: Parameters<typeof createUser>[0] = {})
             `login setup failed: ${response.status} — ${JSON.stringify(response.body)}`
         );
 
-    // supertest types every header as `string`; `set-cookie` is the one that is really a list.
-    const setCookie = response.headers['set-cookie'] ?? [];
-    const cookies = Array.isArray(setCookie) ? setCookie : [setCookie];
-    const jwtCookie = cookies.find((cookie) => cookie.startsWith('jwt='));
+    const jwtCookie = setCookie(response, 'jwt');
     if (!jwtCookie) throw new Error('login set no jwt cookie');
 
     return {
@@ -108,11 +106,7 @@ const mailTo = (to: string) => {
 
 /** `Max-Age` of the named cookie on a response, in seconds. */
 const cookieMaxAge = (response: { headers: Record<string, unknown> }, name: string) => {
-    const setCookie = response.headers['set-cookie'] ?? [];
-    const cookies = Array.isArray(setCookie) ? setCookie : [setCookie];
-    const match = (cookies as string[])
-        .find((cookie) => cookie.startsWith(`${name}=`))
-        ?.match(/max-age=(\d+)/i);
+    const match = setCookie(response, name)?.match(/max-age=(\d+)/i);
     return match ? Number(match[1]) : undefined;
 };
 
@@ -355,9 +349,7 @@ describe('POST /account/reauth', () => {
             .set('Authorization', bearer)
             .send({ password: PLAIN_PASSWORD });
 
-        const setCookie = response.headers['set-cookie'] ?? [];
-        const cookies = Array.isArray(setCookie) ? setCookie : [setCookie];
-        expect(cookies.some((cookie: string) => cookie.startsWith('jwt='))).toBe(true);
+        expect(setCookie(response, 'jwt')).toBeDefined();
     });
 });
 
@@ -573,6 +565,35 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
         expect(response).toSatisfyApiSpec();
 
         expect(await readVerifyToken(response.body.data.id)).toBeDefined();
+    });
+
+    /*
+     * Unverified is a role, not a waiting room: the new account is signed in from here and is
+     * stopped at `cart.checkout` alone. The BODY stays a bare profile so rung 2's refusal — which
+     * `post-signup.ts` answers before it ever reaches the session — is still indistinguishable in
+     * everything a script can read from one response.
+     */
+    it('signup signs the new account in, through the cookie rather than the body', async () => {
+        const response = await api().post('/account/signup').send({
+            email: 'signed-in@example.com',
+            username: 'signedin',
+            password: PLAIN_PASSWORD,
+            passwordConfirm: PLAIN_PASSWORD,
+            termsAccepted: true
+        });
+
+        expect(response.status).toBe(201);
+        expect(response).toSatisfyApiSpec();
+        expect(response.body.data.token).toBeUndefined();
+
+        expect(setCookie(response, 'jwt')).toBeDefined();
+
+        // The access token comes from the bootstrap the frontend already runs after OAuth.
+        const refresh = await api()
+            .get('/account/refresh')
+            .set('Cookie', cookieHeader(response, 'jwt'));
+        expect(refresh.status).toBe(200);
+        expect(refresh.body.data.token).toBeDefined();
     });
 
     it('re-sends for an unverified account and the emailed token then verifies it', async () => {

@@ -79,7 +79,7 @@ Information disclosure feeds entry, entry feeds escalation, escalation feeds imp
 | [Supply chain](supply-chain.md)                         | vulnerable and malicious packages, install scripts, base images        | fewer dependencies is the primary defence                  |
 | [The API surface](api-surface.md)                       | zombie routes, bulk export, webhooks, GraphQL                          | the contract IS the API                                    |
 | [Real-time and messaging](real-time.md)                 | unauthenticated upgrades, broadcast leakage, brokers                   | one-way SSE closes half the family by construction         |
-| [Email and notifications](email.md)                     | template and header injection, spoofing, bombing                       | closed — an unproven address holds no `cart.checkout`      |
+| [Email and notifications](email.md)                     | template and header injection, spoofing, bombing                       | closed                                                     |
 | [Human and social](human-and-social.md)                 | phishing, pretexting, insider threat                                   | no row is closed by code; all of it is blast radius        |
 | [Runtime and language level](runtime.md)                | crashes, `eval`, native memory bugs, env trust                         | bound what reaches native code, and exit on the unknown    |
 | [Automation and abuse](automation-and-abuse.md)         | scraping, fake accounts, form spam, CAPTCHA                            | a ladder, off by default, because every rung costs someone |

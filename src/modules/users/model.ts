@@ -56,6 +56,14 @@ export interface Token {
     type: string;
     expiration?: Date;
     /**
+     * When `tokenAdd` minted this entry. The record a resend cooldown reads: "how long since the
+     * mail carrying this token went out" is a question `expiration` can only answer by being read
+     * backwards through the TTL that set it, which silently changes meaning the moment that TTL
+     * is reconfigured. Absent on entries written before the field existed — a cooldown treats
+     * that as elapsed.
+     */
+    sentAt?: Date;
+    /**
      * When this token was last exchanged for an access token, absent until then — lets
      * `GET /account/sessions` show an idle session as idle rather than indistinguishable from
      * active. Only refresh tokens are ever exchanged, so one-time kinds (a pending reset, a
@@ -389,8 +397,9 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
          * `shared/authorization-keys.yaml`) — this is the record of fact, kept because an account
          * has one role field: the moment an operator grants a staff role to an unproven address,
          * the role overwrites the only other evidence the address was never proven. Set by
-         * `completeEmailVerification`/`completeEmailChange`/`userRepository.linkOAuthAccount`;
-         * read by nothing.
+         * `completeEmailVerification`/`completeEmailChange`/`passwordResetChange` — every route
+         * that proves the mailbox — and read by the OAuth link path, which refuses to link onto
+         * an account that never proved its own address.
          */
         verifiedAt: {
             type: Date,
@@ -420,6 +429,10 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
                         required: true
                     },
                     expiration: {
+                        type: Date,
+                        required: false
+                    },
+                    sentAt: {
                         type: Date,
                         required: false
                     },
@@ -644,7 +657,8 @@ userSchema.methods.tokenAdd = function (
     const entry: Token = {
         type,
         token: hashToken(token),
-        expiration: expirationMs > 0 ? new Date(Date.now() + expirationMs) : undefined
+        expiration: expirationMs > 0 ? new Date(Date.now() + expirationMs) : undefined,
+        sentAt: new Date()
     };
 
     return (this.constructor as UserModel)

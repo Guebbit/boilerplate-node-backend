@@ -16,8 +16,10 @@ import { userRepository, TokenType, type UserDocument } from '@modules/users';
 import { tokenAdd } from './authentication';
 import { verifyRequestEmail } from '../emails';
 import { generateSuccess, generateReject } from '@infrastructure/http/response';
+import { cooldownRemaining, resendTooSoon } from '../cooldown';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
 import type { CallerContext } from '@infrastructure/http/request';
+import type { EmailVerificationRequested } from '@types';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
 import { isUnrestrictedRole } from '@kernel/permissions';
@@ -54,6 +56,20 @@ const EMAIL_VERIFY_TOKEN_TTL_MS = environmentNumber(
     DEFAULT_EMAIL_VERIFY_TTL_MS,
     1
 );
+
+/**
+ * Seconds between two verification emails for one account — what the client counts down before
+ * re-enabling its Resend button. Longer than the 2FA code's 30 s: that one is a six-digit code
+ * someone is typing right now, this one is a link that stays good for `NODE_EMAIL_VERIFY_TTL_MS`.
+ */
+export const VERIFY_RESEND_SECONDS = 60;
+
+/**
+ * The error code a client branches on to render a resend countdown rather than a generic 429.
+ * Module-private, like `services/two-factor.ts`'s equivalent: a client reads it off the response,
+ * not off an exported constant.
+ */
+const VERIFY_RESEND_TOO_SOON_CODE = 'EMAIL_VERIFY_RESEND_TOO_SOON';
 
 /** The two kinds a token may be. A union of the constants, so a third one cannot be passed. */
 type VerificationTokenType = typeof EMAIL_VERIFY_TOKEN_TYPE | typeof EMAIL_CHANGE_TOKEN_TYPE;
@@ -134,34 +150,72 @@ export const requestEmailVerification = (
     });
 
 /**
- * `POST /account/verify-request` end to end: loads the caller's own account, refuses the two
- * states that can't be verified, and sends. The refusals live here since
+ * Seconds still to wait before this account may ask for another verification email, or 0.
+ *
+ * The anchor is the live token's own `sentAt` — `sendVerificationEmail` removes every token of
+ * the kind before adding one, so there is exactly one and it was minted by the last send.
+ *
+ * @param user - the account, carrying its credential fields
+ * @returns seconds to wait, or 0 when a send may go ahead
+ */
+const resendCooldownRemaining = (user: UserDocument, now: Date = new Date()): number =>
+    cooldownRemaining(
+        user.tokens.find(({ type }) => type === EMAIL_VERIFY_TOKEN_TYPE)?.sentAt,
+        VERIFY_RESEND_SECONDS,
+        now
+    );
+
+/**
+ * `POST /account/verify-request` end to end: loads the caller's own account, refuses the three
+ * states that can't be sent to, and sends. The refusals live here since
  * `requestEmailVerification` takes an already-loaded user and can't enforce its own precondition.
  * Unlike the reset request, there's no enumeration surface to blur: the caller is authenticated
  * and asking about their own account, so an already-verified one gets an honest 409, not a
  * soothing 200 that re-sends nothing.
+ *
+ * The cooldown is enforced HERE, not only in the route's limiter: `credentialLimiters` carries
+ * `skipSuccessfulRequests`, so a success spends no budget — right for a login guess, wrong for a
+ * button whose success is the expensive part, since each press publishes mail.
  */
 export const requestEmailVerificationFor = (
     userId: string,
     context: CallerContext
-): Promise<ResponseSuccess<undefined> | ResponseReject> =>
+): Promise<ResponseSuccess<EmailVerificationRequested> | ResponseReject> =>
     // Credentials included: issuing the token pushes onto this document's `tokens`.
     userRepository.findByIdWithCredentials(userId).then((user) => {
         if (!user) return generateReject(404, [t('users.not-found')]);
         if (user.verifiedAt) return generateReject(409, [t('account.verify.already-verified')]);
 
+        const wait = resendCooldownRemaining(user);
+        if (wait > 0)
+            return resendTooSoon(
+                VERIFY_RESEND_TOO_SOON_CODE,
+                t('account.verify.resend-too-soon'),
+                wait
+            );
+
         return requestEmailVerification(user, context).then(() =>
-            generateSuccess(undefined, 200, t('account.verify.email-sent'))
+            generateSuccess<EmailVerificationRequested>(
+                { resendAfter: VERIFY_RESEND_SECONDS },
+                200,
+                t('account.verify.email-sent')
+            )
         );
     });
 
 /**
  * Marks the account's address proven, promoting `unverified` to `customer` in the same step —
- * the verify flow's own vouching, the same reasoning `userRepository.linkOAuthAccount` applies to
- * an OAuth link. Leaves any OTHER role untouched: an operator who staffed an unproven address
+ * the verify flow's own vouching. Leaves any OTHER role untouched: an operator who staffed an
+ * unproven address
  * (`shared/authorization-roles.yaml`'s "no unverified manager" rule) made that decision already.
+ *
+ * Mutates only — the caller's own save is what persists it, so a verification can ride along in a
+ * write the caller was making anyway. Exported for `passwordResetChange`, whose spent token
+ * proves the same mailbox this one does.
+ *
+ * @param user - the account whose address was just proven
  */
-const markVerified = (user: UserDocument): void => {
+export const markVerified = (user: UserDocument): void => {
     user.verifiedAt = new Date();
     if (user.role === 'unverified') user.role = 'customer';
 };

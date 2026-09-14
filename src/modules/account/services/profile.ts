@@ -12,7 +12,7 @@ import { getDefaultLocale, t } from '@infrastructure/i18n';
 import bcrypt from 'bcrypt';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { resetConfirmEmail, deleteConfirmEmail, emailChangeNoticeEmail } from '../emails';
-import { sendVerificationEmail, EMAIL_CHANGE_TOKEN_TYPE } from './verification';
+import { sendVerificationEmail, markVerified, EMAIL_CHANGE_TOKEN_TYPE } from './verification';
 import type { CastError } from 'mongoose';
 import { UpdateAccountBody } from '@api/schemas.zod';
 import { analyticsConsentSchema } from '@infrastructure/http/schemas';
@@ -85,11 +85,20 @@ export const validatePasswordChange = (
  * this codebase can afford to lose once, not a reason to tell the caller their change failed.
  * `passwordChangeWithCurrent`'s caller re-mints its own session on top of this — see
  * `postPasswordChange` and `../session/session`'s `issueSession`.
+ *
+ * @param user - the account, carrying its credential fields
+ * @param password - the new password, as typed
+ * @param passwordConfirm - the repeat, which must match
+ * @param beforeSave - a caller's own mutation to ride along in the same write, run only once
+ *   every refusal is behind us. A parameter rather than a mutation the caller makes first: a
+ *   refused password must not leave a half-applied change on the document, and the only place
+ *   that can be guaranteed is here, next to the `save`.
  */
 export const passwordChange = (
     user: UserDocument,
     password = '',
-    passwordConfirm = ''
+    passwordConfirm = '',
+    beforeSave?: (user: UserDocument) => void
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     const errors = validatePasswordChange(password, passwordConfirm);
 
@@ -101,6 +110,7 @@ export const passwordChange = (
         if (breachErrors.length > 0) return generateReject(422, breachErrors);
 
         user.password = password;
+        beforeSave?.(user);
         return userRepository
             .save(user)
             .then((savedUser) =>
@@ -138,6 +148,17 @@ export const getOwnProfile = (
  * `passwordChangeWithCurrent`'s last step (which reports its own `AUTH_PASSWORD_CHANGED`).
  * The mail is sent here, not by the controller, since "a password was reset" is a fact about
  * the account — any future caller gets the notification for free.
+ *
+ * Also marks the address verified. The token just spent was delivered to that mailbox and
+ * nowhere else, so it proves possession exactly as strongly as a `verify` token does — and
+ * without this, someone whose verification mail never arrived could reset from that same inbox
+ * and still be held at `unverified`, with a re-send of the mail that already failed as their only
+ * remedy. `passwordChangeWithCurrent` deliberately does NOT get this: an already-signed-in caller
+ * typing their current password proves nothing about the mailbox.
+ *
+ * `markVerified` mutates, and rides in as `passwordChange`'s `beforeSave` so one write persists
+ * both facts — and so a refused password (too weak, breached) cannot verify an address on its way
+ * out: the hook runs after the last refusal, not before the first.
  */
 export const passwordResetChange = (
     user: UserDocument,
@@ -145,7 +166,7 @@ export const passwordResetChange = (
     passwordConfirm: string,
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    passwordChange(user, password, passwordConfirm).then((result) => {
+    passwordChange(user, password, passwordConfirm, markVerified).then((result) => {
         if (result.success) {
             emitAuditEvent(
                 buildAuditEvent(context, {

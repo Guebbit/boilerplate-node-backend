@@ -473,15 +473,21 @@ paths:
         post:
             tags: [Auth]
             summary: Request email verification
-            description: Sends a one-time verification token to the authenticated user's email address. The token must then be submitted to `/account/verify-confirm`. Signup already sends one automatically; this endpoint re-sends it for the mail that never arrived.
+            description: Sends a one-time verification token to the authenticated user's email address. The token must then be submitted to `/account/verify-confirm`. Signup already sends one automatically; this endpoint re-sends it for the mail that never arrived. Answers 429 inside the previous send's cooldown, so a client that respects `resendAfter` never sees one — unlike a login guess, a SUCCESSFUL call here is the expensive one, since each publishes mail.
             operationId: requestEmailVerification
             security:
                 - bearerAuth: []
             responses:
-                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '200':
+                    description: A verification email is on its way
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/EmailVerificationRequestedEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # The account is already verified — there is nothing to send.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /account/verify-confirm:
@@ -697,7 +703,7 @@ paths:
         post:
             tags: [Auth]
             summary: Signup
-            description: Registers a new user account with optional image upload. Returns the newly created user profile on success.
+            description: 'Registers a new user account with optional image upload. Returns the newly created user profile on success, and signs the caller in — the refresh cookie is set here, so a client reaches a usable access token through `GET /account/refresh` rather than by calling `POST /account/login` again. The new account holds `unverified` until `POST /account/verify-confirm` proves the address — it browses freely and is stopped only at `cart.checkout`.'
             operationId: signup
             security: []
             parameters:
@@ -719,6 +725,10 @@ paths:
                         application/json:
                             schema:
                                 $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
+                # The BODY is identical when rung 2 of the anti-automation ladder refuses the
+                # address: a fabricated profile from a document that was never saved, so a script
+                # gets nothing to iterate on. Only the refresh cookie tells the two apart, since
+                # a refusal has no account to mint a session for.
                 # Also answered when a human-challenge provider is active and the caller's
                 # token is missing or refused — see antibot/openapi.yaml.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
@@ -1123,6 +1133,29 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
                     $ref: '#/components/schemas/TwoFactorDelivery'
+
+        EmailVerificationRequested:
+            type: object
+            additionalProperties: false
+            required: [resendAfter]
+            properties:
+                resendAfter:
+                    type: integer
+                    description: Seconds before another verification email may be requested. A client counts down from this rather than inventing its own cooldown, so it never disagrees with the server.
+
+        EmailVerificationRequestedEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/EmailVerificationRequested'
 
         TwoFactorConfirmRequest:
             type: object

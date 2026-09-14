@@ -21,7 +21,12 @@ import {
     OAUTH_VERIFIER_COOKIE
 } from '../oauth/state';
 import { oauthRedirectUri, oauthFrontendCallbackUrl } from '../oauth/config';
-import { loginOrCreateFromOAuth, recordOAuthFailure, OAuthEmailUnverifiedError } from '../services';
+import {
+    loginOrCreateFromOAuth,
+    recordOAuthFailure,
+    OAuthEmailUnverifiedError,
+    OAuthAccountUnverifiedError
+} from '../services';
 import { issueSession } from '../session/session';
 import { authOauthTotal } from '../metrics';
 
@@ -99,6 +104,13 @@ export const getOAuthCallback = (request: Request, response: Response) => {
         .catch((error: unknown) => {
             if (error instanceof OAuthEmailUnverifiedError) {
                 failToFrontend('email_unverified');
+                return;
+            }
+            // A DIFFERENT code from the one above, because the remedy is different: there the
+            // caller verifies with the provider, here they reset the password on the account
+            // already holding this address.
+            if (error instanceof OAuthAccountUnverifiedError) {
+                failToFrontend('account_unverified');
                 return;
             }
             // The provider/exchange detail is developer-facing only — same rule

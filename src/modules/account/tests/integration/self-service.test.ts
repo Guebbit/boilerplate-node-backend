@@ -21,6 +21,7 @@ import {
     sendVerificationEmail,
     EMAIL_VERIFY_TOKEN_TYPE,
     EMAIL_CHANGE_TOKEN_TYPE,
+    VERIFY_RESEND_SECONDS,
     completeEmailChange
 } from '@modules/account/services';
 import { userRepository, TokenType, hashToken } from '@modules/users';
@@ -495,6 +496,61 @@ describe('requestEmailVerification', () => {
     });
 });
 
+/*
+ * `credentialLimiters` carries `skipSuccessfulRequests`, so the route's own budget is never spent
+ * by the presses that actually send mail — which is why the cooldown is the service's job.
+ */
+describe('requestEmailVerificationFor', () => {
+    it('sends, and promises when the next send may be asked for', async () => {
+        const user = await createUser({ role: 'unverified' });
+
+        const first = asSuccess(
+            await accountService.requestEmailVerificationFor(user.id, testCallerContext)
+        );
+
+        expect(first.data?.resendAfter).toBe(VERIFY_RESEND_SECONDS);
+    });
+
+    it('refuses a second send inside the cooldown, with the seconds to wait', async () => {
+        const user = await createUser({ role: 'unverified' });
+        await accountService.requestEmailVerificationFor(user.id, testCallerContext);
+
+        const second = asReject(
+            await accountService.requestEmailVerificationFor(user.id, testCallerContext)
+        );
+
+        expect(second.status).toBe(429);
+        const [error] = second.errors;
+        expect(error).toMatchObject({
+            code: 'EMAIL_VERIFY_RESEND_TOO_SOON',
+            details: { retryAfter: expect.any(Number) as number }
+        });
+    });
+
+    it('allows the send again once the cooldown has passed', async () => {
+        const user = await createUser({ role: 'unverified' });
+        await accountService.requestEmailVerificationFor(user.id, testCallerContext);
+
+        // Ageing the recorded send, rather than a fake clock — `sentAt` is what the cooldown reads.
+        const aged = await userRepository.findByIdWithCredentials(user.id);
+        const live = aged!.tokens.find(({ type }) => type === EMAIL_VERIFY_TOKEN_TYPE)!;
+        live.sentAt = new Date(live.sentAt!.getTime() - (VERIFY_RESEND_SECONDS + 1) * 1000);
+        await userRepository.save(aged!);
+
+        asSuccess(await accountService.requestEmailVerificationFor(user.id, testCallerContext));
+    });
+
+    it('refuses an account that is already verified, cooldown or not', async () => {
+        const user = await createUser({ verifiedAt: new Date() });
+
+        const response = asReject(
+            await accountService.requestEmailVerificationFor(user.id, testCallerContext)
+        );
+
+        expect(response.status).toBe(409);
+    });
+});
+
 describe('completeEmailVerification', () => {
     it('marks the account verified and audits it', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
@@ -594,6 +650,48 @@ describe('passwordResetChange', () => {
 
         expect(response.status).toBe(422);
         expect(auditSpy).not.toHaveBeenCalled();
+    });
+
+    /*
+     * The reset token reached the account's mailbox and nowhere else, so spending it proves
+     * possession as strongly as a `verify` token does. Without this, the visitor whose
+     * verification mail never arrived resets from that same inbox and is still held at
+     * `unverified` — unable to check out, with a re-send of the failed mail as their only remedy.
+     */
+    it('proves the address, promoting an unverified account to customer', async () => {
+        const user = await createUser({ role: 'unverified', password: LEGACY_PASSWORD });
+
+        asSuccess(
+            await accountService.passwordResetChange(
+                user,
+                REPLACEMENT_PASSWORD,
+                REPLACEMENT_PASSWORD,
+                testCallerContext
+            )
+        );
+
+        const reloaded = await userRepository.findById(user.id);
+        expect(reloaded?.role).toBe('customer');
+        expect(reloaded?.verifiedAt).toBeInstanceOf(Date);
+    });
+
+    // One save carries both facts, so a refused password cannot verify an address as a side
+    // effect of failing.
+    it('leaves the address unproven when the new password is refused', async () => {
+        const user = await createUser({ role: 'unverified', password: LEGACY_PASSWORD });
+
+        asReject(
+            await accountService.passwordResetChange(
+                user,
+                REPLACEMENT_PASSWORD,
+                'different',
+                testCallerContext
+            )
+        );
+
+        const reloaded = await userRepository.findById(user.id);
+        expect(reloaded?.role).toBe('unverified');
+        expect(reloaded?.verifiedAt ?? null).toBeNull();
     });
 });
 

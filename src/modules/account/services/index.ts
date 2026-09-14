@@ -39,10 +39,16 @@ export {
     sendVerificationEmail,
     EMAIL_VERIFY_TOKEN_TYPE,
     EMAIL_CHANGE_TOKEN_TYPE,
+    VERIFY_RESEND_SECONDS,
     completeEmailChange
 } from './verification';
 export { runTokenCleanup } from './token-cleanup';
-export { loginOrCreateFromOAuth, recordOAuthFailure, OAuthEmailUnverifiedError } from './oauth';
+export {
+    loginOrCreateFromOAuth,
+    recordOAuthFailure,
+    OAuthEmailUnverifiedError,
+    OAuthAccountUnverifiedError
+} from './oauth';
 export { addressForCheckout } from './addresses';
 
 /**
