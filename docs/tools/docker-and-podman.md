@@ -137,6 +137,22 @@ rather than always-on.
 | Observability | `otel-collector`, `tempo`, `prometheus`, `alertmanager`, `loki`, `promtail`, `grafana` | traces, metrics, logs, and dashboards                       |
 | Integrations  | `webhook-tester`                                                                       | opt-in sink for outbound webhooks; `--profile integrations` |
 
+### The `integrations` profile is where a real consumer would go
+
+`webhook-tester` answers _"did we send it, and what did it look like?"_ — the everyday need, and
+the reason it is the default sink.
+
+It does not answer _"can a real consumer actually use this?"_. No sink we point at ourselves can:
+that claim needs a tool the audience already uses — n8n, Zapier, Make — verifying a Standard
+Webhooks signature in its own environment and calling back in with an API key.
+
+**Nothing is planned for that, deliberately.** It is recorded here because the profile is the
+seam it would attach to: another service on this same group, SQLite-backed, a seeded workflow
+mounted read-only, and **nothing under `src/`** — the application must not be able to tell whether
+it is running. Anyone reaching for it should know the licence question comes first: n8n is
+fair-code under the Sustainable Use License, where the line is internal use versus reselling, not
+commercial versus non-commercial.
+
 ## How to think about the setup
 
 - **Compose is the local truth**: one file wires together the app plus all sidecars needed for demos and local debugging.

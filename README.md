@@ -106,19 +106,20 @@ Four ideas carry the whole repository:
 
 ## The map
 
-| You want to                   | Read                                                                                                                    |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Get it running                | [Getting Started](./docs/getting-started.md)                                                                            |
-| **Read the code, first time** | **[Reading Path](./docs/theory/reading-path.md)** — nine files, in order                                                |
-| Know what one file _is_       | [File Glossary](./docs/reference/) — every file in the repo, one hop to an answer                                       |
-| Understand the shape          | [Architecture](./docs/theory/architecture.md) · [Layers](./docs/theory/layers.md) · [Modules](./docs/theory/modules.md) |
-| Add or remove a domain        | [Adding & Removing a Module](./docs/theory/module-lifecycle.md)                                                         |
-| Change an endpoint            | [OpenAPI Workflow](./docs/api/openapi-workflow.md) · [Regenerating](./docs/api/regenerating.md)                         |
-| Run the pair                  | [Pairing & Ports](./docs/tools/pairing-and-ports.md)                                                                    |
-| Look up a script              | [Package Scripts](./docs/tools/package-scripts.md)                                                                      |
-| Understand a dependency       | [Tools Explained](./docs/tools/tools-explained.md)                                                                      |
-| Test something                | [Testing overview](./docs/tools/testing-and-docs.md)                                                                    |
-| Deploy it                     | [Getting Started — Production](./docs/getting-started-production.md)                                                    |
+| You want to                   | Read                                                                                                                                         |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Get it running                | [Getting Started](./docs/getting-started.md)                                                                                                 |
+| **Read the code, first time** | **[Reading Path](./docs/theory/reading-path.md)** — nine files, in order                                                                     |
+| Know what one file _is_       | [File Glossary](./docs/reference/) — every file in the repo, one hop to an answer                                                            |
+| Understand the shape          | [Architecture](./docs/theory/architecture.md) · [Layers](./docs/theory/layers.md) · [Modules](./docs/theory/modules.md)                      |
+| Add or remove a domain        | [Adding & Removing a Module](./docs/theory/module-lifecycle.md)                                                                              |
+| Change an endpoint            | [OpenAPI Workflow](./docs/api/openapi-workflow.md) · [Regenerating](./docs/api/regenerating.md)                                              |
+| Run the pair                  | [Pairing & Ports](./docs/tools/pairing-and-ports.md)                                                                                         |
+| Look up a script              | [Package Scripts](./docs/tools/package-scripts.md)                                                                                           |
+| Catch an outbound webhook     | [Docker & Podman](./docs/tools/docker-and-podman.md#the-integrations-profile-is-where-a-real-consumer-would-go) — the `integrations` profile |
+| Understand a dependency       | [Tools Explained](./docs/tools/tools-explained.md)                                                                                           |
+| Test something                | [Testing overview](./docs/tools/testing-and-docs.md)                                                                                         |
+| Deploy it                     | [Getting Started — Production](./docs/getting-started-production.md)                                                                         |
 
 ---
 
