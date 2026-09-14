@@ -54,6 +54,51 @@ Rule 4 is the one worth remembering for its own sake: an early pass at this inve
 `@asyncapi/modelina` abandoned and recommended ripping it out. It was shipping prereleases monthly.
 **Getting the diagnosis right included correcting the alarm, not just raising one.**
 
+## What is in `overrides`, and why
+
+Rule 7's worked example. Every entry pins a **transitive** package — a direct dependency gets its
+own range bumped instead, so nothing in `dependencies` or `devDependencies` appears here.
+
+| Override                                 | Pins      | Closes                                                                                                                                                           |
+| ---------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ip-address`                             | `^10.5.0` | SSRF/trust-boundary advisories under `express-rate-limit`                                                                                                        |
+| `jsonpath-plus`                          | `^10.4.0` | two CVSS 9.8 RCEs, reaching us through `@asyncapi/modelina` → `@asyncapi/multi-parser`, which aliases two old `@asyncapi/parser` builds that still ask for `7.x` |
+| `axios`                                  | `^1.20.0` | 23 advisories under `jest-openapi` → `openapi-validator`, pinned at `0.21.4`                                                                                     |
+| `lodash`                                 | `^4.18.1` | prototype pollution and `_.template` code injection, via `postman-collection`'s hard pin at `4.17.21`                                                            |
+| `@faker-js/faker`                        | `^10.6.0` | `helpers.fake` arbitrary code execution, for `@stoplight/prism-http`, which asks for `^10.4.0` anyway                                                            |
+| `postman-collection` → `@faker-js/faker` | `5.5.3`   | nothing — it **re-opens** the advisory above, deliberately. See below                                                                                            |
+
+### The one exception that stays open
+
+`postman-collection` hard-pins `@faker-js/faker` at exactly `5.5.3` and calls the pre-v8
+`faker.address.*` API. Forcing it to `10.x` does not degrade — it crashes on import:
+
+```
+TypeError: Cannot read properties of undefined (reading 'city')
+    at postman-collection/lib/superstring/dynamic-variables.js:171
+```
+
+Every published version of `postman-collection`, the latest included, carries that same pin. There
+is no upstream fix to wait for, so the scoped override is permanent rather than a placeholder.
+
+What it costs: six `high` advisories that a bare `npm audit` reports and nobody can close, along
+the chain `@stoplight/prism-cli` → `prism-http` → `@stoplight/http-spec` → `postman-collection`.
+
+Why that is acceptable here, and the two conditions that would change it:
+
+- **It is not in any gate.** The `audit` job runs `npm audit --omit=dev --audit-level=moderate` —
+  production dependencies only — and every package in that chain is a devDependency. See the
+  job's own comment in `.github/workflows/ci.yml` for why it is an alert rather than a gate.
+- **The advisory is not reachable.** `helpers.fake` executes attacker-controlled template strings.
+  Prism renders examples out of our own `openapi.yaml`; `npm run test:prism` boots it, asks for
+  one route and stops.
+- **It would change** if `prism` moved into the production image, or if the chain ever ran against
+  a spec this repo does not author.
+
+The alternative — dropping `@stoplight/prism-cli` — closes all six at the cost of `test:prism` and
+the `schemathesis.yml` workflow that mocks against it. Weighed and declined: the smoke test catches
+a spec whose examples do not satisfy its own schema, which no other check here does.
+
 ## If a rule keeps getting skipped
 
 Optional, and only worth it once the rules above have actually been ignored more than once:
