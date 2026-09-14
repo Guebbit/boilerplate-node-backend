@@ -35,7 +35,9 @@ router.post('/search', cacheProductsSearch, getProducts);
 router.get('/', cacheProductsSearch, getProducts);
 
 // POST /products — admin only (create). Two keys: `products.create` for the record itself,
-// `translations.manage` since the same write always carries every language's copy alongside it.
+// `translations.update` since the same write always carries every language's copy alongside it.
+// Both are required: neither key alone completes this write, which is what stops a rewording
+// from becoming a repricing.
 router.post(
     '/',
     uploadLimiter,

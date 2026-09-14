@@ -65,21 +65,27 @@ roles:
           What is for sale, at what price, and what happens to an order after it arrives. Reads
           stock but does not move it; that is the warehouse's job and its audit trail.
       permissions:
+          # These three stay on the wildcard deliberately — see "why some families keep
+          # `manage`" at the foot of this file. Spelling them out would NARROW this role.
           - products.manage
           - orders.manage
           - locales.manage
-          # Stated rather than inherited. A product write stacks `products.update` AND
-          # `translations.manage`, and a `manage` key expands only over its own family — so
+          # Stated rather than inherited. A product write stacks `products.update` AND a
+          # translations key, and a `manage` key expands only over its own family — so
           # `locales.manage` does not reach `translations.*` and a manager editing a listing needs
-          # this key by name.
-          - translations.manage
+          # these by name.
+          - translations.read
+          - translations.update
           - payments.read
           - inventory.read
           - delivery.read
           - feedback.read
           - users.read
           - audit.read
-          - webhooks.manage
+          - webhooks.read
+          - webhooks.create
+          - webhooks.update
+          - webhooks.delete
           # Shopping on a staff account is not a security event — see "no unverified manager" above.
           - cart.checkout
 
@@ -92,8 +98,10 @@ roles:
       permissions:
           - products.read
           - orders.read
-          - inventory.manage
-          - delivery.manage
+          - inventory.read
+          - inventory.create
+          - delivery.read
+          - delivery.update
           - cart.checkout
 
     - name: support
@@ -101,9 +109,12 @@ roles:
       title: The support desk
       description: >-
           Messages from people, and accounts that need help. May update an account and may not
-          erase one — erasure is the owner's, and it expects a freshly proved session.
+          erase one — that is the owner's and the moderator's, and it expects a freshly proved
+          session.
       permissions:
-          - feedback.manage
+          - feedback.read
+          - feedback.update
+          - feedback.delete
           - users.read
           - users.update
           - orders.read
@@ -119,12 +130,16 @@ roles:
           itself (`products.manage`, price included), the dictionary a shopper reads the shop in
           (`locales.manage` — including registering a language the shop has not spoken before),
           and the words on a translatable entity such as a product's title and description
-          (`translations.manage`). What none of them touches is a different subject entirely:
+          (`translations.read` and `translations.update`). What none of them touches is a different
+          subject entirely:
           stock (that is `inventory`), a delivery rule, an order, or an account.
       permissions:
+          # Both keep the wildcard on purpose — an editor works on drafts, and the concrete
+          # `read` keys are restricted to active rows. See the foot of this file.
           - products.manage
           - locales.manage
-          - translations.manage
+          - translations.read
+          - translations.update
           - cart.checkout
 
     - name: moderator
@@ -135,7 +150,15 @@ roles:
           the order itself. May ban an account, reverse a bad charge, and read why either happened.
           `orders.manage` also reaches delete, which nothing narrower would let a moderator update.
       permissions:
-          - users.manage
+          - users.read
+          - users.create
+          - users.update
+          # Erasing an account. Held explicitly rather than through `users.manage`, so that this
+          # role gaining it was a decision somebody made rather than a key it absorbed. The route
+          # still demands a freshly proved session — `users.delete` carries `stepUp: critical`.
+          - users.delete
+          # Both keep the wildcard: their `read` keys are restricted to the caller's OWN rows,
+          # which is the opposite of what a moderator is for. See the foot of this file.
           - orders.manage
           - payments.manage
           - audit.read
@@ -171,3 +194,22 @@ anonymous:
         - products.read
         - locales.read
         - delivery.read
+
+# WHY SOME FAMILIES KEEP `manage`
+#
+# A `manage` key is not a grant, it is an instruction to expand (`src/kernel/ability.ts`). Every
+# role above that could be spelled out concretely now is, so that adding a key to one of those
+# families never widens a role silently — the grant has to be written down to exist.
+#
+# Four families are deliberately NOT spelled out, because there the two forms are not equivalent:
+#
+#     products.read   active: true, deletedAt: null
+#     locales.read    active: true, deletedAt: null
+#     orders.read     userId: $caller.id, deletedAt: null
+#     payments.read   userId: $caller.id
+#
+# Those conditions apply to a key granted DIRECTLY and are dropped for one reached THROUGH a
+# wildcard. So `orders.manage` reads the whole shop's orders, while a concrete `orders.read` reads
+# only the caller's own — and swapping one for the other would quietly reduce a manager to their
+# own order history, a change no type-check or lint can see. Until a family declares a key for the
+# wide read, the wildcard is the only way to say what these roles actually mean.
