@@ -128,12 +128,22 @@ components:
                 simply forgoes replay protection — the write still happens normally.
 
         # Query ID parameters (just for filtering)
+        #
+        # `id` is a batch read, not a lookup: an array so `?id=a&id=b` reads many at once, filtered
+        # through the same `$in` a single value already produces. `minItems: 1` refuses `[]`, which
+        # a query builder that skips empty filters would otherwise read as "no filter" — an
+        # accidental full export. `maxItems: 100` matches `PageSize.maximum`, so a batch cannot cost
+        # more than a page can.
         IdParam:
             name: id
             in: query
             required: false
+            explode: true
             schema:
-                $ref: '#/components/schemas/Id'
+                type: array
+                minItems: 1
+                maxItems: 100
+                items: { $ref: '#/components/schemas/Id' }
         UserIdParam:
             name: userId
             in: query

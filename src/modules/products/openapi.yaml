@@ -499,7 +499,10 @@ components:
                 text:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Text'
                 id:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                    type: array
+                    minItems: 1
+                    maxItems: 100
+                    items: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id' }
                 minPrice:
                     type: number
                     format: double

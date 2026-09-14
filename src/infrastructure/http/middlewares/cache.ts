@@ -225,7 +225,14 @@ const getCacheKey = (request: Request, sortedKeyParameters: readonly string[], k
             // One spelling of a value, whichever transport carried it: a query string has no
             // types (`?page=1` is the string `'1'`) while a JSON body keeps its own, so
             // stringifying scalars lets `{page: 1}` and `?page=1` share one cache entry.
-            return `${name}=${JSON.stringify(Array.isArray(raw) ? raw.map(String) : String(raw))}`;
+            //
+            // Array values are sorted too — the same argument as `toSorted()` on the parameter
+            // NAMES below, applied to one parameter's VALUES: `?id=a&id=b` and `?id=b&id=a` are
+            // one question, and unsorted they would mint two cache entries for it. Safe today
+            // because no array-typed search filter is order-significant (`id` is a set — the
+            // contract already refuses duplicates meaning anything). An array parameter whose
+            // order ever carries meaning needs its own exemption here, not a silent conflation.
+            return `${name}=${JSON.stringify(Array.isArray(raw) ? raw.map(String).toSorted() : String(raw))}`;
         })
         .join('&');
 

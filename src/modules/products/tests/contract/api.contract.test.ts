@@ -112,6 +112,55 @@ describe('GET /products', () => {
         expect(response.body.data.meta.page).toBe(1);
         expect(response.body.data.meta.pageSize).toBe(10);
     });
+
+    // Tier A: `id` is a batch filter. `?id=` repeated validates against the widened array schema;
+    // over the declared cap it's a 422, matching `PageSize.maximum`.
+    it('accepts a repeated ?id=, and rejects more than 100', async () => {
+        const one = await createProduct();
+        const other = await createProduct();
+
+        const repeated = await api().get(`/products?id=${String(one._id)}&id=${String(other._id)}`);
+        expect(repeated.status).toBe(200);
+        expect(repeated.body.data.items.map((p: { id: string }) => p.id).toSorted()).toEqual(
+            [String(one._id), String(other._id)].toSorted()
+        );
+        expect(repeated).toSatisfyApiSpec();
+
+        const overCap = await api().get(
+            `/products?${Array.from({ length: 101 }, (_, index) => `id=${index}`).join('&')}`
+        );
+        expect(overCap.status).toBe(422);
+        expect(overCap).toSatisfyApiSpec();
+    });
+
+    it('answers 422 for an empty id filter, never "everything"', async () => {
+        await createProduct();
+        const response = await api().get('/products?id=');
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('collapses a duplicated id to one row', async () => {
+        const one = await createProduct();
+
+        const response = await api().get(`/products?id=${String(one._id)}&id=${String(one._id)}`);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items).toHaveLength(1);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    // `$in` casts every element — one malformed id anywhere in the batch is a 422 about the
+    // request, not a page that silently drops it.
+    it('rejects a batch with one malformed id, valid ids included', async () => {
+        const one = await createProduct();
+
+        const response = await api().get(`/products?id=${String(one._id)}&id=not-an-object-id`);
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
 });
 
 describe('POST /products/search', () => {

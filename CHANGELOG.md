@@ -41,6 +41,13 @@ a breaking change is one a generated client cannot absorb without being regenera
   signup starts as. `verifiedAt` is informational only, read by nothing server-side; a client
   gating a checkout button must read `can('checkout', 'Cart')` off `GET /account/abilities`
   instead of the old boolean. The `EMAIL_NOT_VERIFIED` error code and its message are unchanged.
+- **The `id` query/body filter on `GET|POST /products(/search)`, `GET|POST /users(/search)` and
+  `GET|POST /orders(/search)` is an array.** `listProducts({ id: string })` becomes
+  `id: string[]`; `?id=a` is still valid on the wire — it is a one-element array — but a client
+  built against the old generated type must change its call sites. A batch read is a filter, not
+  a lookup: missing ids are silently absent from the page rather than a 404, an empty array is a
+  422 (never "everything"), and the cap is 100 ids per request. The single-item routes
+  (`GET /products/{id}`, etc.) are unaffected. `userId`/`productId` on `GET /orders` stay scalar.
 
 ### Breaking — deployment
 

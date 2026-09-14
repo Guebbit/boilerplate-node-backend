@@ -362,6 +362,25 @@ describe('productService.search', () => {
 
         expect(titlesOf(result.items)).toEqual(['Visible']);
     });
+
+    // Tier A batch read: a missing/invisible id is silently absent from the page, never a 404 —
+    // three ids in, one soft-deleted, two rows out.
+    it('filters by a batch of ids, one soft-deleted', async () => {
+        const kept = await createProduct({ title: 'Kept', active: true });
+        const alsoKept = await createProduct({ title: 'Also kept', active: true });
+        const deleted = await createProduct({
+            title: 'Deleted',
+            active: true,
+            deletedAt: new Date()
+        });
+
+        const result = await productService.search(
+            { id: [String(kept._id), String(alsoKept._id), String(deleted._id)] },
+            productService.callerScope(GUEST)
+        );
+
+        expect(titlesOf(result.items).toSorted()).toEqual(['Also kept', 'Kept']);
+    });
 });
 
 describe('productService.getById', () => {

@@ -407,7 +407,10 @@ components:
                 pageSize:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PageSize'
                 id:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                    type: array
+                    minItems: 1
+                    maxItems: 100
+                    items: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id' }
                 userId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 productId:
