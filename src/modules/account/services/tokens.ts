@@ -20,17 +20,19 @@ import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/respo
 import { t } from '@infrastructure/i18n';
 
 /**
- * Find the account holding a LIVE token of this type, without spending it.
+ * Find the account holding a LIVE token of this type, without spending it — and the entry
+ * itself, for the one caller that needs more than just its holder (`verifyLoginChallenge`, which
+ * reads `entry.amr` back off an `MFA_CHALLENGE`).
  * Live means: exists, right type, not expired. An entry with no `expiration` never expires —
  * that's how a non-positive TTL is stored, and treating absent as "expired" would revoke exactly those.
  * @param type - which kind of token the link claims to carry
  * @param token - the token value from the link the user followed
- * @returns the holder, or `undefined` for every kind of refusal — see the note above
+ * @returns the holder and the matched entry, or `undefined` for every kind of refusal — see the note above
  */
-export const findLiveToken = (
+export const findLiveTokenEntry = (
     type: Token['type'],
     token: string
-): Promise<UserDocument | undefined> =>
+): Promise<{ user: UserDocument; entry: Token } | undefined> =>
     userRepository.findByToken(token, type).then((user) => {
         if (!user) return undefined;
 
@@ -41,8 +43,20 @@ export const findLiveToken = (
         if (!entry) return undefined;
         if (entry.expiration && entry.expiration < new Date()) return undefined;
 
-        return user;
+        return { user, entry };
     });
+
+/**
+ * {@link findLiveTokenEntry}, for the common case that only cares who holds the token.
+ * @param type - which kind of token the link claims to carry
+ * @param token - the token value from the link the user followed
+ * @returns the holder, or `undefined` for every kind of refusal — see {@link findLiveTokenEntry}
+ */
+export const findLiveToken = (
+    type: Token['type'],
+    token: string
+): Promise<UserDocument | undefined> =>
+    findLiveTokenEntry(type, token).then((found) => found?.user);
 
 /**
  * Spend a token found by {@link findLiveToken}, atomically.

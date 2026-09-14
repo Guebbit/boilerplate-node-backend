@@ -5,6 +5,8 @@
  * it reads policy, it doesn't hold or mint anything.
  */
 
+import type { MfaChallenge } from '@types';
+
 /** One provider's client credentials, absent when a deployment never set them. */
 export interface OAuthCredentials {
     clientId?: string;
@@ -51,11 +53,35 @@ export const oauthRedirectUri = (provider: string): string =>
     new URL(`account/oauth/${provider}/callback`, process.env.NODE_URL ?? 'http://localhost:3000/')
         .href;
 
+/** The paired frontend's OAuth landing page — everything below appends its own query to this. */
+const oauthFrontendCallbackBase = (): string =>
+    `${process.env.NODE_FRONTEND_URL ?? 'http://localhost:8080'}/oauth/callback`;
+
 /**
  * Where `GET /account/oauth/:provider/callback` sends the browser once it is done — the paired
  * frontend's origin, which is the only thing `NODE_FRONTEND_URL` is read for.
  */
 export const oauthFrontendCallbackUrl = (errorCode?: string): string =>
-    `${process.env.NODE_FRONTEND_URL ?? 'http://localhost:8080'}/oauth/callback${
-        errorCode ? `?error=${errorCode}` : ''
-    }`;
+    `${oauthFrontendCallbackBase()}${errorCode ? `?error=${errorCode}` : ''}`;
+
+/**
+ * Where the callback sends the browser when the account has 2FA armed. Everything a client needs
+ * to RENDER the 2FA step travels here — none of it secret — while the challenge token itself
+ * travels in `MFA_CHALLENGE_COOKIE` instead; see `oauth/mfa-redirect.ts`.
+ *
+ * @param challenge - `buildLoginChallenge`'s result, minus the token — never pass the whole
+ *   `MfaChallenge` through unchecked, or a future refactor could serialize the token into the URL
+ *   this function exists to keep it out of.
+ */
+export const oauthFrontendMfaCallbackUrl = (
+    challenge: Omit<MfaChallenge, 'mfaRequired' | 'challenge'>
+): string => {
+    const parameters = new URLSearchParams({
+        mfaRequired: '1',
+        expiresAt: challenge.expiresAt,
+        methods: JSON.stringify(challenge.methods)
+    });
+    if (challenge.defaultMethod) parameters.set('defaultMethod', challenge.defaultMethod);
+
+    return `${oauthFrontendCallbackBase()}?${parameters.toString()}`;
+};

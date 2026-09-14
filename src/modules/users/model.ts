@@ -77,6 +77,15 @@ export interface Token {
      * refresh at once from looking like theft. Absent means this token is still live.
      */
     supersededAt?: Date;
+    /**
+     * Which factor(s) were already proven when this entry was minted. Only set on an
+     * `MFA_CHALLENGE`: `account/services/two-factor.ts#verifyLoginChallenge` reads it back once
+     * the second factor checks out, so the finished session's own `amr` names how the FIRST one
+     * was proven — `['pwd']` for a password login, `[provider]` for an OAuth one — instead of
+     * assuming a password. Absent means `['pwd']`: every challenge minted before this field
+     * existed was, since 2FA had no OAuth path yet.
+     */
+    amr?: string[];
 }
 
 /**
@@ -228,7 +237,12 @@ export interface UserMethods {
     // layer knows about, while `tokens` also carries the account-deletion type the account
     // endpoints issue. The stored field is a string, and the method has to accept every value
     // that legitimately appears in it.
-    tokenAdd: (type: Token['type'], expirationMs: number, token: string) => Promise<string>;
+    tokenAdd: (
+        type: Token['type'],
+        expirationMs: number,
+        token: string,
+        amr?: string[]
+    ) => Promise<string>;
     tokenRemoveAll: (type: Token['type']) => Promise<void>;
 }
 
@@ -443,6 +457,10 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
                     supersededAt: {
                         type: Date,
                         required: false
+                    },
+                    amr: {
+                        type: [String],
+                        required: false
                     }
                 }
             ],
@@ -652,13 +670,15 @@ userSchema.methods.tokenAdd = function (
     this: UserDocument,
     type: Token['type'],
     expirationMs: number,
-    token: string
+    token: string,
+    amr?: string[]
 ): Promise<string> {
     const entry: Token = {
         type,
         token: hashToken(token),
         expiration: expirationMs > 0 ? new Date(Date.now() + expirationMs) : undefined,
-        sentAt: new Date()
+        sentAt: new Date(),
+        ...(amr && { amr })
     };
 
     return (this.constructor as UserModel)

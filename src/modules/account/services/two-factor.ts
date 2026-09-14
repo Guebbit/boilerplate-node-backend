@@ -42,7 +42,7 @@ import type {
     TwoFactorStatus
 } from '@types';
 import { accountAuditActions } from '../audit';
-import { findLiveToken, spendLiveToken } from './tokens';
+import { findLiveTokenEntry, findLiveToken, spendLiveToken } from './tokens';
 import { resendTooSoon } from '../cooldown';
 import {
     DELIVERED_CODE_RESEND_SECONDS,
@@ -218,10 +218,16 @@ const MFA_CHALLENGE_DELIVERED_TTL_MS = 600_000;
  * JWT: `verifyLoginChallenge` spends it via `spendLiveToken` on a right code, so a second
  * presentation of an already-answered challenge is refused outright, not merely re-checked.
  *
- * @param user - the account whose password just checked out, with credentials loaded
+ * @param user - the account whose FIRST factor just checked out, with credentials loaded
+ * @param amr - how that first factor was proven — `['pwd']` for a password login, `[provider]`
+ *   for an OAuth one. Stored on the challenge so `verifyLoginChallenge` can hand it back once the
+ *   second factor does too; see {@link Token.amr}.
  * @returns the challenge payload, ready to send
  */
-export const buildLoginChallenge = (user: UserDocument): Promise<MfaChallenge> => {
+export const buildLoginChallenge = (
+    user: UserDocument,
+    amr: readonly string[]
+): Promise<MfaChallenge> => {
     const armed = armedEntries(user);
     const ttlMs = armed.some(({ handler }) => handler.delivers)
         ? MFA_CHALLENGE_DELIVERED_TTL_MS
@@ -230,7 +236,7 @@ export const buildLoginChallenge = (user: UserDocument): Promise<MfaChallenge> =
     // `hashToken`'s doc in `users/model.ts`.
     const challenge = randomBytes(16).toString('hex');
 
-    return user.tokenAdd(TokenType.MFA_CHALLENGE, ttlMs, challenge).then((token) => ({
+    return user.tokenAdd(TokenType.MFA_CHALLENGE, ttlMs, challenge, [...amr]).then((token) => ({
         mfaRequired: true,
         challenge: token,
         expiresAt: new Date(Date.now() + ttlMs).toISOString(),
@@ -536,6 +542,12 @@ export const sendLoginCode = (
     return audited(outcome, context, accountAuditActions.AUTH_2FA_CODE_SENT, method);
 };
 
+/** What a verified challenge hands back to `postLoginTwoFactor` — the account, and how its FIRST factor was proven, for the session about to be minted. */
+export interface VerifiedChallenge {
+    user: UserDocument;
+    amr: readonly string[];
+}
+
 /**
  * `POST /account/login/2fa` — the second step of a 2FA login. Verifies the challenge and the code
  * against the account it names, but does NOT mint a session — see the module doc. A challenge
@@ -549,10 +561,11 @@ export const verifyLoginChallenge = (
     challenge: string,
     code: string,
     context: CallerContext
-): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
-    const outcome = findLiveToken(TokenType.MFA_CHALLENGE, challenge)
-        .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
-            if (!user) return generateReject(401, [t('account.two-factor.challenge-invalid')]);
+): Promise<ResponseSuccess<VerifiedChallenge> | ResponseReject> => {
+    const outcome = findLiveTokenEntry(TokenType.MFA_CHALLENGE, challenge)
+        .then<ResponseSuccess<VerifiedChallenge> | ResponseReject>((found) => {
+            if (!found) return generateReject(401, [t('account.two-factor.challenge-invalid')]);
+            const { user, entry } = found;
             if (!user.twoFactorEnabledAt) return generateReject(401, []);
 
             return verifyAnyFactor(user, code).then((matched) => {
@@ -561,7 +574,9 @@ export const verifyLoginChallenge = (
                 // Right code: spend the challenge before minting anything. A wrong code leaves
                 // it live — `mfaChallengeLimiter` is what bounds how many times it can be tried.
                 return spendLiveToken(user, challenge).then(() =>
-                    saveMethods(user).then((saved) => generateSuccess(saved))
+                    saveMethods(user).then((saved) =>
+                        generateSuccess({ user: saved, amr: entry.amr ?? ['pwd'] })
+                    )
                 );
             });
         })

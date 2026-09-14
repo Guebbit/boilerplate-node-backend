@@ -7,6 +7,8 @@
  */
 
 import '@tests/contract';
+import { generate } from 'otplib';
+import { decode } from 'jsonwebtoken';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api } from '@tests/http';
 import { setCookie, cookieHeader } from '@tests/cookies';
@@ -131,5 +133,74 @@ describe('GET /account/oauth/:provider/callback', () => {
 
         const matches = await userRepository.count({ email: 'oauth.demo@example.com' });
         expect(matches).toBe(1);
+    });
+});
+
+/** One full start → callback round trip through the fake provider. */
+const fakeLogin = async () => {
+    const start = await api().get('/account/oauth/fake');
+    const callbackUrl = new URL(start.headers.location);
+    return api()
+        .get(callbackUrl.pathname + callbackUrl.search)
+        .set('Cookie', attemptCookies(start));
+};
+
+/**
+ * The code a real authenticator app would show for this secret. `stepsFromNow` defaults to the
+ * NEXT RFC 6238 step — same reasoning `tests/integration/two-factor.test.ts#codeFor` gives: the
+ * confirm step already spent the "now" step, and replay protection refuses reusing it.
+ */
+const codeFor = (secret: string, stepsFromNow = 1): Promise<string> =>
+    generate({ secret, epoch: Math.floor(Date.now() / 1000) + stepsFromNow * 30 });
+
+describe('GET /account/oauth/:provider/callback — 2FA armed (1b)', () => {
+    it('challenges instead of minting a session, and mints one only once the code is answered', async () => {
+        // First login creates the OAuth-only account; enroll TOTP on it through its own session.
+        const created = await fakeLogin();
+        const refreshed = await api()
+            .get('/account/refresh')
+            .set('Cookie', setCookie(created, 'jwt')!);
+        const bearer = `Bearer ${refreshed.body.data.token as string}`;
+        const setup = await api()
+            .post('/account/2fa/methods/totp/setup')
+            .set('Authorization', bearer)
+            .send();
+        const { secret } = setup.body.data as { secret: string };
+        await api()
+            .post('/account/2fa/methods/totp/confirm')
+            .set('Authorization', bearer)
+            .send({ code: await codeFor(secret, 0) });
+
+        // Second login: the same linked identity, now with 2FA armed.
+        const challenged = await fakeLogin();
+
+        expect(challenged.status).toBe(302);
+        const location = new URL(challenged.headers.location);
+        expect(location.origin + location.pathname).toBe('http://localhost:8080/oauth/callback');
+        expect(location.searchParams.get('mfaRequired')).toBe('1');
+        expect(location.searchParams.get('expiresAt')).toEqual(expect.any(String));
+        const methods = JSON.parse(location.searchParams.get('methods')!) as { method: string }[];
+        expect(methods.map((m) => m.method)).toEqual(['totp']);
+        // No session — the whole point of 1b.
+        expect(setCookie(challenged, 'jwt')).toBeUndefined();
+        expect(setCookie(challenged, 'isAuth')).toBeUndefined();
+        expect(setCookie(challenged, 'oauth_mfa_challenge')).toBeTruthy();
+
+        // The challenge token never left the server — only its cookie did. `code` alone in the
+        // body, carrying the cookie, is what a real browser can actually do here.
+        const finished = await api()
+            .post('/account/login/2fa')
+            .set('Cookie', setCookie(challenged, 'oauth_mfa_challenge')!)
+            .send({ code: await codeFor(secret) });
+
+        expect(finished.status).toBe(200);
+        const claims = decode(finished.body.data.token as string) as { amr?: string[] };
+        expect(claims.amr).toEqual(['fake', 'otp']);
+    });
+
+    it('refuses to complete the challenge with no cookie and no challenge in the body', async () => {
+        const response = await api().post('/account/login/2fa').send({ code: '000000' });
+
+        expect(response.status).toBe(401);
     });
 });

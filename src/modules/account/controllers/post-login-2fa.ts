@@ -8,6 +8,7 @@
 import type { Request, Response } from 'express';
 import { LoginTwoFactorBody } from '@api/schemas.zod';
 import type { LoginTwoFactorRequest, AuthTokens } from '@types';
+import { t } from '@infrastructure/i18n';
 import { twoFactorService } from '../services';
 import { issueSession } from '../session/session';
 import { recordLoginSuccess } from '../session/login-observability';
@@ -17,6 +18,7 @@ import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { isUnrestrictedRole } from '@kernel/permissions';
+import { readMfaChallengeCookie, destroyMfaChallengeCookie } from '../oauth/mfa-redirect';
 
 /**
  * POST /account/login/2fa — the answer to the `{ mfaRequired: true, challenge }` response from
@@ -35,7 +37,14 @@ export const postLoginTwoFactor = (
         authTwoFactorChallengeTotal.inc({ status: 'failure' });
         return rejectValidation(response, parseResult.error);
     }
-    const { challenge, code } = parseResult.data;
+    const { code } = parseResult.data;
+    // Omitted from the body: an OAuth-originated challenge was never sent to the client at all —
+    // see `oauth/mfa-redirect.ts`. A password-originated one always has it in the body.
+    const challenge = parseResult.data.challenge ?? readMfaChallengeCookie(request);
+    if (!challenge) {
+        authTwoFactorChallengeTotal.inc({ status: 'failure' });
+        return rejectResponse(response, 401, [t('account.two-factor.challenge-invalid')]);
+    }
 
     return twoFactorService
         .verifyLoginChallenge(challenge, code, callerContextOf(request))
@@ -51,18 +60,22 @@ export const postLoginTwoFactor = (
                 rejectResponse(response, 500, []);
                 return;
             }
-            const userId = data._id.toString();
+            const { user, amr } = data;
+            const userId = user._id.toString();
 
-            return issueSession(response, userId, undefined, ['pwd', 'otp']).then((accessToken) => {
-                authTwoFactorChallengeTotal.inc({ status: 'success' });
-                recordLoginSuccess(request, userId, isUnrestrictedRole(data.role));
-                successResponse<AuthTokens>(
-                    response,
-                    { token: accessToken },
-                    200,
-                    'Authentication successful'
-                );
-            });
+            return issueSession(response, userId, undefined, [...amr, 'otp']).then(
+                (accessToken) => {
+                    authTwoFactorChallengeTotal.inc({ status: 'success' });
+                    recordLoginSuccess(request, userId, isUnrestrictedRole(user.role));
+                    destroyMfaChallengeCookie(response);
+                    successResponse<AuthTokens>(
+                        response,
+                        { token: accessToken },
+                        200,
+                        'Authentication successful'
+                    );
+                }
+            );
         })
         .catch((error: Error) => {
             authTwoFactorChallengeTotal.inc({ status: 'failure' });

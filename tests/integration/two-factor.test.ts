@@ -130,7 +130,7 @@ const startLogin = (email: string) =>
 const mintChallenge = (userId: string): Promise<string> =>
     userRepository
         .findByIdWithCredentials(userId)
-        .then((user) => twoFactorService.buildLoginChallenge(user!))
+        .then((user) => twoFactorService.buildLoginChallenge(user!, ['pwd']))
         .then(({ challenge }) => challenge);
 
 describe('status', () => {

@@ -14,6 +14,7 @@ import { callerContextOf } from '@infrastructure/http/request';
 import { t } from '@infrastructure/i18n';
 import { twoFactorService } from '../services';
 import { authTwoFactorCodeSentTotal } from '../metrics';
+import { readMfaChallengeCookie } from '../oauth/mfa-redirect';
 
 /**
  * POST /account/login/2fa/send — mails (or texts) a fresh code against a live challenge. Public,
@@ -28,7 +29,13 @@ export const postLoginTwoFactorSend = (
         authTwoFactorCodeSentTotal.inc({ method: 'unknown', status: 'failure' });
         return rejectValidation(response, parseResult.error);
     }
-    const { challenge, method } = parseResult.data;
+    const { method } = parseResult.data;
+    // Same fallback `postLoginTwoFactor` makes — see `oauth/mfa-redirect.ts`.
+    const challenge = parseResult.data.challenge ?? readMfaChallengeCookie(request);
+    if (!challenge) {
+        authTwoFactorCodeSentTotal.inc({ method, status: 'failure' });
+        return rejectResponse(response, 401, [t('account.two-factor.challenge-invalid')]);
+    }
 
     return twoFactorService
         .sendLoginCode(challenge, method, callerContextOf(request))

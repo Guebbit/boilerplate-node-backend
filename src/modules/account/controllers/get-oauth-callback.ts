@@ -12,6 +12,7 @@ import { t } from '@infrastructure/i18n';
 import { rejectResponse } from '@infrastructure/http/response';
 import { logger } from '@infrastructure/adapters/logger';
 import { callerContextOf } from '@infrastructure/http/request';
+import type { UserDocument } from '@modules/users';
 import { resolveOAuthProvider } from '../oauth/providers';
 import {
     stateMatches,
@@ -20,10 +21,16 @@ import {
     OAUTH_STATE_COOKIE,
     OAUTH_VERIFIER_COOKIE
 } from '../oauth/state';
-import { oauthRedirectUri, oauthFrontendCallbackUrl } from '../oauth/config';
+import { createMfaChallengeCookie } from '../oauth/mfa-redirect';
+import {
+    oauthRedirectUri,
+    oauthFrontendCallbackUrl,
+    oauthFrontendMfaCallbackUrl
+} from '../oauth/config';
 import {
     loginOrCreateFromOAuth,
     recordOAuthFailure,
+    twoFactorService,
     OAuthEmailUnverifiedError,
     OAuthAccountUnverifiedError
 } from '../services';
@@ -94,12 +101,29 @@ export const getOAuthCallback = (request: Request, response: Response) => {
     return provider
         .exchangeCode(query.code, oauthRedirectUri(provider.name), verifier)
         .then((identity) => loginOrCreateFromOAuth(provider.name, identity, context))
-        .then((user) => issueSession(response, user.id, undefined, [provider.name]))
-        .then(() => {
-            authOauthTotal.inc({ provider: providerName, status: 'success' });
-            destroyStateCookie(response);
-            destroyVerifierCookie(response);
-            response.redirect(302, oauthFrontendCallbackUrl());
+        .then((user: UserDocument) => {
+            /*
+             * A factor armed on the password path applies here too — 2FA is a control on the
+             * ACCOUNT, not on one login method. Minting a session directly would let a provider
+             * alone stand in for a second factor the owner deliberately turned on — see 1b in
+             * docs/theory/defences/authentication.md#federated-login.
+             */
+            if (!user.twoFactorEnabledAt) {
+                return issueSession(response, user.id, undefined, [provider.name]).then(() => {
+                    authOauthTotal.inc({ provider: providerName, status: 'success' });
+                    destroyStateCookie(response);
+                    destroyVerifierCookie(response);
+                    response.redirect(302, oauthFrontendCallbackUrl());
+                });
+            }
+
+            return twoFactorService.buildLoginChallenge(user, [provider.name]).then((challenge) => {
+                createMfaChallengeCookie(response, challenge.challenge, challenge.expiresAt);
+                authOauthTotal.inc({ provider: providerName, status: 'mfa_required' });
+                destroyStateCookie(response);
+                destroyVerifierCookie(response);
+                response.redirect(302, oauthFrontendMfaCallbackUrl(challenge));
+            });
         })
         .catch((error: unknown) => {
             if (error instanceof OAuthEmailUnverifiedError) {

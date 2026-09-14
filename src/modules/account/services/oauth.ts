@@ -47,30 +47,45 @@ export class OAuthAccountUnverifiedError extends Error {
     }
 }
 
-/** Audit + analytics for an existing identity that just logged in — the case-1 tail. */
+/**
+ * Audit + analytics for an existing identity that just logged in — the case-1 tail.
+ *
+ * Suppressed when the account has 2FA armed: the callback does not mint a session in that case,
+ * it issues a challenge instead (see `get-oauth-callback.ts`'s 1b handling), so this is not yet a
+ * completed login. `session/login-observability.ts#recordLoginSuccess` fires the generic tail
+ * once the challenge is answered — same as a password login's own 2FA branch.
+ */
 const recordLogin = (
     user: UserDocument,
     provider: string,
     context: CallerContext
 ): UserDocument => {
-    emitAuditEvent(
-        buildAuditEvent(context, {
-            action: accountAuditActions.AUTH_LOGIN,
-            actor_user_id: user.id,
-            actor_role: 'user',
-            outcome: 'success',
-            metadata: { via: provider }
-        })
-    );
-    emitAnalyticsEvent({
-        ...buildAnalyticsBase(context),
-        distinctId: user.id,
-        event: accountAnalyticsEvents.USER_LOGGED_IN
-    });
+    if (!user.twoFactorEnabledAt) {
+        emitAuditEvent(
+            buildAuditEvent(context, {
+                action: accountAuditActions.AUTH_LOGIN,
+                actor_user_id: user.id,
+                actor_role: 'user',
+                outcome: 'success',
+                metadata: { via: provider }
+            })
+        );
+        emitAnalyticsEvent({
+            ...buildAnalyticsBase(context),
+            distinctId: user.id,
+            event: accountAnalyticsEvents.USER_LOGGED_IN
+        });
+    }
     return user;
 };
 
-/** Link a NEW provider identity onto an existing, verified-match account — the case-2 tail. */
+/**
+ * Link a NEW provider identity onto an existing, verified-match account — the case-2 tail.
+ *
+ * The link itself always audits — it genuinely happened. The `USER_LOGGED_IN` analytics event is
+ * suppressed under the same 2FA condition {@link recordLogin} applies: linking is not a completed
+ * login when the callback is about to redirect to a challenge instead of a session.
+ */
 const linkToExistingAccount = (
     user: UserDocument,
     provider: string,
@@ -93,11 +108,13 @@ const linkToExistingAccount = (
                     metadata: { via: provider }
                 })
             );
-            emitAnalyticsEvent({
-                ...buildAnalyticsBase(context),
-                distinctId: user.id,
-                event: accountAnalyticsEvents.USER_LOGGED_IN
-            });
+            if (!user.twoFactorEnabledAt) {
+                emitAnalyticsEvent({
+                    ...buildAnalyticsBase(context),
+                    distinctId: user.id,
+                    event: accountAnalyticsEvents.USER_LOGGED_IN
+                });
+            }
             return user;
         });
 
@@ -167,24 +184,32 @@ export const loginOrCreateFromOAuth = (
     context: CallerContext
 ): Promise<UserDocument> =>
     userRepository
-        .findOne({
+        // WITH credentials, unlike every other lookup in this file: `recordLogin` below may need
+        // to build a 2FA login challenge off `user.twoFactorMethods`, which is `select: false` —
+        // see 1b in docs/theory/defences/authentication.md#federated-login.
+        .findOneWithCredentials({
             'oauthAccounts.provider': provider,
             'oauthAccounts.providerId': identity.providerId
         })
         .then((existing) => {
             if (existing) return recordLogin(existing, provider, context);
 
-            return userRepository.findOne({ email: identity.email }).then((byEmail) => {
-                if (!byEmail) return signupFromOAuth(provider, identity, context);
+            // Same reason as the lookup above: `linkToExistingAccount` below may hand this
+            // account straight to a 2FA challenge too.
+            return userRepository
+                .findOneWithCredentials({ email: identity.email })
+                .then((byEmail) => {
+                    if (!byEmail) return signupFromOAuth(provider, identity, context);
 
-                if (!identity.emailVerified) throw new OAuthEmailUnverifiedError(identity.email);
+                    if (!identity.emailVerified)
+                        throw new OAuthEmailUnverifiedError(identity.email);
 
-                // Both sides must have proved the address, not just the provider — see
-                // `OAuthAccountUnverifiedError`.
-                if (!byEmail.verifiedAt) throw new OAuthAccountUnverifiedError(identity.email);
+                    // Both sides must have proved the address, not just the provider — see
+                    // `OAuthAccountUnverifiedError`.
+                    if (!byEmail.verifiedAt) throw new OAuthAccountUnverifiedError(identity.email);
 
-                return linkToExistingAccount(byEmail, provider, identity, context);
-            });
+                    return linkToExistingAccount(byEmail, provider, identity, context);
+                });
         });
 
 /**

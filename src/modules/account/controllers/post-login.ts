@@ -74,7 +74,7 @@ export const postLogin = (
              * `postLoginTwoFactor` is what finishes it.
              */
             if (data.twoFactorEnabledAt) {
-                return twoFactorService.buildLoginChallenge(data).then((challenge) => {
+                return twoFactorService.buildLoginChallenge(data, ['pwd']).then((challenge) => {
                     successResponse<LoginOutcome>(
                         response,
                         challenge,

@@ -76,6 +76,32 @@ describe('loginOrCreateFromOAuth — case 1: an already-linked identity', () => 
             expect.objectContaining({ event: accountAnalyticsEvents.USER_LOGGED_IN })
         );
     });
+
+    /*
+     * 1b: the callback does not mint a session for this account — it issues a 2FA challenge
+     * instead (`get-oauth-callback.ts`) — so recording AUTH_LOGIN/USER_LOGGED_IN here would claim
+     * a login that has not happened yet. `postLoginTwoFactor` fires the generic tail once the
+     * challenge is actually answered.
+     */
+    it('does not claim a completed login when the account has 2FA armed', async () => {
+        const user = await createUser({
+            email: 'existing@example.com',
+            twoFactorEnabledAt: new Date().toISOString()
+        });
+        await userRepository.linkOAuthAccount(user.id, {
+            provider: 'google',
+            providerId: 'subject-1',
+            connectedAt: new Date()
+        });
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
+
+        const resolved = await loginOrCreateFromOAuth('google', identity(), testCallerContext);
+
+        expect(resolved.id).toBe(user.id);
+        expect(auditSpy).not.toHaveBeenCalled();
+        expect(analyticsSpy).not.toHaveBeenCalled();
+    });
 });
 
 describe('loginOrCreateFromOAuth — case 2: a verified email matching an existing account', () => {
@@ -96,6 +122,24 @@ describe('loginOrCreateFromOAuth — case 2: a verified email matching an existi
                 actor_user_id: user.id
             })
         );
+    });
+
+    it('still audits the link, but not as a completed login, when 2FA is armed', async () => {
+        const user = await createUser({
+            email: identity().email,
+            verifiedAt: new Date(),
+            twoFactorEnabledAt: new Date().toISOString()
+        });
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
+
+        const resolved = await loginOrCreateFromOAuth('google', identity(), testCallerContext);
+
+        expect(resolved.id).toBe(user.id);
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({ action: accountAuditActions.AUTH_OAUTH_LINKED })
+        );
+        expect(analyticsSpy).not.toHaveBeenCalled();
     });
 
     it('refuses to link when the provider does not vouch for the email, and changes nothing', async () => {
