@@ -239,11 +239,11 @@ router.post(
     postEmailChangeConfirm
 );
 
-// DELETE /account/tokens/expired — remove expired tokens from the DB (`tokens.delete`)
+// DELETE /account/tokens/expired — remove expired tokens from the DB (`tokens.any.delete`)
 router.delete(
     '/tokens/expired',
     isAuth,
-    requirePermission('tokens.delete'),
+    requirePermission('tokens.any.delete'),
     invalidateCache(['users', 'account']),
     deleteExpiredTokens
 );

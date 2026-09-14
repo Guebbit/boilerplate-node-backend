@@ -34,11 +34,10 @@ export default {
      * whose module is gone.
      */
     permissions: [
-        'webhooks.read',
-        'webhooks.create',
-        'webhooks.update',
-        'webhooks.delete',
-        'webhooks.manage'
+        'webhooks.any.read',
+        'webhooks.any.create',
+        'webhooks.any.update',
+        'webhooks.any.delete'
     ],
     subscribe: subscribeToWebhookEvents,
     requiredConfig: [

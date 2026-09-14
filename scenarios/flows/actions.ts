@@ -42,7 +42,7 @@ export const CARD = {
  * Bring `quantity` units of `productId` onto the shelf — the opening stock every product needs
  * before anyone can buy it, since the catalogue now seeds at `onHand: 0`.
  *
- * @param owner - a caller holding `inventory.create`
+ * @param owner - a caller holding `inventory.any.create`
  */
 export const receiveStock = (owner: Caller, productId: string, quantity: number): Promise<void> =>
     owner
@@ -126,7 +126,7 @@ export const checkoutAndPay = async (caller: Caller, lines: Line[]): Promise<str
 /**
  * Record money that arrived outside the provider — the admin's own hand.
  *
- * @param owner - a caller holding `payments.create`
+ * @param owner - a caller holding `payments.any.create`
  * @param method - `cash`, `bank_transfer` or `other`
  */
 export const recordOfflinePayment = (
@@ -143,7 +143,7 @@ export const recordOfflinePayment = (
  * final status directly would skip every transition's own side effects — the shipment, the stock
  * movement and the audit row that make this dataset worth more than a written one.
  *
- * @param owner - a caller holding `orders.update`
+ * @param owner - a caller holding `orders.any.update`
  * @param statuses - the transitions in order, e.g. `['processing', 'shipped']`
  */
 export const advanceOrder = async (
@@ -160,7 +160,7 @@ export const advanceOrder = async (
  * Global, with no body — so an order meant to stay in transit has to be shipped AFTER the tick
  * that delivered the others.
  *
- * @param owner - a caller holding `delivery.update`
+ * @param owner - a caller holding `delivery.any.update`
  */
 export const advanceCourier = (owner: Caller): Promise<void> =>
     owner.call('POST', '/delivery/advance').then(() => undefined);
@@ -177,7 +177,7 @@ export const cancelOrder = (caller: Caller, orderId: string, refund?: boolean): 
 /**
  * Soft-delete an order — `deletedAt`, not a removal.
  *
- * @param owner - a caller holding `orders.delete`
+ * @param owner - a caller holding `orders.any.delete`
  */
 export const softDeleteOrder = (owner: Caller, orderId: string): Promise<void> =>
     owner.call('DELETE', `/orders/${orderId}`).then(() => undefined);
@@ -188,7 +188,7 @@ export const softDeleteOrder = (owner: Caller, orderId: string): Promise<void> =
  * The point is the CHANGE, not the picture — an order placed against the old `imageUrl` must
  * resolve this new one live, never the one the buyer originally saw.
  *
- * @param owner - a caller holding `products.update`
+ * @param owner - a caller holding `products.any.update`
  */
 export const replaceProductImage = (
     owner: Caller,
@@ -201,7 +201,7 @@ export const replaceProductImage = (
  * Hard-delete a product — the row is gone, not merely hidden. An order line that named it keeps
  * the id and resolves `current: null` from then on; see SECURITY_HOLES_7_STORAGE_QUOTA.
  *
- * @param owner - a caller holding `products.delete`
+ * @param owner - a caller holding `products.any.delete`
  */
 export const hardDeleteProduct = (owner: Caller, productId: string): Promise<void> =>
     owner.call('DELETE', `/products/${productId}/hard`).then(() => undefined);

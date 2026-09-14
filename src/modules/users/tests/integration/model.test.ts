@@ -116,7 +116,7 @@ describe('user credential exposure', () => {
                 'updatedAt',
                 'username',
                 // WHEN the address was confirmed, or `null` until it is — in the `User` contract,
-                // informational only: the `role` column is what `cart.checkout` actually reads.
+                // informational only: the `role` column is what `cart.self.checkout` actually reads.
                 'verifiedAt'
             ]);
         });

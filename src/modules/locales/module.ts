@@ -68,14 +68,13 @@ export default {
      * whose module is gone, and a module claiming one the file does not attribute to it.
      */
     permissions: [
-        'locales.read',
-        'locales.create',
-        'locales.update',
-        'locales.delete',
-        'locales.manage',
-        'translations.read',
-        'translations.update',
-        'translations.manage'
+        'locales.self.read',
+        'locales.any.read',
+        'locales.any.create',
+        'locales.any.update',
+        'locales.any.delete',
+        'translations.any.read',
+        'translations.any.update'
     ],
     routes: router,
     /*

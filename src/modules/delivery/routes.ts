@@ -21,4 +21,10 @@ router.get('/methods', getShippingMethods);
 router.get('/order/:orderId', getAuth, isAuth, getShipmentByOrder);
 
 // POST /delivery/advance — the fake courier's tick; an operator is the cron
-router.post('/advance', getAuth, isAuth, requirePermission('delivery.update'), postCourierAdvance);
+router.post(
+    '/advance',
+    getAuth,
+    isAuth,
+    requirePermission('delivery.any.update'),
+    postCourierAdvance
+);

@@ -21,16 +21,24 @@ export const router = Router();
 
 router.use(getAuth, isAuth);
 
-router.get('/subscriptions', requirePermission('webhooks.read'), listWebhookSubscriptions);
-router.post('/subscriptions', requirePermission('webhooks.create'), createWebhookSubscription);
-router.patch('/subscriptions/:id', requirePermission('webhooks.update'), updateWebhookSubscription);
+router.get('/subscriptions', requirePermission('webhooks.any.read'), listWebhookSubscriptions);
+router.post('/subscriptions', requirePermission('webhooks.any.create'), createWebhookSubscription);
+router.patch(
+    '/subscriptions/:id',
+    requirePermission('webhooks.any.update'),
+    updateWebhookSubscription
+);
 router.delete(
     '/subscriptions/:id',
-    requirePermission('webhooks.delete'),
+    requirePermission('webhooks.any.delete'),
     deleteWebhookSubscription
 );
 
-router.get('/deliveries', requirePermission('webhooks.read'), listWebhookDeliveries);
-router.post('/deliveries/:id/replay', requirePermission('webhooks.update'), replayWebhookDelivery);
+router.get('/deliveries', requirePermission('webhooks.any.read'), listWebhookDeliveries);
+router.post(
+    '/deliveries/:id/replay',
+    requirePermission('webhooks.any.update'),
+    replayWebhookDelivery
+);
 
-router.get('/events', requirePermission('webhooks.read'), listWebhookEvents);
+router.get('/events', requirePermission('webhooks.any.read'), listWebhookEvents);

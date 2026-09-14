@@ -1,7 +1,7 @@
 /**
  * @module
  * The queryable audit trail: who did what, kept for the retention window the TTL index enforces.
- * Two readers: `GET /audit` (this module's own router, gated on `audit.read`) for a shop's own
+ * Two readers: `GET /audit` (this module's own router, gated on `audit.any.read`) for a shop's own
  * staff, and `GET /observability/audit` (the `observability` module) for the platform operator
  * across every shop — see `docs/modules/audit-logs.md` for why one collection serves both rather
  * than two. Nothing imports this module for its write side: `emitAuditEvent` call sites talk to
@@ -36,5 +36,5 @@ export default {
      * Deleting the module deletes it — `tests/cross-cutting/module-permissions.test.ts` refuses a
      * key in the shared file whose module is gone.
      */
-    permissions: ['audit.read']
+    permissions: ['audit.any.read']
 } satisfies AppModule;

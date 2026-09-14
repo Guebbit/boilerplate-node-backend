@@ -25,7 +25,7 @@ describe('GET /webhooks/subscriptions', () => {
         expect(response).toSatisfyApiSpec();
     });
 
-    it('403s a role holding neither webhooks.read nor webhooks.manage', async () => {
+    it('403s a role holding no webhooks key at all', async () => {
         const { bearer } = await authenticateAsRole('customer');
 
         const response = await api().get('/webhooks/subscriptions').set('Authorization', bearer);
@@ -96,9 +96,9 @@ describe('POST /webhooks/subscriptions', () => {
         expect(response).toSatisfyApiSpec();
     });
 
-    it('403s a role holding only webhooks.read', async () => {
-        // No preset role holds webhooks.read without webhooks.manage today, so this asserts the
-        // negative the other way: a role with NEITHER key is refused on the write route too.
+    it('403s a role holding only webhooks.any.read', async () => {
+        // No preset role holds webhooks.any.read without also holding the write keys today, so
+        // this asserts the negative the other way: a role with NEITHER key is refused too.
         const { bearer } = await authenticateAsRole('customer');
 
         const response = await api()

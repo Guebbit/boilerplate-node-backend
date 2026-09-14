@@ -111,24 +111,24 @@ Reads published products, the dictionary the shop is rendered in, and the delive
 
 <!-- role-matrix:start -->
 
-The roles above after the evaluator has had them: `manage` expanded into its module’s own
-keys, and the `guest` baseline folded in. This is what a route guard and a listing
+The roles above after the evaluator has had them: `all.manage` expanded into every key it
+grants, and the `guest` baseline folded in. This is what a route guard and a listing
 actually answer.
 
-| Role         | products | cart     | orders  | payments | inventory | delivery | feedback | locales | users   | account | audit-logs | webhooks | api-keys | observability |
-| ------------ | -------- | -------- | ------- | -------- | --------- | -------- | -------- | ------- | ------- | ------- | ---------- | -------- | -------- | ------------- |
-| `guest`      | r        | —        | —       | —        | —         | r        | —        | r       | —       | —       | —          | —        | —        | —             |
-| `unverified` | r        | —        | r       | r        | —         | r        | —        | r       | —       | —       | —          | —        | —        | —             |
-| `customer`   | r        | checkout | r       | r        | —         | r        | —        | r       | —       | —       | —          | —        | —        | —             |
-| `manager`    | **all**  | checkout | **all** | r        | r         | r        | r        | **all** | r       | —       | r          | **all**  | —        | —             |
-| `warehouse`  | r        | checkout | r       | —        | **all**   | **all**  | —        | r       | —       | —       | —          | —        | —        | —             |
-| `support`    | r        | checkout | r       | r        | —         | r        | **all**  | r       | ru      | —       | r          | —        | —        | —             |
-| `editor`     | **all**  | checkout | —       | —        | —         | r        | —        | **all** | —       | —       | —          | —        | —        | —             |
-| `moderator`  | r        | checkout | **all** | **all**  | —         | r        | —        | r       | **all** | —       | r          | —        | —        | —             |
-| `owner`      | **all**  | checkout | **all** | **all**  | **all**   | **all**  | **all**  | **all** | **all** | d       | r          | **all**  | **all**  | —             |
-| `operator`   | —        | —        | —       | —        | —         | —        | —        | —       | —       | —       | —          | —        | —        | **all**       |
+| Role         | products | cart | orders | payments | inventory | delivery | feedback | locales | users | account | audit-logs | webhooks | api-keys | observability |
+| ------------ | -------- | ---- | ------ | -------- | --------- | -------- | -------- | ------- | ----- | ------- | ---------- | -------- | -------- | ------------- |
+| `guest`      | r        | —    | —      | —        | —         | R        | —        | r       | —     | —       | —          | —        | —        | —             |
+| `unverified` | r        | —    | r      | r        | —         | R        | —        | r       | —     | —       | —          | —        | —        | —             |
+| `customer`   | r        | x    | r      | r        | —         | R        | —        | r       | —     | —       | —          | —        | —        | —             |
+| `manager`    | RCUD     | x    | RCUD   | r        | R         | R        | R        | RCUD    | R     | —       | R          | RCUD     | —        | —             |
+| `warehouse`  | r        | x    | R      | —        | RC        | RU       | —        | r       | —     | —       | —          | —        | —        | —             |
+| `support`    | r        | x    | R      | R        | —         | R        | RUD      | r       | RU    | —       | R          | —        | —        | —             |
+| `editor`     | RCUD     | x    | —      | —        | —         | R        | —        | RCUD    | —     | —       | —          | —        | —        | —             |
+| `moderator`  | r        | x    | RCUD   | RCU      | —         | R        | —        | r       | RCUD  | —       | R          | —        | —        | —             |
+| `owner`      | RCUD     | x    | RCUD   | RCU      | RCS       | RU       | RUD      | RCUD    | RCUD  | D       | R          | RCUD     | RCD      | —             |
+| `operator`   | —        | —    | —      | —        | —         | —        | —        | —       | —     | —       | —          | —        | —        | R             |
 
-**all** — every key that module declares · `r` read · `c` create · `u` update · `d` delete · — nothing
+UPPERCASE — the `any`-breadth key, every row · lowercase — `self`, the caller’s own · `r` read · `c` create · `u` update · `d` delete · `x` checkout · `s` sweep · — nothing
 
 Read down a column to see who touches one part of the shop; read across a row to see one
 person’s whole job. `operator` is the only row outside the shop entirely: it runs the

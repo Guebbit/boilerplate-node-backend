@@ -2,7 +2,7 @@
  * @module
  * POST /payments/order/:orderId/offline
  * An admin recording money the card provider never saw. Admin-only at the route
- * (`payments.create`); the audit and analytics events fire from the service once settlement
+ * (`payments.any.create`); the audit and analytics events fire from the service once settlement
  * actually lands, same as the confirm.
  */
 

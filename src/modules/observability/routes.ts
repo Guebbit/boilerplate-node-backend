@@ -28,7 +28,7 @@ import { logger } from '@infrastructure/adapters/logger';
 export const router = Router();
 
 /** The one key every route in this module guards on. */
-const OBSERVABILITY_READ_KEY = 'platform.observability.read';
+const OBSERVABILITY_READ_KEY = 'platform.observability.any.read';
 
 /*
  * Both authenticated, though neither carries user data — both expose request volumes, error

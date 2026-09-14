@@ -74,12 +74,12 @@ describe('payment routes', () => {
     it('admin-guards the refund and the offline record, and nothing else', () => {
         // The two routes an operator drives instead of a customer's own checkout — money moving
         // back out, or a claim that money moved in some way the provider never saw.
-        // `cart.checkout` is excluded: it gates the three customer-facing routes below and is the
+        // `cart.self.checkout` is excluded: it gates the three customer-facing routes below and is the
         // customer's own key, not an admin one — see the module docblock's "Verified" row.
         const adminGuarded = routeTable(router)
             .filter(
                 ({ permissionKey }) =>
-                    permissionKey !== undefined && permissionKey !== 'cart.checkout'
+                    permissionKey !== undefined && permissionKey !== 'cart.self.checkout'
             )
             .map(({ method, path }) => `${method} ${path}`);
 
@@ -106,7 +106,7 @@ describe('payment routes', () => {
             'idempotencyKey'
         ]);
         // And that shared prefix is not trivially empty — the fresh-session closure and the
-        // cart.checkout check are both in there.
+        // cart.self.checkout check are both in there.
         expect(withoutHandler('POST /:id/sync')).toEqual([
             'getAuth',
             'isAuth',

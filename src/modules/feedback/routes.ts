@@ -60,18 +60,18 @@ router.use(getAuth, isAuth);
  */
 const cacheFeedbackSearch = searchCache('feedback', searchFeedbackKeyParameters, 600);
 
-router.post('/search', requirePermission('feedback.read'), cacheFeedbackSearch, getFeedback);
+router.post('/search', requirePermission('feedback.any.read'), cacheFeedbackSearch, getFeedback);
 
-router.get('/', requirePermission('feedback.read'), cacheFeedbackSearch, getFeedback);
+router.get('/', requirePermission('feedback.any.read'), cacheFeedbackSearch, getFeedback);
 router.put(
     '/:id',
-    requirePermission('feedback.update'),
+    requirePermission('feedback.any.update'),
     invalidateCache(['feedback']),
     putFeedbackStatus
 );
 router.delete(
     '/:id',
-    requirePermission('feedback.delete'),
+    requirePermission('feedback.any.delete'),
     invalidateCache(['feedback']),
     deleteFeedback
 );

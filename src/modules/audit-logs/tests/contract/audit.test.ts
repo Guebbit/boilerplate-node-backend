@@ -2,7 +2,7 @@
  * @module
  * Contract tests for `GET /audit` — the one route this module owns. `authenticateAs` only spells
  * `owner`/`user`, so callers here log in directly as the two roles the endpoint actually
- * distinguishes: a holder of `audit.read` and one who never gets past the guard.
+ * distinguishes: a holder of `audit.any.read` and one who never gets past the guard.
  */
 
 import '@tests/contract';
@@ -34,7 +34,7 @@ describe('GET /audit', () => {
         expect(response).toSatisfyApiSpec();
     });
 
-    it('403s a role that holds no audit.read, an editor included', async () => {
+    it('403s a role that holds no audit.any.read, an editor included', async () => {
         const { bearer } = await authenticateInRole('editor');
 
         const response = await api().get('/audit').set('Authorization', bearer);

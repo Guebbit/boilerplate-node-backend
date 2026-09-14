@@ -312,7 +312,7 @@ mailboxes, cost something rather than nothing.
 ## Why the metrics endpoint has its own credential
 
 `/observability/metrics` cannot use the bearer token the other observability routes check
-`platform.observability.read` on: it is scraped by Prometheus, which has no way to log in, refresh
+`platform.observability.any.read` on: it is scraped by Prometheus, which has no way to log in, refresh
 a token or hold a session. What Prometheus does
 support is a static bearer credential in its `scrape_configs`, so that is the credential here.
 

@@ -54,7 +54,7 @@ describe('userSchema — what a user must carry', () => {
 
     it('creates a user as unverified and active', () => {
         // `unverified` is the fail-safe direction and the only one: defaulting to a role that
-        // holds more — `customer` and its `cart.checkout`, `owner` above all — is an
+        // holds more — `customer` and its `cart.self.checkout`, `owner` above all — is an
         // account-creation privilege escalation. `verifiedAt: null` matters equally — a default
         // that backdates it makes the whole email verification flow decorative, since every new
         // account would already satisfy it.

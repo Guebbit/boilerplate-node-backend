@@ -22,7 +22,7 @@ A minimal root endpoint used to verify the process is alive.
 
 > The domain behind these routes: [`observability`](../modules/observability.md) · routes and middleware: `src/modules/observability/routes.ts`
 
-Endpoints for health checks, metrics, and audit logs. The two public routes feed external scrapers (Prometheus) and the live dashboard (SSE). The rest need `platform.observability.read` and are intended for internal tooling. See the dedicated [Observability Endpoints](./observability.md) page for response shapes and tool links.
+Endpoints for health checks, metrics, and audit logs. The two public routes feed external scrapers (Prometheus) and the live dashboard (SSE). The rest need `platform.observability.any.read` and are intended for internal tooling. See the dedicated [Observability Endpoints](./observability.md) page for response shapes and tool links.
 
 ## Account & Auth
 
@@ -37,7 +37,7 @@ JWT-based authentication. Login returns an `accessToken` (short-lived) and a `re
 
 > The domain behind these routes: [`products`](../modules/products.md) · routes and middleware: `src/modules/products/routes.ts`
 
-Standard CRUD for the product catalogue. Read endpoints are public and Redis-cached. Write endpoints need `products.create`, `products.update` or `products.delete` respectively, and invalidate the cache on change. Both single-item and bulk operations are supported.
+Standard CRUD for the product catalogue. Read endpoints are public and Redis-cached. Write endpoints need `products.any.create`, `products.any.update` or `products.any.delete` respectively, and invalidate the cache on change. Both single-item and bulk operations are supported.
 
 Stock is read-only on this surface. `onHand`, `reserved` and `available` are serialized on every product, but the only body that accepts a counter is `POST /products` — a new product's opening `onHand`. The update bodies carry none: an absolute stock write on an edit form overwrites whatever sold while the form was open, so changing an existing product's stock is `POST /inventory/receipts` or `POST /inventory/adjustments`, both signed and both audited.
 
@@ -57,7 +57,7 @@ Per-user saved products — ids only, joined client-side like the cart's lines. 
 
 > The domain behind these routes: [`orders`](../modules/orders.md) · routes and middleware: `src/modules/orders/routes.ts`
 
-Orders are normally created via checkout but can also be created manually with `orders.create`. Each order has a PDF invoice available for download. Reads are scoped to the caller's own orders unless they hold a wider `orders.*` key, in which case the same route answers for the whole shop — one route, narrowed by the rules rather than branched on a role.
+Orders are normally created via checkout but can also be created manually with `orders.any.create`. Each order has a PDF invoice available for download. Reads are scoped to the caller's own orders unless they hold a wider `orders.*` key, in which case the same route answers for the whole shop — one route, narrowed by the rules rather than branched on a role.
 
 ## Payments
 
@@ -69,7 +69,7 @@ An order's money, behind a provider port (`NODE_PAYMENT_PROVIDER`, default `fake
 
 > The domain behind these routes: [`delivery`](../modules/delivery.md) · routes and middleware: `src/modules/delivery/routes.ts`
 
-Shipping rates as pure domain rules (flat rates, free-above thresholds), priced authoritatively at checkout via `POST /cart/checkout`'s `shippingMethodId`. An order reaching `shipped` (an `orders.update` status write) automatically gets a shipment, a tracking code and the shipped email; the fake courier is a button, not a schedule — this repo deliberately has no cron.
+Shipping rates as pure domain rules (flat rates, free-above thresholds), priced authoritatively at checkout via `POST /cart/checkout`'s `shippingMethodId`. An order reaching `shipped` (an `orders.any.update` status write) automatically gets a shipment, a tracking code and the shipped email; the fake courier is a button, not a schedule — this repo deliberately has no cron.
 
 ## Inventory
 
@@ -98,7 +98,7 @@ Both reads page and report `meta.totalItems`, and neither is bounded in the serv
 
 > The domain behind these routes: [`users`](../modules/users.md) · routes and middleware: `src/modules/users/routes.ts`
 
-Full user management, behind `users.read` / `users.create` / `users.update` / `users.delete` per route. Supports individual and bulk operations. The equivalent self-service actions (profile read, account deletion) live under `/account`.
+Full user management, behind `users.any.read` / `users.any.create` / `users.any.update` / `users.any.delete` per route. Supports individual and bulk operations. The equivalent self-service actions (profile read, account deletion) live under `/account`.
 
 The three `/hard` routes are not extra operations in disguise. Each mounts the same handler as its
 `:id` sibling behind `routeFlag('hardDelete')`, so the destructive variant has a URL of its own —

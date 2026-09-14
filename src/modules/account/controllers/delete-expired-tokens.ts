@@ -13,7 +13,7 @@ import { callerContextOf } from '@infrastructure/http/request';
 
 /**
  * DELETE /account/tokens/expired
- * Remove all expired tokens from the database — `tokens.delete`.
+ * Remove all expired tokens from the database — `tokens.any.delete`.
  * Useful for periodic cleanup of stale refresh tokens.
  */
 export const deleteExpiredTokens = (request: Request, response: Response) => {

@@ -8,12 +8,12 @@ owner's.
 
 ## Three keys, three jobs
 
-| Key               | Buys                                                      |
-| ----------------- | --------------------------------------------------------- |
-| `users.manage`    | Add, edit, erase an account — and ban one.                |
-| `orders.manage`   | Read and update any order in the shop, not only your own. |
-| `payments.manage` | Read any payment, and refund it.                          |
-| `audit.read`      | Read the history of what everyone with a key did.         |
+| Key                                                   | Buys                                                      |
+| ----------------------------------------------------- | --------------------------------------------------------- |
+| `users.any.read` / `.create` / `.update` / `.delete`  | Add, edit, erase an account — and ban one.                |
+| `orders.any.read` / `.create` / `.update` / `.delete` | Read and update any order in the shop, not only your own. |
+| `payments.any.read` / `.create` / `.update`           | Read any payment, and refund it.                          |
+| `audit.any.read`                                      | Read the history of what everyone with a key did.         |
 
 ## Banning an account is not a fourth feature
 
@@ -41,7 +41,7 @@ as a plain update. → [`users`](../modules/users.md)
 
 ## Reading the shop's own history
 
-`audit.read` opens `GET /audit` — this role's own window onto who did what, scoped to this shop.
+`audit.any.read` opens `GET /audit` — this role's own window onto who did what, scoped to this shop.
 It is the same underlying trail [the observability dashboard](../modules/observability.md) reads
 for the platform operator, reached through a different door with a different key: this one asks
 nothing about the platform, only about this shop, which is exactly the key a shop's own staff can
@@ -49,10 +49,11 @@ be handed. → [`audit-logs`](../modules/audit-logs.md)
 
 ## One deliberate rough edge
 
-`orders.manage` is a wildcard: it grants every action `orders` declares, including delete. There is
-no narrower key that grants read-and-update-but-not-delete, so this role can technically delete an
-order — the price of being able to update any order rather than only its own. Nothing in the demo
-exercises that edge; it is named here rather than left for someone to discover by trying it.
+This role holds `orders.any.delete` alongside the read and the update — there is no narrower key
+that grants read-and-update-but-not-delete on an order, so this role can technically delete one.
+That is a real capability, granted by name rather than absorbed from a wildcard, and it is the
+price of being able to update any order rather than only its own. Nothing in the demo exercises
+that edge; it is named here rather than left for someone to discover by trying it.
 
 ::: tip What this role cannot touch
 No `products.*` — a moderator cannot change what a thing costs or looks like; that is

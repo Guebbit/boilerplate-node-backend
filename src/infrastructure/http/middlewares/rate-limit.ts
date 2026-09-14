@@ -708,7 +708,7 @@ export const paymentDeclineChallengeGate: RequestHandler = (request, response, n
 /**
  * Guards the Prometheus scrape endpoint with a static bearer credential — Prometheus cannot hold a
  * session, so the bearer token the other observability routes check
- * `platform.observability.read` on is not available to it.
+ * `platform.observability.any.read` on is not available to it.
  *
  * DENY by default when `NODE_METRICS_TOKEN` is unset, and `constantTimeEqual` rather than `===`,
  * which would leak the token's prefix to anyone willing to measure.

@@ -569,7 +569,7 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
 
     /*
      * Unverified is a role, not a waiting room: the new account is signed in from here and is
-     * stopped at `cart.checkout` alone. The BODY stays a bare profile so rung 2's refusal — which
+     * stopped at `cart.self.checkout` alone. The BODY stays a bare profile so rung 2's refusal — which
      * `post-signup.ts` answers before it ever reaches the session — is still indistinguishable in
      * everything a script can read from one response.
      */

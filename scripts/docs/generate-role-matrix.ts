@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * The EFFECTIVE role matrix in `docs/demo-ecommerce/index.md`: what `holdsKey` actually answers,
+ * The EFFECTIVE role matrix in `docs/demo-ecommerce/index.md`: which keys a role actually holds,
  * per role, per module. Same shape as `generate-module-graph.ts` — markers in the page, prose
  * around them untouched, `--check` in `complete`.
  *
@@ -8,12 +8,15 @@
  * `shared/authorization-roles.yaml`'s own `title` and `description` — that file documents itself,
  * and a generated copy of its key lists said less than the descriptions it ignored.
  *
- * What it answers cannot be written by hand, which is why this survives: `manage` expands into its
- * module's concrete keys, and every tenant caller is floored at the anonymous baseline (see
- * `keysInScope` in `kernel/permissions.ts`). That is 117 cells nobody can derive reliably by eye.
+ * What it answers cannot be written by hand, which is why this survives: `all.manage` expands into
+ * every declared key, and every tenant caller is floored at the anonymous baseline (see
+ * `keysInScope` in `kernel/permissions.ts`). That is many cells nobody can derive reliably by eye.
  *
- * Asked through `holdsKey` rather than by re-expanding the keys here: a second expander is a
+ * Asked through `heldKeys` rather than by re-expanding the keys here: a second expander is a
  * second answer to "what may this role do", and the one in the docs would be the one nobody runs.
+ * Not `holdsKey`: that collapses two keys sharing an action and a subject but differing in
+ * breadth into one yes/no, which is right for a route guard and wrong for enumerating exactly
+ * which keys a role holds.
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -25,7 +28,7 @@ import {
     PRESET_ROLES,
     permissionsOfRole
 } from '@kernel/permissions';
-import { holdsKey } from '@kernel/ability';
+import { heldKeys } from '@kernel/ability';
 import type { AuthorizationScope, Caller } from '@types';
 
 /** Report drift instead of rewriting the page — what `complete` runs. */
@@ -80,25 +83,41 @@ const codes: Record<string, string> = {
     read: 'r',
     create: 'c',
     update: 'u',
-    delete: 'd'
+    delete: 'd',
+    checkout: 'x',
+    sweep: 's'
 };
 
+/** The breadth segment of a key — always the one before its action. `orders.any.read` is `any`. */
+const breadthOf = (key: string): string => key.split('.').at(-2) ?? '';
+
 /**
- * What a role may do in one module: `all` when it holds that module's wildcard, the action codes
- * it holds otherwise, and an em dash for nothing.
+ * What a role may do in one module: one code letter per action it holds, UPPERCASE when the
+ * caller holds the `any`-breadth key for it (every row, not only their own), lowercase for `self`,
+ * and an em dash for nothing.
  */
 const cell = (caller: Caller, module: string): string => {
+    const heldByCaller = heldKeys(caller);
     const held = PERMISSION_KEYS.filter(
-        (key) => key.module === module && holdsKey(caller, key.key)
+        (key) => key.module === module && heldByCaller.has(key.key)
     );
 
     if (held.length === 0) return '—';
-    if (held.some((key) => key.action === 'manage')) return '**all**';
 
-    return held.map((key) => codes[key.action] ?? key.action).join('');
+    const wide = new Set(
+        held.filter((key) => breadthOf(key.key) === 'any').map((key) => key.action)
+    );
+
+    return [...new Set(held.map((key) => key.action))]
+        .map((action) => {
+            const code = codes[action] ?? action;
+
+            return wide.has(action) ? code.toUpperCase() : code;
+        })
+        .join('');
 };
 
-/** The effective table: what `holdsKey` answers, per module. */
+/** The effective table: which keys `heldKeys` answers, per module. */
 const effectiveTable = (): string =>
     [
         `| Role | ${modules.join(' | ')} |`,
@@ -115,13 +134,14 @@ const effectiveTable = (): string =>
 /** The table and its legend, as the block that replaces whatever sits between the markers. */
 const body = (): string =>
     [
-        'The roles above after the evaluator has had them: `manage` expanded into its module’s own',
-        'keys, and the `guest` baseline folded in. This is what a route guard and a listing',
+        'The roles above after the evaluator has had them: `all.manage` expanded into every key it',
+        'grants, and the `guest` baseline folded in. This is what a route guard and a listing',
         'actually answer.',
         '',
         effectiveTable(),
         '',
-        '**all** — every key that module declares · `r` read · `c` create · `u` update · `d` delete · — nothing',
+        'UPPERCASE — the `any`-breadth key, every row · lowercase — `self`, the caller’s own · ' +
+            '`r` read · `c` create · `u` update · `d` delete · `x` checkout · `s` sweep · — nothing',
         '',
         'Read down a column to see who touches one part of the shop; read across a row to see one',
         'person’s whole job. `operator` is the only row outside the shop entirely: it runs the',

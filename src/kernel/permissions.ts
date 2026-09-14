@@ -27,11 +27,13 @@ import {
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**
- * The action vocabulary. `manage` is the wildcard meaning any declared action; `checkout` is the
- * one addition beyond CASL's own CRUD set, `cart.checkout`'s action and nowhere else — see that
- * key's own description in `shared/authorization-keys.yaml`.
+ * The action vocabulary a declared KEY may carry. `manage` is deliberately absent: it survives
+ * only as the two scope wildcards' action (`all.manage`, `platform.all.manage`), spelled directly
+ * in `wildcards:`, never as an individual key's own action. `checkout` and `sweep` are the two
+ * additions beyond CASL's own CRUD set — `cart.self.checkout`'s and `inventory.any.sweep`'s
+ * actions, and nowhere else. See each key's own description in `shared/authorization-keys.yaml`.
  */
-export type PermissionAction = 'read' | 'create' | 'update' | 'delete' | 'manage' | 'checkout';
+export type PermissionAction = 'read' | 'create' | 'update' | 'delete' | 'checkout' | 'sweep';
 
 /** How recently a caller must have proved themselves to use a key that demands it. */
 export type StepUpTier = 'critical' | 'sensitive';
@@ -40,7 +42,7 @@ export type StepUpTier = 'critical' | 'sensitive';
  * One declared key.
  *
  * `subject` is the CASL subject type — the concrete thing a rule is about — while the key's own
- * first segment is the resource family. `orders.read` is a permission, `Order` is a thing.
+ * first segment is the resource family. `orders.self.read` is a permission, `Order` is a thing.
  */
 export interface PermissionKey {
     key: string;
@@ -67,7 +69,7 @@ export interface PermissionKey {
     /**
      * The `errors[].code` a refusal of THIS key answers, in place of `requirePermission`'s generic
      * `FORBIDDEN`. Absent for almost every key — a generic "you do not have permission" is the
-     * right answer everywhere the caller genuinely lacks a role. `cart.checkout` is the exception:
+     * right answer everywhere the caller genuinely lacks a role. `cart.self.checkout` is the exception:
      * the caller has a role, just not this key yet, and the actionable answer is "confirm your
      * email", not a permissions error. The message is looked up as `generic.error-<code,
      * kebab-cased>` — the same locale key `FORBIDDEN` itself resolves to via that same rule.
@@ -90,7 +92,10 @@ const readShared = (file: string): unknown => parse(readFileSync(path.join(SHARE
 
 const keysDocument = readShared('authorization-keys.yaml') as {
     actions: PermissionAction[];
-    wildcards: { subject: string; action: PermissionAction };
+    // `string`, not `PermissionAction`: the wildcard action is CASL's own `manage`, which is no
+    // longer one of the per-key actions, and the check just below is what catches the YAML
+    // spelling it any other way.
+    wildcards: { subject: string; action: string };
     keys: PermissionKey[];
 };
 
@@ -233,7 +238,7 @@ export const assertDeclared = (key: string): void => {
  * empty list, so the denial comes from the model rather than from an accident of assembly.
  *
  * @param context - the resolved session
- * @param key - the permission key about to be checked, e.g. `orders.read` or `platform.tenants.manage`
+ * @param key - the permission key about to be checked, e.g. `orders.self.read` or `platform.tenants.any.read`
  * @returns the caller as the evaluator sees them, in the key's scope
  */
 export const callerFor = (context: AuthContext, key: string): Caller =>

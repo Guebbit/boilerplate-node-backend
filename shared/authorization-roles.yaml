@@ -15,6 +15,11 @@
 # Every tenant role below is a demo persona, run against every screen — see `docs/demo-ecommerce/`
 # — except `owner`, the shop's one superuser account rather than a job. Reusing the others means
 # the permission model is exercised by the demo rather than only by its own tests.
+#
+# EVERY GRANT BELOW IS SPELLED OUT. There is no per-family `manage` wildcard any more — breadth is
+# a segment on the key itself (`<family>.self.read` vs `<family>.any.read`), so a role that reads
+# widely says `any` and a role that reads only its own says `self`, and nothing has to be inferred
+# from which wildcard a role happens to hold.
 
 version: 1
 
@@ -23,11 +28,11 @@ roles:
     # `unverified` is what `customer` starts as, before the address is proven — one key thinner,
     # nothing else different. Browsing, the basket, the wishlist, the address book and the account
     # follow from being signed in and need no key either way, which is the "fails in the right
-    # direction" property the whole model was chosen for. See `cart.checkout`'s own description in
-    # `shared/authorization-keys.yaml` and docs/theory/authorization.md.
+    # direction" property the whole model was chosen for. See `cart.self.checkout`'s own
+    # description in `shared/authorization-keys.yaml` and docs/theory/authorization.md.
     #
     # THERE IS NO UNVERIFIED MANAGER. A role is something an operator GRANTS, and granting it IS
-    # the vouching — so every staff role below holds `cart.checkout` explicitly (`owner` via
+    # the vouching — so every staff role below holds `cart.self.checkout` explicitly (`owner` via
     # `all.manage`), and this is the only tenant role that may not.
     - name: unverified
       scope: tenant
@@ -37,11 +42,11 @@ roles:
           verify flow promotes the account to `customer` once the address is proven, and an
           operator may promote it to anything else at any time — granting a role is the vouching.
       permissions:
-          - products.read
-          - locales.read
-          - delivery.read
-          - orders.read
-          - payments.read
+          - products.self.read
+          - locales.self.read
+          - delivery.any.read
+          - orders.self.read
+          - payments.self.read
 
     - name: customer
       scope: tenant
@@ -51,12 +56,12 @@ roles:
           and account follows from being signed in and needs no key at all — what is listed here
           is only what they may read of the SHOP, plus the one key that lets them spend.
       permissions:
-          - products.read
-          - locales.read
-          - delivery.read
-          - orders.read
-          - payments.read
-          - cart.checkout
+          - products.self.read
+          - locales.self.read
+          - delivery.any.read
+          - orders.self.read
+          - payments.self.read
+          - cart.self.checkout
 
     - name: manager
       scope: tenant
@@ -65,29 +70,34 @@ roles:
           What is for sale, at what price, and what happens to an order after it arrives. Reads
           stock but does not move it; that is the warehouse's job and its audit trail.
       permissions:
-          # These three stay on the wildcard deliberately — see "why some families keep
-          # `manage`" at the foot of this file. Spelling them out would NARROW this role.
-          - products.manage
-          - orders.manage
-          - locales.manage
-          # Stated rather than inherited. A product write stacks `products.update` AND a
-          # translations key, and a `manage` key expands only over its own family — so
-          # `locales.manage` does not reach `translations.*` and a manager editing a listing needs
-          # these by name.
-          - translations.read
-          - translations.update
-          - payments.read
-          - inventory.read
-          - delivery.read
-          - feedback.read
-          - users.read
-          - audit.read
-          - webhooks.read
-          - webhooks.create
-          - webhooks.update
-          - webhooks.delete
+          - products.any.read
+          - products.any.create
+          - products.any.update
+          - products.any.delete
+          - orders.any.read
+          - orders.any.create
+          - orders.any.update
+          - orders.any.delete
+          - locales.any.read
+          - locales.any.create
+          - locales.any.update
+          - locales.any.delete
+          # A product write stacks `products.any.update` AND a translations key, so a manager
+          # editing a listing needs this by name.
+          - translations.any.read
+          - translations.any.update
+          - payments.self.read
+          - inventory.any.read
+          - delivery.any.read
+          - feedback.any.read
+          - users.any.read
+          - audit.any.read
+          - webhooks.any.read
+          - webhooks.any.create
+          - webhooks.any.update
+          - webhooks.any.delete
           # Shopping on a staff account is not a security event — see "no unverified manager" above.
-          - cart.checkout
+          - cart.self.checkout
 
     - name: warehouse
       scope: tenant
@@ -96,13 +106,15 @@ roles:
           Stock, and getting parcels out of the door. Records movements and advances consignments;
           may not change what a thing costs or delete it from the catalogue.
       permissions:
-          - products.read
-          - orders.read
-          - inventory.read
-          - inventory.create
-          - delivery.read
-          - delivery.update
-          - cart.checkout
+          - products.self.read
+          # The fix this plan exists for: packing an order that is never the warehouse operator's
+          # own needs the WIDE read, not the narrow one `orders.self.read` would give.
+          - orders.any.read
+          - inventory.any.read
+          - inventory.any.create
+          - delivery.any.read
+          - delivery.any.update
+          - cart.self.checkout
 
     - name: support
       scope: tenant
@@ -112,35 +124,42 @@ roles:
           erase one — that is the owner's and the moderator's, and it expects a freshly proved
           session.
       permissions:
-          - feedback.read
-          - feedback.update
-          - feedback.delete
-          - users.read
-          - users.update
-          - orders.read
-          - payments.read
-          - audit.read
-          - cart.checkout
+          - feedback.any.read
+          - feedback.any.update
+          - feedback.any.delete
+          - users.any.read
+          - users.any.update
+          # The fix this plan exists for: helping a customer with an order or a payment that is
+          # never the support agent's own needs the WIDE read, not the narrow one.
+          - orders.any.read
+          - payments.any.read
+          - audit.any.read
+          - cart.self.checkout
 
     - name: editor
       scope: tenant
       title: The editor
       description: >-
           Everything the shop SAYS and SHOWS, in every registered language: the catalogue record
-          itself (`products.manage`, price included), the dictionary a shopper reads the shop in
-          (`locales.manage` — including registering a language the shop has not spoken before),
-          and the words on a translatable entity such as a product's title and description
-          (`translations.read` and `translations.update`). What none of them touches is a different
-          subject entirely:
-          stock (that is `inventory`), a delivery rule, an order, or an account.
+          itself (price included), the dictionary a shopper reads the shop in — including
+          registering a language the shop has not spoken before — and the words on a translatable
+          entity such as a product's title and description. What none of them touches is a
+          different subject entirely: stock (that is `inventory`), a delivery rule, an order, or an
+          account.
       permissions:
-          # Both keep the wildcard on purpose — an editor works on drafts, and the concrete
-          # `read` keys are restricted to active rows. See the foot of this file.
-          - products.manage
-          - locales.manage
-          - translations.read
-          - translations.update
-          - cart.checkout
+          # Every product and locale action, including the wide read — an editor works on drafts,
+          # and the narrow `self` read is restricted to active rows.
+          - products.any.read
+          - products.any.create
+          - products.any.update
+          - products.any.delete
+          - locales.any.read
+          - locales.any.create
+          - locales.any.update
+          - locales.any.delete
+          - translations.any.read
+          - translations.any.update
+          - cart.self.checkout
 
     - name: moderator
       scope: tenant
@@ -148,21 +167,24 @@ roles:
       description: >-
           Accounts, and the two things people write about their orders: the message they send and
           the order itself. May ban an account, reverse a bad charge, and read why either happened.
-          `orders.manage` also reaches delete, which nothing narrower would let a moderator update.
       permissions:
-          - users.read
-          - users.create
-          - users.update
-          # Erasing an account. Held explicitly rather than through `users.manage`, so that this
-          # role gaining it was a decision somebody made rather than a key it absorbed. The route
-          # still demands a freshly proved session — `users.delete` carries `stepUp: critical`.
-          - users.delete
-          # Both keep the wildcard: their `read` keys are restricted to the caller's OWN rows,
-          # which is the opposite of what a moderator is for. See the foot of this file.
-          - orders.manage
-          - payments.manage
-          - audit.read
-          - cart.checkout
+          - users.any.read
+          - users.any.create
+          - users.any.update
+          # Erasing an account. Held explicitly rather than through a wildcard, so that this role
+          # gaining it was a decision somebody made rather than a key it absorbed. The route still
+          # demands a freshly proved session — `users.any.delete` carries `stepUp: critical`.
+          - users.any.delete
+          # The wide read on both — a moderator's whole purpose is rows that are never their own.
+          - orders.any.read
+          - orders.any.create
+          - orders.any.update
+          - orders.any.delete
+          - payments.any.read
+          - payments.any.create
+          - payments.any.update
+          - audit.any.read
+          - cart.self.checkout
 
     - name: owner
       scope: tenant
@@ -182,7 +204,7 @@ roles:
           super-owner — holds no bare key and therefore cannot read a single shop's orders,
           customers or messages. The conformance suite asserts both halves of that.
       permissions:
-          - platform.observability.manage
+          - platform.observability.any.read
 
 # The role every unauthenticated request resolves to. Named so that "guest" is a value in the
 # model rather than a null somebody forgot to handle, and it holds exactly the keys a stranger
@@ -191,25 +213,6 @@ anonymous:
     name: guest
     scope: tenant
     permissions:
-        - products.read
-        - locales.read
-        - delivery.read
-
-# WHY SOME FAMILIES KEEP `manage`
-#
-# A `manage` key is not a grant, it is an instruction to expand (`src/kernel/ability.ts`). Every
-# role above that could be spelled out concretely now is, so that adding a key to one of those
-# families never widens a role silently — the grant has to be written down to exist.
-#
-# Four families are deliberately NOT spelled out, because there the two forms are not equivalent:
-#
-#     products.read   active: true, deletedAt: null
-#     locales.read    active: true, deletedAt: null
-#     orders.read     userId: $caller.id, deletedAt: null
-#     payments.read   userId: $caller.id
-#
-# Those conditions apply to a key granted DIRECTLY and are dropped for one reached THROUGH a
-# wildcard. So `orders.manage` reads the whole shop's orders, while a concrete `orders.read` reads
-# only the caller's own — and swapping one for the other would quietly reduce a manager to their
-# own order history, a change no type-check or lint can see. Until a family declares a key for the
-# wide read, the wildcard is the only way to say what these roles actually mean.
+        - products.self.read
+        - locales.self.read
+        - delivery.any.read

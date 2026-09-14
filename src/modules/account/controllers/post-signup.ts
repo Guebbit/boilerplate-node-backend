@@ -99,7 +99,7 @@ export const postSignup = (
 
             /*
              * Signed in from here, as `unverified`: the role model says an unproven address
-             * browses freely and is stopped at `cart.checkout`, so making the new account log in
+             * browses freely and is stopped at `cart.self.checkout`, so making the new account log in
              * again to reach that state was the old verification-as-a-gate model, not this one.
              *
              * Cookies only, and the body stays `User` — the frontend's `GET /account/refresh`

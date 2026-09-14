@@ -1,6 +1,6 @@
 /**
  * @module
- * The `/audit` router: one read, gated on `audit.read` — a shop's own action history, for the
+ * The `/audit` router: one read, gated on `audit.any.read` — a shop's own action history, for the
  * roles that hold the key rather than for the platform operator.
  *
  * See: docs/modules/audit-logs.md
@@ -14,7 +14,7 @@ import { getAudit } from './controllers/get-audit';
 export const router = Router();
 
 // The router's only route, guarded the same way `users/routes.ts` guards its whole surface.
-router.use(getAuth, isAuth, requirePermission('audit.read'));
+router.use(getAuth, isAuth, requirePermission('audit.any.read'));
 
 // GET /audit
 router.get('/', getAudit);

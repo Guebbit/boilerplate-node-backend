@@ -29,11 +29,11 @@ export default {
      * whose module is gone, and a module claiming one the file does not attribute to it.
      */
     permissions: [
-        'products.read',
-        'products.create',
-        'products.update',
-        'products.delete',
-        'products.manage'
+        'products.self.read',
+        'products.any.read',
+        'products.any.create',
+        'products.any.update',
+        'products.any.delete'
     ],
     routes: router,
     locales: path.join(__dirname, 'locales'),

@@ -393,7 +393,7 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
         },
         /*
          * WHEN the address was confirmed via the verify flow, or `null` until it is.
-         * Enforcement is the `role` column above (`unverified` holds no `cart.checkout`, see
+         * Enforcement is the `role` column above (`unverified` holds no `cart.self.checkout`, see
          * `shared/authorization-keys.yaml`) — this is the record of fact, kept because an account
          * has one role field: the moment an operator grants a staff role to an unproven address,
          * the role overwrites the only other evidence the address was never proven. Set by
@@ -693,7 +693,7 @@ userSchema.methods.tokenRemoveAll = function (this: UserDocument, type: Token['t
  * also `select: false` on the schema; this is defense in depth, not the only guard. Exported so
  * lean results (which bypass `toJSON`) can be mapped through the same logic — see `./service`
  * `search()`. `active` and `deletedAt` pass through untouched: both are in the `User` contract,
- * and every route serving a `User` list requires `users.read`.
+ * and every route serving a `User` list requires `users.any.read`.
  */
 export const applyUserTransform = applySerialization(userSchema, {
     // `password`/`tokens` are secrets; `pendingImageKey` is document-only bookkeeping for the
