@@ -5,11 +5,15 @@
  * (`scripts/mutation/shard-plan.ts`) is a thin, untested CLI wrapper, same split as
  * `check-baseline.ts` over `baseline.ts` in this same directory.
  */
-import { TARGET_LINES_PER_SHARD, packIntoShards, rotationPlan, type Shard } from '../../../../scripts/mutation/sharding';
+import {
+    TARGET_LINES_PER_SHARD,
+    packIntoShards,
+    rotationPlan,
+    type Shard
+} from '../../../../scripts/mutation/sharding';
 
 /** A `{file, lines}` list from `[name, lines]` pairs, named so the fixtures stay readable. */
-const files = (...entries: [string, number][]) =>
-    entries.map(([file, lines]) => ({ file, lines }));
+const files = (...entries: [string, number][]) => entries.map(([file, lines]) => ({ file, lines }));
 
 describe('packIntoShards', () => {
     it('puts every file into exactly one shard', () => {

@@ -50,7 +50,7 @@ export const packIntoShards = (files: readonly { file: string; lines: number }[]
     }));
 
     for (const { file, lines } of files.toSorted((a, b) => b.lines - a.lines)) {
-        let smallest = bins[0]!;
+        let smallest = bins[0];
         for (const bin of bins) if (bin.lines < smallest.lines) smallest = bin;
 
         smallest.files.push(file);
