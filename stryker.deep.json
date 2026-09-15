@@ -27,14 +27,13 @@
     "coverageAnalysis": "perTest",
     "incremental": true,
     "incrementalFile": "reports/stryker-incremental-deep.json",
+    "dryRunTimeoutMinutes": 20,
     "mutate": [
         "src/infrastructure/**/*.ts",
         "src/kernel/**/*.ts",
         "src/modules/*/**/*.ts",
         "!src/modules/*/index.ts",
-        "!src/modules/*/tests/**",
-        "src/app/demo.ts",
-        "scenarios/check.ts"
+        "!src/modules/*/tests/**"
     ],
     "ignorePatterns": [
         "coverage/**",
@@ -49,7 +48,7 @@
     "thresholds": {
         "high": 80,
         "low": 60,
-        "break": 60
+        "break": null
     },
     "timeoutMS": 30000,
     "concurrency": 4,

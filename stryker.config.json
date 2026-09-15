@@ -28,6 +28,7 @@
     },
     "coverageAnalysis": "perTest",
     "incremental": true,
+    "dryRunTimeoutMinutes": 20,
     "mutate": [
         "src/infrastructure/**/*.ts",
         "src/kernel/**/*.ts",
