@@ -19,6 +19,7 @@
 
 import { createHash } from 'node:crypto';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
+import { canonicalize } from '@guebbit/js-toolkit';
 import { rejectResponse } from '@infrastructure/http/response';
 import { isDuplicateKey } from '@infrastructure/http/errors';
 import { logger } from '@infrastructure/adapters/logger';
@@ -39,27 +40,6 @@ const IDEMPOTENCY_KEY_HEADER = 'idempotency-key';
 const KEY_PATTERN = /^[\w-]{1,200}$/;
 
 /**
- * `JSON.stringify`, but with every object's keys sorted first — so two requests carrying the
- * SAME body with its fields in a different order fingerprint identically. Safe to hand-write
- * rather than reach for a library: a body here is always what `express.json()` produced, so it
- * is plain JSON-safe data (no `Date`, no `undefined`, no cycle) by construction.
- *
- * @param value - a JSON-safe value, typically `request.body`
- */
-const stableStringify = (value: unknown): string => {
-    if (Array.isArray(value)) return `[${value.map((entry) => stableStringify(entry)).join(',')}]`;
-
-    if (value !== null && typeof value === 'object') {
-        const entries = Object.entries(value as Record<string, unknown>).toSorted(([a], [b]) =>
-            a.localeCompare(b)
-        );
-        return `{${entries.map(([entryKey, entryValue]) => `${JSON.stringify(entryKey)}:${stableStringify(entryValue)}`).join(',')}}`;
-    }
-
-    return JSON.stringify(value);
-};
-
-/**
  * What this request IS, independent of who is asking: the method, the route pattern (not the
  * raw URL — a path parameter must not mint a new fingerprint) and the body. Two requests with
  * the same key but a different fingerprint are the client reusing a key for a different
@@ -75,10 +55,16 @@ const fingerprintOf = (request: Request): string => {
     const routeTemplate = (matchedRoute as { path?: unknown } | undefined)?.path;
     const routePath = typeof routeTemplate === 'string' ? routeTemplate : request.path;
 
+    /*
+     * js-toolkit: rebuilds the body with every object's keys sorted, recursively, so the SAME
+     * body with its fields in a different order fingerprints identically. `JSON.stringify` of the
+     * result is the stable string — a `sort` replacer would only order the top level.
+     * https://github.com/Guebbit/js-toolkit
+     */
+    const body = JSON.stringify(canonicalize(request.body ?? {}));
+
     return createHash('sha256')
-        .update(
-            `${request.method} ${request.baseUrl}${routePath}\n${stableStringify(request.body ?? {})}`
-        )
+        .update(`${request.method} ${request.baseUrl}${routePath}\n${body}`)
         .digest('hex');
 };
 
