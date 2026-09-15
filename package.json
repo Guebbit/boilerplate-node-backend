@@ -52,6 +52,7 @@
         "test:mutation:baseline": "tsx scripts/mutation/check-baseline.ts --update",
         "test:mutation:deep:check": "tsx scripts/mutation/check-baseline.ts --deep",
         "test:mutation:deep:baseline": "tsx scripts/mutation/check-baseline.ts --deep --update",
+        "test:mutation:deep:merge": "tsx scripts/mutation/check-baseline.ts --deep --merge",
         "test:mutation:diff": "tsx scripts/mutation/run-diff.ts",
         "test:prism": "tsx scripts/testing/run-prism-smoke-test.ts",
         "test:cluster": "jest --config jest.config.cluster.js",

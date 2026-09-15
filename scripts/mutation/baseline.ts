@@ -21,7 +21,7 @@
  *
  * See: docs/tools/mutation-testing.md#the-per-file-ratchet
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 /**
@@ -130,6 +130,28 @@ export const readReport = (
     return scoresFromReport(JSON.parse(readFileSync(reportPath, 'utf8')) as MutationReport);
 };
 
+/**
+ * Every Stryker JSON report under a directory tree, merged into one score map.
+ *
+ * A rotation night's shards each upload their own `mutation.json` under a distinct artifact
+ * directory, so the merge job that grades the night sees a TREE of reports rather than the single
+ * fixed path `readReport` expects — this walks it and folds every report it finds together. Shards
+ * partition the mutate scope, so file keys never collide between reports.
+ */
+export const readReportsUnder = (directory: string): Record<string, number> => {
+    const scores: Record<string, number> = {};
+
+    for (const entry of readdirSync(directory, { recursive: true, encoding: 'utf8' })) {
+        if (!entry.endsWith('mutation.json')) continue;
+        const report = JSON.parse(
+            readFileSync(path.join(directory, entry), 'utf8')
+        ) as MutationReport;
+        Object.assign(scores, scoresFromReport(report));
+    }
+
+    return scores;
+};
+
 export const readBaseline = (
     profile: MutationProfile,
     root = process.cwd()
@@ -173,6 +195,56 @@ export const compareToBaseline = (
             return { file, baseline: before, current: now, verdict: 'improved' as const };
         return { file, baseline: before, current: now, verdict: 'held' as const };
     });
+};
+
+/**
+ * Compare a MERGED, rotation-partial run against a baseline — same verdicts as `compareToBaseline`
+ * except `removed`. A file the baseline knows that this round's `current` doesn't is not reported
+ * at all: on a rotation night that means "not measured tonight", not "left the mutate scope", and
+ * only a run covering the WHOLE scope (`compareToBaseline`, behind `--update`) can tell those apart.
+ */
+export const compareMerged = (
+    current: Record<string, number>,
+    baseline?: MutationBaseline
+): FileComparison[] => {
+    const previous = baseline?.files ?? {};
+
+    return Object.keys(current)
+        .toSorted()
+        .map((file) => {
+            const before = previous[file] as number | undefined;
+            const now = current[file];
+
+            if (before === undefined) return { file, current: now, verdict: 'new' as const };
+            if (now < before - SCORE_TOLERANCE)
+                return { file, baseline: before, current: now, verdict: 'regressed' as const };
+            if (now > before)
+                return { file, baseline: before, current: now, verdict: 'improved' as const };
+            return { file, baseline: before, current: now, verdict: 'held' as const };
+        });
+};
+
+/**
+ * The baseline to commit after a MERGE, as opposed to a full `--update`.
+ *
+ * `nextBaseline` rebuilds `files` from `current`'s keys alone, which is correct after a full run
+ * (a file missing from `current` really did leave the mutate scope) and wrong after a rotation
+ * night (two thirds of the scope are simply "not tonight"). This keeps every existing entry and
+ * only touches the files `current` actually measured, under the same never-lower-a-score rule.
+ */
+export const mergeIntoBaseline = (
+    current: Record<string, number>,
+    baseline?: MutationBaseline
+): MutationBaseline => {
+    const previous = baseline?.files ?? {};
+    const files: Record<string, number> = { ...previous };
+
+    for (const file of Object.keys(current)) {
+        const before = previous[file] as number | undefined;
+        files[file] = before === undefined ? current[file] : Math.max(before, current[file]);
+    }
+
+    return { generatedAt: new Date().toISOString(), files };
 };
 
 /**

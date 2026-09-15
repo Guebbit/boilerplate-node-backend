@@ -11,12 +11,18 @@
  * spec-identity tests use temp directories: the logic must be testable without a 51-minute
  * mutation run, and a test that needed one would never be run.
  */
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import {
     SCORE_TOLERANCE,
     compareToBaseline,
+    compareMerged,
     missingFromReport,
     formatRegressions,
+    mergeIntoBaseline,
     nextBaseline,
+    readReportsUnder,
     scoresFromReport,
     type MutationBaseline
 } from '../../../../scripts/mutation/baseline';
@@ -207,6 +213,80 @@ describe('formatRegressions', () => {
 
         expect(message).toContain('reports/mutation/index.html');
         expect(message).toContain('test:mutation:baseline');
+    });
+});
+
+describe('compareMerged — grading a rotation-partial run', () => {
+    it('does not report a file the baseline knows but this round did not measure', () => {
+        // The whole point of `merge` over `--update`: two thirds of the scope are "not tonight",
+        // not "gone", and only compareToBaseline (behind a FULL run) may call something removed.
+        const comparisons = compareMerged(scores([FILE, 90]), baselineOf([FILE, 90], [OTHER, 40]));
+
+        expect(comparisons).toHaveLength(1);
+        expect(comparisons.find(({ file }) => file === OTHER)).toBeUndefined();
+    });
+
+    it('still catches a regression among the files it did measure', () => {
+        const comparisons = compareMerged(scores([FILE, 40]), baselineOf([FILE, 90]));
+
+        expect(comparisons[0]?.verdict).toBe('regressed');
+    });
+
+    it('marks a file the baseline has never seen as new', () => {
+        expect(compareMerged(scores([NEWCOMER, 0]), baselineOf())[0]?.verdict).toBe('new');
+    });
+});
+
+describe('mergeIntoBaseline — the ratchet across a rotation', () => {
+    it('leaves a file outside this round untouched', () => {
+        expect(
+            mergeIntoBaseline(scores([FILE, 95]), baselineOf([FILE, 90], [OTHER, 40])).files
+        ).toEqual(scores([FILE, 95], [OTHER, 40]));
+    });
+
+    it('KEEPS the higher value for a file that regressed this round', () => {
+        expect(mergeIntoBaseline(scores([FILE, 40]), baselineOf([FILE, 90])).files).toEqual(
+            scores([FILE, 90])
+        );
+    });
+
+    it('records a new file at whatever it first measured', () => {
+        expect(mergeIntoBaseline(scores([NEWCOMER, 0]), baselineOf([FILE, 90])).files).toEqual(
+            scores([FILE, 90], [NEWCOMER, 0])
+        );
+    });
+
+    it('stamps the time it was written', () => {
+        expect(Date.parse(mergeIntoBaseline(scores([FILE, 90])).generatedAt)).not.toBeNaN();
+    });
+});
+
+describe('readReportsUnder — folding a rotation night’s shard artifacts', () => {
+    let dir: string;
+
+    beforeEach(() => {
+        dir = mkdtempSync(path.join(tmpdir(), 'mutation-reports-'));
+    });
+
+    afterEach(() => {
+        rmSync(dir, { recursive: true, force: true });
+    });
+
+    it('merges every mutation.json found anywhere under the directory', () => {
+        const shardA = path.join(dir, 'mutation-deep-shard-00', 'mutation-deep');
+        const shardB = path.join(dir, 'mutation-deep-shard-01', 'mutation-deep');
+        mkdirSync(shardA, { recursive: true });
+        mkdirSync(shardB, { recursive: true });
+        writeFileSync(
+            path.join(shardA, 'mutation.json'),
+            JSON.stringify(report([FILE, ['Killed']]))
+        );
+        writeFileSync(
+            path.join(shardB, 'mutation.json'),
+            JSON.stringify(report([OTHER, ['Survived']]))
+        );
+
+        expect(readReportsUnder(dir)).toEqual(scores([FILE, 100], [OTHER, 0]));
     });
 });
 
