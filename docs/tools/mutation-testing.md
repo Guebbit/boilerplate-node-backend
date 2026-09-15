@@ -233,10 +233,14 @@ the estimate was doing real damage: 3186 of `src/modules/`'s 5489 mutants — 58
 scope — were being reported as `NoCoverage` by a run configured not to execute the tests that cover
 them.
 
-`stryker.deep.json` is the second measurement. The default `mutate` scope, plus
-`tests/integration/`, plus two files the default scope excludes entirely because nothing but an
-integration test covers them: `src/app/demo.ts` and `scenarios/check.ts`. Run it with
-`npm run test:mutation:deep`.
+`stryker.deep.json` is the second measurement: the default `mutate` scope, plus
+`tests/integration/`. Run it with `npm run test:mutation:deep`.
+
+`src/app/demo.ts` and `scenarios/check.ts` were in this scope too, briefly — the only files nothing
+but an integration test covers — and were dropped again once the deep run's real cost was measured
+in full (see [The three runs](#the-three-runs)): they are demo-seeding code, not part of what a
+fork of this boilerplate ships, and mutating them spends real nightly hours on files with no
+production behaviour to protect.
 
 Measured on `src/modules/products/repository.ts` — 196 mutants, a file with no unit tests at all
 and a thorough integration suite — on 2026-08-27:
@@ -747,6 +751,15 @@ a value that does not exist at runtime. The app is already written that way, enf
 worker capped at 1400 MB was measured at 6.6 GB RSS. Against external memory the cap does not decide
 how much a worker accumulates, only how early V8 panics about the part it can see.
 
+## The dry run's own timeout
+
+Both configs set `dryRunTimeoutMinutes: 20`. Neither used to set it at all, which left Stryker's
+default of 5 minutes in force — and the dry run executes the WHOLE suite once, unconditionally,
+before a single mutant runs, to build the coverage map `coverageAnalysis: perTest` needs. On the
+deep scope's nightly, three or four shards lost that coin flip on ordinary nights, timing out at
+340–360 seconds with nothing to show for it. 20 minutes is a flat setup-cost budget against a job
+measured in hours; it hides nothing, unlike narrowing what the dry run has to execute would.
+
 ## Concurrency and maxTestRunnerReuse — the current numbers
 
 Both are measurements with an expiry date, not constants — re-measure them when the numbers below stop matching the machine or the project.
@@ -817,7 +830,16 @@ flowchart TB
     class Cost out;
 ```
 
-**One static mutant runs the entire suite.** The share is worth measuring rather than guessing: the run's summary prints `tests per mutant on average`, and the JSON reporter labels each mutant `static`, so counting them per file names the handful that dominate the wall clock. No run has measured the current `mutate` scope yet, so there are no numbers here to read — the first full run is what fills this in.
+**One static mutant runs the entire suite.** The share is worth measuring rather than guessing: the run's summary prints `tests per mutant on average`, and the JSON reporter labels each mutant `static`, so counting them per file names the handful that dominate the wall clock.
+
+The deep scope has one real number now, from `observability` — its cheapest module, at 5 files and
+421 mutants: **49m35s at `--concurrency 2`, ~7.1 seconds per mutant.** The other 398 files in
+`stryker.deep.json`'s `mutate` (43,847 declared mutable lines in total) have never completed a run;
+extrapolating that one file's rate to the whole scope is what the sharding and rotation in
+[Why the deep nightly does not run in full](#why-the-deep-nightly-shards)
+is sized from, and it is a single data point rather than a settled average — re-measure per-shard
+timings once a few rotation nights have run, the same way `concurrency` and `maxTestRunnerReuse`
+below carry their own expiry dates.
 
 It also inflates timeouts, because the timeout is derived from how long the tests are expected to take:
 
@@ -949,13 +971,13 @@ Same mutator, three scopes, three schedules. They differ only in which tests the
 files they mutate — and, critically, each compares against its own baseline, because a score is
 only meaningful next to one measured the same way.
 
-| Run      | Config                | Tests it runs           | Mutates                                                                 | When               | Baseline                      |
-| -------- | --------------------- | ----------------------- | ----------------------------------------------------------------------- | ------------------ | ----------------------------- |
-| **unit** | `stryker.config.json` | unit + cross-cutting    | everything in `mutate`                                                  | nightly, `--force` | `mutation-baseline.json`      |
-| **deep** | `stryker.deep.json`   | \+ `tests/integration/` | the unit scope plus two integration-only files, sharded by module in CI | nightly, `--force` | `mutation-baseline-deep.json` |
-| **diff** | `stryker.deep.json`   | \+ `tests/integration/` | only the files the branch changed                                       | every pull request | `mutation-baseline-deep.json` |
+| Run      | Config                | Tests it runs           | Mutates                             | When                                     | Baseline                      |
+| -------- | --------------------- | ----------------------- | ----------------------------------- | ---------------------------------------- | ----------------------------- |
+| **unit** | `stryker.config.json` | unit + cross-cutting    | everything in `mutate`              | nightly, `--force`                       | `mutation-baseline.json`      |
+| **deep** | `stryker.deep.json`   | \+ `tests/integration/` | a THIRD of the unit scope, rotating | nightly; every shard, `--force`, Sundays | `mutation-baseline-deep.json` |
+| **diff** | `stryker.deep.json`   | \+ `tests/integration/` | only the files the branch changed   | every pull request                       | `mutation-baseline-deep.json` |
 
-### Why the nightlies always run in full
+### Why the unit nightly always runs in full
 
 `mutation.yml` passes `--force`, which discards the incremental file and re-tests every mutant. That
 is the nightly's job. The incremental file is a CACHE, and a refactor that moves code between files
@@ -963,10 +985,45 @@ leaves it describing a codebase that no longer exists — so it is right for a d
 and wrong for the run of record. `npm run test:mutation` locally, without `--force`, is the fast
 version; CI never trusts it.
 
+### Why the deep nightly does not — sharding, rotation, and the merge job {#why-the-deep-nightly-shards}
+
+The deep scope is measured, not estimated, at **399 files, 43,847 declared mutable lines**
+(`stryker.deep.json`'s `mutate`), and `observability` — its cheapest module — took 49m35s for 421
+mutants, ~7.1 seconds each at `--concurrency 2`. Applied to the whole scope that is **~86
+runner-hours**: no per-shard timeout GitHub allows, and no number of module-shaped shards, makes
+that fit in one night, because splitting work does not shrink the total, it only changes how many
+shards run in parallel.
+
+So three things happen together, not separately:
+
+- **Sharded by line count**, not module name. `mutation-deep-matrix` (a job in `mutation.yml`) runs
+  `scripts/mutation/shard-plan.ts`, which walks the SAME roots `stryker.deep.json` declares and
+  bin-packs every file into shards of ~1,300 lines each (`scripts/mutation/sharding.ts`) — about 32
+  shards over the current scope. This is what closes the gap the previous hand-written matrix had:
+  a module added to `src/modules/` is in a shard the next time this runs, with nothing here to edit.
+- **Rotated over three nights.** An ordinary night runs one third of the shards
+  (`epochDay % 3`), so a run stays inside one job's `timeout-minutes` and every file gets a fresh
+  number within three nights rather than never.
+- **A weekly full pass.** Sundays run every shard with `--force`, refreshing the incremental cache
+  the other nights rely on (below) from scratch, the same insurance the unit nightly's `--force`
+  provides every night.
+
+`mutation-deep-merge` then downloads every shard's report and folds it into
+`mutation-baseline-deep.json` with `--merge` — see [`mergeIntoBaseline`](#the-per-file-ratchet):
+files a rotation night didn't touch are left exactly as they were, not treated as having left the
+mutate scope. `reports/*` is gitignored (nothing commits a run's raw output), so `actions/cache`
+keyed per shard is what makes the OTHER two nights of a rotation cheap: incremental, not a re-run
+from scratch, restoring what the shard's own last run computed.
+
 ### The diff run, and why it can fail when the nightly cannot
 
-The nightly is `continue-on-error` and reports. The diff run is the one that can block, and it does
-so on a narrower question: **did a file you touched score below what it already scored?**
+The deep nightly's own Stryker step does not gate: `stryker.deep.json`'s `thresholds.break` is
+`null`, on the same reasoning as the ratchet everywhere else on this page — a single global
+percentage over the whole scope hides exactly the file that matters. `mutation-deep-merge` folds
+every shard into `mutation-baseline-deep.json` regardless of the result, so the record always
+reflects what was actually measured. The diff run is the one that can block a PR, and it does so
+on a narrower question: **did a file you touched score below what the baseline already records for
+it?**
 
 It mutates WHOLE changed files rather than changed lines. Stryker supports line ranges
 (`--mutate 'file.ts:10-40'`, which is how Google's published practice scopes a diff), and whole
@@ -1096,9 +1153,15 @@ test is needed to defend it.
 
 ## Thresholds — measured, not invented
 
-`high` and `low` only colour the report. `break` is the one that fails a run.
+`high` and `low` only colour the report. `break` is the one that fails a run — on
+`stryker.config.json`, the unit scope. `stryker.deep.json`'s `break` is `null`: 40% of
+`observability`'s mutants were `NoCoverage` on its own first real deep measurement, which makes any
+single number invented rather than measured for a scope this partially covered. The per-file
+ratchet in `mutation-baseline-deep.json` is the deep run's gate instead, for the reason
+[The per-file ratchet](#the-per-file-ratchet) gives generally: one collapsing file cannot hide behind
+398 healthy ones under a global percentage.
 
-As of 2026-08-27, `break` is **60** — copied directly from the frontend's own `thresholds.break`, on request, because the two `stryker.config.json` files were written together and are meant to stay one pair. That is a **deliberate exception** to the rule everywhere else in this file: `break` normally sits at the bottom of the observed band, and 60 is currently well above it (see the numbers below). It is expected to keep failing until real coverage closes the gap — that failure is the intended pressure, not a misconfiguration to quietly "fix" by lowering the number.
+As of 2026-08-27, the unit scope's `break` is **60** — copied directly from the frontend's own `thresholds.break`, on request, because the two `stryker.config.json` files were written together and are meant to stay one pair. That is a **deliberate exception** to the rule everywhere else in this file: `break` normally sits at the bottom of the observed band, and 60 is currently well above it (see the numbers below). It is expected to keep failing until real coverage closes the gap — that failure is the intended pressure, not a misconfiguration to quietly "fix" by lowering the number.
 
 Ordinarily the rule is: raise `break` when a score **sustains** a higher band; never lower it to make a run pass. The single sanctioned exception besides the one above is a change to `mutate` — which changes the population, so old and new numbers are not measurements of the same thing — re-recorded in the same commit with both numbers and the reason.
 
@@ -1139,26 +1202,33 @@ and a floor moved twice is worse than a floor moved once.
 
 ## File map
 
-| Path                                 | Contents                                                                                                                        |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| `stryker.config.json`                | Scope (`mutate`), the narrowed Jest config, thresholds, concurrency, reporters                                                  |
-| `stryker.deep.json`                  | The unit scope plus the integration suites, plus `src/app/demo.ts` and `scenarios/check.ts` — see [The deep run](#the-deep-run) |
-| `jest.config.mutation.js`            | The swc transform and `maxWorkers: 1` — see [the worker pool](#the-worker-pool-multiplication)                                  |
-| `mutation-baseline.json`             | Per-file scores. Committed. The ratchet's memory. Absent until the first run.                                                   |
-| `scripts/mutation/baseline.ts`       | Ratchet logic — scoring, comparison, the "never lower" rule                                                                     |
-| `scripts/mutation/check-baseline.ts` | CLI for the two commands below                                                                                                  |
-| `.github/workflows/mutation.yml`     | Nightly schedule + dispatch, uploads the report even on failure                                                                 |
-| `reports/mutation/index.html`        | Human-readable report (generated per run)                                                                                       |
-| `reports/mutation/mutation.json`     | Machine-readable report the ratchet reads                                                                                       |
+| Path                                 | Contents                                                                                                             |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `stryker.config.json`                | Scope (`mutate`), the narrowed Jest config, thresholds, concurrency, reporters                                       |
+| `stryker.deep.json`                  | The unit scope plus the integration suites — see [The deep run](#the-deep-run)                                       |
+| `jest.config.mutation.js`            | The swc transform and `maxWorkers: 1` — see [the worker pool](#the-worker-pool-multiplication)                       |
+| `mutation-baseline.json`             | Per-file scores, unit scope. Committed. The ratchet's memory.                                                        |
+| `mutation-baseline-deep.json`        | Per-file scores, deep scope. Committed by `mutation-deep-merge`, one rotation at a time.                             |
+| `scripts/mutation/baseline.ts`       | Ratchet logic — scoring, comparison, the "never lower" rule, and the merge variant of both                           |
+| `scripts/mutation/check-baseline.ts` | CLI for the commands below                                                                                           |
+| `scripts/mutation/sharding.ts`       | Bin-packing and rotation logic for the deep matrix — see [Why the deep nightly shards](#why-the-deep-nightly-shards) |
+| `scripts/mutation/shard-plan.ts`     | CLI wrapper: walks the real `mutate` scope, prints tonight's matrix as GitHub Actions job outputs                    |
+| `.github/workflows/mutation.yml`     | Nightly schedule + dispatch, the deep matrix and its merge job, the nightly-failure issue                            |
+| `reports/mutation/index.html`        | Human-readable report (generated per run)                                                                            |
+| `reports/mutation/mutation.json`     | Machine-readable report the ratchet reads                                                                            |
 
 ## Commands
 
-| Command                          | Effect                                                                                 |
-| -------------------------------- | -------------------------------------------------------------------------------------- |
-| `npm run test:mutation`          | Full run — slow, meant for a nightly or before a refactor, never mid-PR                |
-| `npm run test:mutation:deep`     | The same scope with the integration suites included. Slow; does not feed the baseline. |
-| `npm run test:mutation:check`    | Compare the last run against the per-file baseline. Fails naming what regressed.       |
-| `npm run test:mutation:baseline` | Record the last run (improvements only). Use when `mutate` changed, and say why.       |
+| Command                               | Effect                                                                                                                                                                                    |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run test:mutation`               | Full unit-scope run — slow, meant for a nightly or before a refactor, never mid-PR                                                                                                        |
+| `npm run test:mutation:deep`          | The same scope with the integration suites included. Slow; does not feed the baseline alone.                                                                                              |
+| `npm run test:mutation:check`         | Compare the last unit run against its per-file baseline. Fails naming what regressed.                                                                                                     |
+| `npm run test:mutation:baseline`      | Record the last unit run (improvements only). Use when `mutate` changed, and say why.                                                                                                     |
+| `npm run test:mutation:deep:check`    | Same as `:check`, against `mutation-baseline-deep.json`.                                                                                                                                  |
+| `npm run test:mutation:deep:baseline` | Same as `:baseline`, against `mutation-baseline-deep.json`. Needs a report covering EVERY file.                                                                                           |
+| `npm run test:mutation:deep:merge`    | Fold a partial (rotation-night) deep report into `mutation-baseline-deep.json` — see `--merge-dir=<path>` in `scripts/mutation/check-baseline.ts`. What `mutation-deep-merge` runs in CI. |
+| `npm run test:mutation:diff`          | The deep ruler narrowed to a branch's changed files, graded against the ratchet.                                                                                                          |
 
 ## Related pages
 
