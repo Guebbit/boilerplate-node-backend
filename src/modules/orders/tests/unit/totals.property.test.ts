@@ -7,10 +7,11 @@
  * counterexample found is written back as an ordinary `it()`.
  */
 import fc from 'fast-check';
+import { PROPERTY_RUNS } from '@tests/knobs';
 import { sumLineItems, orderTotal, type LineItem } from '../../domain/totals';
 
-/** One seed for the file, and one place to change it. */
-const RUN = { seed: 20_260_809, numRuns: 300, endOnFailure: true } as const;
+/** One seed for the file, and one place to change it; the count is `TEST_PROPERTY_RUNS`. */
+const RUN = { seed: 20_260_809, numRuns: PROPERTY_RUNS, endOnFailure: true } as const;
 
 /**
  * The two nullish spellings a failed populate can leave behind — both must contribute 0 rather

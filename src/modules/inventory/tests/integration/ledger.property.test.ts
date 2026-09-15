@@ -9,6 +9,7 @@
 
 import fc from 'fast-check';
 import { setupTestDb } from '@tests/setup-test-db';
+import { PROPERTY_RUNS_WITH_DATABASE } from '@tests/knobs';
 import { createProduct } from '@modules/products/tests/factories';
 import { productRepository } from '@modules/products';
 import { StockMovementReason } from '@types';
@@ -18,8 +19,8 @@ import { stockMovementModel } from '../../model';
 
 setupTestDb();
 
-/** One seed for the file, and one place to change it. */
-const RUN = { seed: 20_260_817, numRuns: 40, endOnFailure: true } as const;
+/** One seed for the file, and one place to change it; the count is `TEST_PROPERTY_RUNS_DB`. */
+const RUN = { seed: 20_260_817, numRuns: PROPERTY_RUNS_WITH_DATABASE, endOnFailure: true } as const;
 
 /**
  * The opening count every case starts from — large enough that a run of receipts and reserves

@@ -5,7 +5,6 @@
  * mutation run, which is the real instrument: docs/tools/coverage-and-confidence.md.
  */
 
-const os = require('node:os');
 const path = require('node:path');
 const { existsSync, readFileSync } = require('node:fs');
 const { parseEnv } = require('node:util');
@@ -27,43 +26,82 @@ const readEnvFile = () => {
 };
 
 /**
- * Measured peak RSS of one jest worker over the 98-suite unit run, rounded up —
- * docs/tools/mutation-testing.md#jest-worker-count. The upper end (905 MB) is used so the RAM cap
- * below stays a cap, not an optimistic guess.
+ * `.env`'s contents, read once.
+ *
+ * Memoised because every knob below consults it, and re-reading the file per lookup would make
+ * this config's cost grow with the number of knobs rather than stay flat.
  */
-const JEST_WORKER_PEAK_MB = 905;
+const envFileValues = readEnvFile();
 
 /**
- * Headroom left unclaimed for the OS, the docker stack (Mongo/Redis/RabbitMQ) and an editor —
- * everything on the machine that is not a jest worker.
+ * The DEPTH knobs, promoted from `.env` into `process.env` for the suites that read them.
+ *
+ * An allowlist, never a merge — merging `.env` wholesale is precisely what {@link readEnvFile}
+ * exists to avoid, since the live rate limits would then reach a worker before
+ * `tests/support/setup.ts` could raise them. These four are read by the harness alone
+ * (`tests/support/knobs.ts`), so turning one down changes what a suite ASKS, never what the code
+ * under test answers.
+ *
+ * Promotion is what carries them across the process boundary: the suites read them in a WORKER,
+ * jest forks its workers from this process, and `process.env` is the only channel that crosses —
+ * the same one `tests/support/global-setup.ts` uses for the Mongo uri. Done here rather than
+ * there because `jest.config.cluster.js` runs no `globalSetup` at all and still extends this file.
  */
-const OS_RESERVE_MB = 4096;
+const DEPTH_KNOBS = [
+    'TEST_FUZZ_RUNS',
+    'TEST_PROPERTY_RUNS',
+    'TEST_PROPERTY_RUNS_DB',
+    'TEST_RACE_SIZE'
+];
+
+for (const name of DEPTH_KNOBS) {
+    if (envFileValues[name] !== undefined) process.env[name] ??= envFileValues[name];
+}
 
 /**
- * How many jest workers to run.
+ * How many jest workers a bare `npx jest` may run, and how much each may hold.
  *
- * Jest's own default (`logical CPUs - 1`) counts cores for a workload bounded by memory, and the
- * OOM killer then takes workers mid-run while every test still passes — measurements in
- * docs/tools/mutation-testing.md#jest-worker-count. The safe number is a property of the machine,
- * so an explicit `JEST_WORKERS` in `.env` always wins; unset, it is computed from the machine
- * rather than assumed, so a weaker or a stronger box than the one the CPU heuristic was tuned on
- * both get a number sized to what they actually have.
+ * The sizing that matters lives in `scripts/testing/machine-budget.ts`, which the npm scripts reach
+ * through `scripts/testing/run-suite.ts` — it reads MemAvailable and passes `--maxWorkers`,
+ * `--workerIdleMemoryLimit` and a pinned `--max-old-space-size` on the command line, where they
+ * beat anything written here. This file is CommonJS and cannot import that module, and deliberately
+ * does not reimplement it: a second copy of the arithmetic is how the two drifted apart before.
  *
- * @returns `JEST_WORKERS` when set, otherwise the lower of `logical CPUs - 2` and free RAM
- *   divided by one worker's peak RSS
+ * What is left is the fallback for running jest DIRECTLY — `npx jest --onlyChanged`, an IDE's
+ * gutter button, a single file. It is a small fixed number rather than a computed one on purpose:
+ * the previous heuristic multiplied `os.totalmem()` by a core count, which on a 15 GB machine with
+ * 6.6 GB actually free authorised eleven workers at ~905 MB each and let the OOM killer take them
+ * mid-run while every test still reported passing. Guessing low costs a slower ad-hoc run; guessing
+ * high costs the run.
+ *
+ * `JEST_WORKERS` in `.env` still wins, exactly as it did.
+ *
+ * See docs/tools/weak-machines.md
  */
-const resolveMaxWorkers = () => {
+const DEFAULT_MAX_WORKERS = 2;
+
+/**
+ * Per-worker memory ceiling for that same fallback, in MB.
+ *
+ * Above a worker's steady-state baseline on purpose. Set below it, jest finds every worker over
+ * budget the moment it goes idle and restarts it after each test file — measured, and slower than
+ * the retention it is meant to contain.
+ */
+const DEFAULT_WORKER_MEMORY_MB = 1400;
+
+/**
+ * Resolves one of the two numbers above from the environment.
+ *
+ * @param name the variable to read, from the real environment first and then `.env`
+ * @param fallback the value to use when it is unset, empty or nonsense
+ * @returns a positive integer
+ */
+const fromEnvironment = (name, fallback) => {
     // A real environment variable wins over the file, so a one-off run can go lower without
-    // editing anything: `JEST_WORKERS=2 npm run test:unit`.
-    const setting = process.env.JEST_WORKERS ?? readEnvFile().JEST_WORKERS;
+    // editing anything: `JEST_WORKERS=1 npx jest`.
+    const setting = process.env[name] ?? readEnvFile()[name];
     const configured = Number(setting?.trim());
-    if (Number.isInteger(configured) && configured > 0) return configured;
-
-    const cpuCap = os.cpus().length - 2;
-    const ramCap = Math.floor((os.totalmem() / 1024 / 1024 - OS_RESERVE_MB) / JEST_WORKER_PEAK_MB);
-
-    // At least one, or a single-core, low-memory container would compute zero and run nothing.
-    return Math.max(1, Math.min(cpuCap, ramCap));
+    return Number.isInteger(configured) && configured > 0 ? configured : fallback;
 };
 
 /**
@@ -109,7 +147,8 @@ module.exports = {
     clearMocks: true,
     coverageProvider: 'v8',
     testEnvironment: 'node',
-    maxWorkers: resolveMaxWorkers(),
+    maxWorkers: fromEnvironment('JEST_WORKERS', DEFAULT_MAX_WORKERS),
+    workerIdleMemoryLimit: `${fromEnvironment('JEST_WORKER_MEMORY_MB', DEFAULT_WORKER_MEMORY_MB)}MB`,
     testMatch: ['**/tests/**/*.test.ts'],
     /*
      * `tests/cluster` runs under `jest.config.cluster.js` instead: those tests spawn `src/cluster.ts`
