@@ -36,5 +36,11 @@ contract.insomnia.json
 contract.mockoon.json
 contract.postman.json
 
+# Generated from openapi.yaml fragments by `postinstall` — see .gitignore. A stale host copy would
+# be overwritten anyway (`gen:api` starts with `rm -rf ./api`), but there is no reason to upload it
+# to the build daemon first.
+/openapi.yaml
+/api/
+
 # Logs
 *.log

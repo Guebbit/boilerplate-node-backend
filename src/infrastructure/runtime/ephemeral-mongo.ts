@@ -10,7 +10,7 @@
  * dependency. There is deliberately no third, container-per-run branch for Mongo — its only
  * unique use case ("an engine is available but downloading a binary is not wanted") is not a
  * capability either existing path lacks, and it is the one branch that would make a container
- * engine mandatory just to run a test. See `CONTAINERIZATION_1_SERVICES.md`.
+ * engine mandatory just to run a test.
  *
  * Actually starting one is NOT this module's job, on purpose: `mongodb-memory-server` is a
  * devDependency, and `not-to-dev-dep` (`.dependency-cruiser.cjs`) bars anything under `src/` from
@@ -32,23 +32,20 @@ export interface EphemeralMongo {
     stop: () => Promise<void>;
 }
 
-/** Default lookup path, absent an override — where `npm run setup:mongod` used to place a binary. */
-const DEFAULT_BINARY_PATH = '/tmp/mongod';
-
 /**
- * Points `mongodb-memory-server` at a pre-installed `mongod` when one is on disk, so it skips its
- * own ~100 MB first-run download. A no-op when the named binary is absent — the library then
- * downloads its own copy.
+ * Points `mongodb-memory-server` at a pre-installed `mongod` when `MONGOMS_SYSTEM_BINARY` names
+ * one on disk, so it skips its own ~100 MB first-run download. A no-op when the variable is unset
+ * or the named binary is absent — the library then downloads its own copy (or reuses whatever it
+ * finds cached under `MONGOMS_DOWNLOAD_DIR`, which `docker/Dockerfile` bakes at build time).
  *
  * Pure env-var bookkeeping, not a call into the library itself — this is what stays safe to do
  * from `src/`. Must run in the same process that calls `startInProcess`, and before it: this is
  * what `bf615b00` fixed after the vars were set too late to matter.
  */
 const usePreinstalledBinary = (): void => {
-    const systemBinary = process.env.MONGOMS_SYSTEM_BINARY ?? DEFAULT_BINARY_PATH;
-    if (!existsSync(systemBinary)) return;
+    const systemBinary = process.env.MONGOMS_SYSTEM_BINARY;
+    if (!systemBinary || !existsSync(systemBinary)) return;
 
-    process.env.MONGOMS_SYSTEM_BINARY = systemBinary;
     process.env.MONGOMS_SYSTEM_BINARY_VERSION_CHECK = 'false';
     process.env.MONGOMS_MD5_CHECK = 'false';
 };

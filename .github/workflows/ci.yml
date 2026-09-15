@@ -17,6 +17,8 @@ name: CI
 #                     `postinstall` in package.json — so there is nothing left to go stale for
 #                     them to check.
 #   - correctness     typecheck, build, test-unit, test-integration, test-contract
+#   - container       container-gate — the same correctness gate again, but inside the image
+#                     `docker/Dockerfile` actually ships, with no services and no network
 #   - supply chain    audit
 #
 # The slow suites live elsewhere on a nightly schedule: mutation.yml and fuzz.yml.
@@ -541,6 +543,35 @@ jobs:
             - name: Run contract tests
               run: npm run test:contract
 
+    container-gate:
+        # Proves the CONTAINER LANE, not just the code: builds `docker/Dockerfile` and runs
+        # `npm run complete` inside it — no compose, no service containers, no network — so a
+        # passing run means the image genuinely carries everything it needs, baked `mongod`
+        # included. This is the "hermetic" mode; the "wired" mode (`docker-compose.test.yml`'s
+        # `gate` service, against compose-supplied Mongo/Redis) is the everyday-dev shape and is
+        # not run a second time here — one hermetic proof is the stronger claim.
+        #
+        # Docker, not podman: runners ship Docker, and `CONTAINER_ENGINE` exists precisely so
+        # switching is a one-variable difference — the claim under test is about the image, not
+        # about which engine built it.
+        #
+        # It duplicates every other job here on purpose, the same reasoning `build` already
+        # documents for overlapping `typecheck`: they answer WHICH thing broke, this one answers
+        # whether the container lane still works AT ALL.
+        runs-on: ubuntu-latest
+        timeout-minutes: 60
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Build the dev/test image
+              run: docker build -f docker/Dockerfile -t boilerplate-api-gate:${{ github.sha }} .
+
+            - name: Run the gate inside it — no services, no network
+              run: docker run --rm --network=none boilerplate-api-gate:${{ github.sha }} npm run complete
+
     audit:
         # Reports known moderate-and-above vulnerabilities in production dependencies.
         #
@@ -590,6 +621,7 @@ jobs:
             - test-unit
             - test-integration
             - test-contract
+            - container-gate
             # `audit` is deliberately excluded — see its own comment above.
         runs-on: ubuntu-latest
         timeout-minutes: 5

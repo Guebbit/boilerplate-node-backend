@@ -60,12 +60,12 @@ flowchart LR
 
 ## What is implemented
 
-| Area                | Current implementation                                                                                                                        |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| App image           | `docker/Dockerfile` based on `node:25-alpine`, with Chromium installed for Puppeteer-driven PDF rendering                                     |
-| Local orchestration | `docker-compose.yml` defines app, MongoDB, Redis, RabbitMQ, and the full observability stack                                                  |
-| Dev workflow        | bind mount source code into `/app`, keep `node_modules` inside the container, switch between single-worker and clustered dev commands         |
-| Podman support      | `compose:restart`, `compose:rebuild` and `compose:kill` run `${CONTAINER_ENGINE:-podman} compose`; export `CONTAINER_ENGINE=docker` to switch |
+| Area                | Current implementation                                                                                                                                                                                                               |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| App image           | `docker/Dockerfile` based on `node:24-trixie-slim` (Debian, glibc), with Chromium for Puppeteer-driven PDF rendering and a `mongod` baked in at build time — see [Running the gate in a container](#running-the-gate-in-a-container) |
+| Local orchestration | `docker-compose.yml` defines app, MongoDB, Redis, RabbitMQ, and the full observability stack                                                                                                                                         |
+| Dev workflow        | bind mount source code into `/app`, keep `node_modules` inside the container, switch between single-worker and clustered dev commands                                                                                                |
+| Podman support      | `compose:restart`, `compose:rebuild` and `compose:kill` run `${CONTAINER_ENGINE:-podman} compose`; export `CONTAINER_ENGINE=docker` to switch                                                                                        |
 
 ### After a new dependency: rebuild, don't just restart
 
@@ -88,9 +88,9 @@ on the host clearly shows, raised from inside `/app`.
 
 ### App runtime
 
-| Container | Image                                           | Port(s)                      | Role                                                                                                                         | Read next               |
-| --------- | ----------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
-| `app`     | `docker/Dockerfile` (node:25-alpine + Chromium) | `NODE_PORT` (default `3000`) | Runs the Express API. In dev: bind-mounted source, hot-reload. Depends on `database`, `redis`, `rabbitmq`, `otel-collector`. | [Runtime](./runtime.md) |
+| Container | Image                                                                 | Port(s)                      | Role                                                                                                                         | Read next               |
+| --------- | --------------------------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| `app`     | `docker/Dockerfile` (node:24-trixie-slim + Chromium + baked `mongod`) | `NODE_PORT` (default `3000`) | Runs the Express API. In dev: bind-mounted source, hot-reload. Depends on `database`, `redis`, `rabbitmq`, `otel-collector`. | [Runtime](./runtime.md) |
 
 ### Core data
 
@@ -152,6 +152,43 @@ mounted read-only, and **nothing under `src/`** — the application must not be 
 it is running. Anyone reaching for it should know the licence question comes first: n8n is
 fair-code under the Sustainable Use License, where the line is internal use versus reselling, not
 commercial versus non-commercial.
+
+## Running the gate in a container
+
+`docker/Dockerfile` carries everything `npm run complete` needs, baked mongod included. Two ways
+to run it, and only one is a CI job:
+
+| Mode         | How                                                                                              | Services                  | Proves                                                                           |
+| ------------ | ------------------------------------------------------------------------------------------------ | ------------------------- | -------------------------------------------------------------------------------- |
+| **Hermetic** | `docker build -f docker/Dockerfile . && docker run --rm --network=none <image> npm run complete` | none — the baked `mongod` | the image is self-contained; this is the `container-gate` CI job                 |
+| **Wired**    | `npm run compose -- -f docker-compose.test.yml run --rm -T gate`                                 | compose Mongo + Redis     | `NODE_TEST_MONGO_URI`/`NODE_TEST_REDIS_URL` work against a real external service |
+
+Hermetic is the stronger claim — no compose, no network, no `depends_on` — so it is what CI gates
+on. Wired is the everyday-dev shape: run it by hand before merging a change that touches the image
+or the env-var resolvers (`src/infrastructure/runtime/ephemeral-mongo.ts`,
+`tests/cluster/support/redis.ts`).
+
+`docker-compose.test.yml` gives itself its own compose project `name:` on purpose — without one,
+compose derives the project name from the directory, the same one `docker-compose.yml` uses with
+no override, and the two would fight over container names (`redis`, `database`) instead of running
+side by side.
+
+The `gate` service builds the image and runs it as built, with **no source bind mount** — that
+image IS the thing under test, not a live-reload target. A mount would also fight
+`--userns=keep-id`: rootless podman needs that flag to keep a bind-mounted write from landing as
+your subuid rather than you, but the image's own `/app` is root-owned from the build, and
+`keep-id` remaps the in-container process away from root — so anything the run needs to write
+outside a mount (`tsc`'s own `dist/`, for one) loses access instead. Read a wired run's result with
+`podman compose -f docker-compose.test.yml logs gate`.
+
+`docker/Dockerfile.dockerignore` overrides the root `.dockerignore` for this one image, keeping
+`.git` in the build context — `npm run complete` runs `lint`, and the `local/comment-links` ESLint
+rule shells out to `git ls-files`; `docker/Dockerfile.production` has the same gap and sidesteps it
+by never running `lint` at all, which is not an option here.
+
+**Image size**: ~2.4 GB, against Alpine's usual few-hundred-MB — Debian itself, Chromium and its
+font/rendering libraries, and the baked `mongod` all add up. None of it ships in
+`docker/Dockerfile.production`, which stays on Alpine — see the comment at the top of that file.
 
 ## How to think about the setup
 

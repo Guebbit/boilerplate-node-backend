@@ -1,0 +1,85 @@
+# The WIRED half of "what proves the container lane works".
+#
+# The HERMETIC half (the one CI actually gates on) is simpler than a compose file: build
+# `docker/Dockerfile` and run `npm run complete` in it with no services and no network — the
+# baked `mongod` and the app's own Redis-optional cache path cover it. That proves the image is
+# self-contained.
+#
+# This file proves the other claim: that `NODE_TEST_MONGO_URI` / `NODE_TEST_REDIS_URL` — decision
+# 1's env-var branch, `src/infrastructure/runtime/ephemeral-mongo.ts` and
+# `tests/cluster/support/redis.ts` — actually work end to end against services the container did
+# not start itself, the same shape GitHub Actions' own `services:` (see ci.yml) and every other CI
+# system supplies a database. Run it by hand before merging a change here; it is not a second CI
+# job on purpose — one hermetic proof is the stronger claim, this one is the everyday-dev shape.
+#
+# Usage:
+#   npm run compose -- -f docker-compose.test.yml run --rm -T gate
+#   npm run compose -- -f docker-compose.test.yml down -v
+#
+# `-T` is not optional — see the `gate` service's own comment on why.
+#
+# `name:` below is not decoration: compose otherwise derives the project name from the current
+# directory, which is exactly what `docker-compose.yml` ALSO does with no `name:` of its own. Two
+# compose files sharing one derived project name means shared container names — running this file
+# stops and recreates the main dev stack's `redis`/`database` out from under it instead of adding
+# a separate one. Verified the hard way; do not remove this.
+name: boilerplate-node-backend-gate
+
+services:
+    mongo:
+        image: mongo:8
+        # No named volume: this stack is scratch space for one gate run, never a database anyone
+        # comes back to. `docker-compose.yml`'s `database` service is the persistent one.
+        healthcheck:
+            test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+            interval: 5s
+            timeout: 5s
+            retries: 12
+            start_period: 30s
+
+    redis:
+        image: redis:7-alpine
+        healthcheck:
+            test: ['CMD', 'redis-cli', 'ping']
+            interval: 5s
+            timeout: 5s
+            retries: 12
+            start_period: 10s
+
+    gate:
+        build:
+            context: .
+            dockerfile: docker/Dockerfile
+        environment:
+            NODE_TEST_MONGO_URI: mongodb://mongo:27017/gate
+            NODE_TEST_REDIS_URL: redis://redis:6379
+            # `resolveMaxWorkers()` (jest.config.js) sizes Jest's worker pool from the machine it
+            # sees — the full host, since this container has no cgroup memory limit of its own —
+            # so on a dev box already running the main compose stack (or anything else heavy) it
+            # over-commits and the kernel OOM-kills a worker mid-suite. Measured: this exact
+            # failure, `dmesg` confirmed `global_oom`, not a container bug. `${JEST_WORKERS:-8}`
+            # picks up a host override (compose reads `.env`, unlike a bare container env) and
+            # otherwise caps it rather than trusting the host's full core count.
+            JEST_WORKERS: '${JEST_WORKERS:-8}'
+        # No bind mount, not even for `reports/`/`coverage/` — deliberately, after trying it.
+        # `docker/Dockerfile`'s image is owned by root; `--userns=keep-id` (the rootless-podman fix
+        # for a bind mount landing as your subuid instead of you) remaps the IN-CONTAINER process
+        # to your uid too, which then loses write access to the image's own root-owned `/app` for
+        # anything NOT bind-mounted — `tsc`'s `dist/` output included. The two fixes fight each
+        # other, so this mode proves the env-var branch through
+        # its live output (`run` streams stdout to your terminal) rather than handing back a file.
+        #
+        # `-T` on the invocation (see the usage comment at the top) — measured the hard way, and
+        # NOT skippable. `podman-compose run` allocates a pty by default regardless of this file's
+        # own `tty:` key, which it does not read for `run`; only the `-T` CLI flag turns it off.
+        # Under a pty, vitepress's build-progress line redraws on every file, and through this
+        # pod's network stack that turned an 8-SECOND `docs:build` into one still running 15
+        # minutes later, still burning CPU — not hung, just repainting a spinner nobody needed to
+        # see. `docker run` (what the CI job uses directly, no compose) never allocates one unless
+        # asked, which is why only this compose-driven mode needs the flag at all.
+        command: ['npm', 'run', 'complete']
+        depends_on:
+            mongo:
+                condition: service_healthy
+            redis:
+                condition: service_healthy

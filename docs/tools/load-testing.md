@@ -8,6 +8,21 @@ actually experienced.
 
 `autocannon` is a devDependency. Nothing about load testing ships in the server.
 
+## k6 (`bench:k6`, `bench:k6:checkout`) runs in a container, not on the host
+
+Unlike `autocannon`, [k6](https://k6.io/) has no npm package — it is a Go binary nobody installs by
+hand, and this repo does not ask you to. `bench:k6` and `bench:k6:checkout` instead run it through
+whichever engine `CONTAINER_ENGINE` already names (`podman` by default):
+
+```
+${CONTAINER_ENGINE:-podman} run --rm -i --network=host -v ./tests/load:/scripts:Z grafana/k6 run /scripts/browse.js
+```
+
+`--network=host` is what lets the containerized k6 reach the app on the host's own port — the
+opposite of most `docker run` traffic, which stays inside the container's network. `tests/load/` is
+bind-mounted read-only-in-spirit (`:Z` only relabels for SELinux) so both scripts run straight from
+the working tree, unedited by anything in the image.
+
 ## Running one
 
 Start the stack, then point a run at it:

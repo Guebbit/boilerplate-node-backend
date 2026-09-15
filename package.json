@@ -57,7 +57,6 @@
         "test:cluster": "jest --config jest.config.cluster.js",
         "bench": "autocannon -c 20 -d 30 -l http://localhost:${NODE_PORT:-3000}/products",
         "bench:search": "autocannon -c 20 -d 30 -l -m POST -H 'Content-Type: application/json' -b '{\"text\":\"a\"}' http://localhost:${NODE_PORT:-3000}/products/search",
-        "setup:mongod": "${CONTAINER_ENGINE:-podman} create --name mongo-temp mongo:latest && ${CONTAINER_ENGINE:-podman} cp mongo-temp:/usr/bin/mongod /tmp/mongod && ${CONTAINER_ENGINE:-podman} rm mongo-temp",
         "db:sync": "tsx db/sync-indexes.ts",
         "db:data": "tsx db/apply-data.ts",
         "scenario:apply": "tsx scenarios/apply.ts",
@@ -93,8 +92,8 @@
         "test:module": "jest --runInBand",
         "bench:orders": "autocannon -c 20 -d 30 -l http://localhost:${NODE_PORT:-3000}/orders",
         "bench:inventory": "autocannon -c 20 -d 30 -l http://localhost:${NODE_PORT:-3000}/inventory/levels",
-        "bench:k6": "k6 run tests/load/browse.js",
-        "bench:k6:checkout": "k6 run tests/load/checkout.js"
+        "bench:k6": "${CONTAINER_ENGINE:-podman} run --rm -i --network=host -v ./tests/load:/scripts:Z grafana/k6 run /scripts/browse.js",
+        "bench:k6:checkout": "${CONTAINER_ENGINE:-podman} run --rm -i --network=host -v ./tests/load:/scripts:Z grafana/k6 run /scripts/checkout.js"
     },
     "devDependencies": {
         "@asyncapi/diff": "^0.5.0",

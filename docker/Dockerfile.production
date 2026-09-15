@@ -8,6 +8,12 @@
 # This file is the other half. The source is baked in, dev dependencies are gone, the process runs
 # as a non-root user, and the image only exists if the code type-checks and lints first.
 #
+# ── WHY THIS STAYS ON ALPINE WHILE docker/Dockerfile MOVED TO DEBIAN ─────────────────────────────
+# `docker/Dockerfile` needs glibc for `mongodb-memory-server`'s baked `mongod`. This image runs no
+# test and never touches `mongod`, so that constraint does not apply here, and Alpine's smaller
+# runtime footprint is worth keeping. Diverging on purpose: each image is sized for the job it
+# actually does.
+#
 # Build:  docker build -f docker/Dockerfile.production -t boilerplate-api:latest .
 # Run:    docker compose -f docker-compose.production.yml up -d
 #

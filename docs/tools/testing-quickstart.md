@@ -99,6 +99,22 @@ Each answers something the others structurally cannot:
 | **contract**      | a Zod-walked request fuzzer + `jest-openapi`              | the API drifting from `openapi.yaml`, in either direction      |
 | **fuzz**          | fast-check                                                | a rule that holds for your examples and not in general         |
 
+## Pointing the suite at a real Mongo or Redis
+
+Two variables, both optional, both honoured the same way — an external address wins when set,
+otherwise the suite starts its own:
+
+| Variable              | Unset (default)                                          | Set                                                                             |
+| --------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `NODE_TEST_MONGO_URI` | an in-process `mongod` per run (`mongodb-memory-server`) | that Mongo — CI's own service container, or `docker-compose.test.yml`'s `mongo` |
+| `NODE_TEST_REDIS_URL` | `test:cluster` starts and stops its own Redis container  | that Redis                                                                      |
+
+See `src/infrastructure/runtime/ephemeral-mongo.ts` and `tests/cluster/support/redis.ts` for the
+resolvers — Mongo's fallback shape differs from Redis's because it has an in-process option
+(`mongodb-memory-server`) and Redis does not. The same two variables are what
+`docker-compose.test.yml`'s `gate` service sets, to prove the external-URI path works end to end —
+see [Docker & Podman](./docker-and-podman.md#running-the-gate-in-a-container).
+
 ## Performance
 
 Two tools, deliberately:
@@ -127,3 +143,4 @@ database and `npm run scenario:apply:reset` afterwards.
 - [Package Scripts](./package-scripts.md) — every script, annotated
 - [Mutation Testing](./mutation-testing.md)
 - [MongoDB & Mongoose](./mongodb-mongoose.md) — where the demo data comes from
+- [Docker & Podman](./docker-and-podman.md#running-the-gate-in-a-container) — running this whole gate inside the image

@@ -55,6 +55,15 @@ container is already listening there.
 The suite **fails** rather than skips when neither is available. A security control nobody checked
 is the thing it exists for, and a green skip reads exactly like a green pass.
 
+Inside a container this matters more than the words above suggest: the fallback shells out to
+`${CONTAINER_ENGINE} run`, which needs either a nested engine or a mounted container socket —
+precisely what [Docker & Podman](./docker-and-podman.md#running-the-gate-in-a-container) avoids on
+purpose. The container lane **must** supply `NODE_TEST_REDIS_URL` — there is no code change to
+make this work, since the resolver already honours it, only a variable to set. `test:cluster` is
+not part of `npm run complete` (it is `complete:manual`), so this does not block the `container-gate`
+CI job or `docker-compose.test.yml`'s `gate` service; it blocks anyone running the full manual pass
+inside a container.
+
 [testcontainers](https://testcontainers.com/) is the obvious dependency for this and was not taken:
 it talks to a Docker socket, and this repo is podman-first (see
 [Docker and Podman](./docker-and-podman.md)). Using it here means exporting a podman socket as
