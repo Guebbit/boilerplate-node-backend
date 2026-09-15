@@ -209,5 +209,8 @@
         "postman-collection": {
             "@faker-js/faker": "5.5.3"
         }
+    },
+    "engines": {
+        "node": "^22 || ^24"
     }
 }
