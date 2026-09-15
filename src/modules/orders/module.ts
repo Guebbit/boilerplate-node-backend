@@ -22,7 +22,7 @@ import { cancelById, detachUserId } from './services';
 // Installs this module's event declarations (ORDER_CANCELLED, ORDER_STATUS_CHANGED).
 import './events';
 
-/** This module's manifest entry: routes, event subscriptions, and locales. */
+/** This module's manifest entry: routes, the shop-identity config gate, event subscriptions, and locales. */
 export default {
     name: 'orders',
     basePath: '/orders',
@@ -39,6 +39,9 @@ export default {
         'orders.any.delete'
     ],
     routes: router,
+    // The invoice prints the shop's own jurisdiction, and an invoice with no country on it is not
+    // one. The other two identity fields (`./config`) are genuinely optional, so neither is here.
+    requiredConfig: [{ key: 'NODE_SHOP_COUNTRY', minLength: 1 }],
     /*
      * A hold that timed out takes its order with it — the units are already released by the
      * time this fires; what `inventory` cannot do is cancel an order without importing this

@@ -10,7 +10,7 @@
 import type { TFunction } from 'i18next';
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
-import { shopCountry, shopLegalName, shopVatNumber } from '@infrastructure/adapters/shop';
+import { shopCountry, shopLegalName, shopVatNumber } from './config';
 import { orderTotal, orderTaxBreakdown } from './domain';
 import type { OrderTransferInstructions } from '@types';
 

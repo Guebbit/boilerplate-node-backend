@@ -17,9 +17,10 @@ import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
 import { productRepository } from './repository';
+import { invalidVatRateConfig } from './config';
 import './events';
 
-/** This module's manifest entry: routes, locales, the image target and the translatable fields. */
+/** This module's manifest entry: routes, its VAT config gate, locales, the image target and the translatable fields. */
 export default {
     name: 'products',
     basePath: '/products',
@@ -36,6 +37,15 @@ export default {
         'products.any.delete'
     ],
     routes: router,
+    // The catalogue resolves a product's tax class into a rate, so the rates are this module's
+    // config — `orders` only freezes the number `resolveTaxRate` hands it.
+    requiredConfig: [
+        { key: 'NODE_VAT_RATE_DEFAULT', minLength: 1 },
+        { key: 'NODE_VAT_RATE_REDUCED', minLength: 1 }
+    ],
+    // `requiredConfig` catches an EMPTY rate; only a range check catches `2.2` or `abc`, which
+    // would otherwise misprice every invoice silently. See `./config`.
+    customCheck: invalidVatRateConfig,
     locales: path.join(__dirname, 'locales'),
     imageTargets: { products: { writeback: productRepository.writebackImage } },
     /*

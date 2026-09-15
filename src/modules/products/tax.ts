@@ -5,7 +5,7 @@
  * the catalogue, not of any one order — `orders` freezes whatever this returns, it does not decide it.
  */
 
-import { vatRateDefault, vatRateReduced } from '@infrastructure/adapters/shop';
+import { vatRateDefault, vatRateReduced } from './config';
 import type { Product } from '@types';
 
 /** Mirrors `TaxClass` on the contract — the values a product's `taxClass` may hold. */
