@@ -10,6 +10,7 @@
 // Span/Attributes. Importing it when no SDK is registered is harmless: every call becomes a
 // no-op, which is what lets tests run without booting OpenTelemetry.
 import { trace, SpanStatusCode, type Span, type Attributes } from '@opentelemetry/api';
+import { describeError } from '@infrastructure/adapters/logger';
 
 /**
  * Single tracer scoped to this service.
@@ -59,7 +60,7 @@ export const withSpan = <T>(
                 // makes the span show up red / count toward error rates in the backend.
                 span.setStatus({
                     code: SpanStatusCode.ERROR,
-                    message: error instanceof Error ? error.message : String(error)
+                    message: describeError(error)
                 });
                 // `recordException` additionally attaches a structured exception *event*
                 // (type, message, stack) — richer than the status message alone.
@@ -112,7 +113,7 @@ export const recordErrorOnActiveSpan = (error: unknown): void => {
     if (!span) return;
     span.setStatus({
         code: SpanStatusCode.ERROR,
-        message: error instanceof Error ? error.message : String(error)
+        message: describeError(error)
     });
     if (error instanceof Error) span.recordException(error);
     // Note: deliberately does NOT call `span.end()`. The span belongs to whoever opened it

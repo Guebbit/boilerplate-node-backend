@@ -10,6 +10,7 @@
 // built out of those two concepts.
 import winston from 'winston';
 import { createHash } from 'node:crypto';
+import { extractErrorMessage } from '@guebbit/js-toolkit';
 
 /**
  * Field names that must never be logged in clear text.
@@ -149,6 +150,26 @@ export const serializeError = (error: unknown): Record<string, unknown> => {
     // `throw 'string'` and `throw { code: 1 }` are legal JS; keep *something* readable.
     return { raw: String(error) };
 };
+
+/**
+ * The one-line counterpart of {@link serializeError}: a caught value reduced to the string a
+ * single log field, or a stored `lastError` column, can hold.
+ *
+ * Its own function because the alternative — `error instanceof Error ? error.message :
+ * String(error)`, inline — was written out at two dozen call sites, and every one of them read a
+ * non-`Error` rejection carrying a `message` as `[object Object]`.
+ *
+ * @param error - the caught or rejected value
+ * @returns its message, or `String(error)` when it carries none
+ */
+export const describeError = (error: unknown): string =>
+    /*
+     * js-toolkit: consults a bare string, an `Error`, then a `message` on the value itself, so a
+     * rejection that is not an `Error` still yields its message. `String(error)` is the fallback
+     * rather than the toolkit's default empty string — a log line saying nothing is worse than one
+     * saying `undefined`. https://github.com/Guebbit/js-toolkit
+     */
+    extractErrorMessage(error, String(error));
 
 /**
  * Apply error serialization and redaction before transport output.

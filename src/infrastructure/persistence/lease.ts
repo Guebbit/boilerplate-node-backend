@@ -17,7 +17,7 @@
 import { randomUUID } from 'node:crypto';
 import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
-import { logger } from '@infrastructure/adapters/logger';
+import { logger, describeError } from '@infrastructure/adapters/logger';
 import { isDuplicateKey } from '@infrastructure/http/errors';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 
@@ -123,10 +123,6 @@ export const listLeaseSummaries = (): Promise<LeaseSummary[]> =>
                 lastError: row.lastError
             }))
         );
-
-/** `error` reduced to the string `lastError` stores — same shape `db/run-script.ts` logs with. */
-const describeError = (error: unknown): string =>
-    error instanceof Error ? error.message : String(error);
 
 /**
  * Try to become (or remain) the holder of `name`. One atomic `findOneAndUpdate` upsert: it wins

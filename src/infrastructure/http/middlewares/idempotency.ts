@@ -22,7 +22,7 @@ import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { canonicalize } from '@guebbit/js-toolkit';
 import { rejectResponse } from '@infrastructure/http/response';
 import { isDuplicateKey } from '@infrastructure/http/errors';
-import { logger } from '@infrastructure/adapters/logger';
+import { logger, describeError } from '@infrastructure/adapters/logger';
 import { t } from '@infrastructure/i18n';
 import {
     idempotencyRecordModel,
@@ -111,7 +111,7 @@ const armOutcomeCapture = (response: Response, key: string, caller: string): voi
                     message:
                         'Idempotency record could not be marked done; it will expire in-flight.',
                     key,
-                    error: error instanceof Error ? error.message : String(error)
+                    error: describeError(error)
                 });
             });
 

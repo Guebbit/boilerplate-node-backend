@@ -71,7 +71,15 @@ const mockCreateClient = jest.fn((_options: unknown) => mockClient);
 jest.mock('redis', () => ({ createClient: (options: unknown) => mockCreateClient(options) }));
 
 // The adapter logs a warning on every unreachable path; silence it so a passing run is quiet.
+/*
+ * The real module is spread back in, then `logger` replaced: this suite asserts on log calls, but
+ * `describeError` is a plain helper the code under test also imports, and a factory returning
+ * `logger` alone deletes it. Same move `@modules/users` gets in `token-cleanup-job.test.ts`.
+ */
 jest.mock('@infrastructure/adapters/logger', () => ({
+    ...jest.requireActual<typeof import('@infrastructure/adapters/logger')>(
+        '@infrastructure/adapters/logger'
+    ),
     logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }
 }));
 

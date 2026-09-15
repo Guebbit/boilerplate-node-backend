@@ -10,7 +10,7 @@
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { rejectResponse } from '@infrastructure/http/response';
-import { logger } from '@infrastructure/adapters/logger';
+import { logger, describeError } from '@infrastructure/adapters/logger';
 import { callerContextOf } from '@infrastructure/http/request';
 import type { UserDocument } from '@modules/users';
 import { resolveOAuthProvider } from '../oauth/providers';
@@ -142,7 +142,7 @@ export const getOAuthCallback = (request: Request, response: Response) => {
             logger.error({
                 message: 'OAuth callback failed',
                 provider: providerName,
-                error: error instanceof Error ? error.message : String(error)
+                error: describeError(error)
             });
             failToFrontend('provider_error');
         });

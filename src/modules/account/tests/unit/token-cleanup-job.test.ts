@@ -28,8 +28,15 @@ jest.mock('@modules/users', () => ({
     }
 }));
 
+/*
+ * Spread for the same reason `@modules/users` is above: `describeError` is a plain helper the job
+ * imports, and a factory returning `logger` alone deletes it.
+ */
 jest.mock('@infrastructure/adapters/logger', () => ({
     __esModule: true,
+    ...jest.requireActual<typeof import('@infrastructure/adapters/logger')>(
+        '@infrastructure/adapters/logger'
+    ),
     logger: {
         info: jest.fn(),
         error: jest.fn(),

@@ -10,7 +10,7 @@
 // `createClient` builds a (not yet connected) Redis client from a connection URL;
 // `RedisClientType` is the resulting client's type, needed for the generic below.
 import { createClient, type RedisClientType } from 'redis';
-import { logger } from '@infrastructure/adapters/logger';
+import { logger, describeError } from '@infrastructure/adapters/logger';
 import { manageConnection } from '@infrastructure/adapters/managed-connection';
 import type { DependencyStatus } from '@infrastructure/observability/dependency-health';
 import { environmentFlag } from '@infrastructure/runtime/environment';
@@ -150,7 +150,7 @@ export const getCacheValue = (key: string): Promise<string | undefined> =>
             logger.warn({
                 message: 'Redis cache read failed.',
                 key,
-                error: error instanceof Error ? error.message : String(error)
+                error: describeError(error)
             });
             return undefined;
         });
@@ -207,7 +207,7 @@ export const setCacheValue = (
             logger.warn({
                 message: 'Redis cache write failed.',
                 key,
-                error: error instanceof Error ? error.message : String(error)
+                error: describeError(error)
             });
         });
 };
@@ -240,7 +240,7 @@ export const claimCacheRefresh = (key: string, seconds: number): Promise<boolean
             logger.warn({
                 message: 'Redis refresh claim failed.',
                 key,
-                error: error instanceof Error ? error.message : String(error)
+                error: describeError(error)
             });
             return false;
         });
@@ -293,7 +293,7 @@ export const invalidateCacheTags = (tags: string[]): Promise<ClearCacheResult> =
             logger.warn({
                 message: 'Redis cache invalidation failed.',
                 tags: cacheTags,
-                error: error instanceof Error ? error.message : String(error)
+                error: describeError(error)
             });
             return { deleted: 0, reachable: false };
         });
@@ -381,7 +381,7 @@ export const clearCache = (): Promise<ClearCacheResult> =>
             // which is the same verdict as never having connected.
             logger.warn({
                 message: 'Redis cache clear failed.',
-                error: error instanceof Error ? error.message : String(error)
+                error: describeError(error)
             });
             return { deleted: 0, reachable: false };
         });

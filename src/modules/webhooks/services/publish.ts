@@ -18,7 +18,7 @@ import { onDomainEvent } from '@kernel/events';
 import { ORDER_CREATED, ORDER_STATUS_CHANGED, ORDER_CANCELLED } from '@modules/orders';
 import { PAYMENT_SUCCEEDED, PAYMENT_FAILED } from '@modules/payments';
 import { publishToQueue } from '@infrastructure/adapters/queue';
-import { logger } from '@infrastructure/adapters/logger';
+import { logger, describeError } from '@infrastructure/adapters/logger';
 import { WORKER_CHANNELS } from '@types';
 import type { WebhookDeliverJobPayload } from '@types';
 import { webhookSubscriptionRepository, webhookDeliveryRepository } from '../repository';
@@ -85,7 +85,7 @@ const deliverToOne = (
             logger.error({
                 message: 'webhooks: failed to fan out to a subscription',
                 subscriptionId: String(subscription._id),
-                error: error instanceof Error ? error.message : String(error)
+                error: describeError(error)
             });
         });
 

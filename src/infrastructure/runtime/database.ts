@@ -13,7 +13,7 @@ import mongoose from 'mongoose';
 // `collection.find()` yields and `collection.insertMany()` takes, with no Mongoose hydration
 // in between. https://mongodb.github.io/node-mongodb-native/
 import type { Document } from 'mongodb';
-import { logger } from '@infrastructure/adapters/logger';
+import { logger, describeError } from '@infrastructure/adapters/logger';
 
 /** Give up after this many attempts so a misconfigured URI fails the deploy instead of retrying forever. */
 const MAX_RETRIES = 10;
@@ -102,7 +102,7 @@ export const stopDatabase = () =>
             logger.warn({
                 message: 'MongoDB disconnect failed.',
                 // Narrow `unknown` before touching `.message`: anything can be thrown in JS.
-                error: error instanceof Error ? error.message : String(error)
+                error: describeError(error)
             });
         }
     );
