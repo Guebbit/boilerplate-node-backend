@@ -1037,6 +1037,20 @@ export default tseslint.config(
     },
 
     /**
+     * B1's deny-list (`BARREL_EXPORT.md`, `docs/theory/strategic-ddd.md` §5) holds only if a
+     * barrel's `export *` cannot reach a repository, the model's runtime or a wiring file by
+     * naming a source the deny-list never considered. `boundaries/dependencies` above answers
+     * "which module may a FILE import"; this is the question one level up — which of a module's
+     * OWN files its `index.ts` is allowed to publish everything from.
+     */
+    {
+        files: ['src/modules/*/index.ts'],
+        rules: {
+            'local/barrel-allowed-sources': 'error'
+        }
+    },
+
+    /**
      * What the domain layer may not TOUCH, as opposed to which tier it may reach.
      *
      * Left with `no-restricted-imports` on purpose: `mongoose` and `express` are external
