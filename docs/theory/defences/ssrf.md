@@ -8,17 +8,23 @@ database".
 **The one thing that has to be true:** a caller's value ends up in the URL an outbound request is
 made to. Everything else is variation.
 
+This backend has exactly one path where that is true — outbound [webhooks](../../modules/webhooks.md),
+which POST to a URL the subscriber registered — and one guard built for it,
+`infrastructure/adapters/ssrf-guard.ts`. Every other outbound `fetch` in `src/` targets a
+hard-coded host. The table below is read against that split: the guarded webhook path on one side,
+"no surface at all" everywhere else.
+
 ## Making the server fetch
 
-| Attack                      | How it works                                                                            | This boilerplate                                                                                                                                                                                                                                 |
-| --------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| SSRF — basic                | a webhook URL, image import, PDF renderer or URL preview fetches what it is given       | Every outbound `fetch` in `src/` has a HARD-CODED host: the two OAuth providers' token and profile endpoints, and the analytics collector at its configured host — `account/oauth/providers/`, `infrastructure/observability/analytics/umami.ts` |
-| SSRF — blind                | the fetch happens but the response is not shown; timing or out-of-band DNS reveals it   | Same answer — there is no fetch to steer, so there is nothing to observe out of band.                                                                                                                                                            |
-| SSRF — via redirect         | an allowed URL 302s to an internal one; the validator checked the first hop only        | No surface: there is no validator to outrun, because there is no caller-supplied URL. The hard-coded hosts are the allowlist.                                                                                                                    |
-| SSRF — DNS rebinding        | a TTL-0 record resolves publicly at check time and privately at fetch time              | Same answer — no check-then-fetch window exists.                                                                                                                                                                                                 |
-| SSRF — parser confusion     | `http://allowed@evil/`, `evil#@allowed`, IPv6 forms, decimal or octal IPs               | Same answer — no URL is parsed from input, so no two parsers can disagree about it.                                                                                                                                                              |
-| Protocol smuggling via SSRF | `gopher://`, `dict://`, `file://` where the client library allows it                    | Same answer. Node's `fetch` also speaks HTTP(S) only.                                                                                                                                                                                            |
-| Webhook / callback abuse    | user-registered URLs hit by the server — SSRF as a feature, and port scanning by timing | No surface: no endpoint accepts a URL to call back, and no field stores one.                                                                                                                                                                     |
+| Attack                      | How it works                                                                            | This boilerplate                                                                                                                                                                                                                                                                             |
+| --------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SSRF — basic                | a webhook URL, image import, PDF renderer or URL preview fetches what it is given       | Two shapes. Every fetch to a HARD-CODED host — the two OAuth providers' token/profile endpoints, the analytics collector — has no caller-supplied part to steer. The one exception is webhook delivery, whose URL is the subscriber's; it goes through `ssrf-guard.ts` before every request. |
+| SSRF — blind                | the fetch happens but the response is not shown; timing or out-of-band DNS reveals it   | For the hard-coded hosts, nothing to steer. For webhooks the guard runs _before_ the request against the resolved IP, so a refused target never connects — there is no timing or out-of-band signal to read off a request that was never made.                                               |
+| SSRF — via redirect         | an allowed URL 302s to an internal one; the validator checked the first hop only        | `webhook-delivery.ts` never follows a redirect: a 3xx is read as a failed delivery, full stop. There is no "first hop only" because there is no second hop to a validator's blind spot.                                                                                                      |
+| SSRF — DNS rebinding        | a TTL-0 record resolves publicly at check time and privately at fetch time              | The guard closes the TOCTOU window by construction: it resolves the hostname once, validates that address, then hands delivery a `lookup` pinned to it — the HTTP client is never free to resolve a second time and get a private answer.                                                    |
+| SSRF — parser confusion     | `http://allowed@evil/`, `evil#@allowed`, IPv6 forms, decimal or octal IPs               | The subscriber URL is parsed once with `URL`, and the range checks run on the resolved IP via `ip-address`'s `Address4`/`Address6`, not string matching — including the IPv4-mapped IPv6 literal (`::ffff:127.0.0.1`) a naive check waves through.                                           |
+| Protocol smuggling via SSRF | `gopher://`, `dict://`, `file://` where the client library allows it                    | The guard requires `https:` (the one dev/test demo host aside), and Node's client speaks HTTP(S) only regardless.                                                                                                                                                                            |
+| Webhook / callback abuse    | user-registered URLs hit by the server — SSRF as a feature, and port scanning by timing | This IS the surface, and it is the one the guard is for. Private, loopback, link-local and CGNAT ranges are refused before the first request, so a subscription cannot be turned into an internal port scanner — see [The delivery path](../../modules/webhooks.md#the-delivery-path).       |
 
 ## The PDF renderer, specifically
 
@@ -31,23 +37,34 @@ prints goes through `<%= %>` — `infrastructure/adapters/pdf.ts`,
 
 ## What an SSRF primitive would reach
 
-Listed because "no surface" is only a useful verdict if you know what it is protecting.
+Listed because a guard is only as reassuring as what it protects — and because the webhook path is
+constrained, not absent.
 
 | Attack                 | How it works                                                                    | This boilerplate                                                                                                                                                                                                                                                                             |
 | ---------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Cloud metadata access  | credentials from `169.254.169.254` in a cloud VM without IMDSv2                 | Reachable only through an SSRF primitive, and there is none. The deployment-side belt — IMDSv2 and blocking link-local egress — is [Egress filtering and cloud metadata](../../tools/deployment-hardening.md#egress-filtering-and-cloud-metadata).                                           |
+| Cloud metadata access  | credentials from `169.254.169.254` in a cloud VM without IMDSv2                 | The only caller-supplied-URL path refuses link-local addresses before it connects (above). The deployment-side belt — IMDSv2 and blocking link-local egress — is [Egress filtering and cloud metadata](../../tools/deployment-hardening.md#egress-filtering-and-cloud-metadata).             |
 | Internal service reach | unauthenticated admin panels, databases and brokers trusted by network position | Neither Mongo, Redis nor RabbitMQ publishes a port in the production compose file; they are reachable on the compose network and nowhere else — `docker-compose.production.yml`. So even a primitive would find authenticated services — see [Data layer](data-layer.md#reaching-the-store). |
 
-## If you add an outbound fetch
+## If you add another outbound fetch
 
-The rule this page rests on is "every outbound host is hard-coded", and it is a property of the
-code rather than of a guard. Adding a feature that fetches a caller-supplied URL — an avatar
-import, a link preview, a webhook registration — removes it. That feature needs its own allowlist,
-resolved-IP checks against private ranges **after** DNS resolution, and redirect following
-disabled. None of that exists today because nothing needs it.
+Outbound webhooks were the first feature to fetch a caller-supplied URL, and
+`infrastructure/adapters/ssrf-guard.ts` is the reference the next one should copy rather than
+re-derive. The non-negotiables, all of which it already implements:
+
+- an allowlist by **resolved IP** — private, loopback, link-local and CGNAT ranges checked _after_
+  DNS resolution, never against the hostname, which says nothing about where it points;
+- **pin** the validated address for the actual connection, so a second DNS lookup cannot answer
+  differently (the rebinding window);
+- **redirects disabled** — a 3xx is a failure, not a new hop to re-validate;
+- **`https:` only**, and parsing done by a library (`ip-address`), not by hand.
+
+Reuse the guard rather than writing a fresh check: the IPv6 embedding forms alone — mapped, 6to4,
+Teredo — are a class of bug a hand-rolled range test gets wrong. See
+[The delivery path](../../modules/webhooks.md#the-delivery-path).
 
 ## Related
 
+- [webhooks](../../modules/webhooks.md) — the one outbound path that takes a caller-supplied URL
 - [The API surface](api-surface.md) — consuming upstream APIs safely
 - [Data layer](data-layer.md) — what sits behind the network boundary
 - [Authorization](authorization.md#bypassing-the-check-rather-than-passing-it) — the confused-deputy row
