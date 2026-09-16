@@ -6,6 +6,46 @@
 **Breaks if you change** — the six event names in `asyncapi.yaml`, or the queue payload shape in `shared/contracts/asyncapi.workers.yaml`.
 :::
 
+## What a webhook is
+
+A webhook is how this backend tells _someone else's_ server that something happened, without them
+having to ask. A subscriber registers a URL once; from then on, every matching event becomes a
+signed HTTP `POST` to that URL, seconds after it lands.
+
+The direction is the whole point. A normal API waits to be called. A webhook is the reverse edge —
+_this_ server does the calling — so the other side learns about an event the moment it happens
+instead of polling "anything new?" on a timer.
+
+```mermaid
+flowchart LR
+    E["an order is paid"] --> S["this backend"]
+    S -->|"signed POST, seconds later"| U["the subscriber's URL"]
+    U --> R["they react:<br/>notify · fulfil · reconcile"]
+
+    classDef here fill:#ede9fe,stroke:#7c3aed,color:#111827;
+    classDef out fill:#dcfce7,stroke:#16a34a,color:#111827;
+    class S here;
+    class U,R out;
+```
+
+Real uses, one mechanism:
+
+- **A Slack channel that pings on every paid order.** Paste Slack's incoming-webhook URL into a
+  subscription; `payment.succeeded` turns into a message in the channel, with no integration code
+  to host.
+- **A partner's fulfilment system that ships on order.** They subscribe to `order.created`; each
+  delivery carries the order, and their warehouse starts packing without waiting on a nightly
+  export.
+- **An internal ledger that reconciles in near-real-time.** `payment.failed` and `order.cancelled`
+  reach a small endpoint of your own that reverses the entry, rather than a batch job noticing hours
+  later.
+
+The catch — and the reason [SSRF](../theory/defences/ssrf.md) is a live concern here — is that the
+destination URL is chosen by whoever creates the subscription. Delivering to a URL a caller
+supplies is exactly the shape an attacker abuses to make the server fetch something internal, so
+every delivery goes through `infrastructure/adapters/ssrf-guard.ts` first — see
+[The delivery path](#the-delivery-path).
+
 ## Its neighbourhood
 
 <!-- module-graph:webhooks:start -->
