@@ -10,7 +10,7 @@
  */
 
 import i18next from 'i18next';
-import { logger, describeError } from '@infrastructure/adapters/logger';
+import { logger } from '@infrastructure/adapters/logger';
 import { listSupportedLocales, readLocaleDictionary } from './catalog';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 
@@ -101,7 +101,7 @@ export const refreshLocaleOverrides = (): Promise<void> => {
             logger.warn(
                 'refreshLocaleOverrides - locale overrides unavailable, keeping the last set',
                 {
-                    detail: describeError(error)
+                    error
                 }
             );
         });

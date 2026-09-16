@@ -149,16 +149,19 @@ describe('registerAuditSink', () => {
     it('does not let a throwing sink escape into the caller', () => {
         // The property the whole audit path rests on: these run while answering requests, so a
         // broken sink must never turn a successful login into a 500.
+        const failure = new Error('mongo is down');
         registerAuditSink(() => {
-            throw new Error('mongo is down');
+            throw failure;
         });
 
         expect(() => emitAuditEvent(event)).not.toThrow();
         // The failure is reported rather than swallowed silently: the log line, then the warning.
         expect(auditLogger.log).toHaveBeenCalledTimes(1);
+        // The Error itself, not its message: `redactFormat` hands anything under `error` to
+        // `serializeError`, which keeps the name and — outside production — the stack.
         expect(auditLogger.warn).toHaveBeenCalledWith(
             'audit.sink.failed',
-            expect.objectContaining({ error: 'mongo is down' })
+            expect.objectContaining({ error: failure })
         );
     });
 });

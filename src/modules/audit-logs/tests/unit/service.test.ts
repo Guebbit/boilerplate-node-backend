@@ -72,7 +72,8 @@ describe('auditLogService.record', () => {
     });
 
     it('swallows a failed write into a warning instead of throwing', async () => {
-        mockedRepository.create.mockRejectedValue(new Error('mongo is down'));
+        const failure = new Error('mongo is down');
+        mockedRepository.create.mockRejectedValue(failure);
 
         expect(() => auditLogService.record(makeEntry())).not.toThrow();
 
@@ -80,11 +81,13 @@ describe('auditLogService.record', () => {
         await Promise.resolve();
         await Promise.resolve();
 
+        // The Error itself, not its message: `redactFormat` hands anything under `error` to
+        // `serializeError`, which keeps the name and — outside production — the stack.
         expect(mockedLogger.warn).toHaveBeenCalledWith(
             expect.objectContaining({
                 message: 'audit entry not persisted',
                 action: 'auth.login',
-                error: 'mongo is down'
+                error: failure
             })
         );
     });

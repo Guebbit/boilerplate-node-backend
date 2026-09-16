@@ -12,7 +12,7 @@ import {
     type LocaleCapability
 } from '@types';
 import { getDefaultLocale, getFallbackLocale, listSupportedLocales } from '@infrastructure/i18n';
-import { logger, describeError } from '@infrastructure/adapters/logger';
+import { logger } from '@infrastructure/adapters/logger';
 import type { AuthContext } from '@types';
 import { accessibleFilter } from '@kernel/access/query';
 import { deriveBaseLanguage, type LocaleDocument } from '../model';
@@ -144,7 +144,7 @@ export const readDynamicTier = (
         .then(([languages, entryCounts]) => ({ languages, entryCounts }))
         .catch((error: unknown) => {
             logger.warn('listCapabilities - dynamic locale tier unavailable, serving static only', {
-                detail: describeError(error)
+                error
             });
             return { languages: [], entryCounts: new Map() };
         });

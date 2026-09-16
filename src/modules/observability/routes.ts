@@ -59,7 +59,7 @@ router.get('/metrics', isMetricsScraper, (_request, response) => {
             response.send(metrics);
         })
         .catch((error: Error) => {
-            logger.error('Failed to collect Prometheus metrics', { error: error.message });
+            logger.error('Failed to collect Prometheus metrics', { error });
             response.status(500).send('# metrics unavailable\n');
         });
 });

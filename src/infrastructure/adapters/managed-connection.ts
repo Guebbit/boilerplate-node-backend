@@ -10,7 +10,7 @@
  * See: docs/tools/redis-cache.md, docs/tools/rabbitmq.md
  */
 
-import { logger, describeError } from '@infrastructure/adapters/logger';
+import { logger } from '@infrastructure/adapters/logger';
 import type { DependencyStatus } from '@infrastructure/observability/dependency-health';
 
 /** What an adapter has to supply: how to open, how to check, how to close. */
@@ -144,12 +144,12 @@ export const manageConnection = <THandle>({
         if (unavailableLevel === 'error') {
             logger.error({
                 message: unavailableMessage,
-                error: describeError(error)
+                error
             });
         } else {
             logger.warn({
                 message: unavailableMessage,
-                error: describeError(error)
+                error
             });
         }
         warningLogged = true;

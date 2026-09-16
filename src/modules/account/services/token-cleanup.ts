@@ -8,7 +8,7 @@
  */
 
 import { userRepository } from '@modules/users';
-import { logger, describeError } from '@infrastructure/adapters/logger';
+import { logger } from '@infrastructure/adapters/logger';
 import {
     generateSuccess,
     generateReject,
@@ -40,7 +40,7 @@ export const runTokenCleanup = (): Promise<void> => {
              */
             logger.error({
                 message: 'Token cleanup: failed',
-                error: describeError(error)
+                error
             });
         });
 };
@@ -74,7 +74,7 @@ export const adminTokenCleanup = (
              */
             logger.error({
                 message: 'Admin token cleanup failed',
-                error: describeError(error)
+                error
             });
             return generateReject(500, []);
         });

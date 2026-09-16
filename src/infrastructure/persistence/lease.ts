@@ -192,7 +192,7 @@ const releaseLease = (
             // one.
             logger.warn('releaseLease - could not release, lease will expire naturally', {
                 name,
-                detail: describeError(releaseError)
+                error: releaseError
             });
         });
 

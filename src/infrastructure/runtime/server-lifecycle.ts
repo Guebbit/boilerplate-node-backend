@@ -7,7 +7,7 @@
  */
 
 import type { Server } from 'node:http';
-import { logger, describeError } from '@infrastructure/adapters/logger';
+import { logger } from '@infrastructure/adapters/logger';
 import { shutdownAnalytics } from '@infrastructure/observability/analytics';
 import { shutdownTracing } from '@infrastructure/runtime/otel-sdk';
 import { stopDatabase } from '@infrastructure/runtime/database';
@@ -115,7 +115,7 @@ export const registerSignalHandlers = (stopFunction: () => Promise<void>) => {
             .catch((error: unknown) => {
                 logger.error({
                     message: 'Graceful shutdown failed.',
-                    error: describeError(error)
+                    error
                 });
                 // Non-zero code so the platform records an unclean stop.
                 process.exit(1);

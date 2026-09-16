@@ -10,7 +10,7 @@
 import { createClient, type RedisClientType } from 'redis';
 import { MemoryStore, type Options, type Store } from 'express-rate-limit';
 import { RedisStore, type RedisReply } from 'rate-limit-redis';
-import { logger, describeError } from '@infrastructure/adapters/logger';
+import { logger } from '@infrastructure/adapters/logger';
 import { environmentFlag, environmentNumber } from '@infrastructure/runtime/environment';
 import {
     manageConnection,
@@ -189,7 +189,7 @@ const lazyRedisStore = (namespace: string, url: string): Store => {
                     logger.error({
                         message:
                             'Rate-limit Redis store failed to initialise — requests are passing unbudgeted until it recovers.',
-                        error: describeError(error)
+                        error
                     });
                 });
         }

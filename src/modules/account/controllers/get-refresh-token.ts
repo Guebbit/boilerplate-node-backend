@@ -52,7 +52,7 @@ export const getRefreshToken = (request: Request, response: Response) => {
             // `runTokenCleanup` is housekeeping: it removes expired tokens and has nothing to do with
             // whether THIS refresh is valid. Without this catch its rejection escapes to the global
             // handler and a routine maintenance failure answers 500 to a request that was fine.
-            logger.error({ message: 'Token cleanup failed during refresh.', error: error.message });
+            logger.error({ message: 'Token cleanup failed during refresh.', error });
             rejectDatabaseError(response, 'getRefreshToken', error);
         });
 };

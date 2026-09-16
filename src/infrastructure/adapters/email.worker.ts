@@ -42,7 +42,7 @@ export const handleEmailJob = (job: Partial<EmailJobPayload>): Promise<boolean> 
         .catch((error: Error) => {
             // Logged AND rethrown: the requeue is what saves the email, the log is what makes a
             // job that keeps failing visible instead of a queue that quietly refills.
-            logger.error({ message: 'Email worker failed to send.', error: error.message });
+            logger.error({ message: 'Email worker failed to send.', error });
             throw error;
         });
 };

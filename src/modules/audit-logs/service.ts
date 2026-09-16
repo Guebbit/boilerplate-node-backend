@@ -36,7 +36,7 @@ const record = (entry: AuditEntry): void => {
         logger.warn({
             message: 'audit entry not persisted',
             action: entry.action,
-            error: error.message
+            error
         });
     });
 };

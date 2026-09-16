@@ -177,7 +177,7 @@ export const handleImageDigestJob = (job: Partial<ImageDigestJobPayload>): Promi
             // so it is dead-lettered rather than retried. `digestQuarantinedImage` throwing for any
             // OTHER reason (disk full, a storage write failing) looks identical from here; both
             // still resolve `false` today. Revisit if that distinction ever needs its own path.
-            logger.error({ message: 'Image digest worker failed.', error: error.message, key });
+            logger.error({ message: 'Image digest worker failed.', error, key });
             return imageStore.removeQuarantined(key).then(() => false);
         });
 };

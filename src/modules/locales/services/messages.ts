@@ -6,7 +6,7 @@
  */
 
 import type { LocaleMessages, LocaleTenant } from '@types';
-import { logger, describeError } from '@infrastructure/adapters/logger';
+import { logger } from '@infrastructure/adapters/logger';
 import {
     generateSuccess,
     type ResponseReject,
@@ -70,7 +70,8 @@ export const readApiOverrides = async (): Promise<Record<string, Record<string, 
             overrides[locale] = buildMessageTree(entries);
         } catch (error) {
             logger.warn('readApiOverrides - skipping a language whose keys cannot form a tree', {
-                detail: `${locale}: ${describeError(error)}`
+                locale,
+                error
             });
         }
     }

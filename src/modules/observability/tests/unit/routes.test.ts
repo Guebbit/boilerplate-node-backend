@@ -230,8 +230,9 @@ describe('GET /observability/metrics — the inline scrape handler', () => {
         expect(recorded.body).toBe('# metrics unavailable\n');
     });
 
-    it('logs the collection failure with its message, so the gap has a cause', async () => {
-        jest.mocked(getPrometheusMetrics).mockRejectedValueOnce(new Error('registry exploded'));
+    it('logs the collection failure with its cause, so the gap is explicable', async () => {
+        const failure = new Error('registry exploded');
+        jest.mocked(getPrometheusMetrics).mockRejectedValueOnce(failure);
         const { response } = fakeResponse();
 
         handlerFor('GET /metrics')({} as Request, response);
@@ -239,8 +240,11 @@ describe('GET /observability/metrics — the inline scrape handler', () => {
         await Promise.resolve();
         await Promise.resolve();
 
+        // The Error itself, not its message: `redactFormat` hands anything under `error` to
+        // `serializeError`, which is what keeps the name — and, outside production, the stack.
+        // Flattening it to a string here would be asserting that we throw both away.
         expect(logger.error).toHaveBeenCalledWith('Failed to collect Prometheus metrics', {
-            error: 'registry exploded'
+            error: failure
         });
     });
 });

@@ -18,7 +18,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { t } from '@infrastructure/i18n';
-import { logger, describeError } from '@infrastructure/adapters/logger';
+import { logger } from '@infrastructure/adapters/logger';
 import { environmentFlag, environmentNumber } from '@infrastructure/runtime/environment';
 import type { ResponseErrorItem } from '@infrastructure/http/response';
 
@@ -86,7 +86,7 @@ export const checkHibpRange = (
         .catch((error: unknown) => {
             logger.warn({
                 message: 'HIBP breach lookup failed; accepting the password (fail open).',
-                error: describeError(error)
+                error
             });
             return { breached: false };
         });

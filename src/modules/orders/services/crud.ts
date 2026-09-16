@@ -7,7 +7,7 @@
 
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
-import { logger, describeError } from '@infrastructure/adapters/logger';
+import { logger } from '@infrastructure/adapters/logger';
 import { orderConfirmEmail } from '../emails';
 import { OrderStatus } from '@types';
 import type { SearchOrdersRequest, CartItem, UpdateOrderByIdRequest } from '@types';
@@ -130,7 +130,7 @@ export const retractOrder = (order: OrderDocument, releaseHold: boolean): Promis
         logger.error({
             message,
             orderId,
-            error: describeError(error)
+            error
         });
     };
 

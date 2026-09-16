@@ -8,7 +8,7 @@
  * See: docs/tools/winston.md
  */
 
-import { auditLogger, describeError } from '@infrastructure/adapters/logger';
+import { auditLogger } from '@infrastructure/adapters/logger';
 import { getActiveSpanContext } from '@infrastructure/observability/tracer';
 import type { CallerContext } from '@infrastructure/http/request';
 import { wildcardKeyFor } from '@infrastructure/authorization/keys';
@@ -168,7 +168,7 @@ export const emitAuditEvent = (event: AuditEvent): void => {
     } catch (error) {
         auditLogger.warn('audit.sink.failed', {
             action: event.action,
-            error: describeError(error)
+            error
         });
     }
 };

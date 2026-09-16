@@ -28,15 +28,8 @@ jest.mock('@modules/users', () => ({
     }
 }));
 
-/*
- * Spread for the same reason `@modules/users` is above: `describeError` is a plain helper the job
- * imports, and a factory returning `logger` alone deletes it.
- */
 jest.mock('@infrastructure/adapters/logger', () => ({
     __esModule: true,
-    ...jest.requireActual<typeof import('@infrastructure/adapters/logger')>(
-        '@infrastructure/adapters/logger'
-    ),
     logger: {
         info: jest.fn(),
         error: jest.fn(),
@@ -64,10 +57,6 @@ const mockedLogger = logger as jest.Mocked<typeof logger>;
 /** Every message the job passed to `logger.info`, flattened for substring assertions. */
 const infoMessages = () =>
     mockedLogger.info.mock.calls.map(([message]) =>
-        typeof message === 'string' ? message : JSON.stringify(message)
-    );
-const errorMessages = () =>
-    mockedLogger.error.mock.calls.map(([message]) =>
         typeof message === 'string' ? message : JSON.stringify(message)
     );
 
@@ -115,9 +104,12 @@ describe('runTokenCleanup — the success branch', () => {
     });
 });
 
+/** The rejection the failure branch injects — held by name so an assertion can point at it. */
+const CLEANUP_FAILURE = new Error('db failure');
+
 describe('runTokenCleanup — the failure branch', () => {
     beforeEach(() => {
-        mockTokenRemoveExpired.mockRejectedValueOnce(new Error('db failure'));
+        mockTokenRemoveExpired.mockRejectedValueOnce(CLEANUP_FAILURE);
     });
 
     it('logs the failure at ERROR level, not info', async () => {
@@ -128,12 +120,17 @@ describe('runTokenCleanup — the failure branch', () => {
         expect(mockedLogger.error).toHaveBeenCalledTimes(1);
     });
 
-    it('carries the cause into the failure message, so the log says WHY', async () => {
+    it('carries the cause into the failure log, so it says WHY', async () => {
         // The error is the only place the reason reaches a human. Dropped, the operator learns
         // that cleanup failed and nothing else — and this job runs unwatched.
         await runTokenCleanup();
 
-        expect(errorMessages()[0]).toContain('db failure');
+        // Asserted on the logged VALUE, not on a stringified payload: the raw Error is what the
+        // job passes, and `JSON.stringify` renders one as `{}` — which is the whole reason
+        // `redactFormat` routes it through `serializeError` before a transport ever sees it.
+        expect(mockedLogger.error).toHaveBeenCalledWith(
+            expect.objectContaining({ error: CLEANUP_FAILURE })
+        );
     });
 
     it('does not let the sweep fail whatever triggered it', async () => {

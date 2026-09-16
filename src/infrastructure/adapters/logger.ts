@@ -152,12 +152,15 @@ export const serializeError = (error: unknown): Record<string, unknown> => {
 };
 
 /**
- * The one-line counterpart of {@link serializeError}: a caught value reduced to the string a
- * single log field, or a stored `lastError` column, can hold.
+ * A caught value reduced to a bare string, for the consumers that can only hold one.
  *
- * Its own function because the alternative — `error instanceof Error ? error.message :
- * String(error)`, inline — was written out at two dozen call sites, and every one of them read a
- * non-`Error` rejection carrying a `message` as `[object Object]`.
+ * **Not for logging.** A log line passes the raw value under `error` and lets `redactFormat` route
+ * it through {@link serializeError}, which keeps the name and (outside production) the stack —
+ * flattening it here first makes `instanceof Error` false and throws both away. `filesystem.ts`
+ * and `http/errors.ts` are the worked examples.
+ *
+ * What is left is the handful of places that are not a log line and cannot hold an object — a
+ * span status message, a stored `lastError` column. Reach for it there and nowhere else.
  *
  * @param error - the caught or rejected value
  * @returns its message, or `String(error)` when it carries none

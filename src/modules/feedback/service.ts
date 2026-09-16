@@ -128,7 +128,7 @@ export const create = (payload: CreateFeedbackRequest): Promise<FeedbackRequestD
                 ).catch((error: Error) =>
                     logger.error({
                         message: 'feedback contact notification email failed',
-                        error: error.message
+                        error
                     })
                 );
 

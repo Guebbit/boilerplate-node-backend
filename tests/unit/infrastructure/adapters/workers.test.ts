@@ -118,7 +118,8 @@ describe('handleEmailJob', () => {
     });
 
     it('lets a failed send reject, so the broker requeues it', async () => {
-        mockedMailer.mockRejectedValue(new Error('SMTP refused'));
+        const failure = new Error('SMTP refused');
+        mockedMailer.mockRejectedValue(failure);
 
         // Not `false`. A refused connection, a timeout, greylisting — none of them are facts about
         // this job, and `consumeFromQueue` requeues a rejection for exactly that reason. Answering
@@ -126,9 +127,7 @@ describe('handleEmailJob', () => {
         await expect(handleEmailJob(job)).rejects.toThrow('SMTP refused');
         // Logged on the way out: the requeue is what saves the email, the log is what makes a job
         // that keeps failing visible instead of a queue that quietly refills.
-        expect(logger.error).toHaveBeenCalledWith(
-            expect.objectContaining({ error: 'SMTP refused' })
-        );
+        expect(logger.error).toHaveBeenCalledWith(expect.objectContaining({ error: failure }));
     });
 });
 
@@ -171,25 +170,23 @@ describe('handlePdfJob', () => {
     });
 
     it('lets a failed template render reject, so the broker requeues it', async () => {
-        mockedEjs.mockRejectedValue(new Error('template missing'));
+        const failure = new Error('template missing');
+        mockedEjs.mockRejectedValue(failure);
 
         await expect(handlePdfJob(job)).rejects.toThrow('template missing');
         expect(mockedPdf).not.toHaveBeenCalled();
-        expect(logger.error).toHaveBeenCalledWith(
-            expect.objectContaining({ error: 'template missing' })
-        );
+        expect(logger.error).toHaveBeenCalledWith(expect.objectContaining({ error: failure }));
     });
 
     it('lets a failed PDF render reject after a successful template render', async () => {
         mockedEjs.mockResolvedValue('<html></html>');
-        mockedPdf.mockRejectedValue(new Error('puppeteer crashed'));
+        const failure = new Error('puppeteer crashed');
+        mockedPdf.mockRejectedValue(failure);
 
         // The second half of the chain has its own failure mode: the markup was fine and the
         // browser died. A dead browser is the most transient failure this file has — it must not
         // ack an unwritten file, and it must not throw the job away either.
         await expect(handlePdfJob(job)).rejects.toThrow('puppeteer crashed');
-        expect(logger.error).toHaveBeenCalledWith(
-            expect.objectContaining({ error: 'puppeteer crashed' })
-        );
+        expect(logger.error).toHaveBeenCalledWith(expect.objectContaining({ error: failure }));
     });
 });

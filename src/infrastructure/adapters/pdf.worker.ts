@@ -47,7 +47,7 @@ export const handlePdfJob = (job: Partial<PdfJobPayload>): Promise<boolean> => {
             return true;
         })
         .catch((error: Error) => {
-            logger.error({ message: 'PDF worker failed.', error: error.message });
+            logger.error({ message: 'PDF worker failed.', error });
             throw error;
         });
 };

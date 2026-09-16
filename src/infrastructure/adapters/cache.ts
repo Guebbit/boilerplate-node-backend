@@ -10,7 +10,7 @@
 // `createClient` builds a (not yet connected) Redis client from a connection URL;
 // `RedisClientType` is the resulting client's type, needed for the generic below.
 import { createClient, type RedisClientType } from 'redis';
-import { logger, describeError } from '@infrastructure/adapters/logger';
+import { logger } from '@infrastructure/adapters/logger';
 import { manageConnection } from '@infrastructure/adapters/managed-connection';
 import type { DependencyStatus } from '@infrastructure/observability/dependency-health';
 import { environmentFlag } from '@infrastructure/runtime/environment';
@@ -146,11 +146,11 @@ export const getCacheValue = (key: string): Promise<string | undefined> =>
             // which is the same answer to the caller as "not cached".
             return redisClient.get(prefix(`key:${key}`)).then((raw) => raw ?? undefined);
         })
-        .catch((error) => {
+        .catch((error: unknown) => {
             logger.warn({
                 message: 'Redis cache read failed.',
                 key,
-                error: describeError(error)
+                error
             });
             return undefined;
         });
@@ -203,11 +203,11 @@ export const setCacheValue = (
                     .then(() => undefined)
             );
         })
-        .catch((error) => {
+        .catch((error: unknown) => {
             logger.warn({
                 message: 'Redis cache write failed.',
                 key,
-                error: describeError(error)
+                error
             });
         });
 };
@@ -236,11 +236,11 @@ export const claimCacheRefresh = (key: string, seconds: number): Promise<boolean
                 .set(prefix(`refresh:${key}`), '1', { NX: true, EX: seconds })
                 .then((result) => result === 'OK');
         })
-        .catch((error) => {
+        .catch((error: unknown) => {
             logger.warn({
                 message: 'Redis refresh claim failed.',
                 key,
-                error: describeError(error)
+                error
             });
             return false;
         });
@@ -289,11 +289,11 @@ export const invalidateCacheTags = (tags: string[]): Promise<ClearCacheResult> =
                 reachable: true
             }));
         })
-        .catch((error) => {
+        .catch((error: unknown) => {
             logger.warn({
                 message: 'Redis cache invalidation failed.',
                 tags: cacheTags,
-                error: describeError(error)
+                error
             });
             return { deleted: 0, reachable: false };
         });
@@ -375,13 +375,13 @@ export const clearCache = (): Promise<ClearCacheResult> =>
                 reachable: true
             }));
         })
-        .catch((error) => {
+        .catch((error: unknown) => {
             // Reached when SCAN or DEL fails mid-drain — the socket died partway through, say.
             // Whatever `deleted` had reached is discarded: the cache is in an unknown state,
             // which is the same verdict as never having connected.
             logger.warn({
                 message: 'Redis cache clear failed.',
-                error: describeError(error)
+                error
             });
             return { deleted: 0, reachable: false };
         });
