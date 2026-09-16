@@ -268,6 +268,11 @@ against one login: an IP or account key lets a distributed attacker rotate addre
 challenge is the thing being attacked. Both windows are 600s, the longer of the two challenge
 tiers, so a window can never end before the challenge it bounds.
 
+A request naming no `challenge` at all — a forged or malformed body — has nothing to hash, so it
+falls back to the caller's address BLOCK instead of one shared bucket: a shared bucket would let
+any two such callers exhaust the same budget, which bounds neither of them against a live
+challenge.
+
 They are two budgets and not one because they bound different costs — `NODE_MFA_CHALLENGE_MAX`
 caps GUESSES, `NODE_MFA_SEND_MAX` caps outbound mail — and sharing them would let a caller who
 typed three wrong codes lose the ability to be sent a right one.

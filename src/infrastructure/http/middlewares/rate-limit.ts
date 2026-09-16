@@ -496,8 +496,10 @@ const DEFAULT_MFA_CHALLENGE_MAX = 5;
 
 /**
  * The bucket key both challenge limiters use: the challenge string itself, hashed so a credential
- * never becomes a store key. A request naming no challenge at all buckets together under one
- * shared key — still a real budget, just not a useful one to read individually.
+ * never becomes a store key. A request naming no challenge at all — a forged or malformed body —
+ * has nothing to hash, so it falls back to the caller's address BLOCK ({@link addressBlockOf})
+ * rather than one shared `'anonymous'` key: a shared key let any two such callers exhaust the same
+ * budget, which bounds neither of them against a live challenge the way this limiter exists to.
  */
 const challengeKey = (request: Request): string => {
     const body: unknown = request.body;
@@ -505,9 +507,9 @@ const challengeKey = (request: Request): string => {
         typeof body === 'object' && body !== null
             ? (body as Record<string, unknown>).challenge
             : undefined;
-    return createHash('sha256')
-        .update(typeof challenge === 'string' ? challenge : 'anonymous')
-        .digest('hex');
+    return typeof challenge === 'string'
+        ? createHash('sha256').update(challenge).digest('hex')
+        : `block:${addressBlockOf(request)}`;
 };
 
 /**

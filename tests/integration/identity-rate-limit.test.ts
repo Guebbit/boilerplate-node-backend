@@ -203,6 +203,43 @@ describe('address-block keying', () => {
     });
 });
 
+describe('mfaChallengeLimiter', () => {
+    afterEach(() => jest.resetModules());
+
+    it('refuses the 6th guess against one live challenge', async () => {
+        const mfaChallengeLimiter = await withRateLimitModule(
+            { NODE_MFA_CHALLENGE_MAX: '5' },
+            (module) => module.mfaChallengeLimiter
+        );
+
+        const app = appAnswering(200, mfaChallengeLimiter);
+        const guess = () => supertest(app).post('/route').send({ challenge: 'same-challenge' });
+
+        for (let attempt = 0; attempt < 5; attempt++) expect(await statusOf(guess())).toBe(200);
+        expect(await statusOf(guess())).toBe(429);
+    });
+
+    it('does not let two callers with no challenge exhaust the same bucket', async () => {
+        // Regression: a request naming no `challenge` used to bucket under one shared
+        // `'anonymous'` key, so any two such callers spent the same budget. It must now key on
+        // the caller's address BLOCK instead — see `challengeKey` in `rate-limit.ts`.
+        const mfaChallengeLimiter = await withRateLimitModule(
+            { NODE_MFA_CHALLENGE_MAX: '1' },
+            (module) => module.mfaChallengeLimiter
+        );
+
+        const app = appAnswering(200, mfaChallengeLimiter);
+        const guessFrom = (ip: string) =>
+            supertest(app).post('/route').set('X-Forwarded-For', ip).send({});
+
+        expect(await statusOf(guessFrom('203.0.113.5'))).toBe(200);
+        // Same block, no challenge either — spends the block bucket the first call already used.
+        expect(await statusOf(guessFrom('203.0.113.9'))).toBe(429);
+        // A different block entirely has its own, untouched budget.
+        expect(await statusOf(guessFrom('198.51.100.5'))).toBe(200);
+    });
+});
+
 describe('mounted on the real routes', () => {
     setupTestDb();
 

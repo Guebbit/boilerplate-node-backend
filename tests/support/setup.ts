@@ -109,6 +109,44 @@ process.env.NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX ??= '1000';
 process.env.NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX ??= '1000';
 
 /**
+ * The shared window every limiter above measures against
+ * (`DEFAULT_RATE_LIMIT_WINDOW_MS`, one minute) — raised tenfold for the same reason as the
+ * budgets themselves: a suite spends a window's worth of requests in milliseconds, so a
+ * real one-minute window would roll over mid-run and leave two requests fired a heartbeat
+ * apart reading inconsistent budgets.
+ */
+process.env.NODE_RATE_LIMIT_WINDOW_MS ??= '600000';
+
+/**
+ * `mfaSendLimiter` needs the same treatment as the budgets above, on a FIXED ten-minute window
+ * of its own (`rate-limit.ts` does not read `NODE_RATE_LIMIT_WINDOW_MS` for it) — a suite that
+ * resends more than a handful of times against one live challenge would otherwise trip a 429
+ * unrelated to what it is testing.
+ *
+ * `NODE_MFA_CHALLENGE_MAX` is deliberately NOT raised alongside it: `two-factor.test.ts`'s
+ * "kills the challenge after too many wrong attempts" case fires 6 concurrent guesses at ONE
+ * challenge specifically to prove `mfaChallengeLimiter`'s tight production default (5) still
+ * catches them regardless of how generous the credential budgets above are — raising it here
+ * would make that assertion untestable rather than merely more permissive.
+ */
+process.env.NODE_MFA_SEND_MAX ??= '1000';
+
+/**
+ * `apiKeyLimiter` needs the same treatment: keyed on the credential rather than the address, so
+ * a suite driving many requests under one seeded api-key would otherwise trip a 429 the fuzz
+ * suite's spec check does not expect.
+ */
+process.env.NODE_API_KEY_RATE_LIMIT_MAX ??= '1000';
+
+/**
+ * `passwordCheckLimiter` needs the same treatment: `POST /account/password/check` fires on every
+ * debounced keystroke pause in a real client, so a suite exercising the live meter more than
+ * `DEFAULT_PASSWORD_CHECK_RATE_LIMIT_MAX` (20) times from one address would trip a 429 that has
+ * nothing to do with what it is testing.
+ */
+process.env.NODE_PASSWORD_CHECK_RATE_LIMIT_MAX ??= '1000';
+
+/**
  * Bank transfer at checkout, which `GET /payments/methods` offers only where a deployment names
  * both of these. Set here rather than left to a developer's `.env`: the `shop` scenario declares
  * an `order.awaitingTransfer` guarantee, so a suite that builds it against an unconfigured
