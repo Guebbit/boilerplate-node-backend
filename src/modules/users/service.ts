@@ -18,7 +18,7 @@ import {
 } from '@infrastructure/http/response';
 import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
 import { imageStore } from '@infrastructure/adapters/image-store';
-import { zodUserSchema, TokenType, hashToken } from './model';
+import { zodUserSchema, TokenType, hashToken, toUser } from './model';
 import type { UserDocument } from './model';
 import type { CreateUserRequest, SearchUsersRequest, UpdateUserByIdRequest } from '@types';
 import { userRepository } from './repository';
@@ -508,5 +508,8 @@ export const userService = {
     adminDisableTwoFactor,
     findByEmail,
     consumeToken,
-    enqueueIfPending
+    enqueueIfPending,
+    // A controller may not reach `./model` directly (the persistence wall), so the shaping
+    // helper it needs to build a response rides through the service instead.
+    toUser
 };

@@ -10,7 +10,6 @@ import type { Request, Response } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
 import { t } from '@infrastructure/i18n';
 import { productService } from '../service';
-import { toProduct } from '@modules/products';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { readInput, callerContextOf } from '@infrastructure/http/request';
@@ -79,7 +78,7 @@ export const updateProduct = (
                 return deleteUpload().then(() => {
                     rejectResponse(response, 500, [t('generic.error-internal')]);
                 });
-            successResponse<Product>(response, toProduct(result.data));
+            successResponse<Product>(response, productService.toProduct(result.data));
         })
         .catch((error: Error) =>
             deleteUpload().then(() => {

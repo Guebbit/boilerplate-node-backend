@@ -10,7 +10,6 @@ import type { Request, Response } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
 import { t } from '@infrastructure/i18n';
 import { userService } from '../service';
-import { toUser } from '@modules/users';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { readInput, callerContextOf } from '@infrastructure/http/request';
@@ -131,7 +130,7 @@ export const writeUsers = (
             .then((user) => {
                 // `toUser` picks only the `User` contract's own fields, so the hashed password
                 // and tokens on the document never reach `res.json`.
-                successResponse<User>(response, toUser(user), 201);
+                successResponse<User>(response, userService.toUser(user), 201);
             })
             .catch((error: Error) =>
                 deleteUpload().then(() => {
@@ -156,7 +155,7 @@ export const writeUsers = (
                 return deleteUpload().then(() => {
                     rejectResponse(response, 500, [t('generic.error-internal')]);
                 });
-            successResponse<User>(response, toUser(result.data));
+            successResponse<User>(response, userService.toUser(result.data));
         })
         .catch((error: Error) =>
             // Matches the create branch above: an upload this request wrote must not survive a

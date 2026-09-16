@@ -617,5 +617,8 @@ export const productService = {
     writeCreate,
     writeUpdate,
     remove,
-    removeById
+    removeById,
+    // A controller may not reach `./model` directly (the persistence wall), so the shaping
+    // helper it needs to build a response rides through the service instead.
+    toProduct
 };
