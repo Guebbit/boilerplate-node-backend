@@ -855,7 +855,7 @@ export default tseslint.config(
                             from: { element: { type: ['module', 'domain'] } },
                             disallow: { to: { element: { type: ['module', 'domain'] } } },
                             message:
-                                'Import a sibling module through its public path: @modules/<name>. Never its internals — the moment one is reached the module stops being deletable.'
+                                'Import through @modules/<name>. If what you need isn’t exported, it belongs in that module’s index.ts, unless it’s a repository, a model or wiring — then ask the module’s service for it. Reaching its internals directly is what makes a module stop being deletable.'
                         },
                         {
                             from: { element: { type: ['module', 'domain'] } },
