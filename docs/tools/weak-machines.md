@@ -55,6 +55,22 @@ a 15 GB machine with 6.6 GB actually free it authorised eleven workers at ~905 M
 killer took them mid-run while every test still reported passing. What is free now is the only
 number that predicts whether the next worker survives.
 
+**Sharding only starts where the machine runs out.** The per-shard size is the budget, capped by a
+guard rail (`MAX_SHARD_PEAK_MB`, 8 GB) that exists only to stop a momentarily-idle machine sizing
+one enormous shard it cannot sustain an hour later. The rail sits high on purpose: 8 GB is ~101
+files per shard, more than any layer here holds, so a machine with real headroom runs the layer in
+**one** shard, `--shard` is never passed, and the run is exactly what it always was.
+
+| Machine                                 | files/shard | integration shards | sharding cost     |
+| --------------------------------------- | ----------- | ------------------ | ----------------- |
+| roomy box, several GB spare             | ~101        | **1**              | none              |
+| this one, unpinned (6.6 GB free)        | ~50         | 2                  | one extra boot    |
+| this one, `JEST_PROCESS_BUDGET_MB=2600` | ~21         | 4                  | three extra boots |
+
+A constrained machine does not rely on the rail — it sets `JEST_PROCESS_BUDGET_MB` below it. 2600 is
+the figure measured green here: 19 files in one in-band shard peaked at 2407 MB RSS and passed,
+where all 75 in one process reached Node's heap ceiling and died at 448 s.
+
 ## Why in-band inside a shard
 
 `integration`, `contract` and `fuzz` keep `--runInBand` within their shard. They share one

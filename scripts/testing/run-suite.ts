@@ -24,9 +24,9 @@ import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import {
     availableMemoryMb,
+    environmentKnob,
     filesPerShard,
     heapCapMb,
-    positiveInteger,
     processBudgetMb,
     shardCount,
     shardTargetMb,
@@ -117,19 +117,29 @@ const countTestFiles = (): number => {
     return listed.stdout.split('\n').filter((line) => line.trim().endsWith('.test.ts')).length;
 };
 
-const budgetMb = processBudgetMb(positiveInteger(process.env.JEST_PROCESS_BUDGET_MB));
+const budgetMb = processBudgetMb(environmentKnob('JEST_PROCESS_BUDGET_MB'));
 const targetMb = shardTargetMb(budgetMb);
 const heapMb = heapCapMb(targetMb);
 const perShard = filesPerShard(targetMb);
 const fileCount = countTestFiles();
-const shards = positiveInteger(process.env.JEST_SHARDS) ?? shardCount(fileCount, perShard);
+/**
+ * How many sequential jest processes this layer needs.
+ *
+ * Only a SERIALIZED layer is sharded. Per-file retention accumulates in whichever process executes
+ * the files, and for a parallel layer that is a worker — which `--workerIdleMemoryLimit` already
+ * recycles once it grows. Sharding those as well would pay a fresh `mongod` boot per shard to solve
+ * a problem the recycling has already solved.
+ */
+const shards = suite.serialized
+    ? (environmentKnob('JEST_SHARDS') ?? shardCount(fileCount, perShard))
+    : (environmentKnob('JEST_SHARDS') ?? 1);
 
 const workers = suite.serialized
     ? 1
     : workerCount({
           peakMb: suite.workerPeakMb,
           cpuReserve: 2,
-          override: positiveInteger(process.env.JEST_WORKERS)
+          override: environmentKnob('JEST_WORKERS')
       });
 
 /**
@@ -178,7 +188,9 @@ const main = async () => {
     console.log(
         `[test] ${suiteName}: ${fileCount} files in ${shards} shard(s) — ` +
             `${suite.serialized ? 'in band' : `${workers} workers`}, ` +
-            `heap=${heapMb} MB, ${perShard} files/shard, ` +
+            `heap=${heapMb} MB, ` +
+            // Only meaningful where it decided something: an unsharded layer did not consult it.
+            (shards > 1 ? `${perShard} files/shard, ` : '') +
             `${availableMemoryMb()} MB available`
     );
 

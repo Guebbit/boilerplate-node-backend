@@ -15,8 +15,10 @@
  * See: docs/tools/weak-machines.md
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import os from 'node:os';
+import path from 'node:path';
+import { parseEnv } from 'node:util';
 
 /**
  * Memory a new workload can actually claim, in MB.
@@ -47,6 +49,35 @@ export const availableMemoryMb = (): number => {
     const availableMb = fromProc() ?? Math.floor(os.freemem() / 1024 / 1024);
     return Math.max(1, Math.min(availableMb, totalMb));
 };
+
+/**
+ * Reads `.env` WITHOUT merging it into the environment.
+ *
+ * `parseEnv` rather than `process.loadEnvFile()`, for the same reason `jest.config.js` gives: the
+ * latter merges into `process.env`, and this script hands its environment to every jest it spawns.
+ * The app's real rate limits would then land before `tests/support/setup.ts` can raise them, and
+ * the concurrency suites would answer 429 to their own fixtures. Only the sizing knobs below are
+ * ever taken out of the result.
+ *
+ * @returns the file's variables, or `{}` when there is no `.env` — the normal case in CI
+ */
+const readEnvironmentFile = (): NodeJS.Dict<string> => {
+    const environmentFile = path.resolve(__dirname, '..', '..', '.env');
+    // Checked rather than caught: a checkout without a `.env` is ordinary, not exceptional.
+    return existsSync(environmentFile) ? parseEnv(readFileSync(environmentFile, 'utf8')) : {};
+};
+
+/**
+ * One sizing knob, from the real environment first and then `.env`.
+ *
+ * A variable exported for a single run beats the file, so a one-off can go lower without editing
+ * anything: `JEST_WORKERS=1 npm run test:integration`.
+ *
+ * @param name the variable to read
+ * @returns its positive-integer value, or undefined when unset, empty or nonsense
+ */
+export const environmentKnob = (name: string): number | undefined =>
+    positiveInteger(process.env[name] ?? readEnvironmentFile()[name]);
 
 /** A positive integer from the environment, or undefined when unset, empty or nonsense. */
 export const positiveInteger = (value: string | undefined): number | undefined => {
@@ -84,10 +115,8 @@ export const PER_FILE_RETENTION_MB = 70;
 /**
  * The spending limit for one jest process, in MB.
  *
- * Sequential shards mean only one such process is live at a time, so it could in principle claim
- * the whole machine — and must not. `MAX_SHARD_PEAK_MB` is the ceiling, because a budget derived
- * from momentarily-free memory would size a single unbounded shard on an idle machine and hand back
- * exactly the run that fails.
+ * Sequential shards mean only one such process is live at a time, so it may claim what the machine
+ * has spare — bounded by {@link MAX_SHARD_PEAK_MB}, which says why.
  *
  * @param override an explicit cap in MB, which wins outright
  * @returns the per-process budget in MB
@@ -106,15 +135,22 @@ export const MIN_PROCESS_BUDGET_MB = PROCESS_BASELINE_MB + PER_FILE_RETENTION_MB
 /**
  * The most one shard process may be allowed to reach, in MB.
  *
- * Measured rather than chosen: `--shard=1/4 --runInBand` over the integration layer peaked at
- * 2407 MB RSS and passed, which is the largest shard this repo has evidence for. Sizing shards at
- * that peak keeps every machine on the configuration that has actually been observed green, and
- * keeps a big machine from quietly reverting to the one-process run that does not finish.
+ * This is a GUARD RAIL, not a target, and the distinction is the whole point of the number. A
+ * budget derived from momentarily-free memory would size one enormous shard on an idle machine and
+ * hand back exactly the unbounded run that does not finish — so something has to cap it.
+ *
+ * It is set high enough that a machine with real headroom runs a layer in ONE shard and pays no
+ * sharding overhead at all: at 8 GB a shard may hold ~101 files, more than any layer here has, so
+ * `--shard` is not passed and the run is what it always was. Sharding only begins where the
+ * machine cannot hold the layer, which is the only place it earns its wall-clock cost.
+ *
+ * A memory-constrained machine does NOT rely on this ceiling; it sets `JEST_PROCESS_BUDGET_MB`
+ * below it. 2600 is the figure measured green here — see docs/tools/weak-machines.md.
  */
-export const MAX_SHARD_PEAK_MB = 2600;
+export const MAX_SHARD_PEAK_MB = 8192;
 
 /**
- * What one shard process is actually sized for: the budget, capped by what has been measured safe.
+ * What one shard process is actually sized for: the budget, capped by the guard rail.
  *
  * @param budgetMb the result of {@link processBudgetMb}
  * @returns the per-shard target in MB
