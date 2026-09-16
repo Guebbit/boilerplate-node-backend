@@ -106,14 +106,10 @@ describe('feedback routes — submission rate limiting', () => {
         // write — see `contactLimiters`' own docs for why this is a DIFFERENT set of limiters
         // from `credentialLimiters`. All THREE dimensions — address, identity, address-block.
         const chain = chainOf('POST /contact');
-        const limiters = chain.filter((entry) => entry.startsWith('contactLimiters'));
+        const limiters = chain.filter((entry) => entry.startsWith('submission'));
 
-        expect(limiters).toEqual([
-            'contactLimiters[0]',
-            'contactLimiters[1]',
-            'contactLimiters[2]'
-        ]);
-        expect(chain.indexOf('contactLimiters[0]')).toBeLessThan(
+        expect(limiters).toEqual(['submissions', 'submission-identity', 'submission-block']);
+        expect(chain.indexOf('submissions')).toBeLessThan(
             chain.indexOf('invalidateCache([feedback])')
         );
     });
@@ -123,7 +119,7 @@ describe('feedback routes — submission rate limiting', () => {
         const unexpected = routeSignatures(router).filter(
             (signature) =>
                 signature !== 'POST /contact' &&
-                chainOf(signature).some((entry) => entry.startsWith('contactLimiters'))
+                chainOf(signature).some((entry) => entry.startsWith('submission'))
         );
 
         expect(unexpected).toEqual([]);
@@ -136,7 +132,7 @@ describe('feedback routes — human-challenge gate (rung 3)', () => {
 
         expect(chain).toContain('humanChallengeGate');
         expect(chain.indexOf('humanChallengeGate')).toBeGreaterThan(
-            chain.indexOf('contactLimiters[2]')
+            chain.indexOf('submission-block')
         );
     });
 

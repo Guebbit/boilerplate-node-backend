@@ -53,9 +53,10 @@ declare module 'express-serve-static-core' {
         rawBody?: Buffer;
         /**
          * Whether `POST /payments/:id/confirm` settled as `PAYMENT_DECLINED` — set by the confirm
-         * controller, read by `rate-limit.ts`'s decline-budget limiter (`paymentConfirmDeclineLimiter`)
-         * so it can tell a genuine decline apart from the route's other 409, `PAYMENT_ORDER_NOT_PAYABLE`
-         * (a race, not a decline), which must not spend the same budget.
+         * controller, read by `payments/rate-limits.ts`'s decline-budget limiter
+         * (`paymentConfirmDeclineLimiter`) so it can tell a genuine decline apart from the route's
+         * other 409, `PAYMENT_ORDER_NOT_PAYABLE` (a race, not a decline), which must not spend the
+         * same budget.
          */
         paymentConfirmDeclined?: boolean;
         /** Locale negotiated from `Accept-Language` (set by the locale middleware). */

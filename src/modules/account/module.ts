@@ -26,6 +26,7 @@ import { verifyAccessToken, verifyRefreshToken, type TokenData } from './session
 import { addressesDeleteByUserId } from './services/addresses';
 import { requestAccountSetup } from './services/authentication';
 import { router } from './routes';
+import { accountRateLimits } from './rate-limits';
 
 /*
  * This module answers the kernel's "who is making this request". Registered at import time
@@ -129,6 +130,8 @@ export default {
      */
     permissions: ['tokens.any.delete'],
     routes: router,
+    /** The credential/signup/reset/MFA/password-check budgets — see `./rate-limits.ts`. */
+    rateLimits: accountRateLimits,
     /*
      * `.env-example` ships both as literal placeholders that sign and verify perfectly —
      * `getAccessTokenRing`/`getRefreshTokenRing` (`session/config.ts`) read `process.env.X ?? ''`

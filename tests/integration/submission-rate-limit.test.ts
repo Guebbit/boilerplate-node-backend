@@ -8,7 +8,7 @@ import supertest from 'supertest';
  * because every abusive contact-form submission gets a `201`.
  *
  * Lives here rather than in the unit suite because it sends a real request through
- * `express-rate-limit`'s middleware — `tests/unit/infrastructure/http/middlewares/rate-limit.test.ts`
+ * `express-rate-limit`'s middleware — `src/modules/feedback/tests/unit/rate-limits.test.ts`
  * covers the pure-configuration properties (the default, and its relation to the global budget).
  */
 
@@ -22,7 +22,7 @@ const submissionLimiterWithBudget = async (limit: number) => {
     process.env.NODE_SUBMISSION_RATE_LIMIT_MAX = String(limit);
     jest.resetModules();
 
-    const { submissionLimiter } = await import('@infrastructure/http/middlewares/rate-limit');
+    const { submissionLimiter } = await import('@modules/feedback/rate-limits');
 
     if (original === undefined) delete process.env.NODE_SUBMISSION_RATE_LIMIT_MAX;
     else process.env.NODE_SUBMISSION_RATE_LIMIT_MAX = original;

@@ -62,7 +62,7 @@ describe('payment routes', () => {
     });
 
     it('carries a rate limit — the one budget this route has, since a signature is not one', () => {
-        expect(guardsOn(router, WEBHOOK)).toContain('webhookLimiter');
+        expect(guardsOn(router, WEBHOOK)).toContain('payment-webhook');
     });
 
     it('declares the webhook before the auth wall', () => {
@@ -100,8 +100,8 @@ describe('payment routes', () => {
         // the two lists match survives that.
         expect(withoutHandler('POST /:id/confirm')).toEqual([
             ...withoutHandler('POST /:id/sync'),
-            'paymentConfirmAttemptLimiter',
-            'paymentConfirmDeclineLimiter',
+            'payments-confirm-attempts',
+            'payments-confirm-declines',
             'paymentDeclineChallengeGate',
             'idempotencyKey'
         ]);

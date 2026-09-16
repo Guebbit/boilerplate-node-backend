@@ -67,6 +67,11 @@ const STEPS: readonly Step[] = [
         script: 'docs:dependencies',
         because:
             "docs/tools/package-dependencies.md's tables, read off package.json and who actually imports each package"
+    },
+    {
+        script: 'docs:rate-limits',
+        because:
+            "docs/tools/security.md's rate-limit budget table, read off every module's own manifest"
     }
 ];
 

@@ -20,3 +20,7 @@ export type {
     PlatformCaller,
     TenantCaller
 } from './auth-context';
+
+// A module's rate-limit budget data — shared between kernel/registry.ts's manifest field and
+// infrastructure's own limiter factory, which may not import kernel.
+export type { RateLimitBudget } from './rate-limit-budget';

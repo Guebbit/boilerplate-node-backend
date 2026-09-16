@@ -15,7 +15,7 @@ import { getFeedback, searchFeedbackKeyParameters } from './controllers/get-feed
 import { putFeedbackStatus } from './controllers/put-feedback-status';
 import { deleteFeedback } from './controllers/delete-feedback';
 import { invalidateCache, searchCache } from '@infrastructure/http/middlewares/cache';
-import { contactLimiters } from '@infrastructure/http/middlewares/rate-limit';
+import { contactLimiters } from './rate-limits';
 import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 

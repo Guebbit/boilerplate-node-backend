@@ -11,6 +11,7 @@
 
 import type { Router } from 'express';
 import { assertRequiredConfig } from '@kernel/required-config';
+import type { RateLimitBudget } from '@types';
 
 /**
  * One environment variable a module cannot run without. Declared on
@@ -197,6 +198,17 @@ export interface AppModule {
      * Absent for a module with nothing to guarantee, which is most of them, on purpose.
      */
     scenario?: Readonly<Record<string, readonly string[]>>;
+
+    /**
+     * This module's {@link RateLimitBudget}s — the data half of its own rate limiters, built into
+     * the actual middleware by `buildRateLimiter`. Declared here so the generated table in
+     * `docs/tools/security.md` and `tests/cross-cutting/rate-limit-budgets.test.ts` see every
+     * budget without importing each module's `rate-limits.ts` by hand. Most modules have none; a
+     * budget with no one owning module (the global browsing brake, the api-key budget, the upload
+     * budget shared by three modules) is declared as data in infrastructure instead — see
+     * `INFRASTRUCTURE_RATE_LIMITS`.
+     */
+    rateLimits?: readonly RateLimitBudget[];
 }
 
 /**
@@ -238,6 +250,19 @@ export const resolveTranslatables = (
     Object.fromEntries(
         appModules.flatMap((appModule) => Object.entries(appModule.translatables ?? {}))
     );
+
+/**
+ * Every registered module's {@link RateLimitBudget}s, flattened in declaration order.
+ *
+ * Built from the passed-in list for the same reason {@link resolveImageTargets} is: this file
+ * must stay free of any `src/modules/*` import. `docs/tools/security.md`'s generator and
+ * `tests/cross-cutting/rate-limit-budgets.test.ts` both combine this with
+ * `INFRASTRUCTURE_RATE_LIMITS` for the complete list.
+ *
+ * @param appModules - the enabled module list
+ */
+export const resolveRateLimits = (appModules: AppModule[]): readonly RateLimitBudget[] =>
+    appModules.flatMap((appModule) => appModule.rateLimits ?? []);
 
 /**
  * Let every module attach its domain-event handlers.

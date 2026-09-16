@@ -9,16 +9,16 @@
 
 import type { Request } from 'express';
 import { Router } from 'express';
+import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import {
     credentialLimiters,
     signupLimiters,
     resetRequestLimiters,
     passwordCheckLimiter,
-    uploadLimiter,
     mfaChallengeLimiter,
     mfaSendLimiter,
     loginChallengeGate
-} from '@infrastructure/http/middlewares/rate-limit';
+} from './rate-limits';
 import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 import {

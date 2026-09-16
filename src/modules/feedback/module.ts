@@ -10,6 +10,7 @@
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
+import { feedbackRateLimits } from './rate-limits';
 
 /** This module's manifest entry: public contact form, keyed triage (`feedback.*`). */
 export default {
@@ -22,5 +23,7 @@ export default {
      */
     permissions: ['feedback.any.read', 'feedback.any.update', 'feedback.any.delete'],
     routes: router,
+    /** The contact-form budgets — see `./rate-limits.ts`. */
+    rateLimits: feedbackRateLimits,
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

@@ -173,16 +173,14 @@ describe('account routes — authorization', () => {
 
 describe('account routes — credential rate limiting', () => {
     it.each(RATE_LIMITED)('%s carries ALL THREE credential budgets', (signature) => {
-        const limiters = chainOf(signature).filter((entry) =>
-            entry.startsWith('credentialLimiters')
-        );
+        const limiters = chainOf(signature).filter((entry) => entry.startsWith('credentials-'));
 
         // Identity, address AND address-block: each is keyed differently and defends an attack
         // the other two miss. Any one missing reads as protected and is not.
         expect(limiters).toEqual([
-            'credentialLimiters[0]',
-            'credentialLimiters[1]',
-            'credentialLimiters[2]'
+            'credentials-identity',
+            'credentials-address',
+            'credentials-block'
         ]);
     });
 
@@ -193,7 +191,7 @@ describe('account routes — credential rate limiting', () => {
         for (const signature of ['POST /password', 'POST /reauth', 'POST /verify-request']) {
             const chain = chainOf(signature);
 
-            expect(chain.indexOf('credentialLimiters[0]')).toBeLessThan(chain.indexOf('isAuth'));
+            expect(chain.indexOf('credentials-identity')).toBeLessThan(chain.indexOf('isAuth'));
         }
     });
 
@@ -203,7 +201,7 @@ describe('account routes — credential rate limiting', () => {
         const unexpected = routeSignatures(router).filter(
             (signature) =>
                 !RATE_LIMITED.includes(signature) &&
-                chainOf(signature).some((entry) => entry.startsWith('credentialLimiters'))
+                chainOf(signature).some((entry) => entry.startsWith('credentials-'))
         );
 
         expect(unexpected).toEqual([]);
@@ -214,41 +212,33 @@ describe('account routes — signup and reset rate limiting', () => {
     /**
      * `credentialLimiters`' `skipSuccessfulRequests` spends nothing on the 201/200 these two
      * routes answer with on their OWN abuse (a Sybil signup, a mail-bombing reset request) — see
-     * `signupLimiters`'/`resetRequestLimiters`' own docs in `rate-limit.ts`. Each carries its own
+     * `signupLimiters`'/`resetRequestLimiters`' own docs in `rate-limits.ts`. Each carries its own
      * three-dimension budget instead, and neither may carry `credentialLimiters` at all.
      */
     it.each([
-        ['POST /signup', 'signupLimiters'],
-        ['POST /reset', 'resetRequestLimiters']
-    ])('%s carries ALL THREE %s budgets, and no credentialLimiters', (signature, name) => {
+        ['POST /signup', ['signup-identity', 'signup-address', 'signup-block']],
+        ['POST /reset', ['reset-identity', 'reset-address', 'reset-block']]
+    ])('%s carries ALL THREE budgets, and no credentialLimiters', (signature, labels) => {
         const chain = chainOf(signature);
+        const [prefix] = labels[0].split('-');
 
-        expect(chain.filter((entry) => entry.startsWith(name))).toEqual([
-            `${name}[0]`,
-            `${name}[1]`,
-            `${name}[2]`
-        ]);
-        expect(chain.some((entry) => entry.startsWith('credentialLimiters'))).toBe(false);
+        expect(chain.filter((entry) => entry.startsWith(`${prefix}-`))).toEqual(labels);
+        expect(chain.some((entry) => entry.startsWith('credentials-'))).toBe(false);
     });
 });
 
 describe('account routes — human-challenge gate (rung 3)', () => {
     it.each([
-        ['POST /signup', 'signupLimiters'],
-        ['POST /reset', 'resetRequestLimiters']
-    ])(
-        '%s carries humanChallengeGate, after its own rate-limit budget',
-        (signature, limiterName) => {
-            const chain = chainOf(signature);
+        ['POST /signup', 'signup-block'],
+        ['POST /reset', 'reset-block']
+    ])('%s carries humanChallengeGate, after its own rate-limit budget', (signature, lastLabel) => {
+        const chain = chainOf(signature);
 
-            expect(chain).toContain('humanChallengeGate');
-            // A spent budget should not reach the gate at all — see rate-limit.ts's own reasoning
-            // for mounting a budget before the cost it exists to avoid.
-            expect(chain.indexOf('humanChallengeGate')).toBeGreaterThan(
-                chain.indexOf(`${limiterName}[2]`)
-            );
-        }
-    );
+        expect(chain).toContain('humanChallengeGate');
+        // A spent budget should not reach the gate at all — see rate-limits.ts's own reasoning
+        // for mounting a budget before the cost it exists to avoid.
+        expect(chain.indexOf('humanChallengeGate')).toBeGreaterThan(chain.indexOf(lastLabel));
+    });
 
     it('mounts the gate on no other route', () => {
         const unexpected = routeSignatures(router).filter(

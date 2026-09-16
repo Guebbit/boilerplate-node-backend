@@ -1,5 +1,11 @@
 /**
- * `src/infrastructure/http/middlewares/rate-limit.ts` — the two rate-limit budgets and the metrics scrape guard.
+ * `src/infrastructure/http/middlewares/rate-limit.ts` — the budgets no one module owns (the
+ * global brake, the api-key budget, the upload budget) and the metrics scrape guard. Every other
+ * module's own budgets are pinned in that module's own `tests/unit/rate-limits.test.ts` (e.g.
+ * `src/modules/account/tests/unit/rate-limits.test.ts`); the
+ * relationships BETWEEN a module's budget and this file's global one — "stays a small fraction of
+ * the browsing budget" — are cross-cutting and live in
+ * `tests/cross-cutting/rate-limit-budgets.test.ts`.
  *
  * `isMetricsScraper` is the substance here. It is the only credential check in the codebase that
  * does not go through the JWT middleware, because Prometheus cannot log in, and it protects an
@@ -15,29 +21,14 @@
  *   - **length mismatches must not throw.** `timingSafeEqual` raises on unequal lengths, so the
  *     lengths are folded into the boolean first. Remove that guard and every wrong-length token
  *     becomes a 500 — and a length oracle.
- *
- * The limiters themselves are configuration, and what is worth pinning about them is the
- * relationship between the two numbers rather than either value: the credential budget must stay
- * a small fraction of the browsing budget, because the reason it exists is that they must not
- * share a bucket.
  */
 import { asStub } from '@tests/stub';
 import type { Request } from 'express';
 import {
     DEFAULT_RATE_LIMIT_MAX,
     DEFAULT_RATE_LIMIT_WINDOW_MS,
-    DEFAULT_AUTH_RATE_LIMIT_MAX,
-    DEFAULT_AUTH_RATE_LIMIT_ADDRESS_MAX,
-    DEFAULT_AUTH_RATE_LIMIT_BLOCK_MAX,
-    DEFAULT_SIGNUP_RATE_LIMIT_MAX,
-    DEFAULT_SIGNUP_RATE_LIMIT_ADDRESS_MAX,
-    DEFAULT_SIGNUP_RATE_LIMIT_BLOCK_MAX,
-    DEFAULT_RESET_RATE_LIMIT_MAX,
-    DEFAULT_RESET_RATE_LIMIT_ADDRESS_MAX,
-    DEFAULT_RESET_RATE_LIMIT_BLOCK_MAX,
-    DEFAULT_SUBMISSION_RATE_LIMIT_MAX,
-    DEFAULT_SUBMISSION_RATE_LIMIT_EMAIL_MAX,
-    DEFAULT_SUBMISSION_RATE_LIMIT_BLOCK_MAX,
+    DEFAULT_API_KEY_RATE_LIMIT_MAX,
+    DEFAULT_UPLOAD_RATE_LIMIT_MAX,
     isMetricsScraper
 } from '@infrastructure/http/middlewares/rate-limit';
 import { makeResponseStub } from '@tests/express';
@@ -65,44 +56,15 @@ describe('rate limit defaults', () => {
         expect(DEFAULT_RATE_LIMIT_MAX).toBe(100);
     });
 
-    it('keeps the credential budget a small fraction of the browsing budget', () => {
-        // The point of a second limiter is that browsing traffic and password guesses do not
-        // spend the same allowance. Raise the credential budget to the global one and the
-        // module still works — it just stops doing the thing it was added for.
-        expect(DEFAULT_AUTH_RATE_LIMIT_MAX).toBeLessThan(DEFAULT_RATE_LIMIT_MAX / 5);
+    it('keeps the upload budget a small fraction of the browsing budget', () => {
+        expect(DEFAULT_UPLOAD_RATE_LIMIT_MAX).toBeLessThan(DEFAULT_RATE_LIMIT_MAX / 2);
     });
 
-    it('keeps the submission budget a small fraction of the browsing budget', () => {
-        // Same reasoning as the credential budget: a contact form filed once by a person must not
-        // share a bucket with ordinary browsing.
-        expect(DEFAULT_SUBMISSION_RATE_LIMIT_MAX).toBeLessThan(DEFAULT_RATE_LIMIT_MAX / 5);
-    });
-
-    /*
-     * The Rung-1 property that matters is the ORDERING within each triple, not any one value:
-     * identity ≤ address ≤ block, since a block is shared by many honest callers and a single
-     * account or address is not. A block budget set below its own address budget would defeat
-     * the point of adding it.
-     */
-    it('sizes each address-block budget above its own address budget', () => {
-        expect(DEFAULT_AUTH_RATE_LIMIT_BLOCK_MAX).toBeGreaterThan(
-            DEFAULT_AUTH_RATE_LIMIT_ADDRESS_MAX
-        );
-        expect(DEFAULT_SIGNUP_RATE_LIMIT_BLOCK_MAX).toBeGreaterThan(
-            DEFAULT_SIGNUP_RATE_LIMIT_ADDRESS_MAX
-        );
-        expect(DEFAULT_RESET_RATE_LIMIT_BLOCK_MAX).toBeGreaterThan(
-            DEFAULT_RESET_RATE_LIMIT_ADDRESS_MAX
-        );
-        expect(DEFAULT_SUBMISSION_RATE_LIMIT_BLOCK_MAX).toBeGreaterThan(
-            DEFAULT_SUBMISSION_RATE_LIMIT_MAX
-        );
-    });
-
-    it('keeps the signup and reset identity budgets a small fraction of the browsing budget', () => {
-        expect(DEFAULT_SIGNUP_RATE_LIMIT_MAX).toBeLessThan(DEFAULT_RATE_LIMIT_MAX / 5);
-        expect(DEFAULT_RESET_RATE_LIMIT_MAX).toBeLessThan(DEFAULT_RATE_LIMIT_MAX / 5);
-        expect(DEFAULT_SUBMISSION_RATE_LIMIT_EMAIL_MAX).toBeLessThan(DEFAULT_RATE_LIMIT_MAX / 5);
+    it('sizes the api-key budget above the upload budget, below the browsing one', () => {
+        // A partner integration's steady state is well above one browsing session but must never
+        // out-run the address-keyed global brake layered on top of it.
+        expect(DEFAULT_API_KEY_RATE_LIMIT_MAX).toBeGreaterThan(DEFAULT_UPLOAD_RATE_LIMIT_MAX);
+        expect(DEFAULT_API_KEY_RATE_LIMIT_MAX).toBeLessThan(DEFAULT_RATE_LIMIT_MAX * 2);
     });
 });
 

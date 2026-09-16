@@ -17,6 +17,7 @@ import { USER_DELETED } from '@modules/users';
 import { router } from './routes';
 import { refundForOrder, detachUserId } from './services';
 import { validateBankTransferConfig } from './config';
+import { paymentsRateLimits } from './rate-limits';
 // Installs this module's event declarations (PAYMENT_SUCCEEDED, PAYMENT_FAILED).
 import './events';
 
@@ -36,6 +37,8 @@ export default {
         'payments.any.update'
     ],
     routes: router,
+    /** The webhook and card-testing budgets — see `./rate-limits.ts`. */
+    rateLimits: paymentsRateLimits,
     // The provider signs over the exact bytes it sent — relative to `basePath`, composed by the
     // app tier, so the mount point is stated once and the two cannot drift.
     rawBodyPaths: ['/webhook'],

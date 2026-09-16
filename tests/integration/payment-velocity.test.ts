@@ -53,7 +53,7 @@ const limitersWithBudget = async (attemptLimit: number, declineLimit = attemptLi
     process.env.NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX = String(declineLimit);
     jest.resetModules();
 
-    const rateLimit = await import('@infrastructure/http/middlewares/rate-limit');
+    const rateLimit = await import('@modules/payments/rate-limits');
 
     for (const [name, value] of [
         ['NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX', originals.attempt],
@@ -175,7 +175,7 @@ describe('paymentDeclineChallengeGate — rung 3 only once the account has a dec
         jest.resetModules();
 
         const { paymentConfirmDeclineLimiter, paymentDeclineChallengeGate } =
-            await import('@infrastructure/http/middlewares/rate-limit');
+            await import('@modules/payments/rate-limits');
 
         if (original === undefined) delete process.env.NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX;
         else process.env.NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX = original;

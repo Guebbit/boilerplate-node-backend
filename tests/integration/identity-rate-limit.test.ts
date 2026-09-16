@@ -13,14 +13,14 @@ import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
  */
 
 /**
- * Reloads `@infrastructure/http/middlewares/rate-limit` with the given env vars set, restoring
- * them immediately after — every limiter's budget is captured at import time, so a smaller value
- * only takes effect on a fresh module instance. Shared by every case below rather than repeated,
- * since only which env vars and which export differs.
+ * Sets the given env vars, runs `load`, restores them immediately after — every limiter's budget
+ * is captured at import time, so a smaller value only takes effect on a fresh module instance.
+ * Shared by {@link withAccountRateLimits}/{@link withFeedbackRateLimits} rather than repeated,
+ * since only which module and which export differs.
  */
-const withRateLimitModule = async <T>(
+const withOverrides = async <T>(
     overrides: Record<string, string>,
-    pick: (rateLimitModule: typeof import('@infrastructure/http/middlewares/rate-limit')) => T
+    load: () => Promise<T>
 ): Promise<T> => {
     const originals: Record<string, string | undefined> = {};
     for (const [key, value] of Object.entries(overrides)) {
@@ -29,8 +29,7 @@ const withRateLimitModule = async <T>(
     }
     jest.resetModules();
 
-    const rateLimitModule = await import('@infrastructure/http/middlewares/rate-limit');
-    const picked = pick(rateLimitModule);
+    const picked = await load();
 
     for (const [key, original] of Object.entries(originals)) {
         if (original === undefined) delete process.env[key];
@@ -39,6 +38,18 @@ const withRateLimitModule = async <T>(
 
     return picked;
 };
+
+/** Reloads `@modules/account/rate-limits` with the given env vars set — see {@link withOverrides}. */
+const withAccountRateLimits = <T>(
+    overrides: Record<string, string>,
+    pick: (rateLimitsModule: typeof import('@modules/account/rate-limits')) => T
+): Promise<T> => withOverrides(overrides, () => import('@modules/account/rate-limits').then(pick));
+
+/** Reloads `@modules/feedback/rate-limits` with the given env vars set — see {@link withOverrides}. */
+const withFeedbackRateLimits = <T>(
+    overrides: Record<string, string>,
+    pick: (rateLimitsModule: typeof import('@modules/feedback/rate-limits')) => T
+): Promise<T> => withOverrides(overrides, () => import('@modules/feedback/rate-limits').then(pick));
 
 /** A trivial app that always answers `status`, past the given limiter chain. */
 const appAnswering = (status: number, ...limiters: express.RequestHandler[]) => {
@@ -64,7 +75,7 @@ describe('signupLimiters', () => {
     afterEach(() => jest.resetModules());
 
     it('spends the identity budget on a SUCCESSFUL signup, unlike credentialLimiters', async () => {
-        const signupLimiters = await withRateLimitModule(
+        const signupLimiters = await withAccountRateLimits(
             {
                 NODE_SIGNUP_RATE_LIMIT_MAX: '2',
                 NODE_SIGNUP_RATE_LIMIT_ADDRESS_MAX: '50',
@@ -85,7 +96,7 @@ describe('signupLimiters', () => {
     });
 
     it('spends the address budget across different emails from the same caller', async () => {
-        const signupLimiters = await withRateLimitModule(
+        const signupLimiters = await withAccountRateLimits(
             {
                 NODE_SIGNUP_RATE_LIMIT_MAX: '50',
                 NODE_SIGNUP_RATE_LIMIT_ADDRESS_MAX: '2',
@@ -110,7 +121,7 @@ describe('resetRequestLimiters', () => {
     it('spends the identity budget on the 200 postResetRequest always answers', async () => {
         // Standing in for `postResetRequest`'s indistinguishable-response design: every attempt,
         // real account or not, gets the same status, so the limiter must count every one.
-        const resetRequestLimiters = await withRateLimitModule(
+        const resetRequestLimiters = await withAccountRateLimits(
             {
                 NODE_RESET_RATE_LIMIT_MAX: '2',
                 NODE_RESET_RATE_LIMIT_ADDRESS_MAX: '50',
@@ -132,7 +143,7 @@ describe('contactLimiters', () => {
     afterEach(() => jest.resetModules());
 
     it('adds an identity budget the address-only submissionLimiter never had', async () => {
-        const contactLimiters = await withRateLimitModule(
+        const contactLimiters = await withFeedbackRateLimits(
             {
                 NODE_SUBMISSION_RATE_LIMIT_MAX: '50',
                 NODE_SUBMISSION_RATE_LIMIT_EMAIL_MAX: '2',
@@ -157,7 +168,7 @@ describe('address-block keying', () => {
     afterEach(() => jest.resetModules());
 
     it('shares one budget across different IPv4 addresses in the same /24', async () => {
-        const signupLimiters = await withRateLimitModule(
+        const signupLimiters = await withAccountRateLimits(
             {
                 NODE_SIGNUP_RATE_LIMIT_MAX: '50',
                 NODE_SIGNUP_RATE_LIMIT_ADDRESS_MAX: '50',
@@ -180,7 +191,7 @@ describe('address-block keying', () => {
     });
 
     it('shares one budget across different IPv6 addresses in the same /64', async () => {
-        const signupLimiters = await withRateLimitModule(
+        const signupLimiters = await withAccountRateLimits(
             {
                 NODE_SIGNUP_RATE_LIMIT_MAX: '50',
                 NODE_SIGNUP_RATE_LIMIT_ADDRESS_MAX: '50',
@@ -207,7 +218,7 @@ describe('mfaChallengeLimiter', () => {
     afterEach(() => jest.resetModules());
 
     it('refuses the 6th guess against one live challenge', async () => {
-        const mfaChallengeLimiter = await withRateLimitModule(
+        const mfaChallengeLimiter = await withAccountRateLimits(
             { NODE_MFA_CHALLENGE_MAX: '5' },
             (module) => module.mfaChallengeLimiter
         );
@@ -222,8 +233,8 @@ describe('mfaChallengeLimiter', () => {
     it('does not let two callers with no challenge exhaust the same bucket', async () => {
         // Regression: a request naming no `challenge` used to bucket under one shared
         // `'anonymous'` key, so any two such callers spent the same budget. It must now key on
-        // the caller's address BLOCK instead — see `challengeKey` in `rate-limit.ts`.
-        const mfaChallengeLimiter = await withRateLimitModule(
+        // the caller's address BLOCK instead — see `challengeKey` in `account/rate-limits.ts`.
+        const mfaChallengeLimiter = await withAccountRateLimits(
             { NODE_MFA_CHALLENGE_MAX: '1' },
             (module) => module.mfaChallengeLimiter
         );

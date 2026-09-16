@@ -342,4 +342,4 @@ Neither scrubs a settled payment, because there is nothing on it left to scrub.
 - [`orders`](./orders.md) — what a payment is about
 - [`inventory`](./inventory.md) — the units this module commits
 - [Layers](../theory/layers.md) — what a port is and where it sits
-- [Security](../tools/security.md) — what is never stored here
+- [Security](../tools/security.md) — what is never stored here, and this module's own rate-limit budgets

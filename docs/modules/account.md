@@ -166,6 +166,6 @@ up-to-24-hours between the two.
 - [Two-factor authentication](./account-two-factor.md) — the registry, and the enrollment state machine
 - [OAuth](./account-oauth.md) — the provider port and the three outcomes of a callback
 - [`users`](./users.md) — the collection this module shares
-- [Security](../tools/security.md) — hashing, cookies, and the headers around them
+- [Security](../tools/security.md) — hashing, cookies, the headers around them, and this module's own rate-limit budgets
 - [Request Flow](../theory/request-flow.md) — where the guard sits in a request
 - [Strategic DDD](../theory/strategic-ddd.md#_2-context-map-—-how-a-module-reaches-its-siblings) — what `shared-kernel` costs

@@ -181,47 +181,33 @@ export const cacheMock = () => ({
 });
 
 /**
- * Replacement for `@infrastructure/http/middlewares/rate-limit`'s exported limiter arrays.
+ * Replacement for `@infrastructure/http/middlewares/rate-limit`.
  *
- * Every budget arrives as one or more anonymous `express-rate-limit` closures, indistinguishable
- * in a route table from any other unnamed middleware — so "is login rate-limited" is not a
- * question the stack can answer as it stands.
+ * Every budget, module-owned or infrastructure-owned, is built by calling `buildRateLimiter(budget)`
+ * — see `RateLimitBudget` in `src/types/rate-limit-budget.ts`. Relabelling that ONE factory relabels every budget
+ * built from it, by `budget.namespace` (already unique and already the redis key prefix, so a
+ * family reads as a shared string prefix — `credentials-identity`/`credentials-address`/
+ * `credentials-block` for `credentialLimiters`, `submissions`/`submission-identity`/
+ * `submission-block` for `contactLimiters`, and so on), everywhere a module's own
+ * `rate-limits.ts` imports it AFTER this mock is installed.
  *
- * Each array is mapped rather than replaced, so its LENGTH is preserved: `credentialLimiters` is
- * identity + address + address-block, `signupLimiters`/`resetRequestLimiters` the same three keyed
- * differently, and `contactLimiters` is `submissionLimiter` plus the identity and block dimensions
- * Rung 1 adds — each one bounds a different attack, and the modules' own comments say a route
- * "cannot apply half of the pair". Labelling each by index makes dropping one of them visible,
- * which replacing the array with a single marker would not.
+ * This file's own three budgets (`rateLimiter`, `apiKeyLimiter`, `uploadLimiter`) are the
+ * exception: `jest.requireActual` below already built them, for real, before the override can
+ * apply to anything — so each still needs its own entry, the same reason a plain function needed
+ * one before this factory existed.
  */
 export const securityMock = () => {
     const actual = jest.requireActual<typeof import('@infrastructure/http/middlewares/rate-limit')>(
         '@infrastructure/http/middlewares/rate-limit'
     );
 
-    const labelledArray = (name: string, limiters: readonly unknown[]) =>
-        limiters.map((_limiter, index) => labelled(`${name}[${index}]`));
-
     return {
         ...actual,
         __esModule: true,
-        credentialLimiters: labelledArray('credentialLimiters', actual.credentialLimiters),
-        signupLimiters: labelledArray('signupLimiters', actual.signupLimiters),
-        resetRequestLimiters: labelledArray('resetRequestLimiters', actual.resetRequestLimiters),
-        contactLimiters: labelledArray('contactLimiters', actual.contactLimiters),
-        // Same reasoning, singular: `submissionLimiter` on its own (only reachable directly by a
-        // future route, not by `feedback`'s — that one reads it back through `contactLimiters`
-        // above) is a single closure rather than an array, so it gets one label, not an indexed one.
-        submissionLimiter: labelled('submissionLimiter'),
-        webhookLimiter: labelled('webhookLimiter'),
-        // Same shape as `webhookLimiter`: a single closure, run from inside `getAuth`'s
-        // credential branch rather than mounted on any one route.
-        apiKeyLimiter: labelled('apiKeyLimiter'),
-        // Same shape again: each a single closure mounted directly on `POST /:id/confirm` rather
-        // than an array. `paymentDeclineChallengeGate` needs no entry here — like
-        // `loginChallengeGate`, it is a declared arrow function and already arrives named.
-        paymentConfirmAttemptLimiter: labelled('paymentConfirmAttemptLimiter'),
-        paymentConfirmDeclineLimiter: labelled('paymentConfirmDeclineLimiter')
+        buildRateLimiter: (budget: { namespace: string }) => labelled(budget.namespace),
+        rateLimiter: labelled('global'),
+        apiKeyLimiter: labelled('api-key'),
+        uploadLimiter: labelled('uploads')
     };
 };
 

@@ -29,7 +29,7 @@ const limitersWithBudget = async (identityLimit: number, addressLimit = identity
     process.env.NODE_AUTH_RATE_LIMIT_ADDRESS_MAX = String(addressLimit);
     jest.resetModules();
 
-    const { credentialLimiters } = await import('@infrastructure/http/middlewares/rate-limit');
+    const { credentialLimiters } = await import('@modules/account/rate-limits');
 
     for (const [name, value] of [
         ['NODE_AUTH_RATE_LIMIT_MAX', originals.identity],
@@ -156,7 +156,7 @@ describe('loginChallengeGate — rung 3 only once the identity budget is mostly 
         jest.resetModules();
 
         const { credentialLimiters, loginChallengeGate } =
-            await import('@infrastructure/http/middlewares/rate-limit');
+            await import('@modules/account/rate-limits');
 
         if (original === undefined) delete process.env.NODE_AUTH_RATE_LIMIT_MAX;
         else process.env.NODE_AUTH_RATE_LIMIT_MAX = original;

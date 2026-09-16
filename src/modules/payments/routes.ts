@@ -34,7 +34,7 @@ import {
     paymentConfirmAttemptLimiter,
     paymentConfirmDeclineLimiter,
     paymentDeclineChallengeGate
-} from '@infrastructure/http/middlewares/rate-limit';
+} from './rate-limits';
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 import { postPaymentIntent } from './controllers/post-payment-intent';
 import { postPaymentConfirm } from './controllers/post-payment-confirm';
