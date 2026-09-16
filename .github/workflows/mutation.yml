@@ -195,7 +195,7 @@ jobs:
               # a save at the end; `restore-keys` falls back to the shard's most recent cache.
               # `--force` on the forced-full night still discards whatever this restores (Stryker's
               # own behaviour), so restoring on that night is harmless, not wasted.
-              uses: actions/cache@v4
+              uses: actions/cache@v6
               with:
                   path: reports/stryker-incremental-deep.json
                   key: mutation-deep-incremental-${{ matrix.name }}-${{ github.run_id }}
