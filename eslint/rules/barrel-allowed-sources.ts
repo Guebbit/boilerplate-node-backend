@@ -27,12 +27,12 @@ export const barrelAllowedSources = {
         schema: [],
         messages: {
             notAllowed:
-                '`export * from \'{{source}}\'` is not one of the files a barrel may publish ' +
+                "`export * from '{{source}}'` is not one of the files a barrel may publish " +
                 'everything from — services, domain, events and emails as values, model as ' +
                 '`export type *` only. See docs/theory/strategic-ddd.md §5.',
             modelAsValue:
-                'The model is published as types only — `export type * from \'./model\'`, never ' +
-                '`export * from \'./model\'`, which would also publish the mongoose schema and ' +
+                "The model is published as types only — `export type * from './model'`, never " +
+                "`export * from './model'`, which would also publish the mongoose schema and " +
                 'the model object.'
         }
     },
@@ -47,7 +47,11 @@ export const barrelAllowedSources = {
 
                 if (isTypeOnly) {
                     if (!TYPE_SOURCES.has(stem))
-                        context.report({ node: node.source, messageId: 'notAllowed', data: { source } });
+                        context.report({
+                            node: node.source,
+                            messageId: 'notAllowed',
+                            data: { source }
+                        });
                     return;
                 }
 
@@ -57,7 +61,11 @@ export const barrelAllowedSources = {
                 }
 
                 if (!VALUE_SOURCES.has(stem))
-                    context.report({ node: node.source, messageId: 'notAllowed', data: { source } });
+                    context.report({
+                        node: node.source,
+                        messageId: 'notAllowed',
+                        data: { source }
+                    });
             }
         };
     }

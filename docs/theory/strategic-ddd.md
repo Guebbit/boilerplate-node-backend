@@ -195,9 +195,9 @@ What it never publishes, no matter how convenient:
   read moves to a service function instead. `modules/inventory/index.ts` states the case by
   refusing outright:
 
-  > The repositories, both models and every counter primitive are deliberately absent. This module
-  > exists so that nothing outside it can move a stock number, and publishing a repository would
-  > hand back the ability it was created to take away.
+    > The repositories, both models and every counter primitive are deliberately absent. This module
+    > exists so that nothing outside it can move a stock number, and publishing a repository would
+    > hand back the ability it was created to take away.
 
 - **The model's runtime** — the mongoose schema, its `toJSON` transform, the model object itself.
   `export type * from './model'` still publishes every type the model declares; only the values
