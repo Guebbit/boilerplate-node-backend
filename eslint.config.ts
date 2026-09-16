@@ -945,6 +945,30 @@ export default tseslint.config(
                         },
 
                         /*
+                         * A module never imports its own barrel. `index.ts` re-exports every file
+                         * the barrel allows with `export *`, so a file inside the module reaching
+                         * back through it risks a load-order cycle the same way any `export *`
+                         * self-import would — and the real thing is always one relative import
+                         * away. Placed after the same-module allow above so it overrides that
+                         * allow for this one path; a sibling's `index.ts` stays reachable, since
+                         * this only matches the module's OWN captured name.
+                         */
+                        {
+                            from: { element: { type: 'module' } },
+                            disallow: {
+                                to: {
+                                    element: {
+                                        type: 'module',
+                                        fileInternalPath: 'index.ts',
+                                        captured: { module: '{{ from.element.captured.module }}' }
+                                    }
+                                }
+                            },
+                            message:
+                                'A module does not import its own barrel — the export is one relative import away from the real file. Importing a SIBLING’S index.ts is the one door; importing your own is a self-import that risks a load-order cycle under `export *`. See docs/theory/strategic-ddd.md §5.'
+                        },
+
+                        /*
                          * The domain layer: plain TypeScript over plain data. It is the only tier
                          * whose rule is about what it may TOUCH rather than which tier it may
                          * reach — no framework, no tier, no sibling, and not even the outer files
