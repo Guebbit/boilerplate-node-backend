@@ -143,6 +143,25 @@ endpoints. "Usable via any HTTP client" is still true (nothing here requires the
 the only way in. See that repo's `docs/modules/webhooks.md` for the client side, including why
 `rotateSecret`'s response never gets cached client-side.
 
+## Turning it off
+
+`NODE_WEBHOOKS_ENABLED=false` switches the whole feature off on a deployment. On (the default)
+unless explicitly disabled — the same kill-switch shape the other optional features use.
+
+Off, three things change together, so there is no half-on state:
+
+- **Every `/webhooks` route answers 403**, not 404 — `require-enabled.ts` gates the router ahead of
+  auth. The endpoints still exist in `openapi.yaml`; this deployment has switched them off, which a
+  403 says and a 404 would not.
+- **No domain event creates a delivery** — `module.ts` skips `subscribeToWebhookEvents`, so
+  `order.created` and the rest fan out to nothing here.
+- **The queue worker is never registered**, so a stray `worker.webhook.deliver` job is a no-op.
+
+Together that removes the one path in the backend that fetches a caller-supplied URL — see
+[Server-side request forgery](../theory/defences/ssrf.md). It is a boot decision: flipping the
+variable takes a restart to fully land, because the subscription and worker are wired once at
+startup.
+
 ## Seeing it work
 
 `npm run demo` seeds no subscription by default — nothing to deliver to. Start

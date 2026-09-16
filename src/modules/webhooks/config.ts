@@ -4,7 +4,17 @@
  * sets, so a deployment can change these without a restart.
  */
 
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { environmentFlag, environmentNumber } from '@infrastructure/runtime/environment';
+
+/**
+ * Whether this deployment serves outbound webhooks at all. Off (`NODE_WEBHOOKS_ENABLED=false`)
+ * makes every `/webhooks` route answer 403 and stops the module subscribing to domain events, so
+ * no delivery is ever created or sent — the one switch that removes the caller-supplied-URL
+ * surface `@infrastructure/adapters/ssrf-guard` exists to guard. A boot decision: the HTTP gate
+ * reads it per request, but the event subscription and queue worker are wired once at startup
+ * (`module.ts`), so a live flip only fully lands on restart.
+ */
+export const isWebhooksEnabled = (): boolean => environmentFlag('NODE_WEBHOOKS_ENABLED', true);
 
 /**
  * The secret-ring encryption key, versioned the same way `account/session/config.ts`'s

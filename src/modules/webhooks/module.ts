@@ -10,17 +10,23 @@
  * `registerImageWritebackResolver` already establish. Deleting this module is then enough to stop
  * the queue meaning anything, with nothing left to also delete in `infrastructure/`.
  *
+ * `NODE_WEBHOOKS_ENABLED=false` switches it off: no processor, no event subscription, every route
+ * 403s (`require-enabled.ts`) — see `config.ts`. Off, the subscriber-URL surface is gone entirely.
+ *
  * See: docs/modules/webhooks.md
  */
 
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { registerWebhookDeliveryProcessor } from '@infrastructure/adapters/webhook.worker';
+import { isWebhooksEnabled } from './config';
 import { router } from './routes';
 import { subscribeToWebhookEvents, processDeliveryJob } from './services';
 
-// Installs the queue processor — see the module header for why here, not `app/workers.ts`.
-registerWebhookDeliveryProcessor(processDeliveryJob);
+// Installs the queue processor — see the module header for why here, not `app/workers.ts`. Skipped
+// when the feature is off, so a disabled deployment neither subscribes nor delivers; the routes
+// still mount but answer 403 (`require-enabled.ts`).
+if (isWebhooksEnabled()) registerWebhookDeliveryProcessor(processDeliveryJob);
 
 /** This module's manifest entry. */
 export default {
@@ -39,7 +45,7 @@ export default {
         'webhooks.any.update',
         'webhooks.any.delete'
     ],
-    subscribe: subscribeToWebhookEvents,
+    subscribe: isWebhooksEnabled() ? subscribeToWebhookEvents : undefined,
     requiredConfig: [
         // A subscription's secret ring is encrypted under this key (`./secrets.ts`); the shipped
         // placeholder would make every stored secret recoverable by anyone who has read this repo —
