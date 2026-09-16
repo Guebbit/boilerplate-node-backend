@@ -1037,8 +1037,8 @@ export default tseslint.config(
     },
 
     /**
-     * B1's deny-list (`BARREL_EXPORT.md`, `docs/theory/strategic-ddd.md` §5) holds only if a
-     * barrel's `export *` cannot reach a repository, the model's runtime or a wiring file by
+     * The barrel's deny-list (`docs/theory/strategic-ddd.md` §5) holds only if a barrel's
+     * `export *` cannot reach a repository, the model's runtime or a wiring file by
      * naming a source the deny-list never considered. `boundaries/dependencies` above answers
      * "which module may a FILE import"; this is the question one level up — which of a module's
      * OWN files its `index.ts` is allowed to publish everything from.

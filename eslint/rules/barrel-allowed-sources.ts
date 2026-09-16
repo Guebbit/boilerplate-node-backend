@@ -1,9 +1,9 @@
 /**
- * A module's barrel may only `export *` from the files B1 of `BARREL_EXPORT.md` allows: its
- * services, domain rules, events and emails as values, and its model as TYPES ONLY. Everything
- * else — a repository, the model as a value, routes, controllers, the manifest, probes, metrics,
- * analytics, audit — is a persistence handle or wiring, and the deny-list only holds if nothing
- * can re-open it through a new `export *` nobody reads closely.
+ * A module's barrel may only `export *` from its services, domain rules, events and emails as
+ * values, and its model as TYPES ONLY. Everything else — a repository, the model as a value,
+ * routes, controllers, the manifest, probes, metrics, analytics, audit — is a persistence handle
+ * or wiring, and the deny-list only holds if nothing can re-open it through a new `export *`
+ * nobody reads closely.
  *
  * Scoped to `export *` / `export type *` specifically: a named `export { x } from './y'` already
  * says what it publishes, so there is nothing structural to check there. This rule is only about

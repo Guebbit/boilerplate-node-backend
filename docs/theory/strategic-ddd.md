@@ -177,9 +177,9 @@ module has one, structurally, so there is no "no barrel, therefore unreachable" 
 
 The convention is a **convenience barrel with a short, structural deny-list**, not the narrower
 "publish only what a sibling imports today" this repo used to run. That narrower form has exactly
-the failure `BARREL_EXPORT.md` went looking for: the list is short, a sibling's need is real, and
-copying the logic, redeclaring the type, or casting around the gap is cheaper than adding the
-export. A convenience barrel removes the incentive to route around it, at the cost of three things
+one failure in practice: the list is short, a sibling's need is real, and copying the logic,
+redeclaring the type, or casting around the gap is cheaper than adding the export. A convenience
+barrel removes the incentive to route around it, at the cost of three things
 this repo already pays for elsewhere: a write handle leaking through a published repository (closed
 by the deny-list below), an import cycle inside a module (closed by ESLint refusing a module's own
 barrel-of-itself), and the loading cost of pulling in a whole module (already paid — `modules.ts`
