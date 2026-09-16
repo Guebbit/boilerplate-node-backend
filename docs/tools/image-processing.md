@@ -31,8 +31,8 @@ digest job promotes it.
 %%{init: {'flowchart': {'nodeSpacing': 55, 'rankSpacing': 65}}}%%
 flowchart LR
     Upload[Multipart upload] -->|validate + quarantine| Quarantine[(Quarantine dir)]
-    Quarantine -->|broker configured| RMQ[(worker.image.digest)]
-    Quarantine -->|no broker| Inline[Digest inline, in the request]
+    Quarantine -->|broker reachable| RMQ[(worker.image.digest)]
+    Quarantine -->|no broker, or unreachable| Inline[Digest inline, in the request]
     RMQ --> Worker[image.worker.ts]
     Inline --> Digest
     Worker --> Digest[digestImage + thumbnailImage]
@@ -67,21 +67,37 @@ flowchart LR
 
 ## How it's used
 
-### Queue enabled (the normal path)
+### Queue reachable (the normal path)
 
-1. `quarantineUploadedImages` quarantines the staged upload and sets `request.quarantinedImageKeys`.
+1. `quarantineUploadedImages` quarantines the staged upload and sets `request.quarantinedImageKeys`
+   — gated on `queueState() === 'ready'`, a live reachability check, not just "a broker is
+   configured somewhere". A broker that's configured but down takes the fallback below, the same as
+   no broker at all.
 2. The controller persists the document with the pending-image placeholder
    (`imageUrl`/`thumbnailUrl`) and the quarantine key as `pendingImageKey`.
 3. The module's service calls `enqueueImageDigest`, which publishes to `worker.image.digest`.
 4. `handleImageDigestJob` digests, promotes both files, then writes back — **conditionally**, on
    `pendingImageKey` still matching the job's key — before clearing the quarantine file.
 
-### No broker (fallback)
+### No broker, or one that's unreachable (fallback)
 
 `quarantineUploadedImages` runs the entire pipeline inline, synchronously, before the request
 reaches the controller. The response carries the real `imageUrl`/`thumbnailUrl` immediately; the
 placeholder and `pendingImageKey` are never touched. Same shape as `enqueueEmail` falling back to
-sending inline — see `docs/tools/rabbitmq.md`.
+sending inline — see `docs/tools/rabbitmq.md` — except gated on liveness rather than
+configuration, for the reason above.
+
+### The residual race, and why it's awaited
+
+`pendingImageKey` can still end up set even though the broker is down: `queueState()` is a cached
+signal, not a probe on every request, so the very first request after a broker dies (before
+anything has failed against it yet) still takes the queue path. When `enqueueImageDigest`'s
+`publishToQueue` call then fails, it falls back to running the digest inline — same code as the
+no-broker path, but reached from `users`/`products` services' `enqueueIfPending` instead of the
+middleware. That fallback is **awaited**, not fire-and-forget: without it, the response can return
+before the file is on disk, and if the document changes before the inline run's writeback
+resolves, the conditional writeback described below "corrects" it by deleting the file the inline
+run just promoted.
 
 ### Why the writeback is conditional
 
@@ -135,3 +151,9 @@ apart.
   under musl for long-running processes — worth a `k6` soak test before relying on it at scale.
 - **Remote and default images get no thumbnail.** `thumbnailUrl` stays absent when `imageUrl` is a
   body-supplied or default url rather than an upload; there is nothing local to derive one from.
+- **A dead broker logs at `error`, not `warn`.** Unlike Redis (a pure optimisation loss),
+  `queue.ts`'s `unavailableLevel: 'error'` reflects that losing RabbitMQ here changes real
+  behavior — every image upload starts paying the full inline digest cost — so it's worth routing
+  to on-call. `onRecovered` logs the matching "reachable again" line. See
+  `db.<collection>.find({ pendingImageKey: { $exists: true } })` above for the complementary,
+  per-record signal.

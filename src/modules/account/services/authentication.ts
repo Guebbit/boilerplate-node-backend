@@ -460,9 +460,11 @@ export const signup = (
                                               locale: getCurrentLocale()
                                           })
                                           .then((createdUser) =>
-                                              generateSuccess<UserDocument>(
-                                                  userService.enqueueIfPending(createdUser)
-                                              )
+                                              userService
+                                                  .enqueueIfPending(createdUser)
+                                                  .then((user) =>
+                                                      generateSuccess<UserDocument>(user)
+                                                  )
                                           );
                                   })
                                   .catch((error: CastError | Error) =>
