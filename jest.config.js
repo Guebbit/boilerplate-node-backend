@@ -281,6 +281,8 @@ module.exports = {
     globalSetup: '<rootDir>/tests/support/global-setup.ts',
     globalTeardown: '<rootDir>/tests/support/global-teardown.ts',
     setupFiles: ['<rootDir>/tests/support/setup.ts'],
+    // Redirects every file the code under test writes into a per-test-file sandbox.
+    setupFilesAfterEnv: ['<rootDir>/tests/support/setup-file-sandbox.ts'],
     testTimeout: 30_000,
     transform: {
         '^.+\\.tsx?$': [

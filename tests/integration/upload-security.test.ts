@@ -1,7 +1,8 @@
-import { existsSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
 import { api } from '@tests/http';
+import { emptyFileSandbox } from '@tests/file-sandbox';
 import { setupTestDb } from '@tests/setup-test-db';
 import { PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { maxUploadBytes } from '@infrastructure/adapters/storage';
@@ -43,8 +44,8 @@ beforeAll(async () => {
 /**
  * Files present in the upload directory, so a test can tell what a request left behind.
  *
- * Files only — the digest pipeline's `thumbs/` derivative directory now lives alongside the
- * uploads themselves, and it is not one of the per-test artifacts this suite cleans up.
+ * Files only — the digest pipeline's `thumbs/` derivative directory lives alongside the uploads, and
+ * a thumbnail is not what these assertions are about.
  */
 const uploadedFiles = () =>
     existsSync(UPLOAD_DIRECTORY)
@@ -68,22 +69,13 @@ const signupWith = (content: Buffer | string, filename: string, contentType: str
 
 setupTestDb();
 
+/**
+ * Every test here that stores a file for real removes it — the original, its thumbnail and anything
+ * still quarantined. Each test therefore starts from an empty upload directory.
+ */
+afterEach(emptyFileSandbox);
+
 describe('upload content validation', () => {
-    let before: string[];
-
-    beforeEach(() => {
-        before = uploadedFiles();
-    });
-
-    /**
-     * A test that stores a file for real has to remove it, or the repository's upload directory
-     * slowly fills with fixtures — and the next run's `before` snapshot stops meaning anything.
-     */
-    afterEach(() => {
-        for (const file of uploadedFiles())
-            if (!before.includes(file)) rmSync(path.join(UPLOAD_DIRECTORY, file), { force: true });
-    });
-
     /**
      * The attack. Every claim the client controls says "image": the part's `Content-Type`, the
      * filename, the extension. Only the bytes disagree, and only the bytes are true.
@@ -100,14 +92,14 @@ describe('upload content validation', () => {
 
         expect(response.status).toBe(422);
         // The decisive assertion: not the status, but that the disguised file is not on disk.
-        expect(uploadedFiles()).toEqual(before);
+        expect(uploadedFiles()).toEqual([]);
     });
 
     it('accepts a real PNG', async () => {
         const response = await signupWith(PNG_BYTES, 'avatar.png', 'image/png');
 
         expect(response.status).toBe(201);
-        expect(uploadedFiles().length).toBe(before.length + 1);
+        expect(uploadedFiles()).toHaveLength(1);
     });
 
     /**
@@ -119,7 +111,7 @@ describe('upload content validation', () => {
         const response = await signupWith(PNG_BYTES, 'avatar.png', 'application/pdf');
 
         expect(response.status).toBe(201);
-        expect(uploadedFiles()).toEqual(before);
+        expect(uploadedFiles()).toEqual([]);
     });
 
     /**
@@ -134,7 +126,7 @@ describe('upload content validation', () => {
         const response = await signupWith(oversized, 'huge.png', 'image/png');
 
         expect(response.status).toBe(400);
-        expect(uploadedFiles()).toEqual(before);
+        expect(uploadedFiles()).toEqual([]);
     });
 });
 

@@ -192,6 +192,7 @@ One function, no database, no HTTP. Fast enough to run from the pre-commit hook.
 | `tests/integration/kernel/access.test.ts`               | The model's storage — two shops, one person, different roles — and every invariant as a refusal.                                                                      | [Authorization](../theory/authorization.md)              |
 | `tests/cross-cutting/module-permissions.test.ts`        | Every key belongs to a module that exists, and every module claims exactly the keys attributed to it.                                                                 | [Authorization](../theory/authorization.md)              |
 | `tests/unit/scripts/mutation/baseline.test.ts`          | The ratchet reads a Stryker report into per-file scores correctly.                                                                                                    | [Mutation Testing](../tools/mutation-testing.md)         |
+| `tests/unit/support/file-sandbox.test.ts`               | The file sandbox redirects every file-writing setting, refuses to run or delete outside its root, and attributes a leftover file to the test file that left it.       | [Test layout](#a-test-leaves-no-files-behind)            |
 | `tests/unit/scripts/pairing/spec-identity.test.ts`      | The cross-repo shared-file list and its comparison.                                                                                                                   | [Pairing & Ports](../tools/pairing-and-ports.md)         |
 
 ### `tests/unit/infrastructure/runtime/` and `persistence/`
@@ -290,23 +291,25 @@ happen in a single process.
 
 No assertions live here. These are what the suites are built from.
 
-| File                                | What it is                                                                                                                                     | Read next                                                          |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `tests/support/setup.ts`            | Jest's per-worker bootstrap — runs before any test, and raises the rate limits so a concurrency suite does not answer 429 to its own fixtures. | [Unit Testing](../tools/unit-testing.md)                           |
-| `tests/support/global-setup.ts`     | Starts the shared in-memory Mongo for the jest instance.                                                                                       | [Integration Testing](../tools/integration-testing.md)             |
-| `tests/support/global-teardown.ts`  | Stops it, once, after the last worker exits.                                                                                                   | [Integration Testing](../tools/integration-testing.md)             |
-| `tests/support/setup-test-db.ts`    | The database lifecycle for one suite. Called at the top level of any file that touches Mongo.                                                  | [Integration Testing](../tools/integration-testing.md)             |
-| `tests/support/database.ts`         | Connects one test file to the instance's shared in-memory Mongo.                                                                               | [Integration Testing](../tools/integration-testing.md)             |
-| `tests/support/http.ts`             | The HTTP-level harness — booting the app and driving it as a client.                                                                           | [Integration Testing](../tools/integration-testing.md)             |
-| `tests/support/express.ts`          | Express request and response stubs, for a unit test that needs a middleware and not a server.                                                  | [Unit Testing](../tools/unit-testing.md)                           |
-| `tests/support/stub.ts`             | The one sanctioned cast for a hand-built stub, and the reason double casts can be banned everywhere else.                                      | [Repository Root](./root.md)                                       |
-| `tests/support/contract.ts`         | Compares a real HTTP response against `openapi.yaml`.                                                                                          | [Contract Testing (Response)](../tools/contract-testing.md)        |
-| `tests/support/contract-data.ts`    | Generates request bodies from the contract's own Zod schemas.                                                                                  | [Contract-Derived Request Data](../tools/contract-request-data.md) |
-| `tests/support/pattern-samples.ts`  | Known-good strings for `pattern`s no generator can build a value for — one table, read by both generators.                                     | [Fuzz Testing](../tools/fuzz-testing.md)                           |
-| `tests/support/spec-walk.ts`        | Enumerates every operation in `openapi.yaml` — what makes a suite cover new endpoints automatically.                                           | [Fuzz Testing](../tools/fuzz-testing.md)                           |
-| `tests/support/spec-arbitraries.ts` | Turns a JSON Schema node from the contract into a property-testing arbitrary.                                                                  | [Property Testing](../tools/property-testing.md)                   |
-| `tests/support/race.ts`             | The concurrency harness: fire N requests at one instant and assert on the whole set of outcomes.                                               | [Concurrency Testing](../tools/concurrency-testing.md)             |
-| `tests/support/i18n-boot.ts`        | Reproduces the import ordering the app forces — module first, i18next second — so a test hits the same initialisation the app does.            | [Request Flow](../theory/request-flow.md)                          |
+| File                                  | What it is                                                                                                                                     | Read next                                                          |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `tests/support/setup.ts`              | Jest's per-worker bootstrap — runs before any test, and raises the rate limits so a concurrency suite does not answer 429 to its own fixtures. | [Unit Testing](../tools/unit-testing.md)                           |
+| `tests/support/global-setup.ts`       | Starts the shared in-memory Mongo for the jest instance.                                                                                       | [Integration Testing](../tools/integration-testing.md)             |
+| `tests/support/global-teardown.ts`    | Stops it, once, after the last worker exits — and fails the run if any test file left files in its sandbox.                                    | [Integration Testing](../tools/integration-testing.md)             |
+| `tests/support/file-sandbox.ts`       | The per-test-file directory that uploads, quarantine and staging are redirected into.                                                          | [Below](#a-test-leaves-no-files-behind)                            |
+| `tests/support/setup-file-sandbox.ts` | Points one test file at its sandbox, before the file loads.                                                                                    | [Below](#a-test-leaves-no-files-behind)                            |
+| `tests/support/setup-test-db.ts`      | The database lifecycle for one suite. Called at the top level of any file that touches Mongo.                                                  | [Integration Testing](../tools/integration-testing.md)             |
+| `tests/support/database.ts`           | Connects one test file to the instance's shared in-memory Mongo.                                                                               | [Integration Testing](../tools/integration-testing.md)             |
+| `tests/support/http.ts`               | The HTTP-level harness — booting the app and driving it as a client.                                                                           | [Integration Testing](../tools/integration-testing.md)             |
+| `tests/support/express.ts`            | Express request and response stubs, for a unit test that needs a middleware and not a server.                                                  | [Unit Testing](../tools/unit-testing.md)                           |
+| `tests/support/stub.ts`               | The one sanctioned cast for a hand-built stub, and the reason double casts can be banned everywhere else.                                      | [Repository Root](./root.md)                                       |
+| `tests/support/contract.ts`           | Compares a real HTTP response against `openapi.yaml`.                                                                                          | [Contract Testing (Response)](../tools/contract-testing.md)        |
+| `tests/support/contract-data.ts`      | Generates request bodies from the contract's own Zod schemas.                                                                                  | [Contract-Derived Request Data](../tools/contract-request-data.md) |
+| `tests/support/pattern-samples.ts`    | Known-good strings for `pattern`s no generator can build a value for — one table, read by both generators.                                     | [Fuzz Testing](../tools/fuzz-testing.md)                           |
+| `tests/support/spec-walk.ts`          | Enumerates every operation in `openapi.yaml` — what makes a suite cover new endpoints automatically.                                           | [Fuzz Testing](../tools/fuzz-testing.md)                           |
+| `tests/support/spec-arbitraries.ts`   | Turns a JSON Schema node from the contract into a property-testing arbitrary.                                                                  | [Property Testing](../tools/property-testing.md)                   |
+| `tests/support/race.ts`               | The concurrency harness: fire N requests at one instant and assert on the whole set of outcomes.                                               | [Concurrency Testing](../tools/concurrency-testing.md)             |
+| `tests/support/i18n-boot.ts`          | Reproduces the import ordering the app forces — module first, i18next second — so a test hits the same initialisation the app does.            | [Request Flow](../theory/request-flow.md)                          |
 
 ### Never block the event loop in a test
 
@@ -330,6 +333,40 @@ flowchart LR
 
 A seed or a boot logs enough for this to happen within seconds. Spawn asynchronously and `await`
 the result: `tests/integration/scenarios/apply.test.ts` is the worked example.
+
+### A test leaves no files behind
+
+A test run must not write onto the machine it runs on. The application writes files in three
+places, and each defaults to a real directory:
+
+| Setting                    | Default outside tests             | In tests                                  |
+| -------------------------- | --------------------------------- | ----------------------------------------- |
+| `NODE_PUBLIC_PATH`         | `public/` — uploads, thumbnails   | `.tmp/files/<pid>/<test file>/public`     |
+| `NODE_QUARANTINE_PATH`     | `quarantine/`                     | `.tmp/files/<pid>/<test file>/quarantine` |
+| `NODE_UPLOAD_STAGING_PATH` | `<system temp>/node-api-uploads/` | `.tmp/files/<pid>/<test file>/uploads`    |
+
+Two rules, both enforced:
+
+- **Redirected.** `tests/support/setup-file-sandbox.ts` assigns all three before a test file loads,
+  overriding `.env` and the shell. Without `globalSetup` it refuses to run rather than fall back.
+- **Removed.** A test that writes a file for real deletes it — `afterEach(emptyFileSandbox)` is
+  the whole idiom. Teardown lists what is left, deletes the sandbox anyway, then fails the run
+  naming each offending test file.
+
+```mermaid
+flowchart LR
+    A["globalSetup<br/>claims .tmp/files/&lt;pid&gt;"] --> B["setupFilesAfterEnv<br/>env → sandbox of this test file"]
+    B --> C["test writes an upload"]
+    C --> D["afterEach(emptyFileSandbox)"]
+    D --> E["globalTeardown<br/>lists leftover files"]
+    E --> F["deletes .tmp/files/&lt;pid&gt;"]
+    F --> G{"any leftovers?"}
+    G -- no --> H["run passes"]
+    G -- yes --> I["run fails, naming the test file"]
+```
+
+A killed run never reaches teardown; the next run sweeps a dead instance's directory, exactly as it
+does for the in-memory Mongo data.
 
 ## `tests/audit/` — prompts, not tests
 

@@ -1,7 +1,8 @@
-import { existsSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
 import { api, authenticateAs } from '@tests/http';
+import { emptyFileSandbox } from '@tests/file-sandbox';
 import { setupTestDb } from '@tests/setup-test-db';
 import { localeRepository } from '@modules/locales/repository';
 import { makeLocale } from '@modules/locales/factories';
@@ -41,8 +42,8 @@ beforeAll(async () => {
         .toBuffer();
 });
 
-// Files only — the digest pipeline's `thumbs/` derivative directory now lives alongside the
-// uploads themselves, and it is not one of the per-test artifacts this suite cleans up.
+// Files only — the digest pipeline's `thumbs/` derivative directory lives alongside the uploads,
+// and a thumbnail is not what these assertions are about.
 const uploadedFiles = () =>
     existsSync(UPLOAD_DIRECTORY)
         ? readdirSync(UPLOAD_DIRECTORY).filter((name) =>
@@ -66,10 +67,7 @@ afterAll(() => {
 });
 
 describe('writing a product through a multipart body', () => {
-    let before: string[];
-
     beforeEach(async () => {
-        before = uploadedFiles();
         // Every case below writes the fallback locale — see the same note in
         // `locales/tests/integration/translations.test.ts`.
         await localeRepository.create(
@@ -77,12 +75,9 @@ describe('writing a product through a multipart body', () => {
         );
     });
 
-    /* A test that stores a file for real has to remove it, or the repository's upload directory
-     * fills with fixtures and the next run's `before` snapshot stops meaning anything. */
-    afterEach(() => {
-        for (const file of uploadedFiles())
-            if (!before.includes(file)) rmSync(path.join(UPLOAD_DIRECTORY, file), { force: true });
-    });
+    /* A test that stores a file for real removes it — the original, its thumbnail and anything still
+     * quarantined — so each case starts from an empty upload directory. */
+    afterEach(emptyFileSandbox);
 
     it('creates a product, decoding the string-transported price', async () => {
         const { bearer } = await authenticateAs('owner');
@@ -188,6 +183,6 @@ describe('writing a product through a multipart body', () => {
         // 422 about the caller's input rather than becoming a `NaN` the validator has to explain.
         expect(response.status).toBe(422);
         // Nothing stored: a rejected write must not leave its upload behind.
-        expect(uploadedFiles()).toEqual(before);
+        expect(uploadedFiles()).toEqual([]);
     });
 });

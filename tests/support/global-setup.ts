@@ -8,6 +8,7 @@ import {
     type EphemeralMongo
 } from '../../src/infrastructure/runtime/ephemeral-mongo';
 import { startInProcessMongod } from './ephemeral-mongod';
+import { FILE_SANDBOX_ROOT_VARIABLE } from './file-sandbox';
 
 /**
  * The one handle `globalSetup` has to hand `globalTeardown`. Jest runs both in the same process but
@@ -45,6 +46,10 @@ export const TEST_TMP_ROOT =
 /** This instance's own slice of it, holding the one server {@link globalSetup} starts. */
 export const instanceDataRoot = (): string =>
     path.join(TEST_TMP_ROOT, 'mongo', String(process.pid));
+
+/** This instance's file sandbox root, one directory per test file beneath it — `file-sandbox.ts`. */
+export const instanceFilesRoot = (): string =>
+    path.join(TEST_TMP_ROOT, 'files', String(process.pid));
 
 /**
  * Whether a pid is still running.
@@ -89,6 +94,19 @@ const sweepDeadInstances = async (mongoRoot: string): Promise<void> => {
 };
 
 /**
+ * Gives this instance a fresh, empty root of its own, after sweeping dead instances' roots beside it.
+ *
+ * @param root - one of {@link instanceDataRoot} or {@link instanceFilesRoot}
+ * @returns the same root, now existing and empty
+ */
+const claimInstanceRoot = async (root: string): Promise<string> => {
+    await sweepDeadInstances(path.dirname(root));
+    await rm(root, { recursive: true, force: true });
+    await mkdir(root, { recursive: true });
+    return root;
+};
+
+/**
  * Runs once per jest instance, before any worker starts.
  *
  * ── IT STARTS THE ONE DATABASE SERVER ────────────────────────────────────────────────────────────
@@ -101,12 +119,15 @@ const sweepDeadInstances = async (mongoRoot: string): Promise<void> => {
  * while the connections are made in workers, and the environment is what crosses that boundary. The
  * server handle cannot travel that way, so it goes on `globalThis` for {@link globalTeardown},
  * which jest runs in this same process.
+ *
+ * ── IT CLAIMS THE FILE SANDBOX ───────────────────────────────────────────────────────────────────
+ * The root every test file's writes are redirected under, published the same way — see
+ * `file-sandbox.ts`.
  */
 const globalSetup = async () => {
-    const root = instanceDataRoot();
-    await sweepDeadInstances(path.join(TEST_TMP_ROOT, 'mongo'));
-    await rm(root, { recursive: true, force: true });
-    await mkdir(root, { recursive: true });
+    process.env[FILE_SANDBOX_ROOT_VARIABLE] = await claimInstanceRoot(instanceFilesRoot());
+
+    const root = await claimInstanceRoot(instanceDataRoot());
     process.env.NODE_TEST_MONGO_ROOT = root;
 
     // `dbPath` must already exist — mongodb-memory-server reads the directory before starting.
