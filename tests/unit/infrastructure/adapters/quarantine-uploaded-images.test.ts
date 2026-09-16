@@ -19,7 +19,7 @@ jest.mock('@infrastructure/adapters/filesystem', () => ({
 }));
 
 jest.mock('@infrastructure/adapters/queue', () => ({
-    isQueueEnabled: jest.fn(),
+    queueState: jest.fn(),
     publishToQueue: jest.fn()
 }));
 
@@ -33,7 +33,7 @@ const { imageStore } = jest.requireMock<{
 const { deleteFile } = jest.requireMock<{ deleteFile: jest.Mock }>(
     '@infrastructure/adapters/filesystem'
 );
-const { isQueueEnabled } = jest.requireMock<{ isQueueEnabled: jest.Mock }>(
+const { queueState } = jest.requireMock<{ queueState: jest.Mock }>(
     '@infrastructure/adapters/queue'
 );
 const { digestQuarantinedImage } = jest.requireMock<{ digestQuarantinedImage: jest.Mock }>(
@@ -48,9 +48,9 @@ const run = (request: Partial<Request>) =>
         quarantineUploadedImages(request as Request, {} as Response, resolve as NextFunction);
     });
 
-describe('quarantineUploadedImages — broker configured', () => {
+describe('quarantineUploadedImages — broker ready', () => {
     beforeEach(() => {
-        isQueueEnabled.mockReturnValue(true);
+        queueState.mockReturnValue('ready');
     });
 
     it('commits a single upload and records its key on the request', async () => {
@@ -127,9 +127,9 @@ describe('quarantineUploadedImages — broker configured', () => {
     });
 });
 
-describe('quarantineUploadedImages — no broker configured', () => {
+describe('quarantineUploadedImages — no broker ready', () => {
     beforeEach(() => {
-        isQueueEnabled.mockReturnValue(false);
+        queueState.mockReturnValue('disabled');
     });
 
     /**
@@ -152,6 +152,29 @@ describe('quarantineUploadedImages — no broker configured', () => {
         expect(request.storedThumbnailUrls).toEqual(['/images/thumbs/v1/a.webp']);
         expect(request.quarantinedImageKeys).toBeUndefined();
     });
+
+    /**
+     * A broker that is configured but not reachable routes exactly like no broker at all. Handing
+     * it a pending key instead answers before the file exists — the race a later write turns into
+     * a deleted image.
+     */
+    it.each(['unavailable', 'connecting'])(
+        'digests inline while the broker is %s, rather than leaving a pending key',
+        async (state) => {
+            queueState.mockReturnValue(state);
+            imageStore.quarantine.mockResolvedValue('a.png');
+            digestQuarantinedImage.mockResolvedValue({
+                imageUrl: '/images/a.png',
+                thumbnailUrl: '/images/thumbs/v1/a.webp'
+            });
+            const request: Partial<Request> = { file: uploaded('/staging/a.png') };
+
+            await run(request);
+
+            expect(digestQuarantinedImage).toHaveBeenCalledWith('a.png');
+            expect(request.quarantinedImageKeys).toBeUndefined();
+        }
+    );
 
     it('digests every file of a multi-file upload inline, in order', async () => {
         imageStore.quarantine.mockImplementation((staged: string) =>
