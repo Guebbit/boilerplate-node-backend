@@ -85,6 +85,13 @@ const superviseHandle = (handle: EventEmitter, onClose: () => void): void => {
  */
 const queueConnection = manageConnection<Channel>({
     unavailableMessage: 'RabbitMQ unavailable, queue operations will be skipped.',
+    // `error`, not the default `warn`: unlike the cache, a dead queue is not just a lost
+    // optimisation — `quarantineUploadedImages` and `enqueueImageDigest` both degrade to running
+    // work inline, which changes request latency and revives the unawaited-fallback race this was
+    // written to close. Worth a louder line in whatever ships `logger.error` to an on-call channel.
+    unavailableLevel: 'error',
+    onRecovered: () =>
+        logger.info({ message: 'RabbitMQ reachable again, queue operations resumed.' }),
     isEnabled: isQueueEnabled,
     /*
      * The channel handle IS the readiness signal. amqplib publishes no "is this channel still

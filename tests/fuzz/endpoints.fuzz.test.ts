@@ -44,15 +44,18 @@ import {
     type Operation
 } from '@tests/spec-walk';
 import { bodyArbitraryFor } from '@tests/spec-arbitraries';
+import { FUZZ_RUNS_PER_OPERATION } from '@tests/knobs';
 
 setupTestDb();
 
 /**
- * Runs per operation. Deliberately small: 55 operations × N requests × a real in-memory Mongo,
- * and the auth rate limiter is raised but finite (`tests/support/setup.ts`). Raise it when
- * hunting something specific, not as a default.
+ * Runs per operation — `TEST_FUZZ_RUNS`, defaulting to 12.
+ *
+ * Deliberately small: 55 operations × N requests × a real in-memory Mongo, and the auth rate
+ * limiter is raised but finite (`tests/support/setup.ts`). Raise it when hunting something
+ * specific, not as a default; lower it to fit a weak machine's night.
  */
-const RUNS_PER_OPERATION = 12;
+const RUNS_PER_OPERATION = FUZZ_RUNS_PER_OPERATION;
 
 /**
  * One seed for the file, so a failure is reproducible rather than a story about last Tuesday.

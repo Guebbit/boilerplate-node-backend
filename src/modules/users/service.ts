@@ -75,18 +75,19 @@ export const getById = (id?: string) => {
 
 /**
  * Enqueue the digest job for a just-persisted user, when its write carried a pending upload.
- * Fire-and-forget, like every other post-write dispatch here: a `pendingImageKey` only ever means
- * a broker accepted the upload at request time, so this is a queue publish, not a CPU-bound
- * digest, and the caller must not wait on it.
+ * `pendingImageKey` is only ever set while the queue looked ready at upload time (see
+ * `quarantineUploadedImages`) — but a publish can still lose that race to an outage, in which case
+ * `enqueueImageDigest` degrades to digesting right here. Awaited, unlike a plain queue publish:
+ * that inline run is what actually moves the file onto disk, and a caller that returned first
+ * would answer with a document nothing has finished writing yet.
  */
-export const enqueueIfPending = (user: UserDocument): UserDocument => {
-    if (user.pendingImageKey)
-        void enqueueImageDigest(
-            { collection: 'users', documentId: String(user._id), key: user.pendingImageKey },
-            userRepository.writebackImage
-        );
-    return user;
-};
+export const enqueueIfPending = (user: UserDocument): Promise<UserDocument> =>
+    user.pendingImageKey
+        ? enqueueImageDigest(
+              { collection: 'users', documentId: String(user._id), key: user.pendingImageKey },
+              userRepository.writebackImage
+          ).then(() => user)
+        : Promise.resolve(user);
 
 /**
  * Create a new user document, with no email confirmation step — the self-service path is
@@ -160,13 +161,13 @@ export const create = (
                 properties: { admin_created: true }
             });
 
-            enqueueIfPending(user);
+            return enqueueIfPending(user).then(() => {
+                if (passwordProvided || !data.sendSetupEmail) return user;
 
-            if (passwordProvided || !data.sendSetupEmail) return user;
-
-            return emitDomainEvent(USER_SETUP_REQUESTED, { userId: String(user._id) }).then(
-                () => user
-            );
+                return emitDomainEvent(USER_SETUP_REQUESTED, { userId: String(user._id) }).then(
+                    () => user
+                );
+            });
         });
 };
 
@@ -314,7 +315,8 @@ const updateSavedUser = (
         return revoke
             .then(() => membership)
             .then(() => imageCleanup)
-            .then(() => generateSuccess(enqueueIfPending(savedUser)))
+            .then(() => enqueueIfPending(savedUser))
+            .then(generateSuccess)
             .catch(rejectAccessInvariant);
     });
 };

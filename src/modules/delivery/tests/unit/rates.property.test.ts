@@ -6,10 +6,11 @@
  * reproduces; any found gets written back as an example in `rates.test.ts`.
  */
 import fc from 'fast-check';
+import { PROPERTY_RUNS } from '@tests/knobs';
 import { findShippingMethod, priceShipping, SHIPPING_METHODS } from '../../domain/rates';
 
-/** One seed for the file, and one place to change it. */
-const RUN = { seed: 20_260_902, numRuns: 300, endOnFailure: true } as const;
+/** One seed for the file, and one place to change it; the count is `TEST_PROPERTY_RUNS`. */
+const RUN = { seed: 20_260_902, numRuns: PROPERTY_RUNS, endOnFailure: true } as const;
 
 /** Any basket value a rate could be asked for — finite and non-negative, nothing else assumed. */
 const itemsTotal = () => fc.double({ noNaN: true, noDefaultInfinity: true, min: 0, max: 1e6 });

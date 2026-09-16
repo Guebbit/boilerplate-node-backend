@@ -184,9 +184,12 @@ export const handleImageDigestJob = (job: Partial<ImageDigestJobPayload>): Promi
 
 /**
  * Queue-aware image digest dispatch — what a module's service calls right after persisting a
- * document with a `pendingImageKey`. Same shape as `enqueueEmail`: a reachable broker gets the
- * job published and this resolves immediately, leaving the record on its placeholder; no broker
- * (or a failed publish) runs the pipeline right here instead, covered by the caller's `await`.
+ * document with a `pendingImageKey`. `pendingImageKey` is only ever set while the queue looked
+ * ready (see `quarantineUploadedImages`), so the common case here is a reachable broker: the job
+ * gets published and this resolves immediately, leaving the record on its placeholder. A publish
+ * that still fails — the broker died between that check and this call — degrades to running the
+ * pipeline right here instead, always covered by the caller's `await`: this is the one path where
+ * "resolved" and "digested" can otherwise disagree.
  *
  * @param payload - the job envelope
  * @param writeback - the calling module's OWN writeback, supplied directly — the caller already

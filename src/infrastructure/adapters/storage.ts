@@ -25,7 +25,7 @@ import {
 import { deleteFile } from '@infrastructure/adapters/filesystem';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { digestQuarantinedImage } from '@infrastructure/adapters/image.worker';
-import { isQueueEnabled } from '@infrastructure/adapters/queue';
+import { queueState } from '@infrastructure/adapters/queue';
 import { getFormFiles } from '@infrastructure/http/uploads';
 import { logger } from '@infrastructure/adapters/logger';
 import { ExtendedError } from '@infrastructure/http/errors';
@@ -267,11 +267,11 @@ export const validateUploadedImages: RequestHandler = (request, _response, next)
 };
 
 /**
- * Third and last step: quarantine the staged file and — with no broker to hand the digest job
- * to — run the whole digest pipeline right here.
+ * Third and last step: quarantine the staged file and — with no broker currently reachable to
+ * hand the digest job to — run the whole digest pipeline right here.
  *
  * Runs only once the bytes are proven to be the image they claim. Results go on the request, in
- * one of two shapes depending on whether a broker is configured: `request.quarantinedImageKeys`
+ * one of two shapes depending on whether the queue is currently reachable: `request.quarantinedImageKeys`
  * (pending placeholder, digested later) or `request.storedImageUrls`/`storedThumbnailUrls`
  * (already promoted, real urls).
  *
@@ -306,15 +306,20 @@ export const quarantineUploadedImages: RequestHandler = (request, _response, nex
 
             const keys = results.map((result) => (result as PromiseFulfilledResult<string>).value);
 
-            if (isQueueEnabled()) {
+            if (queueState() === 'ready') {
                 request.quarantinedImageKeys = keys;
                 next();
                 return;
             }
 
-            // No broker: the contract promises a real `thumbnailUrl` regardless, so the digest
-            // runs now, inline, before the request is allowed to proceed — same shape as
-            // `enqueueEmail` sending inline rather than dropping the message.
+            // No broker, or one configured but not currently reachable: the contract promises a
+            // real `thumbnailUrl` regardless, so the digest runs now, inline, before the request
+            // is allowed to proceed — same shape as `enqueueEmail` sending inline rather than
+            // dropping the message. `queueState()`, not `isQueueEnabled()`: a broker that is
+            // configured but down must behave exactly like "no broker" here, not fall through to
+            // `enqueueImageDigest`'s own fallback deeper in the write path — that one exists for a
+            // publish that fails despite the queue looking ready moments earlier, not as the
+            // steady-state path for an outage this middleware could see coming.
             return Promise.all(keys.map((key) => digestQuarantinedImage(key)))
                 .then((digested) => {
                     request.storedImageUrls = digested.map((result) => result.imageUrl);

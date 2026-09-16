@@ -29,6 +29,13 @@ coverage
 # per-run in-memory Mongo data directories (see tests/support/global-setup.ts)
 .tmp
 
+# Claude Code's local state: session settings, and the worktrees it creates under
+# `.claude/worktrees/` — which `jest.config.js` already excludes from every test run. None of it
+# describes the project, so none of it is shared. `commands/` is the one exception: those slash
+# commands are checked in deliberately.
+/.claude/*
+!/.claude/commands/
+
 # The optional symlink that exposes tests/audit/*.md as Claude Code slash commands — see
 # docs/tools/ai-auditing.md. The prompts themselves are versioned; this is one developer's
 # convenience, regenerable with a single ln -s.

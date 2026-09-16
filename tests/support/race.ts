@@ -27,9 +27,18 @@
  *    value and reject 429 explicitly rather than lumping it into "not a success".
  */
 import type { Response } from 'supertest';
+import { countKnob } from './knobs';
 
-/** How many participants a race gets by default. Enough to contend, small enough to stay quick. */
-export const RACE_SIZE = 10;
+/**
+ * How many participants a race gets by default — `TEST_RACE_SIZE`, defaulting to 10.
+ *
+ * Enough to contend, small enough to stay quick. The knob exists for a machine that cannot afford
+ * ten simultaneous in-flight requests, and it only goes DOWN usefully: the header above records
+ * that 12 starts drawing 429s from `credentialLimiters`, which the assertions below reject
+ * outright rather than tolerate. Floored at 2, since a race of one contends with nothing and would
+ * pass by construction.
+ */
+export const RACE_SIZE = countKnob('TEST_RACE_SIZE', 10, 2);
 
 /**
  * Fire `count` copies of the same request simultaneously and return every outcome.

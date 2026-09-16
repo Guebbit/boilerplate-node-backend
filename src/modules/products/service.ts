@@ -238,22 +238,23 @@ export const getByIdViewed = (
 
 /**
  * Enqueue the digest job for a just-persisted product, when its write carried a pending upload.
- * Fire-and-forget, like `enqueueEmail`: a `pendingImageKey` here means a broker accepted the
- * upload at request time (the no-broker path resolves inline before saving, see
- * `readUploadedImage`) — this is a queue publish, and the caller must not wait on it.
+ * `pendingImageKey` here means the queue looked ready at upload time (the no-broker path resolves
+ * inline before saving, see `readUploadedImage`) — but a publish can still lose that race to an
+ * outage, in which case `enqueueImageDigest` degrades to digesting right here. Awaited, unlike a
+ * plain queue publish: that inline run is what actually moves the file onto disk, and a caller
+ * that returned first would answer with a document nothing has finished writing yet.
  */
-const enqueueIfPending = (product: ProductDocument): ProductDocument => {
-    if (product.pendingImageKey)
-        void enqueueImageDigest(
-            {
-                collection: 'products',
-                documentId: String(product._id),
-                key: product.pendingImageKey
-            },
-            productRepository.writebackImage
-        );
-    return product;
-};
+const enqueueIfPending = (product: ProductDocument): Promise<ProductDocument> =>
+    product.pendingImageKey
+        ? enqueueImageDigest(
+              {
+                  collection: 'products',
+                  documentId: String(product._id),
+                  key: product.pendingImageKey
+              },
+              productRepository.writebackImage
+          ).then(() => product)
+        : Promise.resolve(product);
 
 /**
  * Create a new product document in the database.

@@ -19,9 +19,10 @@ import {
     toMinorUnits,
     wholeCount
 } from '../../domain/money';
+import { PROPERTY_RUNS } from '@tests/knobs';
 
-/** One seed for the file, and one place to change it. */
-const RUN = { seed: 20_260_819, numRuns: 300, endOnFailure: true } as const;
+/** One seed for the file, and one place to change it; the count is `TEST_PROPERTY_RUNS`. */
+const RUN = { seed: 20_260_819, numRuns: PROPERTY_RUNS, endOnFailure: true } as const;
 
 /** Anything a malformed document, a failed populate or a hostile client can put where a price goes. */
 const anything = () =>
