@@ -80,6 +80,26 @@ Rules of thumb:
   module gets its page, plus a `## Libraries` section if it brings one. Removing a module removes
   what it owned.
 
+## Module barrels
+
+Every module publishes a convenience barrel (`src/modules/<name>/index.ts`, one for every module,
+not only the ones a sibling currently imports): `export *` from its services, domain rules, events
+and emails, plus `export type *` from its model. See `docs/theory/strategic-ddd.md` §5.
+
+- MUST NOT export a repository, a model's runtime value (the mongoose schema, its `toJSON`
+  transform, the model object itself) or a wiring file (`routes.ts`, `controllers/`, `module.ts`,
+  `probes.ts`, `metrics.ts`, `analytics.ts`, `audit.ts`) from a barrel. A repository export is a
+  write handle on a collection this module does not own once published; the service is the door.
+- An export in a file the barrel publishes is the module's public surface. Never remove it because
+  nothing imports it yet — unused is allowed on purpose, since the alternative is a developer (or
+  an AI) copying the logic, redeclaring the type, or casting around the gap instead of adding the
+  export it needed.
+- MUST NOT import a module's own barrel from inside that module — reach the sibling file directly.
+  A module's own files depending on its published surface is what makes the surface unsafe to
+  narrow later, and risks a load-order cycle under `export *`.
+- A controller reaching a repository, a model or wiring for something the barrel won't publish
+  belongs to the service instead — ask the module's service for it, or add the read there.
+
 ## Scope
 
 - MUST NOT preserve backward compatibility (old field names, deprecated endpoints, legacy code

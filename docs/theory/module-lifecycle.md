@@ -105,7 +105,7 @@ src/modules/<name>/
     repository.ts · model.ts       if it owns a collection
     domain/                        if it has rules worth proving without a database
     providers/                     if it owns an outbound port — see payments/
-    index.ts                       ONLY if a sibling imports this module
+    index.ts                       always — the convenience barrel, see strategic-ddd.md §5
     locales/{en,it,es}.json        if it produces user-facing text
     audit.ts · metrics.ts          if it records actions or numbers
     events.ts · emails.ts          if it publishes events or sends mail
@@ -125,8 +125,8 @@ list above has no row for it. `openapi.yaml` and `probes.ts` are the contract sl
 owns; [Contract Ownership & Fragmentation](../api/contract-fragmentation.md) is what reads them.
 
 `wishlist` is the reference: it was the first module added after the registry existed, and its tree
-is exactly the list above minus the parts it does not need (no `index.ts`, since nothing imports it;
-no `audit.ts`; no `emails.ts`).
+is exactly the list above minus the parts it does not need (no `audit.ts`, no `emails.ts`) plus the
+`index.ts` every module carries now.
 
 A new `package.json` dependency this module alone needs is this module's, the moment nothing else
 imports it — no registry entry, just the vetting rules and a `## Libraries` section on the

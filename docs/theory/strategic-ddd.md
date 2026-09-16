@@ -172,30 +172,47 @@ judgement call the reader has to make anyway reads better as a table than as a t
 
 ## 5. Published language — the barrel
 
-`index.ts` is the one surface a sibling may import, and ESLint stops anyone reaching past it. That
-boundary is structural: a module with no `index.ts` cannot be imported by a sibling at all, rather
-than being asked politely not to. `feedback`, `observability` and `locales` are all in that
-position, and none of them is reachable from another module.
+`index.ts` is the one surface a sibling may import, and ESLint stops anyone reaching past it — every
+module has one, structurally, so there is no "no barrel, therefore unreachable" escape hatch left.
 
-The convention for what goes in one: **a module publishes what a sibling imports, and not more.** An
-export costs nothing to add, nothing to keep, and quietly promises every other module that a shape
-will not move. Applying that once removed 36 exports and one whole barrel.
+The convention is a **convenience barrel with a short, structural deny-list**, not the narrower
+"publish only what a sibling imports today" this repo used to run. That narrower form has exactly
+the failure `BARREL_EXPORT.md` went looking for: the list is short, a sibling's need is real, and
+copying the logic, redeclaring the type, or casting around the gap is cheaper than adding the
+export. A convenience barrel removes the incentive to route around it, at the cost of three things
+this repo already pays for elsewhere: a write handle leaking through a published repository (closed
+by the deny-list below), an import cycle inside a module (closed by ESLint refusing a module's own
+barrel-of-itself), and the loading cost of pulling in a whole module (already paid — `modules.ts`
+loads every module regardless).
 
-A repository export deserves more thought than a type export, and the asymmetry is worth stating
-even though nothing enforces it. `OrderDocument` leaving the barrel promises a shape will not move.
-`productRepository` leaving the barrel is a handle on a collection: whoever holds it can create,
-update and delete rows of a module it does not own, with that module's service — and every rule,
-event, counter and audit line the service carries — bypassed. `modules/inventory/index.ts` states
-the case by refusing:
+What a barrel publishes: `export *` from its services, domain rules, events and emails files, and
+`export type *` from its model — a shape describing itself grants no power the way a handle does.
+What it never publishes, no matter how convenient:
 
-> The repositories, both models and every counter primitive are deliberately absent. This module
-> exists so that nothing outside it can move a stock number, and publishing a repository would hand
-> back the ability it was created to take away.
+- **A repository.** `productRepository` leaving the barrel is a handle on a collection: whoever
+  holds it can create, update and delete rows of a module it does not own, with that module's
+  service — and every rule, event, counter and audit line the service carries — bypassed. A sibling
+  read moves to a service function instead. `modules/inventory/index.ts` states the case by
+  refusing outright:
 
-Both of these used to be tests — one failing any export no sibling imported, one demanding a written
-justification per published repository and asserting the justification was a sentence. The
-decisions they encoded are still the decisions; what they cost was 369 lines re-litigating them on
-every run, and an unused export is dead weight rather than a defect.
+  > The repositories, both models and every counter primitive are deliberately absent. This module
+  > exists so that nothing outside it can move a stock number, and publishing a repository would
+  > hand back the ability it was created to take away.
+
+- **The model's runtime** — the mongoose schema, its `toJSON` transform, the model object itself.
+  `export type * from './model'` still publishes every type the model declares; only the values
+  that touch storage stay inside.
+- **Wiring** — `routes.ts`, `controllers/`, `module.ts`, `probes.ts`, `metrics.ts`, `analytics.ts`,
+  `audit.ts`. The app registers these; a sibling never calls them.
+
+Unused exports in a published file are allowed on purpose and unenforced — the point of this
+section is that copying is the expensive failure mode, not an idle export. What IS enforced: a
+barrel may only `export *` from the files above, and a module may not import its own barrel — the
+same cycle risk `export *` always carries, now closed at the one place it would bite.
+
+A repository export deserves more thought than a type export even so, and the asymmetry above is
+worth restating in code, not just here: `OrderDocument` leaving the barrel promises a shape will not
+move; a repository leaving it is a bypass of everything the owning service enforces.
 
 The narrowest surface in the repo is `delivery`: two pure functions. The widest is `users`, and it
 is wide because it is the `users` end of the one shared-kernel relationship in the repo — `account`
