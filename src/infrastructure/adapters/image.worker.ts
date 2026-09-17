@@ -194,14 +194,23 @@ export const handleImageDigestJob = (job: Partial<ImageDigestJobPayload>): Promi
  * @param payload - the job envelope
  * @param writeback - the calling module's OWN writeback, supplied directly — the caller already
  *   knows which collection it is
+ * @returns the digested urls when this call ran the pipeline inline, so the caller can copy them
+ *   onto the in-memory document it hands back; `undefined` when the job was queued instead, since
+ *   the database still holds the placeholder and nothing here has changed
  */
 export const enqueueImageDigest = (
     payload: ImageDigestJobPayload,
     writeback: ImageWriteback
-): Promise<void> => {
-    const runInline = () =>
+): Promise<DigestedImageUrls | undefined> => {
+    const runInline = (): Promise<DigestedImageUrls> =>
         digestQuarantinedImage(payload.key).then((urls) =>
-            settleWriteback(writeback, payload.documentId, payload.key, urls, payload.collection)
+            settleWriteback(
+                writeback,
+                payload.documentId,
+                payload.key,
+                urls,
+                payload.collection
+            ).then(() => urls)
         );
 
     if (!isQueueEnabled()) return runInline();
@@ -212,7 +221,7 @@ export const enqueueImageDigest = (
     }).then((published) => {
         if (published) {
             logger.debug({ message: 'Image digest job enqueued.', collection: payload.collection });
-            return;
+            return undefined;
         }
         return runInline();
     });
@@ -225,11 +234,23 @@ export const enqueueImageDigest = (
  * hands back the same document — awaited, so a caller that returned first can't answer with a
  * record the inline fallback hasn't finished writing yet.
  *
+ * When that fallback ran, the database already holds the real urls (`writeback` wrote them) — so
+ * this copies them onto the in-memory document too and clears `pendingImageKey`, or a caller that
+ * hands this same object back out in its response would keep serving the pre-digest placeholder
+ * with no `pendingImageKey` left to tell the client to refetch.
+ *
  * @param document - the just-persisted document, checked for `pendingImageKey`
  * @param collection - the job's `collection` field, matched by {@link registerImageWritebackResolver}
  * @param writeback - the calling module's own writeback
  */
-export const enqueueIfImagePending = <T extends { _id: unknown; pendingImageKey?: string }>(
+export const enqueueIfImagePending = <
+    T extends {
+        _id: unknown;
+        pendingImageKey?: string;
+        imageUrl?: string;
+        thumbnailUrl?: string;
+    }
+>(
     document: T,
     collection: string,
     writeback: ImageWriteback
@@ -238,5 +259,12 @@ export const enqueueIfImagePending = <T extends { _id: unknown; pendingImageKey?
         ? enqueueImageDigest(
               { collection, documentId: String(document._id), key: document.pendingImageKey },
               writeback
-          ).then(() => document)
+          ).then((urls) => {
+              if (urls) {
+                  document.imageUrl = urls.imageUrl;
+                  document.thumbnailUrl = urls.thumbnailUrl;
+                  document.pendingImageKey = undefined;
+              }
+              return document;
+          })
         : Promise.resolve(document);

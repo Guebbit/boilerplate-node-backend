@@ -303,18 +303,23 @@ describe('enqueueIfImagePending', () => {
     /**
      * The residual race `docs/tools/image-processing.md` describes: the queue looked ready at
      * upload time, but the broker died before this publish. The awaited inline fallback is what's
-     * under test — the caller must not resolve before the writeback it depends on has run.
+     * under test — the caller must not resolve before the writeback it depends on has run, and the
+     * document it gets back must carry the real urls rather than the pre-digest placeholder, since
+     * the database was just updated out from under it.
      */
-    it('awaits the inline fallback when a pending publish fails', async () => {
+    it('awaits the inline fallback and copies its urls onto the returned document', async () => {
         const document = { _id: 'doc1', pendingImageKey: 'abc123.png' };
         mockedIsQueueEnabled.mockReturnValue(true);
         mockedPublishToQueue.mockResolvedValue(false);
         primeSuccessfulDigest();
         writeback.mockResolvedValue(true);
 
-        await expect(enqueueIfImagePending(document, 'products', writeback)).resolves.toBe(
-            document
-        );
+        await expect(enqueueIfImagePending(document, 'products', writeback)).resolves.toEqual({
+            _id: 'doc1',
+            pendingImageKey: undefined,
+            imageUrl: '/images/abc123.png',
+            thumbnailUrl: '/images/thumbs/v1/abc123.webp'
+        });
 
         expect(writeback).toHaveBeenCalledWith('doc1', 'abc123.png', {
             imageUrl: '/images/abc123.png',
