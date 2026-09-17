@@ -134,9 +134,6 @@ const budgetMb = processBudgetMb(environmentKnob('JEST_PROCESS_BUDGET_MB'));
 /** The budget above, capped by the guard rail against an idle machine over-promising a shard. */
 const targetMb = shardTargetMb(budgetMb);
 
-/** `--max-old-space-size` for one shard, pinned to the same number as the shard target. */
-const heapMb = heapCapMb(targetMb);
-
 /** How many files one shard may hold before its retention reaches {@link targetMb}. */
 const perShard = filesPerShard(targetMb);
 
@@ -165,20 +162,35 @@ const workers = suite.serialized
           override: environmentKnob('JEST_WORKERS')
       });
 
+/** `--workerIdleMemoryLimit` for a parallel layer's worker; meaningless (and unused) for a
+ *  serialized one, which has no worker to recycle. */
+const recycleLimitMb = Math.max(1024, suite.serialized ? 0 : suite.workerPeakMb);
+
+/**
+ * `--max-old-space-size` for one spawned process.
+ *
+ * A serialized layer runs one in-band process and gets the shard target whole. A parallel layer
+ * runs `workers` of these AT ONCE, so each gets only its share of the unclamped budget — handing
+ * every worker the full {@link targetMb} would let `workers` of them jointly claim `workers` times
+ * what the machine actually has. Floored at one above {@link recycleLimitMb} so the recycle limit
+ * always fires before a worker would hit its own heap ceiling, never after.
+ */
+const heapMb = suite.serialized
+    ? heapCapMb(targetMb)
+    : Math.max(recycleLimitMb + 1, heapCapMb(budgetMb, workers));
+
 /**
  * The flags that bound ONE shard.
  *
  * `--workerIdleMemoryLimit` is deliberately absent for a serialized layer: with one worker jest
  * runs in band, where there is no worker to recycle and the flag is silently inert. The `1024`
- * floor keeps a small `workerPeakMb` from setting a limit so low jest recycles a worker after
- * nearly every file — the failure mode the module header's "WHY IN BAND" section describes.
+ * floor inside {@link recycleLimitMb} keeps a small `workerPeakMb` from setting a limit so low jest
+ * recycles a worker after nearly every file — the failure mode the module header's "WHY IN BAND"
+ * section describes.
  */
 const boundingFlags = suite.serialized
     ? ['--runInBand']
-    : [
-          `--maxWorkers=${workers}`,
-          `--workerIdleMemoryLimit=${Math.max(1024, suite.workerPeakMb)}MB`
-      ];
+    : [`--maxWorkers=${workers}`, `--workerIdleMemoryLimit=${recycleLimitMb}MB`];
 
 /**
  * Runs one shard to completion.

@@ -141,9 +141,18 @@ describe('shardCount', () => {
 });
 
 describe('heapCapMb', () => {
-    it('pins the old space to the same figure the shard is sized for', () => {
-        // One number, stated twice, cannot drift: the cap and the shard size are the same budget.
+    it('hands a lone process the whole budget by default', () => {
+        // One number, stated twice, cannot drift: the cap and the budget are the same figure.
         expect(heapCapMb(2600)).toBe(2600);
+    });
+
+    it('divides the budget across the processes spending it at once', () => {
+        // Four workers sharing one budget must not each claim the full amount.
+        expect(heapCapMb(2600, 4)).toBe(650);
+    });
+
+    it('floors rather than rounds, so workers never jointly exceed the budget', () => {
+        expect(heapCapMb(2601, 4)).toBe(650);
     });
 });
 

@@ -211,14 +211,21 @@ export const workerCount = ({
 };
 
 /**
- * V8's old-space cap for a spawned jest process, in MB.
+ * V8's old-space cap for ONE spawned jest process, in MB.
  *
  * Pinned rather than left to Node, which derives its ceiling from TOTAL system RAM — so the same
  * suite gets a longer runway on a bigger machine, which is how a retention problem stays invisible
- * on the box most able to survive it. Set to the shard target, so the cap and the shard size are
- * two statements of the same budget rather than two numbers that can drift apart.
+ * on the box most able to survive it.
  *
- * @param targetMb the per-shard target from {@link shardTargetMb}
+ * `workers` divides the budget: a serialized layer runs one in-band process and gets the whole
+ * thing (the default), but a parallel layer runs `workers` of these processes AT ONCE, so handing
+ * each the full budget would let them jointly claim `workers` times what the machine actually has
+ * — the worker count is already sized to fit inside that same budget, so dividing it back out is
+ * what recovers the one-worker share it was sized for.
+ *
+ * @param budgetMb the spending limit to divide — {@link shardTargetMb}'s result for a serialized
+ *   layer, or the unclamped {@link processBudgetMb} for a parallel one
+ * @param workers how many of this budget's processes run at once; 1 spends the whole thing
  * @returns the value for `--max-old-space-size`
  */
-export const heapCapMb = (targetMb: number): number => targetMb;
+export const heapCapMb = (budgetMb: number, workers = 1): number => Math.floor(budgetMb / workers);
