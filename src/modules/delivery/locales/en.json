@@ -1,0 +1,13 @@
+{
+    "delivery": {
+        "order-not-found": "The order was not found",
+        "not-shipped": "Nothing has shipped for this order yet",
+        "email-shipped": {
+            "subject": "Your order is on its way",
+            "meta-title": "Order shipped",
+            "greeting": "Hello, {{name}}!",
+            "body": "Good news — your order has left the warehouse.",
+            "tracking": "Track your parcel with code {{code}}."
+        }
+    }
+}

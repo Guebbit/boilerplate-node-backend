@@ -1,0 +1,99 @@
+/**
+ * @module
+ * A wishlist is its own collection keyed by `userId`, exactly like the cart — a user response
+ * can't leak a list it doesn't carry, and touching one reads/writes a small document, not the
+ * whole user. A line is `{ productId }` and nothing else — no quantity, deliberately: the moment
+ * an amount matters it belongs in the cart (`POST /wishlist/{productId}/move-to-cart`), and one
+ * field fewer is what makes `$addToSet` the whole idempotence story below.
+ *
+ * See: docs/modules/wishlist.md
+ */
+
+import { model, Schema, Types } from 'mongoose';
+import type { Document, Model } from 'mongoose';
+import { applySerialization } from '@infrastructure/persistence/serialize';
+
+/**
+ * A stored wishlist line.
+ *
+ * `productId` is an `ObjectId` and stays one — the service reads ids before any populate, the
+ * same discipline `cart`'s `readCartLines` documents.
+ */
+export interface WishlistItem {
+    productId: Types.ObjectId;
+}
+
+/**
+ * Wishlist Document interface.
+ *
+ * No contract type to extend: `WishlistResponse` is `{ items }` — a view, not this document.
+ * A wishlist id never reaches the wire.
+ */
+export interface WishlistDocument extends Document {
+    userId: Types.ObjectId;
+    items: WishlistItem[];
+    createdAt?: Date;
+    updatedAt?: Date;
+}
+
+/** Wishlist Document model type. Queries live in `./repository`, rules in `./service`. */
+export type WishlistModel = Model<WishlistDocument>;
+
+/**
+ * Schema for a single wishlist line.
+ *
+ * `_id: false` — a line is addressed by its product, never by itself, and `WishlistItem` in
+ * `openapi.yaml` is `additionalProperties: false`, so a generated subdocument id would be a
+ * contract violation waiting to be serialized.
+ */
+const wishlistItemSchema = new Schema(
+    {
+        productId: {
+            type: Schema.Types.ObjectId,
+            ref: 'Product',
+            required: true
+        }
+    },
+    { _id: false }
+);
+
+/**
+ * Mongoose schema for persisted wishlist documents.
+ *
+ * `unique: true` on `userId` makes "one wishlist per user" a database fact, exactly as the
+ * cart's does — every mutation stays a single `findOneAndUpdate({ userId }, …, { upsert: true })`
+ * with no read in front of it.
+ */
+export const wishlistSchema = new Schema<WishlistDocument>(
+    {
+        userId: {
+            type: Schema.Types.ObjectId,
+            ref: 'User',
+            required: true,
+            unique: true
+        },
+        items: {
+            type: [wishlistItemSchema],
+            default: []
+        }
+    },
+    {
+        timestamps: true
+    }
+);
+
+/*
+ * Deleting a product has to find every wishlist holding it; without this it reads the whole
+ * collection. Left unnamed for the same reason the cart's twin is: nothing else creates it, so
+ * Mongoose's derived name has nothing to disagree with.
+ */
+wishlistSchema.index({ 'items.productId': 1 });
+
+/**
+ * Normalizes a serialized wishlist: `_id` → `id`, drops `__v`. Owed to the repository factory for its
+ * lean reads (see `normalize` in @infrastructure/persistence/create-repository).
+ */
+export const applyWishlistTransform = applySerialization(wishlistSchema);
+
+/** Wishlist model entrypoint. */
+export const wishlistModel = model<WishlistDocument, WishlistModel>('Wishlist', wishlistSchema);

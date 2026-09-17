@@ -1,0 +1,91 @@
+# Traefik overlay for MANY client stacks on one host — layer with a second `-f`:
+#
+#   docker compose --env-file "clients/acme/.env" \
+#       -f docker-compose.production.yml -f docker-compose.proxy.yml up -d
+#
+# The base file is unchanged for anyone who does not want this: it still publishes the API on
+# loopback and says "put any TLS-terminating proxy in front" — this overlay is one way to do that
+# when the proxy itself is ALSO shared across several client stacks on the same box. A single-stack
+# deployment behind a standalone nginx/Caddy/managed load balancer needs no overlay at all.
+#
+# `traefik` is started once per HOST, not once per client — bring it up from whichever client's
+# compose invocation happens to run first; every later `up` against a different
+# `COMPOSE_PROJECT_NAME` just adds that client's `app` to the shared `proxy` network, and Traefik's
+# Docker provider picks the new router up on its own, no restart.
+#
+# ── BEFORE THE FIRST DEPLOY ──────────────────────────────────────────────────────────────────────
+# Create the shared network once, on the host, outside any single client's project:
+#   docker network create proxy
+#
+# Add to the client's own `.env` (see `.env-example`'s production block):
+#   NODE_PROXY_DOMAIN=acme.example.com
+#   NODE_PROXY_ACME_EMAIL=ops@example.com
+#
+# ── WHY LABELS RATHER THAN A CENTRAL ROUTES FILE ─────────────────────────────────────────────────
+# Traefik's Docker provider reads routing straight off each container's own labels, so adding
+# client #11 is "start its stack" — nothing central to edit, no restart of `traefik` itself.
+#
+# ── v2 → v3, the one thing that bit real deployments ─────────────────────────────────────────────
+# Docker label KEYS were always lowercase-dotted in both v2 and v3 (`tls.certresolver`, not
+# `tls.certResolver`) — that confusion comes from copying a static-config YAML snippet, which DOES
+# use camelCase, into a label. What actually changed in v3: the Docker provider no longer accepts
+# `swarmMode: true` (Swarm has its own `providers.swarm` now) — irrelevant here, this is plain
+# Compose, not `docker stack deploy`.
+
+services:
+    traefik:
+        image: docker.io/library/traefik:v3
+        restart: unless-stopped
+        command:
+            - '--providers.docker=true'
+            # Never route a container unless it opts in with `traefik.enable=true` — the default
+            # ("route everything") would put every bundled service (`database`, `cache`, `queue`)
+            # on the public internet the moment they joined this network.
+            - '--providers.docker.exposedByDefault=false'
+            - '--providers.docker.network=proxy'
+            - '--entrypoints.web.address=:80'
+            - '--entrypoints.websecure.address=:443'
+            - '--certificatesresolvers.le.acme.email=${NODE_PROXY_ACME_EMAIL:?set NODE_PROXY_ACME_EMAIL in the client env file}'
+            - '--certificatesresolvers.le.acme.storage=/letsencrypt/acme.json'
+            - '--certificatesresolvers.le.acme.httpchallenge.entrypoint=web'
+        ports:
+            - '80:80'
+            - '443:443'
+        volumes:
+            - /var/run/docker.sock:/var/run/docker.sock:ro
+            - traefik-acme:/letsencrypt
+        networks:
+            - proxy
+
+    app:
+        # `default` (this project's own network — reaches `database`/`cache`/`queue`) AND `proxy`
+        # (the shared network Traefik watches) — both, explicitly. Compose's per-service
+        # `networks:` list REPLACES rather than merges across files, so naming only `proxy` here
+        # would silently cut `app` off from its own database.
+        networks:
+            - default
+            - proxy
+        # The loopback publish has no reader once Traefik fronts this stack — every client sharing
+        # the same default `NODE_PORT` would otherwise collide on the HOST's own 127.0.0.1:3000.
+        ports: !reset []
+        labels:
+            - 'traefik.enable=true'
+            - 'traefik.docker.network=proxy'
+            - 'traefik.http.routers.${COMPOSE_PROJECT_NAME}.rule=Host(`${NODE_PROXY_DOMAIN:?set NODE_PROXY_DOMAIN in the client env file}`)'
+            - 'traefik.http.routers.${COMPOSE_PROJECT_NAME}.entrypoints=websecure'
+            - 'traefik.http.routers.${COMPOSE_PROJECT_NAME}.tls=true'
+            - 'traefik.http.routers.${COMPOSE_PROJECT_NAME}.tls.certresolver=le'
+            - 'traefik.http.services.${COMPOSE_PROJECT_NAME}.loadbalancer.server.port=${NODE_PORT:-3000}'
+
+networks:
+    # Declared explicitly so `app` can name it alongside `proxy` — the base file never declares a
+    # top-level `networks:` at all (relying on Compose's own implicit default), and referencing an
+    # undeclared network by name fails on podman-compose 1.6 ("missing networks: default").
+    # `{}` keeps every default behaviour; this is Compose's own documented way to keep using the
+    # auto-created network while also being able to name it.
+    default: {}
+    proxy:
+        external: true
+
+volumes:
+    traefik-acme:

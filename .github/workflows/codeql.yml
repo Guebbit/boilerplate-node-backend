@@ -1,0 +1,43 @@
+name: CodeQL
+
+# Static security analysis: GitHub's CodeQL engine reads this repo's TypeScript looking for
+# vulnerability patterns (injection, path traversal, unsafe deserialization) and files what it
+# finds under the repo's Security tab rather than as a build failure.
+#
+# Complements `audit` in ci.yml, which asks a different question: `npm audit` checks our
+# DEPENDENCIES against a CVE database, this checks the code WE wrote. Neither sees the other's
+# half.
+
+on:
+    push:
+        branches:
+            - main
+    pull_request:
+        branches:
+            - main
+    schedule:
+        # Catch newly-disclosed vulnerability patterns in code that hasn't changed.
+        - cron: '0 5 * * 1'
+
+jobs:
+    analyze:
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        permissions:
+            contents: read
+            # Required to upload findings; the analyze step below writes them, nothing else does.
+            security-events: write
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            # Picks the query pack and sets up the extractor. No build step: JS/TS is analysed
+            # from source, so unlike compiled languages nothing has to run first.
+            - name: Initialize CodeQL
+              uses: github/codeql-action/init@v3
+              with:
+                  languages: javascript-typescript
+
+            # Runs the queries and uploads the SARIF results to the Security tab.
+            - name: Perform CodeQL analysis
+              uses: github/codeql-action/analyze@v3

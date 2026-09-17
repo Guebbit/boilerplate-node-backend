@@ -1,0 +1,548 @@
+/**
+ * @module
+ * RabbitMQ (AMQP 0-9-1) adapter. Like the cache adapter, every function degrades to a no-op when
+ * the broker is not configured — `publishToQueue` returns `false` and callers fall back to doing
+ * the work inline (see `adapters/mailer.ts` → `enqueueEmail`).
+ *
+ * Reconnection is amqplib's own opt-in `recovery` option (2.0.1+), not
+ * `@infrastructure/adapters/managed-connection`: recovery retries the CONNECTION forever with
+ * backoff and re-runs `setup` after every successful (re)connect — exactly "declare the queues,
+ * re-bind every consumer", the one thing this adapter needs redone whenever the connection comes
+ * back. `managed-connection.ts` stays for Redis, where recovery is demand-driven (the next cache
+ * read retries) rather than a background loop this module now gets for free.
+ *
+ * See: docs/tools/rabbitmq.md
+ */
+
+// `amqplib` is the AMQP 0-9-1 client. `ChannelModel` is the TCP connection `setup` receives on
+// each (re)connect; `RecoveringChannelModel` is the wrapper `connect(url, { recovery })` resolves
+// to, an EventEmitter for `connect`/`disconnect` that outlives every individual reconnect;
+// `Channel` is the lightweight session all commands run on; `ConsumeMessage` is a delivered
+// message — `.content` (Buffer) plus the delivery tag `ack`/`nack` reference.
+import amqplib, {
+    type ChannelModel,
+    type RecoveringChannelModel,
+    type Channel,
+    type ConsumeMessage
+} from 'amqplib';
+import type { ZodType } from 'zod';
+import { logger } from '@infrastructure/adapters/logger';
+import type { DependencyStatus } from '@infrastructure/observability/dependency-health';
+import { WORKER_CHANNELS } from '@types';
+import { environmentFlag } from '@infrastructure/runtime/environment';
+
+// ─── Configuration ────────────────────────────────────────────────────────────
+
+/**
+ * Build the AMQP connection URL from env vars.
+ *
+ * Same two-mode pattern as Redis/Mongo: a ready-made URL wins, otherwise assemble one from
+ * fragments. `guest`/`guest` are RabbitMQ's built-in defaults, which only work over localhost.
+ * Returns `undefined` when nothing is configured — the signal that the queue is off.
+ */
+const getAmqpUrl = (): string | undefined => {
+    if (process.env.NODE_RABBITMQ_URL) return process.env.NODE_RABBITMQ_URL;
+    // The port is the required fragment: without it there is nothing to assemble, so queue is off.
+    if (!process.env.NODE_RABBITMQ_PORT) return;
+
+    const host = process.env.NODE_RABBITMQ_HOST ?? '127.0.0.1';
+    const port = process.env.NODE_RABBITMQ_PORT;
+    const user = process.env.NODE_RABBITMQ_USER ?? 'guest';
+    const pass = process.env.NODE_RABBITMQ_PASS ?? 'guest';
+    return `amqp://${user}:${pass}@${host}:${port}`;
+};
+
+/**
+ * Returns true when RabbitMQ is configured and not explicitly disabled.
+ *
+ * Exported (unlike the cache equivalent) because callers branch on it *before* building a
+ * payload — see `enqueueEmail`, which sends inline rather than constructing a job envelope.
+ */
+export const isQueueEnabled = (): boolean =>
+    Boolean(getAmqpUrl()) && environmentFlag('NODE_RABBITMQ_ENABLED', true);
+
+// ─── Connection state ─────────────────────────────────────────────────────────
+
+/**
+ * The one channel this process publishes and consumes on — set by {@link setupChannel} on every
+ * (re)connect, cleared on ITS OWN close. `undefined` means "take the slow lane", whether that is
+ * disabled, still dialing, or between a drop and the next reconnect; nothing here ever waits for
+ * it to become true (see {@link getChannel}).
+ */
+let currentChannel: Channel | undefined;
+
+/**
+ * The recovering connection, once {@link ensureConnecting} has kicked it off — the one handle
+ * {@link stopQueue} can close. `undefined` before that, or once disabled; amqplib itself owns
+ * everything about staying connected from here on.
+ */
+let recoveringConnection: RecoveringChannelModel | undefined;
+
+/** Whether {@link ensureConnecting} has already dialed — sepatate from {@link recoveringConnection} so a burst of calls before the first connect settles shares the one attempt instead of each starting its own. */
+let connectionStarted = false;
+
+/** Warn-once latch: log an outage once, then stay quiet until {@link reportUnavailable}'s caller sees it recover. */
+let warningLogged = false;
+
+/**
+ * Log once that the broker is unreachable, then latch quiet — shared by a publish that fails
+ * mid-flight and the connection's own `disconnect` event, so either path reports it exactly once.
+ *
+ * `error`, not `warn`: unlike the cache, a dead queue is not just a lost optimisation —
+ * `quarantineUploadedImages` and `enqueueImageDigest` both degrade to running work inline, which
+ * changes request latency and revives the unawaited-fallback race this was written to close.
+ */
+const reportUnavailable = (error: unknown): void => {
+    if (warningLogged) return;
+    logger.error({ message: 'RabbitMQ unavailable, queue operations will be skipped.', error });
+    warningLogged = true;
+};
+
+/**
+ * amqplib's recovery `setup` — runs after every successful (re)connect, the first one included,
+ * and is AWAITED before that connect counts as done. The one place a fresh channel is created and
+ * every known consumer re-bound: a fresh channel starts with none of its own, whether this is
+ * boot's first one (nothing registered yet — {@link replayConsumers} is a no-op) or a reconnect's
+ * (the old channel took them with it).
+ *
+ * @param model - the fresh connection this (re)connect opened
+ */
+const setupChannel = async (model: ChannelModel): Promise<void> => {
+    const ch = await model.createChannel();
+    // A channel dies on its own for ordinary reasons (most of them named by `assertJobQueue`
+    // below) WITHOUT the connection closing — recovery only reacts to a connection drop, so this
+    // has to be handled separately, same as it always was.
+    ch.on('error', reportUnavailable);
+    ch.on('close', () => {
+        if (currentChannel === ch) currentChannel = undefined;
+    });
+    currentChannel = ch;
+    await replayConsumers(ch);
+};
+
+/**
+ * amqplib's own retry timer is never `.unref()`'d, so with the library default (`maxRetries:
+ * Infinity`) an unreachable broker keeps the event loop alive on its own — correct for a
+ * long-running server, which is never meant to exit on its own anyway, but wrong for a test
+ * process that needs to exit cleanly once its suite finishes. `.env` names the compose hostname,
+ * which resolves nowhere outside it, so this is the routine case locally, not an edge one — hence
+ * `maxRetries: 0` under test: try once, and if that fails, stay `unavailable` for the rest of the
+ * run rather than retrying forever in the background.
+ */
+const RECOVERY_OPTIONS = {
+    setup: setupChannel,
+    ...(process.env.NODE_ENV === 'test' ? { maxRetries: 0 } : {})
+};
+
+/**
+ * Kick off the recovering connection if nothing has already — idempotent, so every public
+ * function below may call it defensively without risking a second connection racing the first.
+ *
+ * Its own promise is never awaited, on purpose (`docs/tools/rabbitmq.md`): with recovery on, that
+ * promise settles only once the FIRST connect actually succeeds, retrying forever underneath in
+ * production — awaiting it here would stop the app booting until a broker answers.
+ */
+const ensureConnecting = (): void => {
+    if (connectionStarted || !isQueueEnabled()) return;
+    const url = getAmqpUrl();
+    // `isQueueEnabled()` already implies a URL; this is the type narrowing.
+    if (!url) return;
+    connectionStarted = true;
+
+    // https://github.com/amqp-node/amqplib#opt-in-recovery — `setup` is awaited before THIS
+    // promise resolves, so by the time it does, `currentChannel` is already set.
+    void amqplib
+        .connect(url, { recovery: RECOVERY_OPTIONS })
+        .then((model) => {
+            recoveringConnection = model;
+
+            // Fires on every RECONNECT — never on this first connect, which is what THIS promise
+            // IS resolving for; a listener attached here cannot also catch the event that led to it.
+            model.on('connect', () => {
+                if (!warningLogged) return;
+                logger.info({ message: 'RabbitMQ reachable again, queue operations resumed.' });
+                warningLogged = false;
+            });
+            model.on('disconnect', (error) => {
+                currentChannel = undefined;
+                reportUnavailable(error);
+            });
+        })
+        // Only reachable when `maxRetries` is finite (`NODE_ENV=test` above) — production's
+        // `Infinity` default never rejects this promise, so there is nothing to catch there.
+        .catch(reportUnavailable);
+};
+
+/**
+ * The current channel, or `undefined` to mean "take the slow lane" — disabled, still dialing, or
+ * between a drop and the next reconnect look identical to every caller, which already falls back
+ * to inline work either way. Synchronous and never itself dials: {@link ensureConnecting} is a
+ * separate, idempotent nudge, not a wait.
+ */
+const getChannel = (): Channel | undefined => {
+    ensureConnecting();
+    return isQueueEnabled() ? currentChannel : undefined;
+};
+
+/**
+ * What this adapter's connection is doing, for `GET /observability/health`. No I/O — see the
+ * header of `infrastructure/observability/dependency-health.ts` for why a health endpoint never
+ * dials the broker; `ready`/`unavailable` cover every "not disabled" state, `connecting` included,
+ * since amqplib's recovery makes no distinction visible from out here.
+ */
+export const queueState = (): DependencyStatus => {
+    if (!isQueueEnabled()) return 'disabled';
+    return currentChannel ? 'ready' : 'unavailable';
+};
+
+/**
+ * Warm up RabbitMQ during app startup — pays the handshake cost at boot instead of on the first
+ * user request. Never blocks on it: see {@link ensureConnecting}.
+ */
+export const startQueue = (): Promise<void> => {
+    ensureConnecting();
+    return Promise.resolve();
+};
+
+/**
+ * Gracefully close the RabbitMQ connection.
+ *
+ * A connection never reached (the broker stayed down for this process's whole life) has nothing
+ * of ours to close — amqplib's own retry timer is still running underneath, and is left to the
+ * process's forced-exit deadline (`server-lifecycle.ts`) rather than chased here.
+ */
+export const stopQueue = (): Promise<void> => {
+    const connection = recoveringConnection;
+    recoveringConnection = undefined;
+    connectionStarted = false;
+    currentChannel = undefined;
+    warningLogged = false;
+    if (!connection) return Promise.resolve();
+    return connection.close().catch(() => undefined);
+};
+
+// ─── Queue names ──────────────────────────────────────────────────────────────
+
+/**
+ * The queues this application uses, spelled by the contract that declares them.
+ *
+ * A queue name is the one thing a producer and consumer must agree on exactly — a typo on either
+ * side is not an error anywhere, it is a message published to a queue nobody drains. So the
+ * spelling comes from `WORKER_CHANNELS`, generated out of `asyncapi.yaml`.
+ *
+ * See: docs/api/asyncapi-workflow.md#rabbitmq-queue-channels
+ */
+export const EMAIL_QUEUE = WORKER_CHANNELS.EMAIL_SEND;
+
+/** Same sourcing as {@link EMAIL_QUEUE} — the PDF-generation queue. */
+export const PDF_QUEUE = WORKER_CHANNELS.PDF_GENERATE;
+
+/** Same sourcing as {@link EMAIL_QUEUE} — the image-digest queue. */
+export const IMAGE_QUEUE = WORKER_CHANNELS.IMAGE_DIGEST;
+
+// ─── Dead letters ─────────────────────────────────────────────────────────────
+
+/**
+ * The exchange every refused message is routed to, so `nack(msg, false, false)` means "moved for a
+ * human" rather than "destroyed". `direct`, so each queue dead-letters under its own routing key.
+ */
+export const DEAD_LETTER_EXCHANGE = 'dead-letter';
+
+/**
+ * The dead-letter queue for a work queue, and the routing key that reaches it. Derived, so a queue
+ * added to `WORKER_CHANNELS` gets its dead letters without a second registration.
+ *
+ * @param queue - the work queue
+ * @returns the name of the queue its refusals land in
+ */
+export const deadLetterQueueOf = (queue: string): string => `${queue}.dead`;
+
+/**
+ * The two job-priority levels every work queue supports, named rather than passed as raw numbers
+ * so a publish call reads as intent (`'high'`) instead of a magic 0/1 whose meaning lives only
+ * here. Kept to two on purpose: RabbitMQ's priority ordering is approximate under load — it
+ * reorders within whatever is currently buffered, not a strict global heap — so more levels would
+ * invite a false sense of a real scheduler. The idea is one gap, between "most things" and "the
+ * few things a person is actively blocked on," not a fine-grained priority system.
+ *
+ * See: docs/tools/rabbitmq.md#priority
+ */
+export type JobPriority = 'normal' | 'high';
+
+/** `JobPriority` as the number RabbitMQ's `priority` publish option and `x-max-priority` expect. */
+const JOB_PRIORITY_VALUES: Record<JobPriority, number> = { normal: 0, high: 1 };
+
+/**
+ * Declare a work queue, its dead-letter queue, and the binding between them.
+ *
+ * Idempotent, called on both publish and consume paths so producer and consumer may start in any
+ * order. The dead-letter queue is bound BEFORE the work queue names the exchange — otherwise a
+ * queue whose `x-dead-letter-exchange` resolves to nothing just drops the message. `assertQueue`
+ * throws `PRECONDITION_FAILED` (killing the channel) if it already exists with different args —
+ * see `docs/tools/rabbitmq.md` for upgrading an existing broker.
+ *
+ * @param ch - the channel to declare on
+ * @param queue - the work queue
+ * @param durable - whether the definitions survive a broker restart
+ */
+const assertJobQueue = (ch: Channel, queue: string, durable: boolean): Promise<void> =>
+    ch
+        .assertExchange(DEAD_LETTER_EXCHANGE, 'direct', { durable: true })
+        .then(() => ch.assertQueue(deadLetterQueueOf(queue), { durable: true }))
+        .then(() =>
+            ch.bindQueue(deadLetterQueueOf(queue), DEAD_LETTER_EXCHANGE, deadLetterQueueOf(queue))
+        )
+        .then(() =>
+            ch.assertQueue(queue, {
+                // `durable` = the queue definition survives a broker restart.
+                durable,
+                deadLetterExchange: DEAD_LETTER_EXCHANGE,
+                deadLetterRoutingKey: deadLetterQueueOf(queue),
+                // `x-max-priority`: the ceiling `JOB_PRIORITY_VALUES` publishes against. Every
+                // queue gets it, so any producer may opt into `priority: 'high'` without a
+                // separate per-queue declaration.
+                // https://www.rabbitmq.com/docs/priority
+                arguments: { 'x-max-priority': Math.max(...Object.values(JOB_PRIORITY_VALUES)) }
+            })
+        )
+        .then(() => undefined);
+
+// ─── Publish ──────────────────────────────────────────────────────────────────
+
+/** One publish, described in full — every caller of {@link publishToQueue} passes this object. */
+export interface PublishOptions<TPayload = unknown> {
+    /** Queue name to publish to. */
+    queue: string;
+    /** Message payload (will be JSON-serialized). */
+    payload: TPayload;
+    /** Make queue survive broker restarts. Default: true. */
+    durable?: boolean;
+    /** Make message persistent. Default: true. */
+    persistent?: boolean;
+    /** How eagerly the broker should deliver this ahead of others waiting on the same queue. Default: `'normal'`. */
+    priority?: JobPriority;
+}
+
+/**
+ * Publish a message to a queue. No-op when RabbitMQ is not configured.
+ *
+ * Publishes to the *default exchange* (empty name), where the routing key IS the queue name — the
+ * simplest AMQP topology there is. `TPayload` is the job envelope: naming it explicitly
+ * (`publishToQueue<EmailJobPayload>(…)`) checks this call against the same type its consumer declares, so
+ * a field added on one side and forgotten on the other is a compile error, not a 3am silent drop.
+ *
+ * @returns `true` when the broker accepted the message, `false` when the queue is unavailable —
+ *          callers use this to decide whether to fall back to inline work.
+ */
+export const publishToQueue = <TPayload = unknown>(
+    options: PublishOptions<TPayload>
+): Promise<boolean> => {
+    const ch = getChannel();
+    if (!ch) return Promise.resolve(false);
+
+    // Destructure with defaults here (rather than in the interface) so both call paths —
+    // explicit options and omitted options — go through the same durable-by-default choice.
+    const { queue, payload, durable = true, persistent = true, priority = 'normal' } = options;
+
+    return (
+        assertJobQueue(ch, queue, durable)
+            .then(() =>
+                // `sendToQueue(queue, content, options)` — content must be a Buffer, so the
+                // payload is JSON-serialized here and parsed back in `consumeFromQueue`.
+                ch.sendToQueue(queue, Buffer.from(JSON.stringify(payload)), {
+                    // `persistent` = the *message* is written to disk. Both this and a
+                    // `durable` queue are required to survive a restart: a durable queue
+                    // with transient messages comes back empty.
+                    persistent,
+                    priority: JOB_PRIORITY_VALUES[priority]
+                })
+            )
+            // `sendToQueue` returns a boolean: false means amqplib's internal write buffer is
+            // full (backpressure), surfaced to the caller as-is rather than handled. The catch
+            // is the declared contract: a channel that died since the cached-handle check
+            // rejects here, and every caller reads a boolean either way.
+            .catch((error: unknown) => {
+                reportUnavailable(error);
+                return false;
+            })
+    );
+};
+
+// ─── Consume ──────────────────────────────────────────────────────────────────
+
+/** One consumer's registration — the queue, the handler, and the contract its messages must meet. */
+export interface ConsumeOptions<TPayload = unknown> {
+    /** Queue name to consume from. */
+    queue: string;
+    /** Handler called for each message. Return true to ack, false to nack. */
+    handler: (message: TPayload, raw: ConsumeMessage) => Promise<boolean>;
+    /**
+     * The contract schema this queue's messages must satisfy, from
+     * `@types`' generated validators.
+     *
+     * A payload crosses a process boundary, which is where its TypeScript type stops being a fact
+     * and becomes a claim. Supplying this turns the claim back into a check; omitting it leaves
+     * the handler to defend itself, which is the older arrangement and still works.
+     */
+    schema?: ZodType;
+    /** Make queue survive broker restarts. Default: true. */
+    durable?: boolean;
+    /** Number of unacknowledged messages allowed at once. Default: 1. */
+    prefetch?: number;
+}
+
+/**
+ * Parse a delivered message's JSON body.
+ *
+ * Split out of `handleDelivery` purely to keep the `try`/`catch` JSON.parse forces from adding
+ * its own level to that function's nesting — same one-assertion-at-the-boundary story as before,
+ * just named. `undefined` is a safe failure sentinel: valid JSON never parses to it.
+ *
+ * @param incoming - the raw delivered message
+ * @returns the parsed value, or `undefined` when the body is not valid JSON
+ */
+const parseMessageBody = (incoming: ConsumeMessage): unknown => {
+    // eslint-disable-next-line no-restricted-syntax -- JSON.parse has no non-throwing form; a malformed message is dropped, not a crash
+    try {
+        // `.content` is a Buffer; `toString()` assumes UTF-8 JSON, matching
+        // what `publishToQueue` writes.
+        return JSON.parse(incoming.content.toString());
+    } catch {
+        return undefined;
+    }
+};
+
+/**
+ * Handle one delivered message: parse it, run the caller's handler, and translate the outcome
+ * into ack/nack.
+ *
+ * Split out of `consumeFromQueue` because amqplib's `consume` callback fires once per delivery
+ * for the process lifetime, not once during the connect/prefetch chain that registers it — so
+ * the ack-decision logic gets its own ≤3-level depth instead of piling inside that chain.
+ *
+ * @param ch - channel to ack/nack on
+ * @param queue - queue name, for the parse-failure log line
+ * @param handler - caller's per-message handler
+ * @param incoming - the raw delivered message
+ */
+const handleDelivery = <TPayload>(
+    ch: Channel,
+    queue: string,
+    handler: ConsumeOptions<TPayload>['handler'],
+    incoming: ConsumeMessage,
+    schema?: ZodType
+): void => {
+    const parsed = parseMessageBody(incoming);
+    if (parsed === undefined) {
+        // Malformed message — reject without requeue.
+        // `nack(message, allUpTo, requeue)`: allUpTo=false rejects only this
+        // delivery, requeue=false discards it. Requeuing would loop forever
+        // since the bytes will never become valid JSON.
+        logger.warn({ message: 'Queue message parse failed, nacking.', queue });
+        ch.nack(incoming, false, false);
+        return;
+    }
+
+    /*
+     * Dead-lettered, not requeued, for the same reason a parse failure is: a message that does not
+     * match the contract will not start matching it on a retry. Logged at `warn` with the reason,
+     * because the interesting case is not this one message — it is a producer that has drifted.
+     */
+    const verdict = schema?.safeParse(parsed);
+    if (verdict && !verdict.success) {
+        logger.warn({
+            message: 'Queue message failed contract validation, nacking.',
+            queue,
+            issues: verdict.error.issues.map(({ path, message }) => `${path.join('.')}: ${message}`)
+        });
+        ch.nack(incoming, false, false);
+        return;
+    }
+
+    /*
+     * The one assertion in this pipeline: this is where bytes become a value, and `JSON.parse`
+     * can't know `TPayload` — no generic makes it. The handler still checks the fields it needs
+     * before using them, which is why workers narrow with a predicate and declare their payload
+     * `Partial<…>` rather than fully-formed. Keeping it here means it happens once, at the
+     * boundary, instead of once per worker.
+     */
+    // The handler's boolean *is* the ack decision — see the policy above.
+    handler(parsed as TPayload, incoming)
+        .then((ack) => {
+            // `ack` removes the message from the queue permanently.
+            if (ack) ch.ack(incoming);
+            // Handled but refused: drop it (requeue=false).
+            else ch.nack(incoming, false, false);
+        })
+        // Thrown error = presumed transient (DB down, SMTP timeout), so
+        // requeue=true puts it back for another attempt.
+        .catch(() => ch.nack(incoming, false, true));
+};
+
+/**
+ * Declare the queue and register one consumer's callback on it — the whole of what "consuming a
+ * queue" means to amqplib. Split out of {@link consumeFromQueue} so the exact same steps run
+ * whether this is the first registration or a REPLAY of one onto a freshly (re)connected channel —
+ * see {@link consumerBindings}.
+ *
+ * Acknowledgement policy (enforced by {@link handleDelivery}):
+ *  - handler resolves `true`  → `ack` — done, broker deletes the message
+ *  - handler resolves `false` → `nack` without requeue — permanent business rejection
+ *  - handler *throws*         → `nack` with requeue — assumed transient, try again
+ *  - unparseable message      → `nack` without requeue — will never parse, so requeuing loops
+ *
+ * Both `nack`-without-requeue arms route to `DEAD_LETTER_EXCHANGE`.
+ */
+const bindConsumer = <TPayload>(ch: Channel, options: ConsumeOptions<TPayload>): Promise<void> => {
+    const { queue, handler, schema, durable = true, prefetch = 1 } = options;
+
+    return (
+        // Same idempotent declaration as on the publish side — the consumer may boot first.
+        assertJobQueue(ch, queue, durable)
+            // `prefetch` (AMQP basic.qos) caps unacked messages per consumer. With 1, the broker
+            // hands over the next message only after the current one is acked, which gives fair
+            // round-robin across replicas instead of one worker hoarding a batch.
+            .then(() => ch.prefetch(prefetch))
+            .then(() =>
+                // `consume` registers the callback and returns a consumerTag (unused here, since
+                // the consumer lives for the channel's lifetime — see `replayConsumers`).
+                ch.consume(queue, (incoming) => {
+                    // `null` is delivered when the consumer is cancelled broker-side (queue
+                    // deleted, channel closing) — nothing to ack.
+                    if (!incoming) return;
+
+                    handleDelivery(ch, queue, handler, incoming, schema);
+                })
+            )
+            // Discard the consumerTag reply; callers only need "consumer registered".
+            .then(() => undefined)
+    );
+};
+
+/**
+ * Every consumer this process has asked to register, keyed by queue name so a queue asked for
+ * twice replaces its binding rather than doubling it. `registerWorkers` calls
+ * {@link consumeFromQueue} exactly once at boot, but {@link setupChannel} re-runs this map onto
+ * every fresh channel amqplib's recovery hands back, boot's own included — that is what makes a
+ * broker restart survivable without this process ever being restarted itself.
+ */
+const consumerBindings = new Map<string, (ch: Channel) => Promise<void>>();
+
+/** Re-binds every known consumer onto a freshly opened channel — see {@link consumerBindings}. */
+const replayConsumers = (ch: Channel): Promise<void> =>
+    Promise.all([...consumerBindings.values()].map((bind) => bind(ch))).then(() => undefined);
+
+/**
+ * Register a consumer on a queue. No-op when RabbitMQ is not configured.
+ *
+ * Recorded in {@link consumerBindings} regardless of whether a channel is available right now — a
+ * broker still down means nothing to bind onto yet, not never: {@link setupChannel} replays it
+ * the moment amqplib's recovery reaches a channel, first connect or reconnect alike.
+ */
+export const consumeFromQueue = <TPayload = unknown>(
+    options: ConsumeOptions<TPayload>
+): Promise<void> => {
+    consumerBindings.set(options.queue, (ch) => bindConsumer(ch, options));
+    const ch = getChannel();
+    return ch ? bindConsumer(ch, options) : Promise.resolve();
+};

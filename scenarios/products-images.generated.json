@@ -1,0 +1,102 @@
+{
+    "dogFoodStandard": {
+        "imageUrl": "/images/seed/ba302b38676e1a9220d28dddf28f9307.jpg",
+        "thumbnailUrl": "/images/seed/thumbs/v1/eb1b2770d28eeab94d94f4ee87ff8b56.webp"
+    },
+    "heaterSoftDeleted": {
+        "imageUrl": "/images/seed/2b1e84d5872e69f37e8d822fca8d8b3f.jpg",
+        "thumbnailUrl": "/images/seed/thumbs/v1/c30e1302ad756080b0f95b895d74e423.webp"
+    },
+    "scratchPostOutOfStock": {
+        "imageUrl": "/images/seed/421a6d24283bcab298ed895cd76ab3c3.jpg",
+        "thumbnailUrl": "/images/seed/thumbs/v1/4b7d48d8ab2460c8f21c526719091d25.webp"
+    },
+    "dogBedPremium": {
+        "imageUrl": "/images/seed/e2e9ceb4241b096a71ff03d1bffccee2.jpg",
+        "thumbnailUrl": "/images/seed/thumbs/v1/d0ba90449f30a5922b81e8bd86d40a46.webp"
+    },
+    "bundleInactive": {
+        "imageUrl": "/images/seed/e82b74f0d2af519c2291c2dd1b36d346.jpg",
+        "thumbnailUrl": "/images/seed/thumbs/v1/39a98d30a91cc6a66630f748527054f0.webp"
+    },
+    "filler-00": {
+        "imageUrl": "/images/seed/d9cfb7e63ad9a86b902e089297cd708e.jpg",
+        "thumbnailUrl": "/images/seed/thumbs/v1/c36ad39156ecb6d5555d6f6e1c7f83be.webp"
+    },
+    "filler-01": {
+        "imageUrl": "/images/seed/8cfb83d55627f938871b7602392d449f.jpg",
+        "thumbnailUrl": "/images/seed/thumbs/v1/8bb989c07216b4977af0c038748cdfea.webp"
+    },
+    "filler-02": {
+        "imageUrl": "/images/seed/f3c26b2c655d4f68f111c01c77eb2bf4.jpg",
+        "thumbnailUrl": "/images/seed/thumbs/v1/eade70c1bb46face5dcb7d97532b7679.webp"
+    },
+    "filler-03": {
+        "imageUrl": "/images/seed/24caff6ebb8f0c96c7db765c2597b21b.jpg",
+        "thumbnailUrl": "/images/seed/thumbs/v1/c112689213ca28895abc50ff9519743e.webp"
+    },
+    "filler-04": {
+        "imageUrl": "/images/seed/e161925bb7af5c31a67effca2a995120.jpg",
+        "thumbnailUrl": "/images/seed/thumbs/v1/1e1da0652059d040eef01a48accec909.webp"
+    },
+    "filler-05": {
+        "imageUrl": "/images/seed/da2ade16a11e0c476cb77728734b4268.jpg",
+        "thumbnailUrl": "/images/seed/thumbs/v1/aed0177df87baea2f2a1b6250313448a.webp"
+    },
+    "filler-06": {
+        "imageUrl": "/images/seed/6c896532198da910493e6973ff0ba1da.jpg",
+        "thumbnailUrl": "/images/seed/thumbs/v1/ff9b8ac14429fd5c344121e18cc4de0b.webp"
+    },
+    "filler-07": {
+        "imageUrl": "/images/seed/158debc5b4905fd1be217ad28abf4b57.jpg",
+        "thumbnailUrl": "/images/seed/thumbs/v1/7787616de783920702b4bd147f97f8cd.webp"
+    },
+    "filler-08": {
+        "imageUrl": "/images/seed/92a55bd96548217591f9baa424ebe6c1.jpg",
+        "thumbnailUrl": "/images/seed/thumbs/v1/1833f15f389407be22769c40bb29b1f1.webp"
+    },
+    "filler-09": {
+        "imageUrl": "/images/seed/f033021f5b36473d74906924a3c10142.jpg",
+        "thumbnailUrl": "/images/seed/thumbs/v1/d86b5fb195da80592b0115d3abe7c189.webp"
+    },
+    "filler-10": {
+        "imageUrl": "/images/seed/de9f099acefdd75b7644446e77a17ffa.jpg",
+        "thumbnailUrl": "/images/seed/thumbs/v1/615a8e8a5d0c79032b52c489e75d9b28.webp"
+    },
+    "filler-11": {
+        "imageUrl": "/images/seed/af58a31d33f3b196152a4601aed0c7a9.jpg",
+        "thumbnailUrl": "/images/seed/thumbs/v1/b8b5af1efbf94731a44db7dbdeff9f15.webp"
+    },
+    "filler-12": {
+        "imageUrl": "/images/seed/23d91a58865208786fc3dcefd5997f0f.jpg",
+        "thumbnailUrl": "/images/seed/thumbs/v1/54501ee78e42f46d82d91190bbc55b8f.webp"
+    },
+    "filler-13": {
+        "imageUrl": "/images/seed/e47678e03f28eb270f51a7ffe1c2216c.jpg",
+        "thumbnailUrl": "/images/seed/thumbs/v1/89aaea51a44bd021fe165b6525999b33.webp"
+    },
+    "filler-14": {
+        "imageUrl": "/images/seed/0bd46371813b6cac13f39dc630087a82.jpg",
+        "thumbnailUrl": "/images/seed/thumbs/v1/969998535dff4ef14396505ee63e7ba2.webp"
+    },
+    "filler-15": {
+        "imageUrl": "/images/seed/3ebe918cefaaac323c39df223850751b.jpg",
+        "thumbnailUrl": "/images/seed/thumbs/v1/58101e2f327251241a1347382c6297a8.webp"
+    },
+    "filler-16": {
+        "imageUrl": "/images/seed/1d06376f55d596c1ece21d76c675fc91.jpg",
+        "thumbnailUrl": "/images/seed/thumbs/v1/6c9b6ccd97b5b92228d01e4ecdbe846b.webp"
+    },
+    "filler-17": {
+        "imageUrl": "/images/seed/ead9f17de7d26a8f0a9795b5f3b5798d.jpg",
+        "thumbnailUrl": "/images/seed/thumbs/v1/735b65b24b4f08cc0c9f90a551893563.webp"
+    },
+    "filler-18": {
+        "imageUrl": "/images/seed/34c7b35ed620332cb78e29d6e7718df0.jpg",
+        "thumbnailUrl": "/images/seed/thumbs/v1/61bfe86d52f393a62311861cb3f7fdac.webp"
+    },
+    "filler-19": {
+        "imageUrl": "/images/seed/0abc23b39789466a46b30b3d566216b3.jpg",
+        "thumbnailUrl": "/images/seed/thumbs/v1/d9181df2497443fe4403f051a8b1d667.webp"
+    }
+}

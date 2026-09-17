@@ -1,0 +1,305 @@
+/**
+ * @module
+ * `orderService.search` — filtering, pagination, and the three computed totals
+ * (`totalItems`/`totalQuantity`/`totalPrice`) that exist only because the aggregate pipeline
+ * derives them; nothing stores them on the document. `service-crud.test.ts` covers the write
+ * half of this service (`create`, `update`, `remove`, …).
+ */
+import { setupTestDb } from '@tests/setup-test-db';
+import { createUser } from '@modules/users/tests/factories';
+import { createProduct, saveProduct, deleteProduct } from '@modules/products/tests/factories';
+import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
+import * as orderService from '@modules/orders/services';
+import type { OrderDocument } from '../../model';
+
+setupTestDb();
+
+type OrderWithTotals = OrderDocument & {
+    totalItems: number;
+    totalQuantity: number;
+    totalPrice: number;
+};
+
+/**
+ * An order line as `resolveCurrentImages` leaves it — `current` isn't on `OrderDocumentItem`,
+ * since nothing stores it; it's attached at the serialization boundary. See
+ * `../../services/current`.
+ */
+interface ItemWithCurrent {
+    product: { id: string };
+    current: { imageUrl: string; thumbnailUrl?: string } | null;
+}
+
+/**
+ * Narrows a search result's item to what `resolveCurrentImages` attached — a single cast from
+ * `unknown`, not the double `as unknown as` the field's absence from `OrderDocumentItem` would
+ * otherwise force at every call site.
+ */
+const currentOf = (item: unknown): ItemWithCurrent['current'] => (item as ItemWithCurrent).current;
+
+/*
+ * `totalItems`, `totalQuantity` and `totalPrice` are not stored — `applyOrderTransform` derives
+ * them, and `.aggregate()` bypasses the schema's `toJSON`, so the only thing that puts them on a
+ * result is the repository's `normalize` step. These assert that every read path runs it.
+ */
+describe('orderService.search — derived totals', () => {
+    it('adds the totalItems computed field (number of distinct product lines)', async () => {
+        const user = await createUser();
+        const [p1, p2] = await Promise.all([
+            createProduct({ price: 5 }),
+            createProduct({ price: 10 })
+        ]);
+
+        // One order with two product lines
+        await createOrder(user, [toOrderItem(p1, 1), toOrderItem(p2, 3)]);
+
+        const { items } = await orderService.search();
+        const [order] = items as OrderWithTotals[];
+
+        // 2 distinct product lines → totalItems = 2
+        expect(order.totalItems).toBe(2);
+    });
+
+    it('adds the totalQuantity computed field (sum of all quantities)', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 10 });
+
+        // 4 units of the same product
+        await createOrder(user, [toOrderItem(product, 4)]);
+
+        const { items } = await orderService.search();
+        const [order] = items as OrderWithTotals[];
+
+        expect(order.totalQuantity).toBe(4);
+    });
+
+    it('adds the totalPrice computed field (sum of price × quantity)', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 15 }); // $15 each
+
+        await createOrder(user, [toOrderItem(product, 3)]); // 3 × 15 = $45
+
+        const { items } = await orderService.search();
+        const [order] = items as OrderWithTotals[];
+
+        expect(order.totalPrice).toBe(45);
+    });
+
+    it('computes totals correctly for a multi-product order', async () => {
+        const user = await createUser();
+        const [p1, p2] = await Promise.all([
+            createProduct({ price: 10 }), // 2 × $10 = $20
+            createProduct({ price: 5 }) // 4 × $5  = $20
+        ]);
+
+        await createOrder(user, [toOrderItem(p1, 2), toOrderItem(p2, 4)]);
+
+        const { items } = await orderService.search();
+        const [order] = items as OrderWithTotals[];
+
+        expect(order.totalItems).toBe(2); // 2 product lines
+        expect(order.totalQuantity).toBe(6); // 2 + 4
+        expect(order.totalPrice).toBe(40); // 20 + 20
+    });
+});
+
+describe('orderService.search', () => {
+    it('returns all orders with default pagination', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 10 });
+
+        await createOrder(user, [toOrderItem(product, 1)]);
+        await createOrder(user, [toOrderItem(product, 2)]);
+
+        const result = await orderService.search({});
+
+        expect(result.items).toHaveLength(2);
+        expect(result.meta.totalItems).toBe(2);
+    });
+
+    it('filters by userId', async () => {
+        const user1 = await createUser({ email: 'u1@example.com', username: 'u1' });
+        const user2 = await createUser({ email: 'u2@example.com', username: 'u2' });
+        const product = await createProduct({ price: 10 });
+
+        await createOrder(user1, [toOrderItem(product, 1)]);
+        await createOrder(user2, [toOrderItem(product, 2)]);
+
+        const result = await orderService.search({
+            userId: user1._id.toString()
+        });
+
+        expect(result.items).toHaveLength(1);
+    });
+
+    it('filters by email (exact match)', async () => {
+        const user1 = await createUser({
+            email: 'alice@example.com',
+            username: 'alice'
+        });
+        const user2 = await createUser({
+            email: 'bob@example.com',
+            username: 'bob'
+        });
+        const product = await createProduct({ price: 10 });
+
+        await createOrder(user1, [toOrderItem(product, 1)]);
+        await createOrder(user2, [toOrderItem(product, 2)]);
+
+        const result = await orderService.search({ email: 'alice@example.com' });
+
+        expect(result.items).toHaveLength(1);
+    });
+
+    it('filters by paymentMethod — the admin "awaiting transfer" view', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 10 });
+
+        await createOrder(user, [toOrderItem(product, 1)], {
+            status: 'pending',
+            paymentMethod: 'bank_transfer'
+        });
+        await createOrder(user, [toOrderItem(product, 1)], {
+            status: 'pending',
+            paymentMethod: 'card'
+        });
+
+        const result = await orderService.search({
+            paymentMethod: 'bank_transfer',
+            status: 'pending'
+        });
+
+        expect(result.items).toHaveLength(1);
+    });
+
+    it('filters by order id', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 10 });
+
+        const target = await createOrder(user, [toOrderItem(product, 1)]);
+        await createOrder(user, [toOrderItem(product, 2)]);
+
+        const result = await orderService.search({
+            id: [target._id.toString()]
+        });
+
+        expect(result.items).toHaveLength(1);
+    });
+
+    it('filters by productId (embedded product)', async () => {
+        const user = await createUser();
+        const [p1, p2] = await Promise.all([
+            createProduct({ price: 10 }),
+            createProduct({ price: 20 })
+        ]);
+
+        // order1 contains p1; order2 contains p2
+        await createOrder(user, [toOrderItem(p1, 1)]);
+        await createOrder(user, [toOrderItem(p2, 1)]);
+
+        const result = await orderService.search({
+            productId: p1._id.toString()
+        });
+
+        expect(result.items).toHaveLength(1);
+    });
+
+    it('paginates results correctly', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 10 });
+
+        for (let i = 0; i < 5; i++) {
+            await createOrder(user, [toOrderItem(product, i + 1)]);
+        }
+
+        const page1 = await orderService.search({ page: 1, pageSize: 3 });
+        const page2 = await orderService.search({ page: 2, pageSize: 3 });
+
+        expect(page1.items).toHaveLength(3);
+        expect(page2.items).toHaveLength(2);
+        expect(page1.meta.totalPages).toBe(2);
+        expect(page1.meta.totalItems).toBe(5);
+    });
+
+    it('includes computed fields (totalItems, totalQuantity, totalPrice)', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 25 });
+
+        await createOrder(user, [toOrderItem(product, 3)]); // 3 × $25 = $75
+
+        const result = await orderService.search({});
+        const [order] = result.items as OrderWithTotals[];
+
+        expect(order.totalItems).toBe(1);
+        expect(order.totalQuantity).toBe(3);
+        expect(order.totalPrice).toBe(75);
+    });
+
+    it('accepts a scope filter (e.g. restrict to a specific user)', async () => {
+        const user1 = await createUser({ email: 'u1@example.com', username: 'u1' });
+        const user2 = await createUser({ email: 'u2@example.com', username: 'u2' });
+        const product = await createProduct({ price: 10 });
+
+        await createOrder(user1, [toOrderItem(product, 1)]);
+        await createOrder(user2, [toOrderItem(product, 2)]);
+
+        // The scope parameter is a raw Mongoose filter merged into the $match stage
+        const result = await orderService.search({}, { userId: user1._id });
+
+        expect(result.items).toHaveLength(1);
+    });
+
+    it('returns empty results when no orders exist', async () => {
+        const result = await orderService.search({});
+
+        expect(result.items).toHaveLength(0);
+        expect(result.meta.totalItems).toBe(0);
+        expect(result.meta.totalPages).toBe(0);
+    });
+});
+
+/*
+ * SECURITY_HOLES_7_STORAGE_QUOTA decision 2: the order line no longer freezes an image, so
+ * `current` is resolved LIVE from the catalogue product every read — the three branches that
+ * matter are unchanged, replaced-since-purchase, and gone.
+ */
+describe('orderService.search — current (live) image', () => {
+    it('resolves the live imageUrl for an unchanged product', async () => {
+        const user = await createUser();
+        const product = await createProduct({ imageUrl: '/images/original.jpg' });
+
+        await createOrder(user, [toOrderItem(product, 1)]);
+
+        const { items } = await orderService.search({});
+
+        expect(currentOf(items[0].items[0])).toEqual({ imageUrl: '/images/original.jpg' });
+    });
+
+    it('resolves the NEW imageUrl when the product changed since the order was placed', async () => {
+        const user = await createUser();
+        const product = await createProduct({ imageUrl: '/images/at-purchase.jpg' });
+
+        await createOrder(user, [toOrderItem(product, 1)]);
+
+        // The catalogue row changes after the order exists — the order line itself carries no
+        // image at all to go stale, so this can only ever show the live one.
+        product.imageUrl = '/images/replaced.jpg';
+        await saveProduct(product);
+
+        const { items } = await orderService.search({});
+
+        expect(currentOf(items[0].items[0])).toEqual({ imageUrl: '/images/replaced.jpg' });
+    });
+
+    it('resolves null once the product has been hard-deleted', async () => {
+        const user = await createUser();
+        const product = await createProduct({ imageUrl: '/images/doomed.jpg' });
+
+        await createOrder(user, [toOrderItem(product, 1)]);
+        await deleteProduct(product);
+
+        const { items } = await orderService.search({});
+
+        expect(currentOf(items[0].items[0])).toBeNull();
+    });
+});

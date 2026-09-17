@@ -1,0 +1,440 @@
+openapi: 3.0.3
+info:
+    title: webhooks — module contract
+    version: '1.0.0'
+
+paths:
+    /webhooks/subscriptions:
+        get:
+            tags: [Webhooks]
+            summary: List this shop's webhook subscriptions
+            description: |
+                Never returns a secret — the ring's plaintext exists only in the response of the
+                call that minted it (`POST` here, or the rotate action on `PATCH .../{id}`).
+            operationId: listWebhookSubscriptions
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+                - name: enabled
+                  in: query
+                  required: false
+                  schema: { type: boolean }
+                  description: Filter by whether the subscription is currently active.
+            responses:
+                '200':
+                    description: Subscription list
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WebhookSubscriptionsResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        post:
+            tags: [Webhooks]
+            summary: Create a webhook subscription
+            description: |
+                Mints the ring's first secret and returns it in plaintext, once — the only
+                response that ever carries it. `url` must be `https://` and must not resolve to a
+                private, loopback or link-local address; that check runs again on every delivery,
+                since a subscription's DNS can change after it is created.
+            operationId: createWebhookSubscription
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateWebhookSubscriptionRequest'
+            responses:
+                '201':
+                    description: Created subscription, with its one-time secret
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WebhookSubscriptionCreatedEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /webhooks/subscriptions/{id}:
+        patch:
+            tags: [Webhooks]
+            summary: Update a webhook subscription
+            description: |
+                Partial update. `rotateSecret: true` adds a new secret to the ring and returns its
+                plaintext in `newSecret` — the ring then carries two active secrets, and deliveries
+                sign with both (two space-separated `v1,` values in `webhook-signature`) until
+                `removeSecretId` names the old one to drop. Both may be sent in the same request.
+            operationId: updateWebhookSubscription
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateWebhookSubscriptionRequest'
+            responses:
+                '200':
+                    description: Updated subscription
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WebhookSubscriptionCreatedEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        delete:
+            tags: [Webhooks]
+            summary: Delete a webhook subscription
+            description: Permanently removes the subscription. Its delivery log is left in place, so past attempts stay auditable.
+            operationId: deleteWebhookSubscription
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /webhooks/deliveries:
+        get:
+            tags: [Webhooks]
+            summary: The delivery log
+            description: Every attempt, newest first, optionally filtered by subscription and status.
+            operationId: listWebhookDeliveries
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+                - name: subscriptionId
+                  in: query
+                  required: false
+                  schema: { type: string }
+                - name: status
+                  in: query
+                  required: false
+                  schema:
+                      $ref: '#/components/schemas/WebhookDeliveryStatus'
+            responses:
+                '200':
+                    description: Delivery list
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WebhookDeliveriesResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /webhooks/deliveries/{id}/replay:
+        post:
+            tags: [Webhooks]
+            summary: Re-send one delivery
+            description: |
+                Signs and POSTs again, synchronously, against the subscription's CURRENT url and
+                secret ring — not the ones this row was originally attempted with. Updates the same
+                row: `attempt` advances exactly like a real queued attempt would (one step forward
+                on a failure with backoff tiers left, unchanged on success or exhaustion), and
+                `status`/`responseCode`/`durationMs`/`error` reflect this replay. The single
+                most-requested support action, per the design doc.
+            operationId: replayWebhookDelivery
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The delivery, as it stands after the replay
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WebhookDeliveryEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /webhooks/events:
+        get:
+            tags: [Webhooks]
+            summary: The public event catalogue
+            description: |
+                Read straight from this module's own `asyncapi.yaml` fragment — the same source
+                `asyncapi.public.yaml` is generated from — so this list and what the module can
+                actually fire can never drift apart. See `docs/api/asyncapi-workflow.md`.
+            operationId: listWebhookEvents
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: Every event a subscription may filter on
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/WebhookEventCatalogueResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        # ---------- webhooks — the schemas only this module's paths reference. ----------
+        WebhookSubscription:
+            type: object
+            additionalProperties: false
+            required: [id, url, eventTypes, enabled, consecutiveFailures, secretIds, createdAt, updatedAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                url:
+                    type: string
+                    format: uri
+                description:
+                    type: string
+                eventTypes:
+                    type: array
+                    items: { type: string }
+                    minItems: 1
+                    description: Names from `GET /webhooks/events` this subscription receives.
+                enabled:
+                    type: boolean
+                consecutiveFailures:
+                    type: integer
+                    minimum: 0
+                disabledAt:
+                    type: string
+                    format: date-time
+                    description: Set once `consecutiveFailures` crosses the auto-disable threshold.
+                secretIds:
+                    type: array
+                    items: { type: string }
+                    description: The ring's secret ids, oldest first — never the plaintext.
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        WebhookSubscriptionCreated:
+            # Flat, not `allOf: [WebhookSubscription, {...}]`: two sibling schemas each declaring
+            # `additionalProperties: false` is a well-known JSON Schema trap — ajv validates the
+            # instance against EACH branch independently, so every field the OTHER branch owns
+            # reads as "additional" and the whole document fails. Restated flat instead.
+            type: object
+            additionalProperties: false
+            required: [id, url, eventTypes, enabled, consecutiveFailures, secretIds, createdAt, updatedAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                url:
+                    type: string
+                    format: uri
+                description:
+                    type: string
+                eventTypes:
+                    type: array
+                    items: { type: string }
+                    minItems: 1
+                enabled:
+                    type: boolean
+                consecutiveFailures:
+                    type: integer
+                    minimum: 0
+                disabledAt:
+                    type: string
+                    format: date-time
+                secretIds:
+                    type: array
+                    items: { type: string }
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+                secret:
+                    type: string
+                    description: The newly minted secret, in plaintext. Shown here once, on creation, and never again.
+                newSecret:
+                    type: string
+                    description: A rotated-in secret's plaintext, present only when `PATCH` was sent with `rotateSecret:true`.
+
+        WebhookDeliveryStatus:
+            type: string
+            enum: [pending, in-flight, succeeded, failed, exhausted]
+
+        WebhookDelivery:
+            type: object
+            additionalProperties: false
+            required: [id, subscriptionId, eventId, eventType, attempt, status, createdAt, updatedAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                subscriptionId:
+                    type: string
+                eventId:
+                    type: string
+                eventType:
+                    type: string
+                attempt:
+                    type: integer
+                    minimum: 1
+                status:
+                    $ref: '#/components/schemas/WebhookDeliveryStatus'
+                responseCode:
+                    type: integer
+                durationMs:
+                    type: integer
+                error:
+                    type: string
+                nextAttemptAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        WebhookEventCatalogueEntry:
+            type: object
+            additionalProperties: false
+            required: [name]
+            properties:
+                name:
+                    type: string
+                description:
+                    type: string
+
+        CreateWebhookSubscriptionRequest:
+            type: object
+            additionalProperties: false
+            required: [url, eventTypes]
+            properties:
+                url:
+                    type: string
+                    format: uri
+                    description: Must be `https://`. Validated again, against the resolved IP, on every delivery.
+                description:
+                    type: string
+                eventTypes:
+                    type: array
+                    items: { type: string }
+                    minItems: 1
+
+        UpdateWebhookSubscriptionRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                url:
+                    type: string
+                    format: uri
+                description:
+                    type: string
+                eventTypes:
+                    type: array
+                    items: { type: string }
+                    minItems: 1
+                enabled:
+                    type: boolean
+                    description: Setting this true re-arms a subscription the auto-disable guard turned off, and clears `disabledAt`.
+                rotateSecret:
+                    type: boolean
+                    description: Add a new secret to the ring; its plaintext comes back once, in `newSecret`.
+                removeSecretId:
+                    type: string
+                    description: Drop this secret id from the ring — the other half of a rotation, once every consumer has switched.
+
+        WebhookSubscriptionsResponse:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items: { $ref: '#/components/schemas/WebhookSubscription' }
+                meta:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
+
+        WebhookDeliveriesResponse:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items: { $ref: '#/components/schemas/WebhookDelivery' }
+                meta:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
+
+        WebhookSubscriptionCreatedEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess' }
+                status: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus' }
+                message: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage' }
+                data: { $ref: '#/components/schemas/WebhookSubscriptionCreated' }
+
+        WebhookSubscriptionsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess' }
+                status: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus' }
+                message: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage' }
+                data: { $ref: '#/components/schemas/WebhookSubscriptionsResponse' }
+
+        WebhookDeliveryEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess' }
+                status: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus' }
+                message: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage' }
+                data: { $ref: '#/components/schemas/WebhookDelivery' }
+
+        WebhookDeliveriesResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess' }
+                status: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus' }
+                message: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage' }
+                data: { $ref: '#/components/schemas/WebhookDeliveriesResponse' }
+
+        WebhookEventCatalogueResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess' }
+                status: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus' }
+                message: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage' }
+                data:
+                    type: array
+                    items: { $ref: '#/components/schemas/WebhookEventCatalogueEntry' }

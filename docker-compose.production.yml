@@ -1,0 +1,361 @@
+# Production stack for the API.
+#
+# `docker-compose.yml` is the DEVELOPMENT stack: it bind-mounts the working tree, runs the dev
+# server with hot reload, and brings up the full observability estate (Prometheus, Loki, Tempo,
+# Grafana, Alloy, Umami) because being able to see everything is the point of a development box.
+#
+# This file is the deployment. It runs the image built by `docker/Dockerfile.production`, mounts
+# no source, exposes no database port to the host, and stops at the four services the application
+# cannot run without. Telemetry is exported over OTLP to a collector that is deliberately NOT
+# defined here — see the note at the bottom.
+#
+#   export COMPOSE_PROJECT_NAME=acme
+#   docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml up -d --build
+#   docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml logs -f app
+#   docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml down  # -v: data too
+#
+# ── ONE DEPLOYMENT PER CLIENT ────────────────────────────────────────────────────────────────────
+# This stack serves ONE client organisation. Many clients means many stacks, each with its own
+# database and its own domain — never one stack serving many.
+#
+# `COMPOSE_PROJECT_NAME` is the client's name and does two jobs at once: it namespaces every
+# container, network and volume, and it selects that client's config below. Unset, nothing starts.
+#
+# ── BEFORE THE FIRST DEPLOY ──────────────────────────────────────────────────────────────────────
+# Copy `.env-example` to `clients/<name>/.env` and set real values.
+#
+# The file is named twice on purpose, because compose reads it through two separate channels:
+# `--env-file` resolves the `${...}` substitutions in THIS file, while `env_file:` below is what
+# the container itself receives. Naming only one of them silently gives every client the same
+# application config.
+#
+# Every client needs its OWN secrets and its OWN NODE_PORT — never copy one client's keys to
+# another. The values that MUST NOT keep their examples: NODE_TOKEN_ACCESS, NODE_TOKEN_REFRESH,
+# NODE_METRICS_TOKEN, and the Mongo/Redis/RabbitMQ credentials below. `clients/` is in
+# `.dockerignore` and `.gitignore` on purpose — mounted at runtime, never baked into the image.
+#
+# ── BUNDLED OR MANAGED BACKING SERVICES ──────────────────────────────────────────────────────────
+# `database`/`cache`/`queue` below carry `profiles: [bundled]` and start only when
+# `COMPOSE_PROFILES` includes `bundled` — the client env file's production block sets that by
+# default, so a client who changes nothing gets today's all-in-one behaviour. Point at a managed
+# MongoDB/Redis/RabbitMQ instead by setting `NODE_DB_URI`/`NODE_REDIS_URL`/`NODE_RABBITMQ_URL` in
+# the client env file AND removing `bundled` from `COMPOSE_PROFILES` — the client value then wins
+# over the bundled-service default (`required: false` on `depends_on` is what lets `app`/`cron`/
+# `setup` start without the bundled containers present).
+#
+# ── ONE-SHOT SETUP ───────────────────────────────────────────────────────────────────────────────
+# `setup` runs `db:sync` and `access:bootstrap` once, then exits — the equivalent of an
+# `initContainer`/one-off Job in an orchestrator that isn't Compose. `app` and `cron` wait for it to
+# finish successfully before they start, so a fresh deployment gets its indexes and its shop's row
+# before anything serves a request.
+
+x-app-env: &app-env
+    NODE_ENV: 'production'
+    # Service hostnames on the compose network, defaulted — not hardcoded — so a client env file
+    # setting these to a managed instance wins outright. The `:?` that guards each password stays
+    # on the bundled service's OWN block below (`database`/`cache`/`queue`), not here: it only
+    # needs to fire when that service is actually part of the deploy, and nesting a `:?` inside a
+    # `:-` default is compose-version-sensitive — see the two-stacks experiment for that.
+    # No `?authSource=admin` on Mongo: the app user is created ON `MONGO_DB` itself (see
+    # `docker/mongo-init.js`), so the database already in the path is its auth source.
+    # `?replicaSet=rs0` matches the bundled `database`'s own one-node set (see `database` and
+    # `mongo-rs-init` below) — only on the bundled default; a managed URI supplies its own topology.
+    NODE_DB_URI: '${NODE_DB_URI:-mongodb://${MONGO_APP_USER:-api}:${MONGO_APP_PASSWORD:-}@database:27017/${MONGO_DB:-api}?replicaSet=rs0}'
+    NODE_REDIS_URL: '${NODE_REDIS_URL:-redis://:${REDIS_PASSWORD:-}@cache:6379}'
+    NODE_RABBITMQ_URL: '${NODE_RABBITMQ_URL:-amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-}@queue:5672}'
+
+services:
+    app:
+        # `image:` alongside `build:`: the image this build produces is tagged once, and `cron`/
+        # `setup` reference that same tag by `image:` alone — one build, three containers running
+        # it, never three separate builds of the same Dockerfile drifting apart.
+        image: '${APP_IMAGE:-boilerplate-api:latest}'
+        build:
+            context: .
+            dockerfile: docker/Dockerfile.production
+            args:
+                # ~200 MB of Chromium, needed only by the PDF invoice endpoint. See the Dockerfile.
+                INSTALL_CHROMIUM: '${INSTALL_CHROMIUM:-false}'
+
+        # `unless-stopped` rather than `always`: a container an operator stopped by hand stays
+        # stopped across a daemon restart, which is what someone debugging a live incident expects.
+        restart: unless-stopped
+
+        # Runs `dumb-init` as PID 1 already (see the Dockerfile ENTRYPOINT), so compose does not
+        # need to inject its own. Left explicit because the graceful shutdown in `src/cluster.ts`
+        # depends on SIGTERM arriving, and that is worth stating twice.
+        stop_grace_period: 30s
+
+        env_file:
+            - clients/${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME to the client's name}/.env
+
+        environment:
+            <<: *app-env
+            NODE_PORT: '${NODE_PORT:-3000}'
+            # One process per container. Scale with `--scale app=N` or with the orchestrator, not
+            # with an in-container cluster — see the Dockerfile CMD note.
+            NODE_ENABLE_CLUSTERING: '0'
+            OTEL_EXPORTER_OTLP_ENDPOINT: '${OTEL_EXPORTER_OTLP_ENDPOINT:-}'
+            NODE_SERVICE_NAME: '${NODE_SERVICE_NAME:-api}'
+
+        ports:
+            # Bound to the loopback interface, NOT to 0.0.0.0. Put a TLS-terminating reverse proxy
+            # in front of this; publishing the API directly on a public interface means serving it
+            # over plain HTTP, and the auth cookies this application sets are not safe that way.
+            - '127.0.0.1:${NODE_PORT:-3000}:${NODE_PORT:-3000}'
+
+        volumes:
+            # Uploaded images. WITHOUT this the container's own filesystem holds them and a
+            # redeploy loses every one. A named volume is the stopgap; it still pins the deployment
+            # to one host, and two replicas do not share it. The durable answer is an
+            # S3-compatible `ImageStore` backend — see `infrastructure/adapters/image-store.ts`.
+            - uploads:/app/public/images
+
+        depends_on:
+            # `required: false`: a managed backing service has no container here to wait on — see
+            # the bundled-or-managed note above. Compose ≥ 2.20.
+            database:
+                condition: service_healthy
+                required: false
+            cache:
+                condition: service_healthy
+                required: false
+            queue:
+                condition: service_healthy
+                required: false
+            setup:
+                condition: service_completed_successfully
+
+        # Liveness only — `/` depends on no module, so it survives deleting any of them. `node -e`,
+        # not `curl -f`: the runtime image is node:*-alpine and ships no curl. `start_period` is
+        # generous because `setup` (indexes + the shop's row) has already run by the time this
+        # container starts — the wait is for Mongo's own connection handshake, not for a seed.
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'node',
+                    '-e',
+                    "fetch('http://localhost:${NODE_PORT:-3000}/').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+                ]
+            interval: 30s
+            timeout: 5s
+            retries: 3
+            start_period: 30s
+
+    # An external scheduler, not an in-process one — see the equivalent service in
+    # docker-compose.yml and docs/reference/ops.md#scheduled-jobs for the full reasoning. Same
+    # image as `app` — `image:` rather than a second `build:`, so a client is never running two
+    # images built from the same Dockerfile at slightly different times — only the command
+    # differs, so this container runs `ops/reap-*`/`sweep:*` against the exact image that was
+    # type-checked, never a copy built separately.
+    #
+    # `crond -f -d 8`: busybox's cron daemon, already in `node:*-alpine`. `-f` foreground, `-d 8`
+    # debug-level logging to stderr (nothing here runs syslog). This image runs as the unprivileged
+    # `node` user (`docker/Dockerfile.production`'s `USER node`) rather than root, so
+    # `docker/crontab` is bind-mounted to `/etc/crontabs/node`, not `/etc/crontabs/root` — a
+    # non-root crond reads only the crontab named for its own user. Mounting just this one file is
+    # enough; the image already carries `ops/`, `db/run-script.ts` and `package.json`.
+    #
+    # `replicas: 1` is what actually keeps two `reap:orders` passes from racing; the Mongo lease
+    # (`src/infrastructure/persistence/lease.ts`) is the backstop for a future job that does need it.
+    cron:
+        image: '${APP_IMAGE:-boilerplate-api:latest}'
+        restart: unless-stopped
+        deploy:
+            replicas: 1
+        env_file:
+            - clients/${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME to the client's name}/.env
+        environment:
+            <<: *app-env
+            # A dedicated var, not `${NODE_SERVICE_NAME:-api}-cron`: podman-compose 1.6 doubles the
+            # suffix when the same base variable is given a different literal suffix in more than
+            # one service (verified — `api-cron-cron`), so each derived name gets its own variable.
+            NODE_SERVICE_NAME: '${NODE_CRON_SERVICE_NAME:-api-cron}'
+        volumes:
+            - ./docker/crontab:/etc/crontabs/node:ro
+        command: ['crond', '-f', '-d', '8']
+        depends_on:
+            database:
+                condition: service_healthy
+                required: false
+            cache:
+                condition: service_healthy
+                required: false
+            queue:
+                condition: service_healthy
+                required: false
+            setup:
+                condition: service_completed_successfully
+
+    # Runs once, then exits: `db:sync` reconciles the index set, `access:bootstrap` upserts the one
+    # shop and the preset roles. `app`/`cron` both wait on this finishing successfully before they
+    # start — the Compose-native form of an orchestrator's initContainer/one-off Job, a shape that
+    # carries over unchanged to a Kubernetes deployment of the same image.
+    #
+    # `image:`, not `build:` — same image `app` built, never a separate build of the same
+    # Dockerfile. Build `app` first (`docker compose ... build app`) on a stack's first deploy.
+    setup:
+        image: '${APP_IMAGE:-boilerplate-api:latest}'
+        env_file:
+            - clients/${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME to the client's name}/.env
+        environment:
+            <<: *app-env
+            # See `cron`'s own comment: a dedicated var sidesteps podman-compose 1.6's suffix bug.
+            NODE_SERVICE_NAME: '${NODE_SETUP_SERVICE_NAME:-api-setup}'
+        command: ['sh', '-c', 'npm run deploy:setup']
+        depends_on:
+            database:
+                condition: service_healthy
+                required: false
+            mongo-rs-init:
+                condition: service_completed_successfully
+                required: false
+
+    database:
+        image: docker.io/library/mongo:8
+        restart: unless-stopped
+        # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
+        profiles: [bundled]
+        # A replica set of one, not a standalone: MongoDB's own documented production topology,
+        # the only path to a dump consistent across collections while orders keep arriving
+        # (`mongodump --oplog`), and the prerequisite for Percona Backup for MongoDB or real PITR
+        # later. Converting a live standalone to a set is a data-bearing migration; starting as a
+        # set of one is only this line. `--keyFile` is what auth requires once `--replSet` is on,
+        # even with a single member — MongoDB refuses `--auth` alone on a replica set.
+        #
+        # `mongo-entrypoint.sh` wraps the image's own entrypoint purely to get the keyFile onto
+        # disk with the right ownership first — see its own header for why that isn't a separate
+        # one-shot service instead.
+        entrypoint: ['bash', '/mongo-entrypoint.sh']
+        command:
+            [
+                'mongod',
+                '--replSet',
+                'rs0',
+                '--keyFile',
+                '/keyfile-dir/mongo-keyfile',
+                '--bind_ip_all'
+            ]
+        environment:
+            # Root stays maintenance-only — the app authenticates as MONGO_APP_USER instead
+            # (see `NODE_DB_URI` above and `docker/mongo-init.js`), so a leaked connection
+            # string can never `dropDatabase` on another database or read `admin.system.users`.
+            MONGO_INITDB_ROOT_USERNAME: '${MONGO_ROOT_USER:-root}'
+            MONGO_INITDB_ROOT_PASSWORD: '${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in the client env file}'
+            MONGO_INITDB_DATABASE: '${MONGO_DB:-api}'
+            MONGO_APP_USER: '${MONGO_APP_USER:-api}'
+            MONGO_APP_PASSWORD: '${MONGO_APP_PASSWORD:?set MONGO_APP_PASSWORD in the client env file}'
+        volumes:
+            - mongo-data:/data/db
+            - mongo-keyfile-dir:/keyfile-dir
+            - ./docker/mongo-entrypoint.sh:/mongo-entrypoint.sh:ro
+            # First-run only, same as the Umami init script: creates MONGO_APP_USER against an
+            # empty data directory and never runs again on that volume. Runs during the official
+            # image's temporary, flag-stripped standalone boot — which shares this same /data/db —
+            # so it needs no change for --replSet/--keyFile; only rs.initiate() is new, see
+            # `mongo-rs-init` below.
+            - ./docker/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+        # No `ports:` entry, deliberately. The database is reachable from the compose network and
+        # from nowhere else. Reach it for maintenance with
+        # `docker compose --env-file "clients/$COMPOSE_PROJECT_NAME/.env" -f docker-compose.production.yml
+        # exec database mongosh -u "$MONGO_ROOT_USER" -p`.
+        healthcheck:
+            # `ping` needs no auth even under `--keyFile` (which implies `--auth`), so this keeps
+            # gating readiness the same way it did as a standalone.
+            test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 30s
+
+    # A one-shot: calls rs.initiate() once the real, replSet-enabled mongod is up, then waits for
+    # PRIMARY before exiting — see docker/mongo-rs-init.sh for why this cannot live in
+    # docker-entrypoint-initdb.d. `setup` depends on this finishing successfully, since db:sync and
+    # access:bootstrap both need a set that can take writes.
+    mongo-rs-init:
+        image: docker.io/library/mongo:8
+        restart: 'no'
+        profiles: [bundled]
+        entrypoint: ['bash', '/mongo-rs-init.sh']
+        environment:
+            MONGO_ROOT_USER: '${MONGO_ROOT_USER:-root}'
+            MONGO_ROOT_PASSWORD: '${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in the client env file}'
+        volumes:
+            - ./docker/mongo-rs-init.sh:/mongo-rs-init.sh:ro
+        depends_on:
+            database:
+                condition: service_healthy
+
+    cache:
+        image: docker.io/library/redis:8-alpine
+        restart: unless-stopped
+        # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
+        profiles: [bundled]
+        # `--save 60 1` keeps an RDB snapshot so a restart does not cold-start every cache key at
+        # once. The cache is not a source of truth: losing it is a latency event, not a data loss.
+        #
+        # `--requirepass`: this instance also backs the rate-limit store (see
+        # `NODE_RATE_LIMIT_REDIS_URL`'s fallback to `NODE_REDIS_URL`), so an unauthenticated
+        # reader on the compose network could reset rate-limit budgets or read another user's
+        # cached response, not just warm the cache.
+        command:
+            [
+                'redis-server',
+                '--save',
+                '60',
+                '1',
+                '--appendonly',
+                'no',
+                '--requirepass',
+                '${REDIS_PASSWORD:?set REDIS_PASSWORD in the client env file}'
+            ]
+        volumes:
+            - redis-data:/data
+        healthcheck:
+            # `-a` + `--no-auth-warning`: same password as `--requirepass` above, silencing
+            # redis-cli's "insecure on the command line" notice — this runs inside the
+            # container, never on a shared shell history.
+            test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD}', '--no-auth-warning', 'ping']
+            interval: 10s
+            timeout: 3s
+            retries: 5
+
+    queue:
+        image: docker.io/library/rabbitmq:4-alpine
+        restart: unless-stopped
+        # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
+        profiles: [bundled]
+        environment:
+            RABBITMQ_DEFAULT_USER: '${RABBITMQ_USER:-guest}'
+            RABBITMQ_DEFAULT_PASS: '${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in the client env file}'
+        volumes:
+            - rabbitmq-data:/var/lib/rabbitmq
+        healthcheck:
+            test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+            interval: 15s
+            timeout: 10s
+            retries: 5
+            start_period: 30s
+
+volumes:
+    mongo-data:
+    mongo-keyfile-dir:
+    redis-data:
+    rabbitmq-data:
+    uploads:
+# ── OBSERVABILITY IS NOT IN THIS FILE, ON PURPOSE ───────────────────────────────────────────────
+# The development stack runs Prometheus, Loki, Tempo, Grafana and an OTel collector next to the
+# API because a developer wants the whole estate on one machine with one command.
+#
+# A deployment usually does not: telemetry outlives any single service and belongs to a collector
+# the application merely points at. So the API exports OTLP to whatever
+# `OTEL_EXPORTER_OTLP_ENDPOINT` names — a collector you already run, a managed backend, or nothing
+# at all, which is what an empty value means and is a valid choice.
+#
+# To run the estate here anyway, the definitions are already written: the observability services in
+# `docker-compose.yml` and their configuration under `docker/observability/` work unchanged.
+# Compose merges files left to right, so
+#   docker compose -f docker-compose.production.yml -f docker-compose.yml up -d
+# is the wrong way to do it — it drags the bind-mounts and dev commands back in. Copy the services
+# you want into an override file instead.

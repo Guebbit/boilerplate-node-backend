@@ -1,0 +1,216 @@
+#!/usr/bin/env tsx
+/**
+ * Every file path the docs CLAIM exists, checked against the files that do — `npm run
+ * check:docs-references`.
+ *
+ * `docs:build` already refuses a dead LINK between two pages. Nothing refuses a dead FACT, and a
+ * page naming `src/routes/` in a repo that has been `src/modules/<name>/` for a year reads as
+ * current to everyone who has not opened the tree. That class of rot is silent, cheap to write,
+ * and this is the only thing that looks for it.
+ *
+ * WHAT IS SWEPT, and why each narrowing matters:
+ *   - Inline code spans only. A fenced block is a code SAMPLE — its imports describe an example,
+ *     not this repo's tree, and sweeping them buries the real findings in illustration.
+ *   - `./`-relative tokens are skipped. VitePress resolves those against the page, not the repo,
+ *     and `docs:build` already fails on a dead one.
+ *   - Resolution is by SUFFIX, so `orders/model.ts` matches `src/modules/orders/model.ts` without
+ *     every page having to spell a path from the root.
+ *   - `@`-prefixed tokens are rewritten through `tsconfig`'s own path aliases, so `@modules/x`
+ *     is checked and `@asyncapi/cli` — matching no alias — is read as the npm package it is.
+ *   - Tokens starting with `/` are HTTP routes, not files. The contract owns those, and
+ *     `lint:openapi` already refuses one that does not exist.
+ *   - Directories count as targets, so `src/infrastructure/` resolves without naming a file.
+ *   - A token starting with the paired repo's directory name is resolved over THERE. That is what
+ *     makes citing it by its package name instead of its directory name a finding.
+ *   - A line carrying `<!-- doc-paths:ignore -->` is skipped whole. Some prose has to NAME a path
+ *     that is deliberately gone — a rename table's left column, a paragraph explaining why a file
+ *     was merged away. The marker says "this line names an absent path on purpose", which is an
+ *     argument a reader can check, unlike silence.
+ *
+ * The floors below are the point. A sweep that silently reads zero pages reports a clean tree
+ * forever, which is worse than no sweep — see `TierWallsTest`'s canary for the same guard.
+ */
+
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import { resolveFrontendPath, DEFAULT_FRONTEND_PATH } from '../pairing/paired-frontend-path';
+import {
+    ROOT,
+    ALLOWED,
+    allowed,
+    NOT_A_PATH,
+    trackedTargets,
+    resolves,
+    claimsAPath,
+    readAliases,
+    throughAliases
+} from './repo-references';
+
+/** The paired repo, addressed in prose by the directory it actually sits in. */
+const PEER_DIRECTORY = path.basename(DEFAULT_FRONTEND_PATH);
+
+/**
+ * The floors. Set just under what the tree currently holds, so ordinary editing never trips them
+ * and a sweep that stops seeing the docs does. Raise them when the docs grow; never lower them to
+ * make a run pass.
+ */
+const MIN_PAGES = 90;
+const MIN_REFERENCES = 300;
+
+/** Opt-out for a line that names an absent path deliberately. See the module header. */
+const IGNORE_LINE = '<!-- doc-paths:ignore -->';
+
+/** One unresolved claim, and the page that makes it. */
+interface Finding {
+    page: string;
+    token: string;
+}
+
+/**
+ * Normalize one inline code span into the path it claims, or `undefined` when it claims none.
+ *
+ * Trailing `:42` / `:functionName` and `#anchor` are locators within a file, not part of it, and
+ * a trailing slash is a directory's punctuation.
+ */
+const toPath = (span: string): string | undefined => {
+    if (NOT_A_PATH.test(span)) return undefined;
+    if (/^(https?|mailto):/.test(span)) return undefined;
+    // VitePress resolves these against the page, and `docs:build` already fails on a dead one.
+    if (span.startsWith('./') || span.startsWith('../')) return undefined;
+    // An HTTP route. The contract owns those, and `lint:openapi` refuses one that does not exist.
+    if (span.startsWith('/')) return undefined;
+
+    const token = span
+        .split('#')[0]
+        .split(':')[0]
+        .replaceAll(/[,.;]+$/g, '')
+        .replaceAll(/\/+$/g, '');
+    if (!token || token.startsWith('-') || token.startsWith('$')) return undefined;
+
+    return token;
+};
+
+/** What one page's inline code spans resolve to: the paths it claims, filtered to the real ones. */
+interface Scan {
+    tokens: string[];
+    findings: string[];
+}
+
+/** Everything a page claims and everything it gets wrong — one page, so the caller stays flat. */
+const scanPage = (
+    markdown: string,
+    context: {
+        aliases: { prefix: string; target: string }[];
+        roots: Set<string>;
+        own: Set<string>;
+        peer: Set<string> | undefined;
+    }
+): Scan => {
+    const scan: Scan = { tokens: [], findings: [] };
+
+    // Line by line, so the opt-out marker can scope to the one claim that needs it rather than to
+    // a whole page.
+    for (const line of markdown.split('\n')) {
+        if (line.includes(IGNORE_LINE)) continue;
+
+        for (const [, span] of line.matchAll(/`([^`]+)`/g)) {
+            const token = tokenOf(span, context.aliases, context.roots);
+            if (!token) continue;
+
+            scan.tokens.push(token);
+            if (!isReal(token, context.own, context.peer)) scan.findings.push(token);
+        }
+    }
+
+    return scan;
+};
+
+/** One code span reduced to the repo path it claims, or nothing when it claims none. */
+const tokenOf = (
+    span: string,
+    aliases: { prefix: string; target: string }[],
+    roots: Set<string>
+): string | undefined => {
+    const claimed = toPath(span);
+    if (!claimed) return undefined;
+
+    const token = throughAliases(aliases, claimed);
+    if (!token || !claimsAPath(roots, token) || allowed(token)) return undefined;
+
+    return token;
+};
+
+/**
+ * Whether the file a token names exists. A citation of the paired repo resolves over THERE, by its
+ * DIRECTORY name — the one thing that catches a page addressing it by its package name instead.
+ */
+const isReal = (token: string, own: Set<string>, peer: Set<string> | undefined): boolean => {
+    if (!token.startsWith(`${PEER_DIRECTORY}/`)) return resolves(own, token);
+
+    // No peer checkout (a bare clone, a worktree): the cross-repo half is skipped, not failed.
+    return !peer || resolves(peer, token.slice(PEER_DIRECTORY.length + 1));
+};
+
+const run = (): number => {
+    const aliases = readAliases();
+    const own = trackedTargets(ROOT);
+    /* The tracked roots, plus the generated ones git never sees. */
+    const roots = new Set([...own.roots, ...ALLOWED.map((entry) => entry.prefix.split('/')[0])]);
+    const peerRoot = resolveFrontendPath();
+    // Absent in a bare checkout or a worktree; the cross-repo half is skipped rather than fatal.
+    const peerTargets = existsSync(path.join(peerRoot, '.git'))
+        ? trackedTargets(peerRoot).targets
+        : undefined;
+
+    const pages = execFileSync('git', ['ls-files', 'docs'], { cwd: ROOT, encoding: 'utf8' })
+        .split('\n')
+        .filter((file) => file.endsWith('.md'));
+
+    const findings: Finding[] = [];
+    let references = 0;
+
+    const context = { aliases, roots, own: own.targets, peer: peerTargets };
+
+    for (const page of pages) {
+        const scan = scanPage(readFileSync(path.join(ROOT, page), 'utf8'), context);
+
+        references += scan.tokens.length;
+        for (const token of scan.findings) findings.push({ page, token });
+    }
+
+    if (pages.length < MIN_PAGES || references < MIN_REFERENCES) {
+        console.error(
+            `[docs-references] Swept ${pages.length} pages and ${references} references — below ` +
+                `the floor of ${MIN_PAGES}/${MIN_REFERENCES}.\n` +
+                '               A sweep reading nothing reports a clean tree forever. Fix the ' +
+                'sweep, do not lower the floor.'
+        );
+        return 1;
+    }
+
+    if (findings.length === 0) {
+        console.log(
+            `[docs-references] ${pages.length} pages, ${references} references, all resolved.`
+        );
+        return 0;
+    }
+
+    console.error(
+        `[docs-references] ${pages.length} pages, ${references} references, ` +
+            `${findings.length} matching no file:\n`
+    );
+    let current = '';
+    for (const { page, token } of findings) {
+        if (page !== current) {
+            console.error(`  ${page}`);
+            current = page;
+        }
+        console.error(`      ${token}`);
+    }
+    console.error('\n               Correct the claim, or add it to ALLOWED with a reason.');
+
+    return 1;
+};
+
+process.exitCode = run();

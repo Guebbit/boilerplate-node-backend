@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="<%= locale %>">
+<%- include("../layouts/pdf-template-head.ejs"); %>
+<body>
+<main class="centered">
+    <h1><%= title %></h1>
+
+    <% if (typeof meta !== 'undefined' && meta) { %>
+        <p><%= meta.numberLabel %></p>
+        <p><%= meta.dateLabel %></p>
+    <% } %>
+
+    <ul>
+        <% lines.forEach(function(line) { %>
+            <li><%= line %></li>
+        <% }); %>
+    </ul>
+
+    <% if (typeof vat !== 'undefined' && vat) { %>
+        <table>
+            <thead>
+                <tr>
+                    <th><%= vat.columns.description %></th>
+                    <th><%= vat.columns.quantity %></th>
+                    <th><%= vat.columns.unitPrice %></th>
+                    <th><%= vat.columns.net %></th>
+                    <th><%= vat.columns.rate %></th>
+                    <th><%= vat.columns.tax %></th>
+                    <th><%= vat.columns.gross %></th>
+                </tr>
+            </thead>
+            <tbody>
+                <% vat.rows.forEach(function(row) { %>
+                    <tr>
+                        <td><%= row.description %></td>
+                        <td><%= row.quantity %></td>
+                        <td><%= row.unitPrice %></td>
+                        <td><%= row.netAmount %></td>
+                        <td><%= row.taxRateLabel %></td>
+                        <td><%= row.taxAmount %></td>
+                        <td><%= row.grossAmount %></td>
+                    </tr>
+                <% }); %>
+            </tbody>
+        </table>
+        <p><%= vat.netTotalLabel %>: <%= vat.netTotal %></p>
+        <p><%= vat.taxTotalLabel %>: <%= vat.taxTotal %></p>
+
+        <address>
+            <% if (vat.supplier.legalName) { %>
+                <div><%= vat.supplier.legalName %></div>
+            <% } %>
+            <div><%= vat.supplier.vatNumberLine %></div>
+            <% if (vat.supplier.country) { %>
+                <div><%= vat.supplier.country %></div>
+            <% } %>
+        </address>
+    <% } %>
+</main>
+</body>
+</html>

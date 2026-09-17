@@ -1,0 +1,121 @@
+/**
+ * @module
+ * `POST /account/signup` controller — thin HTTP adapter over `accountService.signup`, plus the
+ * uploaded-image cleanup that has to run on every path except a genuine registration: failure, and
+ * the 201 rung 2 fabricates for a refused address, which the caller cannot tell apart from a real
+ * one.
+ */
+
+import type { Request, Response } from 'express';
+import { accountService } from '../services';
+import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { readUploadedImage } from '@infrastructure/adapters/image-store';
+import type { SignupRequest, SignupRequestMultipart, User } from '@types';
+import type { CastError } from 'mongoose';
+import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { authSignupTotal } from '../metrics';
+import { callerContextOf } from '@infrastructure/http/request';
+import { issueSession } from '../session/session';
+import { sendVerificationEmail } from '../services';
+import { userService } from '@modules/users';
+import { logAntibotRefusal } from '@infrastructure/http/middlewares/antibot-log';
+
+/**
+ * POST /account/signup
+ * Register a new user account.
+ */
+export const postSignup = (
+    request: Request<unknown, unknown, SignupRequest | SignupRequestMultipart>,
+    response: Response
+) => {
+    /*
+     * Read, not parsed against `SignupBody` — deliberate, not a gap. `accountService.signup`
+     * validates via `zodUserSchema`, whose messages are translated; the generated schema would
+     * answer first in Zod's own English (`tests/integration/locale.test.ts` asserts it doesn't).
+     */
+    const { email, username, password, passwordConfirm, analyticsConsent, termsAccepted } =
+        request.body;
+
+    // `= ''` because `signup` passes this straight to `zodUserSchema`, which wants a string.
+    const {
+        imageUrl = '',
+        thumbnailUrl,
+        pendingImageKey,
+        deleteUpload
+    } = readUploadedImage(request);
+
+    return accountService
+        .signup(
+            {
+                email,
+                username,
+                password,
+                passwordConfirm,
+                analyticsConsent,
+                termsAccepted,
+                imageUrl,
+                thumbnailUrl,
+                pendingImageKey
+            },
+            callerContextOf(request)
+        )
+        .then((result) => {
+            if (!result.success)
+                return deleteUpload().then(() => {
+                    authSignupTotal.inc({ status: 'failure' });
+                    rejectResponse(response, result.status, result.errors);
+                });
+
+            const { data } = result;
+            if (data === undefined) {
+                // A success verdict without a user is a broken service contract, not a bad request.
+                authSignupTotal.inc({ status: 'failure' });
+                return deleteUpload().then(() => {
+                    rejectResponse(response, 500, []);
+                });
+            }
+
+            // `Document#isNew` stays true until `.save()`: true means rung 2 refused and NO
+            // account was created. https://mongoosejs.com/docs/api/document.html#Document.prototype.isNew
+            if (data.isNew) {
+                // Rung 2 refused this address — `signup` still hands back an unsaved document so
+                // this answers exactly like a real signup. No verification email, and the upload
+                // is discarded same as any other refusal.
+                logAntibotRefusal('email-policy', request.method, request.path, 201);
+                authSignupTotal.inc({ status: 'refused' });
+                return deleteUpload().then(() => {
+                    successResponse<User>(response, userService.toUser(data), 201);
+                });
+            }
+
+            // Registration successful
+            authSignupTotal.inc({ status: 'success' });
+            /*
+             * Start email verification — the account works either way (`verified` is
+             * informational), so this is fire-and-forget like every other account email and the
+             * 201 does not wait on the queue.
+             */
+            void sendVerificationEmail(data, callerContextOf(request));
+
+            /*
+             * Signed in from here, as `unverified`: the role model says an unproven address
+             * browses freely and is stopped at `cart.self.checkout`, so making the new account log in
+             * again to reach that state was the old verification-as-a-gate model, not this one.
+             *
+             * Cookies only, and the body stays `User` — the frontend's `GET /account/refresh`
+             * bootstrap mints the access token, exactly as it does after the OAuth callback. That
+             * also keeps rung 2's refused 201 byte-identical in the BODY; only the absence of
+             * Set-Cookie distinguishes it, which is as close as indistinguishability gets once
+             * signup issues a session at all. Rung 2 is off by default, and the 409 for an
+             * address in use already leaks existence.
+             */
+            return issueSession(response, data.id).then(() => {
+                successResponse<User>(response, userService.toUser(data), 201);
+            });
+        })
+        .catch((error: CastError | Error) => {
+            authSignupTotal.inc({ status: 'failure' });
+            rejectDatabaseError(response, 'signup', error);
+            return deleteUpload();
+        });
+};

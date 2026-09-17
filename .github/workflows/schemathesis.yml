@@ -1,0 +1,74 @@
+name: Schemathesis (stateful contract fuzz)
+
+# Drives REQUEST SEQUENCES through openapi.yaml's declared `links` — create an order, pay it,
+# cancel it — the class of state-dependent failure `test:fuzz` and `test:prism` cannot see because
+# both only ever send one request at a time. See DETERMINISTIC_TOOLS.md, "The real gap".
+#
+# Schemathesis is a Python tool; it never enters this repo's dependency tree. It runs from its
+# own official Docker image, in this workflow only, against the real app booted via `npm run demo`
+# (in-memory Mongo, cache/queue disabled — the same profile the paired frontend's e2e suite uses).
+#
+# `--hypothesis-derandomize` pins the generation seed, so a red run is reproducible by re-running
+# it — the same requirement that keeps this a HUNTER-not-a-gate, like fuzz.yml and mutation.yml:
+# advisory, nightly, not a merge gate.
+
+on:
+    schedule:
+        # 04:00 UTC — after the fuzz run (03:45), so the two do not compete for runners.
+        - cron: '0 4 * * *'
+    workflow_dispatch:
+
+concurrency:
+    group: schemathesis-${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+env:
+    NODE_VERSION: 22
+    NODE_PORT: 3000
+
+jobs:
+    schemathesis:
+        runs-on: ubuntu-latest
+        timeout-minutes: 45
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  cache: npm
+                  cache-dependency-path: package-lock.json
+
+            - name: Install dependencies
+              run: npm ci
+
+            # Same demo profile the paired frontend's e2e suite boots against: in-memory Mongo,
+            # seeded fixtures, cache/queue disabled. Backgrounded so the next step can poll it.
+            - name: Boot the demo API
+              run: npm run demo &
+
+            # /products is public and unauthenticated — the same default probe
+            # scripts/testing/run-prism-smoke-test.ts uses to know the app is actually up.
+            - name: Wait for the API to accept requests
+              run: timeout 60 bash -c 'until curl -sf http://localhost:${{ env.NODE_PORT }}/products >/dev/null; do sleep 1; done'
+
+            # Schemathesis: https://schemathesis.readthedocs.io/en/stable/
+            # `--stateful=links` follows the OpenAPI `links` declared in openapi.yaml to chain
+            # requests (createOrder -> pay -> cancel, etc.) instead of firing one at a time.
+            # `--hypothesis-derandomize` pins the seed so a failure reproduces on re-run.
+            # `--network host`: the app listens directly on the runner, not in a container, so the
+            # container needs the runner's own network namespace to reach it on localhost.
+            - name: Run Schemathesis
+              run: |
+                  docker run --rm --network host \
+                    -v ${{ github.workspace }}/openapi.yaml:/spec/openapi.yaml:ro \
+                    schemathesis/schemathesis:stable \
+                    run /spec/openapi.yaml \
+                    --url http://localhost:${{ env.NODE_PORT }} \
+                    --checks all \
+                    --stateful=links \
+                    --hypothesis-derandomize

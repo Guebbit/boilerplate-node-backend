@@ -1,0 +1,59 @@
+{
+    "orders": {
+        "not-found": "L'ordine richiesto non è stato trovato",
+        "hard-deleted": "L'ordine è stato eliminato definitivamente.",
+        "soft-deleted": "L'ordine è stato eliminato logicamente (nascosto al cliente).",
+        "creation-success": "Ordine creato con successo.",
+        "cancel": {
+            "success": "Ordine annullato.",
+            "not-cancellable": "Questo ordine non può più essere annullato."
+        },
+        "transition": {
+            "not-allowed": "Questo ordine non può passare a quello stato dalla posizione in cui si trova.",
+            "cancel-elsewhere": "L'annullamento di un ordine esegue la sequenza di annullamento — annullalo tramite l'endpoint di annullamento dell'ordine."
+        },
+        "invoice": {
+            "meta-title": "Fattura — ordine {{order}}",
+            "title": "L'ordine è stato confermato",
+            "line": "{{title}} — {{quantity}} × {{price}}",
+            "number": "Fattura n. {{number}}",
+            "date": "Data: {{date}}",
+            "vat": {
+                "column-description": "Descrizione",
+                "column-quantity": "Qtà",
+                "column-unit-price": "Prezzo unitario (lordo)",
+                "column-net": "Imponibile",
+                "column-rate": "Aliquota IVA",
+                "column-tax": "IVA",
+                "column-gross": "Totale",
+                "net-total": "Totale imponibile",
+                "tax-total": "Totale IVA",
+                "vat-number": "Partita IVA: {{number}}",
+                "vat-number-missing": "Partita IVA non configurata"
+            }
+        },
+        "email-confirm": {
+            "subject": "Ordine confermato",
+            "meta-title": "Ordine confermato",
+            "greeting": "Ciao, {{name}}!",
+            "body": "Il tuo ordine è stato confermato.",
+            "line": "{{title}} — {{quantity}} × {{price}}",
+            "total": "Totale: {{total}}"
+        },
+        "email-transfer": {
+            "subject": "Completa il tuo ordine con un bonifico",
+            "meta-title": "Istruzioni per il bonifico",
+            "greeting": "Ciao, {{name}}!",
+            "body": "Il tuo ordine è riservato. Invia il bonifico qui sotto per completarlo — includi il riferimento per farci abbinare il tuo pagamento.",
+            "deadline": "Terremo il tuo ordine in attesa fino al {{payBy}}."
+        },
+        "email-transfer-expired": {
+            "subject": "Il tuo ordine è stato annullato — bonifico non ricevuto",
+            "meta-title": "Ordine annullato",
+            "greeting": "Ciao!",
+            "body": "Non abbiamo ricevuto il tuo bonifico in tempo, quindi questo ordine è stato annullato e i suoi articoli sono stati rilasciati."
+        },
+        "items-held": "Gli articoli di questo ordine non possono essere modificati mentre le scorte sono impegnate o già vendute.",
+        "insufficient-stock": "Alcuni articoli di questo ordine non sono più disponibili nella quantità richiesta — vedi `details.lines`."
+    }
+}

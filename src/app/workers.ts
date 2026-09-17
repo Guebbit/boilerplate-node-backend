@@ -1,0 +1,76 @@
+/**
+ * @module
+ * Queue-consumer registration for this build. This file is `app`; the email/PDF/image handlers it
+ * wires directly are `infrastructure`, because sending an email and rendering a PDF make sense in
+ * an application with no modules at all — naming those two queues is the assembly decision. A
+ * module-owned queue (webhooks' `worker.webhook.deliver`) is not named here at all: it is
+ * collected from every enabled module's own manifest instead, via `resolveConsumers` — see
+ * `ModuleConsumer` (`@kernel/registry.ts`) for why a module cannot call `consumeFromQueue` itself.
+ *
+ * See: docs/tools/rabbitmq.md
+ */
+
+import { consumeFromQueue, isQueueEnabled } from '@infrastructure/adapters/queue';
+import { logger } from '@infrastructure/adapters/logger';
+import { EMAIL_QUEUE, handleEmailJob } from '@infrastructure/adapters/email.worker';
+import { PDF_QUEUE, handlePdfJob } from '@infrastructure/adapters/pdf.worker';
+import {
+    IMAGE_QUEUE,
+    handleImageDigestJob,
+    registerImageWritebackResolver
+} from '@infrastructure/adapters/image.worker';
+import { EmailJobPayloadSchema, ImageDigestJobPayloadSchema, PdfJobPayloadSchema } from '@types';
+import { resolveImageTargets, resolveConsumers } from '@kernel/registry';
+import { enabledModules } from '../modules';
+
+/**
+ * Register all queue consumers. Called once during app startup — no-op when RabbitMQ is disabled.
+ *
+ * Worth knowing: **nothing publishes to `PDF_QUEUE`.** The invoice endpoint renders synchronously
+ * on the request path, so this consumer drains a producerless queue. Left registered on purpose as
+ * the worked example of the async pattern.
+ */
+export const registerWorkers = (): Promise<void> => {
+    /*
+     * Wired unconditionally, not gated behind `isQueueEnabled()` below: this is the one place
+     * allowed to see every module's `imageTargets` (see `ImageWriteback` in
+     * `infrastructure/adapters/image.worker.ts` for why the worker cannot resolve this itself),
+     * and registering it costs nothing when there is no broker to deliver a job in the first place.
+     */
+    const imageTargets = resolveImageTargets(enabledModules);
+    registerImageWritebackResolver((collection) => imageTargets[collection]?.writeback);
+
+    if (!isQueueEnabled()) return Promise.resolve();
+
+    logger.info('Registering queue workers...');
+    return Promise.all([
+        // `prefetch: 5` — sending an email is I/O-bound, not CPU-bound, so several in flight per
+        // worker is cheap.
+        consumeFromQueue({
+            queue: EMAIL_QUEUE,
+            handler: handleEmailJob,
+            schema: EmailJobPayloadSchema,
+            prefetch: 5
+        }),
+        // `prefetch: 2` — producerless today (see the module header); kept low in case that changes.
+        consumeFromQueue({
+            queue: PDF_QUEUE,
+            handler: handlePdfJob,
+            schema: PdfJobPayloadSchema,
+            prefetch: 2
+        }),
+        // `prefetch: 1` — decoding, re-encoding and thumbnailing is the most CPU-bound job this
+        // process runs; one at a time per worker keeps a burst of uploads from starving requests.
+        consumeFromQueue({
+            queue: IMAGE_QUEUE,
+            handler: handleImageDigestJob,
+            schema: ImageDigestJobPayloadSchema,
+            prefetch: 1
+        }),
+        // Every module-declared consumer — webhooks' `worker.webhook.deliver` today, whatever a
+        // future module adds tomorrow, with no edit needed here either time.
+        ...resolveConsumers(enabledModules).map((consumer) => consumeFromQueue(consumer))
+    ]).then(() => {
+        logger.info('Queue workers registered.');
+    });
+};

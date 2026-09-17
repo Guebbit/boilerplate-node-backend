@@ -1,0 +1,19 @@
+{
+    "users": {
+        "field-email-required": "L'email è obbligatoria",
+        "field-email-invalid": "Email non valida",
+        "field-username-required": "Il nome utente è obbligatorio",
+        "field-username-min": "Il nome è troppo corto",
+        "field-password-required": "La password è obbligatoria",
+        "field-password-min": "La password è troppo corta",
+        "field-password-lowercase": "La password deve contenere una lettera minuscola",
+        "field-password-uppercase": "La password deve contenere una lettera maiuscola",
+        "field-password-digit": "La password deve contenere una cifra",
+        "field-password-symbol": "La password deve contenere un simbolo",
+        "field-password-or-setup-required": "Imposta una password, oppure attiva l'email di configurazione per farla scegliere all'utente.",
+        "not-found": "L'utente richiesto non è stato trovato.",
+        "hard-deleted": "L'utente è stato eliminato definitivamente.",
+        "soft-deleted": "L'utente è stato eliminato logicamente (disattivato).",
+        "two-factor-disabled": "L'autenticazione a due fattori è stata disattivata per questo utente."
+    }
+}

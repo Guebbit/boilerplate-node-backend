@@ -1,0 +1,13 @@
+{
+    "delivery": {
+        "order-not-found": "L'ordine non è stato trovato",
+        "not-shipped": "Per questo ordine non è ancora partito nulla",
+        "email-shipped": {
+            "subject": "Il tuo ordine è in viaggio",
+            "meta-title": "Ordine spedito",
+            "greeting": "Ciao, {{name}}!",
+            "body": "Buone notizie — il tuo ordine ha lasciato il magazzino.",
+            "tracking": "Traccia il tuo pacco con il codice {{code}}."
+        }
+    }
+}

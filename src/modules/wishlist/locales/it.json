@@ -1,0 +1,9 @@
+{
+    "wishlist": {
+        "added": "Prodotto salvato nella lista dei desideri.",
+        "removed": "Prodotto rimosso dalla lista dei desideri.",
+        "moved-to-cart": "Prodotto spostato nel carrello.",
+        "not-found": "Questo prodotto non è nella tua lista dei desideri.",
+        "product-not-found": "Il prodotto richiesto non è stato trovato"
+    }
+}
