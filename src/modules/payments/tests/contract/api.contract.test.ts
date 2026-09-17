@@ -1,17 +1,20 @@
 /**
  * @module
- * Contract tests for /payments. Every route requires authentication and answers the same
- * `PaymentEnvelope`; what these pin is that each contract branch — the 201 intent, the 200
- * confirm, the three distinguishable 409s, the 404s — is actually reached over HTTP. The money
- * rules live in the unit suite.
+ * Contract tests for /payments. Every route requires authentication, and all but the reference
+ * lookup answer the same `PaymentEnvelope` — that one answers an `Order`, being the step before a
+ * payment exists. What these pin is that each contract branch — the 201 intent, the 200 confirm,
+ * the three distinguishable 409s, the 404s — is actually reached over HTTP. The money rules live
+ * in the unit suite.
  */
 
+import { Types } from 'mongoose';
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { signWebhookPayload, WEBHOOK_SIGNATURE_HEADER } from '@modules/payments/providers';
+import { buildReference } from '@modules/payments/domain/reference';
 import { paymentRepository } from '@modules/payments/repository';
 import { inventoryService } from '@modules/inventory';
 import { onDomainEvent } from '@kernel/events';
@@ -51,6 +54,24 @@ const authenticateWithIntent = async () => {
         );
 
     return { bearer, order, paymentId: String(response.body.data.id) };
+};
+
+/**
+ * A pending `bank_transfer` order carrying the reference its own checkout would have minted, and
+ * the customer who placed it — the id is pinned first, exactly as checkout pins one, so the code
+ * names the row it is written onto rather than a second id nobody else ever sees.
+ */
+const transferOrder = async () => {
+    const { user, bearer } = await authenticateAs('user');
+    const product = await createProduct({ price: 20 });
+    const id = new Types.ObjectId();
+    const reference = buildReference(id.toHexString());
+    const order = await createOrder(user, [toOrderItem(product, 1)], {
+        id: id.toHexString(),
+        paymentMethod: 'bank_transfer',
+        transferReference: reference
+    });
+    return { order, reference, customerBearer: bearer };
 };
 
 /** A customer who paid in full, over HTTP — the fixture the refund tests start from. */
@@ -493,6 +514,60 @@ describe('POST /payments/order/{orderId}/offline', () => {
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('GET /payments/order-by-reference', () => {
+    it('matches the contract for the order a reference names', async () => {
+        const { bearer } = await authenticateAs('owner');
+        const { order, reference } = await transferOrder();
+
+        const response = await api()
+            .get('/payments/order-by-reference')
+            .query({ ref: reference })
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.id).toBe(String(order._id));
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a reference that fails its check digits', async () => {
+        const { bearer } = await authenticateAs('owner');
+        const { reference } = await transferOrder();
+        const lastChar = reference.at(-1)!;
+        const typo = `${reference.slice(0, -1)}${lastChar === '0' ? '1' : '0'}`;
+
+        const response = await api()
+            .get('/payments/order-by-reference')
+            .query({ ref: typo })
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('refuses the order`s own owner — matching a transfer is admin-only', async () => {
+        const { customerBearer, reference } = await transferOrder();
+
+        const response = await api()
+            .get('/payments/order-by-reference')
+            .query({ ref: reference })
+            .set('Authorization', customerBearer);
+
+        expect(response.status).toBe(403);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a request that names no reference at all', async () => {
+        const { bearer } = await authenticateAs('owner');
+
+        const response = await api()
+            .get('/payments/order-by-reference')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
     });
 });

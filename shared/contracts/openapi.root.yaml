@@ -1325,6 +1325,8 @@ paths:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1intent'
     /payments/order/{orderId}:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1order~1{orderId}'
+    /payments/order-by-reference:
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1order-by-reference'
     /payments/order/{orderId}/refund:
         $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1order~1{orderId}~1refund'
     /payments/order/{orderId}/offline:
