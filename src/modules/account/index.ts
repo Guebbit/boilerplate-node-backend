@@ -1,13 +1,17 @@
 /**
  * @module
- * Account — public barrel: the only surface a sibling module may import (see
- * `modules/products/index.ts` for the rule). `session/`'s token surface is never published, since
- * every request goes through `kernel/authentication.ts`; what remains is the address book's one
- * cross-module surface, the address a checkout resolves. See docs/modules/account.md.
+ * Account — public barrel; the only surface a sibling module may import (see
+ * `docs/theory/strategic-ddd.md` §5 for the rule). `session/`'s token surface is never published,
+ * since every request goes through `kernel/authentication.ts`; `oauth/` and `two-factor/` are the
+ * same, reached only through `accountService`/`twoFactorService`. See docs/modules/account.md.
  */
 
-/** The single address a checkout may resolve — see `../cart`'s `customer-supplier` edge. */
-export { addressForCheckout } from './services/addresses';
+export * from './services';
 
-/** The stored address-book entry shape, for the one function above. */
-export type { AddressItem } from './model';
+export * from './emails';
+
+/** A fixture address-book row for a sibling's own tests. */
+export { makeAddressBook } from './factories';
+export type { AddressBookOverrides, AddressBookFixture } from './factories';
+
+export type * from './model';
