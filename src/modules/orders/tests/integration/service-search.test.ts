@@ -10,7 +10,7 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct, saveProduct, deleteProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import * as orderService from '@modules/orders/services';
-import type { OrderDocument } from '@modules/orders';
+import type { OrderDocument } from '../../model';
 
 setupTestDb();
 

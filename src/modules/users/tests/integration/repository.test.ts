@@ -8,9 +8,8 @@
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { makeUser, createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
-import { hashToken } from '@modules/users';
 import { userRepository } from '../../repository';
-import { TokenType, type UserDocument } from '@modules/users';
+import { TokenType, hashToken, type UserDocument } from '../../model';
 // The model directly: not exported from the barrel, since no sibling MODULE needs it there. A
 // spec reaching its own module's internals is correct — `eslint-plugin-boundaries` allows exactly
 // that.

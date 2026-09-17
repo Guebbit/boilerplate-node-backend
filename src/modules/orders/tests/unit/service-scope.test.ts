@@ -18,7 +18,7 @@
  */
 
 import { Types } from 'mongoose';
-import { orderService } from '@modules/orders';
+import { orderService } from '../../services';
 import { asCustomer, asOwner } from '../../../../../tests/support/callers';
 
 const USER_ID = '507f1f77bcf86cd799439011';

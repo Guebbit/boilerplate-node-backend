@@ -13,7 +13,7 @@ import { PROPERTY_RUNS_WITH_DATABASE } from '@tests/knobs';
 import { createProduct } from '@modules/products/tests/factories';
 import { productService } from '@modules/products';
 import { StockMovementReason } from '@types';
-import { inventoryService } from '@modules/inventory';
+import { inventoryService } from '../../service';
 import { stockMovementRepository } from '../../repository';
 import { stockMovementModel } from '../../model';
 

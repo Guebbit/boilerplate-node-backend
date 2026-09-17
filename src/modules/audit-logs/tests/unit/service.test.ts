@@ -7,7 +7,7 @@
  * response. The repository is mocked, since a real one can't be made to fail on demand.
  */
 
-import { auditLogService } from '@modules/audit-logs';
+import { auditLogService } from '../../service';
 import { auditLogRepository } from '@modules/audit-logs/repository';
 import { logger } from '@infrastructure/adapters/logger';
 import { type AuditEntry } from '@infrastructure/observability/audit';

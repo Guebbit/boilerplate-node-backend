@@ -28,7 +28,7 @@ import {
 } from '@modules/orders/services';
 import { orderRepository } from '../../repository';
 import { inventoryService } from '@modules/inventory';
-import type { OrderDocument } from '@modules/orders';
+import type { OrderDocument } from '../../model';
 import type { ResponseReject, ResponseSuccess } from '@infrastructure/http/response';
 import { asCustomer, asOwner } from '../../../../../tests/support/callers';
 
@@ -536,8 +536,8 @@ describe('remove', () => {
         await remove(order);
 
         const stored = await orderRepository.findById(String(order._id));
-        // `undefined`, not null: the field is unset, which is what `$exists: false` in
-        // `visibleScope` tests for.
+        // `undefined`, not null: the field is unset, which is what `callerScope`'s compiled
+        // `deletedAt: null` matches (Mongo's `{ field: null }` matches missing OR null).
         expect(stored!.deletedAt).toBeUndefined();
     });
 

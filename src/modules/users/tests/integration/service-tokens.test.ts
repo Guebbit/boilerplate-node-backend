@@ -8,9 +8,8 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import * as userService from '@modules/users/service';
-import { hashToken } from '@modules/users';
 import { userRepository } from '../../repository';
-import type { Token } from '@modules/users';
+import { hashToken, type Token } from '../../model';
 
 setupTestDb();
 

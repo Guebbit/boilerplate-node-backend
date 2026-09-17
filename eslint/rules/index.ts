@@ -19,9 +19,9 @@
  * violation there entirely.
  *
  * `barrel-allowed-sources` is the same shape of problem one level up: `eslint-plugin-boundaries`
- * answers "which module may a FILE import", but B1's deny-list is about which of a module's OWN
- * files its `index.ts` may `export *` from — a question about the barrel's own export
- * declarations, not about an import edge between two modules.
+ * answers "which module may a FILE import", but this rule is about which of a module's OWN files
+ * its `index.ts` may publish — a question about the barrel's own export declarations, not about
+ * an import edge between two modules.
  *
  * They live in this directory rather than in a published plugin package because they are about
  * THIS repo's conventions and have exactly one consumer. One file per rule so each can be

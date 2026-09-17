@@ -7,7 +7,7 @@
  */
 import { Types } from 'mongoose';
 import { makeUser, PLAIN_PASSWORD } from '@modules/users/factories';
-import { zodUserSchema } from '@modules/users';
+import { zodUserSchema } from '../../model';
 import { createUserBodyPasswordMin } from '@api/schemas.zod';
 import { isInBundledBreachList } from '@infrastructure/security/breached-passwords';
 import {

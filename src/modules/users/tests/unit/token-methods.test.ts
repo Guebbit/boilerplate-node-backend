@@ -5,8 +5,7 @@
  * only if one was loaded; getting that order wrong makes a logout throw after the tokens were
  * already revoked. The model is a double — none of this needs a database.
  */
-import { userSchema, type Token } from '@modules/users/model';
-import { TokenType, hashToken } from '@modules/users';
+import { userSchema, TokenType, hashToken, type Token } from '@modules/users/model';
 import { asStub } from '@tests/stub';
 
 const USER_ID = '507f1f77bcf86cd799439011';

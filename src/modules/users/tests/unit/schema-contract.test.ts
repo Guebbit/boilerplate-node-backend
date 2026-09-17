@@ -6,8 +6,7 @@
  * hook hashes only when `password` is modified so a profile update can't re-hash an existing hash.
  */
 import bcrypt from 'bcrypt';
-import { userSchema, applyUserTransform } from '@modules/users/model';
-import { TokenType } from '@modules/users';
+import { userSchema, applyUserTransform, TokenType } from '@modules/users/model';
 import { asStub } from '@tests/stub';
 import { PLAIN_PASSWORD } from '@modules/users/factories';
 import {

@@ -716,6 +716,13 @@ export default tseslint.config(
                     default: 'disallow',
                     message:
                         '{{from.element.type}} may not depend on {{to.element.type}} — see docs/theory/layers.md.',
+                    /*
+                     * The plugin skips same-element imports by default (`isInternalDependency`) —
+                     * without this, the own-barrel disallow below and the spec-vs-own-index split
+                     * never run, since both are same-module (same captured element) edges.
+                     * https://github.com/javierbrea/eslint-plugin-boundaries#dependencies-rule
+                     */
+                    checkInternals: true,
                     policies: [
                         /*
                          * ── What is permitted ─────────────────────────────────────────────────
@@ -855,7 +862,7 @@ export default tseslint.config(
                             from: { element: { type: ['module', 'domain'] } },
                             disallow: { to: { element: { type: ['module', 'domain'] } } },
                             message:
-                                'Import through @modules/<name>. If what you need isn’t exported, it belongs in that module’s index.ts, unless it’s a repository, a model or wiring — then ask the module’s service for it. Reaching its internals directly is what makes a module stop being deletable.'
+                                'Import through @modules/<name>. A model TYPE is already there via `export type *` — if what you need is a repository, the model’s runtime value, or wiring instead, ask the module’s service for it; none of those are ever published. Reaching internals directly is what makes a module stop being deletable.'
                         },
                         {
                             from: { element: { type: ['module', 'domain'] } },
@@ -1017,6 +1024,11 @@ export default tseslint.config(
                          * a sibling's `module.ts` manifest, because asserting cross-module cleanup
                          * means running the real registry.
                          *
+                         * `index.ts` is deliberately left off this list: a sibling's barrel is
+                         * already open through the one door above, and a spec reaching its OWN
+                         * module's barrel is exactly the self-import the disallow above exists to
+                         * block — tests included, per docs/theory/strategic-ddd.md §5.
+                         *
                          * Stated last so it overrides the module walls above for spec files only.
                          */
                         {
@@ -1025,7 +1037,7 @@ export default tseslint.config(
                                 to: {
                                     element: {
                                         type: ['module', 'domain'],
-                                        fileInternalPath: ['index.ts', 'module.ts', 'tests/**']
+                                        fileInternalPath: ['module.ts', 'tests/**']
                                     }
                                 }
                             }

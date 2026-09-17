@@ -29,6 +29,10 @@ coverage
 # per-run in-memory Mongo data directories (see tests/support/global-setup.ts)
 .tmp
 
+# Written and removed around one assertion in self-barrel-import.test.ts; ignored so a crash
+# mid-test never leaves it tracked.
+src/modules/*/__self-barrel-probe.ts
+
 # Claude Code's local state: session settings, and the worktrees it creates under
 # `.claude/worktrees/` — which `jest.config.js` already excludes from every test run. None of it
 # describes the project, so none of it is shared. `commands/` is the one exception: those slash
