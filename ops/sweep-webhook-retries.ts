@@ -15,6 +15,9 @@
  * Meant to run every minute, in the same cron container as the other scheduled jobs — see
  * docs/reference/ops.md#scheduled-jobs. Idempotent, so a missed or overlapping run costs nothing.
  *
+ * Removal: owned by `webhooks` — deletes with the module, along with the `sweep:webhook-retries`
+ * npm script and its `docker/crontab` line.
+ *
  * See: docs/reference/ops.md
  */
 import 'dotenv/config';

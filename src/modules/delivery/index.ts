@@ -1,16 +1,18 @@
 /**
  * @module
- * Delivery — public barrel, the only surface a sibling module may import (see
- * `modules/products/index.ts` for the rule). The domain rules are the load-bearing export: cart's
- * checkout prices the chosen method through `findShippingMethod`/`priceShipping`, so the frozen
- * order total and the `/methods` quote can never disagree. See: docs/modules/delivery.md
+ * Delivery — public barrel; the only surface a sibling module may import (see
+ * `docs/theory/strategic-ddd.md` §5 for the rule). The domain rules are the load-bearing export:
+ * cart's checkout prices the chosen method through `findShippingMethod`/`priceShipping`, so the
+ * frozen order total and the `/methods` quote can never disagree. `shipmentRepository` and the
+ * model's runtime stay inside — no other export here is a write handle on the collection.
+ *
+ * See: docs/modules/delivery.md
  */
 
-// Two pure functions and nothing else — a caller prices a shipping method without learning that
-// shipments, couriers, or a `shipmentRepository` exist.
-export { findShippingMethod, priceShipping } from './domain';
+export * from './domain';
 
-// The one shipment READ a sibling may make — the account data export. Still no
-// `shipmentRepository`, `shipOrder` or `runCourierAdvance`: this module's write surface and its
-// admin/courier internals stay exactly as invisible as they were.
-export { findShipmentsForOrders } from './service';
+export * from './service';
+
+export * from './emails';
+
+export type * from './model';

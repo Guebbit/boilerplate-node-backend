@@ -98,12 +98,12 @@ export const installErrorHandling = (app: Express): void => {
      * Process-level error handlers — audit unhandled rejections/exceptions
      */
     process.on('unhandledRejection', (reason) => {
+        // The raw `reason`, not a hand-flattened `{name, message}` — `redactFormat`
+        // (`adapters/logger.ts`) serializes an `Error` into `{name, message, stack}` before JSON
+        // output, so passing it whole is what keeps the stack in the log line outside production.
         auditLogger.error('process.unhandledRejection', {
             action: 'process.unhandledRejection',
-            reason:
-                reason instanceof Error
-                    ? { name: reason.name, message: reason.message }
-                    : String(reason)
+            error: reason
         });
     });
 
@@ -112,10 +112,11 @@ export const installErrorHandling = (app: Express): void => {
     if (process.env.NODE_ENV === 'test') return;
 
     process.on('uncaughtException', (error, origin) => {
+        // The raw `error`, not hand-picked `name`/`message` fields — see the unhandledRejection
+        // handler above for why.
         auditLogger.error('process.uncaughtException', {
             action: 'process.uncaughtException',
-            name: error.name,
-            message: error.message,
+            error,
             origin
         });
         // Logged first, then stopped, in every environment: the state after an uncaught exception

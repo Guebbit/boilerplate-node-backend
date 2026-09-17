@@ -7,7 +7,7 @@
  * answer with and is worth its own audit record.
  */
 
-import { userRepository } from '@modules/users';
+import { userService } from '@modules/users';
 import { logger } from '@infrastructure/adapters/logger';
 import {
     generateSuccess,
@@ -26,7 +26,7 @@ import { getRotationGraceMilliseconds } from '../session/config';
  */
 export const runTokenCleanup = (): Promise<void> => {
     logger.info('Token cleanup: starting expired-token removal');
-    return userRepository
+    return userService
         .tokenRemoveExpired(getRotationGraceMilliseconds())
         .then((removed) => {
             logger.info(`Token cleanup: completed, ${removed} document(s) pruned`);
@@ -34,9 +34,9 @@ export const runTokenCleanup = (): Promise<void> => {
         .catch((error: unknown) => {
             /*
              * Contained on purpose: a pre-flight step on login/refresh must never fail the
-             * request that triggered it. Logs `error.message`, not the Error itself — the logger
-             * serializes as JSON, and an Error has no enumerable properties, so logging it alone
-             * would print `"error":{}`.
+             * request that triggered it. The raw `error`, not a flattened message — `redactFormat`
+             * (`adapters/logger.ts`) serializes an `Error` into `{name, message, stack}` before
+             * JSON output, so passing it whole is what keeps the name and stack in the log line.
              */
             logger.error({
                 message: 'Token cleanup: failed',
@@ -55,7 +55,7 @@ export const runTokenCleanup = (): Promise<void> => {
 export const adminTokenCleanup = (
     context: CallerContext
 ): Promise<ResponseSuccess<{ removed: number }> | ResponseReject> =>
-    userRepository
+    userService
         .tokenRemoveExpired(getRotationGraceMilliseconds())
         .then((removed) => {
             emitAuditEvent(

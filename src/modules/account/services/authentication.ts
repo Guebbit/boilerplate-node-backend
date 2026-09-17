@@ -26,13 +26,7 @@ import {
     validationErrors
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
-import {
-    zodUserSchema,
-    userRepository,
-    userService,
-    type TokenType,
-    type UserDocument
-} from '@modules/users';
+import { zodUserSchema, userService, type TokenType, type UserDocument } from '@modules/users';
 import { parseFormBoolean, type CallerContext } from '@infrastructure/http/request';
 import { analyticsConsentSchema } from '@infrastructure/http/schemas';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -139,7 +133,7 @@ export const requestPasswordReset = (
     if (!email) return Promise.resolve(false);
 
     // Credentials included: issuing the token pushes onto this document's `tokens`.
-    return userRepository.findOneWithCredentials({ email }).then((user) => {
+    return userService.findByEmail(email).then((user) => {
         if (!user) return false;
 
         return tokenAdd(user, PASSWORD_RESET_TOKEN_TYPE, PASSWORD_RESET_TOKEN_TTL_MS).then(
@@ -197,7 +191,7 @@ export const sessionRevoke = (
     sessionId: string,
     context: CallerContext
 ): Promise<{ modifiedCount: number }> =>
-    userRepository.sessionRemove(userId, sessionId).then((result) => {
+    userService.sessionRemove(userId, sessionId).then((result) => {
         if (result.modifiedCount > 0)
             emitAuditEvent(
                 buildAuditEvent(context, {
@@ -218,26 +212,24 @@ export const logoutCurrentSession = (
     refreshToken: string | undefined,
     context: CallerContext
 ): Promise<void> =>
-    (refreshToken ? userRepository.tokenRemoveByValue(refreshToken) : Promise.resolve()).then(
-        () => {
-            emitAuditEvent(
-                buildAuditEvent(context, {
-                    action: accountAuditActions.AUTH_LOGGED_OUT,
-                    outcome: 'success'
-                })
-            );
-            /*
-             * This route authenticates by cookie alone, so there is no bearer to resolve and
-             * `distinctId` falls back to 'anonymous'. Under Umami the visitor is still separated
-             * by the IP + user-agent hash; under PostHog these rows do not attribute to a person.
-             */
-            emitAnalyticsEvent({
-                ...buildAnalyticsBase(context),
-                event: accountAnalyticsEvents.USER_LOGGED_OUT,
-                properties: { scope: 'session' }
-            });
-        }
-    );
+    (refreshToken ? userService.tokenRemoveByValue(refreshToken) : Promise.resolve()).then(() => {
+        emitAuditEvent(
+            buildAuditEvent(context, {
+                action: accountAuditActions.AUTH_LOGGED_OUT,
+                outcome: 'success'
+            })
+        );
+        /*
+         * This route authenticates by cookie alone, so there is no bearer to resolve and
+         * `distinctId` falls back to 'anonymous'. Under Umami the visitor is still separated
+         * by the IP + user-agent hash; under PostHog these rows do not attribute to a person.
+         */
+        emitAnalyticsEvent({
+            ...buildAnalyticsBase(context),
+            event: accountAnalyticsEvents.USER_LOGGED_OUT,
+            properties: { scope: 'session' }
+        });
+    });
 
 /**
  * The absence of a refresh cookie, as an error, so that the one `catch` below can tell the two
@@ -425,7 +417,7 @@ export const signup = (
                               // cleanup still tell the two apart.
                               Promise.resolve(
                                   generateSuccess<UserDocument>(
-                                      userRepository.build({
+                                      userService.build({
                                           email,
                                           username,
                                           imageUrl: imageUrl ?? '',
@@ -435,15 +427,15 @@ export const signup = (
                                       })
                                   )
                               )
-                            : userRepository
-                                  .findOne({ email })
-                                  .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
-                                      if (user)
+                            : userService
+                                  .emailTaken(email)
+                                  .then<ResponseSuccess<UserDocument> | ResponseReject>((taken) => {
+                                      if (taken)
                                           return generateReject(409, [
                                               t('account.signup.email-already-used')
                                           ]);
-                                      return userRepository
-                                          .create({
+                                      return userService
+                                          .createRaw({
                                               username,
                                               email,
                                               imageUrl: imageUrl ?? '',
@@ -526,7 +518,7 @@ export const login = (
         return Promise.resolve(generateReject(422, validationErrors(parseResult.error)));
 
     return (
-        userRepository
+        userService
             // `password` is select:false — this is one of the few flows that legitimately needs it.
             // `active: { $ne: false }` — not `true`, since a pre-migration row has no field at all —
             // blocks a deactivated account at the front door, same clause `findAuthenticatableById` uses.
@@ -559,7 +551,7 @@ export const tokenRemoveAll = (
     type: TokenType,
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    userRepository
+    userService
         // `tokens` is select:false — needed here to filter and re-save them
         .findByIdWithCredentials(userId)
         .then(
@@ -623,7 +615,7 @@ export const reauth = (
     password: string,
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
-    const outcome: Promise<ResponseSuccess<UserDocument> | ResponseReject> = userRepository
+    const outcome: Promise<ResponseSuccess<UserDocument> | ResponseReject> = userService
         // `password` is select:false — proving identity is this flow's whole point.
         .findByIdWithCredentials(userId)
         .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {

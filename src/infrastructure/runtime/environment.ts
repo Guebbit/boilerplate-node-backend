@@ -36,6 +36,22 @@ export const environmentNumber = (key: string, fallback: number, min?: number): 
 const DECIMAL = /^[+-]?\d+(\.\d+)?$/;
 
 /**
+ * The one decimal parse every reader and every boot-time validity check must share — `.5` (no
+ * leading digit), `1e-1` (scientific notation) and a whitespace-only string all coerce to a
+ * number under a bare `Number(raw)`, so a check written that way can wave a value through that
+ * this parser (and therefore {@link environmentDecimal}) then treats as unset. Two callers reading
+ * the same variable through two different parsers is exactly how a value passes validation and
+ * still silently falls back to the default — see `products/config.ts`'s `invalidVatRateConfig`.
+ *
+ * @param raw - the variable's raw string value, or `undefined` when unset
+ * @returns the parsed number, or `undefined` when `raw` is missing or not a whole-string decimal
+ */
+export const parseEnvironmentDecimal = (raw: string | undefined): number | undefined => {
+    const trimmed = raw?.trim();
+    return trimmed && DECIMAL.test(trimmed) ? Number.parseFloat(trimmed) : undefined;
+};
+
+/**
  * A decimal number from the environment, or `fallback` when the variable is unusable — the same
  * contract as {@link environmentNumber}, for a value that is not a whole number (a VAT rate, a
  * ratio) rather than a count.
@@ -43,10 +59,8 @@ const DECIMAL = /^[+-]?\d+(\.\d+)?$/;
  * @param key - the variable's name
  * @param fallback - the value a deployment gets when it did not usably set one
  */
-export const environmentDecimal = (key: string, fallback: number): number => {
-    const raw = process.env[key]?.trim();
-    return raw && DECIMAL.test(raw) ? Number.parseFloat(raw) : fallback;
-};
+export const environmentDecimal = (key: string, fallback: number): number =>
+    parseEnvironmentDecimal(process.env[key]) ?? fallback;
 
 /** The strings a deployment may write for "on", either case. */
 const TRUTHY = new Set(['1', 'true', 'yes', 'on']);

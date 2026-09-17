@@ -21,8 +21,8 @@ import { emitDomainEvent } from '@kernel/events';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { deliveryAuditActions } from './audit';
-import { orderService, orderRepository, ORDER_STATUS_CHANGED } from '@modules/orders';
-import { userRepository } from '@modules/users';
+import { orderService, ORDER_STATUS_CHANGED } from '@modules/orders';
+import { userService } from '@modules/users';
 import { SHIPPING_METHODS } from './domain';
 import { shipmentShippedEmail } from './emails';
 import { shipmentRepository } from './repository';
@@ -69,7 +69,7 @@ export const getForOrder = (
  * @param orderId - the order that moved
  */
 export const shipOrder = async (orderId: string): Promise<void> => {
-    const order = await orderRepository.findById(orderId);
+    const order = await orderService.getById(orderId);
     if (!order) return;
 
     const existing = await shipmentRepository.findByOrderId(orderId);
@@ -84,7 +84,7 @@ export const shipOrder = async (orderId: string): Promise<void> => {
     // `order.userId` is absent once a detach has erased the account — nothing to
     // look up, same as the pre-existing "id points at nobody" case just below.
     const user = order.userId
-        ? await userRepository.findById(String(order.userId)).catch(() => null)
+        ? await userService.getById(String(order.userId)).catch(() => null)
         : null;
     const mail = shipmentShippedEmail(
         user?.locale ?? getDefaultLocale(),
@@ -108,7 +108,7 @@ export const runCourierAdvance = async (context: CallerContext): Promise<number>
     let advanced = 0;
 
     for (const shipment of shipments) {
-        const order = await orderRepository.updateStatusIfIn(
+        const order = await orderService.updateStatusIfIn(
             String(shipment.orderId),
             ['shipped'],
             'delivered',

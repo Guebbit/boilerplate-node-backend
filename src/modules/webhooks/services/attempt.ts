@@ -1,12 +1,13 @@
 /**
  * @module
- * The core delivery attempt: sign, SSRF-check, POST (`@infrastructure/adapters/webhook-delivery`),
- * then record the outcome on the delivery row and the subscription's failure streak. Shared by the
- * worker resolver (`../module.ts`, queued attempts) and `replay` (`./deliveries.ts`, a synchronous
- * admin re-send) so the two paths cannot drift on what "recording an outcome" means.
+ * The core delivery attempt: sign, SSRF-check, POST (`../transport/webhook-delivery`), then record
+ * the outcome on the delivery row and the subscription's failure streak. Shared by
+ * {@link processDeliveryJob} below (queued attempts, registered on `../module.ts`'s `consumers`
+ * manifest entry) and `replay` (`./deliveries.ts`, a synchronous admin re-send) so the two paths
+ * cannot drift on what "recording an outcome" means.
  */
 
-import { deliverWebhook } from '@infrastructure/adapters/webhook-delivery';
+import { deliverWebhook } from '../transport/webhook-delivery';
 import type { WebhookDeliverJobPayload } from '@types';
 import { webhookSubscriptionRepository, webhookDeliveryRepository } from '../repository';
 import { activeRingSecrets } from '../secrets';
@@ -129,10 +130,9 @@ const deliverIfPossible = (
 
 /**
  * Process one `worker.webhook.deliver` job: claim the row it names, load its subscription, and
- * attempt it. This is the function `../module.ts` registers with the infra worker
- * (`@infrastructure/adapters/webhook.worker.ts`) at import time, the same shape
- * `registerAuditSink`/`registerImageWritebackResolver` already establish for "infra needs a
- * module's data and cannot import the module to get it".
+ * attempt it. This is the handler `../module.ts` declares on its `consumers` manifest entry —
+ * `app/workers.ts` is what actually calls `consumeFromQueue` with it, once per enabled module's
+ * consumer list, so deleting this module is enough to stop the queue meaning anything.
  *
  * @returns `true` (ack) once the row is claimed and settled, or when it was already claimed by a
  *   sibling (the sweep, or a redelivered duplicate) — nothing left for this delivery to do. A

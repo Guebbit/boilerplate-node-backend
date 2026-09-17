@@ -7,8 +7,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { createProduct } from '@modules/products/tests/factories';
-import { productRepository } from '@modules/products';
+import { createProduct, readProduct } from '@modules/products/tests/factories';
 import { makeLocale } from '@modules/locales/factories';
 import { localeRepository, translationRepository } from '@modules/locales/repository';
 import { localeService } from '@modules/locales/services';
@@ -205,7 +204,7 @@ describe('upsertEntityTranslations', () => {
             it: { fields: { title: 'Titolo nuovo' } }
         });
 
-        const stored = await productRepository.findById(id);
+        const stored = await readProduct(id);
         expect(stored?.title).toBe('New title');
         expect(stored?.description).toBe('New description');
     });
@@ -219,7 +218,7 @@ describe('upsertEntityTranslations', () => {
             it: { fields: { title: 'Titolo' } }
         });
 
-        const stored = await productRepository.findById(id);
+        const stored = await readProduct(id);
         expect(stored?.title).toBe('Untouched');
     });
 

@@ -15,7 +15,7 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { productRepository } from '@modules/products';
+import { productService } from '@modules/products';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
@@ -67,7 +67,7 @@ const upsertCartItem = (
     quantity: number,
     mode: 'set' | 'add'
 ): Promise<ResponseSuccess<CartView> | ResponseReject> =>
-    productRepository.findPublicById(id).then((product) => {
+    productService.findPublicById(id).then((product) => {
         if (!product) return generateReject(404, [t('products.not-found')]);
 
         return cartRepository

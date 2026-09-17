@@ -11,6 +11,10 @@ import {
     search,
     getById,
     create,
+    createRaw,
+    countOpenBankTransfers,
+    getByTransferReference,
+    updateStatusIfIn,
     recordCreated,
     update,
     updateById,
@@ -18,7 +22,7 @@ import {
     removeById
 } from './crud';
 import { detachUserId, anonymizeDueOrders } from './retention';
-import { callerScope, withActions } from './scope';
+import { callerScope, ownerScope, withActions } from './scope';
 import { cancelById, retryPendingEffects } from './cancel';
 
 /*
@@ -31,6 +35,10 @@ export {
     search,
     getById,
     create,
+    createRaw,
+    countOpenBankTransfers,
+    getByTransferReference,
+    updateStatusIfIn,
     recordCreated,
     retractOrder,
     update,
@@ -40,7 +48,7 @@ export {
 } from './crud';
 export { cancelById, retryPendingEffects } from './cancel';
 export { detachUserId, anonymizeDueOrders } from './retention';
-export { callerScope, actorOf, withActions } from './scope';
+export { callerScope, actorOf, ownerScope, withActions } from './scope';
 export { freezeOrderLines } from './snapshot';
 export { allocateInvoiceNumber } from './invoice-numbering';
 
@@ -49,7 +57,12 @@ export const orderService = {
     search,
     getById,
     callerScope,
+    ownerScope,
     create,
+    createRaw,
+    countOpenBankTransfers,
+    getByTransferReference,
+    updateStatusIfIn,
     recordCreated,
     update,
     updateById,

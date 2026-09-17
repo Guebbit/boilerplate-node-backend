@@ -13,7 +13,7 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { orderRepository, type OrderDocument } from '@modules/orders';
+import { orderService, type OrderDocument } from '@modules/orders';
 import { parseReference } from '../domain/reference';
 
 /**
@@ -37,9 +37,10 @@ export const getOrderByReference = (
     const parsed = parseReference(ref);
     if (!parsed) return Promise.resolve(generateReject(404, [t('payments.order-not-found')]));
 
-    const found = isRawObjectId(parsed)
-        ? orderRepository.findById(parsed)
-        : orderRepository.findOne({ transferReference: parsed });
+    // `getById` answers `undefined` for a miss, `getByTransferReference` `null` — both mean 404.
+    const found: Promise<OrderDocument | null | undefined> = isRawObjectId(parsed)
+        ? orderService.getById(parsed)
+        : orderService.getByTransferReference(parsed);
 
     return found.then((order) =>
         order ? generateSuccess(order) : generateReject(404, [t('payments.order-not-found')])

@@ -14,7 +14,7 @@ import { setCookie, cookieHeader } from '@tests/cookies';
 import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
-import { userRepository } from '@modules/users';
+import { userRepository } from '@modules/users/tests/factories';
 import { EMAIL_VERIFY_TOKEN_TYPE } from '@modules/account/services';
 import { TokenType } from '@modules/users';
 import * as mailerPort from '@infrastructure/adapters/mailer';

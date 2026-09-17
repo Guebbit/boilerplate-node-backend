@@ -93,8 +93,9 @@ configuration, for the reason above.
 signal, not a probe on every request, so the very first request after a broker dies (before
 anything has failed against it yet) still takes the queue path. When `enqueueImageDigest`'s
 `publishToQueue` call then fails, it falls back to running the digest inline — same code as the
-no-broker path, but reached from `users`/`products` services' `enqueueIfPending` instead of the
-middleware. That fallback is **awaited**, not fire-and-forget: without it, the response can return
+no-broker path, but reached from the shared `enqueueIfImagePending` helper that `users`'/`products`'
+`enqueueIfPending` both call, instead of the middleware. That fallback is **awaited**, not
+fire-and-forget: without it, the response can return
 before the file is on disk, and if the document changes before the inline run's writeback
 resolves, the conditional writeback described below "corrects" it by deleting the file the inline
 run just promoted.

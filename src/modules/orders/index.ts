@@ -1,32 +1,19 @@
 /**
  * @module
- * Orders — public barrel, the only surface a sibling module may import. The schema and its
- * transform stay out; only tests reach `@modules/orders/model` directly. `cart` reaches the
- * repository rather than the service because checkout owns its own transaction and rolls it back
- * if clearing the cart fails. `sumLineItems`, `orderTotal`, `canTransition` and
- * `statusesLeadingTo` are published since `cart`/`payments` must reuse this module's arithmetic
- * and lifecycle rather than keep a second opinion; `Money` and `ORDER_LIFECYCLE` stay inside.
+ * Orders — public barrel, the only surface a sibling module may import (see
+ * `docs/theory/strategic-ddd.md` §5 for the rule). `orderRepository` and the model's runtime stay
+ * inside — `cart`'s checkout composes its own transaction from `orderService.createRaw`,
+ * `freezeOrderLines`, `allocateInvoiceNumber` and `retractOrder`, the same granular pieces
+ * `create` itself is built from, never the collection directly. This module's own reach INTO
+ * `users` — `USER_DELETED`, `userService.getById` — is `module.ts`'s business, not this barrel's.
  */
 
-export { orderService } from './services';
-// `cart` reports `order_created` from its own checkout, calling back into the owning module
-// rather than this one reaching up for a `Request` it must never see.
-export { orderRepository } from './repository';
-// `cart`'s checkout runs the same compensation as this module's own `create`: an order written
-// and then refused by a later step. Shared rather than copied — the two failure paths are one.
-export { retractOrder } from './services';
-export { ORDER_CANCELLED, ORDER_STATUS_CHANGED, ORDER_CREATED } from './events';
-// `cart` sends the confirmation itself: only the checkout has the recipient's locale in scope.
-// A `bank_transfer` checkout sends `bankTransferInstructionsEmail` instead — there is nothing to
-// confirm yet, only what the customer still has to do.
-export { orderConfirmEmail, bankTransferInstructionsEmail } from './emails';
-// `cart`'s checkout freezes its own line snapshots the same way `create()` does — one builder,
-// not a second opinion on how a buyer's language gets embedded.
-export { freezeOrderLines } from './services';
-// `cart`'s checkout assigns its own invoice number at the same point, for the same reason: one
-// allocator, not a second opinion on when a number is minted.
-export { allocateInvoiceNumber } from './services';
-// `OrderDocumentItem` stays unpublished — tests derive order lines from a built product
-// (`tests/factories.ts`'s `toOrderItem`) instead of casting around the type.
-export type { OrderDocument } from './model';
-export { sumLineItems, orderTotal, canTransition, statusesLeadingTo } from './domain';
+export * from './services';
+
+export * from './domain';
+
+export * from './events';
+
+export * from './emails';
+
+export type * from './model';

@@ -7,7 +7,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { productRepository } from '@modules/products';
+import { productRepository } from '../../repository';
 import { createProduct } from '@modules/products/tests/factories';
 
 setupTestDb();

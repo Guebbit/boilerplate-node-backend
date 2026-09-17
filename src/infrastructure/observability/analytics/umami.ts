@@ -132,7 +132,7 @@ export const umamiAnalyticsProvider: AnalyticsProvider = {
                 // Analytics is not worth an unhandled rejection. Debug rather than warn: a
                 // developer running the API without the analytics container up would otherwise
                 // get one warning per request.
-                logger.debug('analytics', 'Umami event delivery failed', String(error));
+                logger.debug({ message: 'Umami event delivery failed', error });
             });
     },
 

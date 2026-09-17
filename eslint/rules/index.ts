@@ -18,16 +18,23 @@
  * specifier, and a barrel import — `{ userRepository } from '@modules/users'` — hides the
  * violation there entirely.
  *
+ * `barrel-allowed-sources` is the same shape of problem one level up: `eslint-plugin-boundaries`
+ * answers "which module may a FILE import", but this rule is about which of a module's OWN files
+ * its `index.ts` may publish — a question about the barrel's own export declarations, not about
+ * an import edge between two modules.
+ *
  * They live in this directory rather than in a published plugin package because they are about
  * THIS repo's conventions and have exactly one consumer. One file per rule so each can be
  * unit-tested with `RuleTester` — see `tests/unit/eslint/`.
  */
+import { barrelAllowedSources } from './barrel-allowed-sources';
 import { commentLinks } from './comment-links';
 import { controllerChainMustCatch } from './controller-chain-must-catch';
 import { noHardcodedUserText } from './no-hardcoded-user-text';
 import { noPersistenceImports } from './no-persistence-imports';
 
 export default {
+    'barrel-allowed-sources': barrelAllowedSources,
     'comment-links': commentLinks,
     'controller-chain-must-catch': controllerChainMustCatch,
     'no-hardcoded-user-text': noHardcodedUserText,

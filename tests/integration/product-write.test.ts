@@ -10,7 +10,6 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
 import { createProduct } from '@modules/products/tests/factories';
 import { productService } from '@modules/products';
-import { productRepository } from '@modules/products';
 import type { ProductDocument } from '@modules/products';
 import { translationRepository, localeRepository } from '@modules/locales/repository';
 import { makeLocale } from '@modules/locales/factories';
@@ -69,7 +68,7 @@ describe('productService.writeCreate', () => {
     });
 
     it('rejects, and writes neither the product nor a translation row, when the fallback locale is missing', async () => {
-        const before = await productRepository.search({}, undefined);
+        const before = await productService.search({}, undefined);
 
         const result = await productService.writeCreate(
             { price: 10, translations: { it: { title: 'Solo italiano' } } },
@@ -78,12 +77,12 @@ describe('productService.writeCreate', () => {
 
         expect(result.success).toBe(false);
 
-        const after = await productRepository.search({}, undefined);
+        const after = await productService.search({}, undefined);
         expect(after.items).toHaveLength(before.items.length);
     });
 
     it('rejects, and writes nothing, when a translation locale does not exist', async () => {
-        const before = await productRepository.search({}, undefined);
+        const before = await productService.search({}, undefined);
 
         const result = await productService.writeCreate(
             {
@@ -99,7 +98,7 @@ describe('productService.writeCreate', () => {
             true
         );
 
-        const after = await productRepository.search({}, undefined);
+        const after = await productService.search({}, undefined);
         expect(after.items).toHaveLength(before.items.length);
     });
 });

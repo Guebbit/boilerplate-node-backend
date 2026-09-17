@@ -18,11 +18,11 @@ import {
 } from '@infrastructure/http/response';
 import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
 import { imageStore } from '@infrastructure/adapters/image-store';
-import { zodUserSchema, TokenType, hashToken } from './model';
+import { zodUserSchema, TokenType, hashToken, toUser } from './model';
 import type { UserDocument } from './model';
 import type { CreateUserRequest, SearchUsersRequest, UpdateUserByIdRequest } from '@types';
 import { userRepository } from './repository';
-import { enqueueImageDigest } from '@infrastructure/adapters/image.worker';
+import { enqueueIfImagePending } from '@infrastructure/adapters/image.worker';
 import { emitDomainEvent } from '@kernel/events';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -68,26 +68,18 @@ export const search = (
 }> => userRepository.search(filters);
 
 /** Get a single user by ID. Returns undefined when no id is provided. */
-export const getById = (id?: string) => {
-    if (!id) return Promise.resolve();
+export const getById = (id?: string): Promise<UserDocument | undefined> => {
+    if (!id) return Promise.resolve(undefined);
     return userRepository.findById(id).then((user) => user ?? undefined);
 };
 
 /**
  * Enqueue the digest job for a just-persisted user, when its write carried a pending upload.
- * `pendingImageKey` is only ever set while the queue looked ready at upload time (see
- * `quarantineUploadedImages`) — but a publish can still lose that race to an outage, in which case
- * `enqueueImageDigest` degrades to digesting right here. Awaited, unlike a plain queue publish:
- * that inline run is what actually moves the file onto disk, and a caller that returned first
- * would answer with a document nothing has finished writing yet.
+ * `pendingImageKey` is only ever set while the queue looked ready at upload time — see
+ * `quarantineUploadedImages`, and {@link enqueueIfImagePending} for what happens with it.
  */
 export const enqueueIfPending = (user: UserDocument): Promise<UserDocument> =>
-    user.pendingImageKey
-        ? enqueueImageDigest(
-              { collection: 'users', documentId: String(user._id), key: user.pendingImageKey },
-              userRepository.writebackImage
-          ).then(() => user)
-        : Promise.resolve(user);
+    enqueueIfImagePending(user, 'users', userRepository.writebackImage);
 
 /**
  * Create a new user document, with no email confirmation step — the self-service path is
@@ -118,11 +110,12 @@ export const create = (
         .create({ verifiedAt: new Date(), role: 'customer', ...data, password })
         .then((user) => {
             /*
-             * The membership, not just the column — same reasoning as `update()`'s dual write below.
-             * Without it a brand-new staff account is a role that LOOKS granted and grants nothing,
-             * because `rolesOf`'s membership lookup finds no row and the fallback only reads on the
-             * scope this account is later resolved in. Awaited before the audit event: a rejected
-             * escalation must fail the whole create, not just the column that already saved.
+             * The membership, not just the column — same reasoning as `update()`'s dual write
+             * below. Without it a brand-new staff account is a role that LOOKS granted and grants
+             * nothing, because `rolesOf`'s membership lookup finds no row and the fallback only
+             * reads on the scope this account is later resolved in. Awaited before the audit
+             * event: a rejected escalation must fail the whole create, not just the column that
+             * already saved.
              */
             const membership =
                 data.role === undefined
@@ -145,8 +138,8 @@ export const create = (
                     target_type: 'user',
                     target_id: String(user._id),
                     // Recorded here, not by `account`'s domain-event handler: that handler has no
-                    // request to build a `CallerContext` from, only a `userId`, so the admin's action
-                    // is the only point in the flow with someone to attribute it to.
+                    // request to build a `CallerContext` from, only a `userId`, so the admin's
+                    // action is the only point in the flow with someone to attribute it to.
                     ...(passwordProvided
                         ? {}
                         : { metadata: { sendSetupEmail: Boolean(data.sendSetupEmail) } })
@@ -495,18 +488,141 @@ export const removeById = (
             user ? remove(user, hardDelete) : generateReject(404, [t('users.not-found')])
         );
 
+/*
+ * `account` end of the one shared-kernel relationship in this repo (`docs/theory/strategic-ddd.md`
+ * §5): the User document it authenticates, resets, links to OAuth, and 2FA-protects. Everything
+ * below is a thin pass-through to `userRepository`, named for the question it answers so
+ * `account`'s files read `userService.findByIdWithCredentials(...)` and the like directly. `save`
+ * stays a pass-through on purpose: `account` builds up a mutated `UserDocument` across many fields
+ * (password, 2FA, sessions, tokens) before persisting it, which is exactly the co-administration
+ * the shared kernel exists to allow, not a generic write handle handed to an unrelated caller.
+ */
+
+/** An authenticatable account by id — `active`/soft-delete already excluded by the query. */
+const findAuthenticatableById = (id: string) => userRepository.findAuthenticatableById(id);
+
+/** The hydrated document with every `select: false` field loaded (password, tokens, 2FA). */
+const findByIdWithCredentials = (id: string) => userRepository.findByIdWithCredentials(id);
+
+/** The first user matching a credentialed filter, `select: false` fields included. */
+const findOneWithCredentials = (
+    where: Parameters<typeof userRepository.findOneWithCredentials>[0]
+) => userRepository.findOneWithCredentials(where);
+
+/** The hydrated document with the pending-email-change field loaded. */
+const findByIdWithPendingEmail = (id: string) => userRepository.findByIdWithPendingEmail(id);
+
+/** Whether `email` (or its pending-change counterpart) is already taken by another account. */
+const emailOrPendingEmailTaken = (email: string, excludingId: string) =>
+    userRepository.emailOrPendingEmailTaken(email, excludingId);
+
+/**
+ * The account holding a token of this exact value and type — not filtered by expiry. A caller
+ * that needs "live" (exists, right type, not expired) checks `entry.expiration` itself, same as
+ * `account/services/tokens.ts`'s `findLiveTokenEntry`.
+ */
+const findByToken = (token: string, type: Parameters<typeof userRepository.findByToken>[1]) =>
+    userRepository.findByToken(token, type);
+
+/** The account currently holding this exact token value, any type. */
+const findByTokenValue = (token: string) => userRepository.findByTokenValue(token);
+
+/** Persist an already-loaded, already-mutated document — see the file docblock above. */
+const save = (user: UserDocument) => userRepository.save(user);
+
+/**
+ * Construct a document WITHOUT persisting it — signup's anti-automation deception path answers
+ * with a document that looks real and was never written, so a policy-refused attempt gets nothing
+ * to distinguish it from a genuine one.
+ */
+const build = (data: Parameters<typeof userRepository.build>[0]) => userRepository.build(data);
+
+/**
+ * The raw insert `create` above builds toward — self-service signup runs its OWN orchestration
+ * (anti-automation checks, the duplicate-email pre-check, the verification email), never
+ * `create()`'s admin-panel one (role assignment, admin audit/analytics).
+ */
+const createRaw = (data: Parameters<typeof userRepository.create>[0]) =>
+    userRepository.create(data);
+
+/** Whether an account already exists for this email — signup's duplicate-email pre-check. */
+const emailTaken = (email: string): Promise<boolean> =>
+    userRepository.findOne({ email }).then((user) => user !== null);
+
+/** Revoke one refresh token by its subdocument id — "log out that device", not every device. */
+const sessionRemove = (id: string, sessionId: string) =>
+    userRepository.sessionRemove(id, sessionId);
+
+/** Spend a refresh token by value alone, no user id in the filter — the single-session logout. */
+const tokenRemoveByValue = (token: string) => userRepository.tokenRemoveByValue(token);
+
+/** Sweep every token past its rotation grace window. */
+const tokenRemoveExpired = (supersededGraceMs: number) =>
+    userRepository.tokenRemoveExpired(supersededGraceMs);
+
+/** Mark a refresh token superseded — the one-time-use half of rotation. */
+const tokenSupersede = (token: string) => userRepository.tokenSupersede(token);
+
+/** Bump a refresh token's last-used stamp, without touching anything else on the document. */
+const tokenTouch = (token: string) => userRepository.tokenTouch(token);
+
+/** Attach a federated identity to an existing account. */
+const linkOAuthAccount = (
+    userId: string,
+    account: Parameters<typeof userRepository.linkOAuthAccount>[1]
+) => userRepository.linkOAuthAccount(userId, account);
+
+/**
+ * Every account inactive past the warning threshold, never yet warned —
+ * `ops/reap-inactive-accounts.ts`'s first stage.
+ */
+const findInactiveUnwarned = (cutoff: Date) => userRepository.findInactiveUnwarned(cutoff);
+
+/**
+ * Every account warned, and still inactive past the grace window — the reaper's soft-delete
+ * stage.
+ */
+const findWarnedStillInactive = (cutoff: Date) => userRepository.findWarnedStillInactive(cutoff);
+
+/** Every account soft-deleted by the reaper past ITS OWN grace window — the hard-delete stage. */
+const findReaperSoftDeletedPastGrace = (cutoff: Date) =>
+    userRepository.findReaperSoftDeletedPastGrace(cutoff);
+
 /** The module's barrel export — the controllers call through this, never the bare functions. */
 export const userService = {
     validateData,
     search,
     getById,
     create,
+    createRaw,
+    build,
     update,
     updateById,
     remove,
     removeById,
     adminDisableTwoFactor,
     findByEmail,
+    emailTaken,
+    findAuthenticatableById,
+    findByIdWithCredentials,
+    findOneWithCredentials,
+    findByIdWithPendingEmail,
+    emailOrPendingEmailTaken,
+    findByToken,
+    findByTokenValue,
+    save,
+    sessionRemove,
+    tokenRemoveByValue,
+    tokenRemoveExpired,
+    tokenSupersede,
+    tokenTouch,
+    linkOAuthAccount,
+    findInactiveUnwarned,
+    findWarnedStillInactive,
+    findReaperSoftDeletedPastGrace,
     consumeToken,
-    enqueueIfPending
+    enqueueIfPending,
+    // A controller may not reach `./model` directly (the persistence wall), so the shaping
+    // helper it needs to build a response rides through the service instead.
+    toUser
 };

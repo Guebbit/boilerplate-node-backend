@@ -49,6 +49,7 @@ import { isQueueEnabled, publishToQueue } from '@infrastructure/adapters/queue';
 import { invalidateCacheTagsLogged } from '@infrastructure/http/middlewares/cache';
 import {
     digestQuarantinedImage,
+    enqueueIfImagePending,
     enqueueImageDigest,
     handleImageDigestJob,
     registerImageWritebackResolver,
@@ -278,5 +279,62 @@ describe('enqueueImageDigest', () => {
 
         expect(mockedRemove).toHaveBeenCalledWith('/images/abc123.png');
         expect(mockedInvalidateCacheTagsLogged).not.toHaveBeenCalled();
+    });
+});
+
+describe('enqueueIfImagePending', () => {
+    const writeback: jest.MockedFunction<ImageWriteback> = jest.fn();
+
+    beforeEach(() => {
+        writeback.mockReset();
+    });
+
+    it('passes the document straight through when nothing is pending', async () => {
+        const document = { _id: 'doc1' };
+
+        await expect(enqueueIfImagePending(document, 'products', writeback)).resolves.toBe(
+            document
+        );
+
+        expect(mockedPublishToQueue).not.toHaveBeenCalled();
+        expect(writeback).not.toHaveBeenCalled();
+    });
+
+    /**
+     * The residual race `docs/tools/image-processing.md` describes: the queue looked ready at
+     * upload time, but the broker died before this publish. The awaited inline fallback is what's
+     * under test — the caller must not resolve before the writeback it depends on has run.
+     */
+    it('awaits the inline fallback when a pending publish fails', async () => {
+        const document = { _id: 'doc1', pendingImageKey: 'abc123.png' };
+        mockedIsQueueEnabled.mockReturnValue(true);
+        mockedPublishToQueue.mockResolvedValue(false);
+        primeSuccessfulDigest();
+        writeback.mockResolvedValue(true);
+
+        await expect(enqueueIfImagePending(document, 'products', writeback)).resolves.toBe(
+            document
+        );
+
+        expect(writeback).toHaveBeenCalledWith('doc1', 'abc123.png', {
+            imageUrl: '/images/abc123.png',
+            thumbnailUrl: '/images/thumbs/v1/abc123.webp'
+        });
+    });
+
+    it('publishes and resolves with the document unchanged when the broker accepts the job', async () => {
+        const document = { _id: 'doc1', pendingImageKey: 'abc123.png' };
+        mockedIsQueueEnabled.mockReturnValue(true);
+        mockedPublishToQueue.mockResolvedValue(true);
+
+        await expect(enqueueIfImagePending(document, 'products', writeback)).resolves.toBe(
+            document
+        );
+
+        expect(mockedPublishToQueue).toHaveBeenCalledWith({
+            queue: 'worker.image.digest',
+            payload: { collection: 'products', documentId: 'doc1', key: 'abc123.png' }
+        });
+        expect(writeback).not.toHaveBeenCalled();
     });
 });

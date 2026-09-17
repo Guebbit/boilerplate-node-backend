@@ -12,8 +12,9 @@
 import { assertRequiredConfig } from '@kernel/required-config';
 import { vatRateDefault, vatRateReduced } from '../../config';
 import productsModule from '../../module';
+import { withoutEnvironmentInThisFile } from '@tests/environment';
 
-/** The variables this gate reads, restored after each case so ordering cannot matter. */
+/** Every variable this gate reads, cleared before each case and put back after the file. */
 const TOUCHED = [
     'NODE_ENV',
     'NODE_URL',
@@ -25,8 +26,7 @@ const TOUCHED = [
     'NODE_WEBHOOK_DEMO_SINK_URL'
 ] as const;
 
-/** Every var in `TOUCHED` as it was found, so `afterEach` can restore an unset one as unset. */
-const original = new Map(TOUCHED.map((key) => [key, process.env[key]]));
+withoutEnvironmentInThisFile(TOUCHED);
 
 /** A deployment that satisfies every check, for a case to break one thing in. */
 const configure = (): void => {
@@ -34,19 +34,7 @@ const configure = (): void => {
     process.env.NODE_URL = 'https://api.example.com/';
     process.env.NODE_VAT_RATE_DEFAULT = '0.22';
     process.env.NODE_VAT_RATE_REDUCED = '0.1';
-    // The app-level and other modules' gates run in the same pass; this suite is about this
-    // module's own variables, so the few that a developer's `.env` happens to set are cleared.
-    delete process.env.NODE_SMTP_HOST;
-    delete process.env.NODE_ANTIBOT_PROVIDER;
-    delete process.env.NODE_ANTIBOT_EMAIL_POLICY;
-    delete process.env.NODE_WEBHOOK_DEMO_SINK_URL;
 };
-
-afterEach(() => {
-    for (const [key, value] of original)
-        if (value === undefined) delete process.env[key];
-        else process.env[key] = value;
-});
 
 describe('the VAT rate boot gate', () => {
     it('refuses to boot with neither rate set', () => {
@@ -59,7 +47,14 @@ describe('the VAT rate boot gate', () => {
         );
     });
 
-    it.each(['abc', '1', '1.5', '-0.1'])(
+    /*
+     * `.5` and `1e-1` both coerce to an in-range number under a bare `Number(raw)` — 0.5 and 0.1
+     * respectively — which is exactly the bug this gate must not repeat: `vatRateDefault` reads
+     * through `parseEnvironmentDecimal`'s stricter grammar and would silently fall back to 0.22
+     * for either, so a value this gate accepted would already be the wrong charged rate. A
+     * whitespace-only string is the same story once trimmed to empty.
+     */
+    it.each(['abc', '1', '1.5', '-0.1', '.5', '1e-1', ' '])(
         'refuses a rate that does not parse into [0, 1) (%s)',
         (rate) => {
             configure();

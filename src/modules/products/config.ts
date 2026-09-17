@@ -9,7 +9,7 @@
  * returns onto a line; it never reads a rate itself.
  */
 
-import { environmentDecimal } from '@infrastructure/runtime/environment';
+import { environmentDecimal, parseEnvironmentDecimal } from '@infrastructure/runtime/environment';
 
 /**
  * The VAT rate applied to a product with no `taxClass` — the shop's default, and every product's
@@ -26,10 +26,16 @@ export const vatRateDefault = (): number => environmentDecimal('NODE_VAT_RATE_DE
  */
 export const vatRateReduced = (): number => environmentDecimal('NODE_VAT_RATE_REDUCED', 0.1);
 
-/** A decimal rate is valid VAT config only inside `[0, 1)` — 1 (100%) or more is certainly a typo. */
+/**
+ * A decimal rate is valid VAT config only inside `[0, 1)` — 1 (100%) or more is certainly a typo.
+ * Parsed through {@link parseEnvironmentDecimal}, the same parser {@link vatRateDefault} and
+ * {@link vatRateReduced} read the variable through — a looser check here (a bare `Number(raw)`
+ * accepts `.5`, `1e-1`, and a whitespace-only string, none of which the reader treats as set)
+ * would pass a value that then silently resolves to the fallback rate instead.
+ */
 const isValidVatRate = (raw: string): boolean => {
-    const parsed = Number(raw);
-    return Number.isFinite(parsed) && parsed >= 0 && parsed < 1;
+    const parsed = parseEnvironmentDecimal(raw);
+    return parsed !== undefined && parsed >= 0 && parsed < 1;
 };
 
 /**

@@ -6,7 +6,7 @@
  * `findOneAndUpdate` against a real Mongo — nothing here is provable against a mock.
  */
 import { setupTestDb } from '@tests/setup-test-db';
-import { allocateInvoiceNumber } from '@modules/orders';
+import { allocateInvoiceNumber } from '../../services/invoice-numbering';
 
 setupTestDb();
 

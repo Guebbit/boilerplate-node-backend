@@ -4,7 +4,7 @@
  * book. A folder rather than one file because it passed ~300 lines, split by what each operation
  * does — see `docs/theory/layers.md`.
  *
- * `accountService`:   login, signup, profile, verification, tokens, export, OAuth.
+ * `accountService`:   login, signup, profile, verification, tokens, OAuth.
  * `twoFactorService`: enrollment, removal, backup codes, the login challenge.
  * `addressService`:   the address book's CRUD, plus the address a checkout resolves.
  *
@@ -15,6 +15,13 @@
  *                  name or two; the namespaces exist so the surface can still be browsed by name.
  * Below this:      `../session/` — JWT signing, the refresh cookie, shared expiry. Nothing
  *                  outside this module imports it directly; see `../index`.
+ *
+ * `./export` is NOT imported here, on purpose. It reaches `cart`/`wishlist`/`orders`/… for the
+ * data-export payload, and this file is what the barrel (`../index.ts`) publishes wholesale — one
+ * static import away from `exportOwnData` puts every one of those modules' barrels in this
+ * module's own reachability, which is exactly how `cart`'s checkout (itself reaching back into
+ * `account` for an address) turned into a real import cycle. `../controllers/post-account-export`
+ * imports `./export` directly instead — this module's own file, not a barrel concern.
  */
 
 import * as authentication from './authentication';
@@ -22,7 +29,6 @@ import * as profile from './profile';
 import * as verification from './verification';
 import * as tokens from './tokens';
 import * as tokenCleanup from './token-cleanup';
-import * as accountExport from './export';
 import * as oauth from './oauth';
 import * as twoFactor from './two-factor';
 import * as addresses from './addresses';
@@ -85,7 +91,6 @@ export const accountService = {
     sessionsList: tokens.sessionsList,
     runTokenCleanup: tokenCleanup.runTokenCleanup,
     adminTokenCleanup: tokenCleanup.adminTokenCleanup,
-    exportOwnData: accountExport.exportOwnData,
     loginOrCreateFromOAuth: oauth.loginOrCreateFromOAuth,
     recordOAuthFailure: oauth.recordOAuthFailure
 };

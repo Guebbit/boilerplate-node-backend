@@ -7,11 +7,10 @@
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
-import { createProduct } from '@modules/products/tests/factories';
-import { productRepository } from '@modules/products';
+import { createProduct, saveProduct, deleteProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import * as orderService from '@modules/orders/services';
-import type { OrderDocument } from '@modules/orders';
+import type { OrderDocument } from '../../model';
 
 setupTestDb();
 
@@ -285,7 +284,7 @@ describe('orderService.search — current (live) image', () => {
         // The catalogue row changes after the order exists — the order line itself carries no
         // image at all to go stale, so this can only ever show the live one.
         product.imageUrl = '/images/replaced.jpg';
-        await productRepository.save(product);
+        await saveProduct(product);
 
         const { items } = await orderService.search({});
 
@@ -297,7 +296,7 @@ describe('orderService.search — current (live) image', () => {
         const product = await createProduct({ imageUrl: '/images/doomed.jpg' });
 
         await createOrder(user, [toOrderItem(product, 1)]);
-        await productRepository.deleteOne(product);
+        await deleteProduct(product);
 
         const { items } = await orderService.search({});
 

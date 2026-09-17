@@ -34,7 +34,7 @@ import {
 } from '@infrastructure/http/response';
 import type { FacetCount } from '@types';
 import { imageStore } from '@infrastructure/adapters/image-store';
-import { enqueueImageDigest } from '@infrastructure/adapters/image.worker';
+import { enqueueIfImagePending } from '@infrastructure/adapters/image.worker';
 import { emitDomainEvent } from '@kernel/events';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -194,7 +194,9 @@ export const searchViewed = (
  *
  * The wire shape, not a hydrated document: `.toJSON()` runs here — before translation resolution,
  * never after, since resolution is a plain-object overlay that would otherwise lose whatever the
- * document's own transform computes (`available`, `_id` → `id`, dates to ISO strings).
+ * document's own transform computes (`available`, `_id` → `id`, dates to ISO strings). Unlike
+ * `orders`'/`users`' own `getById`, which hand back the Mongoose document itself — neither of
+ * those has a locale-resolution step forcing an earlier `.toJSON()`.
  *
  * @param scope - which rows this caller may read ({@link callerScope})
  */
@@ -239,22 +241,11 @@ export const getByIdViewed = (
 /**
  * Enqueue the digest job for a just-persisted product, when its write carried a pending upload.
  * `pendingImageKey` here means the queue looked ready at upload time (the no-broker path resolves
- * inline before saving, see `readUploadedImage`) — but a publish can still lose that race to an
- * outage, in which case `enqueueImageDigest` degrades to digesting right here. Awaited, unlike a
- * plain queue publish: that inline run is what actually moves the file onto disk, and a caller
- * that returned first would answer with a document nothing has finished writing yet.
+ * inline before saving, see `readUploadedImage`) — see {@link enqueueIfImagePending} for what
+ * happens with it.
  */
 const enqueueIfPending = (product: ProductDocument): Promise<ProductDocument> =>
-    product.pendingImageKey
-        ? enqueueImageDigest(
-              {
-                  collection: 'products',
-                  documentId: String(product._id),
-                  key: product.pendingImageKey
-              },
-              productRepository.writebackImage
-          ).then(() => product)
-        : Promise.resolve(product);
+    enqueueIfImagePending(product, 'products', productRepository.writebackImage);
 
 /**
  * Create a new product document in the database.
@@ -600,6 +591,69 @@ export const removeById = (
 const facets = (): Promise<{ categories: FacetCount[]; tags: FacetCount[] }> =>
     productRepository.facets();
 
+/**
+ * The plain, untransformed document — `inventory` and `orders` read a product's live counters
+ * this way, never through `getById`'s scoped/transformed shape.
+ */
+const findByIdRaw = (productId: string) => productRepository.findByIdRaw(productId);
+
+/** The publicly visible product with this id, or `null` — `cart` and `wishlist`'s one read. */
+const findPublicById = (productId: string) => productRepository.findPublicById(productId);
+
+/**
+ * Every product in `ids`, plain and untransformed, in one round trip — `orders` joins them onto
+ * its own rows by id rather than reading one at a time.
+ *
+ * `Promise.resolve().then(...)` rather than a bare call: `toObjectId` throws on a malformed id,
+ * and deferring the `.map()` into the callback turns that into a rejection — the convention
+ * `orders/services/crud.ts#create` states for the same reason, so a bad id reaches every caller
+ * as a rejected promise like every other failure here, never a synchronous throw out of a
+ * function every caller otherwise treats as `Promise`-returning.
+ *
+ * @param ids - the product ids to read back
+ */
+const findManyByIds = (ids: readonly string[]) =>
+    Promise.resolve().then(() =>
+        productRepository.findAll({ _id: { $in: ids.map((id) => toObjectId(id)) } })
+    );
+
+/*
+ * The counter transitions below are conditional writes on `onHand`/`reserved`; which one is legal
+ * when belongs to `@modules/inventory` (`writerFor`'s table), not here — this is the door, not the
+ * rule.
+ */
+
+/** Hold units for an order that has not been paid for. */
+const reserveUnits = (productId: string, quantity: number) =>
+    productRepository.reserveUnits(productId, quantity);
+
+/** Turn a hold into a sale — the units leave and stop being reserved. */
+const commitUnits = (productId: string, quantity: number) =>
+    productRepository.commitUnits(productId, quantity);
+
+/** Give up a hold — the units are still here and become sellable again. */
+const releaseUnits = (productId: string, quantity: number) =>
+    productRepository.releaseUnits(productId, quantity);
+
+/** New stock arriving — `onHand` grows. */
+const receiveUnits = (productId: string, quantity: number) =>
+    productRepository.receiveUnits(productId, quantity);
+
+/** A manual correction to `onHand`, signed. */
+const adjustUnits = (productId: string, delta: number) =>
+    productRepository.adjustUnits(productId, delta);
+
+/** How many products are at or below the given availability. */
+const countLowAvailability = (threshold: number) =>
+    productRepository.countLowAvailability(threshold);
+
+/** The total reserved across the whole catalogue. */
+const sumReserved = () => productRepository.sumReserved();
+
+/** A page of every product's counters and derived availability — the stock board's own read. */
+const availabilityPage = (options: { skip: number; limit: number; maxAvailable?: number }) =>
+    productRepository.availabilityPage(options);
+
 /** The service's public surface — every controller and cross-module caller goes through this. */
 export const productService = {
     validateCreateData,
@@ -617,5 +671,19 @@ export const productService = {
     writeCreate,
     writeUpdate,
     remove,
-    removeById
+    removeById,
+    // A controller may not reach `./model` directly (the persistence wall), so the shaping
+    // helper it needs to build a response rides through the service instead.
+    toProduct,
+    findByIdRaw,
+    findPublicById,
+    findManyByIds,
+    reserveUnits,
+    commitUnits,
+    releaseUnits,
+    receiveUnits,
+    adjustUnits,
+    countLowAvailability,
+    sumReserved,
+    availabilityPage
 };

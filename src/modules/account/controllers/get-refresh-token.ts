@@ -48,7 +48,7 @@ export const getRefreshToken = (request: Request, response: Response) => {
                     rejectResponse(response, 401);
                 })
         )
-        .catch((error: Error) => {
+        .catch((error: unknown) => {
             // `runTokenCleanup` is housekeeping: it removes expired tokens and has nothing to do with
             // whether THIS refresh is valid. Without this catch its rejection escapes to the global
             // handler and a routine maintenance failure answers 500 to a request that was fine.

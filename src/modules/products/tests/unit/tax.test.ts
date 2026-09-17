@@ -4,7 +4,7 @@
  * which. Restores the two rate env vars after each case so the suite-wide fallback set by
  * `tests/support/setup.ts` cannot leak between cases here.
  */
-import { resolveTaxRate } from '@modules/products';
+import { resolveTaxRate } from '../../tax';
 
 const ORIGINAL = {
     default: process.env.NODE_VAT_RATE_DEFAULT,

@@ -89,6 +89,13 @@ import, which is what keeps a mutually-aware pair acyclic.
 Each account reads back only its own orders; writing and soft-deleting is admin-only. The
 `userId: 1, deletedAt: 1` index is what makes both of those cheap at once.
 
+Two scheduled jobs, both nightly via `docker/crontab`: `npm run reap:orders` replaces an order's
+remaining PII with placeholders once its post-account-deletion retention window has passed —
+amounts, line items and dates survive, only the person is gone (an order is an invoice, never
+deleted outright, unlike `payments`' abandoned attempts). `npm run sweep:order-effects` re-announces
+`order.cancelled` for a refund the event bus's one delivery attempt did not carry through. See
+[Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full mechanism.
+
 ## The pipeline
 
 The status enum above, drawn. Every solid edge is someone deciding; the dotted ones are this
@@ -115,6 +122,19 @@ flowchart LR
     class CA bad;
     class DL,PM peer;
 ```
+
+## Configuration
+
+| Variable               | Default | Meaning                                                                                                                                                                 |
+| ---------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_SHOP_COUNTRY`    | —       | The shop's own jurisdiction — the only one VAT is ever charged at, no destination lookup. Required at boot; the manifest's `requiredConfig` refuses to start without it |
+| `NODE_SHOP_VAT_NUMBER` | —       | The shop's VAT id, printed on the invoice. Optional — a deployment below the registration threshold prints no VAT number rather than a fake one                         |
+| `NODE_SHOP_LEGAL_NAME` | —       | The shop's legal name, printed on the invoice — distinct from any storefront brand name                                                                                 |
+
+All three are read fresh per call (`config.ts`), so a correction needs no restart; an empty string
+reads as unset, never as a blank invoice row. The VAT RATES charged against an order line are a
+different thing with a different owner — see [products](./products.md#configuration); this module
+only freezes onto the order the rate `products` hands it at checkout.
 
 ## Related pages
 

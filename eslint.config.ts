@@ -30,6 +30,21 @@ const bannedDoubleCasts = [
     }
 ];
 
+/**
+ * A `factories.ts` builder import — matches `./factories`, `../factories` and a sibling module's
+ * `@modules/<name>/factories`, whole-specifier so `@infrastructure/persistence/factories` (the
+ * generic helpers a builder is built FROM, not a builder itself) does not also match a bare
+ * `/factories$` suffix. `no-restricted-imports` does not merge across configs (see
+ * `bannedDoubleCasts` above), so every block covering `src/modules/**` or `ops/**` spreads this
+ * in, or the ban would silently lift for whichever of those files that block's
+ * `no-restricted-imports` entry also configures.
+ */
+const factoriesImportPattern = {
+    regex: String.raw`^(\.{1,2}/factories|@modules/[^/]+/factories)$`,
+    message:
+        'A factories.ts builder is for tests and scenarios/, not production code — it writes past the domain rules a service enforces.'
+};
+
 export default tseslint.config(
     /**
      * Excluded files — GENERATED OR FOREIGN ONLY.
@@ -578,6 +593,11 @@ export default tseslint.config(
      * Scoped by `ignores` rather than by listing every non-controller folder: a new file anywhere
      * under `src/modules` is covered the day it is written, which is the property a glob-listed
      * wall never has.
+     *
+     * `factoriesImportPattern` rides along in the same `patterns` array for the same reason it
+     * rides along everywhere else this rule is configured: the nearest matching block REPLACES
+     * `no-restricted-imports`'s options rather than merging them, and this block's `files` glob
+     * is the one that would otherwise silently win for every non-controller, non-test module file.
      */
     {
         files: ['src/modules/**/*.ts'],
@@ -592,9 +612,24 @@ export default tseslint.config(
                             message:
                                 'Everything here takes an express Response, so only a controller can use it. A service that needs to turn a ZodError into the contract’s error list wants `validationErrors` from `@infrastructure/http/response`, which is where that shape is defined.'
                         }
-                    ]
+                    ],
+                    patterns: [factoriesImportPattern]
                 }
             ]
+        }
+    },
+
+    /**
+     * The other two corners `factoriesImportPattern` above does not reach: a module's own
+     * controllers (excluded there so the `@infrastructure/http/controller` exemption above could
+     * be stated once, by `ignores`, rather than by listing every non-controller folder) and
+     * `ops/`'s one-off scripts, which have no more business seeding through a test builder than a
+     * controller does.
+     */
+    {
+        files: ['src/modules/*/controllers/**/*.ts', 'ops/**/*.ts'],
+        rules: {
+            'no-restricted-imports': ['error', { patterns: [factoriesImportPattern] }]
         }
     },
 
@@ -716,6 +751,13 @@ export default tseslint.config(
                     default: 'disallow',
                     message:
                         '{{from.element.type}} may not depend on {{to.element.type}} — see docs/theory/layers.md.',
+                    /*
+                     * The plugin skips same-element imports by default (`isInternalDependency`) —
+                     * without this, the own-barrel disallow below and the spec-vs-own-index split
+                     * never run, since both are same-module (same captured element) edges.
+                     * https://github.com/javierbrea/eslint-plugin-boundaries#dependencies-rule
+                     */
+                    checkInternals: true,
                     policies: [
                         /*
                          * ── What is permitted ─────────────────────────────────────────────────
@@ -855,7 +897,7 @@ export default tseslint.config(
                             from: { element: { type: ['module', 'domain'] } },
                             disallow: { to: { element: { type: ['module', 'domain'] } } },
                             message:
-                                'Import a sibling module through its public path: @modules/<name>. Never its internals — the moment one is reached the module stops being deletable.'
+                                'Import through @modules/<name>. A model TYPE is already there via `export type *` — if what you need is a repository, the model’s runtime value, or wiring instead, ask the module’s service for it; none of those are ever published. Reaching internals directly is what makes a module stop being deletable.'
                         },
                         {
                             from: { element: { type: ['module', 'domain'] } },
@@ -945,6 +987,30 @@ export default tseslint.config(
                         },
 
                         /*
+                         * A module never imports its own barrel. `index.ts` re-exports every file
+                         * the barrel allows with `export *`, so a file inside the module reaching
+                         * back through it risks a load-order cycle the same way any `export *`
+                         * self-import would — and the real thing is always one relative import
+                         * away. Placed after the same-module allow above so it overrides that
+                         * allow for this one path; a sibling's `index.ts` stays reachable, since
+                         * this only matches the module's OWN captured name.
+                         */
+                        {
+                            from: { element: { type: 'module' } },
+                            disallow: {
+                                to: {
+                                    element: {
+                                        type: 'module',
+                                        fileInternalPath: 'index.ts',
+                                        captured: { module: '{{ from.element.captured.module }}' }
+                                    }
+                                }
+                            },
+                            message:
+                                'A module does not import its own barrel — the export is one relative import away from the real file. Importing a SIBLING’S index.ts is the one door; importing your own is a self-import that risks a load-order cycle under `export *`. See docs/theory/strategic-ddd.md §5.'
+                        },
+
+                        /*
                          * The domain layer: plain TypeScript over plain data. It is the only tier
                          * whose rule is about what it may TOUCH rather than which tier it may
                          * reach — no framework, no tier, no sibling, and not even the outer files
@@ -993,6 +1059,11 @@ export default tseslint.config(
                          * a sibling's `module.ts` manifest, because asserting cross-module cleanup
                          * means running the real registry.
                          *
+                         * `index.ts` is deliberately left off this list: a sibling's barrel is
+                         * already open through the one door above, and a spec reaching its OWN
+                         * module's barrel is exactly the self-import the disallow above exists to
+                         * block — tests included, per docs/theory/strategic-ddd.md §5.
+                         *
                          * Stated last so it overrides the module walls above for spec files only.
                          */
                         {
@@ -1001,7 +1072,7 @@ export default tseslint.config(
                                 to: {
                                     element: {
                                         type: ['module', 'domain'],
-                                        fileInternalPath: ['index.ts', 'module.ts', 'tests/**']
+                                        fileInternalPath: ['module.ts', 'tests/**']
                                     }
                                 }
                             }
@@ -1013,11 +1084,27 @@ export default tseslint.config(
     },
 
     /**
+     * The barrel's deny-list (`docs/theory/strategic-ddd.md` §5) holds only if a barrel's
+     * `export *` cannot reach a repository, the model's runtime or a wiring file by
+     * naming a source the deny-list never considered. `boundaries/dependencies` above answers
+     * "which module may a FILE import"; this is the question one level up — which of a module's
+     * OWN files its `index.ts` is allowed to publish everything from.
+     */
+    {
+        files: ['src/modules/*/index.ts'],
+        rules: {
+            'local/barrel-allowed-sources': 'error'
+        }
+    },
+
+    /**
      * What the domain layer may not TOUCH, as opposed to which tier it may reach.
      *
      * Left with `no-restricted-imports` on purpose: `mongoose` and `express` are external
      * packages, not tiers, so they are not a boundary question and stating them as one would mean
-     * describing npm in the element graph.
+     * describing npm in the element graph. `factoriesImportPattern` rides along for the reason
+     * given where it is declared — this glob is a subset of the module-wide block above, and would
+     * otherwise silently lose that ban for the one tier least likely to ever need it argued for.
      */
     {
         files: ['src/modules/*/domain/**/*.ts'],
@@ -1036,7 +1123,8 @@ export default tseslint.config(
                             message:
                                 'The domain layer may not know it is being called over HTTP. Return a verdict; the controller turns it into a status code.'
                         }
-                    ]
+                    ],
+                    patterns: [factoriesImportPattern]
                 }
             ]
         }

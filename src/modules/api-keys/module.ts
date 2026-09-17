@@ -17,7 +17,7 @@ import { registerCredentialResolver, type ResolvedCredential } from '@kernel/aut
 import { permissionsOfRole, ANONYMOUS_ROLE } from '@kernel/permissions';
 import { holdsKey } from '@kernel/ability';
 import { rolesOf } from '@kernel/access/store';
-import { userRepository } from '@modules/users';
+import { userService } from '@modules/users';
 import type { Caller } from '@types';
 import { router } from './routes';
 import { apiKeyRepository } from './repository';
@@ -43,7 +43,7 @@ import type { ApiKeyDocument } from './model';
  * minted hold nothing, without this document ever being touched.
  */
 const currentCallerOf = (apiKey: ApiKeyDocument): Promise<Caller | undefined> =>
-    userRepository.findAuthenticatableById(apiKey.createdByUserId).then((user) => {
+    userService.findAuthenticatableById(apiKey.createdByUserId).then((user) => {
         if (!user) return undefined;
 
         return rolesOf(apiKey.createdByUserId, apiKey.tenant, {

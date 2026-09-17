@@ -6,6 +6,46 @@
 **Breaks if you change** — the six event names in `asyncapi.yaml`, or the queue payload shape in `shared/contracts/asyncapi.workers.yaml`.
 :::
 
+## What a webhook is
+
+A webhook is how this backend tells _someone else's_ server that something happened, without them
+having to ask. A subscriber registers a URL once; from then on, every matching event becomes a
+signed HTTP `POST` to that URL, seconds after it lands.
+
+The direction is the whole point. A normal API waits to be called. A webhook is the reverse edge —
+_this_ server does the calling — so the other side learns about an event the moment it happens
+instead of polling "anything new?" on a timer.
+
+```mermaid
+flowchart LR
+    E["an order is paid"] --> S["this backend"]
+    S -->|"signed POST, seconds later"| U["the subscriber's URL"]
+    U --> R["they react:<br/>notify · fulfil · reconcile"]
+
+    classDef here fill:#ede9fe,stroke:#7c3aed,color:#111827;
+    classDef out fill:#dcfce7,stroke:#16a34a,color:#111827;
+    class S here;
+    class U,R out;
+```
+
+Real uses, one mechanism:
+
+- **A Slack channel that pings on every paid order.** Paste Slack's incoming-webhook URL into a
+  subscription; `payment.succeeded` turns into a message in the channel, with no integration code
+  to host.
+- **A partner's fulfilment system that ships on order.** They subscribe to `order.created`; each
+  delivery carries the order, and their warehouse starts packing without waiting on a nightly
+  export.
+- **An internal ledger that reconciles in near-real-time.** `payment.failed` and `order.cancelled`
+  reach a small endpoint of your own that reverses the entry, rather than a batch job noticing hours
+  later.
+
+The catch — and the reason [SSRF](../theory/defences/ssrf.md) is a live concern here — is that the
+destination URL is chosen by whoever creates the subscription. Delivering to a URL a caller
+supplies is exactly the shape an attacker abuses to make the server fetch something internal, so
+every delivery goes through `infrastructure/adapters/ssrf-guard.ts` first — see
+[The delivery path](#the-delivery-path).
+
 ## Its neighbourhood
 
 <!-- module-graph:webhooks:start -->
@@ -58,7 +98,7 @@ flowchart LR
     PUB --> MATCH{"matching<br/>subscriptions?"}
     MATCH -->|none| DROP["nothing"]
     MATCH -->|n| Q["worker.webhook.deliver<br/>one message per subscription"]
-    Q --> W["webhook.worker.ts"]
+    Q --> W["webhooks' own<br/>consumer (module.ts)"]
     W --> HTTP["signed POST<br/>SSRF-checked, timed out"]
     HTTP -->|2xx| OK["status: succeeded"]
     HTTP -->|fail, attempts left| BACK["status: pending<br/>nextAttemptAt scheduled"]
@@ -69,24 +109,26 @@ flowchart LR
 ```
 
 **Delayed retry rides the cron container, not the broker.** `webhookdeliveries.nextAttemptAt`
-carries when a failed row is due again; `ops/sweep-webhook-retries.ts` — the one job in
-`docker/crontab` that runs every minute instead of nightly — claims each due row and re-publishes
-it. `webhookDeliveryRepository.claimPending` (`pending` → `in-flight`) is the one atomic step that
-keeps the sweep and a fast-path worker from ever delivering the same attempt twice.
+carries when a failed row is due again; `npm run sweep:webhook-retries` (`ops/sweep-webhook-retries.ts`)
+— the one job in `docker/crontab` that runs every minute instead of nightly — claims each due row
+and re-publishes it. `webhookDeliveryRepository.claimPending` (`pending` → `in-flight`) is the one
+atomic step that keeps the sweep and a fast-path worker from ever delivering the same attempt
+twice. See [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full mechanism.
 
-**Signing is Standard Webhooks, hand-rolled.** `infrastructure/adapters/webhook-signing.ts` emits
-the `webhook-id`/`webhook-timestamp`/`webhook-signature` headers a growing set of the ecosystem
-already verifies with no custom code — the format is the interoperable part; the ~30 lines of
-`node:crypto` around it are not worth a dependency. A subscription's secret ring is a list, not one
-value, so `PATCH .../subscriptions/:id` can rotate without downtime: two active secrets sign two
+**Signing is Standard Webhooks, hand-rolled.** `transport/webhook-signing.ts` emits the
+`webhook-id`/`webhook-timestamp`/`webhook-signature` headers a growing set of the ecosystem already
+verifies with no custom code — the format is the interoperable part; the ~30 lines of `node:crypto`
+around it are not worth a dependency. A subscription's secret ring is a list, not one value, so
+`PATCH .../subscriptions/:id` can rotate without downtime: two active secrets sign two
 space-separated `v1,...` values in one header during the overlap.
 
-**The SSRF guard resolves, THEN validates, THEN pins.** `infrastructure/adapters/ssrf-guard.ts`
-looks up a subscription's hostname itself, checks the resolved address against private/loopback/
-link-local/CGNAT ranges — including an IPv4-mapped IPv6 literal, which a naive string check misses
-— and hands `webhook-delivery.ts` a `lookup` override pinned to that one validated address. A
-second, independent DNS resolution at connect time would reopen exactly the TOCTOU window this
-exists to close, which is why the guard is infrastructure and not `domain/`: it does I/O.
+**The SSRF guard resolves, THEN validates, THEN pins.** `infrastructure/adapters/ssrf-guard.ts` —
+generic, infrastructure-owned, not this module's — looks up a subscription's hostname itself,
+checks the resolved address against private/loopback/link-local/CGNAT ranges — including an
+IPv4-mapped IPv6 literal, which a naive string check misses — and hands `transport/webhook-delivery.ts`
+a `lookup` override pinned to that one validated address. A second, independent DNS resolution at
+connect time would reopen exactly the TOCTOU window this exists to close, which is why the guard is
+infrastructure and not `domain/`: it does I/O.
 
 ::: tip What deleting this module actually costs
 Every ingredient it is built from — the domain-event bus, the queue, the cron container, the public
@@ -102,6 +144,30 @@ Subscriptions, the secret ring and the delivery log all have an admin screen now
 endpoints. "Usable via any HTTP client" is still true (nothing here requires the UI), but no longer
 the only way in. See that repo's `docs/modules/webhooks.md` for the client side, including why
 `rotateSecret`'s response never gets cached client-side.
+
+## Not wanted? Remove the module
+
+There is no switch. Webhooks are on when this module is in the build, and a deployment that never
+sends them removes it — [Removing a module](../theory/module-lifecycle.md#removing-a-module). That
+also removes the one place the backend fetches a caller-supplied URL (see
+[Server-side request forgery](../theory/defences/ssrf.md)).
+
+The standard procedure catches most of it: `tsc` stops on every file that imports the module
+(`ops/sweep-webhook-retries.ts`, `scenarios/webhooks.ts`, the cross-cutting tests), and the
+cross-cutting suite names the permissions, the page and the pairing entries. The module owns its
+queue consumer, its required/forbidden env checks, and its delivery substrate now (`consumers`,
+`requiredConfig` and `forbiddenInProduction` on its own `module.ts`; `transport/` for the signing
+and delivery code) — deleting the folder deletes all of that too, with nothing left in `app/` or
+`kernel/` to also touch. What still sits outside the module and **nothing flags** — delete these by
+hand:
+
+| Piece                         | Where                                                                                           | Left behind, it…                 |
+| ----------------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------- |
+| the retry-sweep script entry  | `sweep:webhook-retries` in `package.json`                                                       | points at a deleted file         |
+| the cron line and its comment | `docker/crontab`                                                                                | fails every minute               |
+| the SSRF guard                | `src/infrastructure/adapters/ssrf-guard.ts` — generic, but this module is its only caller today | compiles, and nothing calls it   |
+| the environment               | the `NODE_WEBHOOK_*` lines in `.env-example`                                                    | documents settings nothing reads |
+| the local test sink           | the `webhook-tester` service in `docker-compose.yml`, `WEBHOOK_TESTER_PORT`                     | runs for nothing                 |
 
 ## Seeing it work
 

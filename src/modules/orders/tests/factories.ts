@@ -7,10 +7,10 @@
  * what a customer was charged.
  */
 
-import type { OrderDocument } from '@modules/orders';
+import type { OrderDocument } from '../model';
 import type { UserDocument } from '@modules/users';
 import type { ProductDocument } from '@modules/products';
-import { orderRepository } from '@modules/orders';
+import { orderRepository } from '../repository';
 import {
     makeOrder as buildOrder,
     type OrderFixture,
@@ -56,9 +56,45 @@ export const makeOrder = (
         ...extras
     });
 
+/**
+ * The live repository object, for a sibling's `jest.spyOn` — a wrapper function copies the call,
+ * not the binding, so it cannot intercept what this module's OWN code (`retractOrder`'s
+ * compensation) reaches internally. Every other need below has a named, narrower helper instead;
+ * reach for this one only when the assertion is "was this repository method called/failed", not
+ * "what does the database now hold".
+ */
+export { orderRepository } from '../repository';
+
 /** Insert an order into the test database and return the Mongoose document. */
 export const createOrder = (
     user: UserDocument,
     items: OrderLineInput[],
     extras: OrderExtras = {}
 ): Promise<OrderDocument> => orderRepository.create(makeOrder(user, items, extras));
+
+/** The raw stored document, hydrated — a sibling's own assertion on persisted state. */
+export const readOrder = (id: string): Promise<OrderDocument | null> =>
+    orderRepository.findById(id);
+
+/** The first order matching a raw filter — a sibling's own assertion, never through the service. */
+export const findOrder = (where: Record<string, unknown>): Promise<OrderDocument | null> =>
+    orderRepository.findOne(where);
+
+/** How many orders match a raw filter — a sibling's own assertion. */
+export const countOrders = (where: Record<string, unknown> = {}): Promise<number> =>
+    orderRepository.count(where);
+
+/** Persist a document a sibling's fixture already built and mutated in memory. */
+export const saveOrder = (document: OrderDocument): Promise<OrderDocument> =>
+    orderRepository.save(document);
+
+/**
+ * Detach an account with an explicit retention deadline — `orderService.detachUserId` always
+ * computes `NODE_ORDER_PII_RETENTION_DAYS` from now, which a sweep test needs to backdate to
+ * exercise `anonymizeDueOrders` without waiting years.
+ *
+ * @param userId - the erased account's id
+ * @param anonymizeAfter - when the reaper may scrub this order's remaining PII
+ */
+export const detachOrderUserId = (userId: string, anonymizeAfter: Date): Promise<number> =>
+    orderRepository.detachUserId(userId, anonymizeAfter);

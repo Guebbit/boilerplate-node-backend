@@ -10,6 +10,7 @@
  */
 
 import type { Router } from 'express';
+import type { ZodType } from 'zod';
 import { assertRequiredConfig } from '@kernel/required-config';
 import type { RateLimitBudget } from '@types';
 
@@ -63,6 +64,38 @@ export interface ImageTarget {
         key: string,
         urls: { imageUrl: string; thumbnailUrl: string }
     ) => Promise<boolean>;
+}
+
+/**
+ * A module's own queue consumer — the same "app tier sees every module, infrastructure sees none
+ * of them" split {@link ImageTarget} is built around, generalized to a whole consumer instead of
+ * one writeback callback. `infrastructure/adapters/queue.ts`'s `consumeFromQueue` cannot be called
+ * from inside a module's own `module.ts` (that would run the moment the module is imported, before
+ * `app/workers.ts` has decided whether the broker is even enabled); a module registers the
+ * declaration instead, keyed under `consumers`, and `app/workers.ts` is what actually calls
+ * `consumeFromQueue` for each one it collects.
+ *
+ * `handler` is written as a method, not a property, on purpose: every module's job payload is a
+ * different generated type, and only a method member lets each one keep its own — a property
+ * function type would force every handler down to `unknown`, unlike {@link ImageTarget.writeback},
+ * whose signature is genuinely identical for every module that has one.
+ */
+export interface ModuleConsumer {
+    /** Queue name to consume from — one of `WORKER_CHANNELS` (`@types`, generated). */
+    queue: string;
+
+    /** Handler called for each message. Return true to ack, false to nack. */
+    handler(message: unknown): Promise<boolean>;
+
+    /**
+     * The contract schema this queue's messages must satisfy, from `@types`'s generated
+     * validators — see `infrastructure/adapters/queue.ts`'s `ConsumeOptions.schema` for what
+     * supplying it buys over leaving the handler to defend itself.
+     */
+    schema?: ZodType;
+
+    /** Number of unacknowledged messages allowed at once. Default: 1 — see `ConsumeOptions.prefetch`. */
+    prefetch?: number;
 }
 
 /**
@@ -156,6 +189,14 @@ export interface AppModule {
     imageTargets?: Readonly<Record<string, ImageTarget>>;
 
     /**
+     * This module's own queue consumers — see {@link ModuleConsumer}. Most modules have none; a
+     * module that owns a queue registers one entry per queue it drains, so deleting the module is
+     * enough to stop that queue meaning anything, with nothing left to also delete in
+     * `app/workers.ts`.
+     */
+    consumers?: readonly ModuleConsumer[];
+
+    /**
      * This module's {@link TranslatableTarget}s, keyed by the `entityType` string a translation
      * row and the `/translations/{entityType}/{id}` route both use. Most modules have none; a
      * module whose documents carry user-authored content registers one entry per such collection.
@@ -174,7 +215,8 @@ export interface AppModule {
 
     /**
      * Env vars this module cannot run without — see {@link RequiredConfig}. Most modules have
-     * none; `account` and `observability` each hold a secret that must not boot on a placeholder.
+     * none; a module declares one when it owns a secret, a boot-required identity field or a
+     * config value nothing else could catch before the first request that needs it.
      */
     requiredConfig?: readonly RequiredConfig[];
 
@@ -187,6 +229,16 @@ export interface AppModule {
      * module on the first request that needs the value.
      */
     customCheck?: () => string[];
+
+    /**
+     * Env vars that must be ABSENT under `NODE_ENV=production` — the opposite of
+     * {@link requiredConfig}, and reported with its own wording (`assertRequiredConfig`'s "set,
+     * which must never happen here" rather than `customCheck`'s "missing, too short, or still
+     * placeholder"). Most modules have none; a module declares one for a value that only makes
+     * sense in a non-production profile — a demo/test fixture endpoint, a relaxed guard — where
+     * being SET in production is itself the mistake, regardless of what it is set to.
+     */
+    forbiddenInProduction?: readonly string[];
 
     /**
      * The states this module GUARANTEES a named scenario offers, keyed by scenario name (currently
@@ -230,6 +282,18 @@ export const resolveImageTargets = (
     Object.fromEntries(
         appModules.flatMap((appModule) => Object.entries(appModule.imageTargets ?? {}))
     );
+
+/**
+ * Every registered module's {@link ModuleConsumer}s, flattened in declaration order.
+ *
+ * Built from the passed-in list for the same reason {@link resolveImageTargets} is: this file
+ * must stay free of any `src/modules/*` import. `app/workers.ts` is the one place allowed to see
+ * every module's `consumers` and is what actually calls `consumeFromQueue` for each.
+ *
+ * @param appModules - the enabled module list
+ */
+export const resolveConsumers = (appModules: AppModule[]): readonly ModuleConsumer[] =>
+    appModules.flatMap((appModule) => appModule.consumers ?? []);
 
 /**
  * Every registered module's {@link TranslatableTarget}s, flattened into one lookup keyed by

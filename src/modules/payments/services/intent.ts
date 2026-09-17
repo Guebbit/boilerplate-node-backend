@@ -15,7 +15,7 @@ import {
 import { OrderStatus } from '@types';
 import type { Payment, AuthContext } from '@types';
 import { orderService, orderTotal, canTransition } from '@modules/orders';
-import { userRepository } from '@modules/users';
+import { userService } from '@modules/users';
 import { defaultCurrency } from '../config';
 import { resolvePaymentProvider } from '../providers';
 import { paymentRepository } from '../repository';
@@ -36,8 +36,8 @@ import { paymentRepository } from '../repository';
 export const resolvePayerId = (orderUserId: string | undefined): Promise<string | undefined> => {
     if (orderUserId === undefined) return Promise.resolve(undefined);
 
-    return userRepository
-        .findById(orderUserId)
+    return userService
+        .getById(orderUserId)
         .then((user) => {
             if (user) return user.id;
             logger.warn(

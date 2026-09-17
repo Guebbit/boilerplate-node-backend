@@ -32,7 +32,12 @@ import { REPO_ROOT, type ContractBundle } from './bundle-kinds';
 type AsyncScope = 'shared' | 'backend';
 
 /** The order sections are merged in, and therefore the order they appear in the output. */
-export const ASYNC_SECTION_ORDER = ['observability', 'webhooks', 'workers'] as const;
+export const ASYNC_SECTION_ORDER = [
+    'observability',
+    'webhooks',
+    'webhooks-internal',
+    'workers'
+] as const;
 
 type AsyncSectionName = (typeof ASYNC_SECTION_ORDER)[number];
 
@@ -41,8 +46,9 @@ type AsyncSectionName = (typeof ASYNC_SECTION_ORDER)[number];
  *
  * `webhooks` belongs here for the reason `observability` does: its channels ARE the public event
  * catalogue (`GET /webhooks/events` reads the module's own fragment, not this bundle), so a
- * consumer needs the generated payload types the same way the SSE dashboard does. `workers` never
- * joins this set — the queue is internal plumbing, not a promise to anyone outside this service.
+ * consumer needs the generated payload types the same way the SSE dashboard does. `webhooks-internal`
+ * and `workers` never join this set — a queue is internal plumbing, not a promise to anyone
+ * outside this service, whether it happens to be owned by a module or by no domain at all.
  */
 const SHARED_SECTIONS: ReadonlySet<AsyncSectionName> = new Set(['observability', 'webhooks']);
 
@@ -52,11 +58,18 @@ const sectionsInScope = (scope: AsyncScope): readonly AsyncSectionName[] =>
         ? ASYNC_SECTION_ORDER
         : ASYNC_SECTION_ORDER.filter((section) => SHARED_SECTIONS.has(section));
 
-/** Where a section's document lives — a module's own file, or the shared one for the queues. */
-const asyncSectionDocument = (section: AsyncSectionName): string =>
-    section === 'workers'
-        ? path.join(REPO_ROOT, 'shared', 'contracts', 'asyncapi.workers.yaml')
-        : path.join(REPO_ROOT, 'src', 'modules', section, 'asyncapi.yaml');
+/**
+ * Where a section's document lives: the shared file for the domainless queues, a module's own
+ * `asyncapi.internal.yaml` for a queue that module owns, or its `asyncapi.yaml` for everything
+ * else — a module's public event catalogue, or `observability`'s one all-public section.
+ */
+const asyncSectionDocument = (section: AsyncSectionName): string => {
+    if (section === 'workers')
+        return path.join(REPO_ROOT, 'shared', 'contracts', 'asyncapi.workers.yaml');
+    if (section === 'webhooks-internal')
+        return path.join(REPO_ROOT, 'src', 'modules', 'webhooks', 'asyncapi.internal.yaml');
+    return path.join(REPO_ROOT, 'src', 'modules', section, 'asyncapi.yaml');
+};
 
 /** Preamble: version, id, info, content type, tags. Holds no channel and no server. */
 const ASYNC_ROOT_DOCUMENT = path.join(REPO_ROOT, 'shared', 'contracts', 'asyncapi.root.yaml');

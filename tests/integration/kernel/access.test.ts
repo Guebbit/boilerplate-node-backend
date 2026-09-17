@@ -34,7 +34,7 @@ import {
     SEED_MODERATOR_ID,
     seedAccessModel
 } from '@scenarios/accounts';
-import { userRepository } from '@modules/users';
+import { userRepository } from '@modules/users/tests/factories';
 import { shopModules } from '@scenarios/index';
 import { PRESET_ROLES, wildcardKeyFor } from '@kernel/permissions';
 

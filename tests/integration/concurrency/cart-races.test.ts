@@ -24,7 +24,7 @@ import type { Response } from 'supertest';
 import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct } from '@modules/products/tests/factories';
-import { productRepository } from '@modules/products';
+import { productService } from '@modules/products';
 import { cartModel } from '@modules/cart/model';
 import { orderModel } from '@modules/orders/model';
 import { RACE_SIZE, countStatus, expectNoServerErrors, raceN } from '@tests/race';
@@ -226,7 +226,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
         for (const loser of losers) expect(loser.body.errors[0].code).toBe('CART_CHANGED');
 
         // The winner's hold and nothing else — every loser's reserve was given back.
-        const stored = await productRepository.findByIdRaw(String(product._id));
+        const stored = await productService.findByIdRaw(String(product._id));
         expect(stored?.reserved).toBe(3);
     });
 

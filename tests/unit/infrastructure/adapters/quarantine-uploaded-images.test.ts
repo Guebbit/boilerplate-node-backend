@@ -1,8 +1,9 @@
 /**
  * `quarantineUploadedImages` — the step between "multer wrote a file" and "the API has an image".
  *
- * It is the only place that turns a staged upload into a quarantined one, and — with no broker
- * configured — the only place that digests it inline. Each failure mode is asserted here; the
+ * It is the only place that turns a staged upload into a quarantined one, and — whenever the queue
+ * isn't `ready` (no broker configured, unreachable, or still connecting) — the only place that
+ * digests it inline. Each failure mode is asserted here; the
  * store and the digest pipeline are mocked, because what is under test is the middleware's
  * handling of them, not where bytes land or how they are re-encoded.
  */

@@ -60,7 +60,7 @@ export const postLoginTwoFactorSend = (
                 t('account.two-factor.code-sent')
             );
         })
-        .catch((error: Error) => {
+        .catch((error: unknown) => {
             authTwoFactorCodeSentTotal.inc({ method, status: 'failure' });
             rejectDatabaseError(response, 'postLoginTwoFactorSend', error);
         });

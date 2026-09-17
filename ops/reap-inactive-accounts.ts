@@ -31,6 +31,9 @@
  * `reap:orders`), never on every boot. Guarded by `withLease` — the one job wired to the
  * primitive today, since a double-run here is the most expensive of the five.
  *
+ * Removal: owned by `account` — deletes with the module, along with the `reap:inactive-accounts`
+ * npm script and its `docker/crontab` line.
+ *
  * See: docs/reference/ops.md
  */
 import 'dotenv/config';
@@ -48,7 +51,7 @@ import {
 } from '@infrastructure/i18n';
 import { registerModules } from '@kernel/registry';
 import { enabledModules } from '../src/modules';
-import { userRepository, userService, type UserDocument } from '@modules/users';
+import { userService, type UserDocument } from '@modules/users';
 import { inactivityWarningEmail } from '@modules/account/emails';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { withLease } from '@infrastructure/persistence/lease';
@@ -100,7 +103,7 @@ const warn = (user: UserDocument): Promise<void> => {
     return enqueueEmail({ to: user.email, subject: mail.subject }, mail.template, mail.data).then(
         () => {
             user.inactivityWarnedAt = new Date();
-            return userRepository.save(user).then(() => undefined);
+            return userService.save(user).then(() => undefined);
         }
     );
 };
@@ -119,17 +122,15 @@ const main = async (): Promise<void> => {
         registerModules(enabledModules);
         await initI18n();
 
-        const toWarn = await userRepository.findInactiveUnwarned(daysAgo(inactiveDays));
+        const toWarn = await userService.findInactiveUnwarned(daysAgo(inactiveDays));
         for (const user of toWarn) await warn(user);
 
-        const toSoftDelete = await userRepository.findWarnedStillInactive(
+        const toSoftDelete = await userService.findWarnedStillInactive(
             daysAgo(inactiveDays + GRACE_DAYS)
         );
         for (const user of toSoftDelete) await userService.remove(user, false);
 
-        const toHardDelete = await userRepository.findReaperSoftDeletedPastGrace(
-            daysAgo(GRACE_DAYS)
-        );
+        const toHardDelete = await userService.findReaperSoftDeletedPastGrace(daysAgo(GRACE_DAYS));
         for (const user of toHardDelete) await userService.remove(user, true);
 
         logger.info({

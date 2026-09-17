@@ -16,7 +16,8 @@ import {
     REPLACEMENT_PASSWORD
 } from '@modules/users/tests/factories';
 import { accountService } from '@modules/account/services';
-import { userRepository, hashToken } from '@modules/users';
+import { hashToken } from '@modules/users';
+import { userRepository } from '@modules/users/tests/factories';
 import { TokenType, type Token, type UserDocument } from '@modules/users';
 import { asReject, asSuccess } from '@tests/response';
 import * as analyticsPort from '@infrastructure/observability/analytics';

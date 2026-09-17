@@ -14,7 +14,8 @@
         "error-email-not-verified": "Please confirm your email address before continuing.",
         "error-idempotency-key-invalid": "Idempotency-Key must be 1-200 letters, digits, hyphens or underscores.",
         "error-idempotency-in-flight": "A request with this Idempotency-Key is still being processed.",
-        "error-idempotency-key-mismatch": "This Idempotency-Key was already used with a different request."
+        "error-idempotency-key-mismatch": "This Idempotency-Key was already used with a different request.",
+        "error-idempotency-body-unsafe": "The request body may not contain a field named __proto__."
     },
     "validation": {
         "required": "This field is required.",

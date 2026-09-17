@@ -10,7 +10,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { TEST_TENANT_ID } from '@tests/callers';
 import type { TenantCallerContext } from '@infrastructure/http/request';
-import { userRepository } from '@modules/users';
+import { userRepository } from '@modules/users/tests/factories';
 import { seedPresetRoles } from '@kernel/access/seed';
 import { assignRole } from '@kernel/access/store';
 import { permissionsOfRole } from '@kernel/permissions';

@@ -4,7 +4,7 @@ import cookieParser from 'cookie-parser';
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser, createOwnerUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
-import { userRepository } from '@modules/users';
+import { userRepository } from '@modules/users/tests/factories';
 
 /**
  * The two observability endpoints, and the credentials that reach them.

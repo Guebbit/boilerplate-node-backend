@@ -14,7 +14,7 @@ import { Types } from 'mongoose';
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/factories';
-import { createProduct } from '@modules/products/tests/factories';
+import { createProduct, saveProduct } from '@modules/products/tests/factories';
 import {
     getById,
     create,
@@ -26,10 +26,9 @@ import {
     callerScope,
     orderService
 } from '@modules/orders/services';
-import { orderRepository } from '@modules/orders';
+import { orderRepository } from '../../repository';
 import { inventoryService } from '@modules/inventory';
-import { productRepository } from '@modules/products';
-import type { OrderDocument } from '@modules/orders';
+import type { OrderDocument } from '../../model';
 import type { ResponseReject, ResponseSuccess } from '@infrastructure/http/response';
 import { asCustomer, asOwner } from '../../../../../tests/support/callers';
 
@@ -139,7 +138,7 @@ describe('create', () => {
         const { order, keyboard } = await seedOrder();
 
         keyboard.price = 999;
-        await productRepository.save(keyboard);
+        await saveProduct(keyboard);
 
         const reloaded = await orderRepository.findById(String(order._id));
         const line = reloaded!.items.find(
@@ -537,8 +536,8 @@ describe('remove', () => {
         await remove(order);
 
         const stored = await orderRepository.findById(String(order._id));
-        // `undefined`, not null: the field is unset, which is what `$exists: false` in
-        // `visibleScope` tests for.
+        // `undefined`, not null: the field is unset, which is what `callerScope`'s compiled
+        // `deletedAt: null` matches (Mongo's `{ field: null }` matches missing OR null).
         expect(stored!.deletedAt).toBeUndefined();
     });
 

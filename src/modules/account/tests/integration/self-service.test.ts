@@ -24,7 +24,8 @@ import {
     VERIFY_RESEND_SECONDS,
     completeEmailChange
 } from '@modules/account/services';
-import { userRepository, TokenType, hashToken } from '@modules/users';
+import { TokenType, hashToken } from '@modules/users';
+import { userRepository } from '@modules/users/tests/factories';
 import { asReject, asSuccess } from '@tests/response';
 import * as auditPort from '@infrastructure/observability/audit';
 import * as analyticsPort from '@infrastructure/observability/analytics';

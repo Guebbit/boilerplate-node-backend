@@ -17,20 +17,26 @@ import { asStub } from '@tests/stub';
 import { keyId } from '@modules/account/session/key-ring';
 
 /*
- * The REPOSITORY, not the model: `session/jwt.ts` reaches `userRepository.findByTokenValue`,
+ * The SERVICE, not the model: `session/jwt.ts` reaches `userService.findByTokenValue`,
  * `.findByIdWithCredentials` and `.tokenTouch` rather than running raw `Users` queries itself, so
  * this suite doubles those instead. What the QUERIES look like is asserted in
- * `users/tests/integration/repository.test.ts`, against a real store.
+ * `users/tests/integration/repository.test.ts`, against a real store. Every other `userService`
+ * member rides through unchanged (`...actual.userService`) — only the three this file drives are
+ * replaced.
  */
-jest.mock('@modules/users', () => ({
-    ...jest.requireActual('@modules/users'),
-    __esModule: true,
-    userRepository: {
-        findByTokenValue: jest.fn(),
-        findByIdWithCredentials: jest.fn(),
-        tokenTouch: jest.fn()
-    }
-}));
+jest.mock('@modules/users', () => {
+    const actual = jest.requireActual<typeof import('@modules/users')>('@modules/users');
+    return {
+        ...actual,
+        __esModule: true,
+        userService: {
+            ...actual.userService,
+            findByTokenValue: jest.fn(),
+            findByIdWithCredentials: jest.fn(),
+            tokenTouch: jest.fn()
+        }
+    };
+});
 
 import {
     verifyAccessToken,
@@ -39,7 +45,7 @@ import {
     createAccessToken,
     recordRefreshTokenUse
 } from '@modules/account/session/jwt';
-import { userRepository, TokenType } from '@modules/users';
+import { userService, TokenType } from '@modules/users';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 
@@ -47,7 +53,7 @@ const mockedUsers = asStub<{
     findByTokenValue: jest.Mock;
     findByIdWithCredentials: jest.Mock;
     tokenTouch: jest.Mock;
-}>(userRepository);
+}>(userService);
 
 /** A user document double, carrying only the one method `createRefreshToken` calls. */
 const userDouble = () => {
@@ -56,7 +62,7 @@ const userDouble = () => {
 };
 
 /**
- * `userRepository.findByIdWithCredentials(id)` — one call to stub, so this file never has to walk
+ * `userService.findByIdWithCredentials(id)` — one call to stub, so this file never has to walk
  * a `findById(...).select('+tokens')` chain of its own.
  */
 const findByIdReturning = (user: unknown) => {
@@ -355,7 +361,7 @@ describe('recordRefreshTokenUse', () => {
 
         /*
          * The positional `$` that stamps the token that MATCHED — not the first in the array — is
-         * `userRepository.tokenTouch`'s, proven against a real document in
+         * `userService.tokenTouch`'s, proven against a real document in
          * `users/tests/integration/repository.test.ts`. What this file owns is that the right
          * value is handed over, exactly once.
          */

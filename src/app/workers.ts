@@ -1,8 +1,11 @@
 /**
  * @module
- * Queue-consumer registration for this build. This file is `app`; the handlers it wires are
- * `infrastructure`, because sending an email and rendering a PDF make sense in an application
- * with no modules at all. Naming *which* queues this build drains is the assembly decision.
+ * Queue-consumer registration for this build. This file is `app`; the email/PDF/image handlers it
+ * wires directly are `infrastructure`, because sending an email and rendering a PDF make sense in
+ * an application with no modules at all — naming those two queues is the assembly decision. A
+ * module-owned queue (webhooks' `worker.webhook.deliver`) is not named here at all: it is
+ * collected from every enabled module's own manifest instead, via `resolveConsumers` — see
+ * `ModuleConsumer` (`@kernel/registry.ts`) for why a module cannot call `consumeFromQueue` itself.
  *
  * See: docs/tools/rabbitmq.md
  */
@@ -16,14 +19,8 @@ import {
     handleImageDigestJob,
     registerImageWritebackResolver
 } from '@infrastructure/adapters/image.worker';
-import { WEBHOOK_QUEUE, handleWebhookDeliverJob } from '@infrastructure/adapters/webhook.worker';
-import {
-    EmailJobPayloadSchema,
-    ImageDigestJobPayloadSchema,
-    PdfJobPayloadSchema,
-    WebhookDeliverJobPayloadSchema
-} from '@types';
-import { resolveImageTargets } from '@kernel/registry';
+import { EmailJobPayloadSchema, ImageDigestJobPayloadSchema, PdfJobPayloadSchema } from '@types';
+import { resolveImageTargets, resolveConsumers } from '@kernel/registry';
 import { enabledModules } from '../modules';
 
 /**
@@ -70,14 +67,9 @@ export const registerWorkers = (): Promise<void> => {
             schema: ImageDigestJobPayloadSchema,
             prefetch: 1
         }),
-        // `prefetch: 5` — one signed POST per job, I/O-bound like email, and a dead endpoint's
-        // hard timeout (`webhook-delivery.ts`) must not let a burst of jobs pile up serially.
-        consumeFromQueue({
-            queue: WEBHOOK_QUEUE,
-            handler: handleWebhookDeliverJob,
-            schema: WebhookDeliverJobPayloadSchema,
-            prefetch: 5
-        })
+        // Every module-declared consumer — webhooks' `worker.webhook.deliver` today, whatever a
+        // future module adds tomorrow, with no edit needed here either time.
+        ...resolveConsumers(enabledModules).map((consumer) => consumeFromQueue(consumer))
     ]).then(() => {
         logger.info('Queue workers registered.');
     });

@@ -3,12 +3,13 @@
  * Placed orders: admin write and soft delete, plus each account reading back its own. See
  * docs/theory/tactical-ddd.md for the invariants — totals, legal status transitions, what
  * cancelling restores. Depends on products (a line copies the catalogue row's fields at purchase
- * time, through `productRepository`, into this module's OWN `orderLineProductSchema` — not
+ * time, through `productService`, into this module's OWN `orderLineProductSchema` — not
  * `products`' `productSchema`, so the embedded copy has nowhere to carry a live warehouse counter)
  * and inventory (a claim on units, released on cancel or `RESERVATION_EXPIRED`); cart depends on
- * this module in turn, keeping the import graph acyclic. `users` is reached for exactly one thing
- * — `USER_DELETED` below — not for resolving a live account, which stays `delivery`'s and
- * `payments`' job.
+ * this module in turn, keeping the import graph acyclic. `users` is reached two ways: `USER_DELETED`
+ * below, for the detach-on-delete cascade, and `userService.getById` (`services/crud.ts`,
+ * `services/cancel.ts`) for a buyer's stored locale — the confirmation and expiry emails this
+ * module sends, never a live account's authorization state.
  */
 
 import path from 'node:path';

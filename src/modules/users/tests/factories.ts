@@ -9,13 +9,20 @@
  * its part when the policy changes.
  */
 
-import type { UserDocument } from '@modules/users';
-import { userRepository } from '@modules/users';
+import type { UserDocument } from '../model';
+import { userRepository } from '../repository';
 import { assignRole } from '@kernel/access/store';
 import { makeUser } from '../factories';
 import type { UserOverrides } from '../factories';
 
 export { makeUser, PLAIN_PASSWORD, type UserOverrides } from '../factories';
+
+/**
+ * The live repository object, for a sibling's `jest.spyOn` or a raw read/write no named helper
+ * below covers — a wrapper function copies the call, not the binding, so it cannot intercept what
+ * this module's own code reaches internally. Prefer a named helper when one exists.
+ */
+export { userRepository } from '../repository';
 
 /**
  * A compliant password DIFFERENT from `PLAIN_PASSWORD`, for a test that changes or resets one.

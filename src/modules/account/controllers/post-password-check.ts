@@ -22,5 +22,5 @@ export const postPasswordCheck = (request: Request, response: Response) => {
         .then((result) => {
             successResponse<PasswordCheck>(response, result);
         })
-        .catch((error: Error) => rejectDatabaseError(response, 'postPasswordCheck', error));
+        .catch((error: unknown) => rejectDatabaseError(response, 'postPasswordCheck', error));
 };

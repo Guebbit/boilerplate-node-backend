@@ -20,7 +20,7 @@ const invalidUser = { email: 'not-an-email', username: 'ab', password: 'x' };
 const messagesFor = async (locale: 'en' | 'it') => {
     const { zodUserSchema } = await loadBeforeI18n(
         locale,
-        () => import('@modules/users'),
+        () => import('../../model'),
         'users.field-email-invalid'
     );
 
@@ -63,7 +63,7 @@ describe('user validation messages', () => {
         await jest.isolateModulesAsync(async () => {
             const i18nextModule = await import('i18next');
             const i18next = i18nextModule.default;
-            const { zodUserSchema } = await import('@modules/users');
+            const { zodUserSchema } = await import('../../model');
 
             await i18next.init({ lng: 'en', fallbackLng: 'en', resources: mergedResources() });
 

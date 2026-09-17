@@ -24,7 +24,8 @@ import {
 import { RefreshTokenExpiryTime } from '@modules/account/session/config';
 import { keyId } from '@modules/account/session/key-ring';
 import { TokenType } from '@modules/users';
-import { userRepository, hashToken } from '@modules/users';
+import { hashToken } from '@modules/users';
+import { userRepository } from '@modules/users/tests/factories';
 
 setupTestDb();
 

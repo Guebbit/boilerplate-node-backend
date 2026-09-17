@@ -489,6 +489,9 @@ services:
     #
     # Profile-gated, so a plain `up` is unchanged: `--profile integrations` starts it.
     # https://github.com/tarampampam/webhook-tester
+    #
+    # WARNING: owned by the webhooks module — delete it when removing the module
+    # (docs/modules/webhooks.md)
     webhook-tester:
         logging: *container-logging
         profiles: ['integrations']

@@ -1,11 +1,15 @@
 /**
- * `src/infrastructure/runtime/environment.ts` — the two coercions every reader shares.
+ * `src/infrastructure/runtime/environment.ts` — the coercions every reader shares.
  *
- * Small on purpose and tested exhaustively for it: every spelling of "read it as a number" or
- * "read it as a switch" in this codebase goes through these two functions, and the failure modes
- * they exist for are silent ones.
+ * Small on purpose and tested exhaustively for it: every spelling of "read it as a whole number",
+ * "read it as a decimal" or "read it as a switch" in this codebase goes through these functions,
+ * and the failure modes they exist for are silent ones.
  */
-import { environmentFlag, environmentNumber } from '@infrastructure/runtime/environment';
+import {
+    environmentFlag,
+    environmentNumber,
+    environmentDecimal
+} from '@infrastructure/runtime/environment';
 
 /**
  * The two coercions every reader shares.
@@ -71,6 +75,43 @@ describe('environmentNumber', () => {
         expect(withValue('0', () => environmentNumber(CANARY, 30, 1))).toBe(30);
         expect(withValue('-5', () => environmentNumber(CANARY, 30, 1))).toBe(30);
         expect(withValue('1', () => environmentNumber(CANARY, 30, 1))).toBe(1);
+    });
+});
+
+describe('environmentDecimal', () => {
+    it('reads a decimal a deployment set', () => {
+        expect(withValue('0.22', () => environmentDecimal(CANARY, 0.1))).toBe(0.22);
+    });
+
+    it('tolerates surrounding whitespace', () => {
+        expect(withValue('  0.1  ', () => environmentDecimal(CANARY, 0.22))).toBe(0.1);
+    });
+
+    it.each([
+        ['unset', undefined],
+        ['blank', ''],
+        ['whitespace', '   '],
+        ['prose', 'abc']
+    ])('falls back for %s', (_label, value) => {
+        expect(withValue(value, () => environmentDecimal(CANARY, 0.22))).toBe(0.22);
+    });
+
+    /*
+     * The defect this parser exists to close: `products/config.ts`'s boot-time VAT check used to
+     * validate a raw string with a bare `Number(raw)`, which accepts both of these (0.5 and 0.1
+     * respectively) — so a value that PASSED the boot check then silently read back as the
+     * fallback rate here, the moment an order actually needed it.
+     */
+    it.each(['.5', '1e-1', '+.1', 'Infinity', '0x10'])(
+        'refuses %p rather than reading it the way a bare Number() would',
+        (value) => {
+            expect(withValue(value, () => environmentDecimal(CANARY, 0.22))).toBe(0.22);
+        }
+    );
+
+    it('accepts zero and negatives, since a caller with its own range check decides those', () => {
+        expect(withValue('0', () => environmentDecimal(CANARY, 0.22))).toBe(0);
+        expect(withValue('-0.1', () => environmentDecimal(CANARY, 0.22))).toBe(-0.1);
     });
 });
 

@@ -39,7 +39,7 @@ export const handleEmailJob = (job: Partial<EmailJobPayload>): Promise<boolean> 
      */
     return nodemailer(job.request, job.templateName, job.data ?? {})
         .then(() => true)
-        .catch((error: Error) => {
+        .catch((error: unknown) => {
             // Logged AND rethrown: the requeue is what saves the email, the log is what makes a
             // job that keeps failing visible instead of a queue that quietly refills.
             logger.error({ message: 'Email worker failed to send.', error });

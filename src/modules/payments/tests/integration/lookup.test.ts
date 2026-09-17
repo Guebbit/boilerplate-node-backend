@@ -12,8 +12,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
-import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
-import { orderRepository } from '@modules/orders';
+import { createOrder, readOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { getOrderByReference, recordOfflinePayment } from '@modules/payments/services';
 import { buildReference } from '@modules/payments/domain/reference';
 import type { ResponseReject } from '@infrastructure/http/response';
@@ -113,7 +112,7 @@ describe("lookup then settle — the admin's two-step flow", () => {
         );
 
         expect(settled.success).toBe(true);
-        const stored = await orderRepository.findById(String(order._id));
+        const stored = await readOrder(String(order._id));
         expect(stored!.status).toBe('paid');
     });
 });

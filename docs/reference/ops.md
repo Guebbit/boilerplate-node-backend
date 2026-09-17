@@ -81,21 +81,29 @@ periodically", via `db/run-script.ts`.
 | `npm run reap:orders`            | 02:10 nightly  | No     | Anonymizes an order's remaining PII once its retention window has passed.                               |
 | `npm run reap:payments`          | 02:15 nightly  | No     | Deletes abandoned (never-settled) payment attempts past their retention window.                         |
 | `npm run sweep:order-effects`    | 02:20 nightly  | No     | Re-announces `ORDER_CANCELLED` for a refund the event bus's one delivery attempt did not carry through. |
+| `npm run sweep:webhook-retries`  | every minute   | No     | Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.   |
 
-`docker/crontab` and this list are staggered five minutes apart so five jobs opening their own
-Mongo connection do not all land on the connection pool at once — each job's own header in `ops/`
-has the full reasoning. `tests/cross-cutting/scheduled-jobs.test.ts` asserts `docker/crontab` and
-`package.json`'s `reap:*`/`sweep:*` scripts agree in both directions — a script renamed in one and
-not the other is either a job that fails every night or cleanup that silently stops running.
+`docker/crontab` and the five nightly jobs above are staggered five minutes apart so they do not all
+land on the connection pool at once — each job's own header in `ops/` has the full reasoning.
+`sweep:webhook-retries` is the one job on a different schedule entirely: it runs every minute,
+because the sweep interval IS the retry granularity — see
+[webhooks](../modules/webhooks.md#the-delivery-path). `tests/cross-cutting/scheduled-jobs.test.ts`
+asserts `docker/crontab` and `package.json`'s `reap:*`/`sweep:*` scripts agree in both directions —
+a script renamed in one and not the other is either a job that fails every run or cleanup that
+silently stops running — and that every scheduled script still names a file that exists, so
+deleting a module's `ops/*.ts` script flags its crontab line rather than leaving it to fail quietly
+at 2am.
 
 **Mutual exclusion.** `deploy: replicas: 1` on the `cron` service is what actually stops two passes
 racing over the same collection — nothing here is meant to scale. `withLease`
 (`src/infrastructure/persistence/lease.ts`) is the backstop if it ever is: an atomic Mongo upsert
 that only one caller can hold at a time, TTL-bounded so a crashed holder's lease still expires.
 `reap:inactive-accounts` wraps its work in it, as the reference implementation — it hard-deletes
-accounts, so it is where "exactly one runner" earns its keep. The other four are correct today
-under `replicas: 1` alone and are not wrapped; any future scheduled job that would NOT be safe to
-run twice concurrently should wrap its work in it too.
+accounts, so it is where "exactly one runner" earns its keep. The other five are correct today
+under `replicas: 1` alone and are not wrapped — `sweep:webhook-retries` included, whose own
+idempotency (`webhookDeliveryRepository.claimPending`'s atomic claim) is a second, independent
+reason a concurrent pass costs nothing. Any future scheduled job that would NOT be safe to run
+twice concurrently should wrap its work in `withLease` too.
 
 **Observability.** Every `withLease` call stamps its lease document's `lastSuccessAt` on success and
 `lastError` on a throw, and `GET /observability/health`'s `jobs` array is built to report that set —
@@ -110,7 +118,7 @@ See `docs/tools/observability-layer.md`.
 Four collections delete their own rows on a timer, via a Mongo TTL index rather than a scheduled
 job — that is cleanup with no scheduler involved at all, the cheapest form there is, and it stays
 right for state with no retry story (a cart, an audit entry, a feedback ticket, an abandoned lease
-never need a second attempt at expiring). The five jobs above are the other half: retention and
+never need a second attempt at expiring). The six jobs above are the other half: retention and
 periodic work that DOES need to run as a step, with a real success/failure outcome — see Scheduled
 jobs above.
 

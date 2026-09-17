@@ -17,9 +17,10 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
-import { orderRepository } from '@modules/orders';
-import { productRepository } from '@modules/products';
+import { orderService } from '@modules/orders';
+import { productService } from '@modules/products';
 import type { ProductDocument } from '@modules/products';
+import type { AuthContext } from '@types';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
@@ -39,19 +40,21 @@ interface ReorderLine {
 /**
  * Copy an order's lines back into the caller's cart.
  *
- * Scoped to the caller's OWN orders (`visibleScope`) — refilling someone else's purchases would
- * leak what they bought, not just misuse a privilege. Lines are re-resolved against today's
- * catalogue via `findPublicById`, and a vanished/inactive product is SKIPPED, not refused, unlike
- * `./items`' `upsertCartItem` — a total skip answers 409 `REORDER_UNAVAILABLE` rather than an
- * empty 200. Writes to the cart happen sequentially; see the loop below for why.
+ * Scoped to the caller's OWN, still-visible orders (`callerScope`) — refilling someone else's
+ * purchases would leak what they bought, not just misuse a privilege. Lines are re-resolved
+ * against today's catalogue via `findPublicById`, and a vanished/inactive product is SKIPPED, not
+ * refused, unlike `./items`' `upsertCartItem` — a total skip answers 409 `REORDER_UNAVAILABLE`
+ * rather than an empty 200. Writes to the cart happen sequentially; see the loop below for why.
  */
 export const reorderIntoCart = (
-    userId: string,
+    authContext: AuthContext,
     orderId: string,
     context: CallerContext
-): Promise<ResponseSuccess<CartView> | ResponseReject> =>
-    orderRepository
-        .findByIdScoped(orderId, orderRepository.visibleScope(userId))
+): Promise<ResponseSuccess<CartView> | ResponseReject> => {
+    const userId = authContext.id;
+
+    return orderService
+        .getById(orderId, orderService.callerScope(authContext))
         .then<ResponseSuccess<CartView> | ResponseReject>((order) => {
             if (!order) return generateReject(404, [t('cart.reorder.order-not-found')]);
 
@@ -72,7 +75,7 @@ export const reorderIntoCart = (
             return Promise.all(
                 requested.map(
                     (line): Promise<ReorderLine> =>
-                        productRepository
+                        productService
                             .findPublicById(line.productId)
                             .then((product) => ({ ...line, product }))
                 )
@@ -118,3 +121,4 @@ export const reorderIntoCart = (
             }
             return result;
         });
+};

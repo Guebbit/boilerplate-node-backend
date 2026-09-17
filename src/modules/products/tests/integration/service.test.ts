@@ -11,9 +11,9 @@ import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import * as productService from '@modules/products/service';
-import { productRepository } from '@modules/products';
+import { productRepository } from '../../repository';
 import type { ResponseReject } from '@infrastructure/http/response';
-import type { ProductDocument } from '@modules/products';
+import type { ProductDocument } from '../../model';
 import type { Caller } from '@types';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
@@ -670,5 +670,38 @@ describe('productService.remove', () => {
 
         expect(result.success).toBe(true);
         expect(await productRepository.findById(pid)).toBeNull();
+    });
+});
+
+describe('productService.findManyByIds', () => {
+    // Reached through the object, not a bare import: `findManyByIds` is published only there —
+    // see `@modules/products`'s own barrel, which would otherwise gain a second door onto it.
+    const { findManyByIds } = productService.productService;
+
+    it('reads back every product named, in one round trip', async () => {
+        const keyboard = await createProduct({ title: 'Keyboard' });
+        const mouse = await createProduct({ title: 'Mouse' });
+
+        const found = await findManyByIds([String(keyboard._id), String(mouse._id)]);
+
+        expect(found.map((product) => String(product._id)).toSorted()).toEqual(
+            [String(keyboard._id), String(mouse._id)].toSorted()
+        );
+    });
+
+    /**
+     * `toObjectId` throws on a malformed id (`BSONError`), and `.map()` used to run outside any
+     * promise chain — a synchronous throw out of a function every caller (`orders`'
+     * `resolveCurrentImages`) treats as `Promise`-returning, uncatchable by its own `.catch()`.
+     */
+    it('rejects rather than throws for a malformed id', async () => {
+        // One call, captured — a second call's promise would go unhandled and crash the suite,
+        // the same failure mode a caller's own unguarded call would hit in production.
+        let result: Promise<unknown> | undefined;
+        expect(() => {
+            result = findManyByIds(['not-an-id']);
+        }).not.toThrow();
+
+        await expect(result).rejects.toThrow();
     });
 });

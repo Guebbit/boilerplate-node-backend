@@ -96,17 +96,18 @@ const invalidEmailPolicy = (): string[] => {
 };
 
 /**
- * The one variable in this file that must be ABSENT rather than present — the opposite of every
- * other check here. `NODE_WEBHOOK_DEMO_SINK_URL` relaxes `@infrastructure/adapters/ssrf-guard` for
- * one exact hostname (`@modules/webhooks/config`'s own `getWebhookDemoAllowedHost` already refuses
- * to honour it outside development/test); this catches the case that check cannot: the variable
- * SET under production, refused here regardless of whether a delivery would ever be attempted.
+ * Every module-declared {@link AppModule.forbiddenInProduction} variable that is actually set,
+ * under `NODE_ENV=production` — the opposite of every other check here, which refuses an ABSENT
+ * value rather than a present one.
  *
- * @returns `['NODE_WEBHOOK_DEMO_SINK_URL']` when set under production, otherwise `[]`
+ * @param appModules - the enabled module list, each contributing its own `forbiddenInProduction`
+ * @returns the offending variable names, empty outside production
  */
-const forbiddenUnderProduction = (): string[] =>
-    process.env.NODE_ENV === 'production' && (process.env.NODE_WEBHOOK_DEMO_SINK_URL ?? '') !== ''
-        ? ['NODE_WEBHOOK_DEMO_SINK_URL']
+const forbiddenUnderProduction = (appModules: AppModule[]): string[] =>
+    process.env.NODE_ENV === 'production'
+        ? appModules
+              .flatMap((appModule) => appModule.forbiddenInProduction ?? [])
+              .filter((key) => (process.env[key] ?? '') !== '')
         : [];
 
 /**
@@ -137,7 +138,7 @@ export const assertRequiredConfig = (appModules: AppModule[]): void => {
         ...invalidEmailPolicy(),
         ...appModules.flatMap((appModule) => appModule.customCheck?.() ?? [])
     ];
-    const forbidden = forbiddenUnderProduction();
+    const forbidden = forbiddenUnderProduction(appModules);
 
     // Two different failure shapes ("absent" vs "present") get two clauses rather than one
     // combined variable list, so the message still says which is wrong for which variable.

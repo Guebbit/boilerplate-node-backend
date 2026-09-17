@@ -77,7 +77,7 @@ export const postLoginTwoFactor = (
                 }
             );
         })
-        .catch((error: Error) => {
+        .catch((error: unknown) => {
             authTwoFactorChallengeTotal.inc({ status: 'failure' });
             rejectDatabaseError(response, 'postLoginTwoFactor', error);
         });

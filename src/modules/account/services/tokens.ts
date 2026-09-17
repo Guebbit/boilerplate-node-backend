@@ -8,13 +8,12 @@
 
 import type { Session } from '@types';
 import {
-    userRepository,
+    userService,
     hashToken,
     isLiveRefreshSession,
     type Token,
     type UserDocument
 } from '@modules/users';
-import { userService } from '@modules/users';
 import { generateSuccess, generateReject } from '@infrastructure/http/response';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
 import { t } from '@infrastructure/i18n';
@@ -33,7 +32,7 @@ export const findLiveTokenEntry = (
     type: Token['type'],
     token: string
 ): Promise<{ user: UserDocument; entry: Token } | undefined> =>
-    userRepository.findByToken(token, type).then((user) => {
+    userService.findByToken(token, type).then((user) => {
         if (!user) return undefined;
 
         // `tokens[].token` is hashed at rest — hash `token` the same way to re-find it on the
@@ -99,7 +98,7 @@ export const sessionsList = (
     cookieToken?: string
 ): Promise<ResponseSuccess<{ sessions: Session[] }> | ResponseReject> =>
     // `tokens` is `select: false` — listing them is this endpoint's whole point.
-    userRepository.findByIdWithCredentials(userId).then((user) => {
+    userService.findByIdWithCredentials(userId).then((user) => {
         if (!user) return generateReject(404, [t('users.not-found')]);
 
         const sessions = user.tokens

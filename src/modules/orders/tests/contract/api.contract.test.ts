@@ -12,7 +12,7 @@ import { api, authenticateAs } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
-import { orderRepository } from '@modules/orders';
+import { orderRepository } from '../../repository';
 
 // No real Chromium in the test environment — same stub `invoice-locale.test.ts` uses. Only the
 // invoice route's scope is under test here, not the render itself.

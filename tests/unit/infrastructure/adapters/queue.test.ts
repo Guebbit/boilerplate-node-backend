@@ -35,19 +35,63 @@ const channelMock = () => ({
     on: mockChannelOn
 });
 const mockCreateChannel = jest.fn().mockImplementation(() => Promise.resolve(channelMock()));
-const mockClose = jest.fn().mockImplementation(() => Promise.resolve());
-const mockOn = jest.fn();
-const mockConnect = jest.fn().mockImplementation(() =>
-    Promise.resolve({
-        createChannel: mockCreateChannel,
-        on: mockOn,
-        close: mockClose
-    })
-);
+const mockModelClose = jest.fn().mockImplementation(() => Promise.resolve());
+
+/** Handlers `queue.ts` registered on the recovering connection's own events (`connect`/`disconnect`). */
+let modelListeners: Record<string, ((...args: never[]) => void)[]> = {};
+const mockModelOn = jest.fn((event: string, handler: (...args: never[]) => void): void => {
+    (modelListeners[event] ??= []).push(handler);
+});
+/** Fires every handler `queue.ts` registered for one event — simulates the library emitting it. */
+const emitModelEvent = (event: string, ...args: never[]) => {
+    for (const handler of modelListeners[event] ?? []) handler(...args);
+};
+const recoveringModelMock = {
+    createChannel: mockCreateChannel,
+    on: mockModelOn,
+    close: mockModelClose
+};
+
+/** The one thing `setup` reads off the model it is handed — same shape on every (re)connect. */
+const fakeConnectionModel = { createChannel: mockCreateChannel };
+
+/** The `setup` callback `queue.ts` passed to `{ recovery: { setup } }` on the one `connect()` call. */
+let capturedSetup: ((model: unknown) => Promise<void>) | undefined;
+
+/**
+ * `amqplib.connect(url, { recovery: { setup } })`'s real contract, replayed exactly: `setup` is
+ * awaited BEFORE this resolves, and this resolves only ONCE, on the first successful connect —
+ * never again for a reconnect, which the library instead surfaces as `connect`/`disconnect`
+ * events on the object this resolves to (see `simulateReconnect` below). `queue.ts` itself is
+ * what is under test here, not a shortcut around amqplib's own documented shape.
+ */
+const mockConnect = jest
+    .fn()
+    .mockImplementation(
+        async (
+            _url: string,
+            options: { recovery?: { setup?: (model: unknown) => Promise<void> } }
+        ) => {
+            modelListeners = {};
+            capturedSetup = options.recovery?.setup;
+            await capturedSetup?.(fakeConnectionModel);
+            return recoveringModelMock;
+        }
+    );
 
 jest.mock('amqplib', () => ({
     connect: (...args: unknown[]) => mockConnect(...args)
 }));
+
+/**
+ * Simulates the library recovering from a drop: it re-runs `setup` on a fresh model (a new
+ * channel, in this mock) and then emits `connect` — same order `node_modules/amqplib/lib/
+ * recovery.js`'s `_connect()` uses, `setup` awaited before the event fires.
+ */
+const simulateReconnect = async () => {
+    await capturedSetup?.(fakeConnectionModel);
+    emitModelEvent('connect');
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -62,6 +106,18 @@ const disableRabbitMQ = () => {
     delete process.env.NODE_RABBITMQ_USER;
     delete process.env.NODE_RABBITMQ_PASS;
     delete process.env.NODE_RABBITMQ_ENABLED;
+};
+
+/**
+ * Enables the queue AND waits for its one connection to actually finish. `getChannel()`
+ * deliberately never waits for one itself (rule 2, `queue.ts`'s own doc) — most cases below are
+ * about what happens once a channel exists, so they need the wait this helper does instead.
+ */
+const ensureConnected = async () => {
+    enableRabbitMQ();
+    await stopQueue();
+    await startQueue();
+    await mockConnect.mock.results.at(-1)!.value;
 };
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -102,7 +158,7 @@ describe('publishToQueue()', () => {
     });
 
     it('publishes a message when enabled', async () => {
-        enableRabbitMQ();
+        await ensureConnected();
         const result = await publishToQueue({ queue: 'emails', payload: { to: 'a@b.c' } });
         expect(result).toBe(true);
         expect(mockSendToQueue).toHaveBeenCalledWith('emails', expect.any(Buffer), {
@@ -118,7 +174,7 @@ describe('publishToQueue()', () => {
      * and the binding has to exist before the work queue names the exchange.
      */
     it('declares the work queue pointing at a bound dead-letter queue', async () => {
-        enableRabbitMQ();
+        await ensureConnected();
         await publishToQueue({ queue: 'emails', payload: { to: 'a@b.c' } });
 
         expect(mockAssertExchange).toHaveBeenCalledWith(DEAD_LETTER_EXCHANGE, 'direct', {
@@ -147,7 +203,7 @@ describe('publishToQueue()', () => {
      * and the only trace is an `unhandledRejection` with no request id attached.
      */
     it('answers false when the channel dies mid-publish, rather than rejecting', async () => {
-        enableRabbitMQ();
+        await ensureConnected();
         mockAssertExchange.mockRejectedValueOnce(new Error('Channel closed'));
 
         await expect(publishToQueue({ queue: 'emails', payload: { to: 'a@b.c' } })).resolves.toBe(
@@ -168,12 +224,9 @@ describe('the channel is supervised, not only the connection', () => {
      * `GET /observability/health` still reports `queue: "ready"`.
      */
     it('registers error and close listeners on the channel', async () => {
-        enableRabbitMQ();
-        // Drop whatever handle an earlier case cached, so this opens a fresh channel.
-        await stopQueue();
         mockChannelOn.mockClear();
 
-        await startQueue();
+        await ensureConnected();
 
         expect(mockChannelOn.mock.calls.map(([event]) => event)).toEqual(
             expect.arrayContaining(['error', 'close'])
@@ -191,10 +244,12 @@ describe('consumeFromQueue()', () => {
         expect(mockConsume).not.toHaveBeenCalled();
     });
 
-    it('registers a consumer when enabled', async () => {
-        enableRabbitMQ();
+    it('registers a consumer once the connection is ready', async () => {
+        await ensureConnected();
+
         const handler = jest.fn().mockResolvedValue(true);
         await consumeFromQueue({ queue: 'pdfs', handler });
+
         expect(mockAssertQueue).toHaveBeenCalledWith('pdfs', {
             durable: true,
             deadLetterExchange: DEAD_LETTER_EXCHANGE,
@@ -203,6 +258,24 @@ describe('consumeFromQueue()', () => {
         });
         expect(mockPrefetch).toHaveBeenCalledWith(1);
         expect(mockConsume).toHaveBeenCalled();
+    });
+
+    it('records the registration but binds nothing yet while still connecting', async () => {
+        enableRabbitMQ();
+        await stopQueue();
+        // Stands in for a broker that has not answered yet — deterministic, unlike racing
+        // `consumeFromQueue`'s own resolution against how many microtask ticks the mocked
+        // connect+setup chain happens to need.
+        mockConnect.mockImplementationOnce(() => new Promise(() => undefined));
+        mockConsume.mockClear();
+        const handler = jest.fn().mockResolvedValue(true);
+
+        // `getChannel()` kicks off the connection but never waits on it (rule 2), so a caller
+        // that reaches `consumeFromQueue` before it settles gets a resolved promise with nothing
+        // bound — the pending connect above is what guarantees that stays true through the assertion.
+        await consumeFromQueue({ queue: 'still-connecting', handler });
+
+        expect(mockConsume).not.toHaveBeenCalled();
     });
 });
 
@@ -243,11 +316,19 @@ describe('startQueue() / stopQueue()', () => {
  */
 /** Register a consumer and hand back the callback the broker would invoke per delivery. */
 const captureConsumerCallback = async (handler: jest.Mock, schema?: ZodType) => {
-    enableRabbitMQ();
     mockAssertQueue.mockResolvedValue({ queue: 'jobs', messageCount: 0, consumerCount: 0 });
     mockPrefetch.mockImplementation(() => Promise.resolve());
     mockConsume.mockResolvedValue({ consumerTag: 'tag-1' });
     mockCreateChannel.mockImplementation(() => Promise.resolve(channelMock()));
+
+    // `consumeFromQueue` only RECORDS a binding while still connecting (rule 2) — every case
+    // below needs the real `ch.consume()` call to capture its delivery callback, so the
+    // connection is established first, regardless of what an earlier test left it as.
+    await ensureConnected();
+    // A prior test's own registrations replay onto this fresh channel too (`consumerBindings` is
+    // module-level and this file never resets it) — cleared so `.mock.calls[0]` below is this
+    // call's own registration, not one of theirs.
+    mockConsume.mockClear();
 
     await consumeFromQueue({ queue: 'jobs', handler, schema });
 
@@ -406,5 +487,61 @@ describe('consumeFromQueue contract validation', () => {
         await Promise.resolve();
 
         expect(handler).toHaveBeenCalledTimes(1);
+    });
+});
+
+/**
+ * "Consumers never come back": amqplib's recovery re-runs `setup` after every successful
+ * (re)connect, and `setup` (`setupChannel` in `queue.ts`) is what re-binds every known consumer —
+ * without that replay, a fresh channel from a reconnect starts with none of its own.
+ */
+describe('a reconnect gets its consumers back', () => {
+    afterEach(disableRabbitMQ);
+
+    it('re-binds a known consumer onto the reconnect channel, which then consumes a job', async () => {
+        await ensureConnected();
+
+        const handler = jest.fn().mockResolvedValue(true);
+        await consumeFromQueue({ queue: 'reconnect-jobs', handler });
+        expect(mockConsume).toHaveBeenCalledWith('reconnect-jobs', expect.any(Function));
+
+        // The broker drops and the library reconnects on its own — `setup` runs again on a fresh
+        // model (`mockCreateChannel` standing in for the fresh channel it opens), THEN `connect`
+        // fires, same order `node_modules/amqplib/lib/recovery.js`'s `_connect()` uses.
+        mockConsume.mockClear();
+        mockCreateChannel.mockClear();
+        await simulateReconnect();
+
+        expect(mockCreateChannel).toHaveBeenCalledTimes(1);
+        const rebound = mockConsume.mock.calls.find(([queue]) => queue === 'reconnect-jobs');
+        expect(rebound).toBeDefined();
+
+        const onMessage = rebound![1] as (message: unknown) => void | Promise<void>;
+        await onMessage(delivery({ jobId: 'after-reconnect' }));
+        await Promise.resolve();
+
+        expect(handler).toHaveBeenCalledWith({ jobId: 'after-reconnect' }, expect.anything());
+        expect(mockAck).toHaveBeenCalledTimes(1);
+    });
+});
+
+/**
+ * Rule 1 (`queue.ts`'s own doc, from `docs/tools/rabbitmq.md`): don't wait for RabbitMQ at boot.
+ * With recovery on, amqplib's own `connect()` promise settles only once the broker actually
+ * answers, retrying forever underneath — so `startQueue` must never await it, or a broker that is
+ * merely still starting would stop the app booting at all.
+ */
+describe('startQueue() never waits for the broker', () => {
+    afterEach(disableRabbitMQ);
+
+    it('resolves even while the connection is still pending', async () => {
+        enableRabbitMQ();
+        await stopQueue();
+        // Stands in for a broker that never answers: this one connect attempt never settles, so
+        // if `startQueue` ever awaited it — even transitively — this test would time out rather
+        // than resolve.
+        mockConnect.mockImplementationOnce(() => new Promise(() => undefined));
+
+        await expect(startQueue()).resolves.toBeUndefined();
     });
 });

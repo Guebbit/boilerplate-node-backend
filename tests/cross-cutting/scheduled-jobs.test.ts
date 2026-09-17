@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 
 /**
@@ -24,13 +24,15 @@ const scriptsInCrontab = (): string[] =>
         .filter((line) => line.trim() !== '' && !line.trim().startsWith('#'))
         .flatMap((line) => [...line.matchAll(/npm run ([\w:-]+)/g)].map(([, name]) => name));
 
-/** Every `package.json` script name in the `reap:*`/`sweep:*` family the crontab is meant to run. */
-const scheduledPackageScripts = (): string[] => {
+/** Every `package.json` script in the `reap:*`/`sweep:*` family, name to its `npm run` command. */
+const scheduledPackageScripts = (): Record<string, string> => {
     const { scripts } = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as {
         scripts: Record<string, string>;
     };
 
-    return Object.keys(scripts).filter((name) => /^(?:reap|sweep):/.test(name));
+    return Object.fromEntries(
+        Object.entries(scripts).filter(([name]) => /^(?:reap|sweep):/.test(name))
+    );
 };
 
 describe('docker/crontab and package.json agree on the scheduled jobs', () => {
@@ -45,12 +47,29 @@ describe('docker/crontab and package.json agree on the scheduled jobs', () => {
     it('schedules every reap:*/sweep:* script package.json declares', () => {
         const scheduled = new Set(scriptsInCrontab());
 
-        for (const name of scheduledPackageScripts()) expect(scheduled).toContain(name);
+        for (const name of Object.keys(scheduledPackageScripts()))
+            expect(scheduled).toContain(name);
     });
 
     it('actually reads both sides', () => {
         // A canary: an empty result must mean "the file moved", not "everything agreed".
         expect(scriptsInCrontab().length).toBeGreaterThan(0);
-        expect(scheduledPackageScripts().length).toBeGreaterThan(0);
+        expect(Object.keys(scheduledPackageScripts()).length).toBeGreaterThan(0);
+    });
+});
+
+/**
+ * The third link in the chain a module removal walks: `tsc` flags an `ops/` script importing a
+ * deleted module, this flags the now-dangling `npm run` entry, and the test above already flags
+ * the crontab line naming it. Without this, deleting a module leaves its `reap:*`/`sweep:*` script
+ * green — `npm run <name>` still "exists", it just fails the moment cron actually runs it.
+ */
+describe('every scheduled script names a file that exists', () => {
+    const scripts = scheduledPackageScripts();
+
+    it.each(Object.entries(scripts))('%s (%s)', (_name, command) => {
+        const [, scriptPath] = /tsx (\S+\.ts)/.exec(command) ?? [];
+        expect(scriptPath).toBeDefined();
+        expect(existsSync(path.join(ROOT, scriptPath))).toBe(true);
     });
 });

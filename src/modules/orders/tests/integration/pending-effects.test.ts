@@ -13,7 +13,8 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { orderService } from '@modules/orders/services';
-import { orderRepository, ORDER_CANCELLED } from '@modules/orders';
+import { ORDER_CANCELLED } from '../../events';
+import { orderRepository } from '../../repository';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { asOwner } from '../../../../../tests/support/callers';
 

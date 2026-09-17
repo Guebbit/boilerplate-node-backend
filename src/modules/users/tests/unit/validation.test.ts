@@ -6,7 +6,7 @@
  * time, before `i18next.init()`, so Zod silently falls back to English — these cases catch that,
  * and a message attached to the wrong rule, by asserting on `en.json`'s own copy.
  */
-import { zodUserSchema } from '@modules/users';
+import { zodUserSchema } from '@modules/users/model';
 import { createUserBodyPasswordMin } from '@api/schemas.zod';
 import { readLocaleDictionary } from '@infrastructure/i18n';
 import { PLAIN_PASSWORD } from '@modules/users/factories';

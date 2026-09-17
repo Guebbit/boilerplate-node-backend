@@ -11,7 +11,8 @@ import { testCallerContext } from '@tests/caller-context';
 import { callerContextAs } from '@tests/callers';
 import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
 import * as userService from '@modules/users/service';
-import { userRepository, USER_SETUP_REQUESTED } from '@modules/users';
+import { USER_SETUP_REQUESTED } from '../../events';
+import { userRepository } from '../../repository';
 import { usersAuditActions } from '@modules/users/audit';
 import * as auditPort from '@infrastructure/observability/audit';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
@@ -19,7 +20,7 @@ import { assignRole } from '@kernel/access/store';
 import { seedPresetRoles } from '@kernel/access/seed';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
-import type { UserDocument } from '@modules/users';
+import type { UserDocument } from '../../model';
 
 // See `tests/support/ports.ts`: the namespace import above must resolve a plain `jest.fn()`,
 // not the real (non-configurable) export, for `observePort` to be able to clear and hand it out.

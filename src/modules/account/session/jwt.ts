@@ -9,7 +9,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { sign, verify, decode } from 'jsonwebtoken';
-import { userRepository, TokenType, hashToken } from '@modules/users';
+import { userService, TokenType, hashToken } from '@modules/users';
 import {
     getAccessTokenRing,
     getRefreshTokenRing,
@@ -95,7 +95,7 @@ export const verifyAccessToken = (token: string): Promise<TokenData> =>
  */
 export const verifyRefreshToken = (token: string): Promise<TokenData> =>
     verifyAgainstRing(token, getRefreshTokenRing()).then((data) =>
-        userRepository.findByTokenValue(token).then((user) => {
+        userService.findByTokenValue(token).then((user) => {
             if (!user) throw new Error('Forbidden');
             return data;
         })
@@ -136,7 +136,7 @@ export const createRefreshToken = (
     remember?: RefreshTokenExpiryTime,
     amr: string[] = ['pwd']
 ) =>
-    userRepository
+    userService
         // Credentials included: minting a session pushes onto this document's `tokens`.
         .findByIdWithCredentials(id)
         .then((user) => {
@@ -174,7 +174,7 @@ export const createRefreshToken = (
  * @param refreshToken - the refresh JWT that was just exchanged
  */
 export const recordRefreshTokenUse = (refreshToken: string): Promise<void> =>
-    userRepository
+    userService
         .tokenTouch(refreshToken)
         .then(() => undefined)
         .catch(() => undefined);
@@ -211,7 +211,7 @@ export class TokenReuseError extends Error {
 
 /** Every refresh token this account currently holds, gone — the reuse-detected response. */
 const revokeAllRefreshTokens = (userId: string): Promise<void> =>
-    userRepository
+    userService
         .findByIdWithCredentials(userId)
         .then((user) => (user ? user.tokenRemoveAll(TokenType.REFRESH) : undefined));
 
@@ -232,7 +232,7 @@ const reissueRotated = (
     authTime: number,
     amr: string[]
 ): Promise<{ accessToken: string; refreshToken: string; refreshMaxAgeMs: number }> =>
-    userRepository.findByIdWithCredentials(id).then((user) => {
+    userService.findByIdWithCredentials(id).then((user) => {
         if (!user) throw new Error('User not found');
 
         const claims = { id, auth_time: authTime, amr } as TokenData;
@@ -276,10 +276,10 @@ export const rotateRefreshToken = (
             const authTime = rawAuthTime ?? 0;
             const carriedAmr = amr ?? ['pwd'];
 
-            return userRepository.tokenSupersede(oldToken).then((won) => {
+            return userService.tokenSupersede(oldToken).then((won) => {
                 if (won) return reissueRotated(id, remainingMs, authTime, carriedAmr);
 
-                return userRepository.findByTokenValue(oldToken).then((user) => {
+                return userService.findByTokenValue(oldToken).then((user) => {
                     const digest = hashToken(oldToken);
                     const entry = user?.tokens.find((tk) => tk.token === digest);
 

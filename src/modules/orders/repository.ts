@@ -118,26 +118,13 @@ const ownerScope = (userId: string): Record<string, unknown> => ({
 });
 
 /**
- * What a non-admin caller is allowed to see: their own orders, not soft-deleted — the
- * counterpart of `publicScope` in `@modules/products`, a rule about which *rows* exist for an
- * audience. Two axes, composed rather than merged: `ownerScope` answers "whose", `deletedAt`
- * answers "still there"; an admin passes no scope, which is how they read other people's orders
- * and soft-deleted ones. `$exists: false` not `null`: `remove` unsets the field to restore, so a
- * restored order has no `deletedAt` key.
- */
-const visibleScope = (userId: string): Record<string, unknown> => ({
-    ...ownerScope(userId),
-    deletedAt: { $exists: false }
-});
-
-/**
  * Move an order between statuses, but only from one of the expected ones — atomically. The
  * condition rides IN THE FILTER, not a preceding read: two requests racing an order (a customer
  * cancelling while admin marks it shipped) must not both read `pending` and both write. mongod
  * evaluates the filter while holding the document, so exactly one matches; the loser gets `null`
  * and a follow-up read only informs the error message. The scope composes the same way:
- * `visibleScope` rides in the same filter, so there's no window between an ownership check and
- * the write.
+ * `callerScope` (`services/scope.ts`) rides in the same filter, so there's no window between an
+ * ownership check and the write.
  *
  * @param effects - consequences the mover cannot guarantee, stored in the SAME write as the
  *   status. Single-document atomicity is what makes them exactly as durable as the move that
@@ -338,7 +325,6 @@ export const orderRepository: Omit<Repository<OrderDocument>, 'search'> & {
         scope?: Record<string, unknown>
     ) => Promise<OrderDocument | undefined>;
     ownerScope: (userId: string) => Record<string, unknown>;
-    visibleScope: (userId: string) => Record<string, unknown>;
     updateStatusIfIn: (
         id: string,
         from: readonly string[],
@@ -358,7 +344,6 @@ export const orderRepository: Omit<Repository<OrderDocument>, 'search'> & {
     search,
     findByIdScoped,
     ownerScope,
-    visibleScope,
     updateStatusIfIn,
     findWithPendingEffects,
     clearPendingEffect,

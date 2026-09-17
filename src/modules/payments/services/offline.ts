@@ -15,7 +15,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { OrderStatus, PaymentMethod } from '@types';
-import { orderRepository, orderTotal } from '@modules/orders';
+import { orderService, orderTotal } from '@modules/orders';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import type { CallerContext } from '@infrastructure/http/request';
@@ -57,7 +57,7 @@ export const recordOfflinePayment = (
     if (input.receivedAt && new Date(input.receivedAt).getTime() > Date.now())
         return Promise.resolve(generateReject(422, [t('payments.received-at-future')]));
 
-    return orderRepository.findById(orderId).then((order) => {
+    return orderService.getById(orderId).then((order) => {
         if (!order) return generateReject(404, [t('payments.order-not-found')]);
         if (order.status !== OrderStatus.pending)
             return generateReject(409, [

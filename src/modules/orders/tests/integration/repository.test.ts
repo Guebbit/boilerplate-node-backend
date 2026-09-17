@@ -13,7 +13,7 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, makeOrder, toOrderItem } from '@modules/orders/tests/factories';
 import type { ProductDocument } from '@modules/products';
-import { orderRepository } from '@modules/orders';
+import { orderRepository } from '../../repository';
 import { DEFAULT_SORT } from '@infrastructure/persistence/search';
 
 setupTestDb();
@@ -172,7 +172,7 @@ describe('orderRepository', () => {
             const asAdmin = await orderRepository.findByIdScoped(expected);
             const asOwner = await orderRepository.findByIdScoped(
                 expected,
-                orderRepository.visibleScope(String(user._id))
+                orderRepository.ownerScope(String(user._id))
             );
 
             // Not `toBeDefined()`: the failure this guards against is a value that stringifies
@@ -188,7 +188,7 @@ describe('orderRepository', () => {
 
             const asOwner = await orderRepository.findByIdScoped(
                 String(order._id),
-                orderRepository.visibleScope(String(user._id))
+                orderRepository.ownerScope(String(user._id))
             );
 
             // The serializer deletes `_id` after writing `id`. Asserted here rather than left
@@ -210,7 +210,7 @@ describe('orderRepository', () => {
 
             const asStranger = await orderRepository.findByIdScoped(
                 String(order._id),
-                orderRepository.visibleScope(String(stranger._id))
+                orderRepository.ownerScope(String(stranger._id))
             );
 
             expect(asStranger).toBeUndefined();
