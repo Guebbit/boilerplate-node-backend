@@ -13,8 +13,9 @@ import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { cartService } from '@modules/cart';
-import { productRepository } from '@modules/products';
-import { orderService, orderRepository } from '@modules/orders';
+import { productService } from '@modules/products';
+import { orderService } from '@modules/orders';
+import { orderRepository } from '@modules/orders/tests/factories';
 import { inventoryService } from '@modules/inventory';
 import { cartRepository } from '@modules/cart/repository';
 import { logger } from '@infrastructure/adapters/logger';
@@ -54,7 +55,7 @@ beforeEach(() => {
 
 /** Both counters and the number derived from them — what every assertion here reads. */
 const countersOf = async (productId: unknown) => {
-    const stored = await productRepository.findByIdRaw(String(productId));
+    const stored = await productService.findByIdRaw(String(productId));
     return {
         onHand: stored?.onHand,
         reserved: stored?.reserved,

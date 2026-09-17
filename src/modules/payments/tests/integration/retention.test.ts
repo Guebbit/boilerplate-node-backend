@@ -13,7 +13,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
-import { orderRepository } from '@modules/orders';
+import { detachOrderUserId } from '@modules/orders/tests/factories';
 import { createIntent, confirmPayment, reapAbandonedPayments } from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
 import { paymentModel } from '@modules/payments/model';
@@ -80,7 +80,7 @@ describe('payments — detach on account erasure', () => {
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
-        await orderRepository.detachUserId(String(user._id), new Date(Date.now() + 100_000));
+        await detachOrderUserId(String(user._id), new Date(Date.now() + 100_000));
 
         const intent = await createIntent(String(order._id), asOwner('admin-caller'));
 

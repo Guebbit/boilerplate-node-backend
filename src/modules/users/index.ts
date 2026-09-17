@@ -1,24 +1,24 @@
 /**
  * @module
- * Users — public barrel, the only surface a sibling module may import; lint errors on any reach
- * into internals like `@modules/users/service`. Wider than most: `account` needs `userRepository`
- * too, since it is a second service over the same record — the repo's one `shared-kernel`
- * relationship (`module-coupling-account` in `.dependency-cruiser.cjs`). `userModel` stays
- * unexported; nothing outside this module calls it.
+ * Users — public barrel, the only surface a sibling module may import (see
+ * `docs/theory/strategic-ddd.md` §5 for the rule). Wider than most: `account` is the `users` end
+ * of the one shared-kernel relationship in the repo, authenticating and co-administering the same
+ * document this module owns. `userRepository` and the model's runtime stay inside even so — every
+ * read or write, including `account`'s, goes through `userService`. `userModel` stays unexported;
+ * nothing outside this module calls it.
+ *
  * See: docs/modules/users.md
  */
 
-/** The record's business rules — what a sibling calls to read or change a user. */
-export { userService } from './service';
+export * from './service';
 
-/** Persistence, for `account` alone: a second service over the same record needs the queries. */
-export { userRepository } from './repository';
+export * from './events';
+
+/** A fixture user for a sibling's own tests. */
+export { makeUser, PLAIN_PASSWORD } from './factories';
+export type { UserOverrides, UserFixture } from './factories';
 
 /** The schema, the token-type enum, and the pure helpers that travel with them. */
 export { TokenType, zodUserSchema, hashToken, toUser, isLiveRefreshSession } from './model';
 
-/** The document shapes a sibling reads back. Types only — the model itself stays internal. */
-export type { UserDocument, Token, OAuthAccount, TwoFactorMethodRecord } from './model';
-
-/** Events this module emits. Importing the barrel is also what installs the payload declaration. */
-export { USER_DELETED, USER_SETUP_REQUESTED } from './events';
+export type * from './model';

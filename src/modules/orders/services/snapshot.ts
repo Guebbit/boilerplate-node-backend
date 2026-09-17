@@ -16,7 +16,7 @@ import type { OrderDocumentItem } from '../model';
  *
  * Takes plain objects, not hydrated documents: `{ ...plain, ...fields }` below only overlays the
  * translated fields correctly on real own properties, which a Mongoose document does not expose
- * the way a plain object does. `productRepository.findByIdRaw`'s `Lean<ProductDocument>` already
+ * the way a plain object does. `productService.findByIdRaw`'s `Lean<ProductDocument>` already
  * satisfies this; a caller holding a hydrated document (e.g. from `populate()`) must call
  * `.toObject()` — never `.toJSON()`, which turns `_id` into a string `id` and would make Mongoose
  * mint a FRESH `_id` when the result is assigned into `orderLineProductSchema`'s embedded path,

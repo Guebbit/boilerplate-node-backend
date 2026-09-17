@@ -11,7 +11,7 @@
 
 import { Gauge } from 'prom-client';
 import { metricsRegistry } from '@infrastructure/observability/metrics-http';
-import { productRepository } from '@modules/products';
+import { productService } from '@modules/products';
 import { lowStockThreshold } from './config';
 
 /**
@@ -25,7 +25,7 @@ const _productsLowStockTotal = new Gauge({
     help: 'Products whose available units are at or under the low-stock threshold.',
     registers: [metricsRegistry],
     async collect() {
-        this.set(await productRepository.countLowAvailability(lowStockThreshold()));
+        this.set(await productService.countLowAvailability(lowStockThreshold()));
     }
 });
 
@@ -39,6 +39,6 @@ const _inventoryReservedUnitsTotal = new Gauge({
     help: 'Units held by open reservations across the catalogue.',
     registers: [metricsRegistry],
     async collect() {
-        this.set(await productRepository.sumReserved());
+        this.set(await productService.sumReserved());
     }
 });

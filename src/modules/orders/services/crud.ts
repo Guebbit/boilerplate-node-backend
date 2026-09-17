@@ -11,16 +11,16 @@ import { logger } from '@infrastructure/adapters/logger';
 import { orderConfirmEmail } from '../emails';
 import { OrderStatus } from '@types';
 import type { SearchOrdersRequest, CartItem, UpdateOrderByIdRequest } from '@types';
-import type { OrderDocument } from '../model';
+import type { OrderDocument, OrderPendingEffect } from '../model';
 import {
     generateReject,
     generateSuccess,
     type ResponseReject,
     type ResponseSuccess
 } from '@infrastructure/http/response';
-import { productRepository } from '@modules/products';
+import { productService } from '@modules/products';
 import { inventoryService } from '@modules/inventory';
-import { userRepository } from '@modules/users';
+import { userService } from '@modules/users';
 import { emitDomainEvent } from '@kernel/events';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -110,6 +110,42 @@ export const recordCreated = (
 };
 
 /**
+ * The uncomposed insert `create` above builds toward — `@modules/cart`'s checkout calls this
+ * directly instead of `create`, because checkout runs its OWN version of the same steps
+ * (`freezeOrderLines`, `allocateInvoiceNumber`, `inventoryService.reserveForOrder`,
+ * {@link retractOrder}) inside its own read-cart/write-order/clear-cart sequence, and rolls the
+ * whole thing back itself if clearing the cart fails. `create`'s orchestration would duplicate
+ * that sequence rather than fit inside it.
+ *
+ * @param data - an already-built order, snapshot and invoice number included
+ */
+export const createRaw = (data: Partial<OrderDocument>): Promise<OrderDocument> =>
+    orderRepository.create(data);
+
+/**
+ * How many `bank_transfer` orders this account has open right now — the cap checkout enforces
+ * before letting a caller take a free week-long hold on more stock than they can be trusted with.
+ *
+ * @param userId - the caller
+ */
+export const countOpenBankTransfers = (userId: string): Promise<number> =>
+    orderRepository.countOpenBankTransfers(userId);
+
+/**
+ * Move an order between statuses, but only from one of the expected ones — atomically. See
+ * `repository.ts`'s own docblock for why the condition rides in the filter: `delivery` and
+ * `payments` are this function's two callers outside this module, moving an order to `delivered`
+ * or `paid` without a preceding read either could race.
+ */
+export const updateStatusIfIn = (
+    id: string,
+    from: readonly string[],
+    to: string,
+    scope?: Record<string, unknown>,
+    effects?: readonly OrderPendingEffect[]
+): Promise<OrderDocument | null> => orderRepository.updateStatusIfIn(id, from, to, scope, effects);
+
+/**
  * Undo an order the request that wrote it cannot keep — the compensation both this module's
  * `create` and `@modules/cart`'s checkout run when a later step refuses.
  *
@@ -164,7 +200,7 @@ export const create = async (
     // never the caller's: this endpoint lets an admin place an order for someone else, and
     // `context.locale` there is the admin's own UI language, not the recipient's. Same rule and
     // same lookup as `@modules/cart`'s checkout, so the two creation paths cannot diverge.
-    const buyer = await userRepository.findById(userId);
+    const buyer = await userService.getById(userId);
     const buyerLocale = buyer?.locale ?? getDefaultLocale();
 
     // One rule call, two outcomes. `Promise.all([])` settles without a query, so an empty basket
@@ -172,7 +208,7 @@ export const create = async (
     // and translated copy is this layer's job.
     const resolvedItems = await Promise.all(
         items.map((item) =>
-            productRepository.findByIdRaw(item.productId).then((product) => ({ item, product }))
+            productService.findByIdRaw(item.productId).then((product) => ({ item, product }))
         )
     );
 
@@ -313,7 +349,7 @@ export const update = async (
 
                   return Promise.all(
                       requestedItems.map((item) =>
-                          productRepository
+                          productService
                               .findByIdRaw(item.productId)
                               .then((product) => ({ item, product }))
                       )

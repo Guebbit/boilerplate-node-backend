@@ -21,7 +21,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { inventoryService } from '@modules/inventory';
-import { userRepository } from '@modules/users';
+import { userService } from '@modules/users';
 import { emitDomainEvent } from '@kernel/events';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -126,7 +126,7 @@ export const cancelById = (
                  */
                 if (isSystemExpiry && order.paymentMethod === 'bank_transfer') {
                     const buyer = order.userId
-                        ? await userRepository.findById(String(order.userId))
+                        ? await userService.getById(String(order.userId))
                         : null;
                     const locale = buyer?.locale ?? getDefaultLocale();
                     const mail = bankTransferExpiredEmail(locale, order);

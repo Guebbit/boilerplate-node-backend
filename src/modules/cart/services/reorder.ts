@@ -17,8 +17,8 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
-import { orderRepository } from '@modules/orders';
-import { productRepository } from '@modules/products';
+import { orderService } from '@modules/orders';
+import { productService } from '@modules/products';
 import type { ProductDocument } from '@modules/products';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -50,8 +50,8 @@ export const reorderIntoCart = (
     orderId: string,
     context: CallerContext
 ): Promise<ResponseSuccess<CartView> | ResponseReject> =>
-    orderRepository
-        .findByIdScoped(orderId, orderRepository.visibleScope(userId))
+    orderService
+        .getById(orderId, orderService.visibleScope(userId))
         .then<ResponseSuccess<CartView> | ResponseReject>((order) => {
             if (!order) return generateReject(404, [t('cart.reorder.order-not-found')]);
 
@@ -72,7 +72,7 @@ export const reorderIntoCart = (
             return Promise.all(
                 requested.map(
                     (line): Promise<ReorderLine> =>
-                        productRepository
+                        productService
                             .findPublicById(line.productId)
                             .then((product) => ({ ...line, product }))
                 )

@@ -7,7 +7,7 @@
  * answer with and is worth its own audit record.
  */
 
-import { userRepository } from '@modules/users';
+import { userService } from '@modules/users';
 import { logger } from '@infrastructure/adapters/logger';
 import {
     generateSuccess,
@@ -26,7 +26,7 @@ import { getRotationGraceMilliseconds } from '../session/config';
  */
 export const runTokenCleanup = (): Promise<void> => {
     logger.info('Token cleanup: starting expired-token removal');
-    return userRepository
+    return userService
         .tokenRemoveExpired(getRotationGraceMilliseconds())
         .then((removed) => {
             logger.info(`Token cleanup: completed, ${removed} document(s) pruned`);
@@ -55,7 +55,7 @@ export const runTokenCleanup = (): Promise<void> => {
 export const adminTokenCleanup = (
     context: CallerContext
 ): Promise<ResponseSuccess<{ removed: number }> | ResponseReject> =>
-    userRepository
+    userService
         .tokenRemoveExpired(getRotationGraceMilliseconds())
         .then((removed) => {
             emitAuditEvent(

@@ -12,7 +12,7 @@ import { decode } from 'jsonwebtoken';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api } from '@tests/http';
 import { setCookie, cookieHeader } from '@tests/cookies';
-import { userRepository } from '@modules/users';
+import { userRepository } from '@modules/users/tests/factories';
 import { enableDemoProfile } from '@infrastructure/adapters/demo-outbox';
 
 setupTestDb();

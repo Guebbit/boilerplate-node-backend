@@ -16,7 +16,8 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
-import { orderService, orderRepository } from '@modules/orders';
+import { orderService } from '@modules/orders';
+import { orderRepository } from '@modules/orders/tests/factories';
 import { OrderStatus } from '@types';
 import { findShippingMethod, priceShipping, SHIPPING_METHODS } from '@modules/delivery/domain';
 import { shipOrder, runCourierAdvance, getForOrder } from '@modules/delivery/service';
@@ -43,7 +44,7 @@ const shippedOrderFor = async () => {
     const user = await createUser();
     const product = await createProduct({ price: 10 });
     const order = await createOrder(user, [toOrderItem(product, 1)]);
-    await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'shipped');
+    await orderService.updateStatusIfIn(String(order._id), ['pending'], 'shipped');
     return { user, order };
 };
 

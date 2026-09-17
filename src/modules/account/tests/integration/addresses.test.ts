@@ -10,9 +10,8 @@ import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/factories';
 import { addressService } from '@modules/account/services';
 import { cartService } from '@modules/cart';
-import { orderRepository } from '@modules/orders';
-import { productRepository } from '@modules/products';
-import { createProduct } from '@modules/products/tests/factories';
+import { countOrders } from '@modules/orders/tests/factories';
+import { createProduct, readProduct } from '@modules/products/tests/factories';
 
 setupTestDb();
 
@@ -174,7 +173,7 @@ describe('checkout and the address', () => {
         expect(result.status).toBe(404);
         expect(!result.success && result.errors[0]?.code).toBe('CART_ADDRESS_NOT_FOUND');
         // Nothing moved — the address check runs before anything is held.
-        const stored = await productRepository.findById(String(product._id));
+        const stored = await readProduct(String(product._id));
         expect(stored?.onHand).toBe(10);
         expect(stored?.reserved).toBe(0);
         const cart = await cartService.cartGetForBadge(user.id);
@@ -203,8 +202,8 @@ describe('checkout and the address', () => {
         expect(result.success).toBe(false);
         expect(result.status).toBe(404);
         expect(!result.success && result.errors[0]?.code).toBe('CART_ADDRESS_NOT_FOUND');
-        await expect(orderRepository.count({ userId: stranger._id })).resolves.toBe(0);
-        const stored = await productRepository.findById(String(product._id));
+        await expect(countOrders({ userId: stranger._id })).resolves.toBe(0);
+        const stored = await readProduct(String(product._id));
         expect(stored?.onHand).toBe(10);
         expect(stored?.reserved).toBe(0);
     });

@@ -3,7 +3,7 @@
  * Placed orders: admin write and soft delete, plus each account reading back its own. See
  * docs/theory/tactical-ddd.md for the invariants — totals, legal status transitions, what
  * cancelling restores. Depends on products (a line copies the catalogue row's fields at purchase
- * time, through `productRepository`, into this module's OWN `orderLineProductSchema` — not
+ * time, through `productService`, into this module's OWN `orderLineProductSchema` — not
  * `products`' `productSchema`, so the embedded copy has nowhere to carry a live warehouse counter)
  * and inventory (a claim on units, released on cancel or `RESERVATION_EXPIRED`); cart depends on
  * this module in turn, keeping the import graph acyclic. `users` is reached for exactly one thing

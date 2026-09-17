@@ -21,7 +21,7 @@ import { registerAuthResolver } from '@kernel/authentication';
 import { rolesOf } from '@kernel/access/store';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { onDomainEvent } from '@kernel/events';
-import { userRepository, USER_DELETED, USER_SETUP_REQUESTED } from '@modules/users';
+import { userService, USER_DELETED, USER_SETUP_REQUESTED } from '@modules/users';
 import { verifyAccessToken, verifyRefreshToken, type TokenData } from './session/jwt';
 import { addressesDeleteByUserId } from './services/addresses';
 import { requestAccountSetup } from './services/authentication';
@@ -50,7 +50,7 @@ const resolve = (verify: (token: string) => Promise<TokenData>) => (token: strin
         // `verify()` outright rather than needing a dedicated rejection; see
         // `account/services/two-factor.ts#buildLoginChallenge`.
         .then((claims) =>
-            userRepository.findAuthenticatableById(claims.id).then((user) => ({ user, claims }))
+            userService.findAuthenticatableById(claims.id).then((user) => ({ user, claims }))
         )
         /*
          * The stored memberships, which are what a role assignment actually IS. The user row's own
@@ -162,7 +162,7 @@ export default {
          * `undefined` and the request is simply dropped — nobody is left to email.
          */
         onDomainEvent(USER_SETUP_REQUESTED, ({ userId }) =>
-            userRepository.findById(userId).then((user) => user && requestAccountSetup(user))
+            userService.getById(userId).then((user) => user && requestAccountSetup(user))
         );
     },
     locales: path.join(__dirname, 'locales')

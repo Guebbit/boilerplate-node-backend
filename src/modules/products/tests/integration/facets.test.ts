@@ -9,7 +9,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct } from '@modules/products/tests/factories';
-import { productRepository } from '@modules/products';
+import { productRepository } from '../../repository';
 
 setupTestDb();
 

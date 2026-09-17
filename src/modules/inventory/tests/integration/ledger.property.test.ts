@@ -11,7 +11,7 @@ import fc from 'fast-check';
 import { setupTestDb } from '@tests/setup-test-db';
 import { PROPERTY_RUNS_WITH_DATABASE } from '@tests/knobs';
 import { createProduct } from '@modules/products/tests/factories';
-import { productRepository } from '@modules/products';
+import { productService } from '@modules/products';
 import { StockMovementReason } from '@types';
 import { inventoryService } from '@modules/inventory';
 import { stockMovementRepository } from '../../repository';
@@ -136,7 +136,7 @@ describe('the ledger reproduces the counters', () => {
 
                 await play(productId, steps);
 
-                const stored = await productRepository.findByIdRaw(productId);
+                const stored = await productService.findByIdRaw(productId);
                 const ledger = await replay(productId);
 
                 // The opening count is the ledger's starting balance: rows explain CHANGES since
@@ -157,7 +157,7 @@ describe('the ledger reproduces the counters', () => {
 
                 await play(productId, steps);
 
-                const stored = await productRepository.findByIdRaw(productId);
+                const stored = await productService.findByIdRaw(productId);
                 expect(stored?.onHand).toBeGreaterThanOrEqual(0);
                 expect(stored?.reserved).toBeGreaterThanOrEqual(0);
                 // The invariant every guard in the repository exists to protect: you cannot have

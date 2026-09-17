@@ -14,7 +14,7 @@ import { accountService } from '@modules/account/services';
 import * as auditPort from '@infrastructure/observability/audit';
 import { createRefreshToken, verifyAccessToken } from '@modules/account/session/jwt';
 import { accountAuditActions } from '../../audit';
-import { userRepository } from '@modules/users';
+import { userRepository } from '@modules/users/tests/factories';
 import type { UserDocument } from '@modules/users';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
 import { observePort } from '@tests/ports';

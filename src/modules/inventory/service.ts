@@ -16,7 +16,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { emitDomainEvent } from '@kernel/events';
-import { productRepository } from '@modules/products';
+import { productService } from '@modules/products';
 import { StockMovementReason, type InventoryLevel } from '@types';
 import {
     normalizePagination,
@@ -80,20 +80,20 @@ const writerFor = (
 ): ((productId: string, quantity: number) => Promise<boolean>) => {
     switch (reason) {
         case StockMovementReason.reserve: {
-            return productRepository.reserveUnits;
+            return productService.reserveUnits;
         }
         case StockMovementReason.commit: {
-            return productRepository.commitUnits;
+            return productService.commitUnits;
         }
         case StockMovementReason.release:
         case StockMovementReason.expire: {
-            return productRepository.releaseUnits;
+            return productService.releaseUnits;
         }
         case StockMovementReason.receive: {
-            return productRepository.receiveUnits;
+            return productService.receiveUnits;
         }
         case StockMovementReason.adjust: {
-            return productRepository.adjustUnits;
+            return productService.adjustUnits;
         }
     }
 };
@@ -136,7 +136,7 @@ const applyTransition = async (
  * @returns its level, or `null` if the product has since gone
  */
 const levelFor = async (productId: string): Promise<InventoryLevel | null> => {
-    const product = await productRepository.findByIdRaw(productId);
+    const product = await productService.findByIdRaw(productId);
     if (!product) return null;
 
     return {
@@ -187,7 +187,7 @@ export const reserveForOrder = async (
              * actually refused this line, not what a pre-flight saw earlier. A deleted product
              * reads as nothing available, which is true.
              */
-            const blocker = await productRepository.findByIdRaw(line.productId);
+            const blocker = await productService.findByIdRaw(line.productId);
             const shortfall: StockShortfall = {
                 productId: line.productId,
                 title: blocker?.title ?? '',
@@ -425,7 +425,7 @@ export const adjust = async (
     note?: string,
     context?: CallerContext
 ): Promise<ResponseSuccess<InventoryLevel> | ResponseReject> => {
-    const product = await productRepository.findByIdRaw(productId);
+    const product = await productService.findByIdRaw(productId);
     if (!product) return generateReject(404, [t('inventory.product-not-found')]);
 
     const adjusted = await applyTransition(
@@ -441,7 +441,7 @@ export const adjust = async (
          * separates them, so a product deleted between the check and this write reports 404
          * rather than a misleading stock conflict.
          */
-        const stillThere = await productRepository.findByIdRaw(productId);
+        const stillThere = await productService.findByIdRaw(productId);
         if (!stillThere) return generateReject(404, [t('inventory.product-not-found')]);
 
         return generateReject(409, [
@@ -480,7 +480,7 @@ export const listLevels = async (
     filters: LevelFilters = {}
 ): Promise<{ items: InventoryLevel[]; meta: PaginatedMeta }> => {
     const pagination = normalizePagination(filters);
-    const { items, totalItems } = await productRepository.availabilityPage({
+    const { items, totalItems } = await productService.availabilityPage({
         skip: pagination.skip,
         limit: pagination.pageSize,
         ...(filters.lowOnly ? { maxAvailable: lowStockThreshold() } : {})

@@ -16,7 +16,7 @@ import {
 import { emitDomainEvent } from '@kernel/events';
 import { OrderStatus } from '@types';
 import type { PaymentStatus, AuthContext } from '@types';
-import { orderRepository, statusesLeadingTo, ORDER_STATUS_CHANGED } from '@modules/orders';
+import { orderService, statusesLeadingTo, ORDER_STATUS_CHANGED } from '@modules/orders';
 import { PAYMENT_SUCCEEDED, PAYMENT_FAILED } from '../events';
 import { inventoryService } from '@modules/inventory';
 import type { CallerContext } from '@infrastructure/http/request';
@@ -118,7 +118,7 @@ export const settlePayment = (
 
     // The order's move IS the gate (module rule 2), and it is conditional, so exactly one of two
     // racing settlements gets past it.
-    return orderRepository
+    return orderService
         .updateStatusIfIn(
             orderId,
             statusesLeadingTo(OrderStatus.paid, 'system'),
@@ -143,7 +143,7 @@ export const settlePayment = (
             // order was raced to `paid` by another settlement of the same charge (nothing lost —
             // just not this call's doing), or it genuinely can no longer get there (cancelled). A
             // stale `paidOrder` is not enough to tell them apart; the order's CURRENT status is.
-            const orderNow = paidOrder ?? (await orderRepository.findById(orderId));
+            const orderNow = paidOrder ?? (await orderService.getById(orderId));
             const orderIsPaid = orderNow?.status === OrderStatus.paid;
 
             if (!orderIsPaid) {

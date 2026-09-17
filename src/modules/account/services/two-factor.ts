@@ -14,7 +14,7 @@ import { randomBytes } from 'node:crypto';
 import { t } from '@infrastructure/i18n';
 import type { CastError } from 'mongoose';
 import {
-    userRepository,
+    userService,
     TokenType,
     type TwoFactorMethodRecord,
     type UserDocument
@@ -72,7 +72,7 @@ const RESEND_TOO_SOON_CODE = 'TWO_FACTOR_RESEND_TOO_SOON';
  */
 const saveMethods = (user: UserDocument): Promise<UserDocument> => {
     user.markModified('twoFactorMethods');
-    return userRepository.save(user);
+    return userService.save(user);
 };
 
 /**
@@ -253,7 +253,7 @@ export const buildLoginChallenge = (
 export const twoFactorStatus = (
     userId: string
 ): Promise<ResponseSuccess<TwoFactorStatus> | ResponseReject> =>
-    userRepository
+    userService
         .findByIdWithCredentials(userId)
         .then<ResponseSuccess<TwoFactorStatus> | ResponseReject>((user) => {
             if (!user) return generateReject(401, []);
@@ -296,7 +296,7 @@ export const setupTwoFactorMethod = (
     if (!handler)
         return Promise.resolve(generateReject(404, [t('account.two-factor.unknown-method')]));
 
-    return userRepository
+    return userService
         .findByIdWithCredentials(userId)
         .then<ResponseSuccess<TwoFactorSetup> | ResponseReject>((user) => {
             if (!user) return generateReject(401, []);
@@ -348,7 +348,7 @@ export const confirmTwoFactorMethod = (
     if (!handler)
         return Promise.resolve(generateReject(404, [t('account.two-factor.unknown-method')]));
 
-    const outcome = userRepository
+    const outcome = userService
         .findByIdWithCredentials(userId)
         .then<ResponseSuccess<TwoFactorConfirmed> | ResponseReject>((user) => {
             if (!user) return generateReject(401, []);
@@ -408,7 +408,7 @@ export const removeTwoFactorMethod = (
     code: string,
     context: CallerContext
 ): Promise<ResponseSuccess<undefined> | ResponseReject> => {
-    const outcome = userRepository
+    const outcome = userService
         .findByIdWithCredentials(userId)
         .then<ResponseSuccess<undefined> | ResponseReject>((user) => {
             if (!user) return generateReject(401, []);
@@ -444,7 +444,7 @@ export const disableTwoFactor = (
     code: string,
     context: CallerContext
 ): Promise<ResponseSuccess<undefined> | ResponseReject> => {
-    const outcome = userRepository
+    const outcome = userService
         .findByIdWithCredentials(userId)
         .then<ResponseSuccess<undefined> | ResponseReject>((user) => {
             if (!user) return generateReject(401, []);
@@ -478,7 +478,7 @@ export const regenerateBackupCodes = (
     code: string,
     context: CallerContext
 ): Promise<ResponseSuccess<TwoFactorBackupCodesRegenerated> | ResponseReject> => {
-    const outcome = userRepository
+    const outcome = userService
         .findByIdWithCredentials(userId)
         .then<ResponseSuccess<TwoFactorBackupCodesRegenerated> | ResponseReject>((user) => {
             if (!user) return generateReject(401, []);

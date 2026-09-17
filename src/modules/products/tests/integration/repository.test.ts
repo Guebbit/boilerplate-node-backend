@@ -8,7 +8,7 @@
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { makeProduct, createProduct } from '@modules/products/tests/factories';
-import { productRepository } from '@modules/products';
+import { productRepository } from '../../repository';
 import { productModel } from '../../model';
 
 setupTestDb();

@@ -10,8 +10,8 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment } from '@tests/environment';
 import { observePort } from '@tests/ports';
-import { createProduct } from '@modules/products/tests/factories';
-import { productRepository } from '@modules/products';
+import { createProduct, readProduct, deleteProduct } from '@modules/products/tests/factories';
+import { productService } from '@modules/products';
 import { StockMovementReason } from '@types';
 import {
     reserveForOrder,
@@ -47,7 +47,7 @@ let orderCounter = 0;
 const anOrderId = () => (++orderCounter).toString(16).padStart(24, 'b');
 
 const countersOf = async (productId: string) => {
-    const stored = await productRepository.findByIdRaw(productId);
+    const stored = await productService.findByIdRaw(productId);
     return { onHand: stored?.onHand, reserved: stored?.reserved };
 };
 
@@ -375,14 +375,15 @@ describe('adjust', () => {
          * pre-check and the write is the only way to reach that ambiguity — the wrong answer
          * would waste an operator's time chasing a stock conflict that doesn't exist.
          */
-        const blocked = productRepository.adjustUnits;
+        const blocked = productService.adjustUnits;
         const spy = jest
-            .spyOn(productRepository, 'adjustUnits')
+            .spyOn(productService, 'adjustUnits')
             .mockImplementation(async (id, delta) => {
-                // Through the barrel, like any cross-module reach — `eslint-plugin-boundaries`
-                // fails a spec that touches a sibling's model directly, and it is right to.
-                const doomed = await productRepository.findById(id);
-                if (doomed) await productRepository.deleteOne(doomed);
+                // Through the test factory's raw door, like any cross-module reach for a
+                // hydrated document — `eslint-plugin-boundaries` fails a spec that touches a
+                // sibling's model directly, and it is right to.
+                const doomed = await readProduct(id);
+                if (doomed) await deleteProduct(doomed);
                 return blocked(id, delta);
             });
 
@@ -465,7 +466,7 @@ describe('listLevels', () => {
     it('deliberately disagrees with the metrics gauge over an inactive product', async () => {
         // docs/modules/inventory-reservations.md §"The threshold, and its two readers": this
         // reader (the stock board) counts the WHOLE catalogue, an admin restocking needs to see
-        // an inactive product too. `products_low_stock_total` (`productRepository
+        // an inactive product too. `products_low_stock_total` (`productService
         // .countLowAvailability`, see repository.test.ts) counts PUBLIC products only. "The two
         // numbers will not match, and should not."
         process.env.NODE_LOW_STOCK_THRESHOLD = '5';
@@ -474,7 +475,7 @@ describe('listLevels', () => {
         const hidden = await createProduct({ active: false, onHand: 1, reserved: 0 });
 
         const board = await listLevels({ lowOnly: true });
-        const gauge = await productRepository.countLowAvailability(5);
+        const gauge = await productService.countLowAvailability(5);
 
         expect(board.meta.totalItems).toBe(3);
         expect(gauge).toBe(2);

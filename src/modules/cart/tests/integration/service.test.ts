@@ -45,8 +45,8 @@ import usersModule from '@modules/users/module';
 import ordersModule from '@modules/orders/module';
 import accountModule from '@modules/account/module';
 import deliveryModule from '@modules/delivery/module';
-import { orderRepository } from '@modules/orders';
-import { productRepository, productService } from '@modules/products';
+import { orderRepository } from '@modules/orders/tests/factories';
+import { productService } from '@modules/products';
 import type { ResponseReject } from '@infrastructure/http/response';
 import { t } from '@infrastructure/i18n';
 
@@ -626,7 +626,7 @@ describe('orderConfirm', () => {
         expect(asReject(result).errors[0].code).toBe('CART_SHIPPING_METHOD_NOT_FOUND');
         // Nothing moved: no order, full shelf, full cart.
         await expect(orderRepository.count({ userId: user._id })).resolves.toBe(0);
-        const stored = await productRepository.findByIdRaw(String(product._id));
+        const stored = await productService.findByIdRaw(String(product._id));
         expect(stored!.onHand).toBe(5);
         expect(stored!.reserved).toBe(0);
     });

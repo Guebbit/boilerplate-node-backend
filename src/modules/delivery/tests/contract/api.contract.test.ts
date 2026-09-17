@@ -10,7 +10,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
-import { orderRepository } from '@modules/orders';
+import { orderService } from '@modules/orders';
 import { shipOrder } from '@modules/delivery/service';
 
 setupTestDb();
@@ -20,7 +20,7 @@ const authenticateWithShipment = async () => {
     const { user, bearer } = await authenticateAs('user');
     const product = await createProduct();
     const order = await createOrder(user, [toOrderItem(product, 1)]);
-    await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'shipped');
+    await orderService.updateStatusIfIn(String(order._id), ['pending'], 'shipped');
     await shipOrder(String(order._id));
     return { bearer, order };
 };

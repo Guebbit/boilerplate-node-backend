@@ -1,13 +1,13 @@
 /**
  * @module
  * `runTokenCleanup` — the scheduled job that drops expired tokens from every user. The obvious
- * test — call it, assert the repository method ran — passes in both branches, producing
+ * test — call it, assert the service method ran — passes in both branches, producing
  * near-zero mutation coverage. The logging IS the behaviour here: this job runs unattended, and
  * its log line is the only way an operator learns whether cleanup is still working. So every
  * case asserts on the log, and the two branches are asserted mutually exclusive.
  */
 
-import { userRepository } from '@modules/users';
+import { userService } from '@modules/users';
 import { runTokenCleanup, accountService } from '@modules/account/services';
 import { logger } from '@infrastructure/adapters/logger';
 import { testCallerContext } from '@tests/caller-context';
@@ -15,18 +15,23 @@ import * as auditPort from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../../audit';
 
 /*
- * Only `userRepository` is replaced. The rest stays REAL: this file reaches the job through
- * `@modules/account/services`, and that barrel evaluates every sibling service at load time —
- * `profile.ts` builds its zod schema from `zodUserSchema` at module scope, so a mock omitting it
- * throws before a single test runs. Spreading the actual module keeps the barrel loadable.
+ * Only `userService.tokenRemoveExpired` is replaced. The rest of `userService` stays REAL, same as
+ * the rest of `@modules/users`: this file reaches the job through `@modules/account/services`, and
+ * that barrel evaluates every sibling service at load time — `profile.ts` builds its zod schema
+ * from `zodUserSchema` at module scope, so a mock omitting it throws before a single test runs.
+ * Spreading both the actual module and the actual `userService` keeps the barrel loadable.
  */
-jest.mock('@modules/users', () => ({
-    ...jest.requireActual('@modules/users'),
-    __esModule: true,
-    userRepository: {
-        tokenRemoveExpired: jest.fn()
-    }
-}));
+jest.mock('@modules/users', () => {
+    const actual = jest.requireActual<typeof import('@modules/users')>('@modules/users');
+    return {
+        ...actual,
+        __esModule: true,
+        userService: {
+            ...actual.userService,
+            tokenRemoveExpired: jest.fn()
+        }
+    };
+});
 
 jest.mock('@infrastructure/adapters/logger', () => ({
     __esModule: true,
@@ -49,8 +54,8 @@ jest.mock('@infrastructure/observability/audit', () => ({
     emitAuditEvent: jest.fn()
 }));
 
-const mockTokenRemoveExpired = userRepository.tokenRemoveExpired as jest.MockedFunction<
-    typeof userRepository.tokenRemoveExpired
+const mockTokenRemoveExpired = userService.tokenRemoveExpired as jest.MockedFunction<
+    typeof userService.tokenRemoveExpired
 >;
 const mockedLogger = logger as jest.Mocked<typeof logger>;
 

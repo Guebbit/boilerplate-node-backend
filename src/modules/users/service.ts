@@ -495,18 +495,128 @@ export const removeById = (
             user ? remove(user, hardDelete) : generateReject(404, [t('users.not-found')])
         );
 
+/*
+ * `account` end of the one shared-kernel relationship in this repo (`docs/theory/strategic-ddd.md`
+ * §5): the User document it authenticates, resets, links to OAuth, and 2FA-protects. Everything
+ * below is a thin pass-through to `userRepository`, kept at THIS name because `account`'s files
+ * already read `userRepository.findByIdWithCredentials(...)` and the like — the door moved, the
+ * vocabulary didn't. `save`/`findOne` stay pass-throughs on purpose too: `account` builds up a
+ * mutated `UserDocument` across many fields (password, 2FA, sessions, tokens) before persisting
+ * it, which is exactly the co-administration the shared kernel exists to allow, not a generic
+ * write handle handed to an unrelated caller.
+ */
+
+/** An authenticatable account by id — `active`/soft-delete already excluded by the query. */
+const findAuthenticatableById = (id: string) => userRepository.findAuthenticatableById(id);
+
+/** The hydrated document with every `select: false` field loaded (password, tokens, 2FA). */
+const findByIdWithCredentials = (id: string) => userRepository.findByIdWithCredentials(id);
+
+/** The first user matching a credentialed filter, `select: false` fields included. */
+const findOneWithCredentials = (
+    where: Parameters<typeof userRepository.findOneWithCredentials>[0]
+) => userRepository.findOneWithCredentials(where);
+
+/** The hydrated document with the pending-email-change field loaded. */
+const findByIdWithPendingEmail = (id: string) => userRepository.findByIdWithPendingEmail(id);
+
+/** Whether `email` (or its pending-change counterpart) is already taken by another account. */
+const emailOrPendingEmailTaken = (email: string, excludingId: string) =>
+    userRepository.emailOrPendingEmailTaken(email, excludingId);
+
+/** The account still holding a live, unexpired token of this value and type. */
+const findByToken = (token: string, type: Parameters<typeof userRepository.findByToken>[1]) =>
+    userRepository.findByToken(token, type);
+
+/** The account currently holding this exact token value, any type. */
+const findByTokenValue = (token: string) => userRepository.findByTokenValue(token);
+
+/** Persist an already-loaded, already-mutated document — see the file docblock above. */
+const save = (user: UserDocument) => userRepository.save(user);
+
+/**
+ * Construct a document WITHOUT persisting it — signup's anti-automation deception path answers
+ * with a document that looks real and was never written, so a policy-refused attempt gets nothing
+ * to distinguish it from a genuine one.
+ */
+const build = (data: Parameters<typeof userRepository.build>[0]) => userRepository.build(data);
+
+/**
+ * The raw insert `create` above builds toward — self-service signup runs its OWN orchestration
+ * (anti-automation checks, the duplicate-email pre-check, the verification email), never
+ * `create()`'s admin-panel one (role assignment, admin audit/analytics).
+ */
+const createRaw = (data: Parameters<typeof userRepository.create>[0]) =>
+    userRepository.create(data);
+
+/** One account by email, credentials included — signup's duplicate-email pre-check. */
+const findByEmailWithCredentials = (email: string) => userRepository.findOne({ email });
+
+/** Log a session out everywhere but this one device — clears the row, not just the cookie. */
+const sessionRemove = (id: string, sessionId: string) =>
+    userRepository.sessionRemove(id, sessionId);
+
+/** Consume a refresh token by its exact value, not by id — the rotation path's own lookup key. */
+const tokenRemoveByValue = (token: string) => userRepository.tokenRemoveByValue(token);
+
+/** Sweep every token past its rotation grace window. */
+const tokenRemoveExpired = (supersededGraceMs: number) =>
+    userRepository.tokenRemoveExpired(supersededGraceMs);
+
+/** Mark a refresh token superseded — the one-time-use half of rotation. */
+const tokenSupersede = (token: string) => userRepository.tokenSupersede(token);
+
+/** Bump a refresh token's last-used stamp, without touching anything else on the document. */
+const tokenTouch = (token: string) => userRepository.tokenTouch(token);
+
+/** Attach a federated identity to an existing account. */
+const linkOAuthAccount = (
+    userId: string,
+    account: Parameters<typeof userRepository.linkOAuthAccount>[1]
+) => userRepository.linkOAuthAccount(userId, account);
+
+/** Every account inactive past the warning threshold, never yet warned — `ops/reap-inactive-accounts.ts`'s first stage. */
+const findInactiveUnwarned = (cutoff: Date) => userRepository.findInactiveUnwarned(cutoff);
+
+/** Every account warned, and still inactive past the grace window — the reaper's soft-delete stage. */
+const findWarnedStillInactive = (cutoff: Date) => userRepository.findWarnedStillInactive(cutoff);
+
+/** Every account soft-deleted by the reaper past ITS OWN grace window — the hard-delete stage. */
+const findReaperSoftDeletedPastGrace = (cutoff: Date) =>
+    userRepository.findReaperSoftDeletedPastGrace(cutoff);
+
 /** The module's barrel export — the controllers call through this, never the bare functions. */
 export const userService = {
     validateData,
     search,
     getById,
     create,
+    createRaw,
+    build,
     update,
     updateById,
     remove,
     removeById,
     adminDisableTwoFactor,
     findByEmail,
+    findByEmailWithCredentials,
+    findAuthenticatableById,
+    findByIdWithCredentials,
+    findOneWithCredentials,
+    findByIdWithPendingEmail,
+    emailOrPendingEmailTaken,
+    findByToken,
+    findByTokenValue,
+    save,
+    sessionRemove,
+    tokenRemoveByValue,
+    tokenRemoveExpired,
+    tokenSupersede,
+    tokenTouch,
+    linkOAuthAccount,
+    findInactiveUnwarned,
+    findWarnedStillInactive,
+    findReaperSoftDeletedPastGrace,
     consumeToken,
     enqueueIfPending,
     // A controller may not reach `./model` directly (the persistence wall), so the shaping

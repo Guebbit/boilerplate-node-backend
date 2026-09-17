@@ -13,7 +13,7 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, makeOrder, toOrderItem } from '@modules/orders/tests/factories';
 import type { ProductDocument } from '@modules/products';
-import { orderRepository } from '@modules/orders';
+import { orderRepository } from '../../repository';
 import { DEFAULT_SORT } from '@infrastructure/persistence/search';
 
 setupTestDb();

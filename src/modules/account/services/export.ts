@@ -23,13 +23,8 @@ import {
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { t } from '@infrastructure/i18n';
-import {
-    userRepository,
-    isLiveRefreshSession,
-    type UserDocument,
-    type Token
-} from '@modules/users';
-import { orderRepository, orderService } from '@modules/orders';
+import { userService, isLiveRefreshSession, type UserDocument, type Token } from '@modules/users';
+import { orderService } from '@modules/orders';
 import { paymentService } from '@modules/payments';
 import { findShipmentsForOrders } from '@modules/delivery';
 import { cartService } from '@modules/cart';
@@ -162,9 +157,9 @@ export const exportOwnData = (
     Promise.all([
         // `findByIdWithCredentials` for `tokens` (`select: false` otherwise) — profile and
         // sessions are both drawn from the same document.
-        userRepository.findByIdWithCredentials(userId),
+        userService.findByIdWithCredentials(userId),
         addressesGet(userId),
-        orderService.search({ pageSize: EVERYTHING }, orderRepository.ownerScope(userId)),
+        orderService.search({ pageSize: EVERYTHING }, orderService.ownerScope(userId)),
         paymentService.findOwnPayments(userId),
         cartService.cartGet(userId),
         wishlistService.wishlistGet(userId),

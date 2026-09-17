@@ -8,8 +8,7 @@
  * frontend's placeholder, not a backend guess. See SECURITY_HOLES_7_STORAGE_QUOTA (decision 2).
  */
 
-import { productRepository } from '@modules/products';
-import { toObjectId } from '@infrastructure/persistence/create-repository';
+import { productService } from '@modules/products';
 
 /** The live picture for one order line, or `null` when its product is gone. */
 export type OrderLineCurrent = { imageUrl: string; thumbnailUrl?: string } | null;
@@ -51,31 +50,25 @@ export const resolveCurrentImages = <T extends OrderShape>(orders: T[]): Promise
 
     // One `find({_id: {$in}})` for the whole response — `findAll` returns lean, untransformed
     // rows, which is all a lookup keyed by `_id` needs.
-    return productRepository
-        .findAll({ _id: { $in: ids.map((id) => toObjectId(id)) } })
-        .then((products) => {
-            const byId = new Map(products.map((product) => [String(product._id), product]));
+    return productService.findManyByIds(ids).then((products) => {
+        const byId = new Map(products.map((product) => [String(product._id), product]));
 
-            for (const order of orders)
-                for (const line of linesOf(order)) {
-                    const product =
-                        typeof line.product?.id === 'string'
-                            ? byId.get(line.product.id)
-                            : undefined;
-                    line.current = product
-                        ? {
-                              // Always present at runtime — `imageUrl` carries a schema default
-                              // (`productSchema`) that never leaves a stored product without one.
-                              // The type is optional only because the wire contract lets a caller
-                              // omit it on WRITE, not because a read can find it absent.
-                              imageUrl: product.imageUrl!,
-                              ...(product.thumbnailUrl
-                                  ? { thumbnailUrl: product.thumbnailUrl }
-                                  : {})
-                          }
-                        : null;
-                }
+        for (const order of orders)
+            for (const line of linesOf(order)) {
+                const product =
+                    typeof line.product?.id === 'string' ? byId.get(line.product.id) : undefined;
+                line.current = product
+                    ? {
+                          // Always present at runtime — `imageUrl` carries a schema default
+                          // (`productSchema`) that never leaves a stored product without one.
+                          // The type is optional only because the wire contract lets a caller
+                          // omit it on WRITE, not because a read can find it absent.
+                          imageUrl: product.imageUrl!,
+                          ...(product.thumbnailUrl ? { thumbnailUrl: product.thumbnailUrl } : {})
+                      }
+                    : null;
+            }
 
-            return orders;
-        });
+        return orders;
+    });
 };

@@ -12,7 +12,7 @@
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
-import { userRepository, TokenType, type UserDocument } from '@modules/users';
+import { userService, TokenType, type UserDocument } from '@modules/users';
 import { tokenAdd } from './authentication';
 import { verifyRequestEmail } from '../emails';
 import { generateSuccess, generateReject } from '@infrastructure/http/response';
@@ -182,7 +182,7 @@ export const requestEmailVerificationFor = (
     context: CallerContext
 ): Promise<ResponseSuccess<EmailVerificationRequested> | ResponseReject> =>
     // Credentials included: issuing the token pushes onto this document's `tokens`.
-    userRepository.findByIdWithCredentials(userId).then((user) => {
+    userService.findByIdWithCredentials(userId).then((user) => {
         if (!user) return generateReject(404, [t('users.not-found')]);
         if (user.verifiedAt) return generateReject(409, [t('account.verify.already-verified')]);
 
@@ -231,7 +231,7 @@ export const completeEmailVerification = (
     context: CallerContext
 ): Promise<UserDocument> => {
     markVerified(user);
-    return userRepository.save(user).then((saved) => {
+    return userService.save(user).then((saved) => {
         emitAuditEvent(
             buildAuditEvent(context, {
                 action: accountAuditActions.AUTH_EMAIL_VERIFY_COMPLETED,
@@ -271,7 +271,7 @@ export const completeEmailChange = (
     user.pendingEmail = undefined;
     markVerified(user);
 
-    return userRepository.save(user).then((saved) =>
+    return userService.save(user).then((saved) =>
         saved
             .tokenRemoveAll(TokenType.REFRESH)
             .catch(() => undefined)

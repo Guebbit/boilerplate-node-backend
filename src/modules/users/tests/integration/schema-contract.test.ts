@@ -6,7 +6,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { userRepository } from '@modules/users';
+import { userRepository } from '../../repository';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 
 setupTestDb();

@@ -8,7 +8,7 @@
  */
 
 import { getCurrentLocale } from '@infrastructure/i18n';
-import { userRepository, type UserDocument } from '@modules/users';
+import { userService, type UserDocument } from '@modules/users';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
@@ -92,7 +92,7 @@ const linkToExistingAccount = (
     identity: OAuthIdentity,
     context: CallerContext
 ): Promise<UserDocument> =>
-    userRepository
+    userService
         .linkOAuthAccount(user.id, {
             provider,
             providerId: identity.providerId,
@@ -124,8 +124,8 @@ const signupFromOAuth = (
     identity: OAuthIdentity,
     context: CallerContext
 ): Promise<UserDocument> =>
-    userRepository
-        .create({
+    userService
+        .createRaw({
             email: identity.email,
             // No display name from the provider: the address is at least unique, unlike a blank.
             username: identity.name ?? identity.email,
@@ -183,7 +183,7 @@ export const loginOrCreateFromOAuth = (
     identity: OAuthIdentity,
     context: CallerContext
 ): Promise<UserDocument> =>
-    userRepository
+    userService
         // WITH credentials, unlike every other lookup in this file: `recordLogin` below may need
         // to build a 2FA login challenge off `user.twoFactorMethods`, which is `select: false` —
         // see 1b in docs/theory/defences/authentication.md#federated-login.
@@ -196,20 +196,17 @@ export const loginOrCreateFromOAuth = (
 
             // Same reason as the lookup above: `linkToExistingAccount` below may hand this
             // account straight to a 2FA challenge too.
-            return userRepository
-                .findOneWithCredentials({ email: identity.email })
-                .then((byEmail) => {
-                    if (!byEmail) return signupFromOAuth(provider, identity, context);
+            return userService.findOneWithCredentials({ email: identity.email }).then((byEmail) => {
+                if (!byEmail) return signupFromOAuth(provider, identity, context);
 
-                    if (!identity.emailVerified)
-                        throw new OAuthEmailUnverifiedError(identity.email);
+                if (!identity.emailVerified) throw new OAuthEmailUnverifiedError(identity.email);
 
-                    // Both sides must have proved the address, not just the provider — see
-                    // `OAuthAccountUnverifiedError`.
-                    if (!byEmail.verifiedAt) throw new OAuthAccountUnverifiedError(identity.email);
+                // Both sides must have proved the address, not just the provider — see
+                // `OAuthAccountUnverifiedError`.
+                if (!byEmail.verifiedAt) throw new OAuthAccountUnverifiedError(identity.email);
 
-                    return linkToExistingAccount(byEmail, provider, identity, context);
-                });
+                return linkToExistingAccount(byEmail, provider, identity, context);
+            });
         });
 
 /**

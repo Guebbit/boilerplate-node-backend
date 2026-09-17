@@ -9,6 +9,7 @@ import { callerForSubject, isUnrestricted } from '@kernel/permissions';
 import type { AuthContext, Order } from '@types';
 import type { OrderDocument } from '../model';
 import { accessibleFilter } from '@kernel/access/query';
+import { orderRepository } from '../repository';
 import { orderActionsFor } from '../domain';
 import type { OrderActor } from '../domain';
 import { resolveCurrentImages } from './current';
@@ -21,6 +22,25 @@ import { resolveCurrentImages } from './current';
  * `accessibleFilter` for why the scope rides in the read.
  */
 export const callerScope = (context?: AuthContext) => accessibleFilter(context, 'Order');
+
+/**
+ * One account's orders, by id rather than by `AuthContext` — for a caller that already knows
+ * WHOSE orders it wants (`account`'s data export) rather than deriving it from a request's role.
+ *
+ * @param userId - whose orders
+ */
+export const ownerScope = (userId: string): Record<string, unknown> =>
+    orderRepository.ownerScope(userId);
+
+/**
+ * {@link ownerScope}, minus soft-deleted rows — the same "own AND still there" pair
+ * `callerScope` computes for a role-based caller, for a caller that already has the userId
+ * (`cart`'s reorder, resolving the order it is refilling from).
+ *
+ * @param userId - whose orders
+ */
+export const visibleScope = (userId: string): Record<string, unknown> =>
+    orderRepository.visibleScope(userId);
 
 /**
  * Which column of the lifecycle table a caller reads. Two actors reach the HTTP surface;

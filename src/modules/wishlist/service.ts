@@ -14,7 +14,7 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { productRepository } from '@modules/products';
+import { productService } from '@modules/products';
 import { cartService } from '@modules/cart';
 import type { WishlistItem } from '@types';
 import type { CallerContext } from '@infrastructure/http/request';
@@ -51,7 +51,7 @@ const wishlistAdd = (
     productId: string,
     context: CallerContext
 ): Promise<ResponseSuccess<WishlistView> | ResponseReject> =>
-    productRepository.findPublicById(productId).then((product) => {
+    productService.findPublicById(productId).then((product) => {
         if (!product) return generateReject(404, [t('wishlist.product-not-found')]);
         return wishlistRepository.addLine(userId, productId).then((wishlist) => {
             emitAnalyticsEvent({

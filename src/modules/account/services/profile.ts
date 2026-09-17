@@ -26,13 +26,7 @@ import {
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
-import {
-    zodUserSchema,
-    userRepository,
-    userService,
-    TokenType,
-    type UserDocument
-} from '@modules/users';
+import { zodUserSchema, userService, TokenType, type UserDocument } from '@modules/users';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
@@ -111,7 +105,7 @@ export const passwordChange = (
 
         user.password = password;
         beforeSave?.(user);
-        return userRepository
+        return userService
             .save(user)
             .then((savedUser) =>
                 savedUser
@@ -139,7 +133,7 @@ export const getOwnProfile = (
         ...buildAnalyticsBase(context),
         event: accountAnalyticsEvents.USER_PROFILE_VIEWED
     });
-    return userRepository.findByIdWithPendingEmail(userId).then((user) => user ?? undefined);
+    return userService.findByIdWithPendingEmail(userId).then((user) => user ?? undefined);
 };
 
 /**
@@ -307,7 +301,7 @@ const applyEmailChangeRequest = (
         return Promise.resolve({ conflict: false, requested: false });
     }
 
-    return userRepository.emailOrPendingEmailTaken(requestedEmail, user.id).then((taken) => {
+    return userService.emailOrPendingEmailTaken(requestedEmail, user.id).then((taken) => {
         if (taken) return { conflict: true, requested: false };
         user.pendingEmail = requestedEmail;
         return { conflict: false, requested: true };
@@ -390,7 +384,7 @@ export const updateProfile = (
     const parseResult = zodProfileSchema.safeParse(data);
 
     const outcome: Promise<ResponseSuccess<UserDocument> | ResponseReject> = parseResult.success
-        ? userRepository
+        ? userService
               // Credentials included: a genuine email request follows with
               // `sendVerificationEmail`, which pushes a token onto this same document.
               .findByIdWithCredentials(userId)
@@ -438,7 +432,7 @@ export const passwordChangeWithCurrent = (
     const outcome: Promise<ResponseSuccess<UserDocument> | ResponseReject> =
         errors.length > 0
             ? Promise.resolve(generateReject(422, errors))
-            : userRepository
+            : userService
                   // `password` is select:false — comparing against it is this flow's whole point.
                   .findByIdWithCredentials(userId)
                   .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {

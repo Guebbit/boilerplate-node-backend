@@ -14,8 +14,8 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
-import { orderService, orderRepository } from '@modules/orders';
-import { productRepository } from '@modules/products';
+import { orderService } from '@modules/orders';
+import { productService } from '@modules/products';
 import {
     createIntent,
     confirmPayment,
@@ -128,7 +128,7 @@ describe('createIntent', () => {
 
     it('refuses a non-pending order with the stable code', async () => {
         const { user, order } = await orderFor();
-        await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'shipped');
+        await orderService.updateStatusIfIn(String(order._id), ['pending'], 'shipped');
 
         const result = await createIntent(String(order._id), auth(user));
 
@@ -339,7 +339,7 @@ describe('refund on cancel', () => {
 
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('refunded');
-        const stored = await orderRepository.findById(String(order._id));
+        const stored = await orderService.getById(String(order._id));
         expect(stored!.status).not.toBe('paid');
     });
 });
@@ -352,7 +352,7 @@ describe('refund on cancel', () => {
  */
 /** Counters straight from the catalogue row, which is where the truth lives. */
 const countersOf = async (productId: unknown) => {
-    const stored = await productRepository.findByIdRaw(String(productId));
+    const stored = await productService.findByIdRaw(String(productId));
     return { onHand: stored?.onHand, reserved: stored?.reserved };
 };
 
@@ -494,7 +494,7 @@ describe('in-flight settlement', () => {
         expect(result.success).toBe(true);
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('requires_action');
-        const stored = await orderRepository.findById(String(order._id));
+        const stored = await orderService.getById(String(order._id));
         expect(stored!.status).toBe('pending');
     });
 
@@ -513,7 +513,7 @@ describe('in-flight settlement', () => {
         expect(result.success).toBe(true);
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('processing');
-        const stored = await orderRepository.findById(String(order._id));
+        const stored = await orderService.getById(String(order._id));
         expect(stored!.status).toBe('pending');
     });
 
@@ -575,7 +575,7 @@ describe('syncPayment', () => {
 
         expect(asReject(result).status).toBe(409);
         expect(asReject(result).errors[0].code).toBe('PAYMENT_DECLINED');
-        expect((await orderRepository.findById(String(order._id)))!.status).toBe('pending');
+        expect((await orderService.getById(String(order._id)))!.status).toBe('pending');
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3 });
     });
 
@@ -619,7 +619,7 @@ describe('applyWebhookSettlement', () => {
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('succeeded');
         expect(payment!.cardLast4).toBe('4242');
-        const stored = await orderRepository.findById(String(order._id));
+        const stored = await orderService.getById(String(order._id));
         expect(stored!.status).toBe('paid');
     });
 
@@ -676,7 +676,7 @@ describe('applyWebhookDelivery', () => {
 
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('succeeded');
-        expect((await orderRepository.findById(String(order._id)))!.status).toBe('paid');
+        expect((await orderService.getById(String(order._id)))!.status).toBe('paid');
     });
 });
 
@@ -690,7 +690,7 @@ describe('refundByOrder', () => {
         expect(result.success).toBe(true);
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('refunded');
-        const stored = await orderRepository.findById(String(order._id));
+        const stored = await orderService.getById(String(order._id));
         expect(stored!.status).toBe('paid');
     });
 
@@ -751,14 +751,14 @@ describe('recordOfflinePayment', () => {
             method: 'cash',
             reference: 'till-42'
         });
-        const stored = await orderRepository.findById(String(order._id));
+        const stored = await orderService.getById(String(order._id));
         expect(stored!.status).toBe('paid');
         expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0 });
     });
 
     it('refuses an order that is not pending, the same code createIntent uses', async () => {
         const { order } = await orderFor();
-        await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'cancelled');
+        await orderService.updateStatusIfIn(String(order._id), ['pending'], 'cancelled');
 
         const result = await recordOfflinePayment(
             String(order._id),

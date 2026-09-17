@@ -600,6 +600,61 @@ export const removeById = (
 const facets = (): Promise<{ categories: FacetCount[]; tags: FacetCount[] }> =>
     productRepository.facets();
 
+/**
+ * The plain, untransformed document — `inventory` and `orders` read a product's live counters
+ * this way, never through `getById`'s scoped/transformed shape.
+ */
+const findByIdRaw = (productId: string) => productRepository.findByIdRaw(productId);
+
+/** The publicly visible product with this id, or `null` — `cart` and `wishlist`'s one read. */
+const findPublicById = (productId: string) => productRepository.findPublicById(productId);
+
+/**
+ * Every product in `ids`, plain and untransformed, in one round trip — `orders` joins them onto
+ * its own rows by id rather than reading one at a time.
+ *
+ * @param ids - the product ids to read back
+ */
+const findManyByIds = (ids: readonly string[]) =>
+    productRepository.findAll({ _id: { $in: ids.map((id) => toObjectId(id)) } });
+
+/*
+ * The counter transitions below are conditional writes on `onHand`/`reserved`; which one is legal
+ * when belongs to `@modules/inventory` (`writerFor`'s table), not here — this is the door, not the
+ * rule.
+ */
+
+/** Hold units for an order that has not been paid for. */
+const reserveUnits = (productId: string, quantity: number) =>
+    productRepository.reserveUnits(productId, quantity);
+
+/** Turn a hold into a sale — the units leave and stop being reserved. */
+const commitUnits = (productId: string, quantity: number) =>
+    productRepository.commitUnits(productId, quantity);
+
+/** Give up a hold — the units are still here and become sellable again. */
+const releaseUnits = (productId: string, quantity: number) =>
+    productRepository.releaseUnits(productId, quantity);
+
+/** New stock arriving — `onHand` grows. */
+const receiveUnits = (productId: string, quantity: number) =>
+    productRepository.receiveUnits(productId, quantity);
+
+/** A manual correction to `onHand`, signed. */
+const adjustUnits = (productId: string, delta: number) =>
+    productRepository.adjustUnits(productId, delta);
+
+/** How many products are at or below the given availability. */
+const countLowAvailability = (threshold: number) =>
+    productRepository.countLowAvailability(threshold);
+
+/** The total reserved across the whole catalogue. */
+const sumReserved = () => productRepository.sumReserved();
+
+/** A page of every product's counters and derived availability — the stock board's own read. */
+const availabilityPage = (options: { skip: number; limit: number; maxAvailable?: number }) =>
+    productRepository.availabilityPage(options);
+
 /** The service's public surface — every controller and cross-module caller goes through this. */
 export const productService = {
     validateCreateData,
@@ -620,5 +675,16 @@ export const productService = {
     removeById,
     // A controller may not reach `./model` directly (the persistence wall), so the shaping
     // helper it needs to build a response rides through the service instead.
-    toProduct
+    toProduct,
+    findByIdRaw,
+    findPublicById,
+    findManyByIds,
+    reserveUnits,
+    commitUnits,
+    releaseUnits,
+    receiveUnits,
+    adjustUnits,
+    countLowAvailability,
+    sumReserved,
+    availabilityPage
 };

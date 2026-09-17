@@ -25,7 +25,6 @@ import {
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import type { Lean } from '@infrastructure/persistence/create-repository';
 import {
-    orderRepository,
     orderService,
     orderConfirmEmail,
     bankTransferInstructionsEmail,
@@ -36,7 +35,7 @@ import {
     type OrderDocument
 } from '@modules/orders';
 import type { ProductDocument } from '@modules/products';
-import { userRepository } from '@modules/users';
+import { userService } from '@modules/users';
 import { inventoryService } from '@modules/inventory';
 import { addressForCheckout, type AddressItem } from '@modules/account';
 import { findShippingMethod, priceShipping } from '@modules/delivery';
@@ -94,7 +93,7 @@ const runCheckout = async (
     shippingMethodId: string | undefined,
     paymentMethod: string | undefined
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
-    const user = await userRepository.findById(userId);
+    const user = await userService.getById(userId);
     if (!user) return generateReject(404, []);
 
     // The whole language chain for this checkout — both the snapshot each line freezes and,
@@ -125,7 +124,7 @@ const runCheckout = async (
      * is written, for the same reason every other pre-flight check in this function is.
      */
     if (requestedMethod === 'bank_transfer') {
-        const openTransfers = await orderRepository.countOpenBankTransfers(userId);
+        const openTransfers = await orderService.countOpenBankTransfers(userId);
         if (openTransfers >= bankTransferMaxOpenPerAccount())
             return generateReject(409, [
                 { code: 'CART_BANK_TRANSFER_LIMIT', message: t('cart.bank-transfer-limit') }
@@ -248,7 +247,7 @@ const runCheckout = async (
      * briefly exists and is retracted is recoverable, units taken with nothing
      * recording who took them are not.
      */
-    const order = await orderRepository.create({
+    const order = await orderService.createRaw({
         userId: new Types.ObjectId(user.id),
         email: user.email,
         items: orderItems,
