@@ -132,7 +132,7 @@ export const writeUsers = (
                 // and tokens on the document never reach `res.json`.
                 successResponse<User>(response, userService.toUser(user), 201);
             })
-            .catch((error: Error) =>
+            .catch((error: unknown) =>
                 deleteUpload().then(() => {
                     rejectDatabaseError(response, 'writeUser', error);
                 })
@@ -157,7 +157,7 @@ export const writeUsers = (
                 });
             successResponse<User>(response, userService.toUser(result.data));
         })
-        .catch((error: Error) =>
+        .catch((error: unknown) =>
             // Matches the create branch above: an upload this request wrote must not survive a
             // failed write, or the file is orphaned with nothing referencing it.
             deleteUpload().then(() => {

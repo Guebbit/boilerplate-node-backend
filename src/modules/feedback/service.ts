@@ -125,7 +125,7 @@ export const create = (payload: CreateFeedbackRequest): Promise<FeedbackRequestD
                     { to: notifyEmail, subject: operatorMail.subject },
                     operatorMail.template,
                     operatorMail.data
-                ).catch((error: Error) =>
+                ).catch((error: unknown) =>
                     logger.error({
                         message: 'feedback contact notification email failed',
                         error

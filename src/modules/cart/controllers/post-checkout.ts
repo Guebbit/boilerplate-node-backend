@@ -46,7 +46,7 @@ export const postCheckout = (request: Request, response: Response): Promise<void
                 );
             });
         })
-        .catch((error: Error) => {
+        .catch((error: unknown) => {
             // A thrown error is a failed checkout too — record it before delegating.
             cartCheckoutTotal.inc({ status: 'failure' });
             catchAs(response, 'postCheckout')(error);

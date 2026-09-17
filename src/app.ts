@@ -240,7 +240,7 @@ installErrorHandling(app);
  */
 if (process.env.NODE_ENV !== 'test' && process.env.NODE_APP_NO_LISTEN !== '1') {
     registerSignalHandlers(stopServer);
-    void startServer().catch((error: Error) =>
-        logger.error('------------- SERVER ERROR -------------', error)
+    void startServer().catch((error: unknown) =>
+        logger.error({ message: '------------- SERVER ERROR -------------', error })
     );
 }

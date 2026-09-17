@@ -17,9 +17,13 @@
 import { randomUUID } from 'node:crypto';
 import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
-import { logger, describeError } from '@infrastructure/adapters/logger';
+import { logger } from '@infrastructure/adapters/logger';
 import { isDuplicateKey } from '@infrastructure/http/errors';
 import { environmentNumber } from '@infrastructure/runtime/environment';
+// js-toolkit: consults a bare string, an `Error`, then a `message` on the value itself, so a
+// rejection that is not an `Error` still yields its message. `String(error)` is the fallback
+// rather than the toolkit's default empty string. https://github.com/Guebbit/js-toolkit
+import { extractErrorMessage } from '@guebbit/js-toolkit';
 
 /**
  * A stored lease, one document per job name.
@@ -178,7 +182,12 @@ const releaseLease = (
         .updateOne(
             { _id: name, owner: token },
             outcome.failed
-                ? { $set: { expiresAt: RELEASED, lastError: describeError(outcome.error) } }
+                ? {
+                      $set: {
+                          expiresAt: RELEASED,
+                          lastError: extractErrorMessage(outcome.error, String(outcome.error))
+                      }
+                  }
                 : {
                       $set: { expiresAt: RELEASED, lastSuccessAt: new Date() },
                       $unset: { lastError: '' }

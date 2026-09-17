@@ -70,9 +70,14 @@ describe('installErrorHandling — uncaughtException', () => {
         added[0](new Error('boom'), 'uncaughtException');
 
         // The order is the finding: the audit write happens BEFORE the exit, not behind it.
+        // The raw Error under `error`, not a hand-picked `message` field — `redactFormat`
+        // (`adapters/logger.ts`) is what serializes it, name/stack included.
         expect(errorSpy).toHaveBeenCalledWith(
             'process.uncaughtException',
-            expect.objectContaining({ message: 'boom', origin: 'uncaughtException' })
+            expect.objectContaining({
+                error: expect.objectContaining({ message: 'boom' }),
+                origin: 'uncaughtException'
+            })
         );
         expect(exitSpy).toHaveBeenCalledWith(1);
 
@@ -91,9 +96,10 @@ describe('installErrorHandling — unhandledRejection', () => {
         // the opposite call from the exception handler above, for the opposite reason.
         (rejectionsAdded as (reason: unknown) => void)(new Error('nobody caught me'));
 
+        // The raw rejection reason under `error`, not a hand-flattened `{name, message}`.
         expect(errorSpy).toHaveBeenCalledWith(
             'process.unhandledRejection',
-            expect.objectContaining({ reason: { name: 'Error', message: 'nobody caught me' } })
+            expect.objectContaining({ error: expect.objectContaining({ message: 'nobody caught me' }) })
         );
 
         remove();

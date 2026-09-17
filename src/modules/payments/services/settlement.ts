@@ -364,7 +364,7 @@ export const applyWebhookDelivery = (event: ProviderWebhookEvent): Promise<void>
             return;
         }
 
-        return applyWebhookSettlement(event.providerRef, event.state).catch((error: Error) =>
+        return applyWebhookSettlement(event.providerRef, event.state).catch((error: unknown) =>
             // The claim is what makes a retry a no-op, so a settlement that failed has to give it
             // back before the rejection leaves: the provider WILL redeliver, and that redelivery
             // is the only thing that can still pay this order.

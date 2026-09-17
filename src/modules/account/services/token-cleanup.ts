@@ -34,9 +34,9 @@ export const runTokenCleanup = (): Promise<void> => {
         .catch((error: unknown) => {
             /*
              * Contained on purpose: a pre-flight step on login/refresh must never fail the
-             * request that triggered it. Logs `error.message`, not the Error itself — the logger
-             * serializes as JSON, and an Error has no enumerable properties, so logging it alone
-             * would print `"error":{}`.
+             * request that triggered it. The raw `error`, not a flattened message — `redactFormat`
+             * (`adapters/logger.ts`) serializes an `Error` into `{name, message, stack}` before
+             * JSON output, so passing it whole is what keeps the name and stack in the log line.
              */
             logger.error({
                 message: 'Token cleanup: failed',

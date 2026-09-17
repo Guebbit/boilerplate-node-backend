@@ -328,6 +328,30 @@ describe('ValidationError branch', () => {
     });
 });
 
+/**
+ * `.catch()`'s parameter is `unknown`, not `Error` — JS lets code `throw` or `reject()` anything.
+ * `Object.prototype.hasOwnProperty.call(null, …)` throws outright, so a rejection that is not an
+ * object has to be turned away before the first branch runs, not read into one of them.
+ */
+describe('a rejection that is not Error-shaped at all', () => {
+    it.each([
+        ['null', null],
+        ['undefined', undefined],
+        ['a bare string', 'boom'],
+        ['a number', 42]
+    ])('falls back to 500/Unknown error for %s, rather than throwing', (_label, value) => {
+        expect(databaseErrorInterpreter(value)).toEqual([500, 'Unknown error']);
+    });
+
+    it('rejectDatabaseError answers 500 instead of throwing inside the interpreter', () => {
+        const response = makeResponseStub();
+
+        expect(() => rejectDatabaseError(response, 'getProducts', null)).not.toThrow();
+
+        expect(response.status).toHaveBeenCalledWith(500);
+    });
+});
+
 describe('rejectDatabaseError', () => {
     it('sends the status the interpreter chose, not a hardcoded 500', () => {
         const response = makeResponseStub();

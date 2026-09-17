@@ -122,7 +122,7 @@ const importEntries = (
 
             return successResponse<LocaleImportResult>(response, result.data);
         })
-        .catch((error: Error) => rejectDatabaseError(response, `${mode}LocaleEntries`, error));
+        .catch((error: unknown) => rejectDatabaseError(response, `${mode}LocaleEntries`, error));
 
 /**
  * PUT /locales/:locale/entries (admin)

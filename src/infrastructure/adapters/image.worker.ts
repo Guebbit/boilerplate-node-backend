@@ -172,7 +172,7 @@ export const handleImageDigestJob = (job: Partial<ImageDigestJobPayload>): Promi
         .then((urls) =>
             settleWriteback(writeback, documentId, key, urls, collection).then(() => true)
         )
-        .catch((error: Error) => {
+        .catch((error: unknown) => {
             // A bad decode is permanent — every redelivery decodes the same bytes the same way —
             // so it is dead-lettered rather than retried. `digestQuarantinedImage` throwing for any
             // OTHER reason (disk full, a storage write failing) looks identical from here; both

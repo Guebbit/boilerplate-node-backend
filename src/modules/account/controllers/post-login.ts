@@ -94,7 +94,7 @@ export const postLogin = (
                 );
             });
         })
-        .catch((error: Error) => {
+        .catch((error: unknown) => {
             // Covers the token cleanup, the credential check and the three token/cookie steps
             // after it. A failure in any of them is not a rejected login — the caller may well
             // have had the right password — so it must not be recorded as one.

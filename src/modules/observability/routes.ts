@@ -58,7 +58,7 @@ router.get('/metrics', isMetricsScraper, (_request, response) => {
             response.setHeader('Content-Type', metricsRegistry.contentType);
             response.send(metrics);
         })
-        .catch((error: Error) => {
+        .catch((error: unknown) => {
             logger.error('Failed to collect Prometheus metrics', { error });
             response.status(500).send('# metrics unavailable\n');
         });

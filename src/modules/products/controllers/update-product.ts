@@ -80,7 +80,7 @@ export const updateProduct = (
                 });
             successResponse<Product>(response, productService.toProduct(result.data));
         })
-        .catch((error: Error) =>
+        .catch((error: unknown) =>
             deleteUpload().then(() => {
                 rejectDatabaseError(response, 'updateProduct', error);
             })

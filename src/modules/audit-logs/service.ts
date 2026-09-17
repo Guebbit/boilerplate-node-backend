@@ -30,7 +30,7 @@ import { auditSinkFailuresTotal } from './metrics';
  *            would genuinely be able to take the process down.
  */
 const record = (entry: AuditEntry): void => {
-    void auditLogRepository.create(entry as Partial<AuditLogDocument>).catch((error: Error) => {
+    void auditLogRepository.create(entry as Partial<AuditLogDocument>).catch((error: unknown) => {
         // Before the log line, so the count is right even if the logger is what is broken.
         auditSinkFailuresTotal.inc();
         logger.warn({

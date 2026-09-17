@@ -9,7 +9,6 @@
 
 import type { Response } from 'express';
 import type { ZodError, ZodType } from 'zod';
-import type { CastError } from 'mongoose';
 import { rejectResponse, validationErrors, type ResponseErrorItem } from './response';
 import { rejectDatabaseError } from './errors';
 
@@ -55,11 +54,7 @@ export const refused = <TData>(response: Response, result: ServiceResult<TData>)
 export const catchAs =
     (response: Response, context: string) =>
     (error: unknown): void => {
-        // `.catch()` types its parameter `unknown` because JS does not guarantee a throw is an
-        // Error — but everything that reaches this app-wide boundary is thrown by this codebase
-        // or by Mongoose, both Error-shaped. One cast here, with the reason, instead of one at
-        // each of the many call sites that would otherwise each reach for `as Error` themselves.
-        rejectDatabaseError(response, context, error as CastError | Error);
+        rejectDatabaseError(response, context, error);
     };
 
 /**

@@ -101,7 +101,6 @@ export const stopDatabase = () =>
         (error: unknown) => {
             logger.warn({
                 message: 'MongoDB disconnect failed.',
-                // Narrow `unknown` before touching `.message`: anything can be thrown in JS.
                 error
             });
         }
