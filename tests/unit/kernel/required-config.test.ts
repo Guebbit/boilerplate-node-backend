@@ -23,7 +23,6 @@ const TOUCHED = [
     'NODE_ANTIBOT_TURNSTILE_SITE_KEY',
     'NODE_ANTIBOT_TURNSTILE_SECRET',
     'NODE_ANTIBOT_EMAIL_POLICY',
-    'NODE_WEBHOOK_DEMO_SINK_URL',
     'SECRET'
 ] as const;
 
@@ -37,7 +36,6 @@ const configure = (): void => {
     delete process.env.NODE_SMTP_HOST;
     delete process.env.NODE_ANTIBOT_PROVIDER;
     delete process.env.NODE_ANTIBOT_EMAIL_POLICY;
-    delete process.env.NODE_WEBHOOK_DEMO_SINK_URL;
 };
 
 afterEach(() => {
@@ -210,21 +208,26 @@ describe('the antibot provider group', () => {
     });
 });
 
-describe('the webhook demo-sink exemption — forbidden, not required', () => {
+describe('module-declared forbiddenInProduction — forbidden, not required', () => {
+    // `SECRET` stands in for a module's own forbidden variable here — the mechanism under test is
+    // generic; `src/modules/webhooks/tests/unit/module.test.ts` covers the real
+    // NODE_WEBHOOK_DEMO_SINK_URL case against this module's actual manifest entry.
+    const modules: AppModule[] = [{ name: 'demo', forbiddenInProduction: ['SECRET'] }];
+
     it('accepts it set outside production', () => {
         configure();
-        process.env.NODE_WEBHOOK_DEMO_SINK_URL = 'http://webhook-tester:8080';
+        process.env.SECRET = 'a-real-secret-value';
 
-        expect(() => assertRequiredConfig([])).not.toThrow();
+        expect(() => assertRequiredConfig(modules)).not.toThrow();
     });
 
     it('refuses to boot in production with it set', () => {
         configure();
         process.env.NODE_ENV = 'production';
         process.env.NODE_CORS_ORIGIN = 'https://example.com';
-        process.env.NODE_WEBHOOK_DEMO_SINK_URL = 'http://webhook-tester:8080';
+        process.env.SECRET = 'a-real-secret-value';
 
-        expect(() => assertRequiredConfig([])).toThrow(/NODE_WEBHOOK_DEMO_SINK_URL/);
+        expect(() => assertRequiredConfig(modules)).toThrow(/SECRET/);
     });
 
     it('accepts production with it unset', () => {
@@ -232,7 +235,7 @@ describe('the webhook demo-sink exemption — forbidden, not required', () => {
         process.env.NODE_ENV = 'production';
         process.env.NODE_CORS_ORIGIN = 'https://example.com';
 
-        expect(() => assertRequiredConfig([])).not.toThrow();
+        expect(() => assertRequiredConfig(modules)).not.toThrow();
     });
 });
 

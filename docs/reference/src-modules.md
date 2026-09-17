@@ -85,9 +85,9 @@ database. See [Data](./data.md) and [Demo profile](../tools/demo-profile.md).
 
 ## The one-offs
 
-Five shapes exist in exactly one module each, and one — `config.ts` — in several. They are
+Seven shapes exist in exactly one module each, and one — `config.ts` — in several. They are
 genuine one-offs rather than a naming drift: each is a piece of a domain no other domain has, and
-three of the five are `account`'s, because proving who somebody is has more moving parts than any
+three of the seven are `account`'s, because proving who somebody is has more moving parts than any
 other domain here.
 
 | Pattern                          | What it is                                                                                                                                                                                                                                                                | Read next                                           |
@@ -98,6 +98,8 @@ other domain here.
 | `src/modules/*/providers/*.ts`   | `payments` only. The payment provider port and the fake implementation behind it, so nothing above the port knows which processor is wired in.                                                                                                                            | [Layers](../theory/layers.md)                       |
 | `src/modules/*/config.ts`        | The env-derived settings one domain owns, read per call so a change lands on the next request rather than the next restart. `inventory`'s reservation thresholds, `payments`' currency, `webhooks`' ring key and cap, `products`' two VAT rates, `orders`' shop identity. | [Ops](./ops.md)                                     |
 | `src/modules/*/tenants.ts`       | `locales` only. The tenant registry — which keyspaces this deployment holds words for, read from the environment and published by the module's own route.                                                                                                                 | [i18n](../tools/i18n.md)                            |
+| `src/modules/*/transport/*.ts`   | `webhooks` only. The delivery substrate its own queue consumer calls: sign (Standard Webhooks), SSRF-check via `@infrastructure/adapters/ssrf-guard`, POST, time out. Kept out of `services/` because it is protocol mechanics, not a domain decision.                     | [webhooks](../modules/webhooks.md#the-delivery-path) |
+| `src/modules/*/asyncapi.internal.yaml` | `webhooks` only, today. A module's own PRIVATE queue contract — `worker.webhook.deliver` — merged into `asyncapi.yaml` and never `asyncapi.public.yaml`, unlike `asyncapi.yaml`'s public event catalogue.                                                          | [Contract Fragmentation](../api/contract-fragmentation.md) |
 
 ::: tip Where the tests are
 Every module also carries its own unit, contract and factory files. They are catalogued on

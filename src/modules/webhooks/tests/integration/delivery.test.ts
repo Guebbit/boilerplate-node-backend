@@ -20,7 +20,7 @@ import {
 import { processDeliveryJob } from '@modules/webhooks/services';
 import { replay as replayDelivery } from '@modules/webhooks/services/deliveries';
 import { mintRingSecret, activeRingSecrets } from '@modules/webhooks/secrets';
-import { verifyWebhookSignature } from '@infrastructure/adapters/webhook-signing';
+import { verifyWebhookSignature } from '@modules/webhooks/transport/webhook-signing';
 import { WEBHOOK_MAX_ATTEMPTS, WEBHOOK_MAX_CONSECUTIVE_FAILURES } from '@modules/webhooks/domain';
 import type { WebhookDeliverJobPayload } from '@types';
 import type { WebhookSubscriptionDocument } from '@modules/webhooks/model';

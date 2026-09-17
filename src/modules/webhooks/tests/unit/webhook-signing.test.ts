@@ -8,7 +8,7 @@
 import {
     signWebhookPayload,
     verifyWebhookSignature
-} from '@infrastructure/adapters/webhook-signing';
+} from '@modules/webhooks/transport/webhook-signing';
 
 describe('signWebhookPayload — against the spec published test vector', () => {
     it('reproduces the reference implementation output exactly', () => {

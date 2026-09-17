@@ -39,10 +39,10 @@
  * What this module does NOT do:
  *  - No redirect handling. A 3xx must not be followed without re-running this same check on the
  *    `Location` header, and the simplest correct answer — refuse every redirect outright — is
- *    `./webhook-delivery.ts`'s job, not this file's.
- *  - No timeout math. `./webhook-delivery.ts` wraps the *whole* delivery attempt — this resolution
- *    included — in one `AbortSignal.timeout`, rather than this module owning a second timer that
- *    would need to stay in sync with the first.
+ *    `@modules/webhooks/transport/webhook-delivery.ts`'s job, not this file's.
+ *  - No timeout math. `@modules/webhooks/transport/webhook-delivery.ts` wraps the *whole* delivery
+ *    attempt — this resolution included — in one `AbortSignal.timeout`, rather than this module
+ *    owning a second timer that would need to stay in sync with the first.
  */
 
 import { resolve4, resolve6 } from 'node:dns/promises';

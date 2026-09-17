@@ -27,8 +27,13 @@ contract it is expected to honour. So the split is by SECTION, one field in
 `scripts/contracts/asyncapi-bundles.ts`:
 
 ```ts
-const SHARED_SECTIONS: readonly AsyncSectionName[] = ['observability'];
+const SHARED_SECTIONS: ReadonlySet<AsyncSectionName> = new Set(['observability', 'webhooks']);
 ```
+
+`webhooks` is shared for a different reason than `observability`: its channels ARE the module's
+public event catalogue, not a queue — see below. A module's OWN queue, by contrast, stays out of
+`SHARED_SECTIONS` the same way `workers` does; `webhooks-internal` (`worker.webhook.deliver`) is
+the one example today, in `src/modules/webhooks/asyncapi.internal.yaml`.
 
 Both bundles merge the same section documents, so neither can describe a shared channel differently
 — `tests/cross-cutting/contract-bundles.test.ts` asserts the public one is a strict subset. Only
@@ -52,9 +57,14 @@ shared/contracts/asyncapi.workers.yaml         the RabbitMQ queues, which belong
 shared/contracts/asyncapi.root.yaml            version, id, info, tags — no channels, no servers
 ```
 
-The worker queues are shared rather than owned by a module because the email and PDF workers are
-substrate — `src/app/workers.ts` over `src/infrastructure/adapters/queue.ts` — enqueued by whichever
-domain needs a mail sent. It is the async twin of filing `GET /` under `system` in the REST contract.
+Most worker queues are shared rather than owned by a module because the email, PDF and image
+workers are substrate — `src/app/workers.ts` over `src/infrastructure/adapters/queue.ts` —
+enqueued by whichever domain needs one. It is the async twin of filing `GET /` under `system` in
+the REST contract. A queue a single module owns outright, like `webhooks`' `worker.webhook.deliver`,
+gets its own PRIVATE section instead — `src/modules/webhooks/asyncapi.internal.yaml`, declaring no
+`servers` of its own (its one channel binds to `shared/contracts/asyncapi.workers.yaml`'s
+`rabbitmqLocal`, so a second declaration here would collide when the two sections merge) and left
+out of `lint:asyncapi:modules`'s glob for the same reason: it is valid only once bundled.
 
 This replaced a three-fragment layout (`channels.yaml`, `messages.yaml`, `schemas.yaml` per section) <!-- doc-paths:ignore -->
 whose pieces were half-objects that parsed as nothing until concatenated in the right order at the

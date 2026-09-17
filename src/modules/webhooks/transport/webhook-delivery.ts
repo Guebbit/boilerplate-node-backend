@@ -8,12 +8,12 @@
  * a human-readable `.error`, so a worker can always write a delivery-log row, never crash on one.
  *
  * Built on `node:http`/`node:https` rather than a client library: the two properties this delivery
- * cannot do without — a custom `lookup` (DNS pinning, from `./ssrf-guard.ts`) and no automatic
- * redirect following — are exactly the two both give directly. A 3xx response is read as a failed
- * delivery below; it is never followed, which is what makes "refuse redirects entirely"
- * (`./ssrf-guard.ts`'s documented split) actually true rather than aspirational.
+ * cannot do without — a custom `lookup` (DNS pinning, from `@infrastructure/adapters/ssrf-guard`)
+ * and no automatic redirect following — are exactly the two both give directly. A 3xx response is
+ * read as a failed delivery below; it is never followed, which is what makes "refuse redirects
+ * entirely" (`ssrf-guard.ts`'s documented split) actually true rather than aspirational.
  *
- * `node:http` only ever runs for `./ssrf-guard.ts`'s one exempted development/test demo host —
+ * `node:http` only ever runs for `ssrf-guard.ts`'s one exempted development/test demo host —
  * every other target already failed the `https:` check before a request module is even chosen.
  */
 
@@ -24,17 +24,14 @@ import {
     SsrfRefusedError,
     type SafeWebhookTarget
 } from '@infrastructure/adapters/ssrf-guard';
-import {
-    signWebhookPayload,
-    type WebhookSignatureHeaders
-} from '@infrastructure/adapters/webhook-signing';
+import { signWebhookPayload, type WebhookSignatureHeaders } from './webhook-signing';
 
 /** Hard total budget for one attempt — DNS resolution through the last response byte. */
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 /** One delivery a worker asks this module to make. */
 export interface WebhookDeliveryAttempt {
-    /** The subscription's endpoint. Validated and pinned by `./ssrf-guard.ts` before any request. */
+    /** The subscription's endpoint. Validated and pinned by `ssrf-guard.ts` before any request. */
     url: string;
     /** The active secret ring, plaintext — already decrypted by the caller; this file signs only. */
     secrets: string[];
@@ -44,7 +41,7 @@ export interface WebhookDeliveryAttempt {
     payload: unknown;
     /** Overrides {@link DEFAULT_TIMEOUT_MS}. */
     timeoutMs?: number;
-    /** Passed straight through to `./ssrf-guard.ts`'s `resolveSafeWebhookTarget`. */
+    /** Passed straight through to `ssrf-guard.ts`'s `resolveSafeWebhookTarget`. */
     allowedInsecureHost?: string;
 }
 
@@ -70,7 +67,7 @@ interface RawResponse {
  *
  * node:https — https.request(options, callback): https://nodejs.org/api/https.html#httpsrequestoptions-callback
  * (node:http's `request` takes the identical options shape for everything used here)
- *  - `lookup`: DNS pinning from `./ssrf-guard.ts` — the connection is made to the address that was
+ *  - `lookup`: DNS pinning from `ssrf-guard.ts` — the connection is made to the address that was
  *    already validated, not to whatever a second resolution would answer.
  *  - `hostname` stays the ORIGINAL host (not the pinned IP): TLS SNI and certificate hostname
  *    verification must check against the name the operator configured, only the IP the socket
@@ -80,7 +77,7 @@ interface RawResponse {
  *  - No redirect handling: this call answers with whatever status the endpoint sent, 3xx included,
  *    and `deliverWebhook` below treats 3xx as a failure rather than a location to chase.
  *
- * `url.protocol` decides `node:http` vs `node:https` — `./ssrf-guard.ts` has already refused
+ * `url.protocol` decides `node:http` vs `node:https` — `ssrf-guard.ts` has already refused
  * every `http:` target except its one exempted demo host, so this never opens a plaintext
  * connection anywhere else.
  *

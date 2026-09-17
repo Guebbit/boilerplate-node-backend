@@ -18,7 +18,7 @@ import { EventEmitter } from 'node:events';
 import { request as httpsRequest } from 'node:https';
 import { request as httpRequest } from 'node:http';
 import { resolveSafeWebhookTarget, SsrfRefusedError } from '@infrastructure/adapters/ssrf-guard';
-import { deliverWebhook } from '@infrastructure/adapters/webhook-delivery';
+import { deliverWebhook } from '@modules/webhooks/transport/webhook-delivery';
 
 // `resolve4`/`resolve6` are mocked so "a DNS name resolving to private space" is deterministic —
 // this suite must never depend on what a real DNS server answers.

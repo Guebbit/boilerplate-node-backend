@@ -98,7 +98,7 @@ flowchart LR
     PUB --> MATCH{"matching<br/>subscriptions?"}
     MATCH -->|none| DROP["nothing"]
     MATCH -->|n| Q["worker.webhook.deliver<br/>one message per subscription"]
-    Q --> W["webhook.worker.ts"]
+    Q --> W["webhooks' own<br/>consumer (module.ts)"]
     W --> HTTP["signed POST<br/>SSRF-checked, timed out"]
     HTTP -->|2xx| OK["status: succeeded"]
     HTTP -->|fail, attempts left| BACK["status: pending<br/>nextAttemptAt scheduled"]
@@ -114,19 +114,20 @@ carries when a failed row is due again; `ops/sweep-webhook-retries.ts` — the o
 it. `webhookDeliveryRepository.claimPending` (`pending` → `in-flight`) is the one atomic step that
 keeps the sweep and a fast-path worker from ever delivering the same attempt twice.
 
-**Signing is Standard Webhooks, hand-rolled.** `infrastructure/adapters/webhook-signing.ts` emits
-the `webhook-id`/`webhook-timestamp`/`webhook-signature` headers a growing set of the ecosystem
-already verifies with no custom code — the format is the interoperable part; the ~30 lines of
-`node:crypto` around it are not worth a dependency. A subscription's secret ring is a list, not one
-value, so `PATCH .../subscriptions/:id` can rotate without downtime: two active secrets sign two
+**Signing is Standard Webhooks, hand-rolled.** `transport/webhook-signing.ts` emits the
+`webhook-id`/`webhook-timestamp`/`webhook-signature` headers a growing set of the ecosystem already
+verifies with no custom code — the format is the interoperable part; the ~30 lines of `node:crypto`
+around it are not worth a dependency. A subscription's secret ring is a list, not one value, so
+`PATCH .../subscriptions/:id` can rotate without downtime: two active secrets sign two
 space-separated `v1,...` values in one header during the overlap.
 
-**The SSRF guard resolves, THEN validates, THEN pins.** `infrastructure/adapters/ssrf-guard.ts`
-looks up a subscription's hostname itself, checks the resolved address against private/loopback/
-link-local/CGNAT ranges — including an IPv4-mapped IPv6 literal, which a naive string check misses
-— and hands `webhook-delivery.ts` a `lookup` override pinned to that one validated address. A
-second, independent DNS resolution at connect time would reopen exactly the TOCTOU window this
-exists to close, which is why the guard is infrastructure and not `domain/`: it does I/O.
+**The SSRF guard resolves, THEN validates, THEN pins.** `infrastructure/adapters/ssrf-guard.ts` —
+generic, infrastructure-owned, not this module's — looks up a subscription's hostname itself,
+checks the resolved address against private/loopback/link-local/CGNAT ranges — including an
+IPv4-mapped IPv6 literal, which a naive string check misses — and hands `transport/webhook-delivery.ts`
+a `lookup` override pinned to that one validated address. A second, independent DNS resolution at
+connect time would reopen exactly the TOCTOU window this exists to close, which is why the guard is
+infrastructure and not `domain/`: it does I/O.
 
 ::: tip What deleting this module actually costs
 Every ingredient it is built from — the domain-event bus, the queue, the cron container, the public
@@ -152,18 +153,20 @@ also removes the one place the backend fetches a caller-supplied URL (see
 
 The standard procedure catches most of it: `tsc` stops on every file that imports the module
 (`ops/sweep-webhook-retries.ts`, `scenarios/webhooks.ts`, the cross-cutting tests), and the
-cross-cutting suite names the permissions, the page and the pairing entries. These pieces sit
-outside the module and **nothing flags them** — delete them by hand:
+cross-cutting suite names the permissions, the page and the pairing entries. The module owns its
+queue consumer, its required/forbidden env checks, and its delivery substrate now (`consumers`,
+`requiredConfig` and `forbiddenInProduction` on its own `module.ts`; `transport/` for the signing
+and delivery code) — deleting the folder deletes all of that too, with nothing left in `app/` or
+`kernel/` to also touch. What still sits outside the module and **nothing flags** — delete these by
+hand:
 
-| Piece                         | Where                                                                                                                                     | Left behind, it…                        |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| the retry-sweep script entry  | `sweep:webhook-retries` in `package.json`                                                                                                 | points at a deleted file                |
-| the cron line and its comment | `docker/crontab`                                                                                                                          | fails every minute                      |
-| the queue consumer            | the `WEBHOOK_QUEUE` entry in `src/app/workers.ts`                                                                                         | listens on a queue nothing publishes to |
-| the delivery adapters         | `webhook.worker.ts`, `webhook-delivery.ts`, `ssrf-guard.ts` in `src/infrastructure/adapters/`, and `tests/fuzz/webhook-ssrf.fuzz.test.ts` | compiles, and nothing calls it          |
-| the environment               | the `NODE_WEBHOOK_*` lines in `.env-example`                                                                                              | documents settings nothing reads        |
-| the demo-sink boot check      | `forbiddenUnderProduction` in `src/kernel/required-config.ts`                                                                             | refuses a variable nothing reads        |
-| the local test sink           | the `webhook-tester` service in `docker-compose.yml`, `WEBHOOK_TESTER_PORT`                                                               | runs for nothing                        |
+| Piece                         | Where                                                                        | Left behind, it…                 |
+| ----------------------------- | ----------------------------------------------------------------------------- | --------------------------------- |
+| the retry-sweep script entry  | `sweep:webhook-retries` in `package.json`                                     | points at a deleted file          |
+| the cron line and its comment | `docker/crontab`                                                               | fails every minute                |
+| the SSRF guard                | `src/infrastructure/adapters/ssrf-guard.ts` — generic, but this module is its only caller today | compiles, and nothing calls it |
+| the environment               | the `NODE_WEBHOOK_*` lines in `.env-example`                                   | documents settings nothing reads  |
+| the local test sink           | the `webhook-tester` service in `docker-compose.yml`, `WEBHOOK_TESTER_PORT`   | runs for nothing                  |
 
 ## Seeing it work
 

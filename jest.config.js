@@ -252,20 +252,20 @@ module.exports = {
         // Best-covered middleware here on statements. The limiters themselves are factory
         // closures Express calls, never this run.
         'src/infrastructure/http/middlewares/rate-limit.ts': floor(91, 100, 40),
-        'src/infrastructure/adapters/!(antibot-verdict|ssrf-guard|webhook-delivery|webhook.worker).ts':
-            STANDARD,
+        'src/infrastructure/adapters/!(antibot-verdict|ssrf-guard).ts': STANDARD,
         /*
          * TYPES ONLY — a single exported union, no runtime code at all. v8 reports zero for every
          * metric because there is nothing to execute, so any floor above zero is unreachable by
          * construction rather than by neglect.
          */
         'src/infrastructure/adapters/antibot-verdict.ts': UNTESTED,
-        // Both reach the network, and both are driven through the webhook delivery path rather
-        // than called directly — `functions: 0` beside a live statement count is that shape.
+        // Reaches the network, and is driven through the webhook delivery path rather than called
+        // directly — `functions: 0` beside a live statement count is that shape.
         'src/infrastructure/adapters/ssrf-guard.ts': floor(57, 100, 0),
-        'src/infrastructure/adapters/webhook-delivery.ts': floor(59, 100, 0),
-        // The queue consumer: one of its two exports is the handler RabbitMQ calls.
-        'src/infrastructure/adapters/webhook.worker.ts': floor(74, 100, 50),
+        // Module-owned (`webhooks/transport/`), not infrastructure — see that module's page for
+        // why. Same reach-the-network shape as `ssrf-guard.ts` above.
+        'src/modules/webhooks/transport/webhook-delivery.ts': floor(59, 100, 0),
+        'src/modules/webhooks/transport/webhook-signing.ts': STANDARD,
         /*
          * The four route-surface controller factories. Unlike a per-module `controllers/` file
          * these are shared infrastructure with real unit coverage of their own, exercised
