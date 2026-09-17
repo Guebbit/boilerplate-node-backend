@@ -301,6 +301,15 @@ rm -rf src/modules/<name>
 Deleting a module another one imports stops `tsc` on the importing file, naming the line. Either
 delete the dependant too, or drop the import.
 
+`tsc` also stops on an `ops/` script that runs the module. What runs that script does not compile,
+so nothing flags it — delete it by hand:
+
+- its `package.json` script entry
+- its line in `docker/crontab`
+
+A module that owns more outside `src/modules/` lists it on its own page — see
+[webhooks](../modules/webhooks.md#not-wanted-remove-the-module).
+
 Drop any `package.json` dependency this module owned alone too — [Package
 Dependencies](../tools/package-dependencies.md), regenerated, shows which; a leftover reads as
 still owned by a module that no longer exists.

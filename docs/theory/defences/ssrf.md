@@ -14,10 +14,8 @@ which POST to a URL the subscriber registered — and one guard built for it,
 hard-coded host. The table below is read against that split: the guarded webhook path on one side,
 "no surface at all" everywhere else.
 
-Set `NODE_WEBHOOKS_ENABLED=false` and even that one path is gone: every `/webhooks` route answers
-403 and no event creates a delivery, which returns the backend to "no caller-supplied URL anywhere"
-— see [webhooks](../../modules/webhooks.md#turning-it-off). A deployment that never intends to send
-webhooks can switch the surface off rather than rely on the guard alone.
+A deployment that never sends webhooks removes the module, and that one path goes with it — see
+[webhooks](../../modules/webhooks.md#not-wanted-remove-the-module).
 
 ## Making the server fetch
 
