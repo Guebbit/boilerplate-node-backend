@@ -8,7 +8,6 @@
 
 import { Router } from 'express';
 import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
-import { requireWebhooksEnabled } from './require-enabled';
 import { listWebhookSubscriptions } from './controllers/list-subscriptions';
 import { createWebhookSubscription } from './controllers/create-subscription';
 import { updateWebhookSubscription } from './controllers/update-subscription';
@@ -19,9 +18,6 @@ import { listWebhookEvents } from './controllers/list-events';
 
 /** Express router for the webhooks admin surface. */
 export const router = Router();
-
-// 403 before auth when the feature is off: a disabled deployment need not authenticate first.
-router.use(requireWebhooksEnabled);
 
 router.use(getAuth, isAuth);
 
