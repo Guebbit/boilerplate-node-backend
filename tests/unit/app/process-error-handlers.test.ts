@@ -99,7 +99,9 @@ describe('installErrorHandling — unhandledRejection', () => {
         // The raw rejection reason under `error`, not a hand-flattened `{name, message}`.
         expect(errorSpy).toHaveBeenCalledWith(
             'process.unhandledRejection',
-            expect.objectContaining({ error: expect.objectContaining({ message: 'nobody caught me' }) })
+            expect.objectContaining({
+                error: expect.objectContaining({ message: 'nobody caught me' })
+            })
         );
 
         remove();

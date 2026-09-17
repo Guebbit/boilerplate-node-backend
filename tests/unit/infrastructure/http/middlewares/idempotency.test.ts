@@ -146,7 +146,11 @@ describe('idempotencyKey', () => {
     it('runs normally for a body with a merely proto-LIKE key, never confusing it for the real one', async () => {
         const next = jest.fn();
 
-        idempotencyKey(makeRequest('key-1', { protoype: 1, __proto_: 2 }), makeResponseStub(), next);
+        idempotencyKey(
+            makeRequest('key-1', { protoype: 1, __proto_: 2 }),
+            makeResponseStub(),
+            next
+        );
         await flush();
 
         expect(create).toHaveBeenCalledTimes(1);

@@ -65,14 +65,19 @@ let capturedSetup: ((model: unknown) => Promise<void>) | undefined;
  * events on the object this resolves to (see `simulateReconnect` below). `queue.ts` itself is
  * what is under test here, not a shortcut around amqplib's own documented shape.
  */
-const mockConnect = jest.fn().mockImplementation(
-    async (_url: string, options: { recovery?: { setup?: (model: unknown) => Promise<void> } }) => {
-        modelListeners = {};
-        capturedSetup = options.recovery?.setup;
-        await capturedSetup?.(fakeConnectionModel);
-        return recoveringModelMock;
-    }
-);
+const mockConnect = jest
+    .fn()
+    .mockImplementation(
+        async (
+            _url: string,
+            options: { recovery?: { setup?: (model: unknown) => Promise<void> } }
+        ) => {
+            modelListeners = {};
+            capturedSetup = options.recovery?.setup;
+            await capturedSetup?.(fakeConnectionModel);
+            return recoveringModelMock;
+        }
+    );
 
 jest.mock('amqplib', () => ({
     connect: (...args: unknown[]) => mockConnect(...args)

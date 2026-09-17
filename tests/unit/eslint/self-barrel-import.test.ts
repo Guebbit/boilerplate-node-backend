@@ -36,7 +36,9 @@ const lintProbe = (): Promise<{ ruleId: string | null }[]> =>
                 try {
                     resolve(JSON.parse(stdout)[0]?.messages ?? []);
                 } catch (parseError) {
-                    reject(parseError instanceof Error ? parseError : new Error(String(parseError)));
+                    reject(
+                        parseError instanceof Error ? parseError : new Error(String(parseError))
+                    );
                 }
             }
         );

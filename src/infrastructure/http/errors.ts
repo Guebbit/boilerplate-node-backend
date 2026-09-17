@@ -102,7 +102,8 @@ export function databaseErrorInterpreter(error: unknown): [number, string] {
         // A schema validator refused the write — the MODEL enforcing something the contract does not.
         // Closing it at the contract is the better fix; this is the floor under that, across all
         // twelve models. Detected by `name`, same reason as BSONError above.
-        if ((error as { name?: string }).name === 'ValidationError') return [422, 'Invalid request'];
+        if ((error as { name?: string }).name === 'ValidationError')
+            return [422, 'Invalid request'];
         // `@kernel/access/store`'s `AccessInvariantError` — an undeclared role, a privilege
         // escalation, or a shop's last administrator. Named rather than imported: `infrastructure`
         // sits below `kernel` and may not reach up into it, same reason `AuditSink` is a port instead
