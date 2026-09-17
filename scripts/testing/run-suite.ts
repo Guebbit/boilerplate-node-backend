@@ -24,6 +24,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import {
     availableMemoryMb,
+    clampShards,
     environmentKnob,
     filesPerShard,
     heapCapMb,
@@ -140,6 +141,9 @@ const perShard = filesPerShard(targetMb);
 /** How many files this layer's patterns actually match, right now. */
 const fileCount = countTestFiles();
 
+/** The raw `JEST_SHARDS` override, if the operator set one — clamped below before use. */
+const shardsOverride = environmentKnob('JEST_SHARDS');
+
 /**
  * How many sequential jest processes this layer needs.
  *
@@ -147,11 +151,14 @@ const fileCount = countTestFiles();
  * process executes the files, and for a parallel layer that is a worker — which
  * `--workerIdleMemoryLimit` already recycles once it grows, so sharding it too would only pay a
  * fresh `mongod` boot per shard for a problem the recycling already solves. `JEST_SHARDS` still
- * overrides this for a parallel layer, for whoever needs that knob anyway.
+ * overrides this for a parallel layer, for whoever needs that knob anyway — clamped to the layer's
+ * own file count, since a shard beyond it would run empty and jest exits non-zero on that.
  */
-const shards = suite.serialized
-    ? (environmentKnob('JEST_SHARDS') ?? shardCount(fileCount, perShard))
-    : (environmentKnob('JEST_SHARDS') ?? 1);
+const shards = shardsOverride
+    ? clampShards(shardsOverride, fileCount)
+    : suite.serialized
+      ? shardCount(fileCount, perShard)
+      : 1;
 
 /** How many parallel workers a non-serialized layer gets; always 1 for a serialized one. */
 const workers = suite.serialized

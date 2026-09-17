@@ -16,6 +16,7 @@ import {
     PER_FILE_RETENTION_MB,
     PROCESS_BASELINE_MB,
     availableMemoryMb,
+    clampShards,
     environmentKnob,
     filesPerShard,
     heapCapMb,
@@ -137,6 +138,27 @@ describe('shardCount', () => {
         // 0 means `--listTests` answered nothing, which is a broken invocation rather than an empty
         // layer. One shard runs whatever is really there instead of dividing by zero.
         expect(shardCount(0, 21)).toBe(1);
+    });
+});
+
+describe('clampShards', () => {
+    it('passes a sane override through untouched', () => {
+        expect(clampShards(4, 75)).toBe(4);
+    });
+
+    it('caps an override above the file count, so no shard runs empty', () => {
+        // The fuzz layer has 2 files: JEST_SHARDS=4 must not ask for a shard beyond file 2, which
+        // would print "No tests found" and exit non-zero while every real test passes.
+        expect(clampShards(4, 2)).toBe(2);
+        expect(clampShards(30, 26)).toBe(26);
+    });
+
+    it('floors at one shard', () => {
+        expect(clampShards(0, 75)).toBe(1);
+    });
+
+    it('treats an unknown file count as one shard, like shardCount does', () => {
+        expect(clampShards(4, 0)).toBe(1);
     });
 });
 

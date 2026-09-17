@@ -182,6 +182,22 @@ export const shardCount = (fileCount: number, perShard: number): number => {
 };
 
 /**
+ * Clamps an explicit `JEST_SHARDS` override to what the layer can actually run.
+ *
+ * Jest splits `fileCount` files evenly across `--shard=i/N`; an override above the file count
+ * leaves at least one shard empty, and an empty shard prints "No tests found" and exits non-zero —
+ * so a request for MORE parallelism than a small layer has files must not turn into a failing run.
+ * `fileCount <= 0` (jest could not be asked) clamps to 1 for the same reason {@link shardCount}
+ * does: one shard runs whatever is really there instead of dividing by zero.
+ *
+ * @param override the raw `JEST_SHARDS` value
+ * @param fileCount how many files the layer matches
+ * @returns a shard count of at least one, never more than the file count
+ */
+export const clampShards = (override: number, fileCount: number): number =>
+    fileCount > 0 ? Math.max(1, Math.min(override, fileCount)) : 1;
+
+/**
  * How many parallel workers a pool may run, bounded by cores AND by memory.
  *
  * The memory half is what jest's own `logical CPUs - 1` default misses: this workload is bounded by
