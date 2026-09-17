@@ -263,7 +263,7 @@ export const validateUploadedImages: RequestHandler = (request, _response, next)
                 )
             );
         })
-        .catch((error: Error) => next(error));
+        .catch((error: unknown) => next(error));
 };
 
 /**
@@ -320,13 +320,18 @@ export const quarantineUploadedImages: RequestHandler = (request, _response, nex
             // `enqueueImageDigest`'s own fallback deeper in the write path — that one exists for a
             // publish that fails despite the queue looking ready moments earlier, not as the
             // steady-state path for an outage this middleware could see coming.
+            //
+            // `queueState()` never dials the broker — cheap on purpose, and nothing here needs to
+            // nudge a reconnect either: `queue.ts`'s amqplib `recovery` option keeps retrying the
+            // connection on its own, in the background, for as long as the process runs. The next
+            // upload after it succeeds simply finds `queueState()` reading `ready` again.
             return Promise.all(keys.map((key) => digestQuarantinedImage(key)))
                 .then((digested) => {
                     request.storedImageUrls = digested.map((result) => result.imageUrl);
                     request.storedThumbnailUrls = digested.map((result) => result.thumbnailUrl);
                     next();
                 })
-                .catch((error: Error) =>
+                .catch((error: unknown) =>
                     Promise.all(keys.map((key) => imageStore.removeQuarantined(key))).then(() =>
                         next(error)
                     )

@@ -199,6 +199,48 @@ the few urgent things a preference," not a real-time scheduler. See
 | `durable`      | `true`  | Queue survives broker restarts.          |
 | `prefetch`     | `1`     | Unacknowledged messages allowed at once. |
 
+## Recovery
+
+The connection recovers on its own — amqplib's opt-in `recovery` option
+(`connect(url, { recovery: { setup } })`), not a hand-rolled retry loop. `setup` runs after every
+successful (re)connect, first one included, and is what opens the one channel this process uses
+and re-binds every consumer `consumeFromQueue` has ever registered — a fresh channel starts with
+none of its own, whether it is boot's first one or a reconnect's.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 60}}}%%
+flowchart LR
+    D["broker down<br/><i>or still starting</i>"] --> S["slow lane<br/><i>publish/consume degrade inline</i>"]
+    S -.->|"amqplib retries<br/>with backoff, forever"| R["broker reachable"]
+    R --> U["setup() runs<br/><i>open channel, re-bind every consumer</i>"]
+    U --> Q["queue path<br/><i>queueState() reads ready again</i>"]
+
+    classDef bad fill:#fee2e2,stroke:#b91c1c,color:#111827;
+    classDef wait fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
+    class D bad;
+    class S wait;
+    class R,U,Q done;
+```
+
+Three rules the connection layer keeps because of how amqplib's own recovery works:
+
+- **Boot never waits for the broker.** `connect(url, { recovery })`'s promise settles only once
+  the FIRST connect succeeds — retrying forever underneath — so `startQueue()` never awaits it;
+  awaiting it would stop the app booting until a broker answered.
+- **Nothing waits for a channel during an outage.** `createChannel()` on the recovering
+  connection parks the caller until reconnected, so `publishToQueue`/`consumeFromQueue` never call
+  it directly — they read `currentChannel`, a plain variable `setup` sets and the channel's own
+  `close` event clears, `undefined` meaning "take the slow lane".
+- **A channel can die while the connection lives.** Recovery only reacts to a CONNECTION drop; an
+  ordinary channel-level fault (a `PRECONDITION_FAILED`, say) is handled the same way it always
+  was — `error`/`close` listeners on the channel itself.
+
+`maxRetries` is `0` under `NODE_ENV=test`: amqplib's retry timer is never `.unref()`'d, so an
+unreachable broker — the routine case locally, since `.env` names the compose hostname, which
+resolves nowhere outside it — would otherwise keep a test process from exiting on its own.
+Production keeps the library default, `Infinity`.
+
 ## Graceful shutdown
 
 `stopQueue()` is called during the app's graceful shutdown sequence (after the HTTP server closes). It closes the AMQP connection cleanly so in-flight messages are not lost.
