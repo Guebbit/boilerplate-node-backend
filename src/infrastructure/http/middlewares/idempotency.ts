@@ -231,6 +231,13 @@ export const idempotencyKey: RequestHandler = (
                     }
 
                     respondToCollision(response, existing, fingerprint);
+                })
+                .catch((error: unknown) => {
+                    // The collision branch is the NORMAL path for a retried request — a failure
+                    // here (the lookup, or respondToCollision's own write) must still answer,
+                    // or the retry hangs until the client's own timeout instead of getting the
+                    // ordinary 500 a caller already knows how to handle.
+                    next(error);
                 });
         });
 };

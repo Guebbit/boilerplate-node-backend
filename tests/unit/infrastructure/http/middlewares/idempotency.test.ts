@@ -22,6 +22,7 @@ import { idempotencyRecordModel } from '@infrastructure/http/middlewares/idempot
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 
 const create = idempotencyRecordModel.create as jest.Mock;
+const findOne = idempotencyRecordModel.findOne as jest.Mock;
 
 /** Lets a pending promise chain (the mocked `create().then(...)`) settle before assertions run. */
 const flush = () => new Promise((resolve) => setImmediate(resolve));
@@ -154,5 +155,24 @@ describe('idempotencyKey', () => {
         await flush();
 
         expect(create).toHaveBeenCalledTimes(1);
+    });
+
+    /**
+     * The collision branch is the NORMAL path for a retried request — a failure in its own lookup
+     * must still answer through `next(error)` rather than leave the promise chain to reject
+     * unhandled, which would hang the client's retry until its own timeout.
+     */
+    it('answers via next(error) when the replay lookup fails after a collision', async () => {
+        const next = jest.fn();
+        const duplicateKeyError = { code: 11_000 };
+        const lookupError = new Error('replica set failover mid-read');
+        create.mockRejectedValueOnce(duplicateKeyError);
+        findOne.mockReturnValueOnce({ lean: () => ({ exec: () => Promise.reject(lookupError) }) });
+
+        idempotencyKey(makeRequest('key-1', { a: 1 }), makeResponseStub(), next);
+        await flush();
+        await flush();
+
+        expect(next).toHaveBeenCalledWith(lookupError);
     });
 });
