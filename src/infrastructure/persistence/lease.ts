@@ -18,7 +18,7 @@ import { randomUUID } from 'node:crypto';
 import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
-import { isDuplicateKey } from '@infrastructure/http/errors';
+import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 // js-toolkit: consults a bare string, an `Error`, then a `message` on the value itself, so a
 // rejection that is not an `Error` still yields its message. `String(error)` is the fallback

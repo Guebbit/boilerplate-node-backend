@@ -20,7 +20,6 @@ import { asStub } from '@tests/stub';
 import {
     ExtendedError,
     databaseErrorInterpreter,
-    isDuplicateKey,
     rejectDatabaseEnvelope,
     rejectDatabaseError
 } from '@infrastructure/http/errors';
@@ -207,8 +206,6 @@ describe('databaseErrorInterpreter', () => {
     });
 });
 
-/** Express response stub with a chainable status().json(). */
-
 /** A driver duplicate-key error: the numeric `code` is the discriminator, never the message. */
 const makeDuplicateKeyError = () =>
     Object.assign(
@@ -234,27 +231,6 @@ const makeBsonError = () =>
     Object.assign(new Error('input must be a 24 character hex string, 12 byte Uint8Array'), {
         name: 'BSONError'
     });
-
-describe('isDuplicateKey', () => {
-    it('recognises the driver code', () => {
-        expect(isDuplicateKey(makeDuplicateKeyError())).toBe(true);
-    });
-
-    it('reads the code, not the message', () => {
-        // E11000's text names the index and the duplicated value, so matching on it would break
-        // the first time an index is renamed — and would match a message that merely quotes it.
-        expect(isDuplicateKey(new Error('E11000 duplicate key error'))).toBe(false);
-    });
-
-    it('is false for an ordinary error, and for nothing at all', () => {
-        expect(isDuplicateKey(new Error('connection reset'))).toBe(false);
-        expect(isDuplicateKey(undefined)).toBe(false);
-    });
-
-    it('does not treat a near-miss code as a duplicate', () => {
-        expect(isDuplicateKey(Object.assign(new Error('x'), { code: 11_001 }))).toBe(false);
-    });
-});
 
 describe('duplicate-key branch', () => {
     it('answers 409, which is what makes `unique: true` safe to declare', () => {

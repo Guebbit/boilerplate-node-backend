@@ -9,6 +9,7 @@
  */
 
 import { logger } from '@infrastructure/adapters/logger';
+import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { generateReject, rejectResponse } from './response';
 import type { Response } from 'express';
 
@@ -62,16 +63,6 @@ export class ExtendedError extends Error {
             });
     }
 }
-
-/**
- * Mongo's duplicate-key error (E11000): a write a unique index refused.
- *
- * One definition because two layers read it differently — the cart repository as a retry signal,
- * the interpreter as "already taken" (409). The CODE is checked, not the message, because E11000's
- * text names the index and would break the first time one is renamed.
- */
-export const isDuplicateKey = (error: unknown): boolean =>
-    (error as { code?: number } | undefined)?.code === 11_000;
 
 /**
  * Decide which driver failures describe the REQUEST rather than the server — the single place

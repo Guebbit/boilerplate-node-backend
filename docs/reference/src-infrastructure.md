@@ -111,6 +111,7 @@ differs per entity; the surface holds everything the entity does not change.
 | `src/infrastructure/persistence/metrics.ts`           | The database query and error counters, and `trackDatabaseQuery`, the wrapper `createRepository` puts around every Mongoose call.                                                                   | [Prometheus](../tools/prometheus.md)                                               |
 | `src/infrastructure/persistence/lease.ts`             | A Mongo-backed lease: one atomic upsert decides who runs a periodic job, so a scaled-up cron container cannot run it twice. No fencing token — every lease-guarded job must be idempotent instead. | [Scheduled jobs](./ops.md#scheduled-jobs)                                          |
 | `src/infrastructure/persistence/factories.ts`         | The part every module's factory would otherwise repeat — an id, a pair of timestamps, and the typing of the overrides bag.                                                                         | [Unit Testing](../tools/unit-testing.md)                                           |
+| `src/infrastructure/persistence/mongo-errors.ts`      | `isDuplicateKey` — the driver's E11000 code, checked once so a repository and the HTTP error interpreter read the same fact instead of each defining it.                                           | [MongoDB & Mongoose](../tools/mongodb-mongoose.md)                                 |
 
 ## `observability/`
 

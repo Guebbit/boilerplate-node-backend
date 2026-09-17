@@ -21,7 +21,7 @@ import { createHash } from 'node:crypto';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { canonicalize } from '@guebbit/js-toolkit';
 import { rejectResponse } from '@infrastructure/http/response';
-import { isDuplicateKey } from '@infrastructure/http/errors';
+import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { logger } from '@infrastructure/adapters/logger';
 import { t } from '@infrastructure/i18n';
 import {

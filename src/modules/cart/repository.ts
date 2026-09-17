@@ -10,7 +10,7 @@
 import type { UpdateWriteOpResult } from 'mongoose';
 import { cartModel, applyCartTransform } from './model';
 import type { CartDocument } from './model';
-import { isDuplicateKey } from '@infrastructure/http/errors';
+import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import {
     createRepository,
     toObjectId,
