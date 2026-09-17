@@ -48,8 +48,8 @@ export const resolveCurrentImages = <T extends OrderShape>(orders: T[]): Promise
     const ids = distinctProductIds(orders);
     if (ids.length === 0) return Promise.resolve(orders);
 
-    // One `find({_id: {$in}})` for the whole response — `findAll` returns lean, untransformed
-    // rows, which is all a lookup keyed by `_id` needs.
+    // One `find({_id: {$in}})` for the whole response — `findManyByIds` returns lean,
+    // untransformed rows, which is all a lookup keyed by `_id` needs.
     return productService.findManyByIds(ids).then((products) => {
         const byId = new Map(products.map((product) => [String(product._id), product]));
 

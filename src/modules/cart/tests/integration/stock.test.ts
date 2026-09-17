@@ -12,10 +12,10 @@ import { withEnvironment } from '@tests/environment';
 import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
-import { cartService } from '@modules/cart';
+import { cartService } from '../../services';
 import { productService } from '@modules/products';
 import { orderService } from '@modules/orders';
-import { orderRepository } from '@modules/orders/tests/factories';
+import { orderRepository, readOrder } from '@modules/orders/tests/factories';
 import { inventoryService } from '@modules/inventory';
 import { cartRepository } from '@modules/cart/repository';
 import { logger } from '@infrastructure/adapters/logger';
@@ -404,7 +404,7 @@ describe('cancel releases the hold', () => {
         expect(await countersOf(bought._id)).toMatchObject({ onHand: 10, reserved: 0 });
         expect(await countersOf(untouched._id)).toMatchObject({ onHand: 5, reserved: 0 });
         // The order really is cancelled, not merely refunded on the shelf.
-        const stored = await orderRepository.findById(orderId);
+        const stored = await readOrder(orderId);
         expect(stored?.status).toBe('cancelled');
     });
 
@@ -429,7 +429,7 @@ describe('cancel releases the hold', () => {
                 inventoryService.runReservationSweep()
             ]);
 
-            const stored = await orderRepository.findById(orderId);
+            const stored = await readOrder(orderId);
             expect(stored?.status).toBe('cancelled');
             // Not 14 (double release) and not 4 (never released) — exactly the held 4 back.
             expect(await countersOf(product._id)).toEqual({
@@ -463,7 +463,7 @@ describe('the expiry sweep', () => {
              * something they had not. This assertion is what proves the `RESERVATION_EXPIRED`
              * subscription is wired.
              */
-            const stored = await orderRepository.findById(orderId);
+            const stored = await readOrder(orderId);
             expect(stored?.status).toBe('cancelled');
         }));
 

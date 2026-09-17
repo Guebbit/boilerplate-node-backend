@@ -21,7 +21,7 @@ import {
     removeById
 } from './crud';
 import { detachUserId, anonymizeDueOrders } from './retention';
-import { callerScope, ownerScope, visibleScope, withActions } from './scope';
+import { callerScope, ownerScope, withActions } from './scope';
 import { cancelById, retryPendingEffects } from './cancel';
 
 /*
@@ -46,7 +46,7 @@ export {
 } from './crud';
 export { cancelById, retryPendingEffects } from './cancel';
 export { detachUserId, anonymizeDueOrders } from './retention';
-export { callerScope, actorOf, ownerScope, visibleScope, withActions } from './scope';
+export { callerScope, actorOf, ownerScope, withActions } from './scope';
 export { freezeOrderLines } from './snapshot';
 export { allocateInvoiceNumber } from './invoice-numbering';
 
@@ -56,7 +56,6 @@ export const orderService = {
     getById,
     callerScope,
     ownerScope,
-    visibleScope,
     create,
     createRaw,
     countOpenBankTransfers,

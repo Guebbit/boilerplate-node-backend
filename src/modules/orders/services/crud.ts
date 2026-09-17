@@ -110,12 +110,14 @@ export const recordCreated = (
 };
 
 /**
- * The uncomposed insert `create` above builds toward — `@modules/cart`'s checkout calls this
+ * The uncomposed insert `create` (below) builds toward — `@modules/cart`'s checkout calls this
  * directly instead of `create`, because checkout runs its OWN version of the same steps
  * (`freezeOrderLines`, `allocateInvoiceNumber`, `inventoryService.reserveForOrder`,
  * {@link retractOrder}) inside its own read-cart/write-order/clear-cart sequence, and rolls the
  * whole thing back itself if clearing the cart fails. `create`'s orchestration would duplicate
- * that sequence rather than fit inside it.
+ * that sequence rather than fit inside it. An interim door, not a settled one: checkout assembling
+ * its own order-shaped object is exactly the granular-pieces seam a future `placeOrder` aggregate
+ * method would fold both callers behind.
  *
  * @param data - an already-built order, snapshot and invoice number included
  */
@@ -139,8 +141,8 @@ export const countOpenBankTransfers = (userId: string): Promise<number> =>
  */
 export const updateStatusIfIn = (
     id: string,
-    from: readonly string[],
-    to: string,
+    from: readonly OrderStatus[],
+    to: OrderStatus,
     scope?: Record<string, unknown>,
     effects?: readonly OrderPendingEffect[]
 ): Promise<OrderDocument | null> => orderRepository.updateStatusIfIn(id, from, to, scope, effects);
@@ -160,8 +162,8 @@ export const updateStatusIfIn = (
 export const retractOrder = (order: OrderDocument, releaseHold: boolean): Promise<void> => {
     const orderId = String(order._id);
 
-    // `error.message`, not the Error: the logger serializes as JSON and an Error has no
-    // enumerable properties, so the object alone would print `"error":{}`.
+    // The raw `error`, not a flattened message — `redactFormat` (`adapters/logger.ts`) serializes
+    // an `Error` into `{name, message, stack}` before JSON output.
     const report = (message: string) => (error: unknown) => {
         logger.error({
             message,

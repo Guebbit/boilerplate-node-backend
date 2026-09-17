@@ -17,11 +17,10 @@ import type { CartResponse } from '@types';
  * an order with nothing left to add answers 409 rather than a hollow 200.
  */
 export const postReorder = (request: Request<{ orderId: string }>, response: Response) => {
-    const userId = request.authContext!.id;
     const { orderId } = request.params;
 
     return cartService
-        .reorderIntoCart(userId, orderId, callerContextOf(request))
+        .reorderIntoCart(request.authContext!, orderId, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
 

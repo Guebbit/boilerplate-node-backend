@@ -16,31 +16,23 @@ import { resolveCurrentImages } from './current';
 
 /**
  * Which orders a caller is allowed to read — the authorization boundary for order reads: own
- * orders vs everyone's, and a soft-deleted order visible or not. `visibleScope` makes it BOTH;
- * `ownerScope` alone would leave soft-deleted rows visible to their owner. Returns `undefined`
- * for admins ("no restriction"), so callers must spread it, not treat it as a filter — see
- * `accessibleFilter` for why the scope rides in the read.
+ * orders vs everyone's, and a soft-deleted order visible or not, compiled from the caller's RULES
+ * rather than assembled by hand — see `@kernel/access/query`'s `accessibleFilter` for why that is
+ * the one encoding of "own AND still there" this module trusts. `{}` for a role that reads
+ * everything ("no restriction"), never `undefined` — both spread into a query the same way, and
+ * `{}` is what "these are the conditions, and there are none" honestly looks like.
  */
 export const callerScope = (context?: AuthContext) => accessibleFilter(context, 'Order');
 
 /**
- * One account's orders, by id rather than by `AuthContext` — for a caller that already knows
- * WHOSE orders it wants (`account`'s data export) rather than deriving it from a request's role.
+ * One account's orders, by id rather than by `AuthContext`, WITHOUT excluding soft-deleted rows —
+ * for a caller that already knows whose orders it wants regardless of a request's role
+ * (`account`'s data export).
  *
  * @param userId - whose orders
  */
 export const ownerScope = (userId: string): Record<string, unknown> =>
     orderRepository.ownerScope(userId);
-
-/**
- * {@link ownerScope}, minus soft-deleted rows — the same "own AND still there" pair
- * `callerScope` computes for a role-based caller, for a caller that already has the userId
- * (`cart`'s reorder, resolving the order it is refilling from).
- *
- * @param userId - whose orders
- */
-export const visibleScope = (userId: string): Record<string, unknown> =>
-    orderRepository.visibleScope(userId);
 
 /**
  * Which column of the lifecycle table a caller reads. Two actors reach the HTTP surface;

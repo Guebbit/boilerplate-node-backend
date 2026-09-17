@@ -45,7 +45,7 @@ import usersModule from '@modules/users/module';
 import ordersModule from '@modules/orders/module';
 import accountModule from '@modules/account/module';
 import deliveryModule from '@modules/delivery/module';
-import { orderRepository } from '@modules/orders/tests/factories';
+import { countOrders, findOrder } from '@modules/orders/tests/factories';
 import { productService } from '@modules/products';
 import type { ResponseReject } from '@infrastructure/http/response';
 import { t } from '@infrastructure/i18n';
@@ -525,8 +525,8 @@ describe('orderConfirm', () => {
         const result = await orderConfirm(user.id, testCallerContext);
 
         expect(result.success).toBe(true);
-        await expect(orderRepository.count({ userId: user._id })).resolves.toBe(1);
-        const order = await orderRepository.findOne({ userId: user._id });
+        await expect(countOrders({ userId: user._id })).resolves.toBe(1);
+        const order = await findOrder({ userId: user._id });
         expect(order!.items).toHaveLength(2);
         expect(order!.email).toBe(user.email);
     });
@@ -550,7 +550,7 @@ describe('orderConfirm', () => {
 
         expect(result.success).toBe(false);
         expect(asReject(result).status).toBe(409);
-        await expect(orderRepository.count({ userId: user._id })).resolves.toBe(0);
+        await expect(countOrders({ userId: user._id })).resolves.toBe(0);
     });
 
     /*
@@ -587,7 +587,7 @@ describe('orderConfirm', () => {
         const result = await orderConfirm(user.id, testCallerContext);
 
         expect(asReject(result).status).toBe(404);
-        await expect(orderRepository.count({ userId: user._id })).resolves.toBe(0);
+        await expect(countOrders({ userId: user._id })).resolves.toBe(0);
     });
 
     it('freezes the chosen shipping method and its cost onto the order', async () => {
@@ -598,7 +598,7 @@ describe('orderConfirm', () => {
         const result = await orderConfirm(user.id, testCallerContext, undefined, 'express');
 
         expect(result.success).toBe(true);
-        const order = await orderRepository.findOne({ userId: user._id });
+        const order = await findOrder({ userId: user._id });
         expect(order!.shippingMethod).toBe('express');
         expect(order!.shippingCost).toBe(15);
     });
@@ -611,7 +611,7 @@ describe('orderConfirm', () => {
         const result = await orderConfirm(user.id, testCallerContext, undefined, 'standard');
 
         expect(result.success).toBe(true);
-        const order = await orderRepository.findOne({ userId: user._id });
+        const order = await findOrder({ userId: user._id });
         expect(order!.shippingCost).toBe(0);
     });
 
@@ -625,7 +625,7 @@ describe('orderConfirm', () => {
         expect(asReject(result).status).toBe(404);
         expect(asReject(result).errors[0].code).toBe('CART_SHIPPING_METHOD_NOT_FOUND');
         // Nothing moved: no order, full shelf, full cart.
-        await expect(orderRepository.count({ userId: user._id })).resolves.toBe(0);
+        await expect(countOrders({ userId: user._id })).resolves.toBe(0);
         const stored = await productService.findByIdRaw(String(product._id));
         expect(stored!.onHand).toBe(5);
         expect(stored!.reserved).toBe(0);
@@ -638,7 +638,7 @@ describe('orderConfirm', () => {
 
         await orderConfirm(user.id, testCallerContext);
 
-        const order = await orderRepository.findOne({ userId: user._id });
+        const order = await findOrder({ userId: user._id });
         // Both absent together, per `shared/contracts/openapi.root.yaml`: "shipping is not
         // required to buy". A chosen method that happens to cost 0 (`pickup`, or `standard`
         // above `freeAbove`) is a DIFFERENT state — `shippingMethod` present, cost legitimately 0.
@@ -654,7 +654,7 @@ describe('orderConfirm', () => {
         // `standard` (5, freeAbove: 100) — a 500 line total clears the threshold.
         await orderConfirm(user.id, testCallerContext, undefined, 'standard');
 
-        const order = await orderRepository.findOne({ userId: user._id });
+        const order = await findOrder({ userId: user._id });
         expect(order!.shippingMethod).toBe('standard');
         expect(order!.shippingCost).toBe(0);
     });
@@ -668,7 +668,7 @@ describe('orderConfirm', () => {
 
         expect(asReject(result).status).toBe(409);
         expect(asReject(result).errors[0].code).toBe('CART_SHIPPING_NOT_APPLICABLE');
-        await expect(orderRepository.count({ userId: user._id })).resolves.toBe(0);
+        await expect(countOrders({ userId: user._id })).resolves.toBe(0);
     });
 
     it('checks out a digital-only cart with no method at all, same as any other', async () => {
@@ -678,7 +678,7 @@ describe('orderConfirm', () => {
 
         await orderConfirm(user.id, testCallerContext);
 
-        const order = await orderRepository.findOne({ userId: user._id });
+        const order = await findOrder({ userId: user._id });
         expect(order!.shippingMethod).toBeUndefined();
         expect(order!.shippingCost).toBeUndefined();
     });
@@ -692,7 +692,7 @@ describe('orderConfirm', () => {
 
         await orderConfirm(user.id, testCallerContext, undefined, 'standard');
 
-        const order = await orderRepository.findOne({ userId: user._id });
+        const order = await findOrder({ userId: user._id });
         expect(order!.shippingMethod).toBe('standard');
     });
 
@@ -753,7 +753,7 @@ describe('orderConfirm — paymentMethod', () => {
 
         await orderConfirm(user.id, testCallerContext);
 
-        const order = await orderRepository.findOne({ userId: user._id });
+        const order = await findOrder({ userId: user._id });
         expect(order!.paymentMethod).toBe('card');
         expect(order!.payBy).toBeUndefined();
     });
@@ -778,7 +778,7 @@ describe('orderConfirm — paymentMethod', () => {
 
                 expect(asReject(result).status).toBe(409);
                 expect(asReject(result).errors[0].code).toBe('CART_PAYMENT_METHOD_NOT_AVAILABLE');
-                await expect(orderRepository.count({ userId: user._id })).resolves.toBe(0);
+                await expect(countOrders({ userId: user._id })).resolves.toBe(0);
             }
         ));
 
@@ -801,7 +801,7 @@ describe('orderConfirm — paymentMethod', () => {
                     );
 
                     expect(result.success).toBe(true);
-                    const order = await orderRepository.findOne({ userId: user._id });
+                    const order = await findOrder({ userId: user._id });
                     expect(order!.paymentMethod).toBe('bank_transfer');
                     // A window, not an exact millisecond: the checkout itself takes some time
                     // between `Date.now()` here and the write inside `runCheckout`.
@@ -821,7 +821,7 @@ describe('orderConfirm — paymentMethod', () => {
 
             await orderConfirm(user.id, testCallerContext, undefined, undefined, 'bank_transfer');
 
-            const stored = await orderRepository.findOne({ userId: user._id });
+            const stored = await findOrder({ userId: user._id });
             // `toJSON()`'s static type mirrors the stored document, not the transform this
             // module's model wires in — the same `unknown`-typed handoff
             // `postCheckout`'s own `toOrderResponse` uses for this boundary.
@@ -878,7 +878,7 @@ describe('orderConfirm — paymentMethod', () => {
             expect(asReject(result).status).toBe(409);
             expect(asReject(result).errors[0].code).toBe('CART_BANK_TRANSFER_LIMIT');
             // Refused before anything moved — only the two pre-existing orders are on the books.
-            await expect(orderRepository.count({ userId: user._id })).resolves.toBe(2);
+            await expect(countOrders({ userId: user._id })).resolves.toBe(2);
         }));
 
     it('does not count a paid transfer order against the cap', () =>

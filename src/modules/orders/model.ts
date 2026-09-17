@@ -300,8 +300,9 @@ export const orderSchema = new Schema<OrderDocument>(
         },
         /*
          * Set when an order is soft-deleted. Orders carry no `active` flag, so unlike a product
-         * this is the only fact that hides one: `visibleScope` requires its absence, and an admin
-         * passes no scope at all, which is how a soft-deleted order stays readable to them.
+         * this is the only fact that hides one: `callerScope` (`services/scope.ts`) requires its
+         * absence for a non-admin, and an admin passes no scope at all, which is how a
+         * soft-deleted order stays readable to them.
          */
         deletedAt: {
             type: Date
@@ -336,7 +337,7 @@ export const orderSchema = new Schema<OrderDocument>(
 orderSchema.index({ userId: 1, createdAt: -1 }, { name: 'orders_userId_createdAt' });
 /* An order remembers the address it was placed from, which is how guests' orders are found. */
 orderSchema.index({ email: 1 }, { name: 'orders_email' });
-/* Non-admin reads exclude soft-deleted rows (`visibleScope` in `./repository`). */
+/* Non-admin reads exclude soft-deleted rows (`callerScope` in `services/scope.ts`). */
 orderSchema.index({ userId: 1, deletedAt: 1 }, { name: 'orders_userId_deletedAt' });
 /*
  * `ops/reap-orders.ts`'s own sweep — NOT a TTL index: the row must survive, only its PII
