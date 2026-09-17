@@ -30,6 +30,21 @@ const bannedDoubleCasts = [
     }
 ];
 
+/**
+ * A `factories.ts` builder import — matches `./factories`, `../factories` and a sibling module's
+ * `@modules/<name>/factories`, whole-specifier so `@infrastructure/persistence/factories` (the
+ * generic helpers a builder is built FROM, not a builder itself) does not also match a bare
+ * `/factories$` suffix. `no-restricted-imports` does not merge across configs (see
+ * `bannedDoubleCasts` above), so every block covering `src/modules/**` or `ops/**` spreads this
+ * in, or the ban would silently lift for whichever of those files that block's
+ * `no-restricted-imports` entry also configures.
+ */
+const factoriesImportPattern = {
+    regex: String.raw`^(\.{1,2}/factories|@modules/[^/]+/factories)$`,
+    message:
+        'A factories.ts builder is for tests and scenarios/, not production code — it writes past the domain rules a service enforces.'
+};
+
 export default tseslint.config(
     /**
      * Excluded files — GENERATED OR FOREIGN ONLY.
@@ -578,6 +593,11 @@ export default tseslint.config(
      * Scoped by `ignores` rather than by listing every non-controller folder: a new file anywhere
      * under `src/modules` is covered the day it is written, which is the property a glob-listed
      * wall never has.
+     *
+     * `factoriesImportPattern` rides along in the same `patterns` array for the same reason it
+     * rides along everywhere else this rule is configured: the nearest matching block REPLACES
+     * `no-restricted-imports`'s options rather than merging them, and this block's `files` glob
+     * is the one that would otherwise silently win for every non-controller, non-test module file.
      */
     {
         files: ['src/modules/**/*.ts'],
@@ -592,9 +612,24 @@ export default tseslint.config(
                             message:
                                 'Everything here takes an express Response, so only a controller can use it. A service that needs to turn a ZodError into the contract’s error list wants `validationErrors` from `@infrastructure/http/response`, which is where that shape is defined.'
                         }
-                    ]
+                    ],
+                    patterns: [factoriesImportPattern]
                 }
             ]
+        }
+    },
+
+    /**
+     * The other two corners `factoriesImportPattern` above does not reach: a module's own
+     * controllers (excluded there so the `@infrastructure/http/controller` exemption above could
+     * be stated once, by `ignores`, rather than by listing every non-controller folder) and
+     * `ops/`'s one-off scripts, which have no more business seeding through a test builder than a
+     * controller does.
+     */
+    {
+        files: ['src/modules/*/controllers/**/*.ts', 'ops/**/*.ts'],
+        rules: {
+            'no-restricted-imports': ['error', { patterns: [factoriesImportPattern] }]
         }
     },
 
@@ -1067,7 +1102,9 @@ export default tseslint.config(
      *
      * Left with `no-restricted-imports` on purpose: `mongoose` and `express` are external
      * packages, not tiers, so they are not a boundary question and stating them as one would mean
-     * describing npm in the element graph.
+     * describing npm in the element graph. `factoriesImportPattern` rides along for the reason
+     * given where it is declared — this glob is a subset of the module-wide block above, and would
+     * otherwise silently lose that ban for the one tier least likely to ever need it argued for.
      */
     {
         files: ['src/modules/*/domain/**/*.ts'],
@@ -1086,7 +1123,8 @@ export default tseslint.config(
                             message:
                                 'The domain layer may not know it is being called over HTTP. Return a verdict; the controller turns it into a status code.'
                         }
-                    ]
+                    ],
+                    patterns: [factoriesImportPattern]
                 }
             ]
         }

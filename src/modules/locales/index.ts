@@ -11,13 +11,4 @@
 
 export * from './services';
 
-/** Fixtures for a sibling's own tests — a locale row and an override entry, not this module's. */
-export { makeLocale, makeLocaleEntry } from './factories';
-export type {
-    LocaleOverrides,
-    LocaleFixture,
-    LocaleEntryOverrides,
-    LocaleEntryFixture
-} from './factories';
-
 export type * from './model';

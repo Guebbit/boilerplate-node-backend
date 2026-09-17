@@ -10,8 +10,4 @@ export * from './services';
 
 export * from './emails';
 
-/** A fixture address-book row for a sibling's own tests. */
-export { makeAddressBook } from './factories';
-export type { AddressBookOverrides, AddressBookFixture } from './factories';
-
 export type * from './model';

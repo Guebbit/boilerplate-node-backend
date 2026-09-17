@@ -8,8 +8,4 @@
 
 export * from './service';
 
-/** A fixture wishlist row for a sibling's own tests. */
-export { makeWishlist } from './factories';
-export type { WishlistOverrides, WishlistFixture } from './factories';
-
 export type * from './model';

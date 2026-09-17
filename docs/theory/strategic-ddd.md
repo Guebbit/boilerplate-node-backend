@@ -204,6 +204,11 @@ What it never publishes, no matter how convenient:
   that touch storage stay inside.
 - **Wiring** — `routes.ts`, `controllers/`, `module.ts`, `probes.ts`, `metrics.ts`, `analytics.ts`,
   `audit.ts`. The app registers these; a sibling never calls them.
+- **`factories.ts`.** A builder writes past the domain rules a service enforces — the same
+  shortcut a repository export would be, offered from the test side instead. It stays reachable at
+  `@modules/<name>/factories`, directly, for tests, `scenarios/`, and a module's own
+  `tests/factories.ts`; the barrel is a production door, and a production import has no legitimate
+  reason to reach for a test builder.
 
 Unused exports in a published file are allowed on purpose and unenforced — the point of this
 section is that copying is the expensive failure mode, not an idle export. What IS enforced: a

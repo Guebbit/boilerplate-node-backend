@@ -11,8 +11,4 @@ export * from './services';
 
 export * from './domain';
 
-/** A fixture cart row for a sibling's own tests. */
-export { makeCart } from './factories';
-export type { CartOverrides, CartFixture } from './factories';
-
 export type * from './model';

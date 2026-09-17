@@ -32,6 +32,7 @@ coverage
 # Written and removed around one assertion in self-barrel-import.test.ts; ignored so a crash
 # mid-test never leaves it tracked.
 src/modules/*/__self-barrel-probe.ts
+src/modules/*/__factories-import-probe.ts
 
 # Claude Code's local state: session settings, and the worktrees it creates under
 # `.claude/worktrees/` — which `jest.config.js` already excludes from every test run. None of it

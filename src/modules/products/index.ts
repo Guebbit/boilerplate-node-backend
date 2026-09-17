@@ -17,8 +17,4 @@ export * from './events';
 export { resolveTaxRate } from './tax';
 export type { TaxClass } from './tax';
 
-/** A fixture product row for a sibling's own tests. */
-export { makeProduct } from './factories';
-export type { ProductOverrides, ProductFixture } from './factories';
-
 export type * from './model';

@@ -16,8 +16,4 @@ export * from './events';
 
 export * from './emails';
 
-/** A fixture order for a sibling's own tests. */
-export { makeOrder } from './factories';
-export type { OrderOverrides, OrderFixture, OrderSnapshotInput, OrderLineInput } from './factories';
-
 export type * from './model';

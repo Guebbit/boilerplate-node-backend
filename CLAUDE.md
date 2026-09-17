@@ -87,9 +87,13 @@ not only the ones a sibling currently imports): `export *` from its services, do
 and emails, plus `export type *` from its model. See `docs/theory/strategic-ddd.md` §5.
 
 - MUST NOT export a repository, a model's runtime value (the mongoose schema, its `toJSON`
-  transform, the model object itself) or a wiring file (`routes.ts`, `controllers/`, `module.ts`,
-  `probes.ts`, `metrics.ts`, `analytics.ts`, `audit.ts`) from a barrel. A repository export is a
-  write handle on a collection this module does not own once published; the service is the door.
+  transform, the model object itself), a wiring file (`routes.ts`, `controllers/`, `module.ts`,
+  `probes.ts`, `metrics.ts`, `analytics.ts`, `audit.ts`) or `factories.ts` from a barrel. A
+  repository export is a write handle on a collection this module does not own once published; the
+  service is the door. A `factories.ts` export is the same door left open from the test side: it
+  writes past the domain rules a service enforces, so it stays reachable at
+  `@modules/<name>/factories` — for tests, `scenarios/`, and a module's own `tests/factories.ts` —
+  never from the barrel a production import goes through.
 - An export in a file the barrel publishes is the module's public surface. Never remove it because
   nothing imports it yet — unused is allowed on purpose, since the alternative is a developer (or
   an AI) copying the logic, redeclaring the type, or casting around the gap instead of adding the
