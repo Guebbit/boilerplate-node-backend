@@ -1,10 +1,15 @@
 /**
  * @module
  * Wishlist — public barrel; the only surface a sibling may import (see
- * `modules/products/index.ts` for the rule). One export: `wishlistService`, so a caller reads the
- * whole curated surface rather than reaching for one function today and a different one tomorrow.
+ * `docs/theory/strategic-ddd.md` §5 for the rule).
  *
  * See: docs/modules/wishlist.md
  */
 
-export { wishlistService } from './service';
+export * from './service';
+
+/** A fixture wishlist row for a sibling's own tests. */
+export { makeWishlist } from './factories';
+export type { WishlistOverrides, WishlistFixture } from './factories';
+
+export type * from './model';
