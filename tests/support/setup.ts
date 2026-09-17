@@ -3,8 +3,8 @@
  * module is imported.
  *
  * That ordering is the whole reason the file exists. Everything configured here is read at
- * IMPORT time by the module that needs it: `security.ts` builds its rate limiters when it is
- * first imported, and `@infrastructure/i18n` must have its resources loaded before any zod schema
+ * IMPORT time by the module that needs it: `rate-limit.ts` builds each limiter when it is first
+ * imported, and `@infrastructure/i18n` must have its resources loaded before any zod schema
  * evaluates a message thunk. Setting these in a `beforeAll` would be too late — the modules
  * under test would already have captured the defaults.
  *
@@ -30,8 +30,8 @@ import { registerValidationMessages } from '@infrastructure/http/validation-mess
  * fail with 429s that have nothing to do with what they assert.
  *
  * Raised rather than disabled, so a runaway loop still terminates — and written as a literal
- * rather than imported from `security.ts`, because importing that module here would evaluate
- * `rateLimit()` before this line had a chance to set the variable it reads.
+ * rather than imported from `rate-limit.ts`, because importing that module here would evaluate
+ * `buildRateLimiter()` before this line had a chance to set the variable it reads.
  *
  * The number tracks the FUZZ suite, which is what actually sets the floor: it fires
  * `RUNS_PER_OPERATION` requests at every non-multipart operation in the contract, from one
