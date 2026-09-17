@@ -40,7 +40,7 @@ import { inventoryService } from '@modules/inventory';
 import { addressForCheckout, type AddressItem } from '@modules/account';
 import { findShippingMethod, priceShipping } from '@modules/delivery';
 import { buildReference, paymentService } from '@modules/payments';
-import type { CallerContext } from '@infrastructure/http/request';
+import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { cartAnalyticsEvents } from '../analytics';
 import { cartRepository } from '../repository';

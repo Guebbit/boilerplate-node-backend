@@ -9,7 +9,7 @@
 
 import { getCurrentLocale } from '@infrastructure/i18n';
 import { userService, type UserDocument } from '@modules/users';
-import type { CallerContext } from '@infrastructure/http/request';
+import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAnalyticsEvents } from '../analytics';

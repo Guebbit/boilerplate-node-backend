@@ -19,7 +19,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { invalidateCacheTagsLogged } from '@infrastructure/http/middlewares/cache';
-import type { CallerContext } from '@infrastructure/http/request';
+import type { CallerContext } from '@types';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { localeAuditActions } from '../audit';
 import type { TranslationDocument } from '../model';

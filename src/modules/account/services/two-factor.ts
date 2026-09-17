@@ -26,7 +26,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
-import type { CallerContext } from '@infrastructure/http/request';
+import type { CallerContext } from '@types';
 import {
     emitAuditEvent,
     buildAuditEvent,

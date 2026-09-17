@@ -18,7 +18,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import type { PaymentStatus, AuthContext } from '@types';
-import type { CallerContext } from '@infrastructure/http/request';
+import type { CallerContext } from '@types';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { paymentsAuditActions } from '../audit';
 import { resolvePaymentProvider } from '../providers';

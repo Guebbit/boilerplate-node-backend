@@ -22,7 +22,7 @@ import { productService } from '@modules/products';
 import { inventoryService } from '@modules/inventory';
 import { userService } from '@modules/users';
 import { emitDomainEvent } from '@kernel/events';
-import type { CallerContext } from '@infrastructure/http/request';
+import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { ordersAnalyticsEvents } from '../analytics';

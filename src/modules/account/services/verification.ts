@@ -18,7 +18,7 @@ import { verifyRequestEmail } from '../emails';
 import { generateSuccess, generateReject } from '@infrastructure/http/response';
 import { cooldownRemaining, resendTooSoon } from '../cooldown';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
-import type { CallerContext } from '@infrastructure/http/request';
+import type { CallerContext } from '@types';
 import type { EmailVerificationRequested } from '@types';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';

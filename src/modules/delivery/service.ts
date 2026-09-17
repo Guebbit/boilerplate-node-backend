@@ -18,7 +18,7 @@ import {
 } from '@infrastructure/http/response';
 import type { ShippingMethodsResponse, Shipment, AuthContext } from '@types';
 import { emitDomainEvent } from '@kernel/events';
-import type { CallerContext } from '@infrastructure/http/request';
+import type { CallerContext } from '@types';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { deliveryAuditActions } from './audit';
 import { orderService, ORDER_STATUS_CHANGED } from '@modules/orders';

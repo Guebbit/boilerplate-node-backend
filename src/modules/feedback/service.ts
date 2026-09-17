@@ -29,7 +29,7 @@ import { checkEmailPolicy } from '@infrastructure/adapters/antibot';
 import { contactRequestEmail } from './emails';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import type { Lean } from '@infrastructure/persistence/create-repository';
-import type { CallerContext } from '@infrastructure/http/request';
+import type { CallerContext } from '@types';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { feedbackAuditActions } from './audit';
 

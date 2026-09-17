@@ -24,7 +24,7 @@ import type { CreateUserRequest, SearchUsersRequest, UpdateUserByIdRequest } fro
 import { userRepository } from './repository';
 import { enqueueIfImagePending } from '@infrastructure/adapters/image.worker';
 import { emitDomainEvent } from '@kernel/events';
-import type { CallerContext } from '@infrastructure/http/request';
+import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import type { AuditAction } from '@infrastructure/observability/audit';

@@ -15,7 +15,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
-import type { TenantCallerContext } from '@infrastructure/http/request';
+import type { TenantCallerContext } from '@types';
 import type { PaginatedResult } from '@infrastructure/persistence/create-repository';
 import type { CreateWebhookSubscriptionRequest, UpdateWebhookSubscriptionRequest } from '@types';
 import type { WebhookSubscriptionDocument } from '../model';

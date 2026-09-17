@@ -9,7 +9,7 @@
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { isDemoMode } from '@infrastructure/adapters/demo-outbox';
-import type { CallerContext } from '@infrastructure/http/request';
+import type { CallerContext } from '@types';
 import type { TwoFactorMethodRecord, UserDocument } from '@modules/users';
 import type { TwoFactorDelivery } from '@types';
 import { twoFactorCodeEmail } from '../../emails';

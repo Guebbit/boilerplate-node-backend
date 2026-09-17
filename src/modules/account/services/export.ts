@@ -20,7 +20,7 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import type { CallerContext } from '@infrastructure/http/request';
+import type { CallerContext } from '@types';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { t } from '@infrastructure/i18n';
 import { userService, isLiveRefreshSession, type UserDocument, type Token } from '@modules/users';

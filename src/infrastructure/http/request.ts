@@ -10,7 +10,7 @@
  */
 
 import type { Request, Response } from 'express';
-import type { Caller, TenantCaller } from '@types';
+import type { Caller, CallerContext, TenantCallerContext } from '@types';
 // `ParamsDictionary` is Express' default type for `request.params` (a `Record<string, string>`).
 // Naming it explicitly in generics keeps `request.params.id` typed instead of `any`.
 // i18next translation function — messages are resolved against the request's locale, which the
@@ -266,68 +266,6 @@ export const readInput = <TId extends string = never>(
 };
 
 /**
- * Everything a service needs to know about the request that reached it — who made it, where it
- * came from, what language it was made in — built once in the controller and passed down, because
- * the service tier is defined by never seeing a `Request`. Threaded rather than read off an
- * `AsyncLocalStorage` so a missing `CallerContext` is a compile error, not an ALS accessor
- * silently returning the wrong (or no) request across an async boundary.
- *
- * See: docs/tools/analytics.md#caller-context
- */
-export interface CallerContext {
-    /**
-     * The caller as an authorization decision sees them, in TENANT scope.
-     *
-     * Tenant scope because that is what an audit row and an analytics event are about: something
-     * that happened inside a shop. Platform work resolves its own caller per key, in the guard,
-     * and never travels on this.
-     */
-    caller: Caller;
-    /**
-     * The tenant role name behind {@link caller} — `AuthContext.roles.tenant`, absent when the
-     * request never resolved one at all (see `STRANGER` below).
-     *
-     * `caller.permissions` is the expanded key list a rule reads; this is the NAME a person would
-     * recognise, kept only for the audit trail's `actor_role_name` — a renamed role invalidates a
-     * value read from here, never a decision made from `caller`, which is why the two travel
-     * separately instead of one standing in for the other.
-     */
-    actorRoleName?: string;
-    /**
-     * The api-key behind {@link caller} — `request.credentialId` — absent for every request that
-     * resolved a human session instead. Sibling to {@link actorRoleName} rather than a replacement
-     * for it, and kept only for the audit trail's `actor_credential_id`: a row can say "acted via
-     * key `sk_a1b2c3d4`" instead of attributing machine traffic to the human who created the key.
-     */
-    actorCredentialId?: string;
-    /** The caller's address, as Express resolved it (trust-proxy aware). */
-    ip?: string;
-    /** The `User-Agent` the caller sent, if any. */
-    userAgent?: string;
-    /** The `Host` header the caller sent, if any. */
-    host?: string;
-    /** The request id assigned by the request-id middleware, for correlating with the access log. */
-    requestId?: string;
-    /**
-     * The language this request was made in, negotiated from `Accept-Language` — the FALLBACK for
-     * copy addressed to someone whose own preference is unknown.
-     *
-     * On this interface, not a second parameter, because without it a service composing email
-     * needed `request.locale` reached from the controller, pulling compose-and-enqueue logic up
-     * out of services. Optional, and last in precedence: a stored preference is the better answer
-     * wherever one exists.
-     */
-    locale?: string;
-    /**
-     * The caller's analytics consent choice — the stored `AuthContext.analyticsConsent`, else the
-     * `X-Analytics-Consent` header the frontend forwards from the visitor's own banner choice.
-     * `false` covers both "denied" and "never asked": `emitAnalyticsEvent`'s gate is opt-in, and
-     * it is the only reader.
-     */
-    analyticsConsent: boolean;
-}
-
-/**
  * A request that reached here without passing an auth guard.
  *
  * Not the `guest` role: this is what the TRAIL records for someone the resolver never saw, and an
@@ -388,19 +326,6 @@ export const callerContextOf = (request: {
             (consentHeader !== undefined && parseFormBoolean(consentHeader) === true)
     };
 };
-
-/**
- * A {@link CallerContext} whose caller is proven to be acting inside a shop.
- *
- * Exists so a tenant-only module's services can take `context.caller.tenantId` as a `string` and
- * state that requirement in their signature, instead of each one narrowing the union back at
- * runtime. `api-keys` and `webhooks` are entirely tenant-scoped — every key either declares
- * `scope: tenant` in `shared/authorization-keys.yaml` — and both previously carried their own
- * identical `tenantOf()` helper to do exactly that.
- */
-export interface TenantCallerContext extends CallerContext {
-    caller: TenantCaller;
-}
 
 /**
  * {@link callerContextOf}, for a route every one of whose permission keys is tenant-scoped.

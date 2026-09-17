@@ -20,7 +20,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
-import type { CallerContext } from '@infrastructure/http/request';
+import type { CallerContext } from '@types';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { localeAuditActions } from '../audit';
 import type { LocaleEntryDocument } from '../model';

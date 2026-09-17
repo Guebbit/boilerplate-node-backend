@@ -17,7 +17,7 @@ import {
 import { productService } from '@modules/products';
 import { cartService } from '@modules/cart';
 import type { WishlistItem } from '@types';
-import type { CallerContext } from '@infrastructure/http/request';
+import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { wishlistAnalyticsEvents } from './analytics';
 import { wishlistRepository } from './repository';

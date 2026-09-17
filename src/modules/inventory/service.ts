@@ -29,7 +29,7 @@ import { reservationTtlMinutes, lowStockThreshold } from './config';
 import { stockMovementRepository, reservationRepository } from './repository';
 import { RESERVATION_EXPIRED } from './events';
 import type { StockMovementDocument } from './model';
-import type { CallerContext } from '@infrastructure/http/request';
+import type { CallerContext } from '@types';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
 import { inventoryAuditActions } from './audit';

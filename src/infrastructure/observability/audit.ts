@@ -10,7 +10,7 @@
 
 import { auditLogger } from '@infrastructure/adapters/logger';
 import { getActiveSpanContext } from '@infrastructure/observability/tracer';
-import type { CallerContext } from '@infrastructure/http/request';
+import type { CallerContext } from '@types';
 import { wildcardKeyFor } from '@infrastructure/authorization/keys';
 
 /**

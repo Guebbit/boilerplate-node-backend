@@ -18,7 +18,7 @@ import { OrderStatus, PaymentMethod } from '@types';
 import { orderService, orderTotal } from '@modules/orders';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import type { CallerContext } from '@infrastructure/http/request';
+import type { CallerContext } from '@types';
 import { defaultCurrency } from '../config';
 import { paymentRepository } from '../repository';
 import { paymentsAuditActions } from '../audit';

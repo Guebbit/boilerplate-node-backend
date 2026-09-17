@@ -10,7 +10,7 @@
 
 import { getActiveSpanContext } from '@infrastructure/observability/tracer';
 import { environmentFlag } from '@infrastructure/runtime/environment';
-import type { CallerContext } from '@infrastructure/http/request';
+import type { CallerContext } from '@types';
 import { umamiAnalyticsProvider } from './umami';
 import { posthogAnalyticsProvider } from './posthog';
 import { noneAnalyticsProvider } from './none';

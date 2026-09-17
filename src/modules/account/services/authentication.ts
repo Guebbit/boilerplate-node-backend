@@ -27,7 +27,8 @@ import {
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { zodUserSchema, userService, type TokenType, type UserDocument } from '@modules/users';
-import { parseFormBoolean, type CallerContext } from '@infrastructure/http/request';
+import { parseFormBoolean } from '@infrastructure/http/request';
+import type { CallerContext } from '@types';
 import { analyticsConsentSchema } from '@infrastructure/http/schemas';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';

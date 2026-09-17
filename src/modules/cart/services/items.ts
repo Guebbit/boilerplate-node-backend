@@ -16,7 +16,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { productService } from '@modules/products';
-import type { CallerContext } from '@infrastructure/http/request';
+import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { cartAnalyticsEvents } from '../analytics';

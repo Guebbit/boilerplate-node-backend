@@ -17,8 +17,10 @@ export type {
     AuthContext,
     AuthorizationScope,
     Caller,
+    CallerContext,
     PlatformCaller,
-    TenantCaller
+    TenantCaller,
+    TenantCallerContext
 } from './auth-context';
 
 // A module's rate-limit budget data — shared between kernel/registry.ts's manifest field and

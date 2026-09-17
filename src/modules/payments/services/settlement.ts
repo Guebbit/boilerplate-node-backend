@@ -19,7 +19,7 @@ import type { PaymentStatus, AuthContext } from '@types';
 import { orderService, statusesLeadingTo, ORDER_STATUS_CHANGED } from '@modules/orders';
 import { PAYMENT_SUCCEEDED, PAYMENT_FAILED } from '../events';
 import { inventoryService } from '@modules/inventory';
-import type { CallerContext } from '@infrastructure/http/request';
+import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { paymentsAnalyticsEvents } from '../analytics';

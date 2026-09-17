@@ -21,7 +21,7 @@ import {
 import type { LocaleDocument } from '../model';
 import { localeRepository } from '../repository';
 import { isKnownTenant } from '../tenants';
-import type { CallerContext } from '@infrastructure/http/request';
+import type { CallerContext } from '@types';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { localeAuditActions } from '../audit';
 

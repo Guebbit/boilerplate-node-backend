@@ -6,7 +6,7 @@
  * here rather than a branch in the login flow.
  */
 
-import type { CallerContext } from '@infrastructure/http/request';
+import type { CallerContext } from '@types';
 import type { TwoFactorMethodRecord, UserDocument } from '@modules/users';
 import type { TwoFactorDelivery, TwoFactorSetup } from '@types';
 import { totpMethod } from './methods/totp';

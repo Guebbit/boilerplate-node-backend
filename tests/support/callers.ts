@@ -12,9 +12,8 @@
  * than in one route's integration test three layers down.
  */
 
-import type { AuthContext, Caller, TenantCaller } from '@types';
+import type { AuthContext, Caller, CallerContext, TenantCaller, TenantCallerContext } from '@types';
 import { anonymousCaller, callerInScope } from '@kernel/permissions';
-import type { CallerContext, TenantCallerContext } from '@infrastructure/http/request';
 
 /** The single shop every fixture belongs to. Multi-tenant behaviour is the conformance suite's. */
 export const TEST_TENANT_ID = 'shop';
