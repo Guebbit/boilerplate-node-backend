@@ -174,7 +174,8 @@ export interface AppModule {
 
     /**
      * Env vars this module cannot run without — see {@link RequiredConfig}. Most modules have
-     * none; `account` and `observability` each hold a secret that must not boot on a placeholder.
+     * none; a module declares one when it owns a secret, a boot-required identity field or a
+     * config value nothing else could catch before the first request that needs it.
      */
     requiredConfig?: readonly RequiredConfig[];
 

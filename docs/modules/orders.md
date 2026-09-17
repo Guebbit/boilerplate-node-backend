@@ -116,6 +116,19 @@ flowchart LR
     class DL,PM peer;
 ```
 
+## Configuration
+
+| Variable               | Default | Meaning                                                                                                                                                                 |
+| ---------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_SHOP_COUNTRY`    | —       | The shop's own jurisdiction — the only one VAT is ever charged at, no destination lookup. Required at boot; the manifest's `requiredConfig` refuses to start without it |
+| `NODE_SHOP_VAT_NUMBER` | —       | The shop's VAT id, printed on the invoice. Optional — a deployment below the registration threshold prints no VAT number rather than a fake one                         |
+| `NODE_SHOP_LEGAL_NAME` | —       | The shop's legal name, printed on the invoice — distinct from any storefront brand name                                                                                 |
+
+All three are read fresh per call (`config.ts`), so a correction needs no restart; an empty string
+reads as unset, never as a blank invoice row. The VAT RATES charged against an order line are a
+different thing with a different owner — see [products](./products.md#configuration); this module
+only freezes onto the order the rate `products` hands it at checkout.
+
 ## Related pages
 
 - [Modules overview](./index.md) — the whole context map

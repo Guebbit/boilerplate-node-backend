@@ -85,6 +85,20 @@ flowchart LR
     class ST note;
 ```
 
+## Configuration
+
+| Variable                | Default | Meaning                                                                                                                               |
+| ----------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_VAT_RATE_DEFAULT` | `0.22`  | The rate charged on a product with no `taxClass` — every product's fallback. Range-checked at boot: outside `[0, 1)` refuses to start |
+| `NODE_VAT_RATE_REDUCED` | `0.1`   | The rate charged on a product whose `taxClass` is `reduced`. Same boot-time range check as the default                                |
+
+Both are read fresh per call (`config.ts`), so a corrected rate needs no restart. The boot check
+(`invalidVatRateConfig`, this module's `customCheck`) parses a set value through the same
+whole-string-decimal grammar the reader itself uses — `@infrastructure/runtime/environment`'s
+`parseEnvironmentDecimal` — so a value the check accepts is never one the reader would then
+silently fall back on. `resolveTaxRate` (`./tax`) is the one place either rate is resolved for a
+product; `orders` freezes the result onto an order line at checkout and never reads a rate itself.
+
 ## Translated content
 
 `title`/`description` are not columns this module resolves on its own. They live as per-locale rows
