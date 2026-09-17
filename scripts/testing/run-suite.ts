@@ -79,7 +79,7 @@ const SUITES: Record<string, Suite> = {
         workerPeakMb: 1400
     },
     fuzz: {
-        patterns: ['tests/fuzz'],
+        patterns: ['tests/fuzz', 'src/modules/.*/tests/fuzz'],
         serialized: true,
         workerPeakMb: 1400
     }
