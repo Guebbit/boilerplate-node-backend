@@ -193,8 +193,8 @@ export const cacheMock = () => ({
  *
  * This file's own three budgets (`rateLimiter`, `apiKeyLimiter`, `uploadLimiter`) are the
  * exception: `jest.requireActual` below already built them, for real, before the override can
- * apply to anything — so each still needs its own entry, the same reason a plain function needed
- * one before this factory existed.
+ * apply to anything — so each still needs its own entry, regardless of the shared-namespace
+ * relabelling above.
  */
 export const securityMock = () => {
     const actual = jest.requireActual<typeof import('@infrastructure/http/middlewares/rate-limit')>(

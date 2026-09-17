@@ -231,9 +231,9 @@ describe('mfaChallengeLimiter', () => {
     });
 
     it('does not let two callers with no challenge exhaust the same bucket', async () => {
-        // Regression: a request naming no `challenge` used to bucket under one shared
-        // `'anonymous'` key, so any two such callers spent the same budget. It must now key on
-        // the caller's address BLOCK instead — see `challengeKey` in `account/rate-limits.ts`.
+        // A request naming no `challenge` must key on the caller's address BLOCK, not one shared
+        // key — a shared key would let any two such callers spend the same budget. See
+        // `challengeKey` in `account/rate-limits.ts`.
         const mfaChallengeLimiter = await withAccountRateLimits(
             { NODE_MFA_CHALLENGE_MAX: '1' },
             (module) => module.mfaChallengeLimiter

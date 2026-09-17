@@ -49,15 +49,6 @@ import { FUZZ_RUNS_PER_OPERATION } from '@tests/knobs';
 setupTestDb();
 
 /**
- * Runs per operation — `TEST_FUZZ_RUNS`, defaulting to 12.
- *
- * Deliberately small: 55 operations × N requests × a real in-memory Mongo, and the auth rate
- * limiter is raised but finite (`tests/support/setup.ts`). Raise it when hunting something
- * specific, not as a default; lower it to fit a weak machine's night.
- */
-const RUNS_PER_OPERATION = FUZZ_RUNS_PER_OPERATION;
-
-/**
  * One seed for the file, so a failure is reproducible rather than a story about last Tuesday.
  *
  * Rolled fresh per run unless `RANDOM_DATA_SEED` pins it, and printed either way — the same
@@ -160,7 +151,7 @@ describe.each(
                 //    `additionalProperties: false` on 95 schemas makes the shape check real.
                 expect(response).toSatisfyApiSpec();
             }),
-            { seed: SEED, numRuns: RUNS_PER_OPERATION, endOnFailure: true }
+            { seed: SEED, numRuns: FUZZ_RUNS_PER_OPERATION, endOnFailure: true }
         );
     }, 120_000);
 });

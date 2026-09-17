@@ -1,16 +1,14 @@
 /**
  * @module
- * Rate limiting's shared machinery, plus the three budgets no one module owns: the global burst
- * brake across the whole surface (`rateLimiter`), the api-key budget (`apiKeyLimiter`, credential-
- * keyed rather than address-keyed), and the image-upload budget (`uploadLimiter`, shared by
- * `account`, `products` and `users`). Every OTHER budget is data on the owning module's manifest
- * (`AppModule.rateLimits`), built into middleware by {@link buildRateLimiter} — the same factory
- * this file's own three budgets go through, exported here for every module's `rate-limits.ts` to
- * import.
+ * Rate limiting's shared machinery, plus the three budgets no module owns.
  *
- * Every limiter shares one Redis-or-memory store (see `rate-limit-store.ts`), fails open on a
- * store error, and answers through the shared error envelope rather than express-rate-limit's own
- * plain-text body.
+ * Owns:    the global burst brake (`rateLimiter`), the api-key budget (`apiKeyLimiter`,
+ *          credential-keyed), and the image-upload budget (`uploadLimiter`, shared by `account`,
+ *          `products` and `users`).
+ * Shares:  {@link buildRateLimiter} — every module's own `rate-limits.ts` budget goes through the
+ *          same factory as this file's three.
+ * Backing: one Redis-or-memory store (`rate-limit-store.ts`), fails open on a store error, answers
+ *          through the shared error envelope, never express-rate-limit's own plain-text body.
  *
  * See: docs/tools/security.md#the-rate-limit-budgets
  */

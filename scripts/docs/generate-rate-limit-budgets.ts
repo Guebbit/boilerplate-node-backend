@@ -28,6 +28,7 @@ const ROOT = path.join(__dirname, '../..');
 /** The page the table lives in. */
 const PAGE = path.join(ROOT, 'docs/tools/security.md');
 
+/** Markers bounding the generated block inside the page — everything between them is replaced. */
 const START = '<!-- rate-limit-budgets:start -->';
 const END = '<!-- rate-limit-budgets:end -->';
 

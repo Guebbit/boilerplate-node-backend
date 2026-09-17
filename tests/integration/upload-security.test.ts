@@ -20,7 +20,9 @@ import { maxUploadBytes } from '@infrastructure/adapters/storage';
  * which makes it the one an unauthenticated attacker would use.
  */
 
-const UPLOAD_DIRECTORY = path.resolve(process.env.NODE_PUBLIC_PATH ?? 'public', 'images');
+// `tests/support/setup-file-sandbox.ts` assigns this before any test file's own top-level code
+// runs, so it is never actually unset here — the `!` narrows what the compiler cannot.
+const UPLOAD_DIRECTORY = path.resolve(process.env.NODE_PUBLIC_PATH!, 'images');
 
 /**
  * A genuinely decodable PNG, not merely a magic-byte header.

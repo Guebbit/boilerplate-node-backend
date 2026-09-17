@@ -37,15 +37,12 @@ const envFileValues = readEnvFile();
  * The DEPTH knobs, promoted from `.env` into `process.env` for the suites that read them.
  *
  * An allowlist, never a merge — merging `.env` wholesale is precisely what {@link readEnvFile}
- * exists to avoid, since the live rate limits would then reach a worker before
- * `tests/support/setup.ts` could raise them. These four are read by the harness alone
- * (`tests/support/knobs.ts`), so turning one down changes what a suite ASKS, never what the code
- * under test answers.
+ * exists to avoid. Read by the harness alone (`tests/support/knobs.ts`), so turning one down
+ * changes what a suite ASKS, never what the code under test answers.
  *
- * Promotion is what carries them across the process boundary: the suites read them in a WORKER,
- * jest forks its workers from this process, and `process.env` is the only channel that crosses —
- * the same one `tests/support/global-setup.ts` uses for the Mongo uri. Done here rather than
- * there because `jest.config.cluster.js` runs no `globalSetup` at all and still extends this file.
+ * Promoted here rather than in `globalSetup` because `process.env` is the only channel that
+ * crosses into a jest WORKER, and `jest.config.cluster.js` runs no `globalSetup` at all while
+ * still extending this file.
  */
 const DEPTH_KNOBS = [
     'TEST_FUZZ_RUNS',
@@ -59,24 +56,17 @@ for (const name of DEPTH_KNOBS) {
 }
 
 /**
- * How many jest workers a bare `npx jest` may run, and how much each may hold.
+ * How many jest workers a bare `npx jest` may run, when nothing else has decided for it.
  *
- * The sizing that matters lives in `scripts/testing/machine-budget.ts`, which the npm scripts reach
- * through `scripts/testing/run-suite.ts` — it reads MemAvailable and passes `--maxWorkers`,
- * `--workerIdleMemoryLimit` and a pinned `--max-old-space-size` on the command line, where they
- * beat anything written here. This file is CommonJS and cannot import that module, and deliberately
- * does not reimplement it: a second copy of the arithmetic is how the two drifted apart before.
+ * The sizing that matters lives in `scripts/testing/machine-budget.ts`, reached through
+ * `scripts/testing/run-suite.ts` for every npm script — it reads MemAvailable and passes
+ * `--maxWorkers`, `--workerIdleMemoryLimit` and a pinned `--max-old-space-size` on the command
+ * line, where they beat anything written here. This file is CommonJS and cannot import that ESM
+ * module, so it does not reimplement the arithmetic either — a fixed, deliberately small number
+ * for `npx jest --onlyChanged`, an IDE's gutter button, or a single file run directly. Guessing low
+ * costs a slower ad-hoc run; guessing high risks the OOM killer taking a worker mid-file.
  *
- * What is left is the fallback for running jest DIRECTLY — `npx jest --onlyChanged`, an IDE's
- * gutter button, a single file. It is a small fixed number rather than a computed one on purpose:
- * the previous heuristic multiplied `os.totalmem()` by a core count, which on a 15 GB machine with
- * 6.6 GB actually free authorised eleven workers at ~905 MB each and let the OOM killer take them
- * mid-run while every test still reported passing. Guessing low costs a slower ad-hoc run; guessing
- * high costs the run.
- *
- * `JEST_WORKERS` in `.env` still wins, exactly as it did.
- *
- * See docs/tools/weak-machines.md
+ * `JEST_WORKERS` in `.env` still wins. See docs/tools/weak-machines.md.
  */
 const DEFAULT_MAX_WORKERS = 2;
 
@@ -99,7 +89,7 @@ const DEFAULT_WORKER_MEMORY_MB = 1400;
 const fromEnvironment = (name, fallback) => {
     // A real environment variable wins over the file, so a one-off run can go lower without
     // editing anything: `JEST_WORKERS=1 npx jest`.
-    const setting = process.env[name] ?? readEnvFile()[name];
+    const setting = process.env[name] ?? envFileValues[name];
     const configured = Number(setting?.trim());
     return Number.isInteger(configured) && configured > 0 ? configured : fallback;
 };

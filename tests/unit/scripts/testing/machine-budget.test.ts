@@ -165,9 +165,8 @@ describe('workerCount', () => {
 
 describe('the two machines this all exists for', () => {
     it('runs a roomy machine in ONE shard, so sharding costs it nothing', () => {
-        // The regression this guards: a flat ceiling once capped every machine at ~21 files per
-        // shard, which made a strong box run four sequential integration shards — slower than the
-        // single unsharded run it was already doing.
+        // A roomy machine must run the integration layer in ONE shard: a flat per-shard ceiling
+        // would force sharding's wall-clock cost onto a machine that has no need of it.
         const perShard = filesPerShard(shardTargetMb(processBudgetMb(30_000)));
 
         expect(perShard).toBeGreaterThan(INTEGRATION_FILES);
