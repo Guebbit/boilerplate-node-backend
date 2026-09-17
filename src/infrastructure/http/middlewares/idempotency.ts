@@ -40,6 +40,26 @@ const IDEMPOTENCY_KEY_HEADER = 'idempotency-key';
 const KEY_PATTERN = /^[\w-]{1,200}$/;
 
 /**
+ * Whether `value`, or anything nested inside it, carries an OWN `__proto__` key. A JSON body
+ * genuinely can: `JSON.parse` creates one as an ordinary data property, never the prototype
+ * itself (ES2019+, verified against the Node version this runs on) — `Object.hasOwn` sees it,
+ * `Object.getPrototypeOf` is unaffected. `canonicalize` (`@guebbit/js-toolkit` 2.2.0) does not
+ * preserve that: its accumulator is a plain object literal, so `result['__proto__'] = value`
+ * invokes the property's SETTER instead of creating a key, and the key silently vanishes from the
+ * fingerprint — two request bodies differing only in `__proto__` then hash identically. Reported
+ * upstream (https://github.com/Guebbit/js-toolkit); refused here until fixed, since silently
+ * mis-fingerprinting is worse than refusing a body no legitimate client sends anyway.
+ *
+ * @param value - the value to scan — `request.body`, or a nested object/array reached from it
+ */
+const hasProtoKey = (value: unknown): boolean => {
+    if (Array.isArray(value)) return value.some((entry) => hasProtoKey(entry));
+    if (value === null || typeof value !== 'object') return false;
+    if (Object.hasOwn(value, '__proto__')) return true;
+    return Object.values(value).some((entry) => hasProtoKey(entry));
+};
+
+/**
  * What this request IS, independent of who is asking: the method, the route pattern (not the
  * raw URL — a path parameter must not mint a new fingerprint) and the body. Two requests with
  * the same key but a different fingerprint are the client reusing a key for a different
@@ -171,6 +191,13 @@ export const idempotencyKey: RequestHandler = (
     if (!KEY_PATTERN.test(raw)) {
         rejectResponse(response, 422, [
             { code: 'VALIDATION_ERROR', message: t('generic.error-idempotency-key-invalid') }
+        ]);
+        return;
+    }
+
+    if (hasProtoKey(request.body)) {
+        rejectResponse(response, 422, [
+            { code: 'VALIDATION_ERROR', message: t('generic.error-idempotency-body-unsafe') }
         ]);
         return;
     }

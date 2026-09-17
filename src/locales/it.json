@@ -14,7 +14,8 @@
         "error-email-not-verified": "Conferma il tuo indirizzo email prima di continuare.",
         "error-idempotency-key-invalid": "Idempotency-Key deve contenere 1-200 lettere, cifre, trattini o underscore.",
         "error-idempotency-in-flight": "Una richiesta con questa Idempotency-Key è ancora in elaborazione.",
-        "error-idempotency-key-mismatch": "Questa Idempotency-Key è già stata usata con una richiesta diversa."
+        "error-idempotency-key-mismatch": "Questa Idempotency-Key è già stata usata con una richiesta diversa.",
+        "error-idempotency-body-unsafe": "Il corpo della richiesta non può contenere un campo chiamato __proto__."
     },
     "validation": {
         "required": "Questo campo è obbligatorio.",
