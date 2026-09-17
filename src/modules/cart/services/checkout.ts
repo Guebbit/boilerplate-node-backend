@@ -39,7 +39,7 @@ import { userService } from '@modules/users';
 import { inventoryService } from '@modules/inventory';
 import { addressForCheckout, type AddressItem } from '@modules/account';
 import { findShippingMethod, priceShipping } from '@modules/delivery';
-import { paymentService } from '@modules/payments';
+import { buildReference, paymentService } from '@modules/payments';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { cartAnalyticsEvents } from '../analytics';
@@ -248,9 +248,7 @@ const runCheckout = async (
      */
     const orderId = new Types.ObjectId();
     const transferReference =
-        requestedMethod === 'bank_transfer'
-            ? paymentService.buildReference(orderId.toHexString())
-            : undefined;
+        requestedMethod === 'bank_transfer' ? buildReference(orderId.toHexString()) : undefined;
 
     /*
      * The order is written first, and the units are held against it. Forced
