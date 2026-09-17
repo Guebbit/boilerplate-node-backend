@@ -316,15 +316,15 @@ one model and one language stop being valid_, not by where you put files.
 behind it, not a claim about intent. See [Strategic DDD](./strategic-ddd.md) for what each one
 enforces and what it refuses.
 
-| Concept                | Where                                                                                        |
-| ---------------------- | -------------------------------------------------------------------------------------------- |
-| Bounded context        | one folder per module; `rm -rf` deletes the domain                                           |
-| Published language     | the module barrel, `index.ts` — lint forbids reaching past it, and no barrel means no import |
-| Context map            | the docblock on each `module.ts`, beside the imports it describes                            |
-| Ubiquitous language    | the code's own identifiers, per context — see [Glossary](./glossary.md)                      |
-| Subdomain distillation | the table in [Strategic DDD](./strategic-ddd.md) §4 — a judgement, re-decided per project    |
-| Domain events          | `kernel/events.ts` — `products` emits, `cart` subscribes                                     |
-| Domain service         | `orders/domain/totals.ts`, `orders/domain/lifecycle.ts`                                      |
+| Concept                | Where                                                                                     |
+| ---------------------- | ----------------------------------------------------------------------------------------- |
+| Bounded context        | one folder per module; `rm -rf` deletes the domain                                        |
+| Published language     | the module barrel, `index.ts` — lint forbids reaching past it, every module publishes one |
+| Context map            | the docblock on each `module.ts`, beside the imports it describes                         |
+| Ubiquitous language    | the code's own identifiers, per context — see [Glossary](./glossary.md)                   |
+| Subdomain distillation | the table in [Strategic DDD](./strategic-ddd.md) §4 — a judgement, re-decided per project |
+| Domain events          | `kernel/events.ts` — `products` emits, `cart` subscribes                                  |
+| Domain service         | `orders/domain/totals.ts`, `orders/domain/lifecycle.ts`                                   |
 
 **Tactical DDD — absent, deliberately:**
 

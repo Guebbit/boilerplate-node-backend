@@ -70,7 +70,7 @@ something to undo.
 | [`account`](./account.md)     | `customer-supplier`  | `addressForCheckout` — the one address this order ships to. The address CRUD stays behind that module's routes.                                                                      |
 | [`products`](./products.md)   | `conformist`         | Catalogue documents, read as they are, to price lines and pre-flight availability.                                                                                                   |
 | [`inventory`](./inventory.md) | `customer-supplier`  | `reserveForOrder` to hold the basket — for as long as the chosen method's window says — and the hold given back when the cart race is lost. Checkout never touches a counter itself. |
-| [`orders`](./orders.md)       | `customer-supplier`  | `create`, and `countOpenBankTransfers` for the open-transfer cap — this is the one place an order is made outside the admin routes.                                                  |
+| [`orders`](./orders.md)       | `customer-supplier`  | `createRaw`, and `countOpenBankTransfers` for the open-transfer cap — this is the one place an order is made outside the admin routes.                                               |
 
 ::: tip The basket is mapped, not handed over
 `inventory` is given product ids and quantities, nothing else. Mapping the lines rather than passing

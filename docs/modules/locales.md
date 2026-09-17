@@ -2,7 +2,7 @@
 
 ::: tip At a glance
 **Owns** — which languages this deployment speaks, and the runtime overrides layered over the bundled copy.
-**Depends on** — nothing. It has no barrel either: nothing may import it.
+**Depends on** — nothing. It carries the convenience barrel every module does, but nothing imports it: no sibling needs a translated dictionary directly.
 **Breaks if you change** — the `tenant` field. It decides which of two dictionaries a row patches.
 :::
 

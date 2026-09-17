@@ -325,10 +325,12 @@ The entity names are examples.
 One folder under `src/modules/` with a `module.ts`, plus one line in `src/modules.ts`. Nothing
 else — not the route mounting, not the lint config.
 
-Add an `index.ts` when another module needs something from this one, and export the narrowest thing
-that satisfies it: the barrel is a promise that the shape will not move. A module nothing imports
-has no barrel at all — `observability` is the case, and the absence is what makes the boundary
-structural rather than advisory.
+Every module gets an `index.ts`, structurally, whether a sibling imports it today or not — a
+convenience barrel (`export *` from services, domain rules, events and emails, plus `export type *`
+from the model) rather than the narrower "only what a sibling needs" rule this repo used to run;
+see [Strategic DDD §5](./strategic-ddd.md#_5-published-language-—-the-barrel) for the trade. A
+module nothing imports still publishes one, just an empty one — `observability` is the case — and
+an empty barrel forbids import as structurally as no barrel would.
 
 ### Removing a domain
 

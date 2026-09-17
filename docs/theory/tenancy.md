@@ -110,7 +110,7 @@ clients: it namespaces every container, network and volume, and selects that cli
 sequenceDiagram
     participant C as Caller
     participant R as account/module.ts resolve()
-    participant U as userRepository
+    participant U as userService
     participant S as kernel/access/store.ts rolesOf()
     participant P as kernel/permissions.ts callerInScope()
 
