@@ -18,13 +18,11 @@
  *    Removing the flag would not make these tests "more concurrent"; it would make them flaky for
  *    an unrelated reason.
  *
- *  - **The rate limiters are raised, not disabled** (`tests/support/setup.ts`). `credentialLimiters`
- *    is mounted on exactly the endpoints these tests hammer, at 10 per IP per window by default,
- *    with `skipSuccessfulRequests`. At that budget an N=10 signup race sits exactly on the limit
- *    and N=12 starts returning 429s — and the test would still PASS, because "not two users" is
- *    trivially true when two of the requests never reached the handler. A race test truncated by
- *    a limiter is a green test that measured nothing, so the assertions below count 4xx codes by
- *    value and reject 429 explicitly rather than lumping it into "not a success".
+ *  - **The rate limiters are raised, not disabled** (`tests/support/setup.ts` sets the credential
+ *    budgets to 1000). A race truncated by a limiter would still PASS, because "not two users" is
+ *    trivially true when some of the requests never reached the handler — a green test that
+ *    measured nothing — so the assertions below count 4xx codes by value and reject 429 explicitly
+ *    rather than lumping it into "not a success".
  */
 import type { Response } from 'supertest';
 import { countKnob } from './knobs';
@@ -33,10 +31,9 @@ import { countKnob } from './knobs';
  * How many participants a race gets by default — `TEST_RACE_SIZE`, defaulting to 10.
  *
  * Enough to contend, small enough to stay quick. The knob exists for a machine that cannot afford
- * ten simultaneous in-flight requests, and it only goes DOWN usefully: the header above records
- * that 12 starts drawing 429s from `credentialLimiters`, which the assertions below reject
- * outright rather than tolerate. Floored at 2, since a race of one contends with nothing and would
- * pass by construction.
+ * ten simultaneous in-flight requests and DB writes, and it only goes DOWN usefully — the raised
+ * limiters (see the header above) leave no smaller ceiling to hit on the way up. Floored at 2,
+ * since a race of one contends with nothing and would pass by construction.
  */
 export const RACE_SIZE = countKnob('TEST_RACE_SIZE', 10, 2);
 

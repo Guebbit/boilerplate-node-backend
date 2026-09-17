@@ -278,11 +278,13 @@ regression across every integration-covered file. Compare a deep run against the
 `jest.config.mutation.js` pins `maxWorkers: 1`, and that single line is worth roughly an order of
 magnitude on this machine.
 
-`jest.config.js` sizes its pool for a STANDALONE run: one jest process, `logical CPUs - 2` workers,
-measured against the whole unit suite and documented in that file. `jest.config.mutation.js`
-spreads the base config, so before this it inherited that number — and under Stryker the number is
-multiplied rather than reused. Stryker runs `concurrency` test runners at once, each of which is a
-full jest with a full pool of its own. On a 32-core box that was four runners times thirty workers.
+`jest.config.js` sizes its pool for a STANDALONE run: one jest process, a fixed default of 2
+workers when `JEST_WORKERS` is unset (the fallback for a direct `npx jest`, documented in that
+file — `npm run test:*` sizes itself through `scripts/testing/machine-budget.ts` instead).
+`jest.config.mutation.js` spreads the base config, so before this it inherited that number — and
+under Stryker the number is multiplied rather than reused. Stryker runs `concurrency` test runners
+at once, each of which is a full jest with a full pool of its own. On a 32-core box that was four
+runners times thirty workers, back when the fallback was itself computed from core count.
 
 What it looks like when it is wrong: **load average 31.8 on 32 cores, and roughly 55 seconds per
 mutant against a suite that runs 703 tests in 78 seconds single-threaded.** The run is not blocked
@@ -704,7 +706,8 @@ every test passes — a message that names the symptom and nothing else.
 Note that eight workers were **faster** than thirty-one: past the point where the machine can hold
 them, extra workers buy contention rather than throughput, so there is no speed being traded away.
 The number is a property of the machine, so it lives in `.env` as `JEST_WORKERS`, exactly like
-`STRYKER_CONCURRENCY`; `jest.config.js` falls back to `logical CPUs - 2` when it is unset.
+`STRYKER_CONCURRENCY`. `npm run test:*` computes it from free memory
+(`scripts/testing/machine-budget.ts`); a bare `npx jest` falls back to a fixed 2.
 
 ### The fix
 
