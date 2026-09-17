@@ -196,7 +196,7 @@ export const loginOrCreateFromOAuth = (
 
             // Same reason as the lookup above: `linkToExistingAccount` below may hand this
             // account straight to a 2FA challenge too.
-            return userService.findOneWithCredentials({ email: identity.email }).then((byEmail) => {
+            return userService.findByEmail(identity.email).then((byEmail) => {
                 if (!byEmail) return signupFromOAuth(provider, identity, context);
 
                 if (!identity.emailVerified) throw new OAuthEmailUnverifiedError(identity.email);

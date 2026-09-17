@@ -68,8 +68,8 @@ export const search = (
 }> => userRepository.search(filters);
 
 /** Get a single user by ID. Returns undefined when no id is provided. */
-export const getById = (id?: string) => {
-    if (!id) return Promise.resolve();
+export const getById = (id?: string): Promise<UserDocument | undefined> => {
+    if (!id) return Promise.resolve(undefined);
     return userRepository.findById(id).then((user) => user ?? undefined);
 };
 
@@ -498,12 +498,11 @@ export const removeById = (
 /*
  * `account` end of the one shared-kernel relationship in this repo (`docs/theory/strategic-ddd.md`
  * §5): the User document it authenticates, resets, links to OAuth, and 2FA-protects. Everything
- * below is a thin pass-through to `userRepository`, kept at THIS name because `account`'s files
- * already read `userRepository.findByIdWithCredentials(...)` and the like — the door moved, the
- * vocabulary didn't. `save`/`findOne` stay pass-throughs on purpose too: `account` builds up a
- * mutated `UserDocument` across many fields (password, 2FA, sessions, tokens) before persisting
- * it, which is exactly the co-administration the shared kernel exists to allow, not a generic
- * write handle handed to an unrelated caller.
+ * below is a thin pass-through to `userRepository`, named for the question it answers so
+ * `account`'s files read `userService.findByIdWithCredentials(...)` and the like directly. `save`
+ * stays a pass-through on purpose: `account` builds up a mutated `UserDocument` across many fields
+ * (password, 2FA, sessions, tokens) before persisting it, which is exactly the co-administration
+ * the shared kernel exists to allow, not a generic write handle handed to an unrelated caller.
  */
 
 /** An authenticatable account by id — `active`/soft-delete already excluded by the query. */
@@ -524,7 +523,11 @@ const findByIdWithPendingEmail = (id: string) => userRepository.findByIdWithPend
 const emailOrPendingEmailTaken = (email: string, excludingId: string) =>
     userRepository.emailOrPendingEmailTaken(email, excludingId);
 
-/** The account still holding a live, unexpired token of this value and type. */
+/**
+ * The account holding a token of this exact value and type — not filtered by expiry. A caller
+ * that needs "live" (exists, right type, not expired) checks `entry.expiration` itself, same as
+ * `account/services/tokens.ts`'s `findLiveTokenEntry`.
+ */
 const findByToken = (token: string, type: Parameters<typeof userRepository.findByToken>[1]) =>
     userRepository.findByToken(token, type);
 
@@ -549,14 +552,15 @@ const build = (data: Parameters<typeof userRepository.build>[0]) => userReposito
 const createRaw = (data: Parameters<typeof userRepository.create>[0]) =>
     userRepository.create(data);
 
-/** One account by email, credentials included — signup's duplicate-email pre-check. */
-const findByEmailWithCredentials = (email: string) => userRepository.findOne({ email });
+/** Whether an account already exists for this email — signup's duplicate-email pre-check. */
+const emailTaken = (email: string): Promise<boolean> =>
+    userRepository.findOne({ email }).then((user) => user !== null);
 
-/** Log a session out everywhere but this one device — clears the row, not just the cookie. */
+/** Revoke one refresh token by its subdocument id — "log out that device", not every device. */
 const sessionRemove = (id: string, sessionId: string) =>
     userRepository.sessionRemove(id, sessionId);
 
-/** Consume a refresh token by its exact value, not by id — the rotation path's own lookup key. */
+/** Spend a refresh token by value alone, no user id in the filter — the single-session logout. */
 const tokenRemoveByValue = (token: string) => userRepository.tokenRemoveByValue(token);
 
 /** Sweep every token past its rotation grace window. */
@@ -575,10 +579,16 @@ const linkOAuthAccount = (
     account: Parameters<typeof userRepository.linkOAuthAccount>[1]
 ) => userRepository.linkOAuthAccount(userId, account);
 
-/** Every account inactive past the warning threshold, never yet warned — `ops/reap-inactive-accounts.ts`'s first stage. */
+/**
+ * Every account inactive past the warning threshold, never yet warned —
+ * `ops/reap-inactive-accounts.ts`'s first stage.
+ */
 const findInactiveUnwarned = (cutoff: Date) => userRepository.findInactiveUnwarned(cutoff);
 
-/** Every account warned, and still inactive past the grace window — the reaper's soft-delete stage. */
+/**
+ * Every account warned, and still inactive past the grace window — the reaper's soft-delete
+ * stage.
+ */
 const findWarnedStillInactive = (cutoff: Date) => userRepository.findWarnedStillInactive(cutoff);
 
 /** Every account soft-deleted by the reaper past ITS OWN grace window — the hard-delete stage. */
@@ -599,7 +609,7 @@ export const userService = {
     removeById,
     adminDisableTwoFactor,
     findByEmail,
-    findByEmailWithCredentials,
+    emailTaken,
     findAuthenticatableById,
     findByIdWithCredentials,
     findOneWithCredentials,

@@ -6,7 +6,7 @@
 import type { Request, Response } from 'express';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
 import type { User } from '@types';
-import { toUser } from '@modules/users';
+import { userService } from '@modules/users';
 import { accountService } from '../services';
 import { callerContextOf } from '@infrastructure/http/request';
 
@@ -25,7 +25,7 @@ export const getAccount = (request: Request, response: Response): void => {
         .getOwnProfile(authContext.id, callerContextOf(request))
         .then((user) => {
             // A valid token whose row is gone is a dead session, not a server fault.
-            if (user) successResponse<User>(response, toUser(user));
+            if (user) successResponse<User>(response, userService.toUser(user));
             else rejectResponse(response, 401);
         })
         .catch(() => rejectResponse(response, 500));

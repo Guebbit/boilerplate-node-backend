@@ -17,7 +17,7 @@ import { authSignupTotal } from '../metrics';
 import { callerContextOf } from '@infrastructure/http/request';
 import { issueSession } from '../session/session';
 import { sendVerificationEmail } from '../services';
-import { toUser } from '@modules/users';
+import { userService } from '@modules/users';
 import { logAntibotRefusal } from '@infrastructure/http/middlewares/antibot-log';
 
 /**
@@ -84,7 +84,7 @@ export const postSignup = (
                 logAntibotRefusal('email-policy', request.method, request.path, 201);
                 authSignupTotal.inc({ status: 'refused' });
                 return deleteUpload().then(() => {
-                    successResponse<User>(response, toUser(data), 201);
+                    successResponse<User>(response, userService.toUser(data), 201);
                 });
             }
 
@@ -110,7 +110,7 @@ export const postSignup = (
              * address in use already leaks existence.
              */
             return issueSession(response, data.id).then(() => {
-                successResponse<User>(response, toUser(data), 201);
+                successResponse<User>(response, userService.toUser(data), 201);
             });
         })
         .catch((error: CastError | Error) => {

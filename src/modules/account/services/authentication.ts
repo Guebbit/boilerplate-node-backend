@@ -133,7 +133,7 @@ export const requestPasswordReset = (
     if (!email) return Promise.resolve(false);
 
     // Credentials included: issuing the token pushes onto this document's `tokens`.
-    return userService.findOneWithCredentials({ email }).then((user) => {
+    return userService.findByEmail(email).then((user) => {
         if (!user) return false;
 
         return tokenAdd(user, PASSWORD_RESET_TOKEN_TYPE, PASSWORD_RESET_TOKEN_TTL_MS).then(
@@ -428,9 +428,9 @@ export const signup = (
                                   )
                               )
                             : userService
-                                  .findByEmailWithCredentials(email)
-                                  .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
-                                      if (user)
+                                  .emailTaken(email)
+                                  .then<ResponseSuccess<UserDocument> | ResponseReject>((taken) => {
+                                      if (taken)
                                           return generateReject(409, [
                                               t('account.signup.email-already-used')
                                           ]);

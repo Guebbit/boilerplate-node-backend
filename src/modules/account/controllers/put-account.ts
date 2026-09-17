@@ -15,7 +15,7 @@ import { readUploadedImage } from '@infrastructure/adapters/image-store';
 import type { UpdateAccountRequest, UpdateAccountRequestMultipart, User } from '@types';
 import { accountService } from '../services';
 import { callerContextOf } from '@infrastructure/http/request';
-import { toUser } from '@modules/users';
+import { userService } from '@modules/users';
 
 /**
  * PUT /account — the authenticated user updates their OWN profile (email, username, locale,
@@ -71,7 +71,12 @@ export const putAccount = (
                 return;
             }
 
-            successResponse<User>(response, toUser(data), 200, t('account.update.success'));
+            successResponse<User>(
+                response,
+                userService.toUser(data),
+                200,
+                t('account.update.success')
+            );
         })
         .catch((error: CastError | Error) => {
             rejectDatabaseError(response, 'putAccount', error);
