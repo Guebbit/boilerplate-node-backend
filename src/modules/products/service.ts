@@ -194,7 +194,9 @@ export const searchViewed = (
  *
  * The wire shape, not a hydrated document: `.toJSON()` runs here — before translation resolution,
  * never after, since resolution is a plain-object overlay that would otherwise lose whatever the
- * document's own transform computes (`available`, `_id` → `id`, dates to ISO strings).
+ * document's own transform computes (`available`, `_id` → `id`, dates to ISO strings). Unlike
+ * `orders`'/`users`' own `getById`, which hand back the Mongoose document itself — neither of
+ * those has a locale-resolution step forcing an earlier `.toJSON()`.
  *
  * @param scope - which rows this caller may read ({@link callerScope})
  */

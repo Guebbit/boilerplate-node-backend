@@ -110,11 +110,12 @@ export const create = (
         .create({ verifiedAt: new Date(), role: 'customer', ...data, password })
         .then((user) => {
             /*
-             * The membership, not just the column — same reasoning as `update()`'s dual write below.
-             * Without it a brand-new staff account is a role that LOOKS granted and grants nothing,
-             * because `rolesOf`'s membership lookup finds no row and the fallback only reads on the
-             * scope this account is later resolved in. Awaited before the audit event: a rejected
-             * escalation must fail the whole create, not just the column that already saved.
+             * The membership, not just the column — same reasoning as `update()`'s dual write
+             * below. Without it a brand-new staff account is a role that LOOKS granted and grants
+             * nothing, because `rolesOf`'s membership lookup finds no row and the fallback only
+             * reads on the scope this account is later resolved in. Awaited before the audit
+             * event: a rejected escalation must fail the whole create, not just the column that
+             * already saved.
              */
             const membership =
                 data.role === undefined
@@ -137,8 +138,8 @@ export const create = (
                     target_type: 'user',
                     target_id: String(user._id),
                     // Recorded here, not by `account`'s domain-event handler: that handler has no
-                    // request to build a `CallerContext` from, only a `userId`, so the admin's action
-                    // is the only point in the flow with someone to attribute it to.
+                    // request to build a `CallerContext` from, only a `userId`, so the admin's
+                    // action is the only point in the flow with someone to attribute it to.
                     ...(passwordProvided
                         ? {}
                         : { metadata: { sendSetupEmail: Boolean(data.sendSetupEmail) } })

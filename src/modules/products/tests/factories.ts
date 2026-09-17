@@ -18,8 +18,8 @@ export const createProduct = (overrides: ProductOverrides = {}): Promise<Product
 
 /**
  * The raw stored document, hydrated — a sibling's own assertion on persisted state. Never through
- * `productService`: a generic hydrated read is a step from becoming a generic write, which is
- * exactly what the production barrel stopped publishing.
+ * `productService`: a generic hydrated read is a step from becoming a generic write, which the
+ * production barrel deliberately does not publish.
  */
 export const readProduct = (id: string): Promise<ProductDocument | null> =>
     productRepository.findById(id);
