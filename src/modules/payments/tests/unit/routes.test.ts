@@ -4,9 +4,10 @@
  * is authenticated at the router level — money is somebody's — while the provider's webhook and
  * `GET /methods` sit ABOVE it: the webhook's caller is a machine that authenticates by signing the
  * body, and which methods are offered is pre-purchase information nobody need sign in to read.
- * Exactly two routes are additionally admin-only: the refund and the offline record, a self-service
- * withdrawal or a self-reported "I paid" if left open to any caller, versus an intent or confirm
- * locked to admins being a checkout nobody can complete.
+ * Exactly three routes are additionally admin-only: the refund, the offline record, and the
+ * RF-reference lookup that precedes it — a self-service withdrawal or a self-reported "I paid" if
+ * left open to any caller, versus an intent or confirm locked to admins being a checkout nobody
+ * can complete.
  */
 
 import { routeSignatures, routeTable, guardsOn } from '@tests/routes';
@@ -33,6 +34,7 @@ describe('payment routes', () => {
             METHODS,
             'POST /intent',
             'GET /order/:orderId',
+            'GET /order-by-reference',
             'POST /order/:orderId/refund',
             'POST /order/:orderId/offline',
             'POST /:id/confirm',
@@ -71,11 +73,12 @@ describe('payment routes', () => {
         expect(routeSignatures(router).indexOf(WEBHOOK)).toBe(0);
     });
 
-    it('admin-guards the refund and the offline record, and nothing else', () => {
-        // The two routes an operator drives instead of a customer's own checkout — money moving
-        // back out, or a claim that money moved in some way the provider never saw.
-        // `cart.self.checkout` is excluded: it gates the three customer-facing routes below and is the
-        // customer's own key, not an admin one — see the module docblock's "Verified" row.
+    it('admin-guards the refund, the offline record, and the reference lookup, and nothing else', () => {
+        // The three routes an operator drives instead of a customer's own checkout — money moving
+        // back out, a claim that money moved in some way the provider never saw, or finding the
+        // order that claim is about. `cart.self.checkout` is excluded: it gates the three
+        // customer-facing routes below and is the customer's own key, not an admin one — see the
+        // module docblock's "Verified" row.
         const adminGuarded = routeTable(router)
             .filter(
                 ({ permissionKey }) =>
@@ -84,6 +87,7 @@ describe('payment routes', () => {
             .map(({ method, path }) => `${method} ${path}`);
 
         expect(adminGuarded).toEqual([
+            'GET /order-by-reference',
             'POST /order/:orderId/refund',
             'POST /order/:orderId/offline'
         ]);

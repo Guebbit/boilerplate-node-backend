@@ -6,9 +6,10 @@
  * would only stop deliveries arriving, not make it safer), and `GET /methods`, which is
  * pre-purchase information exactly like `GET /delivery/methods`.
  *
- * Admin-only:    the refund and the offline record — a self-service withdrawal, or a self-reported
- *                "I paid", if left open to any caller, versus an intent or confirm locked to
- *                admins being a checkout nobody can complete.
+ * Admin-only:    the refund, the offline record, and the RF-reference lookup that precedes it — a
+ *                self-service withdrawal, or a self-reported "I paid", if left open to any caller,
+ *                versus an intent or confirm locked to admins being a checkout nobody can
+ *                complete.
  * Fresh session: every route that moves money requires `requireFreshAuth(REAUTH_TIME_CRITICAL)` —
  *                a stolen access token proves nothing about how recently the holder typed their
  *                password.
@@ -41,6 +42,7 @@ import { postPaymentConfirm } from './controllers/post-payment-confirm';
 import { postPaymentSync } from './controllers/post-payment-sync';
 import { postPaymentWebhook } from './controllers/post-payment-webhook';
 import { getPaymentByOrder } from './controllers/get-payment-by-order';
+import { getOrderByReference } from './controllers/get-order-by-reference';
 import { postPaymentRefund } from './controllers/post-payment-refund';
 import { postPaymentOffline } from './controllers/post-payment-offline';
 import { getPaymentMethods } from './controllers/get-payment-methods';
@@ -71,6 +73,10 @@ router.post(
 
 // GET /payments/order/:orderId — the payment behind an order
 router.get('/order/:orderId', getPaymentByOrder);
+
+// GET /payments/order-by-reference — the admin's RF-code lookup, same authority as offline below.
+// A literal segment, not `/order/:something`: it names no order yet, that's the whole point of it.
+router.get('/order-by-reference', requirePermission('payments.any.create'), getOrderByReference);
 
 // POST /payments/order/:orderId/refund — the operator returns the money, order untouched.
 /*

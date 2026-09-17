@@ -84,6 +84,55 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /payments/order-by-reference:
+        get:
+            tags: [Payments]
+            summary: Find the order behind an RF reference
+            description: >-
+                The admin's own step before `POST /payments/order/{orderId}/offline`: paste the RF
+                creditor reference read off the bank's own website (or, for an order that predates
+                the field, its raw id) and get back the order it pays. Admin only — reading who
+                owes what by reference is no less than recording that the money arrived. A
+                malformed or unmatched reference both answer 404, indistinguishably: nothing here
+                confirms that an almost-right code was close. Requires a session that has re-proved
+                itself within the last few minutes — a valid-but-stale token answers 401 with
+                `errors[].code` `REAUTH_REQUIRED`, and the caller re-authenticates and retries the
+                same request.
+            operationId: getOrderByReference
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: ref
+                  in: query
+                  required: true
+                  schema:
+                      type: string
+                      minLength: 1
+                      maxLength: 64
+                  description: >-
+                      The RF reference, spaces and case tolerated exactly as a customer might type
+                      it — e.g. `RF13 2EY8 H44V JAVZ KX80 JRL` — or a raw 24-character order id for
+                      an order that predates this field.
+            responses:
+                '200':
+                    description: The order this reference pays
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OrderByReferenceResponseEnvelope'
+                    links:
+                        RecordOfflinePayment:
+                            operationId: recordOfflinePayment
+                            parameters:
+                                orderId: '$response.body#/data/id'
+                            description: The order this reference names is what the admin then marks paid.
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                # Malformed (fails the mod-97 check), or well-formed but matching no order.
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /payments/order/{orderId}/refund:
         post:
             tags: [Payments]
@@ -537,6 +586,23 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
                     $ref: '#/components/schemas/PaymentMethodsResponse'
+
+        # The envelope for `GET /payments/order-by-reference` — `data` is the shared `Order`
+        # itself, not a `Payment`: the lookup answers "which order", the settlement that follows
+        # (the existing `POST /payments/order/{orderId}/offline`) is what answers with a payment.
+        OrderByReferenceResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Order'
 
         RecordOfflinePaymentRequest:
             type: object

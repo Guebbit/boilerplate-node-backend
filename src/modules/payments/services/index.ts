@@ -14,7 +14,8 @@
  * copies commit inventory twice — `refunds.ts` is the one place money moves back out, `offline.ts`
  * records money the provider never saw and settles it through the same choreography, `view.ts`
  * reads a payment back with its `actions`, `retention.ts` is erasure/export/the abandoned sweep,
- * and `scope.ts` decides who may see what.
+ * `scope.ts` decides who may see what, and `lookup.ts` matches an admin-pasted RF reference back
+ * to the order it pays, the step before `recordOfflinePayment` settles it.
  */
 
 import { createIntent } from './intent';
@@ -28,6 +29,8 @@ import { refundByOrder, refundForOrder } from './refunds';
 import { recordOfflinePayment } from './offline';
 import { getForOrder } from './view';
 import { detachUserId, findOwnPayments, reapAbandonedPayments } from './retention';
+import { getOrderByReference } from './lookup';
+import { buildReference } from '../domain/reference';
 import { listPaymentMethods } from '../config';
 
 /*
@@ -49,6 +52,8 @@ export { recordOfflinePayment, type OfflinePaymentInput } from './offline';
 export { getForOrder, withActions } from './view';
 export { detachUserId, findOwnPayments, reapAbandonedPayments } from './retention';
 export { callerScope } from './scope';
+export { getOrderByReference } from './lookup';
+export { buildReference } from '../domain/reference';
 export { listPaymentMethods, type PaymentMethodInfo } from '../config';
 
 /** The module's one service handle. Named for the record it serves, like `paymentRepository`. */
@@ -62,6 +67,8 @@ export const paymentService = {
     refundForOrder,
     refundByOrder,
     recordOfflinePayment,
+    getOrderByReference,
+    buildReference,
     detachUserId,
     findOwnPayments,
     reapAbandonedPayments,

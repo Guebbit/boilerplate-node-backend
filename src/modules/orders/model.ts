@@ -139,6 +139,17 @@ export interface OrderDocument
      * something — absent and empty both mean settled.
      */
     pendingEffects?: OrderPendingEffect[];
+    /**
+     * The RF creditor reference this order's `bank_transfer` checkout minted
+     * (`src/modules/payments/domain/reference.ts`'s `buildReference`), from the SAME id this write
+     * creates — never recomputed afterwards. Absent on a `card` order, and on a `bank_transfer`
+     * order that predates this field; `applyTransferInstructions` falls back to the raw id for the
+     * latter case, and `GET /payments/order-by-reference` accepts the raw id too, for the same
+     * reason. Not part of the `Order` contract — `applyOrderTransform` omits it from the wire, the
+     * same treatment as `anonymizeAfter`/`pendingEffects` below, and it is surfaced only through
+     * `transferInstructions.reference`.
+     */
+    transferReference?: string;
     deletedAt?: Date;
 }
 
@@ -318,6 +329,14 @@ export const orderSchema = new Schema<OrderDocument>(
             type: [String],
             enum: ['refund'],
             default: undefined
+        },
+        /*
+         * The RF reference `cart`'s checkout mints for a `bank_transfer` order, from the same id
+         * this write creates. Absent on a `card` order and on an order that predates this field —
+         * no `required`, matching that.
+         */
+        transferReference: {
+            type: String
         }
     },
     {
@@ -351,6 +370,15 @@ orderSchema.index({ anonymizeAfter: 1 }, { name: 'orders_anonymizeAfter', sparse
 orderSchema.index(
     { pendingEffects: 1, updatedAt: 1 },
     { name: 'orders_pendingEffects', sparse: true }
+);
+/*
+ * `GET /payments/order-by-reference`'s lookup. Unique — two orders minting the same reference
+ * would make the code ambiguous about which one a transfer paid — and sparse for the same reason
+ * as the two sweeps above: most orders (every `card` one) never carry this field at all.
+ */
+orderSchema.index(
+    { transferReference: 1 },
+    { name: 'orders_transferReference', unique: true, sparse: true }
 );
 
 /**
@@ -411,9 +439,15 @@ const applyOrderTax = (serialized: Record<string, unknown>) => {
  * currently has configured rather than frozen at checkout time: the beneficiary/IBAN/BIC are
  * deployment config, not order-specific data, so a later change should show up on every
  * still-pending order instead of staying locked to what was true when it was placed. `reference`
- * IS order-specific — the order's own id, already renamed to `id` by the time `after` runs.
+ * IS order-specific — the RF code `buildReference` minted at checkout, falling back to the raw id
+ * (already renamed to `id` by the time `after` runs) for an order that predates that field.
  */
 const applyTransferInstructions = (serialized: Record<string, unknown>) => {
+    // Read before it is stripped, on every path below — never part of the wire, and `omit` above
+    // runs before this callback, too early to strip a field this function still needs to read.
+    const reference = String(serialized.transferReference ?? serialized.id);
+    delete serialized.transferReference;
+
     if (serialized.paymentMethod !== 'bank_transfer' || serialized.status !== OrderStatus.pending)
         return;
 
@@ -426,7 +460,7 @@ const applyTransferInstructions = (serialized: Record<string, unknown>) => {
         beneficiary,
         iban,
         ...(bic ? { bic } : {}),
-        reference: String(serialized.id)
+        reference
     };
 };
 
@@ -439,7 +473,9 @@ const applyTransferInstructions = (serialized: Record<string, unknown>) => {
 export const applyOrderTransform = applySerialization(orderSchema, {
     // `anonymizeAfter` is the reaper's own bookkeeping and `pendingEffects` the cancel sweep's,
     // neither part of the `Order` contract — same reasoning as `users`' `pendingImageKey`/
-    // `inactivityWarnedAt`.
+    // `inactivityWarnedAt`. `transferReference` is NOT listed here: `omit` runs before `after`
+    // below, and `applyTransferInstructions` still needs to read it — it strips the raw field
+    // itself, once it no longer does.
     omit: ['anonymizeAfter', 'pendingEffects'],
     after: (serialized) => {
         applyOrderItems(serialized);

@@ -217,12 +217,13 @@ stateDiagram-v2
 - **A week-long hold is free to take, so an account is capped.** `NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT`
   (default 2) counts that account's own `pending` transfer orders; a third checkout is refused with
   `CART_BANK_TRANSFER_LIMIT` before anything is written.
-- **`transferInstructions` is computed at read time, never frozen onto the order.** The
-  beneficiary/IBAN/BIC are deployment config, not order-specific data, so every response recomputes
-  them from the current environment — a later correction to a typo'd IBAN shows up on every still-
-  `pending` transfer order, not just new ones. Present only while `paymentMethod` is `bank_transfer`
-  and `status` is `pending`; `reference` is the order's own id, what the customer types into the
-  transfer's description so the incoming payment can be matched back.
+- **`transferInstructions` is computed at read time, never frozen onto the order — except its own
+  `reference`.** The beneficiary/IBAN/BIC are deployment config, not order-specific data, so every
+  response recomputes them from the current environment — a later correction to a typo'd IBAN
+  shows up on every still-`pending` transfer order, not just new ones. `reference` is the one
+  exception: the RF code checkout minted for THIS order, stored once on `transferReference` and
+  never recomputed. Present only while `paymentMethod` is `bank_transfer` and `status` is
+  `pending`. See [Matching a transfer back to its order](#matching-a-transfer-back-to-its-order).
 - **`orders`, not `payments`, computes `transferInstructions`.** `payments` already depends on
   `orders` (see this page's neighbourhood), so the reverse import would cycle. The beneficiary/IBAN/
   BIC getters live in `@infrastructure/adapters/bank-transfer.ts` instead — plain values, no
@@ -233,6 +234,41 @@ stateDiagram-v2
   sends a second one, but only when `paymentMethod` is `bank_transfer`: a card hold is thirty
   minutes, over before anyone could have opened a confirmation email, so a card timeout stays
   silent exactly as it does today.
+
+## Matching a transfer back to its order
+
+The bank never tells this app anything — there is no statement feed, no webhook, no polling.
+Instead checkout gives the customer a clean code to write into the transfer, and an admin reads it
+back off the bank's own website:
+
+```mermaid
+flowchart LR
+    C["Customer pays, writes the code<br/>RF18 5390 0754 in the transfer"] --> B["Bank website<br/>shows the incoming transfer"]
+    B --> A["Admin reads the code,<br/>pastes it into the app"]
+    A --> L["GET /payments/order-by-reference<br/>finds the order"]
+    L --> P["POST .../offline<br/>marks it paid — settlePayment, as usual"]
+```
+
+- **The reference is an ISO 11649 "RF" creditor reference** — the standard SEPA reference field,
+  e.g. `RF13 2EY8 H44V JAVZ KX80 JRL`. Its mod-97 check digits (ISO 7064 MOD 97-10, the same scheme
+  IBAN itself uses) mean a mistyped code is REJECTED rather than silently matching the wrong order.
+  `payments/domain/reference.ts`'s `buildReference` mints it at checkout, from the order's own id
+  encoded as base-36 — lossless over every bit of the id, so two different orders can never mint
+  the same code the way a hash could, which is what makes `transferReference`'s unique index a
+  true invariant rather than a rarely-firing safety net.
+- **Minted once, at checkout, never recomputed.** `cart`'s checkout pre-generates the order's id so
+  the reference can be minted from it in the SAME write that creates the order — see
+  `OrderDocument.transferReference`'s own comment. Absent on a `card` order, and on a
+  `bank_transfer` order that predates this field.
+- **The lookup accepts the pre-existing case too.** `GET /payments/order-by-reference` also
+  accepts a raw 24-character order id, so an order placed before this field existed still resolves
+  — there is no backfill, and on a boilerplate there are ~zero pending transfer orders to backfill
+  anyway.
+- **No new settlement code.** The admin screen calls the lookup, then the existing `POST
+/payments/order/{orderId}/offline` — the same `pending → paid` move, stock commit, and events any
+  other offline record already goes through.
+- **A malformed and an unmatched reference answer the same 404.** Distinguishing them would tell a
+  guesser which half of a code they got right.
 
 ## Libraries
 
@@ -246,6 +282,11 @@ advertise `bank_transfer` at all.
 | `ibantools` (chosen)         | active, typed | IBAN + BIC validation and formatting for every SEPA country, zero dependencies |
 | a hand-rolled mod-97 check   | —             | exactly the kind of validation `CLAUDE.md` rules out writing by hand           |
 | trusting the value unchecked | —             | a mistyped IBAN in `.env` sends every customer's money to the wrong account    |
+
+The RF reference above is ALSO a hand-rolled mod-97 check, and is not a contradiction of the row
+just above: `ibantools` validates IBAN and BIC only, has no ISO 11649 support at all, and no
+maintained package on npm covers this narrow a spec — the "only then write it ourselves" branch of
+`CLAUDE.md`'s own dependency rule, not the one the IBAN row warns against skipping.
 
 ## The pipeline
 

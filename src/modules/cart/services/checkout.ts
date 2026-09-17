@@ -242,6 +242,18 @@ const runCheckout = async (
         holdMinutes === undefined ? undefined : new Date(Date.now() + holdMinutes * 60_000);
 
     /*
+     * Pre-generated so a `bank_transfer` order's RF reference can be minted from the SAME id the
+     * write below is about to create — the reference must name the row it will end up on, not a
+     * second id nobody else ever sees. `undefined` for `card`: nothing here reads a reference for
+     * a method that settles through the provider instead of an admin's eyes on a bank statement.
+     */
+    const orderId = new Types.ObjectId();
+    const transferReference =
+        requestedMethod === 'bank_transfer'
+            ? paymentService.buildReference(orderId.toHexString())
+            : undefined;
+
+    /*
      * The order is written first, and the units are held against it. Forced
      * rather than chosen: a hold is keyed by the order's id, and that key is what
      * makes reserving exactly once. It is also the safer half — an order that
@@ -249,12 +261,14 @@ const runCheckout = async (
      * recording who took them are not.
      */
     const order = await orderRepository.create({
+        _id: orderId,
         userId: new Types.ObjectId(user.id),
         email: user.email,
         items: orderItems,
         invoiceNumber,
         paymentMethod: requestedMethod,
         ...(payBy ? { payBy } : {}),
+        ...(transferReference ? { transferReference } : {}),
         ...(address ? { shippingAddress: toShippingAddress(address) } : {}),
         // The cost frozen against THESE lines' total — the free-above
         // rule prices the basket being bought, not a later edit of it.
@@ -311,12 +325,12 @@ const runCheckout = async (
         const iban = bankTransferIbanFriendly();
         const bic = bankTransferBic();
         const mail =
-            requestedMethod === 'bank_transfer' && beneficiary && iban && payBy
+            requestedMethod === 'bank_transfer' && beneficiary && iban && payBy && transferReference
                 ? bankTransferInstructionsEmail(
                       buyerLocale,
                       user.username,
                       order,
-                      { beneficiary, iban, ...(bic ? { bic } : {}), reference: String(order._id) },
+                      { beneficiary, iban, ...(bic ? { bic } : {}), reference: transferReference },
                       payBy
                   )
                 : orderConfirmEmail(buyerLocale, user.username, order);

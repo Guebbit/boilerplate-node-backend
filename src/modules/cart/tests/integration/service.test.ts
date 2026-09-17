@@ -813,7 +813,7 @@ describe('orderConfirm — paymentMethod', () => {
         10_000
     );
 
-    it('serves transferInstructions on the still-pending order, with the order id as reference', () =>
+    it('serves transferInstructions on the still-pending order, with its own RF reference', () =>
         withBankTransferConfigured(async () => {
             const user = await createUser();
             const product = await createProduct();
@@ -829,11 +829,15 @@ describe('orderConfirm — paymentMethod', () => {
             const serialized = raw as {
                 transferInstructions?: { beneficiary: string; iban: string; reference: string };
             };
+            // The exact code is `buildReference`'s own concern, pinned in `reference.test.ts`;
+            // what this pins is that checkout minted one and stamped it on the order BEFORE
+            // quoting it back here, rather than the raw id the field replaced.
+            expect(stored!.transferReference).toMatch(/^RF\d{2}[\dA-Z]{19}$/);
             expect(serialized.transferInstructions).toEqual({
                 beneficiary: 'Guebbit Shop',
                 // Grouped into 4s for display — see `bankTransferIbanFriendly`.
                 iban: 'DE89 3704 0044 0532 0130 00',
-                reference: String(stored!._id)
+                reference: stored!.transferReference
             });
         }));
 

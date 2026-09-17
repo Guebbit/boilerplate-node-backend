@@ -67,6 +67,11 @@ export type OrderOverrides = Omit<
     /** 24-char hex of the person who placed it. */
     userId?: Id;
     items?: OrderLineInput[];
+    /**
+     * The RF reference a `bank_transfer` fixture minted — not part of `Order`, so it needs its
+     * own key here rather than riding along on `OverridesFor<Order>` the way `paymentMethod` does.
+     */
+    transferReference?: string;
 };
 
 /** An order ready for `orderRepository.create`. */
@@ -114,7 +119,8 @@ export const makeOrder = ({
     payBy,
     notes,
     deletedAt,
-    invoiceNumber
+    invoiceNumber,
+    transferReference
 }: OrderOverrides = {}): OrderFixture => ({
     ...identityOf({ id, createdAt, updatedAt }),
     userId: new Types.ObjectId(userId),
@@ -145,6 +151,7 @@ export const makeOrder = ({
         payBy: toDate(payBy),
         notes,
         deletedAt: toDate(deletedAt),
-        invoiceNumber
+        invoiceNumber,
+        transferReference
     })
 });

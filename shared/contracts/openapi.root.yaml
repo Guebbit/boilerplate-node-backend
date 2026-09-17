@@ -800,7 +800,12 @@ components:
                     description: Absent when the deployment has not configured one.
                 reference:
                     type: string
-                    description: The order's own id — what the customer writes in the transfer's description, so an incoming payment can be matched back to this order.
+                    description: >-
+                        The ISO 11649 "RF" creditor reference minted for this order at checkout —
+                        what the customer writes into the transfer's description, so an admin can
+                        match the incoming payment back to it via `GET
+                        /payments/order-by-reference`. An order that predates this field falls
+                        back to its own raw id, which that same endpoint also accepts.
 
         # `Product`, without `onHand`/`reserved`/`available`, and without an image — see
         # `OrderLineCurrent`. An order line is a purchase-time SNAPSHOT — the price and title a
