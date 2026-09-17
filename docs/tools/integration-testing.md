@@ -16,7 +16,7 @@ by weakness. Neither number is a pass rate — every test in every suite must pa
 
 | Tool                                            | Role                                                                                                           |
 | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| [Jest](https://jestjs.io/)                      | Same runner as the unit suite, different scope (`tests/integration --runInBand`)                               |
+| [Jest](https://jestjs.io/)                      | Same runner as the unit suite, different scope — run in band, sharded per [Weak Machines](./weak-machines.md)  |
 | [supertest](https://github.com/ladjs/supertest) | Drives `src/app.ts` over real HTTP semantics (headers, status codes, streaming) without binding an actual port |
 
 ## Where it sits
@@ -76,9 +76,9 @@ spec could pay for on every one of them. `stryker.config.json`'s `testPathIgnore
 
 ## Commands
 
-| Command                    | Effect                               |
-| -------------------------- | ------------------------------------ |
-| `npm run test:integration` | `jest tests/integration --runInBand` |
+| Command                    | Effect                                                                          |
+| -------------------------- | ------------------------------------------------------------------------------- |
+| `npm run test:integration` | `scripts/testing/run-suite.ts integration` — sharded, in band within each shard |
 
 ## Related pages
 

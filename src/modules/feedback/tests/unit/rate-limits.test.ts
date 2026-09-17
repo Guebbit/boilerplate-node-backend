@@ -6,8 +6,8 @@
  *
  * The behavioural property — spent by success, keyed on identity/address/block — sends a real
  * request through `express-rate-limit`'s middleware, which `no-restricted-imports` treats as an
- * integration concern: see `tests/integration/identity-rate-limit.test.ts` and
- * `tests/integration/submission-rate-limit.test.ts`.
+ * integration concern: see `../integration/contact-identity-rate-limit.test.ts` and
+ * `../integration/submission-rate-limit.test.ts`.
  */
 import { DEFAULT_RATE_LIMIT_MAX } from '@infrastructure/http/middlewares/rate-limit';
 import { feedbackRateLimits } from '@modules/feedback/rate-limits';

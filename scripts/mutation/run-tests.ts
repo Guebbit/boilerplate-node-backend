@@ -21,6 +21,7 @@ import { spawn } from 'node:child_process';
 import { rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { availableMemoryMb, positiveInteger } from '../testing/machine-budget';
 
 /** The repo root — the working directory every spawned jest inherits. */
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -57,12 +58,6 @@ try {
 const passthrough = process.argv.slice(2);
 const wasPassed = (flag: string) => passthrough.some((argument) => argument.startsWith(flag));
 
-/** A positive integer from the environment, or undefined when unset, empty or nonsense. */
-const positiveInteger = (value: string | undefined): number | undefined => {
-    const parsed = Number(value?.trim());
-    return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
-};
-
 /**
  * How many Stryker workers to run.
  *
@@ -71,17 +66,15 @@ const positiveInteger = (value: string | undefined): number | undefined => {
  * contributor's laptop, not necessarily this one.
  * See docs/tools/mutation-testing.md#the-worker-pool-multiplication.
  *
- * @returns `STRYKER_CONCURRENCY` when set, otherwise the lower of `logical CPUs - 1` and free RAM
- *   divided by one worker's peak RSS
+ * @returns `STRYKER_CONCURRENCY` when set, otherwise the lower of `logical CPUs - 1` and free
+ *   memory (`MemAvailable`, not total) divided by one worker's peak RSS
  */
 const resolveConcurrency = (): number => {
     const configured = positiveInteger(process.env.STRYKER_CONCURRENCY);
     if (configured) return configured;
 
     const cpuCap = os.cpus().length - 1;
-    const ramCap = Math.floor(
-        (os.totalmem() / 1024 / 1024 - OS_RESERVE_MB) / STRYKER_WORKER_PEAK_MB
-    );
+    const ramCap = Math.floor((availableMemoryMb() - OS_RESERVE_MB) / STRYKER_WORKER_PEAK_MB);
     // At least one, or a single-core, low-memory machine would compute zero and run nothing.
     return Math.max(1, Math.min(cpuCap, ramCap));
 };

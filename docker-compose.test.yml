@@ -53,13 +53,14 @@ services:
         environment:
             NODE_TEST_MONGO_URI: mongodb://mongo:27017/gate
             NODE_TEST_REDIS_URL: redis://redis:6379
-            # `resolveMaxWorkers()` (jest.config.js) sizes Jest's worker pool from the machine it
-            # sees — the full host, since this container has no cgroup memory limit of its own —
-            # so on a dev box already running the main compose stack (or anything else heavy) it
-            # over-commits and the kernel OOM-kills a worker mid-suite. Measured: this exact
-            # failure, `dmesg` confirmed `global_oom`, not a container bug. `${JEST_WORKERS:-8}`
-            # picks up a host override (compose reads `.env`, unlike a bare container env) and
-            # otherwise caps it rather than trusting the host's full core count.
+            # `scripts/testing/machine-budget.ts` (reached through `run-suite.ts` for every
+            # `npm run test:*`) sizes Jest's worker pool from the machine's free memory — the full
+            # host, since this container has no cgroup memory limit of its own — so on a dev box
+            # already running the main compose stack (or anything else heavy) it over-commits and
+            # the kernel OOM-kills a worker mid-suite. Measured: this exact failure, `dmesg`
+            # confirmed `global_oom`, not a container bug. `${JEST_WORKERS:-8}` picks up a host
+            # override (compose reads `.env`, unlike a bare container env) and otherwise pins a
+            # known-safe number rather than trusting the host's free memory at all.
             JEST_WORKERS: '${JEST_WORKERS:-8}'
         # No bind mount, not even for `reports/`/`coverage/` — deliberately, after trying it.
         # `docker/Dockerfile`'s image is owned by root; `--userns=keep-id` (the rootless-podman fix

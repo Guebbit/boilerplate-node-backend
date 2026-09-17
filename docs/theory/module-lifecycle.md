@@ -125,8 +125,7 @@ list above has no row for it. `openapi.yaml` and `probes.ts` are the contract sl
 owns; [Contract Ownership & Fragmentation](../api/contract-fragmentation.md) is what reads them.
 
 `wishlist` is the reference: it was the first module added after the registry existed, and its tree
-is exactly the list above minus the parts it does not need (no `audit.ts`, no `emails.ts`) plus the
-`index.ts` every module carries now.
+is exactly the list above minus the parts it does not need (no `audit.ts`, no `emails.ts`).
 
 A new `package.json` dependency this module alone needs is this module's, the moment nothing else
 imports it — no registry entry, just the vetting rules and a `## Libraries` section on the

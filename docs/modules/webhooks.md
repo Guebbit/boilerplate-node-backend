@@ -30,15 +30,17 @@ flowchart LR
 
 Real uses, one mechanism:
 
-- **A Slack channel that pings on every paid order.** Paste Slack's incoming-webhook URL into a
-  subscription; `payment.succeeded` turns into a message in the channel, with no integration code
-  to host.
+- **A Slack channel that pings on every paid order** — through a thin translator in front of
+  Slack's incoming-webhook URL. A delivery's body is the bare event payload (`{orderId}` for
+  `payment.succeeded`); Slack requires a `text`/`blocks` body, so pointing a subscription straight
+  at Slack's URL gets every delivery rejected until the subscription auto-disables.
 - **A partner's fulfilment system that ships on order.** They subscribe to `order.created`; each
-  delivery carries the order, and their warehouse starts packing without waiting on a nightly
-  export.
-- **An internal ledger that reconciles in near-real-time.** `payment.failed` and `order.cancelled`
-  reach a small endpoint of your own that reverses the entry, rather than a batch job noticing hours
-  later.
+  delivery names the order (`{orderId}`), and their warehouse looks it up and starts packing
+  without waiting on a nightly export.
+- **A reconciliation endpoint that reverses failed or cancelled orders in near-real-time.**
+  `payment.failed` and `order.cancelled` reach a small endpoint of your own — a publicly reachable
+  HTTPS one, whatever it does internally, since [the SSRF guard](../theory/defences/ssrf.md)
+  refuses a private address — rather than a batch job noticing hours later.
 
 The catch — and the reason [SSRF](../theory/defences/ssrf.md) is a live concern here — is that the
 destination URL is chosen by whoever creates the subscription. Delivering to a URL a caller

@@ -62,8 +62,11 @@ module publishes its own field alongside it purely so a staff list has something
 
 **Authentication is not here.** Signup, login, password reset and the token lifecycle all live in
 [`account`](./account.md), which is a _second service over this same collection_. That split is why
-this module's barrel is the widest in the repo: it publishes the model and the repository, not just
-the service, because a sibling genuinely needs to write the record.
+this module's barrel is the widest in the repo: alongside `userService`, it publishes `TokenType`,
+`zodUserSchema`, `hashToken` and `isLiveRefreshSession` straight off the model — `account` needs
+those to authenticate and mint tokens for the same document. `userRepository` and the model's
+runtime value stay inside even so: every read or write, `account`'s included, goes through
+`userService`, never the collection directly.
 
 ::: tip Why two modules and not one
 `/users` and `/account` are different mounts, and a manifest carries one `basePath`. Merging them

@@ -71,7 +71,7 @@ describe('rate limit defaults', () => {
 /*
  * The behavioural property — a SUCCESSFUL request spending the budget — sends a real request
  * through `express-rate-limit`'s middleware, which `no-restricted-imports` treats as an
- * integration concern: see `tests/integration/submission-rate-limit.test.ts`.
+ * integration concern: see `src/modules/feedback/tests/integration/submission-rate-limit.test.ts`.
  */
 
 describe('isMetricsScraper', () => {

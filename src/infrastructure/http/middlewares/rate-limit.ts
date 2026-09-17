@@ -1,16 +1,14 @@
 /**
  * @module
- * Rate limiting's shared machinery, plus the three budgets no one module owns: the global burst
- * brake across the whole surface (`rateLimiter`), the api-key budget (`apiKeyLimiter`, credential-
- * keyed rather than address-keyed), and the image-upload budget (`uploadLimiter`, shared by
- * `account`, `products` and `users`). Every OTHER budget is data on the owning module's manifest
- * (`AppModule.rateLimits`), built into middleware by {@link buildRateLimiter} — the same factory
- * this file's own three budgets go through, exported here for every module's `rate-limits.ts` to
- * import.
+ * Rate limiting's shared machinery, plus the three budgets no module owns.
  *
- * Every limiter shares one Redis-or-memory store (see `rate-limit-store.ts`), fails open on a
- * store error, and answers through the shared error envelope rather than express-rate-limit's own
- * plain-text body.
+ * Owns:    the global burst brake (`rateLimiter`), the api-key budget (`apiKeyLimiter`,
+ *          credential-keyed), and the image-upload budget (`uploadLimiter`, shared by `account`,
+ *          `products` and `users`).
+ * Shares:  {@link buildRateLimiter} — every module's own `rate-limits.ts` budget goes through the
+ *          same factory as this file's three.
+ * Backing: one Redis-or-memory store (`rate-limit-store.ts`), fails open on a store error, answers
+ *          through the shared error envelope, never express-rate-limit's own plain-text body.
  *
  * See: docs/tools/security.md#the-rate-limit-budgets
  */
@@ -19,6 +17,7 @@ import { createHash } from 'node:crypto';
 import { isIPv4 } from 'node:net';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
+import type { RateLimitInfo } from 'express-rate-limit';
 import { constantTimeEqual } from '@infrastructure/security/constant-time';
 import { rejectResponse } from '@infrastructure/http/response';
 import { logger } from '@infrastructure/adapters/logger';
@@ -129,29 +128,70 @@ export const buildRateLimiter = (budget: RateLimitBudget): RequestHandler =>
     });
 
 /**
+ * `keyedBy` label for a budget bucketed on the caller's single address — shared so every such
+ * budget's row in the generated table (`docs/tools/security.md#the-rate-limit-budgets`) reads as
+ * the same sentence.
+ */
+export const KEYED_BY_ADDRESS = 'address';
+
+/** `keyedBy` label for a budget bucketed on the caller's address BLOCK — see {@link addressBlockOf}. */
+export const KEYED_BY_ADDRESS_BLOCK = 'address block (IPv4 /24, IPv6 /64)';
+
+/** `keyedBy` label for a budget bucketed on a submitted email — see {@link identityOf}. */
+export const KEYED_BY_SUBMITTED_EMAIL = 'the submitted email, normalised and hashed';
+
+/** `keyedBy` label for a budget bucketed on the caller's authenticated account. */
+export const KEYED_BY_AUTHENTICATED_ACCOUNT = 'the authenticated account';
+
+/** `keyedBy` label for a budget bucketed on a hashed challenge string, falling back to the address block. */
+export const KEYED_BY_CHALLENGE =
+    'the challenge string, hashed (falls back to address block when absent)';
+
+/**
+ * One string field off a JSON request body — undefined when the body isn't an object, the field
+ * is absent, or it isn't a string. The shape every keying function that reads a submitted value
+ * (rather than the caller's address) goes through, so that shape check exists exactly once.
+ *
+ * @param field - the body property to read
+ */
+export const readBodyField = (request: Request, field: string): string | undefined => {
+    const body: unknown = request.body;
+    const value =
+        typeof body === 'object' && body !== null
+            ? (body as Record<string, unknown>)[field]
+            : undefined;
+    return typeof value === 'string' ? value : undefined;
+};
+
+/**
  * Who a credential attempt names, normalised the way the login lookup normalises it — otherwise
  * `Ada@Example.com` and `ada@example.com` are two budgets for one account.
  *
  * Hashed because the key reaches Redis, and a `KEYS *` or RDB dump should not hand over the user
  * list. An attempt naming nobody is bucketed as `anonymous`, which still costs something.
  *
- * Shared machinery: reused by `account`'s credential/signup/reset budgets and `feedback`'s
- * contact-identity budget — every budget keyed on a submitted email rather than the caller's
- * address.
+ * Shared machinery: reused by every module's own budget keyed on a submitted email rather than
+ * the caller's address.
  */
 export const identityOf = (request: Request): string => {
-    const body: unknown = request.body;
-    const named =
-        typeof body === 'object' && body !== null
-            ? ((body as Record<string, unknown>).email ??
-              (body as Record<string, unknown>).username)
-            : undefined;
-    const identity = typeof named === 'string' ? named.trim().toLowerCase() : '';
+    const named = readBodyField(request, 'email') ?? readBodyField(request, 'username');
+    const identity = named?.trim().toLowerCase() ?? '';
 
     return createHash('sha256')
         .update(identity || 'anonymous')
         .digest('hex');
 };
+
+/**
+ * A budget's own {@link RateLimitInfo} off `request`, under the name its `requestPropertyName`
+ * chose — `undefined` when the limiter never ran, or a store error let the request through
+ * without recording anything. Every gate built on this must fail open on that `undefined`: it
+ * must never be the reason a request fails when the budget it reads already failed open.
+ *
+ * @param property - the budget's own `requestPropertyName`
+ */
+export const rateLimitInfoOf = (request: Request, property: string): RateLimitInfo | undefined =>
+    (request as Request & Record<string, RateLimitInfo | undefined>)[property];
 
 /**
  * The caller's address, WIDENED to the block it belongs to: an IPv4 /24, an IPv6 /64. A
@@ -162,7 +202,8 @@ export const identityOf = (request: Request): string => {
  * /56); IPv4 has no library equivalent to reuse, so the /24 mask is hand-rolled.
  *
  * Shared machinery, same reasoning as {@link identityOf}: reused by every module's own
- * address-block budget, and by `account`'s challenge-less MFA fallback.
+ * address-block budget, and by any keying function that needs a fallback for a caller supplying
+ * no identifying value of its own.
  *
  * See: docs/tools/security.md#the-rate-limit-budgets
  */
@@ -179,7 +220,7 @@ const GLOBAL_RATE_LIMIT_BUDGET: RateLimitBudget = {
     environmentVariable: 'NODE_RATE_LIMIT_MAX',
     defaultMax: DEFAULT_RATE_LIMIT_MAX,
     windowMs: 'shared',
-    keyedBy: 'address',
+    keyedBy: KEYED_BY_ADDRESS,
     bounds:
         'Every request across the whole surface — a scanner sweeping for paths that do not exist ' +
         'is the traffic most worth braking, same as a browsing session.',
@@ -220,14 +261,14 @@ const API_KEY_RATE_LIMIT_BUDGET: RateLimitBudget = {
  */
 export const apiKeyLimiter: RequestHandler = buildRateLimiter(API_KEY_RATE_LIMIT_BUDGET);
 
-/** This file's own budget: `uploadLimiter`, shared by `account`, `products` and `users`. */
+/** This file's own budget: `uploadLimiter`, shared by every module whose routes accept an image upload. */
 const UPLOAD_RATE_LIMIT_BUDGET: RateLimitBudget = {
     name: 'Image uploads',
     namespace: 'uploads',
     environmentVariable: 'NODE_UPLOAD_RATE_LIMIT_MAX',
     defaultMax: DEFAULT_UPLOAD_RATE_LIMIT_MAX,
     windowMs: 'shared',
-    keyedBy: 'address',
+    keyedBy: KEYED_BY_ADDRESS,
     bounds:
         'Routes that accept an image upload. Image processing (the `worker.image.digest` ' +
         'pipeline) is CPU-bound, decoding and re-encoding real work whether it runs inline or in ' +
@@ -237,9 +278,8 @@ const UPLOAD_RATE_LIMIT_BUDGET: RateLimitBudget = {
 };
 
 /**
- * The budget for routes that accept an image upload — `account`, `products` and `users` all mount
- * it, which is why it lives here rather than on any one of their manifests. See
- * {@link UPLOAD_RATE_LIMIT_BUDGET}.
+ * The budget for routes that accept an image upload — mounted by more than one module, which is
+ * why it lives here rather than on any one of their manifests. See {@link UPLOAD_RATE_LIMIT_BUDGET}.
  */
 export const uploadLimiter: RequestHandler = buildRateLimiter(UPLOAD_RATE_LIMIT_BUDGET);
 

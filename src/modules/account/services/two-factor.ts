@@ -204,8 +204,11 @@ const MFA_CHALLENGE_TTL_MS = 300_000;
  * cover an SMTP queue, a spam filter and a person switching apps — five minutes is a window a
  * legitimate user loses races against, and a challenge that expires mid-login reads as the app
  * being broken.
+ *
+ * Exported for `../rate-limits.ts`, which windows the two MFA challenge budgets to this same
+ * lifetime — a window can never end before the challenge it bounds.
  */
-const MFA_CHALLENGE_DELIVERED_TTL_MS = 600_000;
+export const MFA_CHALLENGE_DELIVERED_TTL_MS = 600_000;
 
 /**
  * The `{ mfaRequired, challenge, ... }` body `POST /account/login` answers with, for an account

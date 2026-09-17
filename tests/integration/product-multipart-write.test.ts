@@ -25,7 +25,9 @@ import { localeService } from '@modules/locales/services';
  * persisted `price: '101'` would answer the same and mean something quite different.
  */
 
-const UPLOAD_DIRECTORY = path.resolve(process.env.NODE_PUBLIC_PATH ?? 'public', 'images');
+// `tests/support/setup-file-sandbox.ts` assigns this before any test file's own top-level code
+// runs, so it is never actually unset here — the `!` narrows what the compiler cannot.
+const UPLOAD_DIRECTORY = path.resolve(process.env.NODE_PUBLIC_PATH!, 'images');
 
 /**
  * A genuinely decodable PNG, not merely a magic-byte header — see the matching fixture in

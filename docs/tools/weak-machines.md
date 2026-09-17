@@ -97,8 +97,9 @@ Each has a floor because a vacuous suite is worse than a slow one: `numRuns: 0` 
 both pass by construction. Nonsense reads as unset rather than as zero, so a typo gets the
 documented default instead of silent green.
 
-`TEST_RACE_SIZE` only goes **down** usefully — above 12 the auth limiters start answering 429,
-which `tests/support/race.ts` rejects outright rather than tolerating.
+`TEST_RACE_SIZE` only goes **down** usefully. `tests/support/setup.ts` raises the auth limiters to
+1000 under test, so there is no ceiling to hit on the way up — only more simultaneous requests and
+DB writes for a machine that may not have the memory to spare.
 
 ## What does not fit, at any setting
 

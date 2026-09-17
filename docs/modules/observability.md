@@ -38,10 +38,11 @@ This module owns **URLs, not data**. Everything it serves beyond the audit read 
 own numbers off infrastructure and owns no collection at all. That is also why it has no `model.ts`
 and no `repository.ts`.
 
-::: tip There is deliberately no `index.ts`
-A barrel is a promise to sibling modules, and this one has nothing to promise. With no barrel the
-boundary lint makes that structural: a sibling **cannot** import this module, rather than being
-asked politely not to.
+::: tip The barrel has nothing to promise
+It carries the convenience barrel every module does — `export {}`, empty, since this module owns
+no collection and no data a sibling could want. Every route it serves is either an audit read
+through `audit-logs` or a number read straight off `infrastructure/observability`; nothing reads
+this module back.
 :::
 
 Every route here is authenticated, and the three styles are chosen per route rather than shared:

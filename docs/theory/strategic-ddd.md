@@ -195,9 +195,10 @@ What it never publishes, no matter how convenient:
   read moves to a service function instead. `modules/inventory/index.ts` states the case by
   refusing outright:
 
-    > The repositories, both models and every counter primitive are deliberately absent. This module
-    > exists so that nothing outside it can move a stock number, and publishing a repository would
-    > hand back the ability it was created to take away.
+    > The repositories, both models and every counter primitive are deliberately absent:
+    > publishing one would hand back the ability this module exists to take away. A sibling asks
+    > for a transition by name and gets a boolean — what it costs in counters is not their
+    > business.
 
 - **The model's runtime** — the mongoose schema, its `toJSON` transform, the model object itself.
   `export type * from './model'` still publishes every type the model declares; only the values
@@ -219,8 +220,9 @@ A repository export deserves more thought than a type export even so, and the as
 worth restating in code, not just here: `OrderDocument` leaving the barrel promises a shape will not
 move; a repository leaving it is a bypass of everything the owning service enforces.
 
-The narrowest surface in the repo is `delivery`: two pure functions. The widest is `users`, and it
-is wide because it is the `users` end of the one shared-kernel relationship in the repo — `account`
+The narrowest surface in the repo is `observability`'s — empty, since it owns no collection and no
+data a sibling could want (see that module's own page). The widest is `users`, and it is wide
+because it is the `users` end of the one shared-kernel relationship in the repo — `account`
 authenticates the record `users` administers.
 
 ---

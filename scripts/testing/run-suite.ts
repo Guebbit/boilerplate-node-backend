@@ -13,9 +13,9 @@
  * every N files does, and `--shard` is jest's own way to say which N.
  *
  * ── WHY IN BAND INSIDE A SHARD ───────────────────────────────────────────────────────────────────
- * The layers listed as `serialized` below kept `--runInBand` for a reason that still holds, and a
- * measured one: `--workerIdleMemoryLimit` set below a worker's steady-state baseline restarts that
- * worker after every single file, which is slower than the problem it solves.
+ * The layers marked `serialized` below run `--runInBand` inside each shard.
+ * `--workerIdleMemoryLimit` set below a worker's steady-state baseline restarts it after every
+ * single file — measured, and slower than the retention problem it exists to solve.
  *
  * See: docs/tools/weak-machines.md
  */
@@ -39,23 +39,28 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..');
 /**
  * One test layer: the jest path patterns it matches, and whether its files may run side by side.
  *
- * `serialized` carries the old `--runInBand`. It is a property of the layer, not of the machine:
- * these suites share one in-memory mongod and were written against one-file-at-a-time execution.
+ * `serialized` is a property of the layer, not the machine: these suites share one in-memory
+ * mongod, so their files cannot run side by side regardless of how much memory is free.
  */
-interface Suite {
-    /** Path patterns handed to jest, exactly as the npm script used to spell them. */
-    readonly patterns: readonly string[];
-    /** One file at a time inside a shard, preserving the layer's original `--runInBand`. */
-    readonly serialized: boolean;
-    /** Measured peak cost of one parallel worker, MB. Unused when `serialized`. */
-    readonly workerPeakMb: number;
-}
+type Suite =
+    | {
+          /** Path patterns handed to jest, in the same form each npm script passes them. */
+          readonly patterns: readonly string[];
+          /** One file at a time inside a shard: these suites share one in-memory mongod. */
+          readonly serialized: true;
+      }
+    | {
+          readonly patterns: readonly string[];
+          readonly serialized: false;
+          /** Measured peak cost of one parallel worker, MB — meaningless once `serialized`, so
+           *  the type only carries it for a layer that actually runs workers. */
+          readonly workerPeakMb: number;
+      };
 
 /**
  * The layers this runner knows, keyed by the name its npm script passes.
  *
- * `unit` and `cross-cutting` were already parallel and stay parallel — nothing here changes what
- * they were doing, only where the worker count comes from.
+ * `unit` and `cross-cutting` run in parallel; only their worker count comes from this file now.
  */
 const SUITES: Record<string, Suite> = {
     unit: {
@@ -70,22 +75,22 @@ const SUITES: Record<string, Suite> = {
     },
     integration: {
         patterns: ['tests/integration', 'src/modules/.*/tests/integration'],
-        serialized: true,
-        workerPeakMb: 1400
+        serialized: true
     },
     contract: {
         patterns: ['tests/contract', 'src/modules/.*/tests/contract'],
-        serialized: true,
-        workerPeakMb: 1400
+        serialized: true
     },
     fuzz: {
         patterns: ['tests/fuzz', 'src/modules/.*/tests/fuzz'],
-        serialized: true,
-        workerPeakMb: 1400
+        serialized: true
     }
 };
 
+/** The layer name from argv, and everything after it, passed through to jest untouched. */
 const [suiteName, ...passthrough] = process.argv.slice(2);
+
+/** This run's {@link Suite}, or undefined for a missing or unknown name. */
 const suite = suiteName ? SUITES[suiteName] : undefined;
 
 if (!suite) {
@@ -105,6 +110,12 @@ if (!suite) {
  * @returns the file count, or 0 when jest could not answer
  */
 const countTestFiles = (): number => {
+    /**
+     * node:child_process `spawnSync`: run jest to completion and capture its stdout.
+     * `--listTests` prints one file path per line instead of running anything;
+     * `encoding: 'utf8'` decodes `stdout` to a string instead of a `Buffer`.
+     * https://nodejs.org/api/child_process.html#child_processspawnsynccommand-args-options
+     */
     const listed = spawnSync('npx', ['jest', ...suite.patterns, '--listTests'], {
         cwd: REPO_ROOT,
         encoding: 'utf8'
@@ -117,23 +128,35 @@ const countTestFiles = (): number => {
     return listed.stdout.split('\n').filter((line) => line.trim().endsWith('.test.ts')).length;
 };
 
+/** This layer's spending limit, from `JEST_PROCESS_BUDGET_MB` or the machine's free memory. */
 const budgetMb = processBudgetMb(environmentKnob('JEST_PROCESS_BUDGET_MB'));
+
+/** The budget above, capped by the guard rail against an idle machine over-promising a shard. */
 const targetMb = shardTargetMb(budgetMb);
+
+/** `--max-old-space-size` for one shard, pinned to the same number as the shard target. */
 const heapMb = heapCapMb(targetMb);
+
+/** How many files one shard may hold before its retention reaches {@link targetMb}. */
 const perShard = filesPerShard(targetMb);
+
+/** How many files this layer's patterns actually match, right now. */
 const fileCount = countTestFiles();
+
 /**
  * How many sequential jest processes this layer needs.
  *
- * Only a SERIALIZED layer is sharded. Per-file retention accumulates in whichever process executes
- * the files, and for a parallel layer that is a worker — which `--workerIdleMemoryLimit` already
- * recycles once it grows. Sharding those as well would pay a fresh `mongod` boot per shard to solve
- * a problem the recycling has already solved.
+ * By default only a SERIALIZED layer is sharded. Per-file retention accumulates in whichever
+ * process executes the files, and for a parallel layer that is a worker — which
+ * `--workerIdleMemoryLimit` already recycles once it grows, so sharding it too would only pay a
+ * fresh `mongod` boot per shard for a problem the recycling already solves. `JEST_SHARDS` still
+ * overrides this for a parallel layer, for whoever needs that knob anyway.
  */
 const shards = suite.serialized
     ? (environmentKnob('JEST_SHARDS') ?? shardCount(fileCount, perShard))
     : (environmentKnob('JEST_SHARDS') ?? 1);
 
+/** How many parallel workers a non-serialized layer gets; always 1 for a serialized one. */
 const workers = suite.serialized
     ? 1
     : workerCount({
@@ -146,7 +169,9 @@ const workers = suite.serialized
  * The flags that bound ONE shard.
  *
  * `--workerIdleMemoryLimit` is deliberately absent for a serialized layer: with one worker jest
- * runs in band, where there is no worker to recycle and the flag is silently inert.
+ * runs in band, where there is no worker to recycle and the flag is silently inert. The `1024`
+ * floor keeps a small `workerPeakMb` from setting a limit so low jest recycles a worker after
+ * nearly every file — the failure mode the module header's "WHY IN BAND" section describes.
  */
 const boundingFlags = suite.serialized
     ? ['--runInBand']
@@ -165,6 +190,12 @@ const runShard = (shard: number): Promise<number> =>
     new Promise((resolve) => {
         const shardFlags = shards > 1 ? [`--shard=${shard}/${shards}`] : [];
 
+        /**
+         * node:child_process `spawn`: run jest asynchronously, without capturing its output.
+         * `stdio: 'inherit'` connects the child's stdin/stdout/stderr straight to this process's
+         * own, so jest's own progress output reaches the terminal live.
+         * https://nodejs.org/api/child_process.html#child_processspawncommand-args-options
+         */
         const child = spawn(
             'npx',
             ['jest', ...suite.patterns, ...shardFlags, ...boundingFlags, ...passthrough],
@@ -184,6 +215,7 @@ const runShard = (shard: number): Promise<number> =>
         child.on('close', (code) => resolve(code ?? 1));
     });
 
+/** Runs every shard for this layer in turn, and fails the whole run on the first bad exit. */
 const main = async () => {
     console.log(
         `[test] ${suiteName}: ${fileCount} files in ${shards} shard(s) — ` +

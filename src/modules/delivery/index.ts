@@ -9,9 +9,9 @@
  * See: docs/modules/delivery.md
  */
 
-export * from './domain';
-
 export * from './service';
+
+export * from './domain';
 
 export * from './emails';
 

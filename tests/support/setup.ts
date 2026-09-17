@@ -63,7 +63,7 @@ process.env.NODE_AUTH_RATE_LIMIT_BLOCK_MAX ??= '1000';
  * `submissionLimiter` (`POST /feedback/contact`) needs the same treatment, for a sharper reason
  * than the credential budgets above: it spends its budget on a SUCCESSFUL request, so — unlike
  * `credentialLimiters`, which only a failing suite run trips — every green contract and fuzz run
- * that posts a contact request more than `DEFAULT_SUBMISSION_RATE_LIMIT_MAX` (5) times from one
+ * that posts a contact request more than `SUBMISSION_ADDRESS_BUDGET`'s default (5) times from one
  * address would trip it too. Its two Rung-1 siblings (identity, address block — `contactLimiters`)
  * spend on success the same way, so they need the same raise.
  */
@@ -95,7 +95,7 @@ process.env.NODE_UPLOAD_RATE_LIMIT_MAX ??= '1000';
 
 /**
  * `webhookLimiter` needs the same treatment: the payments contract suite delivers well past
- * `DEFAULT_PAYMENT_WEBHOOK_RATE_LIMIT_MAX` (60) from one address inside a window.
+ * `WEBHOOK_BUDGET`'s default (60) from one address inside a window.
  */
 process.env.NODE_PAYMENT_WEBHOOK_RATE_LIMIT_MAX ??= '1000';
 
@@ -119,7 +119,7 @@ process.env.NODE_RATE_LIMIT_WINDOW_MS ??= '600000';
 
 /**
  * `mfaSendLimiter` needs the same treatment as the budgets above, on a FIXED ten-minute window
- * of its own (`rate-limit.ts` does not read `NODE_RATE_LIMIT_WINDOW_MS` for it) — a suite that
+ * of its own (`account/rate-limits.ts` does not read `NODE_RATE_LIMIT_WINDOW_MS` for it) — a suite that
  * resends more than a handful of times against one live challenge would otherwise trip a 429
  * unrelated to what it is testing.
  *
@@ -141,7 +141,7 @@ process.env.NODE_API_KEY_RATE_LIMIT_MAX ??= '1000';
 /**
  * `passwordCheckLimiter` needs the same treatment: `POST /account/password/check` fires on every
  * debounced keystroke pause in a real client, so a suite exercising the live meter more than
- * `DEFAULT_PASSWORD_CHECK_RATE_LIMIT_MAX` (20) times from one address would trip a 429 that has
+ * `PASSWORD_CHECK_BUDGET`'s default (20) times from one address would trip a 429 that has
  * nothing to do with what it is testing.
  */
 process.env.NODE_PASSWORD_CHECK_RATE_LIMIT_MAX ??= '1000';

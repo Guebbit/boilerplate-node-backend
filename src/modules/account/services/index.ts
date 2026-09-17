@@ -35,9 +35,9 @@ import * as addresses from './addresses';
 
 /*
  * Published by name as well as on the namespace, for the callers that import a single function
- * rather than the object — controllers, and the suites that pin one flow. The criterion is
- * literal: a name nothing imports this way stays off the list, because a second route to a
- * function is a second thing to keep in step with the namespaces below.
+ * rather than the object — controllers, and the suites that pin one flow. Unused-by-name is
+ * allowed on purpose, same as the module barrel itself (CLAUDE.md's "Module barrels"): a caller
+ * reaching for a name not listed here copies the logic instead of adding the export it needed.
  */
 export { PASSWORD_RESET_TOKEN_TYPE } from './authentication';
 export { passwordChangeWithCurrent, updateProfile } from './profile';

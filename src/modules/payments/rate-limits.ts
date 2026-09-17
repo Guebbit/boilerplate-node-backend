@@ -12,9 +12,13 @@
  */
 
 import type { Request, RequestHandler } from 'express';
-import type { RateLimitInfo } from 'express-rate-limit';
 import type { RateLimitBudget } from '@types';
-import { buildRateLimiter } from '@infrastructure/http/middlewares/rate-limit';
+import {
+    buildRateLimiter,
+    rateLimitInfoOf,
+    KEYED_BY_ADDRESS,
+    KEYED_BY_AUTHENTICATED_ACCOUNT
+} from '@infrastructure/http/middlewares/rate-limit';
 import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
 
 /**
@@ -32,7 +36,7 @@ const WEBHOOK_BUDGET: RateLimitBudget = {
     environmentVariable: 'NODE_PAYMENT_WEBHOOK_RATE_LIMIT_MAX',
     defaultMax: 60,
     windowMs: 'shared',
-    keyedBy: 'address',
+    keyedBy: KEYED_BY_ADDRESS,
     bounds: 'Deliveries to `POST /payments/webhook`, spent by success — the traffic being bounded.',
     audited: true
 };
@@ -66,7 +70,7 @@ const CONFIRM_ATTEMPT_BUDGET: RateLimitBudget = {
     environmentVariable: 'NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX',
     defaultMax: 5,
     windowMs: PAYMENT_VELOCITY_WINDOW_MS,
-    keyedBy: 'the authenticated account',
+    keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT,
     bounds:
         'Attempts against `POST /payments/:id/confirm`, counted regardless of outcome — a ' +
         'checkout that never fails a password check can still burn through many card numbers on ' +
@@ -101,7 +105,7 @@ const CONFIRM_DECLINE_BUDGET: RateLimitBudget = {
     environmentVariable: 'NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX',
     defaultMax: 3,
     windowMs: PAYMENT_VELOCITY_WINDOW_MS,
-    keyedBy: 'the authenticated account',
+    keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT,
     bounds:
         "A genuine DECLINE against `POST /payments/:id/confirm`, counted apart from the route's " +
         'other 409 (a race, not a decline).',
@@ -127,11 +131,7 @@ export const paymentConfirmDeclineLimiter: RequestHandler =
  * `limit - 1`, not `limit`, to cancel that provisional count out.
  */
 const hasAPriorDecline = (request: Request): boolean => {
-    // Same cast account's own identity gate uses: the property name is chosen at runtime
-    // (`requestPropertyName`), which the `Request` augmentation cannot describe.
-    const info = (request as Request & Record<string, RateLimitInfo | undefined>)[
-        PAYMENT_DECLINE_RATE_LIMIT_PROPERTY
-    ];
+    const info = rateLimitInfoOf(request, PAYMENT_DECLINE_RATE_LIMIT_PROPERTY);
     if (!info) return false;
     return info.remaining < info.limit - 1;
 };

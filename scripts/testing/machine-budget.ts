@@ -2,12 +2,8 @@
  * @module
  * How hard the test runners may push THIS machine — the one place that decides it.
  *
- * Every sizing decision here was previously computed from `os.totalmem()` and a core count, in two
- * copies (`jest.config.js` and `scripts/mutation/run-tests.ts`). Total memory is the wrong input:
- * a 15 GB box with 6.6 GB actually free was sized for 15 GB, claimed eleven jest workers at ~905 MB
- * each, and the OOM killer arrived while every test still reported passing.
- *
- * Reads:  `MemAvailable`, then the caller's declared per-unit cost.
+ * Reads:  `MemAvailable`, then the caller's declared per-unit cost — never `os.totalmem()`, which
+ *         sizes for RAM this machine may not actually have free right now.
  * Owns:   worker counts, per-process heap caps, and shard counts.
  * Beaten: by an explicit environment variable, always — a number the operator sets is a fact about
  *         their machine that no heuristic here should second-guess.
@@ -33,7 +29,8 @@ import { parseEnv } from 'node:util';
 export const availableMemoryMb = (): number => {
     const totalMb = Math.floor(os.totalmem() / 1024 / 1024);
 
-    // Checked rather than caught per-platform: a missing /proc is ordinary on macOS and Windows.
+    // Caught, not checked: /proc doesn't exist on macOS or Windows, and there is no cheaper way to
+    // find that out than trying to read it.
     const fromProc = (): number | undefined => {
         try {
             const line = readFileSync('/proc/meminfo', 'utf8')
@@ -67,6 +64,10 @@ const readEnvironmentFile = (): NodeJS.Dict<string> => {
     return existsSync(environmentFile) ? parseEnv(readFileSync(environmentFile, 'utf8')) : {};
 };
 
+/** `.env`'s contents, read once — every knob below consults it, so re-reading per lookup would
+ *  make this module's cost grow with the number of knobs rather than stay flat. */
+const environmentFileValues = readEnvironmentFile();
+
 /**
  * One sizing knob, from the real environment first and then `.env`.
  *
@@ -77,7 +78,7 @@ const readEnvironmentFile = (): NodeJS.Dict<string> => {
  * @returns its positive-integer value, or undefined when unset, empty or nonsense
  */
 export const environmentKnob = (name: string): number | undefined =>
-    positiveInteger(process.env[name] ?? readEnvironmentFile()[name]);
+    positiveInteger(process.env[name] ?? environmentFileValues[name]);
 
 /** A positive integer from the environment, or undefined when unset, empty or nonsense. */
 export const positiveInteger = (value: string | undefined): number | undefined => {
@@ -144,8 +145,8 @@ export const MIN_PROCESS_BUDGET_MB = PROCESS_BASELINE_MB + PER_FILE_RETENTION_MB
  * `--shard` is not passed and the run is what it always was. Sharding only begins where the
  * machine cannot hold the layer, which is the only place it earns its wall-clock cost.
  *
- * A memory-constrained machine does NOT rely on this ceiling; it sets `JEST_PROCESS_BUDGET_MB`
- * below it. 2600 is the figure measured green here — see docs/tools/weak-machines.md.
+ * A memory-constrained machine does NOT rely on this ceiling — it sets `JEST_PROCESS_BUDGET_MB`
+ * below it explicitly. See docs/tools/weak-machines.md for measured figures.
  */
 export const MAX_SHARD_PEAK_MB = 8192;
 
