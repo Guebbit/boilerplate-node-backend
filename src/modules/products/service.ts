@@ -34,7 +34,7 @@ import {
 } from '@infrastructure/http/response';
 import type { FacetCount } from '@types';
 import { imageStore } from '@infrastructure/adapters/image-store';
-import { enqueueImageDigest } from '@infrastructure/adapters/image.worker';
+import { enqueueIfImagePending } from '@infrastructure/adapters/image.worker';
 import { emitDomainEvent } from '@kernel/events';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -239,22 +239,11 @@ export const getByIdViewed = (
 /**
  * Enqueue the digest job for a just-persisted product, when its write carried a pending upload.
  * `pendingImageKey` here means the queue looked ready at upload time (the no-broker path resolves
- * inline before saving, see `readUploadedImage`) — but a publish can still lose that race to an
- * outage, in which case `enqueueImageDigest` degrades to digesting right here. Awaited, unlike a
- * plain queue publish: that inline run is what actually moves the file onto disk, and a caller
- * that returned first would answer with a document nothing has finished writing yet.
+ * inline before saving, see `readUploadedImage`) — see {@link enqueueIfImagePending} for what
+ * happens with it.
  */
 const enqueueIfPending = (product: ProductDocument): Promise<ProductDocument> =>
-    product.pendingImageKey
-        ? enqueueImageDigest(
-              {
-                  collection: 'products',
-                  documentId: String(product._id),
-                  key: product.pendingImageKey
-              },
-              productRepository.writebackImage
-          ).then(() => product)
-        : Promise.resolve(product);
+    enqueueIfImagePending(product, 'products', productRepository.writebackImage);
 
 /**
  * Create a new product document in the database.

@@ -217,3 +217,26 @@ export const enqueueImageDigest = (
         return runInline();
     });
 };
+
+/**
+ * A module's own `enqueueIfPending`, factored out since `users` and `products` were identical
+ * apart from the collection name and writeback. Checks the just-persisted document for a
+ * `pendingImageKey`, dispatches through {@link enqueueImageDigest} when there is one, and always
+ * hands back the same document — awaited, so a caller that returned first can't answer with a
+ * record the inline fallback hasn't finished writing yet.
+ *
+ * @param document - the just-persisted document, checked for `pendingImageKey`
+ * @param collection - the job's `collection` field, matched by {@link registerImageWritebackResolver}
+ * @param writeback - the calling module's own writeback
+ */
+export const enqueueIfImagePending = <T extends { _id: unknown; pendingImageKey?: string }>(
+    document: T,
+    collection: string,
+    writeback: ImageWriteback
+): Promise<T> =>
+    document.pendingImageKey
+        ? enqueueImageDigest(
+              { collection, documentId: String(document._id), key: document.pendingImageKey },
+              writeback
+          ).then(() => document)
+        : Promise.resolve(document);

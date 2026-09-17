@@ -22,7 +22,7 @@ import { zodUserSchema, TokenType, hashToken, toUser } from './model';
 import type { UserDocument } from './model';
 import type { CreateUserRequest, SearchUsersRequest, UpdateUserByIdRequest } from '@types';
 import { userRepository } from './repository';
-import { enqueueImageDigest } from '@infrastructure/adapters/image.worker';
+import { enqueueIfImagePending } from '@infrastructure/adapters/image.worker';
 import { emitDomainEvent } from '@kernel/events';
 import type { CallerContext } from '@infrastructure/http/request';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -75,19 +75,11 @@ export const getById = (id?: string): Promise<UserDocument | undefined> => {
 
 /**
  * Enqueue the digest job for a just-persisted user, when its write carried a pending upload.
- * `pendingImageKey` is only ever set while the queue looked ready at upload time (see
- * `quarantineUploadedImages`) — but a publish can still lose that race to an outage, in which case
- * `enqueueImageDigest` degrades to digesting right here. Awaited, unlike a plain queue publish:
- * that inline run is what actually moves the file onto disk, and a caller that returned first
- * would answer with a document nothing has finished writing yet.
+ * `pendingImageKey` is only ever set while the queue looked ready at upload time — see
+ * `quarantineUploadedImages`, and {@link enqueueIfImagePending} for what happens with it.
  */
 export const enqueueIfPending = (user: UserDocument): Promise<UserDocument> =>
-    user.pendingImageKey
-        ? enqueueImageDigest(
-              { collection: 'users', documentId: String(user._id), key: user.pendingImageKey },
-              userRepository.writebackImage
-          ).then(() => user)
-        : Promise.resolve(user);
+    enqueueIfImagePending(user, 'users', userRepository.writebackImage);
 
 /**
  * Create a new user document, with no email confirmation step — the self-service path is
