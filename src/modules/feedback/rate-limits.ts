@@ -14,7 +14,10 @@ import type { RateLimitBudget } from '@types';
 import {
     buildRateLimiter,
     identityOf,
-    addressBlockOf
+    addressBlockOf,
+    KEYED_BY_ADDRESS,
+    KEYED_BY_ADDRESS_BLOCK,
+    KEYED_BY_SUBMITTED_EMAIL
 } from '@infrastructure/http/middlewares/rate-limit';
 
 /**
@@ -32,7 +35,7 @@ const SUBMISSION_ADDRESS_BUDGET: RateLimitBudget = {
     environmentVariable: 'NODE_SUBMISSION_RATE_LIMIT_MAX',
     defaultMax: 5,
     windowMs: 'shared',
-    keyedBy: 'address',
+    keyedBy: KEYED_BY_ADDRESS,
     bounds:
         'Contact-form submissions from ONE address, spent by SUCCESS — a well-formed post is the ' +
         'abuse being bounded, not a failed one.',
@@ -49,7 +52,7 @@ const SUBMISSION_IDENTITY_BUDGET: RateLimitBudget = {
     environmentVariable: 'NODE_SUBMISSION_RATE_LIMIT_EMAIL_MAX',
     defaultMax: 5,
     windowMs: 'shared',
-    keyedBy: 'the submitted email, normalised and hashed',
+    keyedBy: KEYED_BY_SUBMITTED_EMAIL,
     bounds: 'Contact-form submissions naming ONE sender email, spent by success.',
     audited: true,
     keyGenerator: identityOf
@@ -62,7 +65,7 @@ const SUBMISSION_BLOCK_BUDGET: RateLimitBudget = {
     environmentVariable: 'NODE_SUBMISSION_RATE_LIMIT_BLOCK_MAX',
     defaultMax: 20,
     windowMs: 'shared',
-    keyedBy: 'address block (IPv4 /24, IPv6 /64)',
+    keyedBy: KEYED_BY_ADDRESS_BLOCK,
     bounds: 'Contact-form submissions from ONE address block, spent by success.',
     audited: true,
     keyGenerator: addressBlockOf

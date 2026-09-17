@@ -13,14 +13,20 @@
 
 import { createHash } from 'node:crypto';
 import type { Request, RequestHandler } from 'express';
-import type { RateLimitInfo } from 'express-rate-limit';
 import type { RateLimitBudget } from '@types';
 import {
     buildRateLimiter,
     identityOf,
-    addressBlockOf
+    addressBlockOf,
+    readBodyField,
+    rateLimitInfoOf,
+    KEYED_BY_ADDRESS,
+    KEYED_BY_ADDRESS_BLOCK,
+    KEYED_BY_SUBMITTED_EMAIL,
+    KEYED_BY_CHALLENGE
 } from '@infrastructure/http/middlewares/rate-limit';
 import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
+import { MFA_CHALLENGE_DELIVERED_TTL_MS } from './services/two-factor';
 
 /**
  * Where express-rate-limit stores the identity limiter's counter on `request` — a distinct name
@@ -55,7 +61,7 @@ const CREDENTIAL_ADDRESS_BUDGET: RateLimitBudget = {
     environmentVariable: 'NODE_AUTH_RATE_LIMIT_ADDRESS_MAX',
     defaultMax: 30,
     windowMs: 'shared',
-    keyedBy: 'address',
+    keyedBy: KEYED_BY_ADDRESS,
     bounds: 'Failed attempts from ONE address — defeats spraying a user list.',
     audited: true,
     skipSuccessfulRequests: true
@@ -68,7 +74,7 @@ const CREDENTIAL_BLOCK_BUDGET: RateLimitBudget = {
     environmentVariable: 'NODE_AUTH_RATE_LIMIT_BLOCK_MAX',
     defaultMax: 100,
     windowMs: 'shared',
-    keyedBy: 'address block (IPv4 /24, IPv6 /64)',
+    keyedBy: KEYED_BY_ADDRESS_BLOCK,
     bounds:
         'Failed attempts from ONE address block — the largest and coarsest of the three, sized ' +
         'above the address budget because a block is shared by many honest callers (an office, a ' +
@@ -111,11 +117,7 @@ const CHALLENGE_AFTER_IDENTITY_BUDGET_SPENT = 0.5;
  * login fails when the budget it reads already failed open.
  */
 const identityBudgetMostlySpent = (request: Request): boolean => {
-    // The cast is the only way to read it: express-rate-limit stashes the info under a name chosen
-    // at RUNTIME (`requestPropertyName`), which its `Request` augmentation cannot describe.
-    const info = (request as Request & Record<string, RateLimitInfo | undefined>)[
-        IDENTITY_RATE_LIMIT_PROPERTY
-    ];
+    const info = rateLimitInfoOf(request, IDENTITY_RATE_LIMIT_PROPERTY);
     if (!info) return false;
     return info.remaining <= info.limit * (1 - CHALLENGE_AFTER_IDENTITY_BUDGET_SPENT);
 };
@@ -141,7 +143,7 @@ const PASSWORD_CHECK_BUDGET: RateLimitBudget = {
     environmentVariable: 'NODE_PASSWORD_CHECK_RATE_LIMIT_MAX',
     defaultMax: 20,
     windowMs: 'shared',
-    keyedBy: 'address',
+    keyedBy: KEYED_BY_ADDRESS,
     bounds:
         'A live meter fires on every debounced keystroke pause, so this is sized for a real ' +
         'typing session (a handful of edits) rather than a single submission.',
@@ -158,7 +160,7 @@ const SIGNUP_IDENTITY_BUDGET: RateLimitBudget = {
     environmentVariable: 'NODE_SIGNUP_RATE_LIMIT_MAX',
     defaultMax: 5,
     windowMs: 'shared',
-    keyedBy: 'the submitted email, normalised and hashed',
+    keyedBy: KEYED_BY_SUBMITTED_EMAIL,
     bounds:
         'Signup has no account yet to key a failure budget on, so this — spent by SUCCESS — is ' +
         'the whole of its identity budget.',
@@ -173,7 +175,7 @@ const SIGNUP_ADDRESS_BUDGET: RateLimitBudget = {
     environmentVariable: 'NODE_SIGNUP_RATE_LIMIT_ADDRESS_MAX',
     defaultMax: 15,
     windowMs: 'shared',
-    keyedBy: 'address',
+    keyedBy: KEYED_BY_ADDRESS,
     bounds: 'Signups from ONE address, spent by success.',
     audited: true
 };
@@ -185,7 +187,7 @@ const SIGNUP_BLOCK_BUDGET: RateLimitBudget = {
     environmentVariable: 'NODE_SIGNUP_RATE_LIMIT_BLOCK_MAX',
     defaultMax: 40,
     windowMs: 'shared',
-    keyedBy: 'address block (IPv4 /24, IPv6 /64)',
+    keyedBy: KEYED_BY_ADDRESS_BLOCK,
     bounds: 'Signups from ONE address block, spent by success.',
     audited: true,
     keyGenerator: addressBlockOf
@@ -215,7 +217,7 @@ const RESET_IDENTITY_BUDGET: RateLimitBudget = {
     environmentVariable: 'NODE_RESET_RATE_LIMIT_MAX',
     defaultMax: 5,
     windowMs: 'shared',
-    keyedBy: 'the submitted email, normalised and hashed',
+    keyedBy: KEYED_BY_SUBMITTED_EMAIL,
     bounds:
         '`postResetRequest` always answers 200, to prevent account enumeration — so, like ' +
         'signup, only a budget spent by SUCCESS bounds anything here.',
@@ -230,7 +232,7 @@ const RESET_ADDRESS_BUDGET: RateLimitBudget = {
     environmentVariable: 'NODE_RESET_RATE_LIMIT_ADDRESS_MAX',
     defaultMax: 15,
     windowMs: 'shared',
-    keyedBy: 'address',
+    keyedBy: KEYED_BY_ADDRESS,
     bounds: 'Password-reset requests from ONE address, spent by success.',
     audited: true
 };
@@ -242,7 +244,7 @@ const RESET_BLOCK_BUDGET: RateLimitBudget = {
     environmentVariable: 'NODE_RESET_RATE_LIMIT_BLOCK_MAX',
     defaultMax: 40,
     windowMs: 'shared',
-    keyedBy: 'address block (IPv4 /24, IPv6 /64)',
+    keyedBy: KEYED_BY_ADDRESS_BLOCK,
     bounds: 'Password-reset requests from ONE address block, spent by success.',
     audited: true,
     keyGenerator: addressBlockOf
@@ -262,7 +264,7 @@ export const resetRequestLimiters: RequestHandler[] = [
 ];
 
 /** Both challenge budgets bucket on this — the LONGER of the two challenge tiers. */
-const MFA_CHALLENGE_WINDOW_MS = 600 * 1000;
+const MFA_CHALLENGE_WINDOW_MS = MFA_CHALLENGE_DELIVERED_TTL_MS;
 
 /**
  * The bucket key both challenge limiters use: the challenge string itself, hashed so a credential
@@ -272,12 +274,8 @@ const MFA_CHALLENGE_WINDOW_MS = 600 * 1000;
  * bounds neither of them against a live challenge the way this limiter exists to.
  */
 const challengeKey = (request: Request): string => {
-    const body: unknown = request.body;
-    const challenge =
-        typeof body === 'object' && body !== null
-            ? (body as Record<string, unknown>).challenge
-            : undefined;
-    return typeof challenge === 'string'
+    const challenge = readBodyField(request, 'challenge');
+    return challenge
         ? createHash('sha256').update(challenge).digest('hex')
         : `block:${addressBlockOf(request)}`;
 };
@@ -285,10 +283,8 @@ const challengeKey = (request: Request): string => {
 /**
  * Attempts allowed against ONE login MFA challenge. Six digits is a million guesses; this is what
  * stops a single challenge from being the thing an attacker gets to try them against. Windowed to
- * the challenge's own lifetime (`account/services/two-factor.ts#MFA_CHALLENGE_DELIVERED_TTL_MS`,
- * restated rather than imported: `account` depends on `infrastructure`, never the other way
- * around) rather than the shared browsing window, so a window can never end before the challenge
- * it bounds.
+ * the challenge's own lifetime ({@link MFA_CHALLENGE_DELIVERED_TTL_MS}) rather than the shared
+ * browsing window, so a window can never end before the challenge it bounds.
  */
 const MFA_CHALLENGE_BUDGET: RateLimitBudget = {
     name: 'MFA challenge guesses',
@@ -296,7 +292,7 @@ const MFA_CHALLENGE_BUDGET: RateLimitBudget = {
     environmentVariable: 'NODE_MFA_CHALLENGE_MAX',
     defaultMax: 5,
     windowMs: MFA_CHALLENGE_WINDOW_MS,
-    keyedBy: 'the challenge string, hashed (falls back to address block when absent)',
+    keyedBy: KEYED_BY_CHALLENGE,
     bounds:
         'Guesses against ONE live challenge (`POST /account/login/2fa`) — `credentialLimiters` ' +
         'bounds guesses per account/address across every login attempt; this bounds guesses ' +
@@ -329,7 +325,7 @@ const MFA_SEND_BUDGET: RateLimitBudget = {
     environmentVariable: 'NODE_MFA_SEND_MAX',
     defaultMax: 3,
     windowMs: MFA_CHALLENGE_WINDOW_MS,
-    keyedBy: 'the challenge string, hashed (falls back to address block when absent)',
+    keyedBy: KEYED_BY_CHALLENGE,
     bounds: 'Deliveries against ONE login challenge (`POST /account/login/2fa/send`).',
     audited: true,
     keyGenerator: challengeKey

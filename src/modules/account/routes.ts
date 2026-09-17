@@ -126,12 +126,12 @@ router.delete('/delete-confirm', invalidateCache(['users', 'account']), deleteAc
 
 // POST /account/login — authenticate and get tokens. `loginChallengeGate` (rung 3, off by
 // default) only engages once `credentialLimiters`' identity budget is mostly spent — never on an
-// honest first attempt, see rate-limit.ts.
+// honest first attempt, see rate-limits.ts.
 router.post('/login', credentialLimiters, loginChallengeGate, postLogin);
 
 // POST /account/signup — register new user. `signupLimiters`, not `credentialLimiters`: the
 // abuse here (a Sybil account) gets a 201, which `credentialLimiters`' skipSuccessfulRequests
-// would spend nothing on — see rate-limit.ts. `humanChallengeGate` (rung 3, off by default) sits
+// would spend nothing on — see rate-limits.ts. `humanChallengeGate` (rung 3, off by default) sits
 // ahead of the upload parse, so a request that fails it never pays for a file read.
 // `idempotencyKey` comes AFTER `upload.single`, not before: its fingerprint reads `request.body`,
 // which multer only populates once it has parsed a multipart request — any earlier and every
