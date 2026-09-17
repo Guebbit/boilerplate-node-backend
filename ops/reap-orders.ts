@@ -14,6 +14,9 @@
  * Meant to run periodically (the same cron container as the other `reap:*` scripts), never on
  * every boot.
  *
+ * Removal: owned by `orders` — deletes with the module, along with the `reap:orders` npm script
+ * and its `docker/crontab` line.
+ *
  * See: docs/reference/ops.md
  */
 import 'dotenv/config';

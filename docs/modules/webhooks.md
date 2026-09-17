@@ -109,10 +109,11 @@ flowchart LR
 ```
 
 **Delayed retry rides the cron container, not the broker.** `webhookdeliveries.nextAttemptAt`
-carries when a failed row is due again; `ops/sweep-webhook-retries.ts` — the one job in
-`docker/crontab` that runs every minute instead of nightly — claims each due row and re-publishes
-it. `webhookDeliveryRepository.claimPending` (`pending` → `in-flight`) is the one atomic step that
-keeps the sweep and a fast-path worker from ever delivering the same attempt twice.
+carries when a failed row is due again; `npm run sweep:webhook-retries` (`ops/sweep-webhook-retries.ts`)
+— the one job in `docker/crontab` that runs every minute instead of nightly — claims each due row
+and re-publishes it. `webhookDeliveryRepository.claimPending` (`pending` → `in-flight`) is the one
+atomic step that keeps the sweep and a fast-path worker from ever delivering the same attempt
+twice. See [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full mechanism.
 
 **Signing is Standard Webhooks, hand-rolled.** `transport/webhook-signing.ts` emits the
 `webhook-id`/`webhook-timestamp`/`webhook-signature` headers a growing set of the ecosystem already
@@ -160,13 +161,13 @@ and delivery code) — deleting the folder deletes all of that too, with nothing
 `kernel/` to also touch. What still sits outside the module and **nothing flags** — delete these by
 hand:
 
-| Piece                         | Where                                                                        | Left behind, it…                 |
-| ----------------------------- | ----------------------------------------------------------------------------- | --------------------------------- |
-| the retry-sweep script entry  | `sweep:webhook-retries` in `package.json`                                     | points at a deleted file          |
-| the cron line and its comment | `docker/crontab`                                                               | fails every minute                |
-| the SSRF guard                | `src/infrastructure/adapters/ssrf-guard.ts` — generic, but this module is its only caller today | compiles, and nothing calls it |
-| the environment               | the `NODE_WEBHOOK_*` lines in `.env-example`                                   | documents settings nothing reads  |
-| the local test sink           | the `webhook-tester` service in `docker-compose.yml`, `WEBHOOK_TESTER_PORT`   | runs for nothing                  |
+| Piece                         | Where                                                                                           | Left behind, it…                 |
+| ----------------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------- |
+| the retry-sweep script entry  | `sweep:webhook-retries` in `package.json`                                                       | points at a deleted file         |
+| the cron line and its comment | `docker/crontab`                                                                                | fails every minute               |
+| the SSRF guard                | `src/infrastructure/adapters/ssrf-guard.ts` — generic, but this module is its only caller today | compiles, and nothing calls it   |
+| the environment               | the `NODE_WEBHOOK_*` lines in `.env-example`                                                    | documents settings nothing reads |
+| the local test sink           | the `webhook-tester` service in `docker-compose.yml`, `WEBHOOK_TESTER_PORT`                     | runs for nothing                 |
 
 ## Seeing it work
 

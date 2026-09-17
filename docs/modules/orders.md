@@ -89,6 +89,13 @@ import, which is what keeps a mutually-aware pair acyclic.
 Each account reads back only its own orders; writing and soft-deleting is admin-only. The
 `userId: 1, deletedAt: 1` index is what makes both of those cheap at once.
 
+Two scheduled jobs, both nightly via `docker/crontab`: `npm run reap:orders` replaces an order's
+remaining PII with placeholders once its post-account-deletion retention window has passed —
+amounts, line items and dates survive, only the person is gone (an order is an invoice, never
+deleted outright, unlike `payments`' abandoned attempts). `npm run sweep:order-effects` re-announces
+`order.cancelled` for a refund the event bus's one delivery attempt did not carry through. See
+[Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full mechanism.
+
 ## The pipeline
 
 The status enum above, drawn. Every solid edge is someone deciding; the dotted ones are this

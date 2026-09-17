@@ -132,6 +132,22 @@ A new `package.json` dependency this module alone needs is this module's, the mo
 imports it — no registry entry, just the vetting rules and a `## Libraries` section on the
 module's page. See [Libraries a module owns](./modules.md#libraries-a-module-owns).
 
+**A config line outside the module is still the module's.** A scheduled job's `docker/crontab`
+line, a compose service only it needs, an `.env-example` variable nothing else reads — none of
+these can live under `src/modules/<name>/`, but deleting the module should still mean deleting
+them. Wherever the file format allows a comment, that line carries:
+
+```
+# WARNING: owned by the <name> module — delete it when removing the module (docs/modules/<name>.md)
+```
+
+`package.json` is the one exception — its own comments do not survive `npm install`, so its
+scripts are listed on the module's page instead (see step 5 below). An `ops/*.ts` script's own
+docblock names the `npm run` entry and crontab line that go with it, the same way; see
+`ops/sweep-webhook-retries.ts` for the pattern. `tests/cross-cutting/scheduled-jobs.test.ts` is
+what turns a forgotten crontab line, or a script pointing at a file that no longer exists, into a
+failing test rather than a silent 2am cron failure.
+
 The manifest is the whole contract between the domain and the application:
 
 ```ts
@@ -301,11 +317,11 @@ rm -rf src/modules/<name>
 Deleting a module another one imports stops `tsc` on the importing file, naming the line. Either
 delete the dependant too, or drop the import.
 
-`tsc` also stops on an `ops/` script that runs the module. What runs that script does not compile,
-so nothing flags it — delete it by hand:
-
-- its `package.json` script entry
-- its line in `docker/crontab`
+`tsc` also stops on an `ops/` script that runs the module — delete the script itself to fix it.
+From there the chain flags the rest step by step rather than needing to be walked by hand:
+`tests/cross-cutting/scheduled-jobs.test.ts` fails the `package.json` entry that named the
+now-deleted script, and once that entry is gone too, the same test fails the `docker/crontab` line
+that named IT.
 
 A module that owns more outside `src/modules/` lists it on its own page — see
 [webhooks](../modules/webhooks.md#not-wanted-remove-the-module).

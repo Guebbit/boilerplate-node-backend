@@ -25,8 +25,13 @@
 # would go nowhere. /proc/1/fd/* reaches the container's real log stream regardless, which is what
 # lets Promtail ship every run.
 0  2 * * * cd /app && npm run reap:quarantine        >> /proc/1/fd/1 2>> /proc/1/fd/2
+# WARNING: owned by the account module — delete it when removing the module (docs/modules/account.md)
 5  2 * * * cd /app && npm run reap:inactive-accounts >> /proc/1/fd/1 2>> /proc/1/fd/2
+# WARNING: owned by the orders module — delete it when removing the module (docs/modules/orders.md)
 10 2 * * * cd /app && npm run reap:orders            >> /proc/1/fd/1 2>> /proc/1/fd/2
+# WARNING: owned by the payments module — delete it when removing the module (docs/modules/payments.md)
 15 2 * * * cd /app && npm run reap:payments          >> /proc/1/fd/1 2>> /proc/1/fd/2
+# WARNING: owned by the orders module — delete it when removing the module (docs/modules/orders.md)
 20 2 * * * cd /app && npm run sweep:order-effects    >> /proc/1/fd/1 2>> /proc/1/fd/2
+# WARNING: owned by the webhooks module — delete it when removing the module (docs/modules/webhooks.md)
 *  * * * * cd /app && npm run sweep:webhook-retries  >> /proc/1/fd/1 2>> /proc/1/fd/2

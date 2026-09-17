@@ -332,6 +332,10 @@ record. Retrying resets the clock, the same way editing a cart resets `carts`' o
 | `succeeded` / `refunded`                 |      Yes      | Never touched by any timer — it is the invoice |
 | Anything else, untouched past the window |      No       | `npm run reap:payments` deletes the row        |
 
+`npm run reap:payments` runs nightly from `docker/crontab`, alongside the rest of this repo's
+scheduled jobs — see [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full mechanism
+and the module-removal convention that goes with owning one.
+
 This is a genuinely different shape from `orders`' retention: `orders` keeps every row forever and
 scrubs PII in place; `payments` keeps a settled row forever and deletes an unsettled one outright.
 Neither scrubs a settled payment, because there is nothing on it left to scrub.

@@ -64,7 +64,8 @@ const sectionsInScope = (scope: AsyncScope): readonly AsyncSectionName[] =>
  * else — a module's public event catalogue, or `observability`'s one all-public section.
  */
 const asyncSectionDocument = (section: AsyncSectionName): string => {
-    if (section === 'workers') return path.join(REPO_ROOT, 'shared', 'contracts', 'asyncapi.workers.yaml');
+    if (section === 'workers')
+        return path.join(REPO_ROOT, 'shared', 'contracts', 'asyncapi.workers.yaml');
     if (section === 'webhooks-internal')
         return path.join(REPO_ROOT, 'src', 'modules', 'webhooks', 'asyncapi.internal.yaml');
     return path.join(REPO_ROOT, 'src', 'modules', section, 'asyncapi.yaml');

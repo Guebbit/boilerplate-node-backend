@@ -62,6 +62,12 @@ It owns exactly one collection, and it is not the one you would guess. The User 
 is the **address book**, one document per account, and a destroyed account takes its book with it
 through the same `user.deleted` event the cart and wishlist listen for.
 
+An account nobody has signed into in a long time is a live account with no live purpose —
+`npm run reap:inactive-accounts` (`docker/crontab`, nightly, disabled by default via
+`NODE_INACTIVE_ACCOUNT_DAYS=0`) warns, then soft-, then hard-deletes one, the hard delete going
+through the same `user.deleted` cascade above. See
+[Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full mechanism.
+
 ::: tip The barrel is one line wide, and that is the story
 `session/`, `two-factor/` and `oauth/` are three folders and not one exported symbol between them.
 They used to look like something authorization would need. It does not: `kernel/authentication.ts`

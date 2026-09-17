@@ -14,6 +14,9 @@
  * boot. Idempotent: `payments`' conditional refund means a second pass over an order that already
  * settled does nothing.
  *
+ * Removal: owned by `orders` — deletes with the module, along with the `sweep:order-effects` npm
+ * script and its `docker/crontab` line.
+ *
  * See: docs/reference/ops.md
  */
 import 'dotenv/config';

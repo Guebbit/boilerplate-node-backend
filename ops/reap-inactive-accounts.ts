@@ -31,6 +31,9 @@
  * `reap:orders`), never on every boot. Guarded by `withLease` — the one job wired to the
  * primitive today, since a double-run here is the most expensive of the five.
  *
+ * Removal: owned by `account` — deletes with the module, along with the `reap:inactive-accounts`
+ * npm script and its `docker/crontab` line.
+ *
  * See: docs/reference/ops.md
  */
 import 'dotenv/config';
