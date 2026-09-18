@@ -36,7 +36,12 @@ import { usersAnalyticsEvents } from './analytics';
 import { usersAuditActions } from './audit';
 import { USER_DELETED, USER_SETUP_REQUESTED } from './events';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
-import { assignRole, revokeRole, AccessInvariantError } from '@kernel/access/store';
+import {
+    assignRole,
+    revokeRole,
+    promoteVerifiedCustomer,
+    AccessInvariantError
+} from '@kernel/access/store';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**
@@ -87,13 +92,12 @@ export const enqueueIfPending = (user: UserDocument): Promise<UserDocument> =>
 
 /**
  * Create a new user document, with no email confirmation step — the self-service path is
- * `accountService.signup`. `verifiedAt` is hardcoded `now` and `role` defaults `customer` — both
- * ahead of `...data` so an operator naming a role explicitly still wins — since an operator typing
- * the address in is the vouching (`shared/authorization-roles.yaml`'s "no unverified manager"
- * rule). `password` is optional: left out, a random value nobody is told fills the `required`
- * field, and `sendSetupEmail: true` queues a setup mail (`USER_SETUP_REQUESTED`) until a real one
- * is set. Typed off `CreateUserRequest` rather than a hand-picked `Pick`, since a hand-copied list
- * is what silently dropped `active` from `update()` below.
+ * `accountService.signup`. `verifiedAt` is hardcoded `now` — an operator typing the address in is
+ * the vouching (`shared/authorization-roles.yaml`'s "no unverified manager" rule). `password` is
+ * optional: left out, a random value nobody is told fills the `required` field, and
+ * `sendSetupEmail: true` queues a setup mail (`USER_SETUP_REQUESTED`) until a real one is set.
+ * Typed off `CreateUserRequest` rather than a hand-picked `Pick`, since a hand-copied list is what
+ * silently dropped `active` from `update()` below.
  */
 export const create = (
     data: CreateUserRequest & {
@@ -109,31 +113,26 @@ export const create = (
         data.password && data.password.trim().length > 0
             ? data.password
             : randomBytes(32).toString('hex');
+    // `customer`, matching the document field's old default, when an operator names none — an
+    // operator typing the address in is the vouching, same reasoning as `verifiedAt` above.
+    const role = data.role ?? 'customer';
 
     return userRepository
-        .create({ verifiedAt: new Date(), role: 'customer', ...data, password })
-        .then((user) => {
+        .create({ verifiedAt: new Date(), ...data, password })
+        .then((user) =>
             /*
-             * The membership, not just the column — same reasoning as `update()`'s dual write
-             * below. Without it a brand-new staff account is a role that LOOKS granted and grants
-             * nothing, because `rolesOf`'s membership lookup finds no row and the fallback only
-             * reads on the scope this account is later resolved in. Awaited before the audit
-             * event: a rejected escalation must fail the whole create, not just the column that
-             * already saved.
+             * The membership is the ONLY grant now — there is no column beside it any more.
+             * Awaited before the audit event: a rejected escalation must fail the whole create,
+             * not just a column that already saved.
              */
-            const membership =
-                data.role === undefined
-                    ? Promise.resolve()
-                    : assignRole(
-                          String(user._id),
-                          DEPLOYMENT_TENANT_ID,
-                          'tenant',
-                          data.role,
-                          context.caller.permissions
-                      ).then(() => undefined);
-
-            return membership.then(() => user);
-        })
+            assignRole(
+                String(user._id),
+                DEPLOYMENT_TENANT_ID,
+                'tenant',
+                role,
+                context.caller.permissions
+            ).then(() => user)
+        )
         .then((user) => {
             emitAuditEvent(
                 buildAuditEvent(context, {
@@ -222,15 +221,8 @@ export const update = (
 
             if (data.email !== undefined) user.email = data.email;
             if (data.username !== undefined) user.username = data.username;
-            /*
-             * The column AND the membership. `role` on the user row is what this module publishes
-             * — a staff list has to show it — while the membership is what authorization is
-             * decided from, and writing only the first is a change that appears to take and does
-             * nothing. One caller writes both, which is what keeps them from disagreeing; the
-             * membership write is chained after the save so a role change that cannot be stored
-             * fails the request rather than half-applying.
-             */
-            if (data.role !== undefined) user.role = data.role;
+            // `role` is not written here — there is no column any more, only the membership,
+            // written below in `updateSavedUser` once the rest of the document has saved.
             if (data.active !== undefined) user.active = data.active;
             // The three travel as one unit, all produced by the same `readUploadedImage` call on
             // the controller — set together whenever a new upload replaces the image. The old url
@@ -567,8 +559,11 @@ const setPassword = (user: UserDocument, password: string): Promise<UserDocument
  */
 const markEmailVerified = (user: UserDocument): Promise<UserDocument> => {
     user.verifiedAt = new Date();
-    if (user.role === 'unverified') user.role = 'customer';
-    return userRepository.save(user);
+    return userRepository
+        .save(user)
+        .then((saved) =>
+            promoteVerifiedCustomer(String(saved._id), DEPLOYMENT_TENANT_ID).then(() => saved)
+        );
 };
 
 /**
@@ -582,8 +577,11 @@ const applyEmailChange = (user: UserDocument, newEmail: string): Promise<UserDoc
     user.email = newEmail;
     user.pendingEmail = undefined;
     user.verifiedAt = new Date();
-    if (user.role === 'unverified') user.role = 'customer';
-    return userRepository.save(user);
+    return userRepository
+        .save(user)
+        .then((saved) =>
+            promoteVerifiedCustomer(String(saved._id), DEPLOYMENT_TENANT_ID).then(() => saved)
+        );
 };
 
 /**
@@ -620,15 +618,19 @@ const buildSignupDecoy = (data: Parameters<typeof userRepository.build>[0]) =>
 /**
  * A self-service signup, from the request's own fields — `account`'s OWN orchestration
  * (anti-automation checks, the duplicate-email pre-check, the verification email) runs around
- * this, never `create()`'s admin-panel one (role assignment, admin audit/analytics).
+ * this, never `create()`'s admin-panel one (role assignment, admin audit/analytics). Writes no
+ * role of its own: the document holds none, and the caller grants `unverified` separately through
+ * `assignDefaultRole` — never this function, which never sees a role name to misuse.
  */
 const registerSelfService = (data: Parameters<typeof userRepository.create>[0]) =>
     userRepository.create(data);
 
 /**
- * An account minted from a federated identity — the provider vouches for it, so it skips
- * `unverified` entirely (`verifiedAt`/`role` are set at the call site, not defaulted here) the
- * same way an operator-created account does.
+ * An account minted from a federated identity — the provider vouches for it, so its caller grants
+ * `customer` directly (through `assignRole`, not `assignDefaultRole`) rather than `unverified`,
+ * the same way an operator-created account does. Same "writes no role itself" split as
+ * {@link registerSelfService} — `verifiedAt` is set at the call site, the membership grant happens
+ * there too, never inside this function.
  */
 const registerFromOAuth = (data: Parameters<typeof userRepository.create>[0]) =>
     userRepository.create(data);

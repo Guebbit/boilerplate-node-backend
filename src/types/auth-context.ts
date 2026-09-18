@@ -33,8 +33,14 @@ export interface AuthContext {
      * directly — `callerFor` turns them into keys first.
      */
     roles: {
-        /** The role held inside the shop. Everyone has one; a stranger's is `guest`. */
-        tenant: string;
+        /**
+         * The role held inside the shop, or `null` when no membership row exists — every real
+         * signup path writes one immediately, so this is a rare, defensive case rather than the
+         * common one. `permissions.ts`'s `keysInScope` treats it as "no role", never as a guess:
+         * the anonymous baseline, same as a stranger gets, never less. A stranger never reaches
+         * this type at all — they are `guest` via `anonymousCaller()`, a `Caller` built directly.
+         */
+        tenant: string | null;
         /** The role held over the installation, or `null` for the overwhelming majority. */
         platform: string | null;
     };

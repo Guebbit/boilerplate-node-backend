@@ -48,6 +48,14 @@ a breaking change is one a generated client cannot absorb without being regenera
   a lookup: missing ids are silently absent from the page rather than a 404, an empty array is a
   422 (never "everything"), and the cap is 100 ids per request. The single-item routes
   (`GET /products/{id}`, etc.) are unaffected. `userId`/`productId` on `GET /orders` stay scalar.
+- **A role lives in exactly one place: the membership, never `User.role` as a stored column.**
+  The field is gone from the document; `User.role` on the wire is unchanged in shape but is now
+  read live from the membership store, so it can be absent even for an authenticated account (no
+  membership row — a rare, defensive case, since every real signup path grants one immediately).
+  The `role` query/body filter on `GET /users` and `POST /users/search` is removed outright —
+  filtering by role needs a two-step resolve (membership rows holding that role, then the users
+  among them) the generic search filter can't express, and it is not rebuilt yet. No deployment
+  of this boilerplate held real account data yet, so no migration script was needed.
 - **Every outbound webhook delivery body is now the Standard Webhooks envelope**, `{ type,
 timestamp, data }`, instead of the bare per-event payload (`asyncapi.yaml`, `webhooks`
   module — a queue/realtime contract, not `openapi.yaml`, but the same "a generated client must

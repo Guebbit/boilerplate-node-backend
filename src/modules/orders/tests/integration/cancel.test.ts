@@ -103,11 +103,13 @@ describe('cancelById', () => {
 
     it('a shop owner cancels an order they do not own', async () => {
         const owner = await createUser({ email: 'owner@example.com', username: 'admin' });
-        const admin = await createUser({
-            email: 'boss@example.com',
-            username: 'boss',
-            role: 'admin'
-        });
+        const admin = await createUser(
+            {
+                email: 'boss@example.com',
+                username: 'boss'
+            },
+            'admin'
+        );
         const order = await seedOrder(owner);
 
         const result = await orderService.cancelById(String(order._id), asAdmin(admin.id));

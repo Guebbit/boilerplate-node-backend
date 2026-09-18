@@ -32,6 +32,8 @@ import userImages from './users-images.generated.json';
 import { makeUser } from '@modules/users/factories';
 import { insertIfAbsent, type SeedOutcome } from '@scenarios/seed';
 import { userRepository } from '@modules/users/repository';
+import { assignRole } from '@kernel/access/store';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**
  * Deterministic id for seed customer `index` — never `new Types.ObjectId()`, whose default is
@@ -71,11 +73,11 @@ export const namedUsers = [
         username: 'root',
         email: SEED_OWNER_EMAIL,
         password: SEED_OWNER_PASSWORD,
-        role: 'admin',
         /*
-         * Overrides the schema's `unverified` default, which is right for self-signup — nobody has
-         * vouched for the address yet — and wrong here. A seed account exists to be logged into,
-         * not to demonstrate the "verify your email" nag banner to everyone who boots the demo.
+         * Verified, not the schema's absent-until-proven default — a seed account exists to be
+         * logged into, not to demonstrate the "verify your email" nag banner to everyone who boots
+         * the demo. The role itself is a membership, assigned by `@scenarios/accounts`'s
+         * `seedAccessModel` — this file only builds the document.
          */
         verifiedAt: new Date(),
         ...userImages.root
@@ -85,9 +87,6 @@ export const namedUsers = [
         username: 'customer',
         email: SEED_USER_EMAIL,
         password: SEED_USER_PASSWORD,
-        // Explicit, not the schema default: a fresh signup starts `unverified`, and this account
-        // exists to shop, not to demonstrate that state.
-        role: 'customer',
         verifiedAt: new Date(),
         // `<paired-frontend>/src/modules/cart/tests/e2e/analytics.cy.ts` logs in as this account
         // and asserts the backend fires `cart_item_added` — `emitAnalyticsEvent`'s consent gate
@@ -100,7 +99,6 @@ export const namedUsers = [
         username: 'editor',
         email: SEED_EDITOR_EMAIL,
         password: SEED_EDITOR_PASSWORD,
-        role: 'editor',
         verifiedAt: new Date(),
         ...userImages.root
     }),
@@ -109,7 +107,6 @@ export const namedUsers = [
         username: 'moderator',
         email: SEED_MODERATOR_EMAIL,
         password: SEED_MODERATOR_PASSWORD,
-        role: 'moderator',
         verifiedAt: new Date(),
         ...userImages.root
     })
@@ -158,8 +155,6 @@ const customerUsers = CUSTOMER_NAMES.map(([key, username], index) =>
         id: SEED_CUSTOMER_IDS[key],
         username,
         email: SEED_CUSTOMER_EMAILS[key],
-        // Explicit, not the schema default — see the named `customer` account's own comment above.
-        role: 'customer',
         verifiedAt: new Date(),
         // Alternating, same as the image cycling below: a real customer base is a mix of
         // opted-in and not, and `root`/`customer` alone left the "granted" path exercised
@@ -172,9 +167,22 @@ const customerUsers = CUSTOMER_NAMES.map(([key, username], index) =>
 /** Every demo account: the named ones the e2e suite logs in as, then the customer base. */
 export const userFixtures = [...namedUsers, ...customerUsers];
 
-/** Seed this collection. Declared in `./index`'s `shopModules`; walked by `seedShop`. */
+/**
+ * Seed this collection, plus the ten filler customers' `customer` membership — the four named
+ * accounts get theirs from `@scenarios/accounts`'s `seedAccessModel`, which `./index`'s `seedShop`
+ * always runs first, but these ten are this file's own and nobody else assigns them a role. The
+ * document write and the membership grant both go through `insertIfAbsent`/`assignRole`'s own
+ * upserts, so re-running this against an already-seeded database changes nothing.
+ * Declared in `./index`'s `shopModules`; walked by `seedShop`.
+ */
 export const seedUsersCollection = (): Promise<SeedOutcome[]> =>
-    Promise.all(userFixtures.map((user) => insertIfAbsent(userRepository, user)));
+    Promise.all(userFixtures.map((user) => insertIfAbsent(userRepository, user))).then((outcomes) =>
+        Promise.all(
+            customerUsers.map((user) =>
+                assignRole(String(user._id), DEPLOYMENT_TENANT_ID, 'tenant', 'customer')
+            )
+        ).then(() => outcomes)
+    );
 
 /**
  * Seed only the four named accounts — `blank`'s contribution to `users`. Called by

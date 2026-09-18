@@ -42,38 +42,9 @@ describe('GET /users', () => {
     });
 });
 
-// Extracts usernames from a paginated /users response body.
-const usernames = (response: { body: { data: { items: { username: string }[] } } }) =>
-    response.body.data.items.map((user) => user.username);
-
-describe('GET /users — the role filter', () => {
-    /*
-     * Every filter asserts a POSITIVE and a negative, and the positive is the load-bearing half.
-     * An empty page satisfies any number of `not.toContain`, so a filter naming a column no
-     * document has passes a negatives-only test while returning nothing — which is how `?admin=`
-     * survived the move to roles, still filtering a field the migration had deleted.
-     */
-    it('narrows to one role, including the unverified default', async () => {
-        // Asserted by membership, not by an exact list: the authenticated admin is a fixture this
-        // test does not own, and pinning the whole page would break on any change to it.
-        const { bearer } = await authenticateAs('admin');
-        await createUser({ username: 'plain-manager', email: 'pm@example.com', role: 'manager' });
-        await createUser({ username: 'plain-customer', email: 'pc@example.com', role: 'customer' });
-        // No `role`, so the schema's `unverified` default applies — the replacement for the old
-        // boolean `verified` filter (`?role=unverified`, see `repository.ts`).
-        await createUser({ username: 'plain-unverified', email: 'pu@example.com' });
-
-        const managers = await api().get('/users?role=manager').set('Authorization', bearer);
-        expect(managers.status).toBe(200);
-        expect(usernames(managers)).toContain('plain-manager');
-        expect(usernames(managers)).not.toContain('plain-customer');
-
-        const unverified = await api().get('/users?role=unverified').set('Authorization', bearer);
-        expect(unverified.status).toBe(200);
-        expect(usernames(unverified)).toContain('plain-unverified');
-        expect(usernames(unverified)).not.toContain('plain-customer');
-    });
-});
+// The `?role=` filter itself is gone — `role` is a membership fact now, not a searchable document
+// column, and filtering by it needs a two-step resolve `createRepository`'s generic `exact` spec
+// can't express. Deliberately not rebuilt here; see DDD_FIX.md Phase 2.3's follow-up note.
 
 describe('GET /users/{id}', () => {
     it('matches the contract and exposes no credentials', async () => {

@@ -129,8 +129,11 @@ unrepresentable rather than discouraged.
 
 Three supporting rules: keys are lower-case, dotted and **stable** (renaming one is a migration); a
 **module declares its own keys in its manifest**, so deleting a module deletes its keys; and
-**roles are data, permissions are code** — a deployment may create roles at runtime and may never
+**roles are data, permissions are code** — a role's permissions live in `shared/authorization-roles.yaml`
+alone, the one definition every deployment and the PHP twin share, and a deployment may never
 invent a key, because a key nothing checks grants nothing while looking like it grants something.
+A role's ASSIGNMENT — who holds it, where — is the one thing the database stores; see
+[Where it lives](#where-it-lives).
 
 ## Where it lives
 
@@ -142,9 +145,10 @@ enforced per key.
   cases, most of them denials, run by both backends. All three byte-identical in the PHP twin.
 - **`kernel/permissions.ts`** turns an account's two role names into the keys for ONE scope;
   **`kernel/ability.ts`** builds the CASL ability and answers `holdsKey`.
-- **`kernel/access/`** stores it: tenants, roles and memberships, with the invariants as refusals —
-  the last administrator cannot be removed, a granter cannot hand over what they do not hold, a
-  deleted role's members go somewhere named.
+- **`kernel/access/`** stores the ASSIGNMENT half — tenants and memberships, never a role's own
+  permissions — with the invariants as refusals: the last administrator cannot be removed, a
+  granter cannot hand over what they do not hold, self-service signup can grant nothing but the
+  default role.
 - **`kernel/access/query.ts`** compiles the rules into the Mongo filter every scoped read spreads,
   so a key that grants more returns more without anybody editing a fragment.
 - **`GET /account/abilities`** publishes the packed rules; the frontend evaluates _those_, not a

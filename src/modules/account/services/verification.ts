@@ -23,6 +23,8 @@ import type { EmailVerificationRequested } from '@types';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
 import { isUnrestrictedRole } from '@kernel/permissions';
+import { promoteVerifiedCustomer, rolesOf } from '@kernel/access/store';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**
  * The `tokens.type` under which a signup/re-send verification token is stored — proves the
@@ -209,18 +211,20 @@ export const requestEmailVerificationFor = (
  * unproven address
  * (`shared/authorization-roles.yaml`'s "no unverified manager" rule) made that decision already.
  *
- * Mutates only, deliberately unpersisted: `profile.ts#passwordResetChange` is the one remaining
- * caller, passing this as `passwordChange`'s `beforeSave` so a verification can ride along in the
- * SAME write `userService.setPassword` already makes — a spent reset token proves the same
- * mailbox a verify token does. `completeEmailVerification`/`completeEmailChange` below used to
- * call this too; both now call the equivalent `userService` operation directly, which does its
- * own mutating-and-persisting in one step.
+ * Mutates `verifiedAt` on the document, unpersisted — the caller's own `save` covers it — but the
+ * role promotion is a MEMBERSHIP write, which has no document field to ride along in any more, so
+ * this is no longer purely synchronous. `profile.ts#passwordResetChange` is the one remaining
+ * caller, passing this as `passwordChange`'s `beforeSave`, now awaited there, so a verification can
+ * still land in the same request `userService.setPassword` handles — a spent reset token proves
+ * the same mailbox a verify token does. `completeEmailVerification`/`completeEmailChange` below
+ * used to call this too; both now call the equivalent `userService` operation directly, which does
+ * its own mutating-and-persisting-and-promoting in one step.
  *
  * @param user - the account whose address was just proven
  */
-export const markVerified = (user: UserDocument): void => {
+export const markVerified = (user: UserDocument): Promise<void> => {
     user.verifiedAt = new Date();
-    if (user.role === 'unverified') user.role = 'customer';
+    return promoteVerifiedCustomer(String(user._id), DEPLOYMENT_TENANT_ID).then(() => undefined);
 };
 
 /**
@@ -233,17 +237,19 @@ export const completeEmailVerification = (
     user: UserDocument,
     context: CallerContext
 ): Promise<UserDocument> => {
-    return userService.markEmailVerified(user).then((saved) => {
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: accountAuditActions.AUTH_EMAIL_VERIFY_COMPLETED,
-                actor_user_id: saved.id,
-                actor_role: isUnrestrictedRole(saved.role) ? 'admin' : 'user',
-                outcome: 'success'
-            })
-        );
-        return saved;
-    });
+    return userService.markEmailVerified(user).then((saved) =>
+        rolesOf(saved.id, DEPLOYMENT_TENANT_ID).then((roles) => {
+            emitAuditEvent(
+                buildAuditEvent(context, {
+                    action: accountAuditActions.AUTH_EMAIL_VERIFY_COMPLETED,
+                    actor_user_id: saved.id,
+                    actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
+                    outcome: 'success'
+                })
+            );
+            return saved;
+        })
+    );
 };
 
 /**
@@ -273,16 +279,18 @@ export const completeEmailChange = (
         saved
             .tokenRemoveAll(TokenType.REFRESH)
             .catch(() => undefined)
-            .then(() => {
-                emitAuditEvent(
-                    buildAuditEvent(context, {
-                        action: accountAuditActions.AUTH_EMAIL_CHANGE_COMPLETED,
-                        actor_user_id: saved.id,
-                        actor_role: isUnrestrictedRole(saved.role) ? 'admin' : 'user',
-                        outcome: 'success'
-                    })
-                );
-                return saved;
-            })
+            .then(() =>
+                rolesOf(saved.id, DEPLOYMENT_TENANT_ID).then((roles) => {
+                    emitAuditEvent(
+                        buildAuditEvent(context, {
+                            action: accountAuditActions.AUTH_EMAIL_CHANGE_COMPLETED,
+                            actor_user_id: saved.id,
+                            actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
+                            outcome: 'success'
+                        })
+                    );
+                    return saved;
+                })
+            )
     );
 };

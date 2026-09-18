@@ -15,6 +15,8 @@ import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/a
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
 import type { OAuthIdentity } from '../oauth/providers/port';
+import { assignRole } from '@kernel/access/store';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**
  * The provider vouches for this identity, but its email matches an EXISTING account whose own
@@ -132,10 +134,9 @@ const signupFromOAuth = (
             imageUrl: identity.imageUrl ?? process.env.NODE_DEFAULT_IMAGE_USER ?? '',
             // The provider vouches for this identity, same reasoning `userService.create`'s admin
             // path already applies to a typed-in address — no password, so no email loop either.
-            // `role` explicit, not the schema's `unverified` default: this account skips that
-            // state entirely, the same as an operator-created one.
+            // This account skips `unverified` entirely, the same as an operator-created one; the
+            // `customer` grant itself is the membership write just below, not a document field.
             verifiedAt: new Date(),
-            role: 'customer',
             active: true,
             locale: getCurrentLocale(),
             oauthAccounts: [{ provider, providerId: identity.providerId, connectedAt: new Date() }]
@@ -144,6 +145,11 @@ const signupFromOAuth = (
             // controller's catch turns into a generic `?error=provider_error` — the caller simply
             // tries again, and the second attempt finds case 1.
         })
+        .then((created) =>
+            // `customer`, not `assignDefaultRole`'s `unverified`: the provider already vouches for
+            // this address, the same reasoning `verifiedAt` above applies.
+            assignRole(created.id, DEPLOYMENT_TENANT_ID, 'tenant', 'customer').then(() => created)
+        )
         .then((created) => {
             emitAuditEvent(
                 buildAuditEvent(context, {

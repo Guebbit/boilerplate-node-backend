@@ -32,6 +32,8 @@ import * as analyticsPort from '@infrastructure/observability/analytics';
 import { accountAuditActions } from '../../audit';
 import { accountAnalyticsEvents } from '../../analytics';
 import { observePort } from '@tests/ports';
+import { rolesOf } from '@kernel/access/store';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /*
  * The audit port is REPLACED, not spied on: `jest.spyOn` cannot redefine the non-configurable
@@ -99,7 +101,7 @@ describe('updateProfile', () => {
     });
 
     it('cannot escalate: role, active and password do not pass through', async () => {
-        const user = await createUser();
+        const user = await createUser({}, 'unverified');
 
         // `zodProfileSchema` is strict — `role`/`active`/`password` aren't fields `PUT
         // /account` accepts, so the whole body is refused rather than applying `username` and
@@ -118,8 +120,10 @@ describe('updateProfile', () => {
         );
         expect(response.status).toBe(422);
 
+        // The membership, not a document field — `role` has no field to have passed through to.
+        const roles = await rolesOf(user.id, DEPLOYMENT_TENANT_ID);
+        expect(roles.tenant).toBe('unverified');
         const stored = await userRepository.findByIdWithCredentials(user.id);
-        expect(stored?.role).toBe('unverified');
         expect(stored?.active).toBe(true);
         // The password is untouched — the fixture's original still logs in.
         const login = await accountService.login(user.email, PLAIN_PASSWORD);
@@ -503,7 +507,7 @@ describe('requestEmailVerification', () => {
  */
 describe('requestEmailVerificationFor', () => {
     it('sends, and promises when the next send may be asked for', async () => {
-        const user = await createUser({ role: 'unverified' });
+        const user = await createUser({}, 'unverified');
 
         const first = asSuccess(
             await accountService.requestEmailVerificationFor(user.id, testCallerContext)
@@ -513,7 +517,7 @@ describe('requestEmailVerificationFor', () => {
     });
 
     it('refuses a second send inside the cooldown, with the seconds to wait', async () => {
-        const user = await createUser({ role: 'unverified' });
+        const user = await createUser({}, 'unverified');
         await accountService.requestEmailVerificationFor(user.id, testCallerContext);
 
         const second = asReject(
@@ -529,7 +533,7 @@ describe('requestEmailVerificationFor', () => {
     });
 
     it('allows the send again once the cooldown has passed', async () => {
-        const user = await createUser({ role: 'unverified' });
+        const user = await createUser({}, 'unverified');
         await accountService.requestEmailVerificationFor(user.id, testCallerContext);
 
         // Ageing the recorded send, rather than a fake clock — `sentAt` is what the cooldown reads.
@@ -660,7 +664,7 @@ describe('passwordResetChange', () => {
      * `unverified` — unable to check out, with a re-send of the failed mail as their only remedy.
      */
     it('proves the address, promoting an unverified account to customer', async () => {
-        const user = await createUser({ role: 'unverified', password: LEGACY_PASSWORD });
+        const user = await createUser({ password: LEGACY_PASSWORD }, 'unverified');
 
         asSuccess(
             await accountService.passwordResetChange(
@@ -671,15 +675,16 @@ describe('passwordResetChange', () => {
             )
         );
 
+        const roles = await rolesOf(user.id, DEPLOYMENT_TENANT_ID);
+        expect(roles.tenant).toBe('customer');
         const reloaded = await userRepository.findById(user.id);
-        expect(reloaded?.role).toBe('customer');
         expect(reloaded?.verifiedAt).toBeInstanceOf(Date);
     });
 
     // One save carries both facts, so a refused password cannot verify an address as a side
     // effect of failing.
     it('leaves the address unproven when the new password is refused', async () => {
-        const user = await createUser({ role: 'unverified', password: LEGACY_PASSWORD });
+        const user = await createUser({ password: LEGACY_PASSWORD }, 'unverified');
 
         asReject(
             await accountService.passwordResetChange(
@@ -690,8 +695,9 @@ describe('passwordResetChange', () => {
             )
         );
 
+        const roles = await rolesOf(user.id, DEPLOYMENT_TENANT_ID);
+        expect(roles.tenant).toBe('unverified');
         const reloaded = await userRepository.findById(user.id);
-        expect(reloaded?.role).toBe('unverified');
         expect(reloaded?.verifiedAt ?? null).toBeNull();
     });
 });

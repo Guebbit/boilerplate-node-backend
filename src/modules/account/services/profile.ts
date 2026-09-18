@@ -33,6 +33,8 @@ import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/a
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
 import { isUnrestrictedRole } from '@kernel/permissions';
+import { rolesOf } from '@kernel/access/store';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**
  * Validate a new-password pair without touching the user.
@@ -86,13 +88,14 @@ export const validatePasswordChange = (
  * @param beforeSave - a caller's own mutation to ride along in the same write, run only once
  *   every refusal is behind us. A parameter rather than a mutation the caller makes first: a
  *   refused password must not leave a half-applied change on the document, and the only place
- *   that can be guaranteed is here, next to the `save`.
+ *   that can be guaranteed is here, next to the `save`. May return a `Promise` — `markVerified`'s
+ *   role promotion is a membership write, not a field mutation, so it cannot be purely synchronous.
  */
 export const passwordChange = (
     user: UserDocument,
     password = '',
     passwordConfirm = '',
-    beforeSave?: (user: UserDocument) => void
+    beforeSave?: (user: UserDocument) => void | Promise<void>
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     const errors = validatePasswordChange(password, passwordConfirm);
 
@@ -103,9 +106,8 @@ export const passwordChange = (
     return assertPasswordNotBreached(password).then((breachErrors) => {
         if (breachErrors.length > 0) return generateReject(422, breachErrors);
 
-        beforeSave?.(user);
-        return userService
-            .setPassword(user, password)
+        return Promise.resolve(beforeSave?.(user))
+            .then(() => userService.setPassword(user, password))
             .then((savedUser) =>
                 savedUser
                     .tokenRemoveAll(TokenType.REFRESH)
@@ -161,14 +163,22 @@ export const passwordResetChange = (
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
     passwordChange(user, password, passwordConfirm, markVerified).then((result) => {
         if (result.success) {
-            emitAuditEvent(
-                buildAuditEvent(context, {
-                    action: accountAuditActions.AUTH_PASSWORD_RESET_COMPLETED,
-                    actor_user_id: String(user._id),
-                    actor_role: isUnrestrictedRole(user.role) ? 'admin' : 'user',
-                    outcome: 'success'
+            // Read fresh, after `markVerified` may have just promoted it — the document carries
+            // no role of its own to read synchronously any more. Same fire-and-forget shape as the
+            // mail below: the password change already succeeded, so a lookup hiccup here must not
+            // turn a successful reset into an error — worst case, this one audit row is missing.
+            void rolesOf(String(user._id), DEPLOYMENT_TENANT_ID)
+                .then((roles) => {
+                    emitAuditEvent(
+                        buildAuditEvent(context, {
+                            action: accountAuditActions.AUTH_PASSWORD_RESET_COMPLETED,
+                            actor_user_id: String(user._id),
+                            actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
+                            outcome: 'success'
+                        })
+                    );
                 })
-            );
+                .catch(() => undefined);
 
             /*
              * The recipient's OWN language first. These links are clicked from an email client,
@@ -204,36 +214,40 @@ export const removeOwnAccount = (
     /*
      * Read before the write. This is a hard delete, so after `remove` resolves there is no
      * document left to take an address, a name or a language from — the goodbye mail has to be
-     * addressed from a copy taken while the account still existed.
+     * addressed from a copy taken while the account still existed. The role is read the same way,
+     * from the membership store rather than the document, which holds none — `remove`'s own
+     * `USER_DELETED` listener may already have revoked the membership by the time this resolves.
      */
-    const { email, username, locale, _id, role } = user;
+    const { email, username, locale, _id } = user;
 
-    return userService.remove(user, true).then((result) => {
-        if (result.success) {
-            emitAuditEvent(
-                buildAuditEvent(context, {
-                    action: accountAuditActions.AUTH_ACCOUNT_DELETE_COMPLETED,
-                    actor_user_id: String(_id),
-                    actor_role: isUnrestrictedRole(role) ? 'admin' : 'user',
-                    outcome: 'success'
-                })
-            );
-            emitAnalyticsEvent({
-                ...buildAnalyticsBase(context),
-                distinctId: String(_id),
-                event: accountAnalyticsEvents.ACCOUNT_DELETED
-            });
+    return rolesOf(String(_id), DEPLOYMENT_TENANT_ID).then((roles) =>
+        userService.remove(user, true).then((result) => {
+            if (result.success) {
+                emitAuditEvent(
+                    buildAuditEvent(context, {
+                        action: accountAuditActions.AUTH_ACCOUNT_DELETE_COMPLETED,
+                        actor_user_id: String(_id),
+                        actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
+                        outcome: 'success'
+                    })
+                );
+                emitAnalyticsEvent({
+                    ...buildAnalyticsBase(context),
+                    distinctId: String(_id),
+                    event: accountAnalyticsEvents.ACCOUNT_DELETED
+                });
 
-            // The recipient's own language first, the request's as fallback — see
-            // {@link passwordResetChange} for why the request is only ever the fallback.
-            const mail = deleteConfirmEmail(
-                locale ?? context.locale ?? getDefaultLocale(),
-                username
-            );
-            void enqueueEmail({ to: email, subject: mail.subject }, mail.template, mail.data);
-        }
-        return result;
-    });
+                // The recipient's own language first, the request's as fallback — see
+                // {@link passwordResetChange} for why the request is only ever the fallback.
+                const mail = deleteConfirmEmail(
+                    locale ?? context.locale ?? getDefaultLocale(),
+                    username
+                );
+                void enqueueEmail({ to: email, subject: mail.subject }, mail.template, mail.data);
+            }
+            return result;
+        })
+    );
 };
 
 /**

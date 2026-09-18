@@ -20,11 +20,9 @@ const queryBoolean = z.preprocess(
 
 /**
  * Extends the orval-generated `SearchUsersBody`; page/pageSize and `active` are coerced from
- * strings since GET carries them as query text, not JSON types. `role` needs no coercion — it
- * arrives as the string it already is, and is also how a caller now filters for an unproven
- * address (`role=unverified`), the replacement for the old boolean `verified` filter.
- * page/pageSize come from the shared http schemas so all search endpoints agree on what's
- * legal; absent stays absent, since `normalizePagination` owns the defaults.
+ * strings since GET carries them as query text, not JSON types. page/pageSize come from the
+ * shared http schemas so all search endpoints agree on what's legal; absent stays absent, since
+ * `normalizePagination` owns the defaults.
  */
 const searchUsersQuerySchema = SearchUsersBody.extend({
     page: pageSchema,

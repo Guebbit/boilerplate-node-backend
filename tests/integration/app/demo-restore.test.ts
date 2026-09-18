@@ -17,7 +17,7 @@ import { userModel } from '@modules/users/model';
 import { productModel } from '@modules/products/model';
 import { orderModel } from '@modules/orders/model';
 import { localeModel } from '@modules/locales/model';
-import { roleModel } from '@kernel/access/models';
+import { membershipModel } from '@kernel/access/models';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { seedCredentials } from '@scenarios/accounts';
 
@@ -35,7 +35,9 @@ describe('the `blank` scenario', () => {
                 .map((credential) => credential.email)
                 .toSorted()
         );
-        await expect(roleModel.countDocuments()).resolves.toBeGreaterThan(0);
+        // Roles themselves are no longer stored (presets live in the shared YAML alone) — what a
+        // restore must seed is the memberships that place the named accounts in those roles.
+        await expect(membershipModel.countDocuments()).resolves.toBeGreaterThan(0);
         await expect(localeModel.countDocuments()).resolves.toBeGreaterThan(0);
         await expect(productModel.countDocuments()).resolves.toBe(0);
         await expect(orderModel.countDocuments()).resolves.toBe(0);

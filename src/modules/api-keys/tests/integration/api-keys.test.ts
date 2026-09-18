@@ -11,7 +11,6 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { TEST_TENANT_ID } from '@tests/callers';
 import type { TenantCallerContext } from '@types';
 import { userRepository } from '@modules/users/tests/factories';
-import { seedPresetRoles } from '@kernel/access/seed';
 import { assignRole } from '@kernel/access/store';
 import { permissionsOfRole } from '@kernel/permissions';
 import { resolveCredential } from '@kernel/authentication';
@@ -41,8 +40,6 @@ const contextFor = (userId: string, permissions: readonly string[]): TenantCalle
     },
     analyticsConsent: false
 });
-
-beforeEach(() => seedPresetRoles());
 
 describe('mint — the subset boundary', () => {
     it('refuses a permission the caller does not hold', async () => {

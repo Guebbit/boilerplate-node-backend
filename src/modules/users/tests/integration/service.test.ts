@@ -16,8 +16,7 @@ import { userRepository } from '../../repository';
 import { usersAuditActions } from '@modules/users/audit';
 import * as auditPort from '@infrastructure/observability/audit';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
-import { assignRole } from '@kernel/access/store';
-import { seedPresetRoles } from '@kernel/access/seed';
+import { rolesOf } from '@kernel/access/store';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
 import type { UserDocument } from '../../model';
@@ -288,13 +287,16 @@ describe('userService.getById', () => {
 
 describe('userService.create', () => {
     it('creates a user and returns the Mongoose document', async () => {
+        // `callerContextAs('admin')`, not `testCallerContext`: `create` always grants a
+        // membership now (the implicit `customer` default included), and an anonymous granter
+        // cannot grant anything — same invariant a real route guard would already have enforced.
         const user = await userService.create(
             {
                 email: 'created@example.com',
                 username: 'createduser',
                 password: PLAIN_PASSWORD
             },
-            testCallerContext
+            callerContextAs('admin')
         );
 
         expect(user._id).toBeDefined();
@@ -314,7 +316,9 @@ describe('userService.create', () => {
             callerContextAs('admin')
         );
 
-        expect(user.role).toBe('admin');
+        // The membership, not a document field — `create` grants it through `assignRole`.
+        const roles = await rolesOf(String(user._id), DEPLOYMENT_TENANT_ID);
+        expect(roles.tenant).toBe('admin');
     });
 
     describe('with no password', () => {
@@ -327,7 +331,7 @@ describe('userService.create', () => {
             // what the contract allows, so a create with no password still has to write SOMETHING.
             const user = await userService.create(
                 { email: 'no-password@example.com', username: 'nopassworduser' },
-                testCallerContext
+                callerContextAs('admin')
             );
 
             const stored = await userRepository.findByIdWithCredentials(String(user._id));
@@ -343,7 +347,7 @@ describe('userService.create', () => {
 
             await userService.create(
                 { email: 'no-setup@example.com', username: 'nosetupuser' },
-                testCallerContext
+                callerContextAs('admin')
             );
 
             expect(seen).toEqual([]);
@@ -361,7 +365,7 @@ describe('userService.create', () => {
                     username: 'setupmeuser',
                     sendSetupEmail: true
                 },
-                testCallerContext
+                callerContextAs('admin')
             );
 
             expect(seen).toEqual([String(user._id)]);
@@ -382,7 +386,7 @@ describe('userService.create', () => {
                     password: PLAIN_PASSWORD,
                     sendSetupEmail: true
                 },
-                testCallerContext
+                callerContextAs('admin')
             );
 
             expect(seen).toEqual([]);
@@ -409,7 +413,8 @@ describe('userService.updateById', () => {
         expect(result.success).toBe(true);
         const updated = (result as { data: UserDocument }).data;
         expect(updated.username).toBe('new-name');
-        expect(updated.role).toBe('admin');
+        const roles = await rolesOf(String(updated._id), DEPLOYMENT_TENANT_ID);
+        expect(roles.tenant).toBe('admin');
     });
 
     it('changes the password when a non-empty password is supplied', async () => {
@@ -662,13 +667,9 @@ describe('userService.remove', () => {
     });
 
     it("refuses to hard-delete a shop's last owner, with 409", async () => {
-        // Only reachable with a real MEMBERSHIP row — `revokeRole` no-ops for a role that lives
-        // only on the `.role` column (nothing seeded a membership when this fixture was made
-        // customer/other roles above) — and `assertNotLastAdministrator` counts administrators
-        // through the stored ROLE rows, so those need seeding too, not just the membership.
-        await seedPresetRoles();
-        const user = await createUser({ role: 'admin' });
-        await assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'admin');
+        // `createUser`'s `role` parameter grants the membership `administratorsOf` reads —
+        // presets themselves need no seeding, they're read straight from the shared YAML.
+        const user = await createUser({}, 'admin');
 
         const result = await userService.remove(user, true);
 

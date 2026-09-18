@@ -102,11 +102,14 @@ export const isLiveRefreshSession = (token: Token): boolean =>
 /**
  * The full user record shape backing Mongoose documents. `createdAt`, `updatedAt`, `deletedAt`,
  * `twoFactorEnabledAt` and `verifiedAt` are omitted from the wire `User` contract and redeclared
- * as `Date` below — the contract carries ISO strings, the document carries real dates.
+ * as `Date` below — the contract carries ISO strings, the document carries real dates. `role` is
+ * omitted outright: the document holds no role of its own any more — `kernel/access/store.ts`'s
+ * membership rows are the only place one is stored — so nothing here may read or write it.
+ * {@link toUser} takes the caller's current role as an explicit parameter instead.
  */
 export interface UserRecord extends Omit<
     User,
-    'createdAt' | 'updatedAt' | 'deletedAt' | 'twoFactorEnabledAt' | 'verifiedAt'
+    'createdAt' | 'updatedAt' | 'deletedAt' | 'twoFactorEnabledAt' | 'verifiedAt' | 'role'
 > {
     /**
      * Hashed by the pre-save hook below before it ever reaches Mongo. Absent for an OAuth-only
@@ -378,25 +381,6 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
             default: true
         },
         /*
-         * The role this person holds inside the shop, by name — one of the presets in
-         * `shared/authorization-roles.yaml`. A NAME rather than a key list: roles are data a
-         * deployment may edit, and storing the keys would freeze each account at the permissions
-         * its role happened to hold on the day it was created.
-         *
-         * Not an enum on the schema: a deployment may add roles, and a mongoose enum would refuse
-         * one this build did not ship. `permissionsOfRole` is what refuses an unknown name, at the
-         * point the caller is resolved, where the error can say which account is wrong.
-         */
-        // `unverified`, not `customer`: an account starts able to browse and not to spend, and
-        // stays that way until `POST /account/verify-confirm` (or an OAuth signup a provider
-        // already vouched for) promotes it — see `shared/authorization-roles.yaml`. A row written
-        // before this field existed reads the same way, through `module.ts`'s `?? 'unverified'`
-        // fallback, never through this default.
-        role: {
-            type: String,
-            default: 'unverified'
-        },
-        /*
          * Whether the account is enabled — independent of `deletedAt`, matching `products`:
          * deactivation and soft-delete are separate states that produce the same effect from
          * outside.
@@ -407,13 +391,13 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
         },
         /*
          * WHEN the address was confirmed via the verify flow, or `null` until it is.
-         * Enforcement is the `role` column above (`unverified` holds no `cart.self.checkout`, see
-         * `shared/authorization-keys.yaml`) — this is the record of fact, kept because an account
-         * has one role field: the moment an operator grants a staff role to an unproven address,
-         * the role overwrites the only other evidence the address was never proven. Set by
-         * `completeEmailVerification`/`completeEmailChange`/`passwordResetChange` — every route
-         * that proves the mailbox — and read by the OAuth link path, which refuses to link onto
-         * an account that never proved its own address.
+         * Enforcement is the membership role (`unverified` holds no `cart.self.checkout`, see
+         * `shared/authorization-keys.yaml`) — this is the record of fact, kept separately because
+         * the role can be reassigned: the moment an operator grants a staff role to an unproven
+         * address, that grant would otherwise be the only evidence the address was never proven.
+         * Set by `completeEmailVerification`/`completeEmailChange`/`passwordResetChange` — every
+         * route that proves the mailbox — and read by the OAuth link path, which refuses to link
+         * onto an account that never proved its own address.
          */
         verifiedAt: {
             type: Date,
@@ -740,12 +724,16 @@ export const applyUserTransform = applySerialization(userSchema, {
  * the document itself compiles fine ONLY by luck of those fields being optional and missing —
  * `Date` is not a `string`, so any populated record fails the check; this is the honest fix rather
  * than a wider `UserDocument` generic argument.
+ *
+ * @param role - the caller's CURRENT tenant role, read from the membership store by whoever calls
+ *   this — never off the document, which holds no role of its own any more. `null` prints as
+ *   absent, the same as every other optional field below.
  */
-export const toUser = (document: UserDocument): User => ({
+export const toUser = (document: UserDocument, role: string | null): User => ({
     id: document.id,
     email: document.email,
     username: document.username,
-    ...(document.role === undefined ? {} : { role: document.role }),
+    ...(role === null ? {} : { role }),
     ...(document.active === undefined ? {} : { active: document.active }),
     ...(document.verifiedAt ? { verifiedAt: document.verifiedAt.toISOString() } : {}),
     ...(document.pendingEmail === undefined ? {} : { pendingEmail: document.pendingEmail }),

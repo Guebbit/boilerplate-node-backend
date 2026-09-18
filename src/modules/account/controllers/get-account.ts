@@ -24,8 +24,11 @@ export const getAccount = (request: Request, response: Response): void => {
     accountService
         .getOwnProfile(authContext.id, callerContextOf(request))
         .then((user) => {
-            // A valid token whose row is gone is a dead session, not a server fault.
-            if (user) successResponse<User>(response, userService.toUser(user));
+            // A valid token whose row is gone is a dead session, not a server fault. The role
+            // comes straight off the already-resolved auth context — it was read from the
+            // membership store once already, at token verification, so no second lookup here.
+            if (user)
+                successResponse<User>(response, userService.toUser(user, authContext.roles.tenant));
             else rejectResponse(response, 401);
         })
         .catch(() => rejectResponse(response, 500));

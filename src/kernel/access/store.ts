@@ -12,9 +12,16 @@
 
 import { Types } from 'mongoose';
 import type { AuthorizationScope } from '@types';
-import { assertDeclared, findRole, PERMISSION_KEYS } from '@kernel/permissions';
-import { membershipModel, roleModel, tenantModel } from './models';
-import type { MembershipDocument, RoleDocument, TenantDocument } from './models';
+import { assertDeclared, findRole, PERMISSION_KEYS, PRESET_ROLES } from '@kernel/permissions';
+import { membershipModel, tenantModel } from './models';
+import type { MembershipDocument, TenantDocument } from './models';
+
+/** The one role self-service signup (or an OAuth signup a provider already vouches for) may ever
+ * grant — never a caller-supplied name. See {@link assignDefaultRole}. */
+const SIGNUP_DEFAULT_ROLE = 'unverified';
+
+/** What `unverified` promotes to once the address is proven. See {@link promoteVerifiedCustomer}. */
+const VERIFIED_CUSTOMER_ROLE = 'customer';
 
 /** Raised when a write would leave the model in a state the next request cannot recover from. */
 export class AccessInvariantError extends Error {
@@ -23,10 +30,6 @@ export class AccessInvariantError extends Error {
         this.name = 'AccessInvariantError';
     }
 }
-
-/** One shop by its slug, or `null`. */
-export const tenantBySlug = (slug: string): Promise<TenantDocument | null> =>
-    tenantModel.findOne({ slug: slug.toLowerCase() }).exec();
 
 /**
  * Create a shop, or return the one already carrying that slug.
@@ -50,40 +53,6 @@ export const ensureTenant = (slug: string, name: string, id?: string): Promise<T
             { returnDocument: 'after', upsert: true }
         )
         .exec() as Promise<TenantDocument>;
-
-/**
- * The role a name resolves to in a place: the shop's own first, then the preset every shop has.
- *
- * That order is what "a deployment may edit its roles" means in practice — a shop that redefines
- * `manager` gets its own, and every other shop keeps the preset, with no copy of the preset made
- * anywhere.
- */
-export const roleFor = (
-    name: string,
-    scope: AuthorizationScope,
-    tenantId: string | null
-): Promise<RoleDocument | null> =>
-    roleModel
-        .findOne({ name: name.toLowerCase(), scope, tenantId })
-        .exec()
-        .then(
-            (own) =>
-                own ?? roleModel.findOne({ name: name.toLowerCase(), scope, tenantId: null }).exec()
-        );
-
-/**
- * The keys a membership grants, resolved through the stored role.
- *
- * Falls back to the SHARED preset file when no row exists yet — a deployment that has not seeded
- * still answers correctly, and the conformance suite runs without a database. The database is
- * where a deployment's EDITS live, not where the model's meaning does.
- */
-export const permissionsOfMembership = (
-    membership: Pick<MembershipDocument, 'role' | 'scope' | 'tenantId'>
-): Promise<readonly string[]> =>
-    roleFor(membership.role, membership.scope, membership.tenantId).then(
-        (stored) => stored?.permissions ?? findRole(membership.role)?.permissions ?? []
-    );
 
 /** Every place a person holds a role. One row per place; a person may appear in several. */
 export const membershipsOf = (userId: string): Promise<MembershipDocument[]> =>
@@ -111,6 +80,11 @@ export const membershipIn = (
  *
  * @param granter - the keys the person MAKING the grant holds, or `undefined` for a seeder, a
  *   migration or an operator on the console — the three callers with nobody to escalate from
+ * @throws AccessInvariantError synchronously refused as a REJECTION, never a thrown exception —
+ *   every check below runs inside the promise chain on purpose, so a caller doing
+ *   `assignRole(...).catch(...)` (every caller in this codebase does) sees a rejection, not an
+ *   uncaught throw. `Promise.resolve().then(...)` is what buys that for code with no `await` of
+ *   its own to make it genuinely asynchronous.
  */
 export const assignRole = (
     userId: string,
@@ -119,13 +93,15 @@ export const assignRole = (
     roleName: string,
     granter?: readonly string[]
 ): Promise<MembershipDocument> =>
-    roleFor(roleName, scope, tenantId).then((stored) => {
-        const permissions = stored?.permissions ?? findRole(roleName)?.permissions;
+    Promise.resolve().then(() => {
+        const lowered = roleName.toLowerCase();
+        const role = findRole(lowered);
+        const permissions = role?.scope === scope ? role.permissions : undefined;
 
         if (!permissions) {
             throw new AccessInvariantError(
                 `[access] "${roleName}" is not a role in this ${scope} scope. ` +
-                    `Create it first, or assign one that exists.`
+                    `Declare it in shared/authorization-roles.yaml first, or assign one that exists.`
             );
         }
 
@@ -149,10 +125,39 @@ export const assignRole = (
         return membershipModel
             .findOneAndUpdate(
                 { userId, tenantId, scope },
-                { $set: { role: roleName.toLowerCase() } },
+                { $set: { role: lowered } },
                 { returnDocument: 'after', upsert: true }
             )
             .exec() as Promise<MembershipDocument>;
+    });
+
+/**
+ * The only role self-service signup (or an OAuth signup a provider already vouches for) may ever
+ * grant. Deliberately NOT `assignRole` with a caller-supplied name: a signup endpoint that could
+ * assign any role would be a privilege-escalation door, so this function's whole job is to make
+ * that request impossible to express — there is no `roleName` parameter to pass one through.
+ */
+export const assignDefaultRole = (
+    userId: string,
+    tenantId: string,
+    scope: AuthorizationScope = 'tenant'
+): Promise<MembershipDocument> => assignRole(userId, tenantId, scope, SIGNUP_DEFAULT_ROLE);
+
+/**
+ * Promote an `unverified` membership to `customer` once the address is proven — through the
+ * access store, not by assigning a field. A no-op when the membership already holds any OTHER
+ * role: verification proves an address, it never overwrites a role an operator already assigned,
+ * and it never downgrades one either.
+ *
+ * @returns whether a promotion actually happened
+ */
+export const promoteVerifiedCustomer = (userId: string, tenantId: string): Promise<boolean> =>
+    membershipIn(userId, tenantId, 'tenant').then((membership) => {
+        if (membership?.role !== SIGNUP_DEFAULT_ROLE) {
+            return false;
+        }
+
+        return assignRole(userId, tenantId, 'tenant', VERIFIED_CUSTOMER_ROLE).then(() => true);
     });
 
 /**
@@ -232,99 +237,45 @@ const restoreIfNowUnadministered = (
  * Everyone holding an unrestricted role in a place, by user id.
  *
  * "Unrestricted" is no longer one token to match — there is no wildcard — so a role counts when
- * its stored `permissions` array is a SUPERSET of every key this scope currently declares. `$all`
- * is Mongo's own set-containment operator, so this stays one query rather than a fetch-then-filter
- * in application code; it is never called with an empty list, since both scopes always declare at
- * least one key.
+ * its declared `permissions` array is a SUPERSET of every key this scope currently declares.
+ * The candidate names are computed against `shared/authorization-roles.yaml` (in memory — the
+ * preset list is small and fixed for the process lifetime, so no query is worth it there); which
+ * userIds actually HOLD one of those names is still the one thing the database answers, since
+ * assignment is the data half of this model.
  */
 export const administratorsOf = (
     tenantId: string | null,
     scope: AuthorizationScope
 ): Promise<string[]> => {
     const required = PERMISSION_KEYS.filter((key) => key.scope === scope).map((key) => key.key);
+    const names = PRESET_ROLES.filter(
+        (role) => role.scope === scope && required.every((key) => role.permissions.includes(key))
+    ).map((role) => role.name);
 
-    return roleModel
-        .find({ scope, permissions: { $all: required }, $or: [{ tenantId }, { tenantId: null }] })
-        .exec()
-        .then((roles) => roles.map((role) => role.name))
-        .then((names) =>
-            names.length === 0
-                ? []
-                : membershipModel
-                      .find({ tenantId, scope, role: { $in: names } })
-                      .exec()
-                      .then((memberships) => memberships.map((one) => one.userId))
-        );
+    return names.length === 0
+        ? Promise.resolve([])
+        : membershipModel
+              .find({ tenantId, scope, role: { $in: names } })
+              .exec()
+              .then((memberships) => memberships.map((one) => one.userId));
 };
 
 /**
- * Delete a role, moving everyone who held it to `reassignTo`.
+ * The two role names a person holds, and the shop they hold the first one in — `null` for a scope
+ * where no membership row exists, which is the honest answer: this person holds no role there.
  *
- * The reassignment is REQUIRED, not defaulted: dropping the holders to no permissions is a silent
- * lockout, and dropping them to a default is a silent grant. Either way the next person to notice
- * is the member who cannot do their job.
- *
- * A preset is refused outright — every shop starts with them, and one shop deleting `manager`
- * would take it from all of them.
- */
-export const deleteRole = (
-    name: string,
-    scope: AuthorizationScope,
-    tenantId: string | null,
-    reassignTo: string
-): Promise<number> =>
-    roleFor(name, scope, tenantId).then((role) => {
-        if (!role) {
-            throw new AccessInvariantError(`[access] there is no "${name}" role to delete.`);
-        }
-
-        if (role.preset) {
-            throw new AccessInvariantError(
-                `[access] "${name}" is a preset every shop starts with. Edit what it holds, or ` +
-                    `create a role of your own — deleting it would take it from every other shop.`
-            );
-        }
-
-        return roleFor(reassignTo, scope, tenantId).then((target) => {
-            if (!target) {
-                throw new AccessInvariantError(
-                    `[access] cannot reassign "${name}"'s members to "${reassignTo}": no such role.`
-                );
-            }
-
-            return membershipModel
-                .updateMany({ role: role.name, scope, tenantId }, { $set: { role: target.name } })
-                .exec()
-                .then((result) =>
-                    roleModel
-                        .deleteOne({ _id: role._id })
-                        .exec()
-                        .then(() => result.modifiedCount)
-                );
-        });
-    });
-
-/**
- * The two role names a person holds, and the shop they hold the first one in.
- *
- * What the auth resolver needs and the only shape it needs: the stored memberships, turned into
- * the two names `AuthContext` carries.
- *
- * `fallback`:  what the ACCOUNT itself says — the `role` column the users module publishes.
- * Precedence:  one-way, **a stored membership always wins**. Without the fallback the kernel would
- *              read the users collection to answer, and the kernel naming a module is the coupling
- *              this layout exists to remove.
- * Never a tie: the two agree wherever both exist, and
- *              `tests/integration/kernel/access.test.ts` refuses to let them drift.
+ * No fallback any more: a role lives in exactly one place, the membership row. `permissions.ts`'s
+ * `keysInScope` already treats a `null` role as "no role", not as a guessed default — the anonymous
+ * baseline in tenant scope (signing in may only ever widen what a stranger already sees), an empty
+ * set in platform scope. See `docs/theory/authorization.md`.
  */
 export const rolesOf = (
     userId: string,
-    tenantId: string | null,
-    fallback: { tenant: string; platform: string | null }
-): Promise<{ tenant: string; platform: string | null }> =>
+    tenantId: string | null
+): Promise<{ tenant: string | null; platform: string | null }> =>
     membershipsOf(userId).then((memberships) => ({
         tenant:
             memberships.find((one) => one.scope === 'tenant' && one.tenantId === tenantId)?.role ??
-            fallback.tenant,
-        platform: memberships.find((one) => one.scope === 'platform')?.role ?? fallback.platform
+            null,
+        platform: memberships.find((one) => one.scope === 'platform')?.role ?? null
     }));

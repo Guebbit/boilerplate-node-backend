@@ -84,7 +84,10 @@ export const postSignup = (
                 logAntibotRefusal('email-policy', request.method, request.path, 201);
                 authSignupTotal.inc({ status: 'refused' });
                 return deleteUpload().then(() => {
-                    successResponse<User>(response, userService.toUser(data), 201);
+                    // `'unverified'` hardcoded, not read off a membership that was never written
+                    // (this document is never saved) — exactly what a genuine signup's response
+                    // shows, which is the whole point of this branch being indistinguishable.
+                    successResponse<User>(response, userService.toUser(data, 'unverified'), 201);
                 });
             }
 
@@ -110,7 +113,10 @@ export const postSignup = (
              * address in use already leaks existence.
              */
             return issueSession(response, data.id).then(() => {
-                successResponse<User>(response, userService.toUser(data), 201);
+                // `'unverified'`, not a lookup: self-service signup's `assignDefaultRole` can only
+                // ever grant this one role, so it's what the membership just written holds, by
+                // construction — see `authentication.ts#signup`.
+                successResponse<User>(response, userService.toUser(data, 'unverified'), 201);
             });
         })
         .catch((error: CastError | Error) => {

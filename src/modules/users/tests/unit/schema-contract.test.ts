@@ -51,13 +51,12 @@ describe('userSchema — what a user must carry', () => {
         expect(pattern.test('ada@example.com\nBcc: evil@attacker.test')).toBe(false);
     });
 
-    it('creates a user as unverified and active', () => {
-        // `unverified` is the fail-safe direction and the only one: defaulting to a role that
-        // holds more — `customer` and its `cart.self.checkout`, `owner` above all — is an
-        // account-creation privilege escalation. `verifiedAt: null` matters equally — a default
-        // that backdates it makes the whole email verification flow decorative, since every new
-        // account would already satisfy it.
-        expect(defaultOf(userSchema, 'role')).toBe('unverified');
+    it('creates a user as active, with verification unproven', () => {
+        // `verifiedAt: null` matters: a default that backdates it makes the whole email
+        // verification flow decorative, since every new account would already satisfy it. The
+        // role itself has no schema default any more — see `kernel/access/store.ts`'s
+        // `assignDefaultRole`, the one place `unverified` (the same fail-safe direction) can be
+        // granted, as a membership rather than a document field.
         expect(defaultOf(userSchema, 'active')).toBe(true);
         expect(defaultOf(userSchema, 'verifiedAt')).toBeNull();
     });

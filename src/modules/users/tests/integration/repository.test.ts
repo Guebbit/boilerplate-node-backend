@@ -28,12 +28,6 @@ describe('userRepository', () => {
             // The pre-save hook hashes the password; we must NOT store plain text
             expect(user.password).not.toBe(PLAIN_PASSWORD);
         });
-
-        it('sets the role to unverified by default', async () => {
-            const user = await userRepository.create(makeUser() as Partial<UserDocument>);
-
-            expect(user.role).toBe('unverified');
-        });
     });
 
     describe('findById', () => {
@@ -111,18 +105,18 @@ describe('userRepository', () => {
             await createUser({
                 email: 'admin@example.com',
                 username: 'admin',
-                role: 'admin'
+                active: false
             });
             await createUser({
                 email: 'user@example.com',
                 username: 'user',
-                role: 'customer'
+                active: true
             });
 
-            const admins = await userRepository.findAll({ role: 'admin' });
+            const deactivated = await userRepository.findAll({ active: false });
 
-            expect(admins).toHaveLength(1);
-            expect(admins[0].email).toBe('admin@example.com');
+            expect(deactivated).toHaveLength(1);
+            expect(deactivated[0].email).toBe('admin@example.com');
         });
 
         it('returns lean (plain JS) objects, not Mongoose Documents', async () => {
@@ -147,16 +141,16 @@ describe('userRepository', () => {
             await createUser({
                 email: 'admin@example.com',
                 username: 'admin',
-                role: 'admin'
+                active: false
             });
             await createUser({
                 email: 'user@example.com',
                 username: 'user',
-                role: 'customer'
+                active: true
             });
 
-            expect(await userRepository.count({ role: 'admin' })).toBe(1);
-            expect(await userRepository.count({ role: 'customer' })).toBe(1);
+            expect(await userRepository.count({ active: false })).toBe(1);
+            expect(await userRepository.count({ active: true })).toBe(1);
         });
 
         it('returns 0 when the collection is empty', async () => {
@@ -192,34 +186,31 @@ describe('userRepository', () => {
 
     describe('updateMany', () => {
         it('applies the update to every document matching the filter', async () => {
-            await createUser({ email: 'a@example.com', username: 'a', role: 'customer' });
-            await createUser({ email: 'b@example.com', username: 'b', role: 'customer' });
-            await createUser({ email: 'c@example.com', username: 'c', role: 'admin' });
+            await createUser({ email: 'a@example.com', username: 'a', active: false });
+            await createUser({ email: 'b@example.com', username: 'b', active: false });
+            await createUser({ email: 'c@example.com', username: 'c', active: true });
 
-            // Promote every customer
-            await userRepository.updateMany({ role: 'customer' }, { $set: { role: 'admin' } });
+            // Reactivate every deactivated account
+            await userRepository.updateMany({ active: false }, { $set: { active: true } });
 
-            expect(await userRepository.count({ role: 'admin' })).toBe(3);
-            expect(await userRepository.count({ role: 'customer' })).toBe(0);
+            expect(await userRepository.count({ active: true })).toBe(3);
+            expect(await userRepository.count({ active: false })).toBe(0);
         });
 
         it('does not modify documents that do not match the filter', async () => {
             await createUser({
                 email: 'admin@example.com',
                 username: 'admin',
-                role: 'admin'
+                active: false
             });
             await createUser({
                 email: 'user@example.com',
                 username: 'user',
-                role: 'customer'
+                active: true
             });
 
-            // Only target the customer
-            await userRepository.updateMany(
-                { role: 'customer' },
-                { $set: { username: 'changed' } }
-            );
+            // Only target the active account
+            await userRepository.updateMany({ active: true }, { $set: { username: 'changed' } });
 
             const admin = await userRepository.findOne({
                 email: 'admin@example.com'

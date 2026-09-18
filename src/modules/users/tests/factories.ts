@@ -12,6 +12,7 @@
 import type { UserDocument } from '../model';
 import { userRepository } from '../repository';
 import { assignRole } from '@kernel/access/store';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { makeUser } from '../factories';
 import type { UserOverrides } from '../factories';
 
@@ -44,9 +45,22 @@ export const LEGACY_PASSWORD = 'correct-horse-battery';
 /** Fails the policy outright, for a test asserting the rejection rather than the success. */
 export const WEAK_PASSWORD = 'weak';
 
-/** Insert a user into the test database and return the Mongoose document. */
-export const createUser = (overrides: UserOverrides = {}): Promise<UserDocument> =>
-    userRepository.create(makeUser(overrides));
+/**
+ * Insert a user into the test database and return the Mongoose document.
+ *
+ * @param role - grants a TENANT membership through `assignRole` once the document exists — the
+ *   document holds no role of its own any more, only a membership does. Omit for a caller that
+ *   genuinely wants no membership row at all (the "no role" case `keysInScope` floors to the
+ *   anonymous baseline for).
+ */
+export const createUser = (overrides: UserOverrides = {}, role?: string): Promise<UserDocument> =>
+    userRepository
+        .create(makeUser(overrides))
+        .then((user) =>
+            role === undefined
+                ? user
+                : assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', role).then(() => user)
+        );
 
 /**
  * Insert the demo's `root` — the account every operator test signs in as.
@@ -54,16 +68,17 @@ export const createUser = (overrides: UserOverrides = {}): Promise<UserDocument>
  * TWO ROLES, because that is what the seeded `root` holds and because the two scopes are two
  * jobs: unrestricted inside the shop, and operator over the installation. A fixture carrying only
  * the first would pass every shop test and fail every observability one, which is a fixture that
- * disagrees with the deployment it is standing in for. The shop role rides the account's own
- * `role` column, same as every other role fixture; the platform one has no column to ride at all
- * — `memberships` is its sole authority — so it is written the same way `seedAccessModel` writes
+ * disagrees with the deployment it is standing in for. Both are memberships now — `admin` through
+ * {@link createUser}'s own `role` parameter, `operator` the same way `seedAccessModel` writes
  * `root`'s: through `assignRole`, tenant-less (`tenantId: null`, matching `platform`'s own
  * tenant-less-by-definition rule).
  */
 export const createAdminUser = (overrides: UserOverrides = {}): Promise<UserDocument> =>
-    createUser({
-        role: 'admin',
-        email: 'owner@example.com',
-        username: 'owneruser',
-        ...overrides
-    }).then((user) => assignRole(user.id, null, 'platform', 'operator').then(() => user));
+    createUser(
+        {
+            email: 'owner@example.com',
+            username: 'owneruser',
+            ...overrides
+        },
+        'admin'
+    ).then((user) => assignRole(user.id, null, 'platform', 'operator').then(() => user));

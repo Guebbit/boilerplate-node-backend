@@ -18,6 +18,8 @@ import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { isUnrestrictedRole } from '@kernel/permissions';
+import { rolesOf } from '@kernel/access/store';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { readMfaChallengeCookie, destroyMfaChallengeCookie } from '../oauth/mfa-redirect';
 
 /**
@@ -63,10 +65,11 @@ export const postLoginTwoFactor = (
             const { user, amr } = data;
             const userId = user._id.toString();
 
-            return issueSession(response, userId, undefined, [...amr, 'otp']).then(
-                (accessToken) => {
+            return issueSession(response, userId, undefined, [...amr, 'otp']).then((accessToken) =>
+                // Read fresh from the membership — the document carries no role of its own.
+                rolesOf(userId, DEPLOYMENT_TENANT_ID).then((roles) => {
                     authTwoFactorChallengeTotal.inc({ status: 'success' });
-                    recordLoginSuccess(request, userId, isUnrestrictedRole(user.role));
+                    recordLoginSuccess(request, userId, isUnrestrictedRole(roles.tenant));
                     destroyMfaChallengeCookie(response);
                     successResponse<AuthTokens>(
                         response,
@@ -74,7 +77,7 @@ export const postLoginTwoFactor = (
                         200,
                         'Authentication successful'
                     );
-                }
+                })
             );
         })
         .catch((error: unknown) => {

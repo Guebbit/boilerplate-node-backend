@@ -85,18 +85,11 @@ export const userRepository: Repository<UserDocument> & {
              * `active` filters the real column, not `deletedAt: { $exists: … }`: "show me
              * deactivated accounts" and "show me deleted accounts" are different questions.
              */
-            /*
-             * `role` narrows a listing that already answers 403 to anyone who is not staff, which
-             * is what makes publishing it safe. `unverified` is now itself a role in that same
-             * vocabulary, so filtering on it is the replacement for the old boolean `verified`
-             * filter — a stricter question, since it also excludes an unproven address an operator
-             * already promoted to staff.
-             *
-             * Matched exactly, not as a regex: a role name is a closed vocabulary
-             * (`shared/authorization-roles.yaml`), so a partial match would answer for a role
-             * nobody asked about.
-             */
-            exact: { role: 'role' },
+            // No `role` filter here any more: the document carries no `role` column to match
+            // against — see `kernel/access/store.ts`. Filtering a search by role needs a two-step
+            // resolve (membership rows holding that role, then the users among those ids) that
+            // this generic `exact` filter can't express; deliberately not rebuilt yet, see
+            // DDD_FIX.md Phase 2.3's follow-up note.
             booleans: { active: 'active' }
         }
     }),

@@ -35,6 +35,8 @@ import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/a
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
 import { rotateRefreshToken, TokenReuseError } from '../session/jwt';
+import { assignDefaultRole } from '@kernel/access/store';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**
  * Add a token to the user (e.g. password reset).
@@ -452,6 +454,16 @@ export const signup = (
                                               // endpoints.
                                               locale: getCurrentLocale()
                                           })
+                                          .then((createdUser) =>
+                                              // The membership, not a caller-supplied name —
+                                              // `assignDefaultRole` never accepts one, which is
+                                              // what makes self-service signup structurally
+                                              // unable to grant anything but `unverified`.
+                                              assignDefaultRole(
+                                                  String(createdUser._id),
+                                                  DEPLOYMENT_TENANT_ID
+                                              ).then(() => createdUser)
+                                          )
                                           .then((createdUser) =>
                                               userService
                                                   .enqueueIfPending(createdUser)

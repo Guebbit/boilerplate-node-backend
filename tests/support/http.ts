@@ -30,17 +30,17 @@ interface AuthenticatedTestUser {
  * access token. Going through the endpoint rather than signing a token by hand keeps these
  * tests honest: if login stops issuing usable tokens, every contract test fails.
  *
- * `role: 'customer', verifiedAt: new Date()` — this is the account most tests want: a logged-in
- * caller free to use the whole app, checkout and payment included. A test asserting UNVERIFIED
- * behaviour builds its own user with `createUser({ role: 'unverified' })` (`account`'s own
- * suites do exactly that) rather than fighting this default.
+ * `customer` membership, `verifiedAt: new Date()` — this is the account most tests want: a
+ * logged-in caller free to use the whole app, checkout and payment included. A test asserting
+ * UNVERIFIED behaviour builds its own user with `createUser({ verifiedAt: new Date() }, 'unverified')`
+ * (`account`'s own suites do exactly that) rather than fighting this default.
  */
 export const authenticateAs = async (
     role: 'admin' | 'user' = 'user'
 ): Promise<AuthenticatedTestUser> => {
     const user = await (role === 'admin'
         ? createAdminUser({ verifiedAt: new Date() })
-        : createUser({ role: 'customer', verifiedAt: new Date() }));
+        : createUser({ verifiedAt: new Date() }, 'customer'));
 
     return authenticateUser(user, role);
 };
@@ -50,20 +50,21 @@ export const authenticateAs = async (
  * `editor`, `moderator`, `customer` — and logs it in the same way
  * {@link authenticateAs} does. Separate from it rather than a third accepted value there: those
  * two are the two accounts most tests reach for by NAME, while this one exists for the contract
- * sweep that has to drive every preset role through the HTTP surface — see `rolesOf`'s
- * column-fallback in `@kernel/access/store`, which is what makes a bare `role` column enough
- * without seeding a membership row too.
+ * sweep that has to drive every preset role through the HTTP surface — granted through
+ * `createUser`'s own `role` parameter, which writes the membership `rolesOf` actually reads.
  */
 export const authenticateAsRole = async (role: string): Promise<AuthenticatedTestUser> => {
     // Distinct per role, not `createUser`'s shared default: the contract sweep this exists for
     // authenticates several roles inside ONE test, and a second account at the same address is a
     // duplicate-key error, not a second caller.
-    const user = await createUser({
-        role,
-        email: `${role}@example.com`,
-        username: role,
-        verifiedAt: new Date()
-    });
+    const user = await createUser(
+        {
+            email: `${role}@example.com`,
+            username: role,
+            verifiedAt: new Date()
+        },
+        role
+    );
 
     return authenticateUser(user, role);
 };

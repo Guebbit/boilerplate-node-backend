@@ -71,9 +71,11 @@ export const putAccount = (
                 return;
             }
 
+            // The role comes straight off the already-resolved auth context, same as
+            // `get-account.ts` — a profile edit never changes it, so no second lookup here.
             successResponse<User>(
                 response,
-                userService.toUser(data),
+                userService.toUser(data, request.authContext!.roles.tenant),
                 200,
                 t('account.update.success')
             );

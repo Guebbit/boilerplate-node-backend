@@ -287,7 +287,7 @@ const STRANGER: Caller = { id: null, tenantId: null, scope: 'platform', permissi
  */
 export const callerContextOf = (request: {
     caller?: Caller;
-    authContext?: { analyticsConsent?: boolean; roles?: { tenant?: string } };
+    authContext?: { analyticsConsent?: boolean; roles?: { tenant?: string | null } };
     credentialId?: string;
     ip?: string;
     headers?: {
@@ -303,7 +303,9 @@ export const callerContextOf = (request: {
     const consentHeader = Array.isArray(rawConsentHeader) ? rawConsentHeader[0] : rawConsentHeader;
     return {
         caller: request.caller ?? STRANGER,
-        actorRoleName: request.authContext?.roles?.tenant,
+        // `null` (no membership) reads the same as "never resolved one" here — `actorRoleName`
+        // has no separate spelling for "authenticated, but holds no role".
+        actorRoleName: request.authContext?.roles?.tenant ?? undefined,
         actorCredentialId: request.credentialId,
         ip: request.ip,
         // Node exposes a repeated header as an array; take the first rather than logging

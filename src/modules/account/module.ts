@@ -63,18 +63,13 @@ const resolve = (verify: (token: string) => Promise<TokenData>) => (token: strin
          */
         .then(({ user, claims }) =>
             (user
-                ? rolesOf(user.id, DEPLOYMENT_TENANT_ID, {
-                      // What the account itself says, for the account no membership names —
-                      // an unseeded deployment, or a fixture written straight to the
-                      // collection. A stored membership always wins over it. Platform has no
-                      // such column of its own: `memberships` is the sole authority for that
-                      // scope, so an account with none there simply holds no platform role.
-                      tenant: user.role ?? 'unverified',
-                      platform: null
-                  }).then((roles) => ({ tenantId: DEPLOYMENT_TENANT_ID, roles }))
+                ? rolesOf(user.id, DEPLOYMENT_TENANT_ID).then((roles) => ({
+                      tenantId: DEPLOYMENT_TENANT_ID,
+                      roles
+                  }))
                 : Promise.resolve({
                       tenantId: DEPLOYMENT_TENANT_ID,
-                      roles: { tenant: 'unverified', platform: null }
+                      roles: { tenant: null, platform: null }
                   })
             ).then((membership) => ({ user, claims, membership }))
         )
@@ -86,13 +81,12 @@ const resolve = (verify: (token: string) => Promise<TokenData>) => (token: strin
                       email: user.email,
                       username: user.username,
                       /*
-                       * `rolesOf`'s membership lookup wins over both fallbacks. `tenant` falls
-                       * back to the account's own `role` column — `unverified` is the default for
-                       * a row with none, the least-privileged answer and therefore the safe one:
-                       * after the verification-role migration, an absent role means a row the
-                       * migration did not see. `platform` has no column to fall back to at all:
-                       * `memberships` is the sole authority for that scope, so no row there means
-                       * no platform role, which is correct for almost everyone.
+                       * `rolesOf`'s membership lookup, with no fallback: a role lives in exactly
+                       * one place now. `null` in either scope means genuinely no role there — for
+                       * `tenant` that is a rare, defensive case (every real signup path writes a
+                       * membership immediately), for `platform` it is correct for almost everyone.
+                       * `keysInScope` in `kernel/permissions.ts` is what turns a `null` role into
+                       * the anonymous baseline (tenant) or an empty set (platform), never a guess.
                        *
                        * A stranger never reaches here at all — they are `guest`, via
                        * `anonymousCaller()`.

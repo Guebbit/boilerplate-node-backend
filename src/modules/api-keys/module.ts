@@ -49,18 +49,18 @@ const currentCallerOf = (apiKey: ApiKeyDocument): Promise<Caller | undefined> =>
     userService.findAuthenticatableById(apiKey.createdByUserId).then((user) => {
         if (!user) return undefined;
 
-        return rolesOf(apiKey.createdByUserId, apiKey.tenant, {
-            // `unverified`, not `customer` — same fallback `account/module.ts` resolves to, for
-            // the same reason: after the verification-role migration, an absent `role` means a
-            // row the migration did not see, and least-privileged is the safe answer.
-            tenant: user.role ?? 'unverified',
-            platform: null
-        }).then((roles) => ({
+        return rolesOf(apiKey.createdByUserId, apiKey.tenant).then((roles) => ({
             id: apiKey.createdByUserId,
             tenantId: apiKey.tenant,
             scope: 'tenant' as const,
+            // `roles.tenant` may be `null` — no membership row exists — so this floors to the
+            // anonymous baseline alone, never throws. Same null-safety `keysInScope` gives every
+            // other caller; restated here because that helper is private to `kernel/permissions.ts`.
             permissions: [
-                ...new Set([...permissionsOfRole(roles.tenant), ...ANONYMOUS_ROLE.permissions])
+                ...new Set([
+                    ...(roles.tenant ? permissionsOfRole(roles.tenant) : []),
+                    ...ANONYMOUS_ROLE.permissions
+                ])
             ]
         }));
     });

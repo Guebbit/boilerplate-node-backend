@@ -14,6 +14,8 @@ import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { readInput, callerContextOf } from '@infrastructure/http/request';
 import { readUploadedImage } from '@infrastructure/http/middlewares/upload';
+import { rolesOf } from '@kernel/access/store';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type {
     CreateUserRequest,
     CreateUserRequestMultipart,
@@ -127,11 +129,14 @@ export const writeUsers = (
                 },
                 callerContextOf(request)
             )
-            .then((user) => {
+            .then((user) =>
                 // `toUser` picks only the `User` contract's own fields, so the hashed password
-                // and tokens on the document never reach `res.json`.
-                successResponse<User>(response, userService.toUser(user), 201);
-            })
+                // and tokens on the document never reach `res.json`. The role is read fresh from
+                // the membership just written — never off the document, which holds none.
+                rolesOf(String(user._id), DEPLOYMENT_TENANT_ID).then((roles) => {
+                    successResponse<User>(response, userService.toUser(user, roles.tenant), 201);
+                })
+            )
             .catch((error: unknown) =>
                 deleteUpload().then(() => {
                     rejectDatabaseError(response, 'writeUser', error);
@@ -155,7 +160,10 @@ export const writeUsers = (
                 return deleteUpload().then(() => {
                     rejectResponse(response, 500, [t('generic.error-internal')]);
                 });
-            successResponse<User>(response, userService.toUser(result.data));
+            const saved = result.data;
+            return rolesOf(String(saved._id), DEPLOYMENT_TENANT_ID).then((roles) => {
+                successResponse<User>(response, userService.toUser(saved, roles.tenant));
+            });
         })
         .catch((error: unknown) =>
             // Matches the create branch above: an upload this request wrote must not survive a

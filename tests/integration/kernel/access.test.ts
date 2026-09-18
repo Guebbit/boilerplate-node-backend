@@ -16,17 +16,16 @@ import {
     AccessInvariantError,
     administratorsOf,
     assignRole,
-    deleteRole,
+    assignDefaultRole,
     ensureTenant,
     membershipIn,
     membershipsOf,
-    permissionsOfMembership,
     revokeRole,
-    roleFor,
-    tenantBySlug
+    rolesOf
 } from '@kernel/access/store';
-import { membershipModel, roleModel } from '@kernel/access/models';
-import { bootstrapAccessModel, DEPLOYMENT_TENANT_SLUG, seedPresetRoles } from '@kernel/access/seed';
+import { membershipModel } from '@kernel/access/models';
+import { bootstrapAccessModel, DEPLOYMENT_TENANT_SLUG } from '@kernel/access/seed';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import {
     SEED_OWNER_ID,
     SEED_USER_ID,
@@ -36,44 +35,21 @@ import {
 } from '@scenarios/accounts';
 import { userRepository } from '@modules/users/tests/factories';
 import { shopModules } from '@scenarios/index';
-import { PERMISSION_KEYS, PRESET_ROLES } from '@kernel/permissions';
+import { PERMISSION_KEYS, permissionsOfRole } from '@kernel/permissions';
 import { asStub } from '@tests/stub';
 
 setupTestDb();
-
-beforeEach(async () => {
-    await seedPresetRoles();
-});
 
 /** The user rows the last describe compares against — seeded only where it needs them. */
 const seedUsers = () => shopModules.users.seed();
 
 describe('the preset roles', () => {
-    it('are seeded as editable rows, one per name', async () => {
-        const stored = await roleModel.find({ preset: true }).exec();
-
-        // Every preset in the shared file, and nothing invented here: the seeder reads that file
-        // rather than restating it, which is what makes both backends start the same shop.
-        expect(stored.map((role) => role.name).toSorted()).toEqual(
-            [...PRESET_ROLES.map((role) => role.name), 'guest'].toSorted()
-        );
-    });
-
-    it('are idempotent, so seeding a seeded database changes nothing', async () => {
-        await seedPresetRoles();
-
-        expect(await roleModel.countDocuments({ name: 'admin' }).exec()).toBe(1);
-    });
-
-    it('can be edited, because roles are data', async () => {
-        await roleModel.updateOne(
-            { name: 'support', tenantId: null },
-            { $set: { permissions: [] } }
-        );
-
-        const support = await roleFor('support', 'tenant', null);
-
-        expect(support?.permissions).toEqual([]);
+    // No seeding, no editing: since B2(b) (2026-09-18), a role's permissions live in
+    // `shared/authorization-roles.yaml` alone — `kernel/permissions.ts` reads them at import,
+    // there is no database row to seed or to edit. `tests/cross-cutting/authorization-conformance.test.ts`
+    // is where the YAML itself gets exercised; this file is membership storage only.
+    it('resolve straight from the shared file, with no database involved', () => {
+        expect(permissionsOfRole('support')).toEqual(expect.any(Array));
     });
 });
 
@@ -96,29 +72,6 @@ describe('membership across tenants', () => {
             { tenantId: String(north._id), role: 'admin' },
             { tenantId: String(south._id), role: 'warehouse' }
         ]);
-    });
-
-    it('resolves each membership to its own keys, not to a union of them', async () => {
-        const north = await ensureTenant('north', 'North Shop');
-        const south = await ensureTenant('south', 'South Shop');
-
-        const [inNorth, inSouth] = await Promise.all([
-            permissionsOfMembership({
-                role: 'admin',
-                scope: 'tenant',
-                tenantId: String(north._id)
-            }),
-            permissionsOfMembership({
-                role: 'warehouse',
-                scope: 'tenant',
-                tenantId: String(south._id)
-            })
-        ]);
-
-        // Owning one shop says nothing about the other. If these merged, "a member of several
-        // associations with different roles in each" would mean the widest role everywhere.
-        expect(inNorth).toContain('apikeys.any.delete');
-        expect(inSouth).not.toContain('apikeys.any.delete');
     });
 
     it('holds one role per person per place, so a reassignment replaces rather than adds', async () => {
@@ -145,24 +98,6 @@ describe('membership across tenants', () => {
 
         expect(held.map((one) => one.scope).toSorted()).toEqual(['platform', 'tenant']);
     });
-
-    it('prefers a shop own role over the preset of the same name', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
-
-        await roleModel.create({
-            name: 'manager',
-            scope: 'tenant',
-            tenantId: String(shop._id),
-            permissions: ['products.self.read'],
-            preset: false
-        });
-
-        // What "a deployment may edit its roles" means in practice: this shop's manager is
-        // narrower, and every other shop still gets the preset.
-        const scoped = await roleFor('manager', 'tenant', String(shop._id));
-
-        expect(scoped?.permissions).toEqual(['products.self.read']);
-    });
 });
 
 describe('the invariants', () => {
@@ -187,11 +122,9 @@ describe('the invariants', () => {
 
     it('allows a granter to hand over exactly what they hold', async () => {
         const shop = await ensureTenant('shop', 'The Shop');
-        const granter = await permissionsOfMembership({
-            role: 'admin',
-            scope: 'tenant',
-            tenantId: String(shop._id)
-        });
+        // A role's keys are a pure YAML lookup now — no membership or tenant involved in reading
+        // what `admin` holds, only in who holds it.
+        const granter = permissionsOfRole('admin');
 
         await expect(
             assignRole('person-1', String(shop._id), 'tenant', 'manager', granter)
@@ -270,72 +203,30 @@ describe('the invariants', () => {
         expect(await administratorsOf(String(shop._id), 'tenant')).toEqual(['owner-b']);
     });
 
-    it('counts administrators by what they HOLD, not by what they are called', async () => {
+    it('counts administrators by what they HOLD, computed against the shared presets', async () => {
         const shop = await ensureTenant('shop', 'The Shop');
         const everyTenantKey = PERMISSION_KEYS.filter((key) => key.scope === 'tenant').map(
             (key) => key.key
         );
-        await roleModel.create({
-            name: 'steward',
-            scope: 'tenant',
-            tenantId: String(shop._id),
-            permissions: everyTenantKey,
-            preset: false
-        });
-        await assignRole('person-1', String(shop._id), 'tenant', 'steward');
+        // `admin` is the only preset that holds every tenant key (Phase 2.2) — proving the
+        // invariant asks the YAML, not a hand-picked name, by checking that fact rather than
+        // assuming it.
+        expect(permissionsOfRole('admin')).toEqual(expect.arrayContaining(everyTenantKey));
+        await assignRole('person-1', String(shop._id), 'tenant', 'admin');
 
-        // A deployment may rename or invent roles. The invariant has to survive that, so it asks
-        // which rows hold every declared key, not which rows are called `admin`.
         expect(await administratorsOf(String(shop._id), 'tenant')).toEqual(['person-1']);
     });
 
-    it('refuses to delete a preset every shop starts with', async () => {
-        await expect(deleteRole('manager', 'tenant', null, 'customer')).rejects.toThrow(/preset/);
-    });
-
-    it('moves a deleted role members to a named role rather than to nothing', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
-        await roleModel.create({
-            name: 'curator',
-            scope: 'tenant',
-            tenantId: String(shop._id),
-            permissions: ['products.self.read'],
-            preset: false
-        });
-        await assignRole('person-1', String(shop._id), 'tenant', 'curator');
-
-        const moved = await deleteRole('curator', 'tenant', String(shop._id), 'customer');
-
-        // Never silently to "no permissions", never silently to a default: the reassignment is a
-        // required argument, so the caller has to have decided.
-        expect(moved).toBe(1);
-        const moved2 = await membershipsOf('person-1');
-
-        expect(moved2[0].role).toBe('customer');
-    });
-
-    it('refuses a deletion whose reassignment target does not exist', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
-        await roleModel.create({
-            name: 'curator',
-            scope: 'tenant',
-            tenantId: String(shop._id),
-            permissions: [],
-            preset: false
-        });
-
-        await expect(deleteRole('curator', 'tenant', String(shop._id), 'nobody')).rejects.toThrow(
-            /no such role/
-        );
-    });
+    // `deleteRole` and the editable per-tenant role it operated on are gone (B2(b),
+    // 2026-09-18) — presets are the sole authority now, defined in
+    // `shared/authorization-roles.yaml` alone, and nothing deletes a preset at runtime.
 });
 
 describe('bootstrapAccessModel', () => {
-    it('creates the shop and the presets, with no accounts', async () => {
+    it('creates the shop, with no accounts — the presets need no seeding step', async () => {
         const tenant = await bootstrapAccessModel('Shop');
 
         expect(tenant.slug).toBe(DEPLOYMENT_TENANT_SLUG);
-        expect(await roleModel.countDocuments({ preset: true })).toBe(PRESET_ROLES.length + 1);
         expect(await membershipsOf(SEED_OWNER_ID)).toEqual([]);
     });
 
@@ -352,7 +243,6 @@ describe('the seeded model', () => {
     it('places the demo accounts, and gives root both jobs', async () => {
         await seedAccessModel();
 
-        const tenant = await tenantBySlug(DEPLOYMENT_TENANT_SLUG);
         const rootMemberships = await membershipsOf(SEED_OWNER_ID);
 
         // Two memberships for one person, because running a shop and operating the installation
@@ -368,9 +258,9 @@ describe('the seeded model', () => {
         ]);
 
         const [customer, editor, moderator] = await Promise.all([
-            membershipIn(SEED_USER_ID, String(tenant?._id), 'tenant'),
-            membershipIn(SEED_EDITOR_ID, String(tenant?._id), 'tenant'),
-            membershipIn(SEED_MODERATOR_ID, String(tenant?._id), 'tenant')
+            membershipIn(SEED_USER_ID, DEPLOYMENT_TENANT_ID, 'tenant'),
+            membershipIn(SEED_EDITOR_ID, DEPLOYMENT_TENANT_ID, 'tenant'),
+            membershipIn(SEED_MODERATOR_ID, DEPLOYMENT_TENANT_ID, 'tenant')
         ]);
 
         // Each of these two holds exactly one tenant role, unlike root's two jobs above — the
@@ -387,22 +277,51 @@ describe('the seeded model', () => {
         expect(await membershipsOf(SEED_OWNER_ID)).toHaveLength(2);
     });
 
-    it('agrees with what the users module publishes', async () => {
+    it('is the ONLY place a role is stored — the user document carries none', async () => {
         await seedUsers();
         await seedAccessModel();
 
-        const tenant = await tenantBySlug(DEPLOYMENT_TENANT_SLUG);
-        const [membership, published] = await Promise.all([
-            membershipIn(SEED_OWNER_ID, String(tenant?._id), 'tenant'),
-            userRepository.findById(SEED_OWNER_ID)
-        ]);
+        const membership = await membershipIn(SEED_OWNER_ID, DEPLOYMENT_TENANT_ID, 'tenant');
+        const published = await userRepository.findById(SEED_OWNER_ID);
 
         /*
-         * Two stores, one answer. The membership is what authorization is decided from; the user
-         * row's `role` is what the staff list shows. They are written by one caller apiece and
-         * this is what refuses to let them drift — a listing that disagrees with the model is a
-         * listing that lies, and nobody finds out until somebody cannot do their job.
+         * One store, one answer — the redundancy this phase closed. A role field on the user
+         * document could drift from the membership that actually decides authorization; the fix
+         * is not to keep them in sync, it is to have only one of them at all.
          */
-        expect(published?.role).toBe(membership?.role);
+        expect(membership?.role).toBe('admin');
+        expect(asStub<{ role?: unknown }>(published).role).toBeUndefined();
+    });
+});
+
+describe('a role lives in exactly one place, the membership row', () => {
+    it('an account with no membership resolves to no role, not a guess', async () => {
+        // `ensureTenant` alone, no `assignRole` — nobody has ever been placed here.
+        const shop = await ensureTenant('nomembers', 'No Members Shop');
+
+        const roles = await rolesOf('never-granted', String(shop._id));
+
+        expect(roles.tenant).toBeNull();
+        expect(roles.platform).toBeNull();
+    });
+
+    it('assignDefaultRole can only ever grant unverified — there is no name to pass it', async () => {
+        const shop = await ensureTenant('shop', 'The Shop');
+
+        await assignDefaultRole('fresh-signup', String(shop._id));
+
+        const membership = await membershipIn('fresh-signup', String(shop._id), 'tenant');
+        expect(membership?.role).toBe('unverified');
+        // The type itself is the guard: `assignDefaultRole` takes no role-name parameter at all,
+        // so a caller cannot express "grant admin" through it even by mistake — see
+        // `kernel/access/store.ts`.
+    });
+
+    it('assignRole refuses a name the shared presets do not declare', async () => {
+        const shop = await ensureTenant('shop', 'The Shop');
+
+        await expect(
+            assignRole('person-1', String(shop._id), 'tenant', 'not-a-real-role')
+        ).rejects.toThrow(AccessInvariantError);
     });
 });

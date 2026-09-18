@@ -94,10 +94,13 @@ describe('user credential exposure', () => {
         it('emits only the OpenAPI User properties', async () => {
             const user = await withTokens();
 
+            // No `role` here: it is a membership fact now, never a column on this document —
+            // `kernel/access/store.ts` is the sole authority, and `toUser` takes the caller's
+            // current role as an explicit parameter instead of reading one off the schema.
             expect(Object.keys(user.toJSON() as object).toSorted()).toEqual([
                 'active',
-                // Now defaulted like `active`/`role` rather than tri-state, so it is always
-                // present rather than omitted when unset.
+                // Now defaulted like `active` rather than tri-state, so it is always present
+                // rather than omitted when unset.
                 'analyticsConsent',
                 'createdAt',
                 'email',
@@ -106,17 +109,13 @@ describe('user credential exposure', () => {
                 // The user's preferred language. Public rather than stripped: the client shows
                 // it in the profile and writes it back, and it is in the `User` contract.
                 'locale',
-                // The role held inside the shop. Who operates the INSTALLATION is not a fact
-                // about a shop, and is not a column on this document at all — `memberships` is
-                // the sole authority for that scope.
-                'role',
-                // Defaulted `true` like `active`/`role`, always present — enforced at signup,
+                // Defaulted `true` like `active`, always present — enforced at signup,
                 // informational everywhere else (see `users/model.ts`).
                 'termsAccepted',
                 'updatedAt',
                 'username',
                 // WHEN the address was confirmed, or `null` until it is — in the `User` contract,
-                // informational only: the `role` column is what `cart.self.checkout` actually reads.
+                // informational only: the membership role is what `cart.self.checkout` actually reads.
                 'verifiedAt'
             ]);
         });
