@@ -328,9 +328,10 @@ const runCheckout = async (
                       user.username,
                       order,
                       { beneficiary, iban, ...(bic ? { bic } : {}), reference: transferReference },
-                      payBy
+                      payBy,
+                      String(order._id)
                   )
-                : orderConfirmEmail(buyerLocale, user.username, order);
+                : orderConfirmEmail(buyerLocale, user.username, order, String(order._id));
         void enqueueEmail({ to: user.email, subject: mail.subject }, mail.template, mail.data);
         return generateSuccess<OrderDocument>(order);
     }

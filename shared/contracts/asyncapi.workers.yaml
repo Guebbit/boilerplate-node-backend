@@ -1,10 +1,12 @@
 # The queues that belong to no domain — the async half of what `openapi.root.yaml` files under
 # `system`.
 #
-# Sending an email and rendering a PDF are verbs, not domains: the producer is whichever module
-# needs one, and the consumer is `infrastructure/adapters/{email,pdf}.worker.ts`. Neither half
-# stops making sense in an app with no modules, so the contract for them sits beside the root
-# rather than inside a domain that happens to enqueue the most jobs.
+# Sending an email is a verb, not a domain: the producer is whichever module needs one, and the
+# consumer is `infrastructure/adapters/email.worker.ts`. That doesn't stop making sense in an app
+# with no modules, so the contract for it sits beside the root rather than inside a domain that
+# happens to enqueue the most jobs. PDF generation is NOT here any more — it's orders' own invoice
+# pipeline now (`src/modules/orders/asyncapi.internal.yaml`), the same way webhook delivery is
+# webhooks' own queue rather than a domainless one.
 #
 # Unlike the root, this IS a standalone AsyncAPI document — `info` exists only to make it one, so
 # `npm run lint:asyncapi:modules` can validate it exactly like a module’s.
@@ -36,14 +38,6 @@ channels:
         messages:
             EmailJobMessage:
                 $ref: '#/components/messages/EmailJobMessage'
-    worker.pdf.generate:
-        address: worker.pdf.generate
-        description: PDF generation job queue — producers enqueue render requests, the PDF worker consumes them.
-        servers:
-            - $ref: '#/servers/rabbitmqLocal'
-        messages:
-            PdfJobMessage:
-                $ref: '#/components/messages/PdfJobMessage'
     worker.image.digest:
         address: worker.image.digest
         description: >-
@@ -80,28 +74,6 @@ operations:
             it forever would starve the queue behind a job that cannot succeed.
         messages:
             - $ref: '#/channels/worker.email.send/messages/EmailJobMessage'
-    workerPdfPublish:
-        action: receive
-        channel:
-            $ref: '#/channels/worker.pdf.generate'
-        summary: Enqueue a PDF generation request.
-        description: >-
-            Rendering is CPU-bound and unbounded in duration, which is exactly what must not
-            happen on a request thread: the producer hands over the template name and its data
-            and returns immediately.
-        messages:
-            - $ref: '#/channels/worker.pdf.generate/messages/PdfJobMessage'
-    workerPdfConsume:
-        action: send
-        channel:
-            $ref: '#/channels/worker.pdf.generate'
-        summary: PDF worker renders template to PDF.
-        description: >-
-            Renders the named template and writes the result where the job says. Runs in the
-            worker process rather than the API cluster, so a render storm degrades PDF turnaround
-            and leaves request latency alone.
-        messages:
-            - $ref: '#/channels/worker.pdf.generate/messages/PdfJobMessage'
     workerImageDigestPublish:
         action: receive
         channel:
@@ -134,11 +106,6 @@ components:
             title: Email delivery job
             payload:
                 $ref: '#/components/schemas/EmailJobPayload'
-        PdfJobMessage:
-            name: PdfJobMessage
-            title: PDF generation job
-            payload:
-                $ref: '#/components/schemas/PdfJobPayload'
         ImageDigestJobMessage:
             name: ImageDigestJobMessage
             title: Image digest job
@@ -183,30 +150,6 @@ components:
                         including the `<html lang>` value and the footer line. The consumer
                         interpolates it and resolves nothing, which is why no locale travels
                         with the job.
-            additionalProperties: false
-        PdfJobPayload:
-            type: object
-            required:
-                - templatePath
-                - templateData
-                - outputPath
-            properties:
-                templatePath:
-                    type: string
-                    description: >-
-                        Template to render, named the way the consumer resolves it — a file path
-                        here, a Blade view name in the twin. Neutral for the same reason
-                        `EmailJobPayload.templateName` is: the two backends render different
-                        engines and the payload is not the place that decides which.
-                templateData:
-                    type: object
-                    description: >-
-                        Everything the template prints, already translated by the producer —
-                        same contract as EmailJobPayload.data, and the same reason no locale
-                        travels with the job.
-                outputPath:
-                    type: string
-                    description: Filesystem path where the generated PDF will be written.
             additionalProperties: false
         ImageDigestJobPayload:
             type: object

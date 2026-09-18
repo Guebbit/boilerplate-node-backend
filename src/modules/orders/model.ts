@@ -150,6 +150,14 @@ export interface OrderDocument
      * `transferInstructions.reference`.
      */
     transferReference?: string;
+    /**
+     * `'pending'` from the moment this order is written (the schema default below), `'ready'`
+     * once `orders/transport/invoice-pdf.ts`'s worker has stored the rendered PDF. Absent on an
+     * order that predates this field — no job was ever queued for it, and
+     * `GET /orders/{id}/invoice` falls back to rendering it on demand, exactly as every order did
+     * before this field existed.
+     */
+    invoicePdfStatus?: 'pending' | 'ready';
     deletedAt?: Date;
 }
 
@@ -338,6 +346,19 @@ export const orderSchema = new Schema<OrderDocument>(
          */
         transferReference: {
             type: String
+        },
+        /*
+         * Defaulted, unlike every other field in this schema that tracks a feature's rollout —
+         * `invoiceNumber`/`transferReference` above are deliberately never backfilled onto a row
+         * that predates them. This one IS applied to every new document (Mongoose only applies a
+         * schema default on insert, never retroactively), which is exactly what gives the
+         * "pending on write, absent on anything older" distinction `OrderDocument`'s docblock
+         * describes for free, with no code at either order-creation call site.
+         */
+        invoicePdfStatus: {
+            type: String,
+            enum: ['pending', 'ready'],
+            default: 'pending'
         }
     },
     {

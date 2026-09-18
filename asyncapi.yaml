@@ -3,6 +3,7 @@
 #          src/modules/observability/asyncapi.yaml
 #          src/modules/webhooks/asyncapi.yaml
 #          src/modules/webhooks/asyncapi.internal.yaml
+#          src/modules/orders/asyncapi.internal.yaml
 #          shared/contracts/asyncapi.workers.yaml
 asyncapi: 3.0.0
 id: 'urn:boilerplate-node-backend:asyncapi:contracts'
@@ -128,6 +129,15 @@ channels:
         messages:
             WebhookDeliverJobMessage:
                 $ref: '#/components/messages/WebhookDeliverJobMessage'
+    worker.orders.invoice-generate:
+        address: worker.orders.invoice-generate
+        description: >-
+            Invoice PDF generation job queue — the `orders` module enqueues one message per order created, the invoice worker consumes it and writes the stored PDF.
+        servers:
+            - $ref: '#/servers/rabbitmqLocal'
+        messages:
+            OrderInvoicePdfJobMessage:
+                $ref: '#/components/messages/OrderInvoicePdfJobMessage'
     worker.email.send:
         address: worker.email.send
         description: Email job queue — producers enqueue email requests, the email worker consumes them.
@@ -136,14 +146,6 @@ channels:
         messages:
             EmailJobMessage:
                 $ref: '#/components/messages/EmailJobMessage'
-    worker.pdf.generate:
-        address: worker.pdf.generate
-        description: PDF generation job queue — producers enqueue render requests, the PDF worker consumes them.
-        servers:
-            - $ref: '#/servers/rabbitmqLocal'
-        messages:
-            PdfJobMessage:
-                $ref: '#/components/messages/PdfJobMessage'
     worker.image.digest:
         address: worker.image.digest
         description: >-
@@ -247,6 +249,24 @@ operations:
             Signs the payload (Standard Webhooks format), resolves and validates the target through the SSRF guard, POSTs with a hard timeout, and records the outcome on the delivery row this job names. A failure schedules `nextAttemptAt` for the retry sweep rather than requeueing here — see `docs/reference/ops.md#scheduled-jobs`.
         messages:
             - $ref: '#/channels/worker.webhook.deliver/messages/WebhookDeliverJobMessage'
+    ordersInvoicePdfPublish:
+        action: receive
+        channel:
+            $ref: '#/channels/worker.orders.invoice-generate'
+        summary: Enqueue invoice PDF generation for a just-created order.
+        description: >-
+            Published from the module's own `order.created` listener — see `orders/events.ts`: fires exactly once per order, regardless of which of the two creation paths made it.
+        messages:
+            - $ref: '#/channels/worker.orders.invoice-generate/messages/OrderInvoicePdfJobMessage'
+    ordersInvoicePdfConsume:
+        action: send
+        channel:
+            $ref: '#/channels/worker.orders.invoice-generate'
+        summary: Invoice worker renders and stores the PDF, then marks the order ready.
+        description: >-
+            Resolves the order by `orderId`, renders the same EJS template `GET /orders/{id}/invoice` renders synchronously for orders that predate this queue, writes the PDF to private storage, and flips `invoicePdfStatus` to `ready`. A failed render is left to reject, so the broker redelivers it.
+        messages:
+            - $ref: '#/channels/worker.orders.invoice-generate/messages/OrderInvoicePdfJobMessage'
     workerEmailPublish:
         action: receive
         channel:
@@ -265,24 +285,6 @@ operations:
             The consumer acknowledges only after the transport accepts the message, so a worker that dies mid-send returns the job to the queue rather than losing it. A rendering failure is not retried — the template is broken for every redelivery, and requeueing it forever would starve the queue behind a job that cannot succeed.
         messages:
             - $ref: '#/channels/worker.email.send/messages/EmailJobMessage'
-    workerPdfPublish:
-        action: receive
-        channel:
-            $ref: '#/channels/worker.pdf.generate'
-        summary: Enqueue a PDF generation request.
-        description: >-
-            Rendering is CPU-bound and unbounded in duration, which is exactly what must not happen on a request thread: the producer hands over the template name and its data and returns immediately.
-        messages:
-            - $ref: '#/channels/worker.pdf.generate/messages/PdfJobMessage'
-    workerPdfConsume:
-        action: send
-        channel:
-            $ref: '#/channels/worker.pdf.generate'
-        summary: PDF worker renders template to PDF.
-        description: >-
-            Renders the named template and writes the result where the job says. Runs in the worker process rather than the API cluster, so a render storm degrades PDF turnaround and leaves request latency alone.
-        messages:
-            - $ref: '#/channels/worker.pdf.generate/messages/PdfJobMessage'
     workerImageDigestPublish:
         action: receive
         channel:
@@ -353,16 +355,16 @@ components:
             title: Webhook delivery job
             payload:
                 $ref: '#/components/schemas/WebhookDeliverJobPayload'
+        OrderInvoicePdfJobMessage:
+            name: OrderInvoicePdfJobMessage
+            title: Order invoice PDF generation job
+            payload:
+                $ref: '#/components/schemas/OrderInvoicePdfJobPayload'
         EmailJobMessage:
             name: EmailJobMessage
             title: Email delivery job
             payload:
                 $ref: '#/components/schemas/EmailJobPayload'
-        PdfJobMessage:
-            name: PdfJobMessage
-            title: PDF generation job
-            payload:
-                $ref: '#/components/schemas/PdfJobPayload'
         ImageDigestJobMessage:
             name: ImageDigestJobMessage
             title: Image digest job
@@ -498,6 +500,16 @@ components:
                     minimum: 1
                     description: Which attempt this is — 1 on the first try, incremented on retry.
             additionalProperties: false
+        OrderInvoicePdfJobPayload:
+            type: object
+            required:
+                - orderId
+            properties:
+                orderId:
+                    type: string
+                    description: >-
+                        The order to render. Deliberately the ONLY field: the worker resolves its own template path and output location from this id, never from anything the message carries — see this file's header for why.
+            additionalProperties: false
         EmailJobPayload:
             type: object
             required:
@@ -531,25 +543,6 @@ components:
                     type: object
                     description: >-
                         Everything the template prints, already translated by the producer — including the `<html lang>` value and the footer line. The consumer interpolates it and resolves nothing, which is why no locale travels with the job.
-            additionalProperties: false
-        PdfJobPayload:
-            type: object
-            required:
-                - templatePath
-                - templateData
-                - outputPath
-            properties:
-                templatePath:
-                    type: string
-                    description: >-
-                        Template to render, named the way the consumer resolves it — a file path here, a Blade view name in the twin. Neutral for the same reason `EmailJobPayload.templateName` is: the two backends render different engines and the payload is not the place that decides which.
-                templateData:
-                    type: object
-                    description: >-
-                        Everything the template prints, already translated by the producer — same contract as EmailJobPayload.data, and the same reason no locale travels with the job.
-                outputPath:
-                    type: string
-                    description: Filesystem path where the generated PDF will be written.
             additionalProperties: false
         ImageDigestJobPayload:
             type: object

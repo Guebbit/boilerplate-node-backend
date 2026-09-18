@@ -1062,6 +1062,15 @@ components:
                     type: string
                     readOnly: true
                     example: '2026-000041'
+                # `pending` from the moment the order is created (the schema default — see
+                # `orders/model.ts`), `ready` once the invoice worker has written the stored PDF.
+                # Absent entirely on an order that predates the async pipeline: no job was ever
+                # queued for it, and `GET /orders/{id}/invoice` falls back to rendering it
+                # on demand, exactly as every order did before this field existed.
+                invoicePdfStatus:
+                    type: string
+                    enum: [pending, ready]
+                    readOnly: true
                 # Present only while `paymentMethod` is `bank_transfer` and `status` is `pending`
                 # — the window in which the customer still needs to act. Scoped to the order's
                 # owner and to staff; never served to another customer.

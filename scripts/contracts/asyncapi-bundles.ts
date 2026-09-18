@@ -36,6 +36,7 @@ export const ASYNC_SECTION_ORDER = [
     'observability',
     'webhooks',
     'webhooks-internal',
+    'orders-internal',
     'workers'
 ] as const;
 
@@ -46,9 +47,10 @@ type AsyncSectionName = (typeof ASYNC_SECTION_ORDER)[number];
  *
  * `webhooks` belongs here for the reason `observability` does: its channels ARE the public event
  * catalogue (`GET /webhooks/events` reads the module's own fragment, not this bundle), so a
- * consumer needs the generated payload types the same way the SSE dashboard does. `webhooks-internal`
- * and `workers` never join this set — a queue is internal plumbing, not a promise to anyone
- * outside this service, whether it happens to be owned by a module or by no domain at all.
+ * consumer needs the generated payload types the same way the SSE dashboard does.
+ * `webhooks-internal`, `orders-internal` and `workers` never join this set — a queue is internal
+ * plumbing, not a promise to anyone outside this service, whether it happens to be owned by a
+ * module or by no domain at all.
  */
 const SHARED_SECTIONS: ReadonlySet<AsyncSectionName> = new Set(['observability', 'webhooks']);
 
@@ -68,6 +70,8 @@ const asyncSectionDocument = (section: AsyncSectionName): string => {
         return path.join(REPO_ROOT, 'shared', 'contracts', 'asyncapi.workers.yaml');
     if (section === 'webhooks-internal')
         return path.join(REPO_ROOT, 'src', 'modules', 'webhooks', 'asyncapi.internal.yaml');
+    if (section === 'orders-internal')
+        return path.join(REPO_ROOT, 'src', 'modules', 'orders', 'asyncapi.internal.yaml');
     return path.join(REPO_ROOT, 'src', 'modules', section, 'asyncapi.yaml');
 };
 

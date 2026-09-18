@@ -15,6 +15,21 @@ import { orderTotal, orderTaxBreakdown } from './domain';
 import type { OrderTransferInstructions } from '@types';
 
 /**
+ * Absolute URL for this order's page on the paired frontend — where the customer signs in and
+ * downloads the invoice once it's ready, `GET /orders/{id}/invoice` being an authenticated API
+ * route rather than something an email client can fetch directly.
+ *
+ * Same construction as `account/emails.ts`'s `accountLink`: joined through `URL` when `NODE_URL`
+ * is set (a trailing-slash-dependent concatenation would otherwise produce
+ * `https://api.example.comorders/…`), no fallback host when it isn't — a relative link in a mail
+ * body is merely useless without `NODE_URL`, not a wrong destination.
+ */
+const orderLink = (orderId: string): string => {
+    const path = `orders/${orderId}`;
+    return process.env.NODE_URL ? new URL(path, process.env.NODE_URL).href : path;
+};
+
+/**
  * The minimum either document needs from an order: a title and a price per line.
  *
  * Structural rather than `OrderDocument`: what the documents print is the lines, and asking for
@@ -35,11 +50,16 @@ export interface OrderLines {
  * string each, since per-line copy interpolates per-line values and can't be a single string
  * decided up front. The total is `orderTotal`'s arithmetic, not a fresh sum — the email quotes
  * what the order stands for, shipping included.
+ *
+ * Sent immediately at order creation, same as always — never held for the invoice PDF to finish
+ * generating. `linkUrl` points at the order's page regardless of whether the invoice is ready yet:
+ * the download button there greys out on its own until `invoicePdfStatus` reads `ready`.
  */
 export const orderConfirmEmail = (
     locale: string,
     name: string,
-    order: OrderLines
+    order: OrderLines,
+    orderId: string
 ): EmailContent => {
     const t = translator(locale);
     return {
@@ -59,6 +79,8 @@ export const orderConfirmEmail = (
                 })
             ),
             total: t('orders.email-confirm.total', { total: orderTotal(order) }),
+            linkLabel: t('orders.email-confirm.link-label'),
+            linkUrl: orderLink(orderId),
             footer: t('email.footer')
         }
     };
@@ -76,7 +98,8 @@ export const bankTransferInstructionsEmail = (
     name: string,
     order: OrderLines,
     instructions: OrderTransferInstructions,
-    payBy: Date
+    payBy: Date,
+    orderId: string
 ): EmailContent => {
     const t = translator(locale);
     return {
@@ -102,6 +125,10 @@ export const bankTransferInstructionsEmail = (
                 }).format(payBy)
             }),
             total: t('orders.email-confirm.total', { total: orderTotal(order) }),
+            // Invoice number allocation doesn't wait on payment (see `invoice-numbering.ts`), so
+            // the same link and the same eventually-ready PDF apply here as on the paid path.
+            linkLabel: t('orders.email-transfer.link-label'),
+            linkUrl: orderLink(orderId),
             footer: t('email.footer')
         }
     };

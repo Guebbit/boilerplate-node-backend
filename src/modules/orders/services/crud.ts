@@ -288,7 +288,7 @@ export const create = async (
      * Same `buyerLocale` the snapshot above was frozen in, so the email and the order it
      * describes never quote two different languages.
      */
-    const mail = orderConfirmEmail(buyerLocale, email, order);
+    const mail = orderConfirmEmail(buyerLocale, email, order, String(order._id));
     void enqueueEmail({ to: email, subject: mail.subject }, mail.template, mail.data);
 
     return generateSuccess(order, 201, t('orders.creation-success'));

@@ -234,9 +234,6 @@ export const stopQueue = (): Promise<void> => {
  */
 export const EMAIL_QUEUE = WORKER_CHANNELS.EMAIL_SEND;
 
-/** Same sourcing as {@link EMAIL_QUEUE} — the PDF-generation queue. */
-export const PDF_QUEUE = WORKER_CHANNELS.PDF_GENERATE;
-
 /** Same sourcing as {@link EMAIL_QUEUE} — the image-digest queue. */
 export const IMAGE_QUEUE = WORKER_CHANNELS.IMAGE_DIGEST;
 

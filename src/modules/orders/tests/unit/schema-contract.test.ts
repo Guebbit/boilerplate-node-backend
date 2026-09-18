@@ -53,6 +53,15 @@ describe('orderSchema — what an order must carry', () => {
         expect(requiredPaths(orderSchema)).not.toContain('transferReference');
         expect(typeOf(orderSchema, 'transferReference')).toBe('String');
     });
+
+    it("defaults invoicePdfStatus to pending, unlike invoiceNumber's no-default", () => {
+        // The distinction that makes `GET /orders/{id}/invoice`'s three-way branch work: a NEW
+        // order always gets `pending` (this default), never `absent` — only an order that predates
+        // this field entirely reads as `absent`, since Mongoose only applies a default on insert.
+        expect(requiredPaths(orderSchema)).not.toContain('invoicePdfStatus');
+        expect(enumOf(orderSchema, 'invoicePdfStatus')).toEqual(['pending', 'ready']);
+        expect(defaultOf(orderSchema, 'invoicePdfStatus')).toBe('pending');
+    });
 });
 
 describe('orderSchema — status', () => {

@@ -9,6 +9,7 @@ import { orderConfirmEmail, invoiceDocument, type OrderLines } from '@modules/or
 import { orderTotal } from '@modules/orders/domain';
 
 const NAME = 'Ada Lovelace';
+const ORDER_ID = 'order-1';
 
 /** Two lines with different titles, quantities and prices, so no field can stand in for another. */
 const ORDER: OrderLines = {
@@ -21,13 +22,15 @@ const ORDER: OrderLines = {
 
 describe('orderConfirmEmail', () => {
     it('names the order-confirmation template', () => {
-        expect(orderConfirmEmail('en', NAME, ORDER).template).toBe('orders.order-confirm');
+        expect(orderConfirmEmail('en', NAME, ORDER, ORDER_ID).template).toBe(
+            'orders.order-confirm'
+        );
     });
 
     it('renders one line per item, and only for the items on the order', () => {
         // The count is the assertion an "email was sent" check cannot make: a builder mapping the
         // wrong array confirms the wrong number of things and still sends successfully.
-        const { data } = orderConfirmEmail('en', NAME, ORDER);
+        const { data } = orderConfirmEmail('en', NAME, ORDER, ORDER_ID);
 
         expect(data.lines).toHaveLength(ORDER.items.length);
     });
@@ -35,7 +38,7 @@ describe('orderConfirmEmail', () => {
     it('puts each item"s own title, quantity and price on its own line', () => {
         // Distinct values per field per line, so a builder that swapped `quantity` for `price`,
         // or reused the first item for both lines, cannot pass.
-        const lines = orderConfirmEmail('en', NAME, ORDER).data.lines as string[];
+        const lines = orderConfirmEmail('en', NAME, ORDER, ORDER_ID).data.lines as string[];
 
         expect(lines[0]).toContain('Grain-Free Dog Food');
         expect(lines[0]).toContain('2');
@@ -48,7 +51,7 @@ describe('orderConfirmEmail', () => {
     it('states the same total the order itself computes, shipping included', () => {
         // Not a recomputation: the point is that this builder defers to `orderTotal`, so the
         // email and the charge cannot drift apart. `totals.property.test.ts` covers the sum.
-        const { data } = orderConfirmEmail('en', NAME, ORDER);
+        const { data } = orderConfirmEmail('en', NAME, ORDER, ORDER_ID);
 
         expect(data.total).toContain(String(orderTotal(ORDER)));
     });
@@ -56,15 +59,19 @@ describe('orderConfirmEmail', () => {
     it('includes the shipping cost in that total rather than quoting the goods alone', () => {
         // The specific drift worth naming: an email that quotes the basket subtotal while the
         // card is charged the delivered total.
-        const withShipping = orderConfirmEmail('en', NAME, ORDER).data.total;
-        const withoutShipping = orderConfirmEmail('en', NAME, { ...ORDER, shippingCost: 0 }).data
-            .total;
+        const withShipping = orderConfirmEmail('en', NAME, ORDER, ORDER_ID).data.total;
+        const withoutShipping = orderConfirmEmail(
+            'en',
+            NAME,
+            { ...ORDER, shippingCost: 0 },
+            ORDER_ID
+        ).data.total;
 
         expect(withShipping).not.toBe(withoutShipping);
     });
 
     it('greets the customer by name', () => {
-        const greeting = orderConfirmEmail('en', NAME, ORDER).data.greeting as string;
+        const greeting = orderConfirmEmail('en', NAME, ORDER, ORDER_ID).data.greeting as string;
 
         expect(greeting).toContain(NAME);
         expect(greeting).not.toContain('{{');
@@ -74,14 +81,14 @@ describe('orderConfirmEmail', () => {
         // Not reachable through checkout, but reachable through an admin-created order — and a
         // builder that indexed `items[0]` rather than mapping would throw here rather than in a
         // test.
-        const { data } = orderConfirmEmail('en', NAME, { items: [] });
+        const { data } = orderConfirmEmail('en', NAME, { items: [] }, ORDER_ID);
 
         expect(data.lines).toEqual([]);
     });
 
     it('carries the locale through and translates by it', () => {
-        const english = orderConfirmEmail('en', NAME, ORDER);
-        const italian = orderConfirmEmail('it', NAME, ORDER);
+        const english = orderConfirmEmail('en', NAME, ORDER, ORDER_ID);
+        const italian = orderConfirmEmail('it', NAME, ORDER, ORDER_ID);
 
         expect(english.data.locale).toBe('en');
         expect(italian.data.locale).toBe('it');
@@ -89,13 +96,23 @@ describe('orderConfirmEmail', () => {
     });
 
     it('resolves every copy slot rather than echoing a key', () => {
-        const { subject, data } = orderConfirmEmail('en', NAME, ORDER);
+        const { subject, data } = orderConfirmEmail('en', NAME, ORDER, ORDER_ID);
 
-        for (const value of [subject, data.pageMetaTitle, data.body, data.footer]) {
+        for (const value of [subject, data.pageMetaTitle, data.body, data.footer, data.linkLabel]) {
             expect(value).not.toBe('');
             expect(value).not.toMatch(/^orders\./);
         }
         expect(data.pageMetaLinks).toEqual([]);
+    });
+
+    /*
+     * The link is what lets a customer reach an invoice that may not be ready yet — the button on
+     * the order page greys out on its own; the email always links to the same place regardless.
+     */
+    it('links to the order, carrying its id', () => {
+        const { data } = orderConfirmEmail('en', NAME, ORDER, ORDER_ID);
+
+        expect(data.linkUrl).toContain(ORDER_ID);
     });
 
     /*
@@ -111,8 +128,8 @@ describe('orderConfirmEmail', () => {
             items: [{ quantity: 1, product: { title: collidingTitle, price: 1 } }]
         };
 
-        const english = orderConfirmEmail('en', NAME, order).data.lines as string[];
-        const italian = orderConfirmEmail('it', NAME, order).data.lines as string[];
+        const english = orderConfirmEmail('en', NAME, order, ORDER_ID).data.lines as string[];
+        const italian = orderConfirmEmail('it', NAME, order, ORDER_ID).data.lines as string[];
 
         expect(english[0]).toContain(collidingTitle);
         expect(italian[0]).toContain(collidingTitle);

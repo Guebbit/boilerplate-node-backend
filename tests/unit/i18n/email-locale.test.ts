@@ -148,7 +148,8 @@ describe('the email worker renders the copy it was given', () => {
 
     /**
      * The nack paths: a job the worker cannot process has to be reported as unprocessable, or it
-     * is redelivered forever. Mirrors the same two cases on `pdf.worker.ts`.
+     * is redelivered forever. Mirrors the same two cases on
+     * `src/modules/orders/transport/invoice-pdf.ts`'s worker.
      */
     it('discards a job with no recipient rather than rendering one', async () => {
         const { handleEmailJob } = await import('@infrastructure/adapters/email.worker');

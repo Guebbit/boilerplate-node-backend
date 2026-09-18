@@ -38,14 +38,16 @@
             "greeting": "Ciao, {{name}}!",
             "body": "Il tuo ordine è stato confermato.",
             "line": "{{title}} — {{quantity}} × {{price}}",
-            "total": "Totale: {{total}}"
+            "total": "Totale: {{total}}",
+            "link-label": "Visualizza il tuo ordine e la fattura"
         },
         "email-transfer": {
             "subject": "Completa il tuo ordine con un bonifico",
             "meta-title": "Istruzioni per il bonifico",
             "greeting": "Ciao, {{name}}!",
             "body": "Il tuo ordine è riservato. Invia il bonifico qui sotto per completarlo — includi il riferimento per farci abbinare il tuo pagamento.",
-            "deadline": "Terremo il tuo ordine in attesa fino al {{payBy}}."
+            "deadline": "Terremo il tuo ordine in attesa fino al {{payBy}}.",
+            "link-label": "Visualizza il tuo ordine e la fattura"
         },
         "email-transfer-expired": {
             "subject": "Il tuo ordine è stato annullato — bonifico non ricevuto",
@@ -54,6 +56,7 @@
             "body": "Non abbiamo ricevuto il tuo bonifico in tempo, quindi questo ordine è stato annullato e i suoi articoli sono stati rilasciati."
         },
         "items-held": "Gli articoli di questo ordine non possono essere modificati mentre le scorte sono impegnate o già vendute.",
-        "insufficient-stock": "Alcuni articoli di questo ordine non sono più disponibili nella quantità richiesta — vedi `details.lines`."
+        "insufficient-stock": "Alcuni articoli di questo ordine non sono più disponibili nella quantità richiesta — vedi `details.lines`.",
+        "invoice-pending": "La fattura è ancora in fase di generazione — riprova tra poco."
     }
 }

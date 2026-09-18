@@ -84,18 +84,24 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
     'account.inactivity-warning.ejs': inactivityWarningEmail(locale, 'Ada', 30),
     'account.two-factor-code.ejs': twoFactorCodeEmail(locale, 'Ada', '492013', 10),
     'account.email-change-notice.ejs': emailChangeNoticeEmail(locale, 'Ada', 'new@example.com'),
-    'orders.order-confirm.ejs': orderConfirmEmail(locale, 'Ada', {
-        items: [
-            { quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } },
-            { quantity: 1, product: { title: 'A whole ham', price: 42 } }
-        ]
-    }),
+    'orders.order-confirm.ejs': orderConfirmEmail(
+        locale,
+        'Ada',
+        {
+            items: [
+                { quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } },
+                { quantity: 1, product: { title: 'A whole ham', price: 42 } }
+            ]
+        },
+        'an-order-id'
+    ),
     'orders.order-transfer-instructions.ejs': bankTransferInstructionsEmail(
         locale,
         'Ada',
         { items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }] },
         { beneficiary: 'Guebbit Shop', iban: 'DE89370400440532013000', reference: 'an-order-id' },
-        new Date('2026-09-19T12:00:00.000Z')
+        new Date('2026-09-19T12:00:00.000Z'),
+        'an-order-id'
     ),
     'orders.order-transfer-expired.ejs': bankTransferExpiredEmail(locale, {
         items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }]

@@ -10,6 +10,10 @@
  * below, for the detach-on-delete cascade, and `userService.getById` (`services/crud.ts`,
  * `services/cancel.ts`) for a buyer's stored locale — the confirmation and expiry emails this
  * module sends, never a live account's authorization state.
+ *
+ * Declares its own queue consumer below, the same `ModuleConsumer` shape `webhooks` set the
+ * precedent for (`@kernel/registry.ts`) — invoice PDF generation, triggered by this module's own
+ * `order.created` listener. See `transport/invoice-pdf.ts` and `docs/modules/orders.md#the-invoice-pipeline`.
  */
 
 import path from 'node:path';
@@ -18,10 +22,12 @@ import { SYSTEM_ACTOR } from '@kernel/permissions';
 import { onDomainEvent } from '@kernel/events';
 import { RESERVATION_EXPIRED } from '@modules/inventory';
 import { USER_DELETED } from '@modules/users';
+import { WORKER_CHANNELS, OrderInvoicePdfJobPayloadSchema } from '@types';
 import { router } from './routes';
 import { cancelById, detachUserId } from './services';
-// Installs this module's event declarations (ORDER_CANCELLED, ORDER_STATUS_CHANGED).
-import './events';
+import { enqueueInvoicePdfJob, handleInvoicePdfJob } from './transport/invoice-pdf';
+// Also installs this module's other event declarations (ORDER_CANCELLED, ORDER_STATUS_CHANGED).
+import { ORDER_CREATED } from './events';
 
 /** This module's manifest entry: routes, the shop-identity config gate, event subscriptions, and locales. */
 export default {
@@ -55,8 +61,28 @@ export default {
         onDomainEvent(RESERVATION_EXPIRED, ({ orderId }) => cancelById(orderId, SYSTEM_ACTOR));
         // Detach, never delete: the order survives the account.
         onDomainEvent(USER_DELETED, ({ userId }) => detachUserId(userId));
+        // Fires exactly once per order regardless of which creation path made it — see
+        // `events.ts`'s own docblock on `order.created`. Returned, not `void`-wrapped:
+        // `emitDomainEvent` already catches and logs per handler, and a publish failure here
+        // leaves the order `pending` with nothing yet able to retry it (no dead-letter/parking
+        // exists for any queue in this codebase today) — the same as every other queue's state.
+        onDomainEvent(ORDER_CREATED, ({ orderId }) => enqueueInvoicePdfJob(orderId));
     },
     locales: path.join(__dirname, 'locales'),
+    /*
+     * `handler: handleInvoicePdfJob` directly, no separate guard in front of it: `schema` below
+     * already refuses a job missing `orderId` before `consumeFromQueue` ever calls the handler,
+     * same reasoning as webhooks' own consumer. `prefetch: 2` — CPU-bound (Puppeteer), like the
+     * old domainless PDF queue this replaces, so kept low.
+     */
+    consumers: [
+        {
+            queue: WORKER_CHANNELS.ORDERS_INVOICE_GENERATE,
+            handler: handleInvoicePdfJob,
+            schema: OrderInvoicePdfJobPayloadSchema,
+            prefetch: 2
+        }
+    ],
     /**
      * The order states the storefront and the admin both have a screen for.
      *

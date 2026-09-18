@@ -14,7 +14,7 @@ import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { orderRepository } from '../../repository';
 
-// No real Chromium in the test environment — same stub `invoice-locale.test.ts` uses. Only the
+// No real Chromium in the test environment — same stub `invoice-pdf.test.ts` uses. Only the
 // invoice route's scope is under test here, not the render itself.
 jest.mock('@infrastructure/adapters/pdf', () => ({
     renderHtmlToPdf: () => Promise.resolve(Buffer.from('pdf'))
@@ -22,9 +22,16 @@ jest.mock('@infrastructure/adapters/pdf', () => ({
 
 setupTestDb();
 
+/**
+ * `invoicePdfStatus: 'ready'` with nothing actually stored: the controller's own fallback for
+ * that combination renders inline (see `get-order-invoice.ts`), which is what lets these fixtures
+ * exercise the download route through the mocked renderer above without a real queued worker
+ * ever having run. Scope/permission tests below have nothing to do with the async pipeline
+ * itself — that pipeline has its own coverage in `orders/tests/unit/invoice-pdf.test.ts`.
+ */
 const seedOrderFor = async (user: Parameters<typeof createOrder>[0]) => {
     const product = await createProduct();
-    return createOrder(user, [toOrderItem(product, 2)]);
+    return createOrder(user, [toOrderItem(product, 2)], { invoicePdfStatus: 'ready' });
 };
 
 describe('GET /orders — the filters it now publishes', () => {
@@ -200,6 +207,26 @@ describe('GET /orders/{id}', () => {
 
         expect(response.status).toBe(200);
         expect(response.headers['content-type']).toBe('application/pdf');
+    });
+
+    /*
+     * The schema default (`invoicePdfStatus: 'pending'` from the moment an order is written) is
+     * what every OTHER order in this file overrides away with `invoicePdfStatus: 'ready'` — this
+     * is the one test that leaves it alone, to prove the 202 side of the contract actually answers
+     * what `openapi.yaml` promises.
+     */
+    it('answers 202 while the invoice worker has not finished yet', async () => {
+        const { user: owner, bearer } = await authenticateAs('user');
+        const product = await createProduct();
+        const order = await createOrder(owner, [toOrderItem(product, 1)]);
+
+        const response = await api()
+            .get(`/orders/${String(order._id)}/invoice`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(202);
+        expect(response.body.data).toEqual({ invoicePdfStatus: 'pending' });
+        expect(response).toSatisfyApiSpec();
     });
 });
 

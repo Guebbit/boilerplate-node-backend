@@ -286,6 +286,25 @@ const scrubDueForAnonymization = (cutoff: Date): Promise<number> => {
 };
 
 /**
+ * Flips `invoicePdfStatus` to `ready` once the worker has durably written the PDF — the only
+ * writer of this field besides the schema's own `pending` default. Conditional on it still being
+ * `pending`, so a redelivered job (the broker's own retry, not a rejection this codebase produces
+ * yet) cannot report success twice for a write that already landed.
+ *
+ * @param orderId - the order the worker just rendered
+ * @returns whether this call was the one that flipped it
+ */
+const markInvoicePdfReady = (orderId: string): Promise<boolean> =>
+    orderModel
+        .updateOne(
+            { _id: toObjectId(orderId), invoicePdfStatus: 'pending' },
+            { $set: { invoicePdfStatus: 'ready' } },
+            { timestamps: false }
+        )
+        .exec()
+        .then(({ modifiedCount }) => modifiedCount > 0);
+
+/**
  * Atomically bumps the invoice sequence for `year` and returns the new value — one
  * `findOneAndUpdate` upsert with `$inc`, so two callers racing the same year still get distinct,
  * contiguous numbers. Mongo serializes concurrent writes to the same document; this is what makes
@@ -338,6 +357,7 @@ export const orderRepository: Omit<Repository<OrderDocument>, 'search'> & {
     detachUserId: (userId: string, anonymizeAfter: Date) => Promise<number>;
     scrubDueForAnonymization: (cutoff: Date) => Promise<number>;
     incrementInvoiceCounter: (year: number) => Promise<number>;
+    markInvoicePdfReady: (orderId: string) => Promise<boolean>;
 } = {
     ...base,
     aggregate,
@@ -350,5 +370,6 @@ export const orderRepository: Omit<Repository<OrderDocument>, 'search'> & {
     countOpenBankTransfers,
     detachUserId,
     scrubDueForAnonymization,
-    incrementInvoiceCounter
+    incrementInvoiceCounter,
+    markInvoicePdfReady
 };
