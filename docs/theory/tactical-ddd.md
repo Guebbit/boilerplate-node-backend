@@ -261,6 +261,25 @@ the panel flips the instant a charge lands rather than waiting for the order to 
 charge. Publishing it as a capability while withholding it as a transition is the distinction
 between "you may see this is possible" and "you may do this".
 
+**One function, three doors.** `domain/lifecycle.ts`'s `isPayable(status)` is the single answer to
+"can this order still be paid" — `pending` only. `system` may still write a `paid → paid` echo (the
+payment webhook's own retries), but that echo is not a fresh offer to pay, so `isPayable` excludes
+it even though `canTransition` alone would not. Every door that moves money asks it instead of
+comparing a status literal:
+
+```mermaid
+flowchart LR
+    I["payments: createIntent<br/>(card)"] --> P["orders.isPayable(status)"]
+    O["payments: recordOfflinePayment<br/>(cash, transfer)"] --> P
+    V["payments: getForOrder's<br/>PaymentActions.pay"] --> P
+    P -- true --> ALLOW["door opens"]
+    P -- false --> REFUSE["409 PAYMENT_ORDER_NOT_PAYABLE<br/>or actions.pay: false"]
+```
+
+A `paid → paid` echo settling twice (a webhook retry, or an admin resending the same status) is a
+settlement detail `system` alone may write — never a second offer to pay, which is why the door and
+the transition disagree on purpose: see "Why `paid` is never in `transitions`" above.
+
 The client's side of the bargain is to decide nothing. A control is enabled when the server says so
 and disabled otherwise, which is what makes a rule change on the API move the interface without the
 interface being edited.

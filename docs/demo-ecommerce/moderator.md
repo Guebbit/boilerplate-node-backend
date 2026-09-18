@@ -39,6 +39,17 @@ code path: flipping `active` from true to false is recorded as `admin.user.banne
 back is `admin.user.unbanned` — everything else that changes on the same request is still recorded
 as a plain update. → [`users`](../modules/users.md)
 
+## Recording a transfer, and why a paid order refuses it
+
+`payments.any.create` is also what lets this role record money that arrived outside the checkout
+flow — cash at the counter, a bank transfer once its reference is matched — through
+`POST /payments/order/{orderId}/offline`. It settles the order exactly as a card payment would: the
+order moves to `paid`, stock commits, the confirmation fires.
+
+An order already `paid` refuses a second recording, the same rule that refuses a second card
+intent — `orders` alone decides whether an order still awaits payment, and every door that could
+open a new one asks it before doing anything else. → [`payments`](../modules/payments.md)
+
 ## Reading the shop's own history
 
 `audit.any.read` opens `GET /audit` — this role's own window onto who did what, scoped to this shop.

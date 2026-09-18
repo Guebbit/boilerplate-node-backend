@@ -101,6 +101,10 @@ Once payment goes through, the money and the goods are settled in the same insta
 becomes **paid** and the goods stop being "set aside" and become "sold".
 → [`payments`](../modules/payments.md)
 
+**When the card form shows at all.** An order only awaits payment while it is still `pending` — the
+one status the shop considers "still open to pay". Once an order is `paid`, the form does not come
+back: the shop is not asking "would you like to pay again", it already has the money.
+
 ## Afterwards
 
 - **They see their own orders, and only their own.** → [`orders`](../modules/orders.md)

@@ -103,6 +103,22 @@ database fact, not a check somebody has to remember.
 Delete this module and cancelling an order still releases its stock but returns no money — which is
 exactly the sentence `CANCELLABLE_ORDER_STATUSES` documents.
 
+## The pre-check, and the final write
+
+Two different questions, asked at two different moments, both owned by `orders`:
+
+- **The pre-check** — `orders.isPayable(order.status)` — gates every door that could open a new
+  payment: `POST /payments/intent`, `POST /payments/order/{orderId}/offline`, and `getForOrder`'s
+  `PaymentActions.pay`. `pending` only; a `paid` order answers `false` even though `system` may
+  still write a `paid → paid` echo underneath it (the payment webhook's own retries) — that echo is
+  not a fresh offer to pay. This module never compares a status literal to decide whether to open a
+  door; it always asks `orders`, so it cannot drift off the rule the lifecycle owns.
+- **The final write** — `orderService.markPaid` — is what actually moves the order once money has
+  settled (`settlePayment` calls it; see "Status transitions" below and
+  `docs/theory/tactical-ddd.md` §1 "Who writes the status"). It is `orders`' own conditional write,
+  independent of the pre-check: a race that slips past the pre-check still cannot double-move the
+  order, because `markPaid` only writes from `pending`.
+
 ## Status transitions
 
 `requires_confirmation` is entered once, by `POST /payments/intent`, and never again — nothing a
