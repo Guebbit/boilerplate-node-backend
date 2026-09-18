@@ -33,6 +33,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import type { DependencyStatus } from '@infrastructure/adapters/managed-connection';
 import { WORKER_CHANNELS } from '@types';
 import { environmentFlag, environmentNumber } from '@infrastructure/runtime/environment';
+import { queueJobsDeadLetteredTotal } from '@infrastructure/observability/metrics-queue';
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
@@ -566,6 +567,7 @@ const parkInDead = (ch: ConfirmChannel, queue: string, incoming: ConsumeMessage)
                 ch.nack(incoming, false, true);
                 return;
             }
+            queueJobsDeadLetteredTotal.inc({ queue });
             ch.ack(incoming);
         }
     );

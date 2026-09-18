@@ -60,7 +60,7 @@ groups:
           # `nodejs_heap_size_total_bytes`, which is only the heap V8 has committed so far and
           # which it grows on demand. Against `total` this ratio sits around 0.97 on an idle,
           # healthy process, so the alert fired permanently and taught everyone to ignore it.
-          # The limit metric is registered by `infrastructure/observability/metrics-http`.
+          # The limit metric is registered by `infrastructure/observability/metrics-registry`.
           - alert: HighHeapUsage
             expr: |
                 nodejs_heap_size_used_bytes
@@ -72,3 +72,17 @@ groups:
             annotations:
                 summary: 'Node.js heap usage above 90 % of the V8 limit'
                 description: 'The heap is within 10 % of --max-old-space-size; OOM risk if left unaddressed.'
+
+          # Parked queue jobs: a job only reaches <queue>.dead after every retry the deployment's
+          # NODE_QUEUE_MAX_ATTEMPTS allows, or a permanent rejection that was never going to
+          # succeed on one. Nothing else reads that queue on its own, so this counter — registered
+          # by `infrastructure/observability/metrics-queue` — is the only thing that surfaces it.
+          # A rate above zero is the alert; there is no meaningful threshold above that.
+          - alert: QueueJobsParked
+            expr: increase(queue_jobs_dead_lettered_total[15m]) > 0
+            for: 0m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'A queue is parking jobs in its dead-letter queue'
+                description: 'queue_jobs_dead_lettered_total increased in the last 15 minutes for queue {{ $labels.queue }} — inspect and replay via the RabbitMQ management UI.'

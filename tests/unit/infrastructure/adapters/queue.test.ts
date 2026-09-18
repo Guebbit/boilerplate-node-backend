@@ -9,6 +9,7 @@ import {
     DEAD_LETTER_EXCHANGE,
     deadLetterQueueOf
 } from '@infrastructure/adapters/queue';
+import { queueJobsDeadLetteredTotal } from '@infrastructure/observability/metrics-queue';
 
 // ─── Mock amqplib ─────────────────────────────────────────────────────────────
 
@@ -442,6 +443,13 @@ const delivery = (body: unknown, headers: Record<string, unknown> = {}) => ({
     properties: { headers }
 });
 
+/** This queue's current `queue_jobs_dead_lettered_total` — the counter is a shared, un-reset
+ *  registry, so a test asserting on it reads the delta around its own action, not an absolute. */
+const deadLetteredCountFor = async (queue: string): Promise<number> => {
+    const metric = await queueJobsDeadLetteredTotal.get();
+    return metric.values.find((entry) => entry.labels.queue === queue)?.value ?? 0;
+};
+
 describe('consumeFromQueue acknowledgement policy', () => {
     afterEach(disableRabbitMQ);
 
@@ -512,6 +520,7 @@ describe('consumeFromQueue acknowledgement policy', () => {
         // 5) — this delivery is the 5th, so a further failure has nowhere left to retry to.
         const handler = jest.fn().mockRejectedValue(new Error('still down'));
         const onMessage = await captureConsumerCallback(handler);
+        const before = await deadLetteredCountFor('jobs');
 
         await onMessage(
             delivery(
@@ -538,6 +547,9 @@ describe('consumeFromQueue acknowledgement policy', () => {
             expect.any(Function)
         );
         expect(mockAck).toHaveBeenCalledTimes(1);
+        // Nothing else reads `<queue>.dead` on its own — this counter is the only thing that
+        // surfaces a parked job to an operator (see prometheus.alert-rules.yaml's QueueJobsParked).
+        expect(await deadLetteredCountFor('jobs')).toBe(before + 1);
     });
 
     it('parks a message that will never parse, rather than cycling it through retries', async () => {
