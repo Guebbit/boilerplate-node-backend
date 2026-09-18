@@ -91,7 +91,6 @@ domain-free is `infrastructure`, no matter where it sits in the request lifecycl
 | rate limiting, metrics scraper | `infrastructure/http/middlewares/rate-limit.ts`     | generic HTTP hardening                        |
 | conditional handler toggle     | `infrastructure/http/middlewares/route-flag.ts`     | imports nothing but Express                   |
 | email queue consumer           | `infrastructure/adapters/email.worker.ts`           | the consumer half of `adapters/mailer.ts`     |
-| PDF queue consumer             | `infrastructure/adapters/pdf.worker.ts`             | the consumer half of `adapters/pdf.ts`        |
 | worker registration at boot    | `app/workers.ts`                                    | names which queues _this_ build drains        |
 
 The test that keeps this honest: a `kernel` file may be imported by a module, but its **purpose**

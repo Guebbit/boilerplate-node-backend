@@ -325,12 +325,12 @@ to, so a bundle that leaves a section out leaves its transport out with it — w
 describes the deployment rather than a domain, and no channels.
 
 `observability` owns the SSE channels because the module serving `/observability/events` decides
-what it pushes down them. The `worker.email.send`/`worker.pdf.generate`/`worker.image.digest`
-queues are shared because those three workers are substrate, enqueued by whichever domain needs one
-sent. `worker.webhook.deliver` is the one exception: `webhooks` owns that queue outright, in its own
-PRIVATE `asyncapi.internal.yaml` section — `backend`-scoped like the shared queues file, but a
-module's, so deleting the module deletes the queue's contract along with everything else that names
-it.
+what it pushes down them. The `worker.email.send`/`worker.image.digest` queues are shared because
+those two workers are substrate, enqueued by whichever domain needs one sent. `worker.webhook.deliver`
+and `worker.orders.invoice-generate` are the exceptions: `webhooks` and `orders` each own their
+queue outright, in their own PRIVATE `asyncapi.internal.yaml` section — `backend`-scoped like the
+shared queues file, but a module's, so deleting the module deletes the queue's contract along with
+everything else that names it.
 
 What that bought is the property a fragment could never have: **each section is valid on its own** —
 lintable by `npm run lint:asyncapi:modules`. `channels.yaml` and <!-- doc-paths:ignore -->

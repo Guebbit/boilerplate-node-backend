@@ -123,18 +123,59 @@ flowchart LR
     class DL,PM peer;
 ```
 
+## The invoice pipeline
+
+`GET /orders/{id}/invoice` used to render the PDF synchronously, on the request. It still does for
+an order that predates this pipeline — no `invoicePdfStatus` at all — but every new order now
+generates its invoice asynchronously, off the module's own `worker.orders.invoice-generate` queue
+(`transport/invoice-pdf.ts`, `asyncapi.internal.yaml`), the same "a module owns its own queue"
+shape `webhooks` set first.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 55}}}%%
+flowchart LR
+    C["order.created<br/><i>fires once, either creation path</i>"] --> E["enqueueInvoicePdfJob"]
+    E -->|"broker up"| Q[("worker.orders.<br/>invoice-generate")]
+    E -->|"no broker, or publish failed"| R["render inline"]
+    Q --> W["the worker"]
+    W --> R
+    R --> S["write the PDF · storage<br/>NODE_INVOICE_STORAGE_PATH"]
+    S --> D["invoicePdfStatus: ready"]
+
+    classDef event fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef queue fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
+    class C event;
+    class Q queue;
+    class D done;
+```
+
+A new order is written `pending` (the schema default), never absent — only an order from before
+this field existed reads as absent. `GET /orders/{id}/invoice` branches on that field: `ready`
+streams the stored file, `pending` answers `202` so a client can grey out the download button and
+poll, and absent falls back to the pre-existing synchronous render. The confirmation email is
+never held for the PDF to finish — it sends immediately, as it always has, linking to the order's
+page; the download button there is what waits.
+
+The job payload carries an order id and nothing else — never a template path or an output path.
+The queue it replaces (`worker.pdf.generate`, domainless, in the shared workers contract) shipped a
+producer-chosen template path and output path with no producer ever wired to publish to it: a
+latent arbitrary-file-write, closed by removing the surface rather than guarding it. See
+[RabbitMQ](../tools/rabbitmq.md#invoice-pdf-generation-async-module-owned).
+
 ## Configuration
 
-| Variable               | Default | Meaning                                                                                                                                                                 |
-| ---------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_SHOP_COUNTRY`    | —       | The shop's own jurisdiction — the only one VAT is ever charged at, no destination lookup. Required at boot; the manifest's `requiredConfig` refuses to start without it |
-| `NODE_SHOP_VAT_NUMBER` | —       | The shop's VAT id, printed on the invoice. Optional — a deployment below the registration threshold prints no VAT number rather than a fake one                         |
-| `NODE_SHOP_LEGAL_NAME` | —       | The shop's legal name, printed on the invoice — distinct from any storefront brand name                                                                                 |
+| Variable                    | Default            | Meaning                                                                                                                                                                                             |
+| --------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_SHOP_COUNTRY`         | —                  | The shop's own jurisdiction — the only one VAT is ever charged at, no destination lookup. Required at boot; the manifest's `requiredConfig` refuses to start without it                             |
+| `NODE_SHOP_VAT_NUMBER`      | —                  | The shop's VAT id, printed on the invoice. Optional — a deployment below the registration threshold prints no VAT number rather than a fake one                                                     |
+| `NODE_SHOP_LEGAL_NAME`      | —                  | The shop's legal name, printed on the invoice — distinct from any storefront brand name                                                                                                             |
+| `NODE_INVOICE_STORAGE_PATH` | `storage/invoices` | Where the invoice worker writes each order's stored PDF. Outside `NODE_PUBLIC_PATH` on purpose — an invoice is personal and financial data, reachable only through the authenticated download route |
 
-All three are read fresh per call (`config.ts`), so a correction needs no restart; an empty string
-reads as unset, never as a blank invoice row. The VAT RATES charged against an order line are a
-different thing with a different owner — see [products](./products.md#configuration); this module
-only freezes onto the order the rate `products` hands it at checkout.
+The first three are read fresh per call (`config.ts`), so a correction needs no restart; an empty
+string reads as unset, never as a blank invoice row. The VAT RATES charged against an order line
+are a different thing with a different owner — see [products](./products.md#configuration); this
+module only freezes onto the order the rate `products` hands it at checkout.
 
 ## Related pages
 

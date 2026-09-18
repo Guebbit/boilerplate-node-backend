@@ -198,10 +198,10 @@ One function, no database, no HTTP. Fast enough to run from the pre-commit hook.
 
 ### `tests/unit/infrastructure/runtime/` and `persistence/`
 
-| File                                                    | What it guarantees                                                                                                          | Read next                      |
-| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| `tests/unit/infrastructure/runtime/environment.test.ts` | The fail-fast boot check, tested exhaustively because it is small and because it decides whether the process starts at all. | [Runtime](../tools/runtime.md) |
-| `tests/unit/infrastructure/runtime/demo-profile.test.ts` | Demo mode is exactly `enableDemoProfile()` having been called, and production refuses it even then. | [Demo profile](../tools/demo-profile.md) |
+| File                                                     | What it guarantees                                                                                                          | Read next                                |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `tests/unit/infrastructure/runtime/environment.test.ts`  | The fail-fast boot check, tested exhaustively because it is small and because it decides whether the process starts at all. | [Runtime](../tools/runtime.md)           |
+| `tests/unit/infrastructure/runtime/demo-profile.test.ts` | Demo mode is exactly `enableDemoProfile()` having been called, and production refuses it even then.                         | [Demo profile](../tools/demo-profile.md) |
 
 ### `tests/unit/infrastructure/adapters/`
 
@@ -211,7 +211,7 @@ One function, no database, no HTTP. Fast enough to run from the pre-commit hook.
 | `tests/unit/infrastructure/adapters/cache.test.ts`                    | The fail-open behaviour the whole cache depends on, the tag index behind group invalidation, and `clearCache` telling "nothing to clear" from "could not clear". | [Redis Cache](../tools/redis-cache.md)                   |
 | `tests/unit/infrastructure/adapters/queue.test.ts`                    | Whether the queue is enabled, and what every function does when it is not.                                                                                       | [RabbitMQ](../tools/rabbitmq.md)                         |
 | `tests/unit/app/process-error-handlers.test.ts`                       | The process-level handlers: an uncaught exception is always audited and always exits, and no handler is installed under a test runner.                           | [Winston & Audit Logs](../tools/winston.md)              |
-| `tests/unit/infrastructure/adapters/workers.test.ts`                  | The two consumers: queue names, ack on success, dead-letter on a permanent refusal, and a rejection left to escape so the broker requeues a transient failure.   | [RabbitMQ](../tools/rabbitmq.md)                         |
+| `tests/unit/infrastructure/adapters/email.worker.test.ts`             | The email consumer: queue name, ack on success, dead-letter on a permanent refusal, and a rejection left to escape so the broker requeues a transient failure.   | [RabbitMQ](../tools/rabbitmq.md)                         |
 | `tests/unit/infrastructure/adapters/logger.test.ts`                   | Redaction and error serialization — that a password never reaches a log line.                                                                                    | [Winston & Audit Logs](../tools/winston.md)              |
 | `tests/unit/infrastructure/adapters/mailer-dispatch.test.ts`          | The queue-or-send-inline dispatch: queue when a broker exists, send inline when it does not.                                                                     | [Email & PDF Rendering](../tools/email-and-rendering.md) |
 | `tests/unit/infrastructure/adapters/mailer-templates.test.ts`         | Every template referenced by a module resolves and renders.                                                                                                      | [Email & PDF Rendering](../tools/email-and-rendering.md) |
@@ -242,13 +242,13 @@ One function, no database, no HTTP. Fast enough to run from the pre-commit hook.
 
 ### `tests/unit/infrastructure/observability/`
 
-| File                                                                | What it guarantees                                                                    | Read next                                                  |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `tests/unit/infrastructure/observability/metrics-http.test.ts`      | Route labels are normalised, so an id in a URL cannot explode the metric cardinality. | [Prometheus](../tools/prometheus.md)                       |
-| `tests/unit/infrastructure/observability/metrics-registry.test.ts`  | The scrape endpoint's exposition includes the standard process families.              | [Prometheus](../tools/prometheus.md)                       |
-| `tests/unit/infrastructure/observability/audit.test.ts`             | The core audit actions and the shape of an entry.                                     | [Winston & Audit Logs](../tools/winston.md)                |
-| `tests/unit/infrastructure/observability/analytics.test.ts`         | Provider resolution and all three implementations behind the port.                    | [Product Analytics](../tools/analytics.md)                 |
-| `tests/unit/infrastructure/observability/tracer.test.ts`            | The tracing helpers over the OpenTelemetry API.                                       | [OpenTelemetry](../tools/opentelemetry.md)                 |
+| File                                                               | What it guarantees                                                                    | Read next                                   |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `tests/unit/infrastructure/observability/metrics-http.test.ts`     | Route labels are normalised, so an id in a URL cannot explode the metric cardinality. | [Prometheus](../tools/prometheus.md)        |
+| `tests/unit/infrastructure/observability/metrics-registry.test.ts` | The scrape endpoint's exposition includes the standard process families.              | [Prometheus](../tools/prometheus.md)        |
+| `tests/unit/infrastructure/observability/audit.test.ts`            | The core audit actions and the shape of an entry.                                     | [Winston & Audit Logs](../tools/winston.md) |
+| `tests/unit/infrastructure/observability/analytics.test.ts`        | Provider resolution and all three implementations behind the port.                    | [Product Analytics](../tools/analytics.md)  |
+| `tests/unit/infrastructure/observability/tracer.test.ts`           | The tracing helpers over the OpenTelemetry API.                                       | [OpenTelemetry](../tools/opentelemetry.md)  |
 
 ## `tests/integration/` — the real app over HTTP
 

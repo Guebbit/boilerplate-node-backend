@@ -10,7 +10,8 @@ For this boilerplate, keep REST and async contracts separate:
 Current scope of `asyncapi.yaml`:
 
 - SSE observability channels (`observability.*`)
-- RabbitMQ worker queues (`worker.email.send`, `worker.pdf.generate`)
+- RabbitMQ worker queues: the domainless ones (`worker.email.send`, `worker.image.digest`) plus
+  each module's own (`webhooks`' `worker.webhook.deliver`, `orders`' `worker.orders.invoice-generate`)
 
 ## Two bundles: the whole contract, and the shared half
 
@@ -92,7 +93,7 @@ including why each bundle uses the verb it does.
 | Name | Protocol | Purpose | Declared in | In the public bundle |
 |------|----------|---------|-------------|----------------------|
 | `sseLocal` | `http` | SSE observability stream | `src/modules/observability/asyncapi.yaml` | yes |
-| `rabbitmqLocal` | `amqp` | Async job queues (email, PDF) | `shared/contracts/asyncapi.workers.yaml` | no |
+| `rabbitmqLocal` | `amqp` | Async job queues (email, image digest, and each module's own) | `shared/contracts/asyncapi.workers.yaml` | no |
 
 ## Generated TypeScript types
 
@@ -100,7 +101,7 @@ Types are generated from `asyncapi.yaml` into `src/types/asyncapi.generated.ts` 
 They are re-exported from `src/types/index.ts` so all app code can import them consistently:
 
 ```ts
-import type { ObservabilityMetricsPayload, EmailJobPayload, PdfJobPayload } from '@types';
+import type { ObservabilityMetricsPayload, EmailJobPayload, ImageDigestJobPayload } from '@types';
 import { WORKER_CHANNELS, OBSERVABILITY_CHANNELS } from '@types';
 ```
 
@@ -137,7 +138,9 @@ and both write the same path:
 | Frontend | `tsx scripts/contracts/generate-asyncapi-types.ts --out src/types/asyncapi.generated.ts` | its `asyncapi.yaml`, which is a copy of `asyncapi.public.yaml` |
 
 The script is the same, the INPUT is not — so the two outputs differ, and are meant to: only this
-repo's carries `EmailJobPayload`, `PdfJobPayload` and `WORKER_CHANNELS`. Everything the frontend's
+repo's carries the queue payload types (`EmailJobPayload`, `ImageDigestJobPayload`, each module's
+own like `WebhookDeliverJobPayload` and `OrderInvoicePdfJobPayload`) and `WORKER_CHANNELS`.
+Everything the frontend's
 does carry, it carries identically, because the shared half of the spec is one document copied
 across.
 
@@ -177,16 +180,23 @@ npm run gen:asyncapi          # regenerate src/types/asyncapi.generated.ts from 
 
 ## RabbitMQ queue channels
 
-Worker queues use AMQP (RabbitMQ) for reliable async job processing:
+Worker queues use AMQP (RabbitMQ) for reliable async job processing. Two live in the shared,
+domainless contract (`shared/contracts/asyncapi.workers.yaml`):
 
 - **`worker.email.send`** — email delivery jobs consumed by `src/infrastructure/adapters/email.worker.ts`
-- **`worker.pdf.generate`** — PDF render jobs consumed by `src/infrastructure/adapters/pdf.worker.ts`
+- **`worker.image.digest`** — image digest jobs consumed by `src/infrastructure/adapters/image.worker.ts`
 
-Both use the `EmailJobPayload` / `PdfJobPayload` interfaces generated from the contract, and both
-queue NAMES are the channel names: `src/infrastructure/adapters/queue.ts` exports `EMAIL_QUEUE` and
-`PDF_QUEUE` as aliases of `WORKER_CHANNELS.EMAIL_SEND` and `WORKER_CHANNELS.PDF_GENERATE`, so the
-string a producer publishes to and the string the contract declares are one string. The worker types
-and names are both derived from AsyncAPI — no hand-written duplicates.
+Everything else is module-owned, declared in that module's own private `asyncapi.internal.yaml`
+(see [Contract Fragmentation](./contract-fragmentation.md)):
+
+- **`worker.webhook.deliver`** — outbound webhook delivery, consumed by `webhooks`' own worker
+- **`worker.orders.invoice-generate`** — invoice PDF generation, consumed by `orders`' own worker
+
+Every queue's NAME is its channel name: `src/infrastructure/adapters/queue.ts` exports `EMAIL_QUEUE`
+and `IMAGE_QUEUE` as aliases of `WORKER_CHANNELS.EMAIL_SEND`/`WORKER_CHANNELS.IMAGE_DIGEST`, and a
+module reads its own channel directly off `WORKER_CHANNELS` the same way — so the string a producer
+publishes to and the string the contract declares are one string. The worker payload types and
+channel names are both derived from AsyncAPI — no hand-written duplicates.
 
 `EmailJob` in `adapters/mailer.ts` IS `EmailJobPayload`, deliberately rather than a local widening
 onto Nodemailer's full envelope. The contract declares `request` with `additionalProperties: false`,
