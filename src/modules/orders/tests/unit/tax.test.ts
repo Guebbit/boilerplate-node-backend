@@ -24,7 +24,14 @@ describe('orderTaxBreakdown — the pre-VAT order', () => {
     });
 
     it('is zero on every axis for an order with no lines at all — not pre-VAT, just empty', () => {
-        expect(orderTaxBreakdown({ items: [] })).toEqual({ lines: [], netTotal: 0, taxTotal: 0 });
+        expect(orderTaxBreakdown({ items: [] })).toEqual({
+            lines: [],
+            netTotal: 0,
+            taxTotal: 0,
+            shippingNetAmount: 0,
+            shippingTaxAmount: 0,
+            taxSummary: []
+        });
     });
 });
 
@@ -127,5 +134,110 @@ describe('orderTaxBreakdown — shipping, apportioned pro-rata by line value', (
 
     it('is still undefined for a pre-VAT order, regardless of shipping', () => {
         expect(orderTaxBreakdown({ items: [line(19.9, 1)], shippingCost: 5 })).toBeUndefined();
+    });
+});
+
+describe('orderTaxBreakdown — shippingNetAmount/shippingTaxAmount', () => {
+    it('is zero on both when the order chose no delivery method', () => {
+        const breakdown = orderTaxBreakdown({ items: [line(19.9, 1, 0.22)] });
+
+        expect(breakdown?.shippingNetAmount).toBe(0);
+        expect(breakdown?.shippingTaxAmount).toBe(0);
+    });
+
+    it("reconstructs shipping's own gross cost from its net plus tax, to the cent", () => {
+        const breakdown = orderTaxBreakdown({
+            items: [line(10, 1, 0.22), line(10, 1, 0.1)],
+            shippingCost: 7.5
+        });
+
+        expect(
+            Math.round(
+                ((breakdown?.shippingNetAmount ?? 0) + (breakdown?.shippingTaxAmount ?? 0)) * 100
+            )
+        ).toBe(750);
+    });
+});
+
+describe('orderTaxBreakdown — taxSummary, one row per distinct rate', () => {
+    it('is empty for a shippingless single line at a zero rate — nothing to summarise beyond zero', () => {
+        const breakdown = orderTaxBreakdown({ items: [line(50, 1, 0)] });
+
+        expect(breakdown?.taxSummary).toEqual([
+            { rate: 0, netAmount: 50, taxAmount: 0, grossAmount: 50 }
+        ]);
+    });
+
+    it('merges two lines at the SAME rate into one row', () => {
+        const breakdown = orderTaxBreakdown({
+            items: [line(10, 1, 0.22), line(20, 1, 0.22)]
+        });
+
+        expect(breakdown?.taxSummary).toHaveLength(1);
+        expect(breakdown?.taxSummary[0].rate).toBe(0.22);
+    });
+
+    it('keeps two different rates as two separate rows, sorted ascending', () => {
+        const breakdown = orderTaxBreakdown({
+            items: [line(10, 1, 0.22), line(20, 1, 0.1)]
+        });
+
+        expect(breakdown?.taxSummary.map((row) => row.rate)).toEqual([0.1, 0.22]);
+    });
+
+    it("folds shipping's apportioned share into the SAME row as the line it was taxed at", () => {
+        const withoutShipping = orderTaxBreakdown({ items: [line(19.9, 1, 0.22)] });
+        const withShipping = orderTaxBreakdown({ items: [line(19.9, 1, 0.22)], shippingCost: 5 });
+
+        // One row, since there's one rate — its net/tax include shipping's 4.10/0.90 split.
+        expect(withShipping?.taxSummary).toHaveLength(1);
+        expect(withShipping?.taxSummary[0].netAmount).toBeGreaterThan(
+            withoutShipping?.taxSummary[0].netAmount ?? 0
+        );
+    });
+
+    it('every row is internally consistent: grossAmount is exactly netAmount + taxAmount', () => {
+        const breakdown = orderTaxBreakdown({
+            items: [line(19.9, 3, 0.22), line(5.5, 1, 0.1), line(100, 2, 0)],
+            shippingCost: 12.3
+        });
+
+        for (const row of breakdown?.taxSummary ?? [])
+            expect(Math.round(row.grossAmount * 100)).toBe(
+                Math.round((row.netAmount + row.taxAmount) * 100)
+            );
+    });
+
+    it('reconciles to the totals: summed net is netTotal + shippingNetAmount, summed tax is taxTotal', () => {
+        const breakdown = orderTaxBreakdown({
+            items: [line(19.9, 3, 0.22), line(5.5, 1, 0.1), line(100, 2, 0)],
+            shippingCost: 12.3
+        });
+        const rows = breakdown?.taxSummary ?? [];
+        const summedNet = rows.reduce((sum, row) => sum + row.netAmount, 0);
+        const summedTax = rows.reduce((sum, row) => sum + row.taxAmount, 0);
+
+        expect(Math.round(summedNet * 100)).toBe(
+            Math.round(((breakdown?.netTotal ?? 0) + (breakdown?.shippingNetAmount ?? 0)) * 100)
+        );
+        expect(Math.round(summedTax * 100)).toBe(Math.round((breakdown?.taxTotal ?? 0) * 100));
+    });
+
+    it("reconciles to the order's own total: summed gross equals every line's price plus shipping", () => {
+        const items = [line(19.9, 3, 0.22), line(5.5, 1, 0.1), line(100, 2, 0)];
+        const shippingCost = 12.3;
+        const breakdown = orderTaxBreakdown({ items, shippingCost });
+
+        const totalPrice =
+            items.reduce(
+                (sum, item) => sum + Number(item.product?.price) * Number(item.quantity),
+                0
+            ) + shippingCost;
+        const summedGross = (breakdown?.taxSummary ?? []).reduce(
+            (sum, row) => sum + row.grossAmount,
+            0
+        );
+
+        expect(Math.round(summedGross * 100)).toBe(Math.round(totalPrice * 100));
     });
 });

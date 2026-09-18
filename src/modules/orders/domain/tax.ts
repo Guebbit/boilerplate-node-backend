@@ -32,14 +32,37 @@ export interface LineTaxBreakdown {
     netAmount: number;
 }
 
+/**
+ * One VAT rate's slice of the whole order — goods AND shipping combined, since shipping is taxed
+ * at each line's own rate rather than carrying one of its own. `grossAmount` is `netAmount +
+ * taxAmount`, not re-derived from a price, so it can never drift from the two figures beside it.
+ */
+export interface TaxRateSummary {
+    /** The decimal rate this row is for (`0.22` for 22%) — never repeated across rows. */
+    rate: number;
+    netAmount: number;
+    taxAmount: number;
+    grossAmount: number;
+}
+
 /** What `orderTaxBreakdown` reports: one entry per line, plus the order-level sums. */
 export interface OrderTaxBreakdown {
     /** Same order and length as the `items` given in. */
     lines: LineTaxBreakdown[];
-    /** Sum of every line's `netAmount`. */
+    /** Sum of every line's `netAmount` — goods only, shipping's own net sits in {@link shippingNetAmount}. */
     netTotal: number;
-    /** Sum of every line's `taxAmount`. */
+    /** Sum of every line's `taxAmount` PLUS shipping's apportioned tax — the amount actually remitted. */
     taxTotal: number;
+    /** Shipping's own net amount, summed across every line it was apportioned onto. */
+    shippingNetAmount: number;
+    /** Shipping's own tax amount, summed across every line it was apportioned onto. */
+    shippingTaxAmount: number;
+    /**
+     * One row per distinct rate charged on this order, sorted ascending. Reconciles exactly:
+     * summed `netAmount` is {@link netTotal} + {@link shippingNetAmount}, summed `taxAmount` is
+     * {@link taxTotal}, and summed `grossAmount` is the order's `totalPrice`.
+     */
+    taxSummary: TaxRateSummary[];
 }
 
 /** An order, as far as its VAT breakdown is concerned. */
@@ -70,6 +93,24 @@ const frozenRate = (item: TaxableLineItem): number | undefined =>
     typeof item.product?.taxRate === 'number' ? item.product.taxRate : undefined;
 
 /**
+ * Folds one line's (net, tax) pair into its rate's running total in `byRate` — goods and
+ * shipping both call this, which is what lets one row carry both without a second pass.
+ * @param byRate - accumulator, mutated in place; one entry per rate seen so far
+ * @param rate - the line's own frozen rate, this pair's key
+ * @param net - the net amount to fold in
+ * @param tax - the tax amount to fold in
+ */
+const foldIntoRate = (
+    byRate: Map<number, { net: Money; tax: Money }>,
+    rate: number,
+    net: Money,
+    tax: Money
+): void => {
+    const existing = byRate.get(rate) ?? { net: NO_MONEY, tax: NO_MONEY };
+    byRate.set(rate, { net: addMoney(existing.net, net), tax: addMoney(existing.tax, tax) });
+};
+
+/**
  * Every VAT figure an order's response and invoice need, derived from each line's FROZEN price,
  * quantity and rate, plus shipping's own apportioned share. A single line missing `taxRate` makes
  * the WHOLE order pre-VAT — `undefined`, rather than a partial breakdown that would imply a rate
@@ -91,6 +132,9 @@ export const orderTaxBreakdown = ({
 
     let netTotal: Money = NO_MONEY;
     let taxTotal: Money = NO_MONEY;
+    let shippingNetTotal: Money = NO_MONEY;
+    let shippingTaxTotal: Money = NO_MONEY;
+    const byRate = new Map<number, { net: Money; tax: Money }>();
 
     const lines = items.map((item, index) => {
         // Every rate was checked present just above — proven, not merely assumed, so `!` applies.
@@ -99,12 +143,34 @@ export const orderTaxBreakdown = ({
         const tax = extractTax(gross, rate);
         const net = subtractMoney(gross, tax);
         // Shipping's own apportioned slice, taxed at THIS line's rate — ancillary to the goods.
-        const shippingTax = extractTax(shippingShares[index], rate);
+        const shippingGross = shippingShares[index];
+        const shippingTax = extractTax(shippingGross, rate);
+        const shippingNet = subtractMoney(shippingGross, shippingTax);
 
         netTotal = addMoney(netTotal, net);
         taxTotal = addMoney(taxTotal, tax, shippingTax);
+        shippingNetTotal = addMoney(shippingNetTotal, shippingNet);
+        shippingTaxTotal = addMoney(shippingTaxTotal, shippingTax);
+        foldIntoRate(byRate, rate, addMoney(net, shippingNet), addMoney(tax, shippingTax));
+
         return { taxAmount: toDecimalAmount(tax), netAmount: toDecimalAmount(net) };
     });
 
-    return { lines, netTotal: toDecimalAmount(netTotal), taxTotal: toDecimalAmount(taxTotal) };
+    const taxSummary = [...byRate.entries()]
+        .toSorted(([left], [right]) => left - right)
+        .map(([rate, { net, tax }]) => ({
+            rate,
+            netAmount: toDecimalAmount(net),
+            taxAmount: toDecimalAmount(tax),
+            grossAmount: toDecimalAmount(addMoney(net, tax))
+        }));
+
+    return {
+        lines,
+        netTotal: toDecimalAmount(netTotal),
+        taxTotal: toDecimalAmount(taxTotal),
+        shippingNetAmount: toDecimalAmount(shippingNetTotal),
+        shippingTaxAmount: toDecimalAmount(shippingTaxTotal),
+        taxSummary
+    };
 };
