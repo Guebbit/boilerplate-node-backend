@@ -329,6 +329,47 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /orders/{id}/status-override:
+        post:
+            tags: [Orders]
+            summary: Force-correct an order's status by hand
+            description: >-
+                Moves the order identified by `{id}` forward to `to` with no parcel record and no
+                shipped email — for a manual correction, never for the ordinary shipping flow
+                (`POST /delivery/order/{orderId}/ship` and `.../deliver` are that door, with their
+                own `forced` option). Only `processing`, `shipped` and `delivered` are legal
+                destinations, and only moving forward from wherever the order currently stands —
+                never into `paid` (that stays system-only in absolute terms) and never `cancelled`
+                (`POST /orders/{id}/cancel` is that door). Requires `orders.any.override`, itself
+                step-up gated, and a non-empty `reason` recorded on the order's override history.
+                Webhooks still fire for this move; no shipped email does.
+            operationId: overrideOrderStatus
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/StatusOverrideRequest'
+            responses:
+                '200':
+                    description: The order, moved
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OrderEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # `to` is not a legal forward override from the order's current status.
+                # `errors[].code` is `ORDER_OVERRIDE_NOT_ALLOWED`.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /orders/{id}/invoice:
         get:
             tags: [Orders]
@@ -428,6 +469,20 @@ components:
                         `false` cancels and releases the stock without returning the money — a
                         replacement going out, a correction, or a refund handled separately through
                         `POST /payments/order/{orderId}/refund`.
+
+        StatusOverrideRequest:
+            type: object
+            additionalProperties: false
+            required: [to, reason]
+            properties:
+                to:
+                    allOf:
+                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/OrderStatus'
+                    description: Must be `processing`, `shipped` or `delivered`, and forward of the order's current status — every other value is a 409.
+                reason:
+                    type: string
+                    minLength: 1
+                    description: Why the normal door didn't apply. Recorded on the order's override history, never optional.
 
         SearchOrdersRequest:
             type: object

@@ -49,6 +49,7 @@ actions:
     - delete
     - checkout
     - sweep
+    - override
 
 # The two scopes. Never both, never derived from a flag — a caller resolves to exactly one.
 scopes:
@@ -202,6 +203,17 @@ keys:
       action: delete
       scope: tenant
       description: Remove an order.
+    - key: orders.any.override
+      module: orders
+      subject: Order
+      action: override
+      scope: tenant
+      description: Skip the normal lifecycle gate to force a delivery move, or correct a status by hand, with a recorded reason.
+      # An override exists precisely to bypass the ordinary rule — the same reasoning
+      # payments.any.update carries this tier for: a stolen access token proves nothing about how
+      # recently its holder typed their password, and this key's damage (a wrong parcel/status
+      # written on the record) is not undone by another ordinary request.
+      stepUp: critical
 
     # -- payments ------------------------------------------------------------------------------
     - key: payments.self.read

@@ -12,6 +12,9 @@
             "not-allowed": "This order cannot move to that status from where it is now.",
             "cancel-elsewhere": "Cancelling an order runs the cancellation sequence — cancel it through the order's cancel endpoint instead."
         },
+        "override": {
+            "not-allowed": "This override cannot move the order to that status from where it is now."
+        },
         "invoice": {
             "meta-title": "Invoice — order {{order}}",
             "title": "The order has been confirmed",

@@ -208,6 +208,7 @@ roles:
           - orders.any.create
           - orders.any.update
           - orders.any.delete
+          - orders.any.override
           - payments.self.read
           - payments.any.read
           - payments.any.create

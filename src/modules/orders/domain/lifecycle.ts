@@ -73,6 +73,52 @@ export const isPayable = (status: OrderStatus): boolean =>
     canTransition(status, OrderStatus.paid, 'system') && status !== OrderStatus.paid;
 
 /**
+ * The forward sequence an admin override may move an order along — never `paid` (that destination
+ * stays `system`-only in absolute terms, echo included, see {@link canTransition}) and never
+ * `cancelled` (that has its own endpoint, with its own refund/stock-release sequence). Order in
+ * this array IS the "forward" rule: an override may only move to a LATER index than the order's
+ * current status sits at within it.
+ */
+const OVERRIDABLE_SEQUENCE: readonly OrderStatus[] = [
+    OrderStatus.pending,
+    OrderStatus.paid,
+    OrderStatus.processing,
+    OrderStatus.shipped,
+    OrderStatus.delivered
+];
+
+/**
+ * Whether an admin override may move an order from `from` to `to` — forward-only, and only ever
+ * landing on `processing`/`shipped`/`delivered`. Deliberately its own rule, not a widened
+ * {@link canTransition}: an override exists precisely to skip a `from` gate the normal lifecycle
+ * enforces, so reusing that table here would defeat the feature it is called from.
+ * @param from - the order's current status
+ * @param to - the status an override is being asked to move it to
+ * @returns whether the move is a legal forward override
+ */
+export const canOverrideTo = (from: OrderStatus, to: OrderStatus): boolean => {
+    if (to !== OrderStatus.processing && to !== OrderStatus.shipped && to !== OrderStatus.delivered)
+        return false;
+
+    const fromIndex = OVERRIDABLE_SEQUENCE.indexOf(from);
+    const toIndex = OVERRIDABLE_SEQUENCE.indexOf(to);
+    // `from` not in the sequence at all (already `cancelled`) → no override lands on it.
+    return fromIndex !== -1 && toIndex > fromIndex;
+};
+
+/**
+ * Every status a forced or status-only override starting from `to` could have legally come FROM —
+ * the conditional write's own `from` set, the same shape {@link markSystemMove}'s single-status
+ * version needs but computed dynamically here since an override's `from` is not fixed to one value.
+ * @param to - the status being written
+ * @returns every status strictly earlier than `to` in the overridable sequence
+ */
+export const statusesOverridableInto = (to: OrderStatus): readonly OrderStatus[] => {
+    const toIndex = OVERRIDABLE_SEQUENCE.indexOf(to);
+    return toIndex === -1 ? [] : OVERRIDABLE_SEQUENCE.slice(0, toIndex);
+};
+
+/**
  * @param from - current status
  * @param actor - who is asking
  * @returns statuses `actor` may move to from `from`, in contract order — what a 409 should offer

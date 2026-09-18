@@ -7,7 +7,7 @@
  */
 
 import { orderModel, applyOrderTransform, invoiceCounterModel } from './model';
-import type { OrderDocument, OrderPendingEffect } from './model';
+import type { OrderDocument, OrderPendingEffect, OrderStatusOverride } from './model';
 import type { PipelineStage, QueryFilter } from 'mongoose';
 import { OrderStatus } from '@types';
 import {
@@ -149,6 +149,32 @@ const updateStatusIfIn = (
                 status: { $in: [...from] }
             } as QueryFilter<OrderDocument>,
             { $set: { status: to, ...(effects?.length ? { pendingEffects: [...effects] } : {}) } },
+            { returnDocument: 'after' }
+        )
+        .exec();
+
+/**
+ * Move an order to `to` from any status in `from`, appending one override-history entry in the
+ * SAME write — an override's history entry and the status move it describes must never come
+ * apart, the same reasoning {@link updateStatusIfIn}'s `effects` parameter already follows for
+ * cancellation. `from` is not one fixed status here (unlike {@link updateStatusIfIn}'s normal
+ * callers): `domain/lifecycle.ts`'s `statusesOverridableInto` computes the real set per call.
+ * @param id - the order to move
+ * @param from - every status this override may legally have started from
+ * @param to - the status being written
+ * @param entry - the override-history entry to append
+ * @returns the order as it now stands, or `null` if `id`'s current status was not in `from`
+ */
+const applyStatusOverride = (
+    id: string,
+    from: readonly OrderStatus[],
+    to: OrderStatus,
+    entry: OrderStatusOverride
+): Promise<OrderDocument | null> =>
+    orderModel
+        .findOneAndUpdate(
+            { _id: toObjectId(id), status: { $in: [...from] } } as QueryFilter<OrderDocument>,
+            { $set: { status: to }, $push: { statusOverrides: entry } },
             { returnDocument: 'after' }
         )
         .exec();
@@ -351,6 +377,12 @@ export const orderRepository: Omit<Repository<OrderDocument>, 'search'> & {
         scope?: Record<string, unknown>,
         effects?: readonly OrderPendingEffect[]
     ) => Promise<OrderDocument | null>;
+    applyStatusOverride: (
+        id: string,
+        from: readonly OrderStatus[],
+        to: OrderStatus,
+        entry: OrderStatusOverride
+    ) => Promise<OrderDocument | null>;
     findWithPendingEffects: (cutoff: Date, limit: number) => Promise<OrderDocument[]>;
     clearPendingEffect: (orderId: string, effect: OrderPendingEffect) => Promise<boolean>;
     countOpenBankTransfers: (userId: string) => Promise<number>;
@@ -365,6 +397,7 @@ export const orderRepository: Omit<Repository<OrderDocument>, 'search'> & {
     findByIdScoped,
     ownerScope,
     updateStatusIfIn,
+    applyStatusOverride,
     findWithPendingEffects,
     clearPendingEffect,
     countOpenBankTransfers,

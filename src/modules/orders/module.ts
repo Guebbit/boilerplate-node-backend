@@ -46,7 +46,8 @@ export default {
         'orders.any.read',
         'orders.any.create',
         'orders.any.update',
-        'orders.any.delete'
+        'orders.any.delete',
+        'orders.any.override'
     ],
     routes: router,
     // The invoice prints the shop's own jurisdiction, and an invoice with no country on it is not

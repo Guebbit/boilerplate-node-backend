@@ -12,6 +12,9 @@
             "not-allowed": "Questo ordine non può passare a quello stato dalla posizione in cui si trova.",
             "cancel-elsewhere": "L'annullamento di un ordine esegue la sequenza di annullamento — annullalo tramite l'endpoint di annullamento dell'ordine."
         },
+        "override": {
+            "not-allowed": "Questa forzatura non può spostare l'ordine a quello stato dalla posizione in cui si trova."
+        },
         "invoice": {
             "meta-title": "Fattura — ordine {{order}}",
             "title": "L'ordine è stato confermato",

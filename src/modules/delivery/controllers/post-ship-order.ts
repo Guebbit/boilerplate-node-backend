@@ -19,7 +19,13 @@ export const postShipOrder = (request: Request<{ orderId?: string }>, response: 
     if (!body) return;
 
     return deliveryService
-        .recordShipment(String(request.params.orderId), body.trackingCode, callerContextOf(request))
+        .recordShipment(
+            String(request.params.orderId),
+            body.trackingCode,
+            callerContextOf(request),
+            body.forced,
+            body.reason
+        )
         .then((result) => {
             if (refused(response, result)) return;
             successResponse<Shipment>(response, result.data!);

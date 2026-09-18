@@ -11,6 +11,8 @@ import { OrderStatus } from '@types';
 import {
     ORDER_LIFECYCLE,
     canTransition,
+    canOverrideTo,
+    statusesOverridableInto,
     isPayable,
     orderActionsFor,
     statusesLeadingTo,
@@ -283,5 +285,48 @@ describe('orderActionsFor', () => {
     it('withdraws `pay` once the money has landed or the order is over', () => {
         for (const status of [OrderStatus.paid, OrderStatus.delivered, OrderStatus.cancelled])
             expect(orderActionsFor(status, 'admin').pay).toBe(false);
+    });
+});
+
+describe('canOverrideTo — the admin override, forward only, never onto paid or cancelled', () => {
+    const OVERRIDABLE_DESTINATIONS = [OrderStatus.processing, OrderStatus.shipped, OrderStatus.delivered];
+
+    it('never allows paid as a destination, from any status', () => {
+        for (const from of EVERY_STATUS) expect(canOverrideTo(from, OrderStatus.paid)).toBe(false);
+    });
+
+    it('never allows cancelled as a destination, from any status', () => {
+        for (const from of EVERY_STATUS) expect(canOverrideTo(from, OrderStatus.cancelled)).toBe(false);
+    });
+
+    it('never moves a cancelled order anywhere — it has left the fulfilment sequence', () => {
+        for (const to of EVERY_STATUS) expect(canOverrideTo(OrderStatus.cancelled, to)).toBe(false);
+    });
+
+    it('allows every forward move within processing/shipped/delivered', () => {
+        for (const from of FULFILMENT_SEQUENCE)
+            for (const to of OVERRIDABLE_DESTINATIONS) {
+                const fromIndex = FULFILMENT_SEQUENCE.indexOf(from);
+                const toIndex = FULFILMENT_SEQUENCE.indexOf(to);
+                expect(canOverrideTo(from, to)).toBe(toIndex > fromIndex);
+            }
+    });
+
+    it('refuses a no-op — an override always moves the order somewhere new', () => {
+        for (const status of OVERRIDABLE_DESTINATIONS) expect(canOverrideTo(status, status)).toBe(false);
+    });
+});
+
+describe('statusesOverridableInto — the conditional write\'s own `from` set', () => {
+    it('is every status strictly earlier than the destination in the fulfilment sequence', () => {
+        expect(statusesOverridableInto(OrderStatus.shipped)).toEqual([
+            OrderStatus.pending,
+            OrderStatus.paid,
+            OrderStatus.processing
+        ]);
+    });
+
+    it('is empty for a destination outside the overridable sequence', () => {
+        expect(statusesOverridableInto(OrderStatus.cancelled)).toEqual([]);
     });
 });

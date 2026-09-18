@@ -14,7 +14,8 @@ describe('the orders audit vocabulary', () => {
             ORDER_CREATED: 'order.created',
             ORDER_UPDATED: 'order.updated',
             ORDER_DELETED: 'order.deleted',
-            ORDER_CANCELLED: 'order.cancelled'
+            ORDER_CANCELLED: 'order.cancelled',
+            ORDER_STATUS_OVERRIDDEN: 'order.status_overridden'
         });
     });
 });

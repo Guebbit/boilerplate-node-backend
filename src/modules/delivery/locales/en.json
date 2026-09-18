@@ -5,6 +5,7 @@
         "not-processing": "This order is not ready to ship",
         "not-shippable-for-delivery": "This order has not shipped yet",
         "tracking-code-required": "A tracking code is required for this shipping method",
+        "override-reason-required": "A reason is required to force this move",
         "email-shipped": {
             "subject": "Your order is on its way",
             "meta-title": "Order shipped",

@@ -13,6 +13,7 @@ import { deleteOrders } from './controllers/delete-orders';
 import { getOrderItem } from './controllers/get-order-item';
 import { getOrderInvoice } from './controllers/get-order-invoice';
 import { postCancelOrder } from './controllers/post-cancel-order';
+import { postOrderStatusOverride } from './controllers/post-order-status-override';
 import { invalidateCache, searchCache, setCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
@@ -56,6 +57,14 @@ router.delete(
 // POST /orders/:id/cancel — the one order write a customer can make (owner or admin;
 // the service's conditional write carries the caller's scope)
 router.post('/:id/cancel', invalidateCache(['orders', 'products']), postCancelOrder);
+
+// POST /orders/:id/status-override — must come before /:id
+router.post(
+    '/:id/status-override',
+    requirePermission('orders.any.override'),
+    invalidateCache(['orders']),
+    postOrderStatusOverride
+);
 
 // GET /orders/:id/invoice — must come before /:id
 router.get(

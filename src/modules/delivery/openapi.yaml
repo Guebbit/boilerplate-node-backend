@@ -97,6 +97,12 @@ paths:
                   schema:
                       $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                   description: The order that arrived
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/DeliverOrderRequest'
             responses:
                 '200':
                     description: The shipment
@@ -201,6 +207,25 @@ components:
                 trackingCode:
                     type: string
                     description: The carrier's handle on the parcel. Required when the order's shipping method is tracked; optional otherwise.
+                forced:
+                    type: boolean
+                    description: Skip the normal `processing`-only gate — the caller must hold `orders.any.override`, and `reason` is then required. Still creates the parcel record and sends the shipped email; still refuses a tracked method with no `trackingCode`.
+                reason:
+                    type: string
+                    minLength: 1
+                    description: Required exactly when `forced` is `true` — why the normal door didn't apply. Recorded on the order's override history.
+
+        DeliverOrderRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                forced:
+                    type: boolean
+                    description: Skip the normal `shipped`-only gate — the caller must hold `orders.any.override`, and `reason` is then required. Still stamps the shipment delivered and reports the fact.
+                reason:
+                    type: string
+                    minLength: 1
+                    description: Required exactly when `forced` is `true`.
 
         ShipmentEnvelope:
             type: object

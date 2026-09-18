@@ -1432,6 +1432,8 @@ paths:
         $ref: '../../src/modules/orders/openapi.yaml#/paths/~1orders~1{id}~1hard'
     /orders/{id}/cancel:
         $ref: '../../src/modules/orders/openapi.yaml#/paths/~1orders~1{id}~1cancel'
+    /orders/{id}/status-override:
+        $ref: '../../src/modules/orders/openapi.yaml#/paths/~1orders~1{id}~1status-override'
     /orders/{id}/invoice:
         $ref: '../../src/modules/orders/openapi.yaml#/paths/~1orders~1{id}~1invoice'
 

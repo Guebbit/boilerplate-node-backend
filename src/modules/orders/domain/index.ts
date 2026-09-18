@@ -20,7 +20,9 @@ export {
     isPayable,
     statusesReachableFrom,
     statusesLeadingTo,
-    orderActionsFor
+    orderActionsFor,
+    canOverrideTo,
+    statusesOverridableInto
 } from './lifecycle';
 export type { OrderActor } from './lifecycle';
 

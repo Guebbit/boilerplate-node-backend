@@ -17,7 +17,9 @@ export const ordersAuditActions = {
      * question with a money answer — who cancelled it, the customer or the shop, decides who owes
      * whom an apology. `actor_role` on the record carries who did it.
      */
-    ORDER_CANCELLED: 'order.cancelled'
+    ORDER_CANCELLED: 'order.cancelled',
+    /* An admin skipped or corrected the normal lifecycle — Q8. `metadata` carries mode/from/to/reason. */
+    ORDER_STATUS_OVERRIDDEN: 'order.status_overridden'
 } as const;
 
 /** Registers this module's actions into the app-wide `AuditActionMap` union. */

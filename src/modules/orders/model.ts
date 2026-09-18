@@ -158,7 +158,33 @@ export interface OrderDocument
      * before this field existed.
      */
     invoicePdfStatus?: 'pending' | 'ready';
+    /**
+     * The admin-override history — `services/override.ts`'s only writer, never emptied. Absent
+     * (not `[]`) on an order no override has ever touched, the same "owes nothing" vs. "was never
+     * asked" distinction `pendingEffects` already uses. Each entry is one override, forced or
+     * status-only; `PUT`/`POST` normal writes never append here.
+     */
+    statusOverrides?: OrderStatusOverride[];
     deletedAt?: Date;
+}
+
+/** One admin override event, embedded in order-arrival order — never reordered or deleted. */
+export interface OrderStatusOverride {
+    /** The order's status immediately before this override. */
+    from: OrderStatus;
+    /** The status this override moved the order to. */
+    to: OrderStatus;
+    /** `'forced'` — a delivery door skipped its normal `from` gate; `'status'` — the status-only door. */
+    mode: 'forced' | 'status';
+    /** Required on every override — why the normal path didn't apply. */
+    reason: string;
+    /**
+     * The admin who made the call, as `caller.id` gave it. A plain string, not an ObjectId: this
+     * is a historical record, never queried by it, and `Caller.id` carries no guarantee of being
+     * one (an API-key caller, or a test fixture, can hand it a value that is not).
+     */
+    actorUserId: string;
+    at: Date;
 }
 
 /**
@@ -359,6 +385,26 @@ export const orderSchema = new Schema<OrderDocument>(
             type: String,
             enum: ['pending', 'ready'],
             default: 'pending'
+        },
+        /*
+         * `default: undefined`, same reasoning as `pendingEffects` above: an order no override has
+         * ever touched carries no key at all. Only `services/override.ts`'s `$push` creates it.
+         */
+        statusOverrides: {
+            type: [
+                new Schema<OrderStatusOverride>(
+                    {
+                        from: { type: String, enum: Object.values(OrderStatus), required: true },
+                        to: { type: String, enum: Object.values(OrderStatus), required: true },
+                        mode: { type: String, enum: ['forced', 'status'], required: true },
+                        reason: { type: String, required: true },
+                        actorUserId: { type: String, required: true },
+                        at: { type: Date, required: true }
+                    },
+                    { _id: false }
+                )
+            ],
+            default: undefined
         }
     },
     {

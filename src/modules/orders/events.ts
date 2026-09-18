@@ -22,9 +22,19 @@ declare module '@kernel/events' {
 
         /**
          * An order's status moved, whoever moved it. Listeners filter on `to`; the event doesn't
-         * know who cares.
+         * know who cares. `override` is `true` only for a status-only admin override
+         * (`services/override.ts`) — the one case where NO parcel and NO shipped email should
+         * follow a `shipped`/`delivered` move; a forced delivery-door override still creates both,
+         * so it emits with `override` absent, indistinguishable here from the ordinary system move
+         * it stands in for. Webhooks fire either way — a subscriber cares that the status moved,
+         * not by which door.
          */
-        'order.status_changed': { orderId: string; from: OrderStatus; to: OrderStatus };
+        'order.status_changed': {
+            orderId: string;
+            from: OrderStatus;
+            to: OrderStatus;
+            override?: true;
+        };
 
         /**
          * A new order was written — the admin create and the storefront checkout both funnel

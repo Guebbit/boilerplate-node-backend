@@ -43,7 +43,15 @@ export const scopeOfKey = (key: string): AuthorizationScope =>
  * `cart.self.checkout`'s and `inventory.any.sweep`'s actions, and nowhere else. See each key's own
  * description in `shared/authorization-keys.yaml`.
  */
-const PERMISSION_ACTIONS = ['read', 'create', 'update', 'delete', 'checkout', 'sweep'] as const;
+const PERMISSION_ACTIONS = [
+    'read',
+    'create',
+    'update',
+    'delete',
+    'checkout',
+    'sweep',
+    'override'
+] as const;
 
 /** See {@link PERMISSION_ACTIONS}. */
 export type PermissionAction = (typeof PERMISSION_ACTIONS)[number];

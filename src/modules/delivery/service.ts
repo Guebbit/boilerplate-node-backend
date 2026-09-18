@@ -20,8 +20,9 @@ import { OrderStatus } from '@types';
 import type { CallerContext } from '@types';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { deliveryAuditActions } from './audit';
-import { orderService, canTransition } from '@modules/orders';
+import { orderService, canTransition, canOverrideTo } from '@modules/orders';
 import { userService } from '@modules/users';
+import { holdsKey } from '@kernel/ability';
 import { SHIPPING_METHODS, findShippingMethod } from './domain';
 import { shipmentShippedEmail } from './emails';
 import { shipmentRepository } from './repository';
@@ -62,23 +63,62 @@ export const getForOrder = (
     });
 
 /**
+ * A `forced: true` caller must hold `orders.any.override` (the route's own `delivery.any.update`
+ * gate is not enough — forcing is a second, stricter permission) and must give a `reason`. Shared
+ * between {@link recordShipment} and {@link recordDelivery} so the two doors cannot drift on what
+ * "forced" requires.
+ * @param context - the caller
+ * @param forced - the request body's own flag
+ * @param reason - the request body's own reason, required exactly when `forced` is `true`
+ * @returns a 403/422 reject if forcing was asked for but not earned, `undefined` otherwise
+ */
+const refuseUnearnedForce = (
+    context: CallerContext,
+    forced: boolean | undefined,
+    reason: string | undefined
+): ResponseReject | undefined => {
+    if (!forced) return undefined;
+    if (!holdsKey(context.caller, 'orders.any.override'))
+        return generateReject(403, [
+            { code: 'FORBIDDEN', message: t('generic.error-forbidden') }
+        ]);
+    if (!reason)
+        return generateReject(422, [
+            { code: 'DELIVERY_OVERRIDE_REASON_REQUIRED', message: t('delivery.override-reason-required') }
+        ]);
+    return undefined;
+};
+
+/**
  * Record a parcel's handover to the carrier — the shipping door. Writes the parcel FIRST, then
- * asks `orders` to move: an order not currently `processing` refuses before anything is written,
- * so a stray call never creates a parcel for an order that cannot ship.
+ * asks `orders` to move: an order that cannot legally reach `shipped` refuses before anything is
+ * written, so a stray call never creates a parcel for an order that cannot ship. `forced` widens
+ * WHICH orders are eligible (an override holder's call, `canOverrideTo`) — it never widens what
+ * gets written: the parcel and the tracking-code rule are identical either way.
  * @param orderId - the order to ship
  * @param trackingCode - the carrier's handle; required when the method is `tracked`
  * @param context - the caller, for the audit entry
+ * @param forced - skip the normal `processing`-only gate; requires `orders.any.override` + `reason`
+ * @param reason - required exactly when `forced` is `true`, recorded on the order's override history
  */
 export const recordShipment = (
     orderId: string,
     trackingCode: string | undefined,
-    context: CallerContext
-): Promise<ResponseSuccess<Shipment> | ResponseReject> =>
-    orderService.getById(orderId).then((order) => {
+    context: CallerContext,
+    forced?: boolean,
+    reason?: string
+): Promise<ResponseSuccess<Shipment> | ResponseReject> => {
+    const unearned = refuseUnearnedForce(context, forced, reason);
+    if (unearned) return Promise.resolve(unearned);
+
+    return orderService.getById(orderId).then((order) => {
         if (!order) return generateReject(404, [t('delivery.order-not-found')]);
         // Asked of the order lifecycle rather than a status literal, same reasoning `orders`'
         // own `isPayable` callers follow: this module cannot drift off the rule's owner.
-        if (!canTransition(order.status, OrderStatus.shipped, 'system'))
+        const eligible = forced
+            ? canOverrideTo(order.status, OrderStatus.shipped)
+            : canTransition(order.status, OrderStatus.shipped, 'system');
+        if (!eligible)
             return generateReject(409, [
                 { code: 'ORDER_NOT_PROCESSING', message: t('delivery.not-processing') }
             ]);
@@ -89,8 +129,12 @@ export const recordShipment = (
                 { code: 'DELIVERY_TRACKING_CODE_REQUIRED', message: t('delivery.tracking-code-required') }
             ]);
 
-        return shipmentRepository.upsertForOrder(orderId, trackingCode).then((shipment) =>
-            orderService.markShipped(orderId).then((moved) => {
+        return shipmentRepository.upsertForOrder(orderId, trackingCode).then((shipment) => {
+            const moveOrder = forced
+                ? orderService.forceMove(orderId, OrderStatus.shipped, reason!, context)
+                : orderService.markShipped(orderId);
+
+            return moveOrder.then((moved) => {
                 // The parcel write above is idempotent (unique on orderId); this order's own
                 // move is what is actually at-most-once — a racing loser lands here.
                 if (!moved)
@@ -124,23 +168,38 @@ export const recordShipment = (
 
                     return generateSuccess(toShipmentResponse(shipment));
                 });
-            })
-        );
+            });
+        });
     });
+};
 
 /**
  * Record a parcel's arrival — the delivery door. Stamps the shipment FIRST, then asks `orders`
- * to move: an order not currently `shipped` refuses before anything is written.
+ * to move: an order that cannot legally reach `delivered` refuses before anything is written. The
+ * shipment record itself must still be `shipped` regardless of `forced` — a parcel with no
+ * recorded handover has nothing to stamp arrived, override or not; `forced` only widens which
+ * ORDER statuses are eligible (an override holder's call — useful when the order's own status
+ * field fell out of step with a shipment that genuinely did go out).
  * @param orderId - the order that arrived
  * @param context - the caller, for the audit entry
+ * @param forced - skip the normal `shipped`-only order-status gate; requires `orders.any.override` + `reason`
+ * @param reason - required exactly when `forced` is `true`, recorded on the order's override history
  */
 export const recordDelivery = (
     orderId: string,
-    context: CallerContext
-): Promise<ResponseSuccess<Shipment> | ResponseReject> =>
-    orderService.getById(orderId).then((order) => {
+    context: CallerContext,
+    forced?: boolean,
+    reason?: string
+): Promise<ResponseSuccess<Shipment> | ResponseReject> => {
+    const unearned = refuseUnearnedForce(context, forced, reason);
+    if (unearned) return Promise.resolve(unearned);
+
+    return orderService.getById(orderId).then((order) => {
         if (!order) return generateReject(404, [t('delivery.order-not-found')]);
-        if (!canTransition(order.status, OrderStatus.delivered, 'system'))
+        const eligible = forced
+            ? canOverrideTo(order.status, OrderStatus.delivered)
+            : canTransition(order.status, OrderStatus.delivered, 'system');
+        if (!eligible)
             return generateReject(409, [
                 { code: 'ORDER_NOT_SHIPPED', message: t('delivery.not-shippable-for-delivery') }
             ]);
@@ -153,7 +212,11 @@ export const recordDelivery = (
                         { code: 'ORDER_NOT_SHIPPED', message: t('delivery.not-shippable-for-delivery') }
                     ]);
 
-                return orderService.markDelivered(orderId).then((moved) => {
+                const moveOrder = forced
+                    ? orderService.forceMove(orderId, OrderStatus.delivered, reason!, context)
+                    : orderService.markDelivered(orderId);
+
+                return moveOrder.then((moved) => {
                     if (!moved)
                         return generateReject(409, [
                             { code: 'ORDER_NOT_SHIPPED', message: t('delivery.not-shippable-for-delivery') }
@@ -172,6 +235,7 @@ export const recordDelivery = (
                 });
             });
     });
+};
 
 /**
  * Every shipment behind a set of orders — for the account data export, called with the caller's
