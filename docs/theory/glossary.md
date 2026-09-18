@@ -28,6 +28,22 @@ language is kept per context rather than shared.
 | **Address**          | An entry in the account’s address book. The one collection this module owns outright.                 |
 | **Account deletion** | Two steps — a request that issues a token, and a confirm that destroys the record. Never one call.    |
 
+## `antibot`
+
+| Term             | What it means here                                                                                                                                            |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Provider**     | The active human-challenge implementation (`none`, `altcha`, `turnstile`) — this module publishes which one, it never runs the gate itself.                   |
+| **Verdict**      | `'ok'` or `'refused'`, what a guarded check (a challenge, an email policy) answers — never a raw boolean, so a caller cannot mistake `undefined` for a pass.  |
+| **Email policy** | How hard to look at a submitted address before trusting it: `off`, `disposable` (deny known throwaway domains) or `mx` (require a resolvable mail exchanger). |
+
+## `api-keys`
+
+| Term                    | What it means here                                                                                                                                                                           |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **API key**             | A machine-to-machine credential, `sk_...`, that authenticates a request the way a JWT does — minted, listed and revoked here, the only module that reads or writes the `apikeys` collection. |
+| **Mint**                | Issue a new key. Its permissions are always a SUBSET of the minter's own, re-checked at mint time and at every use — never a caller-chosen superset.                                         |
+| **Credential resolver** | The `kernel/authentication.ts` port this module fills, so an `sk_...` bearer resolves to a caller the same way a refresh session does.                                                       |
+
 ## `audit-logs`
 
 | Term            | What it means here                                                            |
@@ -68,9 +84,9 @@ language is kept per context rather than shared.
 
 | Term               | What it means here                                                                                                                               |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **On hand**        | Units physically present, whether or not anyone has claimed them.                                                                                |
+| **On hand**        | Units physically present, whether or not anyone has claimed them. Stored on this module's own `stocklevels` collection — the source of truth.    |
 | **Reserved**       | Units an open order has claimed. Still on the shelf, no longer for sale.                                                                         |
-| **Available**      | On hand minus reserved — what a customer may buy. Derived everywhere, stored nowhere.                                                            |
+| **Available**      | On hand minus reserved, clamped at zero — what a customer may buy. Stored and kept in step by `applyTransition`, the one writer.                 |
 | **Reservation**    | One order’s hold on its units, with a deadline. Ends as a commit, a release or an expiry — never by being deleted.                               |
 | **Transition**     | One of the six ways a counter may move. Each implies a fixed pair of deltas (`domain/transitions.ts`) and each writes exactly one ledger row.    |
 | **Stock movement** | A ledger row: which product, which transition, and both signed deltas. Written by the same call that moved the counter, so it cannot be missing. |
@@ -117,14 +133,11 @@ language is kept per context rather than shared.
 
 ## `products`
 
-| Term            | What it means here                                                                                                                                                                     |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Product**     | A sellable item in the catalogue. Identified by id; the name is not unique.                                                                                                            |
-| **On hand**     | Units physically present. Stored here because this module owns the collection, but never written here — see `Counter`.                                                                 |
-| **Reserved**    | Units already claimed by an open order. Present on the shelf, not for sale. Stored here, written by `inventory`.                                                                       |
-| **Available**   | On hand minus reserved — what a customer may actually buy. Derived at serialization, never stored, so it cannot go stale.                                                              |
-| **Counter**     | Either of the two stored numbers. This module declares them and reads them; every write goes through `inventory`, which owns the transitions and the ledger row that records each one. |
-| **Soft delete** | Withdrawal from sale, reversible. The row survives so orders that embedded it stay readable.                                                                                           |
+| Term            | What it means here                                                                                                                                                                            |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Product**     | A sellable item in the catalogue. Identified by id; the name is not unique.                                                                                                                   |
+| **Available**   | A read-only cached copy of `inventory`'s own figure, kept in step by a synchronous call inside `applyTransition` — never written here. See `inventory`'s own entries for the source of truth. |
+| **Soft delete** | Withdrawal from sale, reversible. The row survives so orders that embedded it stay readable.                                                                                                  |
 
 ## `users`
 
@@ -134,6 +147,17 @@ language is kept per context rather than shared.
 | **Role**        | A named permission set on the User (`shared/authorization-roles.yaml`), not a boolean — see [authorization](./authorization.md). |
 | **Token**       | A single-use secret bound to a user and a purpose (`TokenType`), stored on the record.                                           |
 | **Soft delete** | A destroyed account, kept for the audit trail. Emits `user.deleted`, which is what actually clears the cart and wishlist.        |
+
+## `webhooks`
+
+| Term             | What it means here                                                                                                                                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Subscription** | One endpoint, owned by whoever configured it, listening for a set of event types. The unit an auto-disable acts on.                                                                                                       |
+| **Delivery**     | One attempt to POST one event to one subscription. Tracked through `pending` → `in-flight` → `succeeded`/`failed`/`exhausted`.                                                                                            |
+| **Lease**        | A visibility timeout on an `in-flight` delivery (`leaseExpiresAt` + a claim token) — only the holder may write the outcome, and an expired lease is picked up again, so a crash mid-delivery cannot strand a row forever. |
+| **Ladder**       | The five-step retry schedule (5s, 5m, 30m, 2h, 10h) a failing subscription climbs — about a subscriber being down, distinct from the broker's own short-lived job retries.                                                |
+| **Auto-disable** | What happens after `WEBHOOK_MAX_CONSECUTIVE_FAILURES` (5) consecutive exhausted chains — the subscription turns off and its owner is emailed.                                                                             |
+| **Envelope**     | The Standard Webhooks body shape, `{ type, timestamp, data }` — `type` is what lets a receiver subscribed to two event types on the same signal tell them apart.                                                          |
 
 ## `wishlist`
 
