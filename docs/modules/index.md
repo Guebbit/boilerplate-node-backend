@@ -194,9 +194,9 @@ inside a module folder is, is [Modules (files)](../reference/src-modules.md).
 
 ## The two repositories
 
-Twelve of fourteen domains exist on both sides under the same name. **The interesting two do not**,
-and neither does the frontend's third extra module — an asymmetry that is real architecture rather
-than drift, and that is written down nowhere else in either repository.
+Most domains exist on both sides under the same name. **The interesting two do not**, and neither
+does the frontend's third extra module — an asymmetry that is real architecture rather than drift,
+and that is written down nowhere else in either repository.
 
 | This repository | `boilerplate-vue-frontend` | Note                                                                                                                                                            |
 | --------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
