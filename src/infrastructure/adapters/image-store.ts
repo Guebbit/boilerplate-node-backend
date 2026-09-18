@@ -14,6 +14,7 @@ import path from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { deleteFile, moveFile } from '@infrastructure/adapters/filesystem';
 import { toPosixPath } from '@infrastructure/http/uploads';
+import type { ReencodableImageMime } from '@infrastructure/adapters/image';
 
 /**
  * The seam between an upload and wherever bytes actually live. One implementation ships today —
@@ -53,29 +54,39 @@ export interface ImageStore {
     removeQuarantined(key: string): Promise<boolean>;
 
     /**
-     * Publish a digested original under its quarantine key, and return the value to persist in
-     * `imageUrl`.
+     * Publish a digested original under a name DERIVED FROM ITS OWN BYTES, and return the value to
+     * persist in `imageUrl` — never named from the upload's quarantine key. Two digest runs of the
+     * SAME input converge on the identical file (a harmless duplicate write of identical bytes);
+     * two runs of DIFFERENT input can never collide, which is what makes a stale run's cleanup safe
+     * to run at all — it can never delete a newer run's live file, because their names differ the
+     * moment their content does. Doubles as cache-busting: the URL only changes when the content
+     * does.
      *
      * THROWS on failure: a promote that did not land is a job worth retrying, never a job worth
      * silently dropping — see the worker's ack policy.
      *
-     * @param key - the same key the original was quarantined and digested under
+     * @param stem - the shared identity this original and {@link putDerivative}'s thumbnail are
+     *   filed under — `image.worker.ts` derives it once, from the digested bytes, and passes it to
+     *   both, so `remove` can still find a main image's thumbnail from its own filename alone
      * @param digested - the re-encoded bytes {@link import('./image').digestImage} produced
+     * @param mime - which of the three accepted formats `digested` was encoded as, for the extension
      * @returns the promoted image's url, legal under `ImageUrl` (`format: uri-reference`)
      */
-    promote(key: string, digested: Buffer): Promise<string>;
+    promote(stem: string, digested: Buffer, mime: ReencodableImageMime): Promise<string>;
 
     /**
-     * Publish a thumbnail derived from the upload at `key`, and return the value to persist in
-     * `thumbnailUrl`. Lands at its own path, `thumbs/v1/<stem>.webp` — never at the original's
-     * key — so the version segment can change independently the day quality settings do. THROWS
-     * on failure, same reason {@link promote} does.
+     * Publish a thumbnail under the SAME `stem` {@link promote} used for the original — never the
+     * thumbnail's own bytes' hash, so `remove` can derive a thumbnail's filename from the main
+     * image's filename alone, without needing the thumbnail's bytes on hand. Lands at its own path,
+     * `thumbs/v1/<stem>.webp` — never at the original's own path — so the version segment can
+     * change independently the day quality settings do. THROWS on failure, same reason
+     * {@link promote} does.
      *
-     * @param key - the same key the original was quarantined and digested under
+     * @param stem - the same value passed to {@link promote} for this digest run
      * @param thumbnail - the WebP bytes {@link import('./image').thumbnailImage} produced
      * @returns the promoted thumbnail's url
      */
-    putDerivative(key: string, thumbnail: Buffer): Promise<string>;
+    putDerivative(stem: string, thumbnail: Buffer): Promise<string>;
 
     /**
      * Delete the stored image (and its thumbnail, if one exists) an `imageUrl` names.
@@ -117,8 +128,15 @@ const quarantineRoot = () => path.resolve(process.env.NODE_QUARANTINE_PATH ?? 'q
 const thumbnailsDirectory = (root: string) =>
     path.join(root, IMAGES_SEGMENT, 'thumbs', THUMBNAIL_VERSION);
 
-/** The thumbnail filename for a given original key — same stem, always `.webp`. */
+/** The thumbnail filename for a given original's stem — same stem, always `.webp`. */
 const thumbnailFilename = (key: string) => `${path.basename(key, path.extname(key))}.webp`;
+
+/** The file extension `promote` writes for each accepted format — the standard short spelling. */
+const EXTENSION_OF: Record<ReencodableImageMime, string> = {
+    'image/png': '.png',
+    'image/jpeg': '.jpg',
+    'image/webp': '.webp'
+};
 
 /**
  * Resolve a stored `imageUrl` to a real path, refusing anything that would escape `root`.
@@ -171,22 +189,23 @@ export const filesystemImageStore: ImageStore = {
 
     removeQuarantined: (key) => deleteFile(path.join(quarantineRoot(), path.basename(key))),
 
-    promote: async (key, digested) => {
-        const safeKey = path.basename(key);
+    promote: async (stem, digested, mime) => {
+        const safeStem = path.basename(stem);
+        const filename = `${safeStem}${EXTENSION_OF[mime]}`;
         const root = publicRoot();
         await mkdir(path.join(root, IMAGES_SEGMENT), { recursive: true });
-        await writeFile(path.join(root, IMAGES_SEGMENT, safeKey), digested);
+        await writeFile(path.join(root, IMAGES_SEGMENT, filename), digested);
         // Built from literals rather than `path.join`, because this is a URL: on Windows `join`
         // would answer `\images\x.png`, which `express.static` does not serve and which is broken
         // the moment it reaches a browser.
-        return `/${IMAGES_SEGMENT}/${safeKey}`;
+        return `/${IMAGES_SEGMENT}/${filename}`;
     },
 
-    putDerivative: async (key, thumbnail) => {
+    putDerivative: async (stem, thumbnail) => {
         const root = publicRoot();
         const directory = thumbnailsDirectory(root);
         await mkdir(directory, { recursive: true });
-        const filename = thumbnailFilename(key);
+        const filename = thumbnailFilename(stem);
         await writeFile(path.join(directory, filename), thumbnail);
         return `/${IMAGES_SEGMENT}/thumbs/${THUMBNAIL_VERSION}/${filename}`;
     },

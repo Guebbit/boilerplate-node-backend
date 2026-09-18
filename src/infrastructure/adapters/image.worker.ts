@@ -10,6 +10,7 @@
  * See: docs/tools/image-processing.md
  */
 
+import { createHash } from 'node:crypto';
 import type { ImageDigestJobPayload } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import { imageStore } from '@infrastructure/adapters/image-store';
@@ -31,6 +32,16 @@ const REENCODABLE_MIMES: ReadonlySet<string> = new Set<ReencodableImageMime>([
 
 const isReencodableMime = (mime: string | undefined): mime is ReencodableImageMime =>
     mime !== undefined && REENCODABLE_MIMES.has(mime);
+
+/**
+ * The shared identity a digest run's promoted original AND its thumbnail are filed under —
+ * derived from the RE-ENCODED original's own bytes, never the quarantine key. See
+ * `image-store.ts#promote`'s docblock for why: it is what makes a duplicate run of the same input
+ * converge instead of collide, and a stale run's cleanup provably unable to delete a newer run's
+ * live file.
+ */
+const contentStem = (digested: Buffer): string =>
+    createHash('sha256').update(digested).digest('hex').slice(0, 24);
 
 /** The two urls a finished digest produces, ready to persist. */
 export interface DigestedImageUrls {
@@ -88,12 +99,13 @@ export const digestQuarantinedImage = (key: string): Promise<DigestedImageUrls> 
             throw new Error(`Quarantined image ${key} does not match an accepted format.`);
 
         return Promise.all([digestImage(raw, mime), thumbnailImage(raw)])
-            .then(([digested, thumbnail]) =>
-                Promise.all([
-                    imageStore.promote(key, digested),
-                    imageStore.putDerivative(key, thumbnail)
-                ])
-            )
+            .then(([digested, thumbnail]) => {
+                const stem = contentStem(digested);
+                return Promise.all([
+                    imageStore.promote(stem, digested, mime),
+                    imageStore.putDerivative(stem, thumbnail)
+                ]);
+            })
             .then(([imageUrl, thumbnailUrl]) =>
                 // Best-effort: the promoted files are what matters, and a leftover quarantine file
                 // is cleaned up later by `ops/reap-quarantine.ts` regardless.

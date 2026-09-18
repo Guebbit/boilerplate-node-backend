@@ -14,7 +14,26 @@ import {
 
 const mockAck = jest.fn();
 const mockNack = jest.fn();
-const mockSendToQueue = jest.fn().mockReturnValue(true);
+/**
+ * A confirm channel's `sendToQueue` gains a callback the broker invokes once it has accepted (or
+ * refused) the message — `publishToQueue` now waits for THAT, not the return value, so this
+ * default invokes it synchronously with no error (a successful confirm). Individual tests override
+ * this to simulate backpressure (return `false`, callback still fires success), a broker refusal
+ * (callback fires an error), or a confirm that never arrives (callback never called).
+ */
+const mockSendToQueue = jest
+    .fn()
+    .mockImplementation(
+        (
+            _queue: string,
+            _content: Buffer,
+            _options: unknown,
+            callback?: (error: unknown) => void
+        ) => {
+            callback?.(null);
+            return true;
+        }
+    );
 const mockAssertQueue = jest
     .fn()
     .mockResolvedValue({ queue: 'test', messageCount: 0, consumerCount: 0 });
@@ -34,7 +53,10 @@ const channelMock = () => ({
     nack: mockNack,
     on: mockChannelOn
 });
-const mockCreateChannel = jest.fn().mockImplementation(() => Promise.resolve(channelMock()));
+// `queue.ts` now opens a CONFIRM channel (`model.createConfirmChannel()`), not a plain one — see
+// its own docblock on `currentChannel`. The mock channel shape is identical either way (a
+// `ConfirmChannel` only ADDS the callback/`waitForConfirms` surface `sendToQueue` above covers).
+const mockCreateConfirmChannel = jest.fn().mockImplementation(() => Promise.resolve(channelMock()));
 const mockModelClose = jest.fn().mockImplementation(() => Promise.resolve());
 
 /** Handlers `queue.ts` registered on the recovering connection's own events (`connect`/`disconnect`). */
@@ -47,13 +69,13 @@ const emitModelEvent = (event: string, ...args: never[]) => {
     for (const handler of modelListeners[event] ?? []) handler(...args);
 };
 const recoveringModelMock = {
-    createChannel: mockCreateChannel,
+    createConfirmChannel: mockCreateConfirmChannel,
     on: mockModelOn,
     close: mockModelClose
 };
 
 /** The one thing `setup` reads off the model it is handed — same shape on every (re)connect. */
-const fakeConnectionModel = { createChannel: mockCreateChannel };
+const fakeConnectionModel = { createConfirmChannel: mockCreateConfirmChannel };
 
 /** The `setup` callback `queue.ts` passed to `{ recovery: { setup } }` on the one `connect()` call. */
 let capturedSetup: ((model: unknown) => Promise<void>) | undefined;
@@ -161,10 +183,70 @@ describe('publishToQueue()', () => {
         await ensureConnected();
         const result = await publishToQueue({ queue: 'emails', payload: { to: 'a@b.c' } });
         expect(result).toBe(true);
-        expect(mockSendToQueue).toHaveBeenCalledWith('emails', expect.any(Buffer), {
-            persistent: true,
-            priority: 0
-        });
+        expect(mockSendToQueue).toHaveBeenCalledWith(
+            'emails',
+            expect.any(Buffer),
+            { persistent: true, priority: 0 },
+            expect.any(Function)
+        );
+    });
+
+    /**
+     * `sendToQueue`'s own return value is amqplib's LOCAL write-buffer signal, not the broker's
+     * answer — `false` here means "wait for drain", never "failed". Before this fix `publishToQueue`
+     * read that boolean directly, so a caller under load ran its inline fallback ALONGSIDE a
+     * publish that was going to succeed anyway (the double-run bug this confirm design closes).
+     */
+    it('still resolves true on backpressure, once the broker confirms', async () => {
+        await ensureConnected();
+        mockSendToQueue.mockImplementationOnce(
+            (
+                _queue: string,
+                _content: Buffer,
+                _options: unknown,
+                callback?: (error: unknown) => void
+            ) => {
+                callback?.(null);
+                return false; // the local buffer is full; the broker still confirms
+            }
+        );
+
+        await expect(publishToQueue({ queue: 'emails', payload: { to: 'a@b.c' } })).resolves.toBe(
+            true
+        );
+    });
+
+    it('resolves false when the broker refuses the message', async () => {
+        await ensureConnected();
+        mockSendToQueue.mockImplementationOnce(
+            (
+                _queue: string,
+                _content: Buffer,
+                _options: unknown,
+                callback?: (error: unknown) => void
+            ) => {
+                callback?.(new Error('channel-level nack'));
+                return true;
+            }
+        );
+
+        await expect(publishToQueue({ queue: 'emails', payload: { to: 'a@b.c' } })).resolves.toBe(
+            false
+        );
+    });
+
+    it('resolves false when the broker never confirms within the publish timeout', async () => {
+        jest.useFakeTimers();
+        await ensureConnected();
+        // The callback is simply never invoked — a broker that accepted the TCP write but never
+        // answered, the exact case a fixed boolean read could not tell from success.
+        mockSendToQueue.mockImplementationOnce(() => true);
+
+        const result = publishToQueue({ queue: 'emails', payload: { to: 'a@b.c' } });
+        await jest.advanceTimersByTimeAsync(5000);
+
+        await expect(result).resolves.toBe(false);
+        jest.useRealTimers();
     });
 
     /**
@@ -319,7 +401,7 @@ const captureConsumerCallback = async (handler: jest.Mock, schema?: ZodType) => 
     mockAssertQueue.mockResolvedValue({ queue: 'jobs', messageCount: 0, consumerCount: 0 });
     mockPrefetch.mockImplementation(() => Promise.resolve());
     mockConsume.mockResolvedValue({ consumerTag: 'tag-1' });
-    mockCreateChannel.mockImplementation(() => Promise.resolve(channelMock()));
+    mockCreateConfirmChannel.mockImplementation(() => Promise.resolve(channelMock()));
 
     // `consumeFromQueue` only RECORDS a binding while still connecting (rule 2) — every case
     // below needs the real `ch.consume()` call to capture its delivery callback, so the
@@ -506,13 +588,13 @@ describe('a reconnect gets its consumers back', () => {
         expect(mockConsume).toHaveBeenCalledWith('reconnect-jobs', expect.any(Function));
 
         // The broker drops and the library reconnects on its own — `setup` runs again on a fresh
-        // model (`mockCreateChannel` standing in for the fresh channel it opens), THEN `connect`
+        // model (`mockCreateConfirmChannel` standing in for the fresh channel it opens), THEN `connect`
         // fires, same order `node_modules/amqplib/lib/recovery.js`'s `_connect()` uses.
         mockConsume.mockClear();
-        mockCreateChannel.mockClear();
+        mockCreateConfirmChannel.mockClear();
         await simulateReconnect();
 
-        expect(mockCreateChannel).toHaveBeenCalledTimes(1);
+        expect(mockCreateConfirmChannel).toHaveBeenCalledTimes(1);
         const rebound = mockConsume.mock.calls.find(([queue]) => queue === 'reconnect-jobs');
         expect(rebound).toBeDefined();
 

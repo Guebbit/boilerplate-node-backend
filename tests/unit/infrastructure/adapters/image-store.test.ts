@@ -121,8 +121,12 @@ describe('filesystemImageStore.removeQuarantined', () => {
 });
 
 describe('filesystemImageStore.promote', () => {
-    it('writes the digested bytes under the public images directory, keyed by the same name', async () => {
-        const url = await filesystemImageStore.promote('abc123.png', Buffer.from('digested bytes'));
+    it('writes the digested bytes under the public images directory, extension from mime', async () => {
+        const url = await filesystemImageStore.promote(
+            'abc123',
+            Buffer.from('digested bytes'),
+            'image/png'
+        );
 
         expect(url).toBe('/images/abc123.png');
         expect(await readFile(path.join(root, 'images', 'abc123.png'), 'utf8')).toBe(
@@ -130,8 +134,18 @@ describe('filesystemImageStore.promote', () => {
         );
     });
 
+    it.each([
+        ['image/png', '.png'],
+        ['image/jpeg', '.jpg'],
+        ['image/webp', '.webp']
+    ] as const)('picks the %s extension %s', async (mime, extension) => {
+        const url = await filesystemImageStore.promote('abc123', Buffer.from('x'), mime);
+
+        expect(url).toBe(`/images/abc123${extension}`);
+    });
+
     it('returns a url, never a path', async () => {
-        const url = await filesystemImageStore.promote('abc123.png', Buffer.from('x'));
+        const url = await filesystemImageStore.promote('abc123', Buffer.from('x'), 'image/png');
 
         expect(url).not.toMatch(/\\/);
         expect(url.startsWith('/')).toBe(true);
@@ -140,9 +154,18 @@ describe('filesystemImageStore.promote', () => {
     it('creates the images directory on demand', async () => {
         await rm(path.join(root, 'images'), { recursive: true, force: true });
 
-        await filesystemImageStore.promote('abc123.png', Buffer.from('x'));
+        await filesystemImageStore.promote('abc123', Buffer.from('x'), 'image/png');
 
         expect(existsSync(path.join(root, 'images', 'abc123.png'))).toBe(true);
+    });
+
+    it('two promotes of the identical stem converge on one file, not a collision', async () => {
+        await filesystemImageStore.promote('abc123', Buffer.from('run one'), 'image/png');
+        await filesystemImageStore.promote('abc123', Buffer.from('run two'), 'image/png');
+
+        // The second write simply lands on the same path — never a "file exists" failure, which
+        // is what makes a duplicate digest run (a redelivered job, a reclaimed lease) harmless.
+        expect(await readFile(path.join(root, 'images', 'abc123.png'), 'utf8')).toBe('run two');
     });
 });
 

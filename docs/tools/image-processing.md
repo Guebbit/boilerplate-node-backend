@@ -107,7 +107,11 @@ themselves instead of needing a lock:
 
 - **A second upload racing the first job.** The writeback only applies when `pendingImageKey`
   still equals the job's key. A stale/duplicate delivery therefore matches nothing, and the worker
-  unlinks the files it just promoted rather than overwriting a newer upload.
+  unlinks the files it just promoted — safely, now that `promote`/`putDerivative` name a file from
+  the RE-ENCODED bytes' own content hash rather than the quarantine key: a second upload is
+  different content, lands under a different name, and this cleanup can no longer touch it. Before
+  that fix, both uploads' files shared the same key-derived name, so this branch could delete the
+  newer upload's live file, not just the stale one's.
 - **The document being deleted mid-flight.** Same mechanism — no match, no orphaned write, files
   cleaned up.
 

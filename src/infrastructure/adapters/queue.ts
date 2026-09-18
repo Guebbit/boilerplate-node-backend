@@ -23,6 +23,7 @@ import amqplib, {
     type ChannelModel,
     type RecoveringChannelModel,
     type Channel,
+    type ConfirmChannel,
     type ConsumeMessage
 } from 'amqplib';
 import type { ZodType } from 'zod';
@@ -68,8 +69,12 @@ export const isQueueEnabled = (): boolean =>
  * (re)connect, cleared on ITS OWN close. `undefined` means "take the slow lane", whether that is
  * disabled, still dialing, or between a drop and the next reconnect; nothing here ever waits for
  * it to become true (see {@link getChannel}).
+ *
+ * A CONFIRM channel, not a plain one: {@link publishToQueue} needs the broker's own
+ * acknowledgement, not `sendToQueue`'s local return value, to tell a genuinely failed publish from
+ * ordinary write-buffer backpressure — see that function's own docblock.
  */
-let currentChannel: Channel | undefined;
+let currentChannel: ConfirmChannel | undefined;
 
 /**
  * The recovering connection, once {@link ensureConnecting} has kicked it off — the one handle
@@ -108,7 +113,11 @@ const reportUnavailable = (error: unknown): void => {
  * @param model - the fresh connection this (re)connect opened
  */
 const setupChannel = async (model: ChannelModel): Promise<void> => {
-    const ch = await model.createChannel();
+    // https://amqp-node.github.io/amqplib/channel_api.html#confirms — a confirm channel's
+    // `sendToQueue` gains a callback the broker invokes once it has actually accepted (or
+    // refused) the message, which is what lets `publishToQueue` tell a real failure from
+    // `sendToQueue`'s own local buffer-full signal.
+    const ch = await model.createConfirmChannel();
     // A channel dies on its own for ordinary reasons (most of them named by `assertJobQueue`
     // below) WITHOUT the connection closing — recovery only reacts to a connection drop, so this
     // has to be handled separately, same as it always was.
@@ -179,7 +188,7 @@ const ensureConnecting = (): void => {
  * to inline work either way. Synchronous and never itself dials: {@link ensureConnecting} is a
  * separate, idempotent nudge, not a wait.
  */
-const getChannel = (): Channel | undefined => {
+const getChannel = (): ConfirmChannel | undefined => {
     ensureConnecting();
     return isQueueEnabled() ? currentChannel : undefined;
 };
@@ -321,6 +330,13 @@ export interface PublishOptions<TPayload = unknown> {
 }
 
 /**
+ * How long {@link publishToQueue} waits for the broker's own confirmation before giving up and
+ * falling back to the caller's inline path. Generous, since the alternative — a false "failed" on
+ * a broker that is merely slow — is what caused the double-run bug this confirm design fixes.
+ */
+const PUBLISH_CONFIRM_TIMEOUT_MS = 5000;
+
+/**
  * Publish a message to a queue. No-op when RabbitMQ is not configured.
  *
  * Publishes to the *default exchange* (empty name), where the routing key IS the queue name — the
@@ -328,8 +344,18 @@ export interface PublishOptions<TPayload = unknown> {
  * (`publishToQueue<EmailJobPayload>(…)`) checks this call against the same type its consumer declares, so
  * a field added on one side and forgotten on the other is a compile error, not a 3am silent drop.
  *
- * @returns `true` when the broker accepted the message, `false` when the queue is unavailable —
- *          callers use this to decide whether to fall back to inline work.
+ * Waits for the BROKER's own confirmation, not `sendToQueue`'s return value — that boolean means
+ * "amqplib's local write buffer is full" (backpressure), never "failed", and callers that treated
+ * it as a failure (`image.worker.ts`, `mailer.ts`, before this fix) ran their inline fallback
+ * ALONGSIDE a publish that was going to succeed anyway, producing two runs of the same job. A
+ * confirm channel's callback (https://amqp-node.github.io/amqplib/channel_api.html#confirms) fires
+ * once the broker has actually accepted or refused the message, regardless of what the local
+ * buffer was doing — that is the one signal this function now trusts.
+ *
+ * @returns `true` once the broker confirms the message, `false` when the queue is unavailable, the
+ *          broker refuses it, or confirmation does not arrive within
+ *          {@link PUBLISH_CONFIRM_TIMEOUT_MS} — callers use this to decide whether to fall back to
+ *          inline work.
  */
 export const publishToQueue = <TPayload = unknown>(
     options: PublishOptions<TPayload>
@@ -341,28 +367,45 @@ export const publishToQueue = <TPayload = unknown>(
     // explicit options and omitted options — go through the same durable-by-default choice.
     const { queue, payload, durable = true, persistent = true, priority = 'normal' } = options;
 
-    return (
-        assertJobQueue(ch, queue, durable)
-            .then(() =>
-                // `sendToQueue(queue, content, options)` — content must be a Buffer, so the
-                // payload is JSON-serialized here and parsed back in `consumeFromQueue`.
-                ch.sendToQueue(queue, Buffer.from(JSON.stringify(payload)), {
-                    // `persistent` = the *message* is written to disk. Both this and a
-                    // `durable` queue are required to survive a restart: a durable queue
-                    // with transient messages comes back empty.
-                    persistent,
-                    priority: JOB_PRIORITY_VALUES[priority]
+    return assertJobQueue(ch, queue, durable)
+        .then(
+            () =>
+                new Promise<boolean>((resolve) => {
+                    let settled = false;
+                    const timer = setTimeout(() => {
+                        if (settled) return;
+                        settled = true;
+                        resolve(false);
+                    }, PUBLISH_CONFIRM_TIMEOUT_MS);
+
+                    // `sendToQueue(queue, content, options, callback)` — content must be a
+                    // Buffer, so the payload is JSON-serialized here and parsed back in
+                    // `consumeFromQueue`. The RETURN VALUE is deliberately ignored: it is
+                    // amqplib's local buffer-full signal, not the broker's answer, which only
+                    // the callback below carries.
+                    ch.sendToQueue(
+                        queue,
+                        Buffer.from(JSON.stringify(payload)),
+                        {
+                            // `persistent` = the *message* is written to disk. Both this and a
+                            // `durable` queue are required to survive a restart: a durable
+                            // queue with transient messages comes back empty.
+                            persistent,
+                            priority: JOB_PRIORITY_VALUES[priority]
+                        },
+                        (error: unknown) => {
+                            if (settled) return;
+                            settled = true;
+                            clearTimeout(timer);
+                            resolve(!error);
+                        }
+                    );
                 })
-            )
-            // `sendToQueue` returns a boolean: false means amqplib's internal write buffer is
-            // full (backpressure), surfaced to the caller as-is rather than handled. The catch
-            // is the declared contract: a channel that died since the cached-handle check
-            // rejects here, and every caller reads a boolean either way.
-            .catch((error: unknown) => {
-                reportUnavailable(error);
-                return false;
-            })
-    );
+        )
+        .catch((error: unknown) => {
+            reportUnavailable(error);
+            return false;
+        });
 };
 
 // ─── Consume ──────────────────────────────────────────────────────────────────

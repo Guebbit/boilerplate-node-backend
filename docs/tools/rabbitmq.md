@@ -139,6 +139,13 @@ directly (`webhooks`' `WORKER_CHANNELS.WEBHOOK_DELIVER`, `orders`' own
 producer publishes to, the name the consumer drains and the name the contract declares are one
 string. A typo in a literal is not an error anywhere; it is a message on a queue nobody reads.
 
+`publishToQueue`'s `true`/`false` answers the BROKER's own confirmation, not `sendToQueue`'s return
+value — the channel it publishes on is a confirm channel
+(`model.createConfirmChannel()`), and only the confirm callback resolves the promise (a 5s timeout
+falls back to `false` if it never arrives). `sendToQueue` returning `false` on its own means "the
+local write buffer is full, wait for `drain`" — never "failed" — so a caller reading THAT boolean
+directly would run its inline fallback alongside a publish that was going to succeed anyway.
+
 ### Consuming messages
 
 ```ts

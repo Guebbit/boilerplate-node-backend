@@ -11,7 +11,13 @@
  * sharp, the store and the queue are all mocked: what is under test is the pipeline's decisions,
  * not image encoding or persistence.
  */
+import { createHash } from 'node:crypto';
 import { logger } from '@infrastructure/adapters/logger';
+
+/** The same derivation `image.worker.ts#contentStem` uses — computed here, not hardcoded, so a
+ *  change to the hash algorithm or its length moves this expectation with it. */
+const contentStemOf = (digested: Buffer): string =>
+    createHash('sha256').update(digested).digest('hex').slice(0, 24);
 
 jest.mock('@infrastructure/adapters/image-store', () => ({
     imageStore: {
@@ -104,8 +110,9 @@ describe('digestQuarantinedImage', () => {
         expect(mockedReadQuarantined).toHaveBeenCalledWith('abc123.png');
         expect(mockedDigestImage).toHaveBeenCalledWith(Buffer.from('raw bytes'), 'image/png');
         expect(mockedThumbnailImage).toHaveBeenCalledWith(Buffer.from('raw bytes'));
-        expect(mockedPromote).toHaveBeenCalledWith('abc123.png', Buffer.from('digested'));
-        expect(mockedPutDerivative).toHaveBeenCalledWith('abc123.png', Buffer.from('thumbnail'));
+        const stem = contentStemOf(Buffer.from('digested'));
+        expect(mockedPromote).toHaveBeenCalledWith(stem, Buffer.from('digested'), 'image/png');
+        expect(mockedPutDerivative).toHaveBeenCalledWith(stem, Buffer.from('thumbnail'));
         expect(mockedRemoveQuarantined).toHaveBeenCalledWith('abc123.png');
     });
 
