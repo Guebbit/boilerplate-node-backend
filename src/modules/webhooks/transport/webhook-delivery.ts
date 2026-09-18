@@ -20,9 +20,9 @@
 import { request as httpsRequest } from 'node:https';
 import { request as httpRequest, type IncomingMessage } from 'node:http';
 import {
-    resolveSafeWebhookTarget,
+    resolveSafeOutboundTarget,
     SsrfRefusedError,
-    type SafeWebhookTarget
+    type SafeOutboundTarget
 } from '@infrastructure/adapters/ssrf-guard';
 import { signWebhookPayload, type WebhookSignatureHeaders } from './webhook-signing';
 
@@ -41,7 +41,7 @@ export interface WebhookDeliveryAttempt {
     payload: unknown;
     /** Overrides {@link DEFAULT_TIMEOUT_MS}. */
     timeoutMs?: number;
-    /** Passed straight through to `ssrf-guard.ts`'s `resolveSafeWebhookTarget`. */
+    /** Passed straight through to `ssrf-guard.ts`'s `resolveSafeOutboundTarget`. */
     allowedInsecureHost?: string;
 }
 
@@ -81,14 +81,14 @@ interface RawResponse {
  * every `http:` target except its one exempted demo host, so this never opens a plaintext
  * connection anywhere else.
  *
- * @param target - the pinned, already-validated destination from `resolveSafeWebhookTarget`
+ * @param target - the pinned, already-validated destination from `resolveSafeOutboundTarget`
  * @param url - the parsed subscription URL, for the scheme/path/query/port `lookup` cannot supply
  * @param headers - the three `webhook-*` headers from `signWebhookPayload`
  * @param body - the exact signed bytes
  * @param timeoutMs - hard total budget for connect + request + response headers
  */
 const postSignedPayload = (
-    target: SafeWebhookTarget,
+    target: SafeOutboundTarget,
     url: URL,
     headers: WebhookSignatureHeaders,
     body: string,
@@ -146,7 +146,7 @@ export const deliverWebhook = (attempt: WebhookDeliveryAttempt): Promise<Webhook
     const startedAt = Date.now();
     const timeoutMs = attempt.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
-    return resolveSafeWebhookTarget(attempt.url, attempt.allowedInsecureHost)
+    return resolveSafeOutboundTarget(attempt.url, attempt.allowedInsecureHost)
         .then((target) => {
             const body = JSON.stringify(attempt.payload);
             const { headers } = signWebhookPayload({

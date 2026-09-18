@@ -1,8 +1,10 @@
 /**
  * @module
- * SSRF guard for outbound webhook delivery: resolve, THEN validate, THEN pin — never validate a
- * hostname and let the HTTP client resolve it a second time, because the second lookup is free to
- * answer differently (DNS rebinding, the classic SSRF TOCTOU).
+ * SSRF guard for an outbound request this server initiates on someone else's behalf: resolve,
+ * THEN validate, THEN pin — never validate a hostname and let the HTTP client resolve it a second
+ * time, because the second lookup is free to answer differently (DNS rebinding, the classic SSRF
+ * TOCTOU). Generic on purpose — this file names no caller and no module; `webhooks` is the only
+ * one today, a fact about the current build, not something this guard depends on.
  *
  * Infrastructure, not `domain/`, on purpose: this module does DNS I/O, and `domain/` is
  * lint-guaranteed free of it.
@@ -24,32 +26,32 @@
  * address in their bits — 6to4 plainly, Teredo XOR-obfuscated, the compat form plainly again — that
  * this guard would otherwise never see: a literal encoding `169.254.169.254` in any of the three
  * reads as an ordinary global address to every other check here. Refused outright rather than
- * decoded: a legitimate webhook endpoint has no reason to be specified as a transition-mechanism
+ * decoded: a legitimate outbound target has no reason to be specified as a transition-mechanism
  * literal, and native 6to4/Teredo relaying is still enabled on some hosts and networks despite the
  * public relay infrastructure having mostly been decommissioned — the compat form's own automatic
  * tunneling is dead everywhere by now, but it costs nothing to judge it the same way as the other
  * two rather than carve out an exception.
  *
  * One exact hostname may be exempted from the `https:` and private-address checks — see
- * {@link resolveSafeWebhookTarget}'s `exemptHostname` parameter — for
- * `@modules/webhooks/config`'s development/test-only demo sink. Parsing, credentials and DNS
- * resolution are never exempted; this file has no idea what that hostname is or why it is
- * exempt, only that its one caller decided so.
+ * {@link resolveSafeOutboundTarget}'s `exemptHostname` parameter — for a caller's own
+ * development/test-only exemption. Parsing, credentials and DNS resolution are never exempted;
+ * this file has no idea what that hostname is or why it is exempt, only that its caller decided
+ * so.
  *
  * What this module does NOT do:
  *  - No redirect handling. A 3xx must not be followed without re-running this same check on the
- *    `Location` header, and the simplest correct answer — refuse every redirect outright — is
- *    `@modules/webhooks/transport/webhook-delivery.ts`'s job, not this file's.
- *  - No timeout math. `@modules/webhooks/transport/webhook-delivery.ts` wraps the *whole* delivery
- *    attempt — this resolution included — in one `AbortSignal.timeout`, rather than this module
- *    owning a second timer that would need to stay in sync with the first.
+ *    `Location` header, and the simplest correct answer — refuse every redirect outright — is the
+ *    caller's job, not this file's.
+ *  - No timeout math. The caller wraps the *whole* outbound attempt — this resolution included —
+ *    in one `AbortSignal.timeout`, rather than this module owning a second timer that would need
+ *    to stay in sync with the first.
  */
 
 import { resolve4, resolve6 } from 'node:dns/promises';
 import net, { type LookupFunction } from 'node:net';
 import { Address4, Address6 } from 'ip-address';
 
-/** Why {@link resolveSafeWebhookTarget} refused a URL — so a caller and a test can branch on why. */
+/** Why {@link resolveSafeOutboundTarget} refused a URL — so a caller and a test can branch on why. */
 export type SsrfRefusalReason =
     | 'invalid-url'
     | 'insecure-scheme'
@@ -57,7 +59,7 @@ export type SsrfRefusalReason =
     | 'dns-resolution-failed'
     | 'unsafe-address';
 
-/** A webhook URL this guard will not open a connection to, and the specific reason it refused. */
+/** A URL this guard will not open a connection to, and the specific reason it refused. */
 export class SsrfRefusedError extends Error {
     readonly reason: SsrfRefusalReason;
 
@@ -69,10 +71,10 @@ export class SsrfRefusedError extends Error {
 }
 
 /**
- * A webhook URL that passed every check, with the connection pinned to the address that was
+ * A URL that passed every check, with the connection pinned to the address that was
  * actually validated.
  */
-export interface SafeWebhookTarget {
+export interface SafeOutboundTarget {
     /** The URL's hostname (brackets stripped for a literal IPv6 host), for logging. */
     hostname: string;
     /** The single resolved address every check ran against, and the one the connection must use. */
@@ -92,7 +94,7 @@ const stripBrackets = (hostname: string): string =>
     hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname;
 
 /**
- * Parse and gate a webhook URL on scheme and embedded credentials — the checks that need no I/O,
+ * Parse and gate a URL on scheme and embedded credentials — the checks that need no I/O,
  * so they run before any DNS query is spent on a URL that was always going to be refused.
  *
  * `new URL()` itself does useful work here beyond parsing: the WHATWG host-parsing algorithm
@@ -101,12 +103,12 @@ const stripBrackets = (hostname: string): string =>
  * reach {@link isAddressUnsafe} as `127.0.0.1` rather than slipping past it as an opaque hostname.
  * https://url.spec.whatwg.org/#concept-ipv4-parser
  *
- * @param exemptHostname - see {@link resolveSafeWebhookTarget}'s own parameter
+ * @param exemptHostname - see {@link resolveSafeOutboundTarget}'s own parameter
  * @throws {SsrfRefusedError} `invalid-url` | `insecure-scheme` | `credentials-in-url`
  */
-const parseWebhookUrl = (rawUrl: string, exemptHostname?: string): URL => {
+const parseOutboundUrl = (rawUrl: string, exemptHostname?: string): URL => {
     let parsed: URL;
-    // eslint-disable-next-line no-restricted-syntax -- URL's constructor has no non-throwing form; an unparseable webhook URL is a refusal, not a crash
+    // eslint-disable-next-line no-restricted-syntax -- URL's constructor has no non-throwing form; an unparseable URL is a refusal, not a crash
     try {
         parsed = new URL(rawUrl);
     } catch {
@@ -119,7 +121,7 @@ const parseWebhookUrl = (rawUrl: string, exemptHostname?: string): URL => {
     if (parsed.protocol !== 'https:' && !isExempt)
         throw new SsrfRefusedError(
             'insecure-scheme',
-            `Webhook URL must use https:, got ${parsed.protocol}`
+            `URL must use https:, got ${parsed.protocol}`
         );
 
     // Rejected outright rather than stripped: a subscription that embeds credentials is already
@@ -127,7 +129,7 @@ const parseWebhookUrl = (rawUrl: string, exemptHostname?: string): URL => {
     // Never exempted, even for the demo host — a URL with embedded credentials is malformed input,
     // not an insecure-transport choice, and the exemption only ever covers the latter.
     if (parsed.username || parsed.password)
-        throw new SsrfRefusedError('credentials-in-url', 'Webhook URL must not embed credentials');
+        throw new SsrfRefusedError('credentials-in-url', 'URL must not embed credentials');
 
     return parsed;
 };
@@ -213,7 +215,7 @@ const resolveAllAddresses = (hostname: string): Promise<string[]> => {
 
 /**
  * A `lookup` override that ignores whatever hostname it is called with and always answers with the
- * one address this guard already validated — the pin described on {@link SafeWebhookTarget.lookup}.
+ * one address this guard already validated — the pin described on {@link SafeOutboundTarget.lookup}.
  *
  * Node calls a custom `lookup` with `{ all: true }` when the caller asked for every address and
  * omits it (or sets it false) for the single-address form; both are handled since `https.request`
@@ -236,14 +238,14 @@ const buildPinnedLookup = (address: string): LookupFunction => {
 };
 
 /**
- * Resolve a webhook subscription's URL, validate every resolved address, and hand back a target
+ * Resolve an outbound target's URL, validate every resolved address, and hand back a target
  * pinned to the one address that was checked.
  *
  * Fails closed: ANY unsafe resolved address refuses the whole hostname, even when other addresses
  * in the same answer are fine — a multi-answer DNS response is exactly the shape an attacker who
  * controls one but not all of the returned addresses would rely on.
  *
- * Rejects rather than throws for EVERY refusal, `parseWebhookUrl`'s included — the whole point of
+ * Rejects rather than throws for EVERY refusal, `parseOutboundUrl`'s included — the whole point of
  * returning a `Promise` is that a caller chains `.catch()` on it once; a synchronous throw from the
  * first line would skip that catch entirely and take the caller down instead. Starting the chain
  * with `Promise.resolve().then(...)` is what turns "throws sometimes, rejects sometimes" into
@@ -251,16 +253,16 @@ const buildPinnedLookup = (address: string): LookupFunction => {
  *
  * @param exemptHostname - an exact hostname (case-sensitive; callers pass an already-lowercased
  *   host) to exempt from the `https:` and private/unsafe-address checks, and ONLY those two —
- *   parsing, credentials and DNS resolution still run in full. For `@modules/webhooks`'
- *   development/test-only demo sink; absent for every other caller and every other call.
+ *   parsing, credentials and DNS resolution still run in full. For a caller's own
+ *   development/test-only exemption; absent for every other caller and every other call.
  * @throws {SsrfRefusedError} see {@link SsrfRefusalReason} for every reason this can refuse
  */
-export const resolveSafeWebhookTarget = (
+export const resolveSafeOutboundTarget = (
     rawUrl: string,
     exemptHostname?: string
-): Promise<SafeWebhookTarget> =>
+): Promise<SafeOutboundTarget> =>
     Promise.resolve()
-        .then(() => stripBrackets(parseWebhookUrl(rawUrl, exemptHostname).hostname))
+        .then(() => stripBrackets(parseOutboundUrl(rawUrl, exemptHostname).hostname))
         .then((hostname) =>
             resolveAllAddresses(hostname).then((addresses) => {
                 const isExempt = hostname === exemptHostname;

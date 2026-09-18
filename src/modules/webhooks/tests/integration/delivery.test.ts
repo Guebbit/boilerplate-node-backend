@@ -47,7 +47,7 @@ jest.mock('@infrastructure/adapters/ssrf-guard', () => {
     const actual = jest.requireActual('@infrastructure/adapters/ssrf-guard');
     return {
         ...actual,
-        resolveSafeWebhookTarget: (rawUrl: string) => {
+        resolveSafeOutboundTarget: (rawUrl: string) => {
             const parsed = new URL(rawUrl);
             return Promise.resolve({
                 hostname: parsed.hostname,

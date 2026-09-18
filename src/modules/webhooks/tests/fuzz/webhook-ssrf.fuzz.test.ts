@@ -17,7 +17,7 @@
 import { EventEmitter } from 'node:events';
 import { request as httpsRequest } from 'node:https';
 import { request as httpRequest } from 'node:http';
-import { resolveSafeWebhookTarget, SsrfRefusedError } from '@infrastructure/adapters/ssrf-guard';
+import { resolveSafeOutboundTarget, SsrfRefusedError } from '@infrastructure/adapters/ssrf-guard';
 import { deliverWebhook } from '@modules/webhooks/transport/webhook-delivery';
 
 // `resolve4`/`resolve6` are mocked so "a DNS name resolving to private space" is deterministic —
@@ -57,7 +57,7 @@ beforeEach(() => {
     dns.resolve6.mockReset();
 });
 
-describe('resolveSafeWebhookTarget — literal IP hostiles, refused with unsafe-address', () => {
+describe('resolveSafeOutboundTarget — literal IP hostiles, refused with unsafe-address', () => {
     it.each([
         ['RFC 1918 private (10/8)', 'https://10.0.0.1/hook'],
         ['RFC 1918 private (172.16/12)', 'https://172.16.5.5/hook'],
@@ -89,16 +89,16 @@ describe('resolveSafeWebhookTarget — literal IP hostiles, refused with unsafe-
             'https://[2001:0000:4136:e378:8000:63bf:3fff:fdd2]/hook'
         ]
     ])('%s: %s', async (_label, url) => {
-        await expect(resolveSafeWebhookTarget(url)).rejects.toBeInstanceOf(SsrfRefusedError);
-        await expect(resolveSafeWebhookTarget(url)).rejects.toMatchObject({
+        await expect(resolveSafeOutboundTarget(url)).rejects.toBeInstanceOf(SsrfRefusedError);
+        await expect(resolveSafeOutboundTarget(url)).rejects.toMatchObject({
             reason: 'unsafe-address'
         });
     });
 });
 
-describe('resolveSafeWebhookTarget — scheme and credential hostiles, refused before any DNS query', () => {
+describe('resolveSafeOutboundTarget — scheme and credential hostiles, refused before any DNS query', () => {
     it('refuses plain http://', async () => {
-        await expect(resolveSafeWebhookTarget('http://example.test/hook')).rejects.toMatchObject({
+        await expect(resolveSafeOutboundTarget('http://example.test/hook')).rejects.toMatchObject({
             reason: 'insecure-scheme'
         });
         expect(dns.resolve4).not.toHaveBeenCalled();
@@ -106,24 +106,24 @@ describe('resolveSafeWebhookTarget — scheme and credential hostiles, refused b
 
     it('refuses credentials embedded in the URL', async () => {
         await expect(
-            resolveSafeWebhookTarget('https://attacker:hunter2@example.test/hook')
+            resolveSafeOutboundTarget('https://attacker:hunter2@example.test/hook')
         ).rejects.toMatchObject({ reason: 'credentials-in-url' });
         expect(dns.resolve4).not.toHaveBeenCalled();
     });
 
     it('refuses a string that is not a URL at all', async () => {
-        await expect(resolveSafeWebhookTarget('not a url')).rejects.toMatchObject({
+        await expect(resolveSafeOutboundTarget('not a url')).rejects.toMatchObject({
             reason: 'invalid-url'
         });
     });
 });
 
-describe('resolveSafeWebhookTarget — a hostname whose DNS answer is private space', () => {
+describe('resolveSafeOutboundTarget — a hostname whose DNS answer is private space', () => {
     it('refuses when the ONLY resolved address is private', async () => {
         mockDns(['10.1.2.3']);
 
         await expect(
-            resolveSafeWebhookTarget('https://internal.example.test/hook')
+            resolveSafeOutboundTarget('https://internal.example.test/hook')
         ).rejects.toMatchObject({
             reason: 'unsafe-address'
         });
@@ -133,7 +133,7 @@ describe('resolveSafeWebhookTarget — a hostname whose DNS answer is private sp
         mockDns(['203.0.113.7', '10.1.2.3']);
 
         await expect(
-            resolveSafeWebhookTarget('https://multi-answer.example.test/hook')
+            resolveSafeOutboundTarget('https://multi-answer.example.test/hook')
         ).rejects.toMatchObject({ reason: 'unsafe-address' });
     });
 
@@ -141,14 +141,14 @@ describe('resolveSafeWebhookTarget — a hostname whose DNS answer is private sp
         mockDns(['10.1.2.3'], ['2001:db8::1']);
 
         await expect(
-            resolveSafeWebhookTarget('https://mixed-family.example.test/hook')
+            resolveSafeOutboundTarget('https://mixed-family.example.test/hook')
         ).rejects.toMatchObject({ reason: 'unsafe-address' });
     });
 
     it('accepts a hostname resolving only to public addresses', async () => {
         mockDns(['203.0.113.7']);
 
-        const target = await resolveSafeWebhookTarget('https://public.example.test/hook');
+        const target = await resolveSafeOutboundTarget('https://public.example.test/hook');
         expect(target.resolvedAddress).toBe('203.0.113.7');
     });
 
@@ -156,14 +156,14 @@ describe('resolveSafeWebhookTarget — a hostname whose DNS answer is private sp
         mockDns(new Error('ENOTFOUND'), new Error('ENOTFOUND'));
 
         await expect(
-            resolveSafeWebhookTarget('https://nowhere.example.test/hook')
+            resolveSafeOutboundTarget('https://nowhere.example.test/hook')
         ).rejects.toMatchObject({ reason: 'dns-resolution-failed' });
     });
 });
 
-describe('resolveSafeWebhookTarget — a literal IP never triggers a DNS query', () => {
+describe('resolveSafeOutboundTarget — a literal IP never triggers a DNS query', () => {
     it('accepts a public literal IPv4 address without calling resolve4/resolve6', async () => {
-        const target = await resolveSafeWebhookTarget('https://203.0.113.7/hook');
+        const target = await resolveSafeOutboundTarget('https://203.0.113.7/hook');
 
         expect(target.resolvedAddress).toBe('203.0.113.7');
         expect(dns.resolve4).not.toHaveBeenCalled();
@@ -171,10 +171,10 @@ describe('resolveSafeWebhookTarget — a literal IP never triggers a DNS query',
     });
 });
 
-describe('resolveSafeWebhookTarget — the pinned lookup it hands back', () => {
+describe('resolveSafeOutboundTarget — the pinned lookup it hands back', () => {
     it('always answers the SAME address it validated, never re-resolving', async () => {
         mockDns(['203.0.113.9']);
-        const target = await resolveSafeWebhookTarget('https://pin-me.example.test/hook');
+        const target = await resolveSafeOutboundTarget('https://pin-me.example.test/hook');
 
         const singleAnswer = await new Promise((resolve, reject) => {
             target.lookup('pin-me.example.test', { all: false }, (error, address, family) =>
@@ -192,7 +192,7 @@ describe('resolveSafeWebhookTarget — the pinned lookup it hands back', () => {
         });
         expect(allAnswer).toEqual([{ address: '203.0.113.9', family: 4 }]);
 
-        // The DNS mock was consulted exactly once, by `resolveSafeWebhookTarget` itself — the
+        // The DNS mock was consulted exactly once, by `resolveSafeOutboundTarget` itself — the
         // pinned `lookup` above answered from the already-validated address, not a new query.
         expect(dns.resolve4).toHaveBeenCalledTimes(1);
     });
@@ -246,21 +246,21 @@ describe('deliverWebhook — a redirect is a failed delivery, never followed', (
  * Literal IPs, not DNS names: `resolveAllAddresses` returns a literal straight back without
  * calling `resolve4`/`resolve6`, so these cases need no `mockDns`.
  */
-describe('resolveSafeWebhookTarget — the exemptHostname parameter', () => {
+describe('resolveSafeOutboundTarget — the exemptHostname parameter', () => {
     it('allows a private, http: address for the exact exempted hostname', async () => {
-        const target = await resolveSafeWebhookTarget('http://127.0.0.1:8080/hook', '127.0.0.1');
+        const target = await resolveSafeOutboundTarget('http://127.0.0.1:8080/hook', '127.0.0.1');
         expect(target.resolvedAddress).toBe('127.0.0.1');
     });
 
     it('still refuses a hostname other than the one exempted', async () => {
         await expect(
-            resolveSafeWebhookTarget('http://127.0.0.1/hook', 'webhook-tester')
+            resolveSafeOutboundTarget('http://127.0.0.1/hook', 'webhook-tester')
         ).rejects.toMatchObject({ reason: 'insecure-scheme' });
     });
 
     it('still refuses credentials in the URL, even for the exempted hostname', async () => {
         await expect(
-            resolveSafeWebhookTarget('http://user:pass@127.0.0.1/hook', '127.0.0.1')
+            resolveSafeOutboundTarget('http://user:pass@127.0.0.1/hook', '127.0.0.1')
         ).rejects.toMatchObject({ reason: 'credentials-in-url' });
     });
 });
