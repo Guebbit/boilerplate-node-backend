@@ -160,9 +160,25 @@ export const assignRole = (
 /**
  * Take somebody's role in a place away.
  *
- * Refuses to remove the LAST holder of the scope's wildcard: without this a shop becomes
- * unadministrable and only somebody with a database client can put it right. The check is a count
- * rather than a flag, so it stays true however the roles were edited.
+ * Refuses to leave nobody who can administer it: without this a shop becomes unadministrable and
+ * only somebody with a database client can put it right.
+ *
+ * Deletes first, then checks — not a transaction. A session transaction would close the race
+ * outright, but it needs a replica set, and only the production compose profile has one
+ * (`docker/mongo-rs-init.sh`); local dev (`docker-compose.yml`) and the test gate
+ * (`docker-compose.test.yml` and the in-process `mongod` under jest) both run standalone Mongo,
+ * where opening a session throws. Wiring replica-set support into dev and test infrastructure is a
+ * change of its own, well past this fix — see the note left in `TIER_AUDIT_BUGS.md`.
+ *
+ * The delete is awaited now (it was fired with `void` before), so a rejection reaches the caller's
+ * `.catch` instead of vanishing behind an orphaned membership row. And the delete happening FIRST,
+ * checked after, is what {@link restoreIfNowUnadministered} exists for: it puts the row back and
+ * throws the same refusal a pre-delete check would have, if the delete just emptied the
+ * administrator set. Two concurrent revokes of the last two administrators can still both delete
+ * before either checks — both then see zero, both restore their own row, and BOTH calls end in the
+ * same refusal, which is the weaker but still-safe guarantee this shape buys without a transaction:
+ * the set is never left with nobody who can administer it, even though a genuine tie over-refuses
+ * rather than letting one revoke through.
  */
 export const revokeRole = (
     userId: string,
@@ -174,29 +190,44 @@ export const revokeRole = (
             return;
         }
 
-        return assertNotLastAdministrator(userId, tenantId, scope).then(() => {
-            void membershipModel.deleteOne({ _id: membership._id }).exec();
-        });
+        return membershipModel
+            .deleteOne({ _id: membership._id })
+            .exec()
+            .then(() => restoreIfNowUnadministered(tenantId, scope, membership));
     });
 
 /**
- * Refuse to leave a place with nobody who can administer it.
+ * Puts a just-deleted membership back and refuses, if deleting it left nobody who can administer
+ * this place — see {@link revokeRole} for why this runs AFTER the delete rather than before it.
  *
- * @throws AccessInvariantError when this person is the only holder of the scope's wildcard
+ * @param membership - the row {@link revokeRole} already deleted
+ * @throws AccessInvariantError when the place is now left with no administrator
  */
-const assertNotLastAdministrator = (
-    userId: string,
+const restoreIfNowUnadministered = (
     tenantId: string | null,
-    scope: AuthorizationScope
+    scope: AuthorizationScope,
+    membership: MembershipDocument
 ): Promise<void> =>
     administratorsOf(tenantId, scope).then((administrators) => {
-        if (administrators.length === 1 && administrators[0] === userId) {
-            throw new AccessInvariantError(
-                `[access] "${userId}" is the only member who can administer this ${scope}. ` +
-                    `Give somebody else that role first — a place with nobody to administer it ` +
-                    `can only be repaired from a database client.`
-            );
+        if (administrators.length > 0) {
+            return;
         }
+
+        return membershipModel
+            .create({
+                _id: membership._id,
+                userId: membership.userId,
+                tenantId: membership.tenantId,
+                scope: membership.scope,
+                role: membership.role
+            })
+            .then(() => {
+                throw new AccessInvariantError(
+                    `[access] "${membership.userId}" is the only member who can administer ` +
+                        `this ${scope}. Give somebody else that role first — a place with ` +
+                        `nobody to administer it can only be repaired from a database client.`
+                );
+            });
     });
 
 /** Everyone holding the scope's wildcard in a place, by user id. */

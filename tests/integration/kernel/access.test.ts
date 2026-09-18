@@ -25,7 +25,7 @@ import {
     roleFor,
     tenantBySlug
 } from '@kernel/access/store';
-import { roleModel } from '@kernel/access/models';
+import { membershipModel, roleModel } from '@kernel/access/models';
 import { bootstrapAccessModel, DEPLOYMENT_TENANT_SLUG, seedPresetRoles } from '@kernel/access/seed';
 import {
     SEED_OWNER_ID,
@@ -37,6 +37,7 @@ import {
 import { userRepository } from '@modules/users/tests/factories';
 import { shopModules } from '@scenarios/index';
 import { PRESET_ROLES, wildcardKeyFor } from '@kernel/permissions';
+import { asStub } from '@tests/stub';
 
 setupTestDb();
 
@@ -206,6 +207,57 @@ describe('the invariants', () => {
         await expect(revokeRole('only-owner', String(shop._id), 'tenant')).rejects.toThrow(
             /only member who can administer/
         );
+    });
+
+    it('puts the membership back after refusing, not just the error', async () => {
+        const shop = await ensureTenant('shop', 'The Shop');
+        await assignRole('only-owner', String(shop._id), 'tenant', 'owner');
+
+        // The refusal deletes first and restores second (no replica set to run a transaction
+        // against in dev/test — see the docblock on `revokeRole`). This is what proves the
+        // restore actually lands, not only that the promise rejects.
+        await expect(revokeRole('only-owner', String(shop._id), 'tenant')).rejects.toThrow(
+            AccessInvariantError
+        );
+        expect(await administratorsOf(String(shop._id), 'tenant')).toEqual(['only-owner']);
+    });
+
+    it('surfaces a rejecting delete instead of losing it silently', async () => {
+        const shop = await ensureTenant('shop', 'The Shop');
+        await assignRole('owner-a', String(shop._id), 'tenant', 'owner');
+        await assignRole('owner-b', String(shop._id), 'tenant', 'owner');
+        const failure = new Error('mongo is down');
+        const spy = jest.spyOn(membershipModel, 'deleteOne').mockReturnValue(
+            asStub<ReturnType<typeof membershipModel.deleteOne>>({
+                exec: () => Promise.reject(failure)
+            })
+        );
+
+        // Before this fix the delete was fired with `void` and never awaited — a rejection here
+        // vanished as an unhandled rejection instead of reaching the caller.
+        await expect(revokeRole('owner-a', String(shop._id), 'tenant')).rejects.toThrow(
+            'mongo is down'
+        );
+
+        spy.mockRestore();
+    });
+
+    it('cannot leave zero administrators from two concurrent last-two revokes', async () => {
+        const shop = await ensureTenant('shop', 'The Shop');
+        await assignRole('owner-a', String(shop._id), 'tenant', 'owner');
+        await assignRole('owner-b', String(shop._id), 'tenant', 'owner');
+
+        // No transaction to serialize these — both deletes can land before either checks. The
+        // guarantee this shape buys is weaker than a transaction's (a genuine tie can refuse
+        // both instead of letting one through), but the one thing it must never do is let both
+        // succeed and leave the shop with nobody who can administer it.
+        const outcomes = await Promise.allSettled([
+            revokeRole('owner-a', String(shop._id), 'tenant'),
+            revokeRole('owner-b', String(shop._id), 'tenant')
+        ]);
+
+        expect(outcomes.filter((outcome) => outcome.status === 'fulfilled').length).toBeLessThan(2);
+        expect(await administratorsOf(String(shop._id), 'tenant')).not.toEqual([]);
     });
 
     it('allows removing an administrator once another one exists', async () => {
