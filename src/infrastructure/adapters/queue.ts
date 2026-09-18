@@ -17,20 +17,22 @@
 // `amqplib` is the AMQP 0-9-1 client. `ChannelModel` is the TCP connection `setup` receives on
 // each (re)connect; `RecoveringChannelModel` is the wrapper `connect(url, { recovery })` resolves
 // to, an EventEmitter for `connect`/`disconnect` that outlives every individual reconnect;
-// `Channel` is the lightweight session all commands run on; `ConsumeMessage` is a delivered
-// message — `.content` (Buffer) plus the delivery tag `ack`/`nack` reference.
+// `ConfirmChannel` is the session every command runs on (see `setupChannel`'s own docblock for why
+// a confirm channel, not a plain one); `ConsumeMessage` is a delivered message — `.content`
+// (Buffer) plus the delivery tag `ack`/`nack` reference; `MessagePropertyHeaders` is that
+// message's headers, `x-death` (the retry-count RabbitMQ stamps for free) included.
 import amqplib, {
     type ChannelModel,
     type RecoveringChannelModel,
-    type Channel,
     type ConfirmChannel,
-    type ConsumeMessage
+    type ConsumeMessage,
+    type MessagePropertyHeaders
 } from 'amqplib';
 import type { ZodType } from 'zod';
 import { logger } from '@infrastructure/adapters/logger';
 import type { DependencyStatus } from '@infrastructure/adapters/managed-connection';
 import { WORKER_CHANNELS } from '@types';
-import { environmentFlag } from '@infrastructure/runtime/environment';
+import { environmentFlag, environmentNumber } from '@infrastructure/runtime/environment';
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
@@ -246,22 +248,52 @@ export const EMAIL_QUEUE = WORKER_CHANNELS.EMAIL_SEND;
 /** Same sourcing as {@link EMAIL_QUEUE} — the image-digest queue. */
 export const IMAGE_QUEUE = WORKER_CHANNELS.IMAGE_DIGEST;
 
-// ─── Dead letters ─────────────────────────────────────────────────────────────
+// ─── Retries and dead letters ───────────────────────────────────────────────────
 
 /**
- * The exchange every refused message is routed to, so `nack(msg, false, false)` means "moved for a
- * human" rather than "destroyed". `direct`, so each queue dead-letters under its own routing key.
+ * The exchange every failed/refused message is routed through, so a `deadLetterRoutingKey` means
+ * "moved for a reason" rather than "destroyed". `direct`, so each queue's messages land exactly
+ * where their routing key names — the retry queue, or back on the work queue once a retry's TTL
+ * expires (see {@link assertJobQueue}).
  */
 export const DEAD_LETTER_EXCHANGE = 'dead-letter';
 
 /**
- * The dead-letter queue for a work queue, and the routing key that reaches it. Derived, so a queue
- * added to `WORKER_CHANNELS` gets its dead letters without a second registration.
+ * The parking lot for a work queue's exhausted or permanently-rejected messages — a plain durable
+ * queue with no consumer and no `x-dead-letter-*` of its own. Nothing routes here automatically any
+ * more (see {@link assertJobQueue}); `handleDelivery` publishes to it directly, once, the moment a
+ * message is decided to be done retrying.
  *
  * @param queue - the work queue
  * @returns the name of the queue its refusals land in
  */
 export const deadLetterQueueOf = (queue: string): string => `${queue}.dead`;
+
+/**
+ * The TTL holding queue a work queue's failed messages wait in before RabbitMQ redelivers them —
+ * the broker owns the delay, not an app-side timer. No consumer ever binds here.
+ *
+ * @param queue - the work queue
+ * @returns the name of its retry queue
+ */
+export const retryQueueOf = (queue: string): string => `${queue}.retry`;
+
+/**
+ * Deployment-wide default: deliveries a job gets before it is parked in
+ * {@link deadLetterQueueOf}. A consumer that needs a different number declares it on its own
+ * `ConsumeOptions`, next to its handler — not a second environment variable.
+ */
+const defaultMaxAttempts = (): number => environmentNumber('NODE_QUEUE_MAX_ATTEMPTS', 5, 1);
+
+/**
+ * Deployment-wide default: how long a failed job waits in {@link retryQueueOf} before RabbitMQ
+ * dead-letters it back onto the work queue. One fixed delay per queue (not per message) is what
+ * keeps this ONE retry queue per work queue and sidesteps RabbitMQ's head-of-line expiry rule — a
+ * 5s message queued behind a 10-hour one would otherwise wait 10 hours, since a queue only expires
+ * from the head.
+ */
+const defaultRetryDelaySeconds = (): number =>
+    environmentNumber('NODE_QUEUE_RETRY_DELAY_SECONDS', 30, 1);
 
 /**
  * The two job-priority levels every work queue supports, named rather than passed as raw numbers
@@ -279,31 +311,60 @@ export type JobPriority = 'normal' | 'high';
 const JOB_PRIORITY_VALUES: Record<JobPriority, number> = { normal: 0, high: 1 };
 
 /**
- * Declare a work queue, its dead-letter queue, and the binding between them.
+ * Declare a work queue and its two companions, wired for the retry design
+ * (`docs/tools/rabbitmq.md#retries-and-parking`):
+ *
+ * ```
+ * work queue ──(nack, requeue=false)──▶ <queue>.retry (TTL, no consumer) ──(expires)──▶ work queue
+ * ```
+ *
+ * The work queue's `deadLetterRoutingKey` points at `<queue>.retry`, never `<queue>.dead` — a
+ * `nack(msg, false, false)` always means "try again later" now. `<queue>.retry` points BACK at the
+ * work queue (bound under the work queue's own name), so a message that sits out its TTL there
+ * reappears on the work queue with RabbitMQ's own `x-death` array one entry longer — the free
+ * attempt count `handleDelivery` reads. `<queue>.dead` gets no exchange binding at all: nothing
+ * dead-letters into it automatically any more, since a permanent rejection and an exhausted retry
+ * both need to skip the retry cycle entirely, which only an explicit publish can guarantee.
  *
  * Idempotent, called on both publish and consume paths so producer and consumer may start in any
- * order. The dead-letter queue is bound BEFORE the work queue names the exchange — otherwise a
- * queue whose `x-dead-letter-exchange` resolves to nothing just drops the message. `assertQueue`
- * throws `PRECONDITION_FAILED` (killing the channel) if it already exists with different args —
- * see `docs/tools/rabbitmq.md` for upgrading an existing broker.
+ * order — both must agree on `retryDelaySeconds` for the same queue, the same way they already
+ * must agree on `durable`, or `assertQueue` throws `PRECONDITION_FAILED` on the second call. In
+ * practice this app's consumers register at boot (`app/workers.ts`), before anything publishes.
+ * See `docs/tools/rabbitmq.md` for upgrading an existing broker — the dead-letter target changing
+ * shape here is exactly the kind of change that needs one.
  *
  * @param ch - the channel to declare on
  * @param queue - the work queue
  * @param durable - whether the definitions survive a broker restart
+ * @param retryDelaySeconds - this queue's retry delay — {@link defaultRetryDelaySeconds} unless a
+ *   consumer declared its own
  */
-const assertJobQueue = (ch: Channel, queue: string, durable: boolean): Promise<void> =>
-    ch
+const assertJobQueue = (
+    ch: ConfirmChannel,
+    queue: string,
+    durable: boolean,
+    retryDelaySeconds: number
+): Promise<void> => {
+    const retryQueue = retryQueueOf(queue);
+
+    return ch
         .assertExchange(DEAD_LETTER_EXCHANGE, 'direct', { durable: true })
         .then(() => ch.assertQueue(deadLetterQueueOf(queue), { durable: true }))
         .then(() =>
-            ch.bindQueue(deadLetterQueueOf(queue), DEAD_LETTER_EXCHANGE, deadLetterQueueOf(queue))
+            ch.assertQueue(retryQueue, {
+                durable: true,
+                messageTtl: retryDelaySeconds * 1000,
+                deadLetterExchange: DEAD_LETTER_EXCHANGE,
+                deadLetterRoutingKey: queue
+            })
         )
+        .then(() => ch.bindQueue(retryQueue, DEAD_LETTER_EXCHANGE, retryQueue))
         .then(() =>
             ch.assertQueue(queue, {
                 // `durable` = the queue definition survives a broker restart.
                 durable,
                 deadLetterExchange: DEAD_LETTER_EXCHANGE,
-                deadLetterRoutingKey: deadLetterQueueOf(queue),
+                deadLetterRoutingKey: retryQueue,
                 // `x-max-priority`: the ceiling `JOB_PRIORITY_VALUES` publishes against. Every
                 // queue gets it, so any producer may opt into `priority: 'high'` without a
                 // separate per-queue declaration.
@@ -311,7 +372,9 @@ const assertJobQueue = (ch: Channel, queue: string, durable: boolean): Promise<v
                 arguments: { 'x-max-priority': Math.max(...Object.values(JOB_PRIORITY_VALUES)) }
             })
         )
+        .then(() => ch.bindQueue(queue, DEAD_LETTER_EXCHANGE, queue))
         .then(() => undefined);
+};
 
 // ─── Publish ──────────────────────────────────────────────────────────────────
 
@@ -367,7 +430,7 @@ export const publishToQueue = <TPayload = unknown>(
     // explicit options and omitted options — go through the same durable-by-default choice.
     const { queue, payload, durable = true, persistent = true, priority = 'normal' } = options;
 
-    return assertJobQueue(ch, queue, durable)
+    return assertJobQueue(ch, queue, durable, defaultRetryDelaySeconds())
         .then(
             () =>
                 new Promise<boolean>((resolve) => {
@@ -429,6 +492,14 @@ export interface ConsumeOptions<TPayload = unknown> {
     durable?: boolean;
     /** Number of unacknowledged messages allowed at once. Default: 1. */
     prefetch?: number;
+    /**
+     * Deliveries this queue's jobs get before one is parked in `<queue>.dead` — overrides
+     * {@link defaultMaxAttempts}. Declare this instead of a new environment variable when one
+     * consumer genuinely needs a different number than the deployment-wide default.
+     */
+    maxAttempts?: number;
+    /** This queue's retry delay, in seconds — overrides {@link defaultRetryDelaySeconds}. */
+    retryDelaySeconds?: number;
 }
 
 /**
@@ -453,33 +524,81 @@ const parseMessageBody = (incoming: ConsumeMessage): unknown => {
 };
 
 /**
+ * How many times THIS delivery has already cycled through the retry queue — the count RabbitMQ
+ * stamps for free every time it dead-letters a message, read back off the header it arrives with.
+ * `0` for a first delivery: nothing has dead-lettered it into the retry queue yet, so no entry for
+ * that queue exists.
+ *
+ * @param headers - the delivered message's own headers
+ * @param retryQueue - this work queue's retry companion (`retryQueueOf(queue)`)
+ */
+const deathCountFor = (headers: MessagePropertyHeaders | undefined, retryQueue: string): number =>
+    headers?.['x-death']?.find((entry) => entry.queue === retryQueue)?.count ?? 0;
+
+/**
+ * Move a message straight into `<queue>.dead`, bypassing the retry queue entirely — the shared
+ * ending for every PERMANENT rejection (unparseable, contract failure, handler-refused) and for a
+ * throw whose {@link deathCountFor} has reached the limit. None of these may reach the retry queue:
+ * a `nack` would, since the work queue's own `deadLetterRoutingKey` always points there now (see
+ * `assertJobQueue`), which is exactly why this publishes directly instead.
+ *
+ * Confirmed the same way {@link publishToQueue} is: only acks the original once the broker has
+ * actually accepted the parked copy, so a publish failure here can never silently drop the job —
+ * on that failure this nacks with requeue instead, the ordinary "try the whole delivery again"
+ * path, rather than pretending the park succeeded.
+ *
+ * @param ch - the channel to publish and ack/nack on
+ * @param queue - the work queue this message came from
+ * @param incoming - the raw delivered message, moved byte-for-byte
+ */
+const parkInDead = (ch: ConfirmChannel, queue: string, incoming: ConsumeMessage): void => {
+    ch.sendToQueue(
+        deadLetterQueueOf(queue),
+        incoming.content,
+        { persistent: true, headers: incoming.properties.headers },
+        (error: unknown) => {
+            if (error) {
+                logger.error({
+                    message: 'Failed to park a job in its dead-letter queue; redelivering instead.',
+                    queue,
+                    error
+                });
+                ch.nack(incoming, false, true);
+                return;
+            }
+            ch.ack(incoming);
+        }
+    );
+};
+
+/**
  * Handle one delivered message: parse it, run the caller's handler, and translate the outcome
- * into ack/nack.
+ * into ack / nack (retry) / {@link parkInDead} (done retrying).
  *
  * Split out of `consumeFromQueue` because amqplib's `consume` callback fires once per delivery
  * for the process lifetime, not once during the connect/prefetch chain that registers it — so
  * the ack-decision logic gets its own ≤3-level depth instead of piling inside that chain.
  *
- * @param ch - channel to ack/nack on
+ * @param ch - channel to ack/nack/park on
  * @param queue - queue name, for the parse-failure log line
  * @param handler - caller's per-message handler
  * @param incoming - the raw delivered message
+ * @param maxAttempts - deliveries this queue's jobs get before {@link parkInDead} — see
+ *   {@link ConsumeOptions.maxAttempts}
  */
 const handleDelivery = <TPayload>(
-    ch: Channel,
+    ch: ConfirmChannel,
     queue: string,
     handler: ConsumeOptions<TPayload>['handler'],
     incoming: ConsumeMessage,
+    maxAttempts: number,
     schema?: ZodType
 ): void => {
     const parsed = parseMessageBody(incoming);
     if (parsed === undefined) {
-        // Malformed message — reject without requeue.
-        // `nack(message, allUpTo, requeue)`: allUpTo=false rejects only this
-        // delivery, requeue=false discards it. Requeuing would loop forever
-        // since the bytes will never become valid JSON.
-        logger.warn({ message: 'Queue message parse failed, nacking.', queue });
-        ch.nack(incoming, false, false);
+        // Malformed message — permanent: the bytes will never become valid JSON on a retry.
+        logger.warn({ message: 'Queue message parse failed, parking.', queue });
+        parkInDead(ch, queue, incoming);
         return;
     }
 
@@ -491,11 +610,11 @@ const handleDelivery = <TPayload>(
     const verdict = schema?.safeParse(parsed);
     if (verdict && !verdict.success) {
         logger.warn({
-            message: 'Queue message failed contract validation, nacking.',
+            message: 'Queue message failed contract validation, parking.',
             queue,
             issues: verdict.error.issues.map(({ path, message }) => `${path.join('.')}: ${message}`)
         });
-        ch.nack(incoming, false, false);
+        parkInDead(ch, queue, incoming);
         return;
     }
 
@@ -511,12 +630,28 @@ const handleDelivery = <TPayload>(
         .then((ack) => {
             // `ack` removes the message from the queue permanently.
             if (ack) ch.ack(incoming);
-            // Handled but refused: drop it (requeue=false).
-            else ch.nack(incoming, false, false);
+            // Handled but refused: permanent business rejection — parked, not retried.
+            else parkInDead(ch, queue, incoming);
         })
-        // Thrown error = presumed transient (DB down, SMTP timeout), so
-        // requeue=true puts it back for another attempt.
-        .catch(() => ch.nack(incoming, false, true));
+        .catch((error: unknown) => {
+            // Thrown = presumed transient (DB down, SMTP timeout). `nack(requeue=false)` still
+            // routes through the work queue's OWN dead-letter target, which is the retry queue —
+            // so this still means "try again", just via the broker's TTL instead of instantly.
+            const retryQueue = retryQueueOf(queue);
+            const attemptsSoFar = deathCountFor(incoming.properties.headers, retryQueue) + 1;
+            if (attemptsSoFar < maxAttempts) {
+                ch.nack(incoming, false, false);
+                return;
+            }
+
+            logger.error({
+                message: 'Job exhausted its retries; parking.',
+                queue,
+                attempts: attemptsSoFar,
+                error
+            });
+            parkInDead(ch, queue, incoming);
+        });
 };
 
 /**
@@ -526,19 +661,34 @@ const handleDelivery = <TPayload>(
  * see {@link consumerBindings}.
  *
  * Acknowledgement policy (enforced by {@link handleDelivery}):
- *  - handler resolves `true`  → `ack` — done, broker deletes the message
- *  - handler resolves `false` → `nack` without requeue — permanent business rejection
- *  - handler *throws*         → `nack` with requeue — assumed transient, try again
- *  - unparseable message      → `nack` without requeue — will never parse, so requeuing loops
+ *  - handler resolves `true`     → `ack` — done, broker deletes the message
+ *  - handler resolves `false`    → parked — permanent business rejection, never retried
+ *  - handler *throws*, attempts left → `nack` with no requeue — routes to the retry queue, which
+ *    redelivers it once its TTL expires
+ *  - handler *throws*, attempts exhausted → parked, logged, the job's identifying fields only —
+ *    never the payload, which passes the logger's redaction but is still a leak in a log line
+ *  - unparseable / contract-invalid message → parked — will never become valid on a retry
  *
- * Both `nack`-without-requeue arms route to `DEAD_LETTER_EXCHANGE`.
+ * "Parked" is always {@link parkInDead}: a direct publish to `<queue>.dead`, bypassing the retry
+ * queue and its DLX chain entirely, and only ack'd once that publish is itself confirmed.
  */
-const bindConsumer = <TPayload>(ch: Channel, options: ConsumeOptions<TPayload>): Promise<void> => {
-    const { queue, handler, schema, durable = true, prefetch = 1 } = options;
+const bindConsumer = <TPayload>(
+    ch: ConfirmChannel,
+    options: ConsumeOptions<TPayload>
+): Promise<void> => {
+    const {
+        queue,
+        handler,
+        schema,
+        durable = true,
+        prefetch = 1,
+        maxAttempts = defaultMaxAttempts(),
+        retryDelaySeconds = defaultRetryDelaySeconds()
+    } = options;
 
     return (
         // Same idempotent declaration as on the publish side — the consumer may boot first.
-        assertJobQueue(ch, queue, durable)
+        assertJobQueue(ch, queue, durable, retryDelaySeconds)
             // `prefetch` (AMQP basic.qos) caps unacked messages per consumer. With 1, the broker
             // hands over the next message only after the current one is acked, which gives fair
             // round-robin across replicas instead of one worker hoarding a batch.
@@ -551,7 +701,7 @@ const bindConsumer = <TPayload>(ch: Channel, options: ConsumeOptions<TPayload>):
                     // deleted, channel closing) — nothing to ack.
                     if (!incoming) return;
 
-                    handleDelivery(ch, queue, handler, incoming, schema);
+                    handleDelivery(ch, queue, handler, incoming, maxAttempts, schema);
                 })
             )
             // Discard the consumerTag reply; callers only need "consumer registered".
@@ -566,10 +716,10 @@ const bindConsumer = <TPayload>(ch: Channel, options: ConsumeOptions<TPayload>):
  * every fresh channel amqplib's recovery hands back, boot's own included — that is what makes a
  * broker restart survivable without this process ever being restarted itself.
  */
-const consumerBindings = new Map<string, (ch: Channel) => Promise<void>>();
+const consumerBindings = new Map<string, (ch: ConfirmChannel) => Promise<void>>();
 
 /** Re-binds every known consumer onto a freshly opened channel — see {@link consumerBindings}. */
-const replayConsumers = (ch: Channel): Promise<void> =>
+const replayConsumers = (ch: ConfirmChannel): Promise<void> =>
     Promise.all([...consumerBindings.values()].map((bind) => bind(ch))).then(() => undefined);
 
 /**

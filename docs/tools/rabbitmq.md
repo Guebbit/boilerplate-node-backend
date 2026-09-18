@@ -85,8 +85,8 @@ flowchart LR
     Publish --> Queue[(worker.email.send or a module's own)]
     Queue --> Consume[email.worker / a module's own worker]
     Consume --> Ack[Ack on success]
-    Consume --> Retry[Requeue on transient failure]
-    Consume --> Drop[Reject malformed payload]
+    Consume --> Retry["Nack, no requeue<br/>(routes to &lt;queue&gt;.retry)"]
+    Consume --> Drop["Park in &lt;queue&gt;.dead<br/>(malformed, refused, or attempts exhausted)"]
 
     classDef app fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef queue fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -97,6 +97,8 @@ flowchart LR
     class Consume worker;
     class Ack,Retry,Drop result;
 ```
+
+See [Retries and parking](#retries-and-parking) for what happens after the "nack" and "park" arms.
 
 ## Configuration
 
@@ -163,31 +165,73 @@ consumeFromQueue({
 });
 ```
 
-### Dead letters
+### Retries and parking
 
-Every work queue is declared with a dead-letter exchange, and every declaration also creates and
-binds the queue the refusals land in:
+A failing job waits in a TTL queue and comes back on its own — the broker owns the delay, not an
+app-side timer:
 
-| Name           | What it is                                                     |
-| -------------- | -------------------------------------------------------------- |
-| `dead-letter`  | A `direct` exchange. Every refused message is routed to it.    |
-| `<queue>.dead` | The dead-letter queue for `<queue>`, bound under its own name. |
+```
+work queue ──(nack, requeue=false)──▶ <queue>.retry (TTL, no consumer) ──(expires)──▶ work queue
+                                                                            attempts exhausted ──▶ <queue>.dead
+```
 
-That is what makes the handler's three outcomes mean what they say:
+Every work queue is declared with two companions, all through the same `dead-letter` exchange (a
+`direct` exchange — a routing key names exactly one queue):
 
-| Handler does  | Broker call               | Where the message goes         |
-| ------------- | ------------------------- | ------------------------------ |
-| resolve true  | `ack`                     | deleted — the job is done      |
-| resolve false | `nack(msg, false, false)` | `<queue>.dead`, for a human    |
-| reject        | `nack(msg, false, true)`  | back on `<queue>`, tried again |
+| Name            | What it is                                                                                                                             |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `<queue>.retry` | No consumer. `x-message-ttl` set to `NODE_QUEUE_RETRY_DELAY_SECONDS`; dead-letters BACK to `<queue>` once a message sits out its wait. |
+| `<queue>.dead`  | The parking lot. No consumer, no `x-dead-letter-*` of its own — nothing routes here automatically; the app publishes to it directly.   |
+
+The work queue's OWN dead-letter target is `<queue>.retry`, never `<queue>.dead` — a
+`nack(msg, false, false)` always means "try again later" now. That is what makes the handler's
+outcomes mean what they say:
+
+| Handler does                 | What happens                                                                                       |
+| ---------------------------- | -------------------------------------------------------------------------------------------------- |
+| resolve `true`               | `ack` — deleted, the job is done                                                                   |
+| resolve `false`              | parked in `<queue>.dead` directly — a permanent business rejection, never retried                  |
+| malformed / contract-invalid | parked in `<queue>.dead` directly — the bytes will never become valid on a retry                   |
+| throws, attempts remain      | `nack(msg, false, false)` — routes to `<queue>.retry`, comes back once its TTL expires             |
+| throws, attempts exhausted   | parked in `<queue>.dead`, logged once at `error` (the job's identifying fields, never the payload) |
+
+**The attempt count is free.** RabbitMQ stamps an `x-death` array on a message every time it
+dead-letters it, with a `count` per `(queue, reason)` pair. The consumer reads the entry for
+`<queue>.retry` to know how many full retry cycles this delivery has already been through — no
+custom header, no republish needed to track it.
+
+**Parking is always a direct publish, confirmed.** Every "parked" outcome above goes through the
+same internal helper: a `sendToQueue` straight to `<queue>.dead` (bypassing the retry queue and its
+DLX chain entirely), and the original message is only acked once that publish is itself confirmed
+by the broker — the same confirm-channel guarantee [Publishing a message](#publishing-a-message)
+describes, so a parking failure can never silently drop a job.
+
+**The two knobs**, deployment-wide defaults — a consumer that genuinely needs different numbers
+declares them on its own `ConsumeOptions`, in code, next to its handler, rather than a second
+environment variable:
+
+| Env var                          | Default | Meaning                                         |
+| -------------------------------- | ------- | ----------------------------------------------- |
+| `NODE_QUEUE_MAX_ATTEMPTS`        | `5`     | Deliveries before a job is parked.              |
+| `NODE_QUEUE_RETRY_DELAY_SECONDS` | `30`    | How long a failed job waits in `<queue>.retry`. |
+
+One fixed delay per queue (not per message) is deliberate: RabbitMQ only expires a queue from the
+head, so a 5s message queued behind a 10-hour one would otherwise wait 10 hours. One retry queue
+per work queue sidesteps that entirely.
+
+**Replaying a parked job** is a management-UI action today (move the message from `<queue>.dead`
+back onto `<queue>`), not an app endpoint — a parked job is a morning's work to triage, not
+something to automate blindly.
 
 **Upgrading an existing broker.** `assertQueue` throws `PRECONDITION_FAILED` when a queue already
-exists with different arguments — which is what adding the dead-letter policy, and later the
-`x-max-priority` argument in [Priority](#priority), does to a broker holding queues declared
+exists with different arguments — which is what this retry topology (and, before it, the
+`x-max-priority` argument in [Priority](#priority)) does to a broker holding queues declared
 without them. The channel dies, is replaced, and fails the same way. Delete the old queues once
 (`rabbitmqctl delete_queue worker.email.send`, and the same for `worker.image.digest` and any
-module-owned queue) with the consumers stopped, then restart the app — the declarations are
-recreated on the first publish.
+module-owned queue) with the consumers stopped, then restart the app — the declarations, `.retry`
+included, are recreated on the first publish. Nothing is deployed against a broker outside this
+compose stack as of this writing, so this stays a runbook line rather than a procedure anyone has
+had to run.
 
 ### Priority
 
@@ -217,10 +261,12 @@ the few urgent things a preference," not a real-time scheduler. See
 | `persistent`   | `true`     | Message is written to disk.                                                                        |
 | `priority`     | `'normal'` | `'high'` jumps ahead of `'normal'` messages waiting on the same queue — see [Priority](#priority). |
 
-| Consume option | Default | Description                              |
-| -------------- | ------- | ---------------------------------------- |
-| `durable`      | `true`  | Queue survives broker restarts.          |
-| `prefetch`     | `1`     | Unacknowledged messages allowed at once. |
+| Consume option      | Default                          | Description                                                |
+| ------------------- | -------------------------------- | ---------------------------------------------------------- |
+| `durable`           | `true`                           | Queue survives broker restarts.                            |
+| `prefetch`          | `1`                              | Unacknowledged messages allowed at once.                   |
+| `maxAttempts`       | `NODE_QUEUE_MAX_ATTEMPTS`        | Overrides the deployment-wide default for this queue only. |
+| `retryDelaySeconds` | `NODE_QUEUE_RETRY_DELAY_SECONDS` | Overrides the deployment-wide default for this queue only. |
 
 ## Recovery
 
