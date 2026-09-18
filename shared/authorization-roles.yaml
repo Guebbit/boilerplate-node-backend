@@ -13,7 +13,7 @@
 # them afterwards — they are a starting point, not a schema.
 #
 # Every tenant role below is a demo persona, run against every screen — see `docs/demo-ecommerce/`
-# — except `owner`, the shop's one superuser account rather than a job. Reusing the others means
+# — except `admin`, the shop's one superuser account rather than a job. Reusing the others means
 # the permission model is exercised by the demo rather than only by its own tests.
 #
 # EVERY GRANT BELOW IS SPELLED OUT. There is no per-family `manage` wildcard any more — breadth is
@@ -32,7 +32,7 @@ roles:
     # description in `shared/authorization-keys.yaml` and docs/theory/authorization.md.
     #
     # THERE IS NO UNVERIFIED MANAGER. A role is something an operator GRANTS, and granting it IS
-    # the vouching — so every staff role below holds `cart.self.checkout` explicitly (`owner` via
+    # the vouching — so every staff role below holds `cart.self.checkout` explicitly (`admin` via
     # `all.manage`), and this is the only tenant role that may not.
     - name: unverified
       scope: tenant
@@ -121,7 +121,7 @@ roles:
       title: The support desk
       description: >-
           Messages from people, and accounts that need help. May update an account and may not
-          erase one — that is the owner's and the moderator's, and it expects a freshly proved
+          erase one — that is the admin's and the moderator's, and it expects a freshly proved
           session.
       permissions:
           - feedback.any.read
@@ -186,9 +186,9 @@ roles:
           - audit.any.read
           - cart.self.checkout
 
-    - name: owner
+    - name: admin
       scope: tenant
-      title: The shop owner
+      title: The administrator
       description: >-
           Unrestricted within this shop, and only within it — and note that it says nothing
           about the platform. One role cannot reach both scopes, which is the point.
@@ -201,7 +201,7 @@ roles:
       title: The platform operator
       description: >-
           Runs the installation: health, metrics, the operational audit. Explicitly NOT a
-          super-owner — holds no bare key and therefore cannot read a single shop's orders,
+          super-admin — holds no bare key and therefore cannot read a single shop's orders,
           customers or messages. The conformance suite asserts both halves of that.
       permissions:
           - platform.observability.any.read

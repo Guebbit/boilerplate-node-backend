@@ -32,7 +32,7 @@ const identity = (id: string) => ({
  * Someone acting in the shop, in the named role.
  *
  * @param role - a preset tenant role: `customer`, `manager`, `warehouse`, `support`, `editor`,
- * `moderator` or `owner`
+ * `moderator` or `admin`
  */
 export const asRole = (role: string, id = 'test-user'): AuthContext => ({
     ...identity(id),
@@ -44,7 +44,7 @@ export const asRole = (role: string, id = 'test-user'): AuthContext => ({
 export const asCustomer = (id = 'test-customer'): AuthContext => asRole('customer', id);
 
 /** Unrestricted inside the shop, and only inside it. */
-export const asOwner = (id = 'test-owner'): AuthContext => asRole('owner', id);
+export const asAdmin = (id = 'test-admin'): AuthContext => asRole('admin', id);
 
 /** Runs the shop: catalogue, orders, locales. Reads stock without moving it. */
 export const asManager = (id = 'test-manager'): AuthContext => asRole('manager', id);
@@ -65,8 +65,8 @@ export const asEditor = (id = 'test-editor'): AuthContext => asRole('editor', id
 export const asModerator = (id = 'test-moderator'): AuthContext => asRole('moderator', id);
 
 /**
- * Operates the installation and is NOT a super-owner: holds no bare key, so it cannot read one
- * shop's orders, customers or messages. The pair to {@link asOwner} in every scope test.
+ * Operates the installation and is NOT a super-admin: holds no bare key, so it cannot read one
+ * shop's orders, customers or messages. The pair to {@link asAdmin} in every scope test.
  */
 export const asOperator = (id = 'test-operator'): AuthContext => ({
     ...identity(id),

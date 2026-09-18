@@ -35,8 +35,8 @@ export const probes: Probe[] = [
         path: '/account/signup',
         body: {
             username: 'root',
-            email: '{{seedOwnerEmail}}',
-            password: '{{seedOwnerPassword}}'
+            email: '{{seedAdminEmail}}',
+            password: '{{seedAdminPassword}}'
         }
     },
     {
@@ -45,7 +45,7 @@ export const probes: Probe[] = [
         method: 'POST',
         path: '/account/login',
         body: {
-            email: '{{seedOwnerEmail}}',
+            email: '{{seedAdminEmail}}',
             password: 'wrong-on-purpose'
         }
     }

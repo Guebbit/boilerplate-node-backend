@@ -109,7 +109,7 @@ describe('updateProfile', () => {
                 user.id,
                 {
                     username: 'still-plain',
-                    role: 'owner',
+                    role: 'admin',
                     active: false,
                     password: 'injected-password'
                 },
@@ -333,7 +333,7 @@ describe('sessionRemove', () => {
     });
 
     it("cannot revoke another user's session", async () => {
-        const owner = await createUser({ email: 'owner@example.com', username: 'owner' });
+        const owner = await createUser({ email: 'owner@example.com', username: 'admin' });
         const attacker = await createUser({ email: 'attacker@example.com', username: 'attacker' });
         await owner.tokenAdd(TokenType.REFRESH, 60_000, 'owner-session');
 

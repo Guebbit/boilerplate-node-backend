@@ -41,7 +41,7 @@ describe('GET /orders — the filters it now publishes', () => {
      * so the filter is only reachable by someone who can already see it.
      */
     it('narrows by status, and by a fragment of the notes', async () => {
-        const { bearer, user } = await authenticateAs('owner');
+        const { bearer, user } = await authenticateAs('admin');
         const product = await createProduct();
         const paid = await createOrder(user, [toOrderItem(product, 1)]);
         const pending = await createOrder(user, [toOrderItem(product, 1)], {
@@ -67,7 +67,7 @@ describe('GET /orders — the filters it now publishes', () => {
     // `id` is a batch filter now — Tier A. `userId`/`productId` were deliberately left scalar, so
     // a repeated key there must still 422 rather than silently reading the first value.
     it('filters by a batch of ids, and still 422s a repeated userId — the filter that stayed scalar', async () => {
-        const { bearer, user } = await authenticateAs('owner');
+        const { bearer, user } = await authenticateAs('admin');
         const product = await createProduct();
         const target = await createOrder(user, [toOrderItem(product, 1)]);
         await createOrder(user, [toOrderItem(product, 1)]);
@@ -88,7 +88,7 @@ describe('GET /orders — the filters it now publishes', () => {
 
 describe('GET /orders', () => {
     it('matches the contract for an unrestricted caller', async () => {
-        const { bearer, user } = await authenticateAs('owner');
+        const { bearer, user } = await authenticateAs('admin');
         await seedOrderFor(user);
         const response = await api().get('/orders').set('Authorization', bearer);
 
@@ -106,7 +106,7 @@ describe('GET /orders', () => {
     });
 
     it('reports the three order totals rather than a single collapsed total', async () => {
-        const { bearer, user } = await authenticateAs('owner');
+        const { bearer, user } = await authenticateAs('admin');
         await seedOrderFor(user);
         const response = await api().get('/orders').set('Authorization', bearer);
         const [order] = response.body.data.items;
@@ -122,7 +122,7 @@ describe('GET /orders/{id}', () => {
     // The unscoped path uses findById and the scoped path uses an aggregate — two routes into
     // the same transform, so both are asserted against the contract.
     it('matches the contract on the unscoped path', async () => {
-        const { bearer, user } = await authenticateAs('owner');
+        const { bearer, user } = await authenticateAs('admin');
         const order = await seedOrderFor(user);
         const response = await api()
             .get(`/orders/${String(order._id)}`)
@@ -150,7 +150,7 @@ describe('GET /orders/{id}', () => {
      * 422 unless something upstream of it already turned the id away. Both need their own case, or
      * a regression on either path alone has nothing to catch it.
      */
-    it.each([['owner'], ['user']] as const)(
+    it.each([['admin'], ['user']] as const)(
         '404s on a malformed id for a %s caller',
         async (role) => {
             const { bearer } = await authenticateAs(role);
@@ -162,7 +162,7 @@ describe('GET /orders/{id}', () => {
         }
     );
 
-    it.each([['owner'], ['user']] as const)(
+    it.each([['admin'], ['user']] as const)(
         'the invoice route answers the same 404 for a %s caller',
         async (role) => {
             const { bearer } = await authenticateAs(role);
@@ -199,7 +199,7 @@ describe('GET /orders/{id}', () => {
     it("an unrestricted caller CAN download another customer's invoice — the scope narrows, the route isn't broken", async () => {
         const { user: owner } = await authenticateAs('user');
         const order = await seedOrderFor(owner);
-        const { bearer: ownerBearer } = await authenticateAs('owner');
+        const { bearer: ownerBearer } = await authenticateAs('admin');
 
         const response = await api()
             .get(`/orders/${String(order._id)}/invoice`)
@@ -247,7 +247,7 @@ describe('POST /orders/{id}/cancel', () => {
     it("lets an unrestricted caller cancel someone else's pending order", async () => {
         const { user: owner } = await authenticateAs('user');
         const order = await seedOrderFor(owner);
-        const { bearer } = await authenticateAs('owner');
+        const { bearer } = await authenticateAs('admin');
 
         const response = await api()
             .post(`/orders/${String(order._id)}/cancel`)

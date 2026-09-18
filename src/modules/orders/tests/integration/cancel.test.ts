@@ -21,7 +21,7 @@ import * as analyticsPort from '@infrastructure/observability/analytics';
 import { ordersAuditActions } from '../../audit';
 import { ordersAnalyticsEvents } from '../../analytics';
 import { observePort } from '@tests/ports';
-import { asCustomer, asOwner } from '../../../../../tests/support/callers';
+import { asCustomer, asAdmin } from '../../../../../tests/support/callers';
 
 // The queue, not the copy: `mail-copy.test.ts` pins what the email says.
 jest.mock('@infrastructure/adapters/mailer', () => ({
@@ -72,7 +72,7 @@ describe('cancelById', () => {
     });
 
     it("refuses another user's order with 404 — indistinguishable from absence", async () => {
-        const owner = await createUser({ email: 'owner@example.com', username: 'owner' });
+        const owner = await createUser({ email: 'owner@example.com', username: 'admin' });
         const stranger = await createUser({ email: 'stranger@example.com', username: 'stranger' });
         const order = await seedOrder(owner);
 
@@ -102,15 +102,15 @@ describe('cancelById', () => {
     });
 
     it('a shop owner cancels an order they do not own', async () => {
-        const owner = await createUser({ email: 'owner@example.com', username: 'owner' });
+        const owner = await createUser({ email: 'owner@example.com', username: 'admin' });
         const admin = await createUser({
             email: 'boss@example.com',
             username: 'boss',
-            role: 'owner'
+            role: 'admin'
         });
         const order = await seedOrder(owner);
 
-        const result = await orderService.cancelById(String(order._id), asOwner(admin.id));
+        const result = await orderService.cancelById(String(order._id), asAdmin(admin.id));
 
         expect(result.success).toBe(true);
     });
@@ -121,7 +121,7 @@ describe('cancelById', () => {
      * of caller, this edge would silently exist in the table for everyone.
      */
     it('an operator cancels a processing order, which a customer cannot', async () => {
-        const owner = await createUser({ email: 'owner@example.com', username: 'owner' });
+        const owner = await createUser({ email: 'owner@example.com', username: 'admin' });
         const order = await seedOrder(owner);
         await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'processing');
 
@@ -129,7 +129,7 @@ describe('cancelById', () => {
         expect(refused.success).toBe(false);
         expect(refused.status).toBe(409);
 
-        const allowed = await orderService.cancelById(String(order._id), asOwner());
+        const allowed = await orderService.cancelById(String(order._id), asAdmin());
 
         expect(allowed.success).toBe(true);
         const stored = await orderRepository.findById(String(order._id));
@@ -179,7 +179,7 @@ describe('cancelById — who gets their money back', () => {
         const user = await createUser();
         const order = await seedOrder(user);
 
-        await orderService.cancelById(String(order._id), asOwner(), { refund: false });
+        await orderService.cancelById(String(order._id), asAdmin(), { refund: false });
 
         expect(cancellations).toEqual([{ orderId: String(order._id), refund: false }]);
     });
@@ -188,7 +188,7 @@ describe('cancelById — who gets their money back', () => {
         const user = await createUser();
         const order = await seedOrder(user);
 
-        await orderService.cancelById(String(order._id), asOwner());
+        await orderService.cancelById(String(order._id), asAdmin());
 
         expect(cancellations).toEqual([{ orderId: String(order._id), refund: true }]);
     });
@@ -199,7 +199,7 @@ describe('cancelById — who gets their money back', () => {
         const user = await createUser();
         const order = await seedOrder(user);
 
-        await orderService.cancelById(String(order._id), asOwner(), { refund: false });
+        await orderService.cancelById(String(order._id), asAdmin(), { refund: false });
 
         expect(cancellations).toHaveLength(1);
     });
@@ -232,7 +232,7 @@ describe('cancelById — audit and analytics', () => {
         const order = await seedOrder(user);
 
         // Mirrors module.ts's RESERVATION_EXPIRED handler: admin scope, no CallerContext.
-        await orderService.cancelById(String(order._id), asOwner());
+        await orderService.cancelById(String(order._id), asAdmin());
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -249,7 +249,7 @@ describe('cancelById — audit and analytics', () => {
         const user = await createUser();
         const order = await seedOrder(user);
 
-        await orderService.cancelById(String(order._id), asOwner());
+        await orderService.cancelById(String(order._id), asAdmin());
 
         expect(analyticsSpy).toHaveBeenCalledWith(
             expect.objectContaining({ event: ordersAnalyticsEvents.ORDER_RESERVATION_EXPIRED })
@@ -270,7 +270,7 @@ describe('cancelById — the bank-transfer-expired email', () => {
         });
 
         // Mirrors module.ts's RESERVATION_EXPIRED handler: admin scope, no CallerContext.
-        await orderService.cancelById(String(order._id), asOwner());
+        await orderService.cancelById(String(order._id), asAdmin());
 
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         const [envelope, template] = mockEnqueueEmail.mock.calls[0];
@@ -284,7 +284,7 @@ describe('cancelById — the bank-transfer-expired email', () => {
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)], { paymentMethod: 'card' });
 
-        await orderService.cancelById(String(order._id), asOwner());
+        await orderService.cancelById(String(order._id), asAdmin());
 
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
     });
@@ -316,10 +316,10 @@ describe('withActions', () => {
     it('offers an operator nothing on a terminal order', async () => {
         const user = await createUser();
         const order = await seedOrder(user);
-        await orderService.cancelById(String(order._id), asOwner());
+        await orderService.cancelById(String(order._id), asAdmin());
         const cancelled = await orderRepository.findById(String(order._id));
 
-        const body = await orderService.withActions(cancelled!, asOwner());
+        const body = await orderService.withActions(cancelled!, asAdmin());
 
         expect(body.actions).toEqual({ transitions: [], cancel: false, pay: false });
     });
@@ -328,7 +328,7 @@ describe('withActions', () => {
         const user = await createUser();
         const order = await seedOrder(user);
 
-        for (const caller of [asUser(user), asOwner()]) {
+        for (const caller of [asUser(user), asAdmin()]) {
             const body = await orderService.withActions(order, caller);
             expect((body.actions as { transitions: string[] }).transitions).not.toContain('paid');
         }

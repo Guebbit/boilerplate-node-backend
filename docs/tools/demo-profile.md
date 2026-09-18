@@ -59,7 +59,7 @@ answers.
 {
   "scenario": "shop",
   "accounts": {
-    "owner": { "email": "root@root.it", "password": "Demo-Admin1!" },
+    "admin": { "email": "root@root.it", "password": "Demo-Admin1!" },
     "user": { "email": "customer@example.com", "password": "Demo-User1!" },
     "editor": { "...": "..." },
     "moderator": { "...": "..." }

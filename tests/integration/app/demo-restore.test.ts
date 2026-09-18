@@ -79,7 +79,7 @@ describe('a restore never strands the tenant cache', () => {
         await restoreScenario('blank');
         await restoreScenario('blank');
 
-        const { bearer } = await authenticateAs('owner');
+        const { bearer } = await authenticateAs('admin');
         const response = await api().get('/account/abilities').set('Authorization', bearer);
 
         expect(response.status).toBe(200);

@@ -27,7 +27,7 @@ describe('GET /products — the filters it now publishes', () => {
         await createProduct({ title: 'Oak stool' });
         await createProduct({ title: 'Walnut prototype', active: false });
 
-        const { bearer } = await authenticateAs('owner');
+        const { bearer } = await authenticateAs('admin');
         const staff = await api().get('/products?title=Walnut').set('Authorization', bearer);
         expect(staff.status).toBe(200);
         expect(staff.body.data.items.map((p: { title: string }) => p.title).toSorted()).toEqual([
@@ -66,7 +66,7 @@ describe('GET /products', () => {
     });
 
     it('matches the contract for an admin caller', async () => {
-        const { bearer } = await authenticateAs('owner');
+        const { bearer } = await authenticateAs('admin');
         await createProduct();
         const response = await api().get('/products').set('Authorization', bearer);
 
@@ -200,7 +200,7 @@ const stored = (id: string) => productRepository.findByIdRaw(id);
  */
 describe('DELETE /products/{id}', () => {
     it('soft-deletes when nothing asks otherwise', async () => {
-        const { bearer } = await authenticateAs('owner');
+        const { bearer } = await authenticateAs('admin');
         const product = await createProduct();
 
         const response = await api()
@@ -213,7 +213,7 @@ describe('DELETE /products/{id}', () => {
     });
 
     it('soft-deletes for hardDelete=false rather than destroying the record', async () => {
-        const { bearer } = await authenticateAs('owner');
+        const { bearer } = await authenticateAs('admin');
         const product = await createProduct();
 
         const response = await api()
@@ -226,7 +226,7 @@ describe('DELETE /products/{id}', () => {
     });
 
     it('hard-deletes for hardDelete=true', async () => {
-        const { bearer } = await authenticateAs('owner');
+        const { bearer } = await authenticateAs('admin');
         const product = await createProduct();
 
         const response = await api()
@@ -239,7 +239,7 @@ describe('DELETE /products/{id}', () => {
     });
 
     it('rejects a value that is not a boolean rather than guessing at it', async () => {
-        const { bearer } = await authenticateAs('owner');
+        const { bearer } = await authenticateAs('admin');
         const product = await createProduct();
 
         const response = await api()
@@ -261,7 +261,7 @@ describe('DELETE /products/{id}', () => {
             ['query false, body true', 'false', true],
             ['query true, body false', 'true', false]
         ])('hard-deletes for %s', async (_case, query, body) => {
-            const { bearer } = await authenticateAs('owner');
+            const { bearer } = await authenticateAs('admin');
             const product = await createProduct();
 
             const response = await api()
@@ -276,7 +276,7 @@ describe('DELETE /products/{id}', () => {
 
         // OR must not become a way to launder a malformed value into a destroy.
         it('still rejects an undecodable value when the other source says true', async () => {
-            const { bearer } = await authenticateAs('owner');
+            const { bearer } = await authenticateAs('admin');
             const product = await createProduct();
 
             const response = await api()
@@ -293,7 +293,7 @@ describe('DELETE /products/{id}', () => {
 
 describe('DELETE /products/{id}/hard', () => {
     it('is the same operation with the flag spelled in the path', async () => {
-        const { bearer } = await authenticateAs('owner');
+        const { bearer } = await authenticateAs('admin');
         const product = await createProduct();
 
         const response = await api()
@@ -307,7 +307,7 @@ describe('DELETE /products/{id}/hard', () => {
 
     // The URL the caller aimed at is the more explicit statement of intent.
     it('wins over a query parameter that contradicts it', async () => {
-        const { bearer } = await authenticateAs('owner');
+        const { bearer } = await authenticateAs('admin');
         const product = await createProduct();
 
         const response = await api()

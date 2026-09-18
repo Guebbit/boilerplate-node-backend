@@ -108,7 +108,7 @@ const cartWith = async (userId: string) => {
 
 describe('ownership', () => {
     it("someone else's entry answers the same 404 as an invented one", async () => {
-        const owner = await createUser({ email: 'owner@example.com', username: 'owner' });
+        const owner = await createUser({ email: 'owner@example.com', username: 'admin' });
         const stranger = await createUser({ email: 'stranger@example.com', username: 'stranger' });
         await addressService.addressAdd(owner.id, HOME);
         const view = await addressService.addressesGet(owner.id);
@@ -185,7 +185,7 @@ describe('checkout and the address', () => {
         // real entry and an invented id take the same branch — but the invariant this proves is
         // ownership, not merely existence, and the doc's split return type exists for exactly
         // this case: collapsing it would let a stale/foreign id silently downgrade to "no address".
-        const owner = await createUser({ email: 'owner@example.com', username: 'owner' });
+        const owner = await createUser({ email: 'owner@example.com', username: 'admin' });
         await addressService.addressAdd(owner.id, HOME);
         const ownerView = await addressService.addressesGet(owner.id);
         const ownersEntryId = ownerView.addresses[0].id;

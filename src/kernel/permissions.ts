@@ -421,7 +421,7 @@ export const SYSTEM_ACTOR: AuthContext = {
     id: 'system',
     email: 'system@localhost',
     username: 'system',
-    roles: { tenant: 'owner', platform: null },
+    roles: { tenant: 'admin', platform: null },
     tenantId: DEPLOYMENT_TENANT_ID,
     authTime: 0,
     amr: [],
@@ -432,7 +432,7 @@ export const SYSTEM_ACTOR: AuthContext = {
  * Is this ROLE unrestricted in its scope — the audit trail's word for "admin"?
  *
  * Roles are data a deployment may rename or add to; the trail's vocabulary is closed and its
- * values outlive them. So the question asked of a role name is never "is it called owner" but
+ * values outlive them. So the question asked of a role name is never "is it called admin" but
  * "does it hold the scope's wildcard", which stays true through any renaming.
  *
  * @param name - a role name, or `null`/`undefined` for an account with none in that scope

@@ -30,7 +30,7 @@ import {
 import { registerAuthResolver } from '@kernel/authentication';
 import { emitAuditEvent, coreAuditActions } from '@infrastructure/observability/audit';
 import { makeResponseStub } from '@tests/express';
-import { asCustomer, asOwner } from '../../support/callers';
+import { asCustomer, asAdmin } from '../../support/callers';
 import { callerInScope } from '@kernel/permissions';
 import type { AuthContext } from '@types';
 import { wildcardKeyFor } from '@kernel/permissions';
@@ -155,7 +155,7 @@ describe('getAuth', () => {
     });
 
     it('attaches the identity of the user the token names', async () => {
-        const resolved = { ...asOwner('user-1'), username: 'tester', imageUrl: '/images/a.png' };
+        const resolved = { ...asAdmin('user-1'), username: 'tester', imageUrl: '/images/a.png' };
         mockedVerifyAccessToken.mockResolvedValue(resolved as never);
 
         const request = makeRequest({ authorization: 'Bearer valid.token' });
@@ -283,7 +283,7 @@ describe('requirePermission', () => {
         const response = makeResponseStub();
 
         requirePermission(WILDCARD)(
-            makeRequest({ authContext: asOwner('user-1') }),
+            makeRequest({ authContext: asAdmin('user-1') }),
             response,
             next
         );
@@ -410,7 +410,7 @@ describe('requirePermission', () => {
  */
 describe('requirePermissionViaCookie', () => {
     /** An admin user document, as `findById` resolves one. */
-    const adminUser = { ...asOwner('admin-1'), username: 'root', imageUrl: '/images/root.png' };
+    const adminUser = { ...asAdmin('admin-1'), username: 'root', imageUrl: '/images/root.png' };
 
     it('rejects with 401 when there is no session cookie at all', () => {
         const response = makeResponseStub();
@@ -589,7 +589,7 @@ describe('requirePermissionViaCookie', () => {
  * cannot tell the two apart and must not hang waiting to find out.
  */
 describe('stillHoldsKeyViaCookie', () => {
-    const adminUser = { ...asOwner('admin-1'), username: 'root', imageUrl: '/images/root.png' };
+    const adminUser = { ...asAdmin('admin-1'), username: 'root', imageUrl: '/images/root.png' };
 
     it('resolves true for a caller who still holds the key', async () => {
         mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser as never);

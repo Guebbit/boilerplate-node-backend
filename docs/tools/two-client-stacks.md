@@ -43,12 +43,12 @@ One `up -d` brings up everything in the right order — `database`'s own entrypo
 replica set's keyFile, `mongo-rs-init` initiates the set, `setup` runs `db:sync` and
 `access:bootstrap` once that succeeds, then `app`/`cron` start.
 
-**A fresh stack has an organisation but no owner** — every signup is a `customer`, on purpose (a
+**A fresh stack has an organisation but no admin** — every signup is a `customer`, on purpose (a
 race to be first is a known vulnerability pattern). Sign up through the app once, then:
 
 ```bash
 docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml \
-    exec app npm run access:grant -- you@example.com owner
+    exec app npm run access:grant -- you@example.com admin
 ```
 
 Verified end to end on this exact sequence: signup, the verification email arriving (a local
@@ -103,7 +103,7 @@ curl http://127.0.0.1:3102/products   # {"data":{"items":[],...}} — brava has 
 ```
 
 Verified directly against both databases, not just the API: `acme`'s `users`/`orders` collections
-hold the signed-up owner and their order; `brava`'s hold nothing. Two stacks, two databases, zero
+hold the signed-up admin and their order; `brava`'s hold nothing. Two stacks, two databases, zero
 shared state.
 
 **2. Deleting `brava` never touches `acme`.**

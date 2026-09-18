@@ -71,7 +71,7 @@ export const namedUsers = [
         username: 'root',
         email: SEED_OWNER_EMAIL,
         password: SEED_OWNER_PASSWORD,
-        role: 'owner',
+        role: 'admin',
         /*
          * Overrides the schema's `unverified` default, which is right for self-signup — nobody has
          * vouched for the address yet — and wrong here. A seed account exists to be logged into,

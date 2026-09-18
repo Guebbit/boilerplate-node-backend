@@ -15,7 +15,7 @@
 
 import type { NextFunction, Request, Response } from 'express';
 import { asStub } from '@tests/stub';
-import { asCustomer, asOwner } from '../../support/callers';
+import { asCustomer, asAdmin } from '../../support/callers';
 import { callerInScope } from '@kernel/permissions';
 import type { AuthContext } from '@types';
 import { requirePermission } from '@kernel/middlewares/authorizations';
@@ -53,7 +53,7 @@ describe('a key that demands step-up', () => {
         const next = jest.fn();
 
         requirePermission('users.any.delete')(
-            makeRequest({ ...asOwner('u1'), authTime: NOW() }),
+            makeRequest({ ...asAdmin('u1'), authTime: NOW() }),
             makeResponse(),
             asStub<NextFunction>(next)
         );
@@ -67,7 +67,7 @@ describe('a key that demands step-up', () => {
 
         requirePermission('users.any.delete')(
             // Yesterday. `authTime` is carried from the token's own claim, never derived.
-            makeRequest({ ...asOwner('u1'), authTime: NOW() - 86_400 }),
+            makeRequest({ ...asAdmin('u1'), authTime: NOW() - 86_400 }),
             response,
             asStub<NextFunction>(next)
         );
@@ -82,7 +82,7 @@ describe('a key that demands step-up', () => {
         const response = makeResponse();
 
         requirePermission('users.any.delete')(
-            makeRequest({ ...asOwner('u1'), authTime: 0 }),
+            makeRequest({ ...asAdmin('u1'), authTime: 0 }),
             response,
             asStub<NextFunction>(jest.fn())
         );
@@ -104,7 +104,7 @@ describe('a key that demands step-up', () => {
 
     it('records that the challenge was demanded, and for which key', () => {
         requirePermission('users.any.delete')(
-            makeRequest({ ...asOwner('u1'), authTime: 0 }),
+            makeRequest({ ...asAdmin('u1'), authTime: 0 }),
             makeResponse(),
             asStub<NextFunction>(jest.fn())
         );
@@ -144,7 +144,7 @@ describe('a key that does not demand step-up', () => {
         const next = jest.fn();
 
         requirePermission('users.any.update')(
-            makeRequest({ ...asOwner('u1'), authTime: 0 }),
+            makeRequest({ ...asAdmin('u1'), authTime: 0 }),
             makeResponse(),
             asStub<NextFunction>(next)
         );

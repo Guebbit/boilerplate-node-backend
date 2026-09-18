@@ -146,7 +146,7 @@ const body = (): string =>
         'Read down a column to see who touches one part of the shop; read across a row to see one',
         'person’s whole job. `operator` is the only row outside the shop entirely: it runs the',
         'installation and reads no shop’s rows, which is why its row is empty everywhere else and',
-        'why `owner` — unrestricted **inside one shop** — cannot reach observability either.'
+        'why `admin` — unrestricted **inside one shop** — cannot reach observability either.'
     ].join('\n');
 
 /**

@@ -29,7 +29,7 @@ import cartModule from '@modules/cart/module';
 import deliveryModule from '@modules/delivery/module';
 import type { ResponseSuccess } from '@infrastructure/http/response';
 import type { Payment } from '@types';
-import { asCustomer, asOwner } from '../../../../../tests/support/callers';
+import { asCustomer, asAdmin } from '../../../../../tests/support/callers';
 
 setupTestDb();
 
@@ -82,7 +82,7 @@ describe('payments — detach on account erasure', () => {
         const order = await createOrder(user, [toOrderItem(product, 1)]);
         await detachOrderUserId(String(user._id), new Date(Date.now() + 100_000));
 
-        const intent = await createIntent(String(order._id), asOwner('admin-caller'));
+        const intent = await createIntent(String(order._id), asAdmin('admin-caller'));
 
         const payment = (intent as ResponseSuccess<Payment>).data!;
         expect(payment.userId).toBeUndefined();

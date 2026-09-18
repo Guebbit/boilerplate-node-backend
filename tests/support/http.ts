@@ -36,9 +36,9 @@ interface AuthenticatedTestUser {
  * suites do exactly that) rather than fighting this default.
  */
 export const authenticateAs = async (
-    role: 'owner' | 'user' = 'user'
+    role: 'admin' | 'user' = 'user'
 ): Promise<AuthenticatedTestUser> => {
-    const user = await (role === 'owner'
+    const user = await (role === 'admin'
         ? createOwnerUser({ verifiedAt: new Date() })
         : createUser({ role: 'customer', verifiedAt: new Date() }));
 

@@ -9,13 +9,13 @@
 
 import { accessibleFilter } from '@kernel/access/query';
 import { Types } from 'mongoose';
-import { asCustomer, asManager, asOwner, asOperator } from '../../support/callers';
+import { asCustomer, asManager, asAdmin, asOperator } from '../../support/callers';
 
 describe('accessibleFilter', () => {
     it('narrows nothing for a role that reads everything', () => {
         // `{}` rather than `undefined`: "no conditions" and "no rules" must not look alike to the
         // caller spreading this into a query.
-        expect(accessibleFilter(asOwner(), 'Product')).toEqual({});
+        expect(accessibleFilter(asAdmin(), 'Product')).toEqual({});
     });
 
     it('narrows a customer to the rows their key carries a condition for', () => {

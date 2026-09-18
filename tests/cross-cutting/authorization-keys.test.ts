@@ -71,7 +71,7 @@ describe('the preset roles', () => {
             role.permissions.includes(wildcardKeyFor(role.scope))
         );
 
-        expect(unrestricted.map((role) => role.name)).toEqual(['owner']);
+        expect(unrestricted.map((role) => role.name)).toEqual(['admin']);
     });
 });
 

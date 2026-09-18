@@ -111,7 +111,7 @@ describe('userRepository', () => {
             await createUser({
                 email: 'admin@example.com',
                 username: 'admin',
-                role: 'owner'
+                role: 'admin'
             });
             await createUser({
                 email: 'user@example.com',
@@ -119,7 +119,7 @@ describe('userRepository', () => {
                 role: 'customer'
             });
 
-            const admins = await userRepository.findAll({ role: 'owner' });
+            const admins = await userRepository.findAll({ role: 'admin' });
 
             expect(admins).toHaveLength(1);
             expect(admins[0].email).toBe('admin@example.com');
@@ -147,7 +147,7 @@ describe('userRepository', () => {
             await createUser({
                 email: 'admin@example.com',
                 username: 'admin',
-                role: 'owner'
+                role: 'admin'
             });
             await createUser({
                 email: 'user@example.com',
@@ -155,7 +155,7 @@ describe('userRepository', () => {
                 role: 'customer'
             });
 
-            expect(await userRepository.count({ role: 'owner' })).toBe(1);
+            expect(await userRepository.count({ role: 'admin' })).toBe(1);
             expect(await userRepository.count({ role: 'customer' })).toBe(1);
         });
 
@@ -194,12 +194,12 @@ describe('userRepository', () => {
         it('applies the update to every document matching the filter', async () => {
             await createUser({ email: 'a@example.com', username: 'a', role: 'customer' });
             await createUser({ email: 'b@example.com', username: 'b', role: 'customer' });
-            await createUser({ email: 'c@example.com', username: 'c', role: 'owner' });
+            await createUser({ email: 'c@example.com', username: 'c', role: 'admin' });
 
             // Promote every customer
-            await userRepository.updateMany({ role: 'customer' }, { $set: { role: 'owner' } });
+            await userRepository.updateMany({ role: 'customer' }, { $set: { role: 'admin' } });
 
-            expect(await userRepository.count({ role: 'owner' })).toBe(3);
+            expect(await userRepository.count({ role: 'admin' })).toBe(3);
             expect(await userRepository.count({ role: 'customer' })).toBe(0);
         });
 
@@ -207,7 +207,7 @@ describe('userRepository', () => {
             await createUser({
                 email: 'admin@example.com',
                 username: 'admin',
-                role: 'owner'
+                role: 'admin'
             });
             await createUser({
                 email: 'user@example.com',

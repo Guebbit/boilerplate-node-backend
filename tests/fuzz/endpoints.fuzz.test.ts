@@ -127,7 +127,7 @@ describe.each(
     )
 )('%s', (_label, operation) => {
     it('never answers 5xx, and always answers something the spec documents', async () => {
-        const { bearer } = await authenticateAs('owner');
+        const { bearer } = await authenticateAs('admin');
         const bodyArbitrary = bodyArbitraryFor(operation.bodySchema);
         const url = buildUrl(operation);
 

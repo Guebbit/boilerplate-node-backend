@@ -62,7 +62,7 @@ describe('the preset roles', () => {
     it('are idempotent, so seeding a seeded database changes nothing', async () => {
         await seedPresetRoles();
 
-        expect(await roleModel.countDocuments({ name: 'owner' }).exec()).toBe(1);
+        expect(await roleModel.countDocuments({ name: 'admin' }).exec()).toBe(1);
     });
 
     it('can be edited, because roles are data', async () => {
@@ -83,7 +83,7 @@ describe('membership across tenants', () => {
         const north = await ensureTenant('north', 'North Shop');
         const south = await ensureTenant('south', 'South Shop');
 
-        await assignRole('person-1', String(north._id), 'tenant', 'owner');
+        await assignRole('person-1', String(north._id), 'tenant', 'admin');
         await assignRole('person-1', String(south._id), 'tenant', 'warehouse');
 
         const held = await membershipsOf('person-1');
@@ -93,7 +93,7 @@ describe('membership across tenants', () => {
                 .map((one) => ({ tenantId: one.tenantId, role: one.role }))
                 .toSorted((a, b) => a.role.localeCompare(b.role))
         ).toEqual([
-            { tenantId: String(north._id), role: 'owner' },
+            { tenantId: String(north._id), role: 'admin' },
             { tenantId: String(south._id), role: 'warehouse' }
         ]);
     });
@@ -104,7 +104,7 @@ describe('membership across tenants', () => {
 
         const [inNorth, inSouth] = await Promise.all([
             permissionsOfMembership({
-                role: 'owner',
+                role: 'admin',
                 scope: 'tenant',
                 tenantId: String(north._id)
             }),
@@ -138,7 +138,7 @@ describe('membership across tenants', () => {
     it('separates the two scopes, so one person can run a shop and operate the installation', async () => {
         const shop = await ensureTenant('shop', 'The Shop');
 
-        await assignRole('person-1', String(shop._id), 'tenant', 'owner');
+        await assignRole('person-1', String(shop._id), 'tenant', 'admin');
         await assignRole('person-1', null, 'platform', 'operator');
 
         const held = await membershipsOf('person-1');
@@ -181,14 +181,14 @@ describe('the invariants', () => {
         // The single most common way these systems fail: a role editor that lets a support agent
         // hand somebody the keys they do not have themselves.
         await expect(
-            assignRole('person-1', String(shop._id), 'tenant', 'owner', ['feedback.any.read'])
+            assignRole('person-1', String(shop._id), 'tenant', 'admin', ['feedback.any.read'])
         ).rejects.toThrow(/privilege-escalation/);
     });
 
     it('allows a granter to hand over exactly what they hold', async () => {
         const shop = await ensureTenant('shop', 'The Shop');
         const granter = await permissionsOfMembership({
-            role: 'owner',
+            role: 'admin',
             scope: 'tenant',
             tenantId: String(shop._id)
         });
@@ -200,7 +200,7 @@ describe('the invariants', () => {
 
     it('refuses to remove the last member who can administer a shop', async () => {
         const shop = await ensureTenant('shop', 'The Shop');
-        await assignRole('only-owner', String(shop._id), 'tenant', 'owner');
+        await assignRole('only-owner', String(shop._id), 'tenant', 'admin');
 
         // Without this a shop becomes unadministrable and only somebody with a database client
         // can put it right.
@@ -211,7 +211,7 @@ describe('the invariants', () => {
 
     it('puts the membership back after refusing, not just the error', async () => {
         const shop = await ensureTenant('shop', 'The Shop');
-        await assignRole('only-owner', String(shop._id), 'tenant', 'owner');
+        await assignRole('only-owner', String(shop._id), 'tenant', 'admin');
 
         // The refusal deletes first and restores second (no replica set to run a transaction
         // against in dev/test — see the docblock on `revokeRole`). This is what proves the
@@ -224,8 +224,8 @@ describe('the invariants', () => {
 
     it('surfaces a rejecting delete instead of losing it silently', async () => {
         const shop = await ensureTenant('shop', 'The Shop');
-        await assignRole('owner-a', String(shop._id), 'tenant', 'owner');
-        await assignRole('owner-b', String(shop._id), 'tenant', 'owner');
+        await assignRole('owner-a', String(shop._id), 'tenant', 'admin');
+        await assignRole('owner-b', String(shop._id), 'tenant', 'admin');
         const failure = new Error('mongo is down');
         const spy = jest.spyOn(membershipModel, 'deleteOne').mockReturnValue(
             asStub<ReturnType<typeof membershipModel.deleteOne>>({
@@ -244,8 +244,8 @@ describe('the invariants', () => {
 
     it('cannot leave zero administrators from two concurrent last-two revokes', async () => {
         const shop = await ensureTenant('shop', 'The Shop');
-        await assignRole('owner-a', String(shop._id), 'tenant', 'owner');
-        await assignRole('owner-b', String(shop._id), 'tenant', 'owner');
+        await assignRole('owner-a', String(shop._id), 'tenant', 'admin');
+        await assignRole('owner-b', String(shop._id), 'tenant', 'admin');
 
         // No transaction to serialize these — both deletes can land before either checks. The
         // guarantee this shape buys is weaker than a transaction's (a genuine tie can refuse
@@ -262,8 +262,8 @@ describe('the invariants', () => {
 
     it('allows removing an administrator once another one exists', async () => {
         const shop = await ensureTenant('shop', 'The Shop');
-        await assignRole('owner-a', String(shop._id), 'tenant', 'owner');
-        await assignRole('owner-b', String(shop._id), 'tenant', 'owner');
+        await assignRole('owner-a', String(shop._id), 'tenant', 'admin');
+        await assignRole('owner-b', String(shop._id), 'tenant', 'admin');
 
         await revokeRole('owner-a', String(shop._id), 'tenant');
 
@@ -361,7 +361,7 @@ describe('the seeded model', () => {
                 .toSorted((a, b) => a.scope.localeCompare(b.scope))
         ).toEqual([
             { scope: 'platform', role: 'operator' },
-            { scope: 'tenant', role: 'owner' }
+            { scope: 'tenant', role: 'admin' }
         ]);
 
         const [customer, editor, moderator] = await Promise.all([

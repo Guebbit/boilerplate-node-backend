@@ -30,7 +30,7 @@ const taxedLine = (productId: string, price: number, taxRate: number) => ({
 
 describe('GET /orders/{id}/invoice — pre-VAT vs. VAT orders', () => {
     it('renders no VAT table or shop identity for an order frozen before VAT existed', async () => {
-        const { bearer, user } = await authenticateAs('owner');
+        const { bearer, user } = await authenticateAs('admin');
         const product = await createProduct();
         // `invoicePdfStatus: 'ready'` with nothing actually stored falls back to rendering
         // inline (see `get-order-invoice.ts`) — what lets this exercise the download route
@@ -49,7 +49,7 @@ describe('GET /orders/{id}/invoice — pre-VAT vs. VAT orders', () => {
     });
 
     it('renders the VAT table and totals for an order with a frozen rate on every line', async () => {
-        const { bearer, user } = await authenticateAs('owner');
+        const { bearer, user } = await authenticateAs('admin');
         const product = await createProduct();
         const order = await createOrder(user, [taxedLine(String(product._id), 19.9, 0.22)], {
             invoicePdfStatus: 'ready'
@@ -69,7 +69,7 @@ describe('GET /orders/{id}/invoice — pre-VAT vs. VAT orders', () => {
 
 describe('GET /orders/{id} — the VAT fields on the response', () => {
     it('omits netTotal/taxTotal and every line tax field on a pre-VAT order', async () => {
-        const { bearer, user } = await authenticateAs('owner');
+        const { bearer, user } = await authenticateAs('admin');
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
 
@@ -86,7 +86,7 @@ describe('GET /orders/{id} — the VAT fields on the response', () => {
     });
 
     it('publishes netTotal/taxTotal and every line tax field on a fully-VAT order', async () => {
-        const { bearer, user } = await authenticateAs('owner');
+        const { bearer, user } = await authenticateAs('admin');
         const product = await createProduct();
         const order = await createOrder(user, [taxedLine(String(product._id), 19.9, 0.22)]);
 

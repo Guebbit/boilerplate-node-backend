@@ -22,7 +22,7 @@ beforeEach(() => renderHtmlToPdfMock.mockClear());
 
 describe('GET /orders/{id} — the invoice number on the response', () => {
     it('omits invoiceNumber on an order that predates this field', async () => {
-        const { bearer, user } = await authenticateAs('owner');
+        const { bearer, user } = await authenticateAs('admin');
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)]);
 
@@ -36,7 +36,7 @@ describe('GET /orders/{id} — the invoice number on the response', () => {
     });
 
     it('publishes the invoice number frozen at creation', async () => {
-        const { bearer, user } = await authenticateAs('owner');
+        const { bearer, user } = await authenticateAs('admin');
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             invoiceNumber: '2026-000041'
@@ -54,7 +54,7 @@ describe('GET /orders/{id} — the invoice number on the response', () => {
 
 describe('GET /orders/{id}/invoice — the number-and-date block', () => {
     it('renders no number or date for an order with no invoice number', async () => {
-        const { bearer, user } = await authenticateAs('owner');
+        const { bearer, user } = await authenticateAs('admin');
         const product = await createProduct();
         // `invoicePdfStatus: 'ready'` with nothing actually stored falls back to rendering
         // inline (see `get-order-invoice.ts`) — what lets this exercise the download route
@@ -73,7 +73,7 @@ describe('GET /orders/{id}/invoice — the number-and-date block', () => {
     });
 
     it('renders the number and its date of supply for an order that carries one', async () => {
-        const { bearer, user } = await authenticateAs('owner');
+        const { bearer, user } = await authenticateAs('admin');
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             invoiceNumber: '2026-000041',

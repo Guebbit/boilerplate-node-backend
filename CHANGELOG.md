@@ -178,6 +178,12 @@ role's actual capability changes, except the two the fix targets. `GET /account/
 generated client are unaffected: `permissions` was already `string[]`, never an enum. See
 [Authorization](docs/theory/authorization.md#the-key-grammar-and-the-invariant-it-exists-for).
 
+**The unrestricted shop role is `admin`, not `owner`.** `role` was always `type: string`, never a
+generated enum, so no client type changes — but anything comparing `user.role`/`membership.role`
+against the literal `'owner'`, or logging in as it in an e2e suite, must read `'admin'` instead.
+No real deployment holds seeded role data yet, so no data-migration script was written; a
+deployment reseeds after pulling this change rather than migrating in place.
+
 ### Added
 
 - **`POST /account/password/check`** — unauthenticated, advisory-only breach lookup for a

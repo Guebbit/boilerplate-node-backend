@@ -76,7 +76,7 @@ one of them silently gives every client the same application config.
 
 That builds `docker/Dockerfile.production` (multi-stage: type-checks in a build stage, ships only
 production dependencies in the runtime stage), runs `setup` once — indexes and the shop's row, see
-[below](#the-first-owner) — then starts the API, `cron`, and (bundled profile) `database`, `cache`
+[below](#the-first-admin) — then starts the API, `cron`, and (bundled profile) `database`, `cache`
 and `queue`, the production names for Mongo, Redis and RabbitMQ. No bind mount, no hot reload:
 what's running is exactly what was built.
 
@@ -90,18 +90,18 @@ curl http://127.0.0.1:3000/          # health probe
 The port is published to `127.0.0.1`, not `0.0.0.0` — reachable from the host, not from the
 network. That is deliberate, see [Putting a reverse proxy in front](#putting-a-reverse-proxy-in-front) below.
 
-## The first owner
+## The first admin
 
 `setup` gives the database its shop and its preset roles, but nobody starts with a role above
-`customer` — the first signup racing to become owner is a known vulnerability pattern, so nothing
+`customer` — the first signup racing to become admin is a known vulnerability pattern, so nothing
 does that automatically. Sign up through the app once, then grant the account a role from the host:
 
 ```bash
 docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml \
-    exec app npm run access:grant -- you@example.com owner
+    exec app npm run access:grant -- you@example.com admin
 ```
 
-The same command is the recovery path if every owner is ever locked out — `--scope platform` grants
+The same command is the recovery path if every admin is ever locked out — `--scope platform` grants
 an installation-wide role (an operator) instead of a shop role.
 
 ## What's different from dev

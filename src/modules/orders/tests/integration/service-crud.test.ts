@@ -30,7 +30,7 @@ import { orderRepository } from '../../repository';
 import { inventoryService } from '@modules/inventory';
 import type { OrderDocument } from '../../model';
 import type { ResponseReject, ResponseSuccess } from '@infrastructure/http/response';
-import { asCustomer, asOwner } from '../../../../../tests/support/callers';
+import { asCustomer, asAdmin } from '../../../../../tests/support/callers';
 
 setupTestDb();
 
@@ -356,7 +356,7 @@ describe('update', () => {
         // The path that made this worth fixing: a reopened order is cancellable again, and the
         // refund listener sees a payment that is still `succeeded`.
         const { order } = await seedOrder();
-        await orderService.cancelById(String(order._id), asOwner());
+        await orderService.cancelById(String(order._id), asAdmin());
 
         const result = await update(await reload(order), { status: 'pending' });
 
@@ -598,7 +598,7 @@ describe('callerScope hides soft-deleted orders', () => {
         const own = await search({}, callerScope(asCustomer(userId)));
         expect(own.items).toHaveLength(0);
 
-        const asAdmin = await search({}, callerScope(asOwner(userId)));
-        expect(asAdmin.items).toHaveLength(1);
+        const adminSearch = await search({}, callerScope(asAdmin(userId)));
+        expect(adminSearch.items).toHaveLength(1);
     });
 });

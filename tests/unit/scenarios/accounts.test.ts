@@ -100,7 +100,7 @@ describe('seedCredentials', () => {
      * account does not actually have, with nothing on either side to notice.
      */
     it('publishes exactly what each account was seeded with', () => {
-        expect(seedCredentials.owner).toEqual({
+        expect(seedCredentials.admin).toEqual({
             email: SEED_OWNER_EMAIL,
             password: SEED_OWNER_PASSWORD
         });
@@ -113,7 +113,7 @@ describe('seedCredentials', () => {
     it('carries the overridden password, not the fallback', async () => {
         const seeds = await reloadWith('Env-Admin1!', 'Env-User1!');
 
-        expect(seeds.seedCredentials.owner.password).toBe('Env-Admin1!');
+        expect(seeds.seedCredentials.admin.password).toBe('Env-Admin1!');
         expect(seeds.seedCredentials.user.password).toBe('Env-User1!');
     });
 });

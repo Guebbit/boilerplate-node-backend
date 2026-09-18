@@ -176,7 +176,7 @@ an unrelated reason — renaming it today would be a breaking contract change fo
 
 ## 8 · Hands-on: two clients on your laptop
 
-The full walkthrough — bringing up two independent stacks, granting the first owner, placing a real
+The full walkthrough — bringing up two independent stacks, granting the first admin, placing a real
 order, and the two demonstrations that make silo a fact rather than a claim (an order in one stack
 invisible to the other; deleting one stack leaving the other untouched) — lives on its own page:
 **[Two Client Stacks](../tools/two-client-stacks.md)**. Everything there was run for real, not

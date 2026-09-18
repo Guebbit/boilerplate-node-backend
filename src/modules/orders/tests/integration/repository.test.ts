@@ -170,7 +170,7 @@ describe('orderRepository', () => {
             const expected = order._id.toString();
 
             const asAdmin = await orderRepository.findByIdScoped(expected);
-            const asOwner = await orderRepository.findByIdScoped(
+            const scopedToOwner = await orderRepository.findByIdScoped(
                 expected,
                 orderRepository.ownerScope(String(user._id))
             );
@@ -178,7 +178,7 @@ describe('orderRepository', () => {
             // Not `toBeDefined()`: the failure this guards against is a value that stringifies
             // to the literal 'undefined', which is defined enough to pass a laxer assertion.
             expect(String(asStub<{ id?: unknown }>(asAdmin).id)).toBe(expected);
-            expect(String(asStub<{ id?: unknown }>(asOwner).id)).toBe(expected);
+            expect(String(asStub<{ id?: unknown }>(scopedToOwner).id)).toBe(expected);
         });
 
         it('drops `_id` on the scoped branch, which is why `id` is the field to read', async () => {
@@ -186,7 +186,7 @@ describe('orderRepository', () => {
             const product = await createProduct();
             const order = await createOrder(user, [toOrderItem(product, 1)]);
 
-            const asOwner = await orderRepository.findByIdScoped(
+            const scopedToOwner = await orderRepository.findByIdScoped(
                 String(order._id),
                 orderRepository.ownerScope(String(user._id))
             );
@@ -194,8 +194,8 @@ describe('orderRepository', () => {
             // The serializer deletes `_id` after writing `id`. Asserted here rather than left
             // implicit: it is the half of the contract that makes reading `_id` a silent,
             // role-dependent bug instead of a loud one.
-            expect(asOwner).toBeDefined();
-            expect(asStub<{ _id?: unknown }>(asOwner)._id).toBeUndefined();
+            expect(scopedToOwner).toBeDefined();
+            expect(asStub<{ _id?: unknown }>(scopedToOwner)._id).toBeUndefined();
         });
 
         it('still refuses an order the scope does not cover', async () => {

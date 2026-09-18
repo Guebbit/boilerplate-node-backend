@@ -74,7 +74,7 @@ describe('POST /products', () => {
      * ledger back needs `inventory.any.read`, which the editor role does not hold.
      */
     it('gives the product its opening stock through a real receive movement', async () => {
-        const { bearer } = await authenticateAs('owner');
+        const { bearer } = await authenticateAs('admin');
 
         const response = await api()
             .post('/products')

@@ -83,7 +83,7 @@ describe('GET /account/abilities', () => {
     });
 
     it('carries a shop owner’s rules, which narrow nothing', async () => {
-        const { bearer } = await authenticateAs('owner');
+        const { bearer } = await authenticateAs('admin');
 
         const response = await api()
             .get('/account/abilities')
@@ -100,7 +100,7 @@ describe('GET /account/abilities', () => {
     it('keeps the two scopes apart in the one payload', async () => {
         // This account is a shop owner AND the installation's operator — two memberships, which is
         // what makes it the one caller that can prove the lists do not leak into each other.
-        const { bearer } = await authenticateAs('owner');
+        const { bearer } = await authenticateAs('admin');
 
         const response = await api()
             .get('/account/abilities')

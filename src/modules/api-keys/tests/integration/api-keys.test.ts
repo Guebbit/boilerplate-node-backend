@@ -76,7 +76,7 @@ describe('mint — the subset boundary', () => {
 
     it('lets a wildcard-holder mint a key naming one specific key beneath it', async () => {
         const user = await createRealUser('mint-wildcard');
-        const context = contextFor(String(user._id), permissionsOfRole('owner'));
+        const context = contextFor(String(user._id), permissionsOfRole('admin'));
 
         const result = await mint(
             { name: 'from owner', permissions: ['orders.self.read'] },
@@ -91,9 +91,9 @@ describe('the credential-resolve path — re-floored at every use, not just at m
     it("shrinks a key's reach the moment its minter is demoted, with the document never touched", async () => {
         const user = await createRealUser('demoted-minter');
         const userId = String(user._id);
-        await assignRole(userId, TEST_TENANT_ID, 'tenant', 'owner');
+        await assignRole(userId, TEST_TENANT_ID, 'tenant', 'admin');
 
-        const mintContext = contextFor(userId, permissionsOfRole('owner'));
+        const mintContext = contextFor(userId, permissionsOfRole('admin'));
         const minted = await mint(
             { name: 'about to be demoted', permissions: ['apikeys.any.read'] },
             mintContext

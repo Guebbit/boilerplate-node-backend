@@ -18,10 +18,10 @@ describe('grantAccess', () => {
     it("grants a shop role to an existing account's tenant scope", async () => {
         const user = await createUser({ email: 'owner@example.com' });
 
-        await grantAccess('owner@example.com', 'owner', 'tenant');
+        await grantAccess('owner@example.com', 'admin', 'tenant');
 
         const membership = await membershipIn(user.id, DEPLOYMENT_TENANT_ID, 'tenant');
-        expect(membership?.role).toBe('owner');
+        expect(membership?.role).toBe('admin');
     });
 
     it('grants a platform role with no shop, tenant-less by definition', async () => {
@@ -34,7 +34,7 @@ describe('grantAccess', () => {
     });
 
     it('refuses an email nobody signed up with', async () => {
-        await expect(grantAccess('nobody@example.com', 'owner', 'tenant')).rejects.toThrow(
+        await expect(grantAccess('nobody@example.com', 'admin', 'tenant')).rejects.toThrow(
             GrantAccessError
         );
     });

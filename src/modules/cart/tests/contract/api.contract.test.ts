@@ -417,7 +417,7 @@ describe('POST /cart/reorder/{orderId}', () => {
     });
 
     it("answers 404 for another user's order — no existence leak", async () => {
-        const owner = await createUser({ email: 'owner@example.com', username: 'owner' });
+        const owner = await createUser({ email: 'owner@example.com', username: 'admin' });
         const product = await createProduct();
         const order = await createOrder(owner, [toOrderItem(product, 1)]);
         const { bearer } = await authenticateAs('user');

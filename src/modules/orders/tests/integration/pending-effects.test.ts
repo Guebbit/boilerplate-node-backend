@@ -16,7 +16,7 @@ import { orderService } from '@modules/orders/services';
 import { ORDER_CANCELLED } from '../../events';
 import { orderRepository } from '../../repository';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
-import { asOwner } from '../../../../../tests/support/callers';
+import { asAdmin } from '../../../../../tests/support/callers';
 
 setupTestDb();
 
@@ -61,7 +61,7 @@ describe('cancelById — writing the intent down', () => {
         });
         const order = await seedOrder();
 
-        const result = await orderService.cancelById(String(order._id), asOwner());
+        const result = await orderService.cancelById(String(order._id), asAdmin());
 
         expect(result.success).toBe(true);
         const stored = await orderRepository.findById(String(order._id));
@@ -73,7 +73,7 @@ describe('cancelById — writing the intent down', () => {
         onDomainEvent(ORDER_CANCELLED, () => undefined);
         const order = await seedOrder();
 
-        await orderService.cancelById(String(order._id), asOwner());
+        await orderService.cancelById(String(order._id), asAdmin());
 
         // The happy path writes the marker and removes it milliseconds later; what a reader sees
         // afterwards is an order owing nothing.
@@ -86,7 +86,7 @@ describe('cancelById — writing the intent down', () => {
         onDomainEvent(ORDER_CANCELLED, () => undefined);
         const order = await seedOrder();
 
-        await orderService.cancelById(String(order._id), asOwner(), { refund: false });
+        await orderService.cancelById(String(order._id), asAdmin(), { refund: false });
 
         expect(await storedEffects(String(order._id))).toBeUndefined();
     });
@@ -98,12 +98,12 @@ describe('cancelById — writing the intent down', () => {
             throw new Error('payment provider unreachable');
         });
         const order = await seedOrder();
-        await orderService.cancelById(String(order._id), asOwner());
+        await orderService.cancelById(String(order._id), asAdmin());
 
         const stored = await orderRepository.findById(String(order._id));
 
         expect(stored?.pendingEffects).toEqual(['refund']);
-        expect(orderService.withActions(stored!, asOwner())).not.toHaveProperty('pendingEffects');
+        expect(orderService.withActions(stored!, asAdmin())).not.toHaveProperty('pendingEffects');
     });
 });
 
@@ -117,7 +117,7 @@ describe('retryPendingEffects', () => {
             return undefined;
         });
         const order = await seedOrder();
-        await orderService.cancelById(String(order._id), asOwner());
+        await orderService.cancelById(String(order._id), asAdmin());
         expect(await storedEffects(String(order._id))).toEqual(['refund']);
 
         const settled = await orderService.retryPendingEffects();
@@ -135,7 +135,7 @@ describe('retryPendingEffects', () => {
             return undefined;
         });
         const order = await seedOrder();
-        await orderService.cancelById(String(order._id), asOwner());
+        await orderService.cancelById(String(order._id), asAdmin());
         await orderService.retryPendingEffects();
 
         const second = await orderService.retryPendingEffects();
@@ -152,7 +152,7 @@ describe('retryPendingEffects', () => {
             throw new Error('payment provider unreachable');
         });
         const order = await seedOrder();
-        await orderService.cancelById(String(order._id), asOwner());
+        await orderService.cancelById(String(order._id), asAdmin());
 
         const settled = await orderService.retryPendingEffects();
 
@@ -169,7 +169,7 @@ describe('retryPendingEffects', () => {
         // One cancelled cleanly, one never cancelled at all.
         const settledOrder = await seedOrder();
         await seedOrder();
-        await orderService.cancelById(String(settledOrder._id), asOwner());
+        await orderService.cancelById(String(settledOrder._id), asAdmin());
         announcements.length = 0;
 
         expect(await orderService.retryPendingEffects()).toBe(0);
@@ -183,7 +183,7 @@ describe('retryPendingEffects', () => {
             throw new Error('payment provider unreachable');
         });
         const order = await seedOrder();
-        await orderService.cancelById(String(order._id), asOwner());
+        await orderService.cancelById(String(order._id), asAdmin());
 
         expect(await orderService.retryPendingEffects()).toBe(0);
         // Still owed — deferred, not discharged.

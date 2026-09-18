@@ -101,14 +101,14 @@ const values: ValueSources = {
 
     /*
      * Bodies a schema cannot produce correctly on its own. Only two, and both for the same reason:
-     * the credentials have to be the OWNER's. A login that returns a narrower token makes every
+     * the credentials have to be the ADMIN's. A login that returns a narrower token makes every
      * admin-only request in the collection fail with a 403, and the first thing anyone would do
      * with the collection is log in.
      */
     byOperation: {
         'POST /account/login': {
-            email: SUBJECTS.owner.email,
-            password: SUBJECTS.owner.password
+            email: SUBJECTS.admin.email,
+            password: SUBJECTS.admin.password
         },
         'POST /account/signup': {
             username: 'new-shopper',
@@ -130,7 +130,7 @@ const values: ValueSources = {
         if (template.startsWith('/products')) return SUBJECTS.product.id;
         if (template.startsWith('/orders')) return ORDER_ID_VARIABLE;
         if (template.startsWith('/users')) return SUBJECTS.user.id;
-        return SUBJECTS.owner.id;
+        return SUBJECTS.admin.id;
     },
 
     /*
@@ -139,9 +139,9 @@ const values: ValueSources = {
      * copies drift — the whole reason these are read from there rather than retyped.
      */
     tokens: {
-        seedOwnerEmail: SUBJECTS.owner.email,
-        seedOwnerPassword: SUBJECTS.owner.password,
-        seedOwnerId: SUBJECTS.owner.id,
+        seedAdminEmail: SUBJECTS.admin.email,
+        seedAdminPassword: SUBJECTS.admin.password,
+        seedAdminId: SUBJECTS.admin.id,
         seedUserEmail: SUBJECTS.user.email,
         seedUserPassword: SUBJECTS.user.password,
         seedUserId: SUBJECTS.user.id,

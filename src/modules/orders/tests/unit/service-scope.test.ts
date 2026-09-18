@@ -19,7 +19,7 @@
 
 import { Types } from 'mongoose';
 import { orderService } from '../../services';
-import { asCustomer, asOwner } from '../../../../../tests/support/callers';
+import { asCustomer, asAdmin } from '../../../../../tests/support/callers';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 
@@ -28,7 +28,7 @@ const MATCHES_NOTHING = { $expr: { $eq: [0, 1] } };
 
 describe('orderService.callerScope', () => {
     it('applies no restriction for a role that reads everything', () => {
-        expect(orderService.callerScope(asOwner(USER_ID))).toEqual({});
+        expect(orderService.callerScope(asAdmin(USER_ID))).toEqual({});
     });
 
     it('restricts a customer to their own userId', () => {
@@ -45,7 +45,7 @@ describe('orderService.callerScope', () => {
     });
 
     it('lets a role that reads everything see soft-deleted orders', () => {
-        expect(orderService.callerScope(asOwner(USER_ID))).not.toHaveProperty('deletedAt');
+        expect(orderService.callerScope(asAdmin(USER_ID))).not.toHaveProperty('deletedAt');
     });
 
     it('matches nothing when there is no auth context at all', () => {

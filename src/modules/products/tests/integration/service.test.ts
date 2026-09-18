@@ -24,7 +24,7 @@ import deliveryModule from '@modules/delivery/module';
 import accountModule from '@modules/account/module';
 import usersModule from '@modules/users/module';
 import ordersModule from '@modules/orders/module';
-import { asCustomer, asOwner } from '../../../../../tests/support/callers';
+import { asCustomer, asAdmin } from '../../../../../tests/support/callers';
 
 /**
  * Mock the image store, not the filesystem underneath it.
@@ -52,7 +52,7 @@ afterEach(() => {
  * alone, so a rule that starts distinguishing them fails a case rather than passing silently. */
 const GUEST: Caller | undefined = undefined;
 const LOGGED = asCustomer('507f1f77bcf86cd799439011');
-const ADMIN = asOwner('507f1f77bcf86cd799439012');
+const ADMIN = asAdmin('507f1f77bcf86cd799439012');
 
 const titlesOf = (items: ProductDocument[]): string[] => items.map(({ title }) => title);
 

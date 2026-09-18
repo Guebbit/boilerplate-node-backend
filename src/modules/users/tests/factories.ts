@@ -62,7 +62,7 @@ export const createUser = (overrides: UserOverrides = {}): Promise<UserDocument>
  */
 export const createOwnerUser = (overrides: UserOverrides = {}): Promise<UserDocument> =>
     createUser({
-        role: 'owner',
+        role: 'admin',
         email: 'owner@example.com',
         username: 'owneruser',
         ...overrides

@@ -41,7 +41,7 @@ describe('GET /api-keys', () => {
     });
 
     it('lists an owner’s own credentials, never a secret', async () => {
-        const { bearer } = await authenticateAsRole('owner');
+        const { bearer } = await authenticateAsRole('admin');
         await api()
             .post('/api-keys')
             .set('Authorization', bearer)
@@ -60,7 +60,7 @@ describe('GET /api-keys', () => {
 
 describe('POST /api-keys', () => {
     it('mints a credential and returns its one-time secret', async () => {
-        const { bearer } = await authenticateAsRole('owner');
+        const { bearer } = await authenticateAsRole('admin');
 
         const response = await api()
             .post('/api-keys')
@@ -75,9 +75,9 @@ describe('POST /api-keys', () => {
     });
 
     it('422s a permission the caller does not hold', async () => {
-        const { bearer } = await authenticateAsRole('owner');
+        const { bearer } = await authenticateAsRole('admin');
 
-        // Owner is unrestricted in TENANT scope, not platform scope — this asks for a platform
+        // Admin is unrestricted in TENANT scope, not platform scope — this asks for a platform
         // key, which floors it exactly the way a permission it genuinely lacks would.
         const response = await api()
             .post('/api-keys')
@@ -89,7 +89,7 @@ describe('POST /api-keys', () => {
     });
 
     it('422s an empty permissions list', async () => {
-        const { bearer } = await authenticateAsRole('owner');
+        const { bearer } = await authenticateAsRole('admin');
 
         const response = await api()
             .post('/api-keys')
@@ -115,7 +115,7 @@ describe('POST /api-keys', () => {
 
 describe('DELETE /api-keys/:id', () => {
     it('revokes a credential', async () => {
-        const { bearer } = await authenticateAsRole('owner');
+        const { bearer } = await authenticateAsRole('admin');
         const created = await api()
             .post('/api-keys')
             .set('Authorization', bearer)
@@ -130,7 +130,7 @@ describe('DELETE /api-keys/:id', () => {
     });
 
     it('404s an id from outside this admin’s reach', async () => {
-        const { bearer } = await authenticateAsRole('owner');
+        const { bearer } = await authenticateAsRole('admin');
 
         const response = await api()
             .delete('/api-keys/000000000000000000000000')

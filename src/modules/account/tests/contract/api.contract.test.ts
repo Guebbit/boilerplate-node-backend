@@ -503,7 +503,7 @@ describe('DELETE /account/sessions/{sessionId}', () => {
     });
 
     it("matches the error contract for another user's session id", async () => {
-        const owner = await loginWithCookie({ email: 'owner@example.com', username: 'owner' });
+        const owner = await loginWithCookie({ email: 'owner@example.com', username: 'admin' });
         const ownerListing = await api()
             .get('/account/sessions')
             .set('Authorization', owner.bearer);

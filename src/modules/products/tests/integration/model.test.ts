@@ -9,7 +9,7 @@ import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct } from '@modules/products/tests/factories';
 import * as productService from '@modules/products/service';
-import { asOwner } from '../../../../../tests/support/callers';
+import { asAdmin } from '../../../../../tests/support/callers';
 
 setupTestDb();
 
@@ -27,7 +27,7 @@ describe('product serialization', () => {
         const product = await createProduct({ title: 'Lookup Product', active: true });
         const found = await productService.getById(
             product._id.toString(),
-            productService.callerScope(asOwner())
+            productService.callerScope(asAdmin())
         );
 
         // Already the wire shape, not a hydrated document — `getById` runs `.toJSON()` itself
@@ -42,7 +42,7 @@ describe('product serialization', () => {
 
     it('normalizes a lean list via productService.search', async () => {
         await createProduct({ title: 'Listed Product', active: true });
-        const { items } = await productService.search({}, productService.callerScope(asOwner()));
+        const { items } = await productService.search({}, productService.callerScope(asAdmin()));
 
         expect(items).toHaveLength(1);
         const item = asStub<Record<string, unknown>>(items[0]);

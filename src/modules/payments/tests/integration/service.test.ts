@@ -37,7 +37,7 @@ import accountModule from '@modules/account/module';
 import cartModule from '@modules/cart/module';
 import deliveryModule from '@modules/delivery/module';
 import type { ResponseReject } from '@infrastructure/http/response';
-import { asCustomer, asOwner } from '../../../../../tests/support/callers';
+import { asCustomer, asAdmin } from '../../../../../tests/support/callers';
 
 setupTestDb();
 
@@ -685,7 +685,7 @@ describe('refundByOrder', () => {
         // The whole point of the standalone action: a goodwill refund is not a cancellation.
         const { order } = await paidOrder();
 
-        const result = await refundByOrder(String(order._id), asOwner(), testCallerContext);
+        const result = await refundByOrder(String(order._id), asAdmin(), testCallerContext);
 
         expect(result.success).toBe(true);
         const payment = await paymentRepository.findByOrderId(String(order._id));
@@ -696,9 +696,9 @@ describe('refundByOrder', () => {
 
     it('refuses the second attempt with 409 rather than paying twice', async () => {
         const { order } = await paidOrder();
-        await refundByOrder(String(order._id), asOwner(), testCallerContext);
+        await refundByOrder(String(order._id), asAdmin(), testCallerContext);
 
-        const result = await refundByOrder(String(order._id), asOwner(), testCallerContext);
+        const result = await refundByOrder(String(order._id), asAdmin(), testCallerContext);
 
         expect(result.success).toBe(false);
         expect(asReject(result).status).toBe(409);
@@ -709,7 +709,7 @@ describe('refundByOrder', () => {
         const { user, order } = await orderFor();
         await createIntent(String(order._id), auth(user));
 
-        const result = await refundByOrder(String(order._id), asOwner(), testCallerContext);
+        const result = await refundByOrder(String(order._id), asAdmin(), testCallerContext);
 
         expect(asReject(result).status).toBe(409);
     });
@@ -717,7 +717,7 @@ describe('refundByOrder', () => {
     it('answers 404 when the order never had a payment', async () => {
         const { order } = await orderFor();
 
-        const result = await refundByOrder(String(order._id), asOwner(), testCallerContext);
+        const result = await refundByOrder(String(order._id), asAdmin(), testCallerContext);
 
         expect(asReject(result).status).toBe(404);
     });
@@ -726,7 +726,7 @@ describe('refundByOrder', () => {
         const refundSpy = jest.spyOn(fakePaymentProvider, 'refund');
         const { order } = await paidOrder();
 
-        await refundByOrder(String(order._id), asOwner(), testCallerContext);
+        await refundByOrder(String(order._id), asAdmin(), testCallerContext);
 
         expect(refundSpy).toHaveBeenCalledTimes(1);
         refundSpy.mockRestore();
@@ -882,9 +882,9 @@ describe('getForOrder — what the caller may do', () => {
             testCallerContext
         );
 
-        const before = await getForOrder(String(order._id), asOwner());
-        await refundByOrder(String(order._id), asOwner(), testCallerContext);
-        const after = await getForOrder(String(order._id), asOwner());
+        const before = await getForOrder(String(order._id), asAdmin());
+        await refundByOrder(String(order._id), asAdmin(), testCallerContext);
+        const after = await getForOrder(String(order._id), asAdmin());
 
         expect((before as { data?: Record<string, unknown> }).data?.actions).toMatchObject({
             refund: true
@@ -930,7 +930,7 @@ describe('getForOrder — what the caller may do', () => {
         await createIntent(String(order._id), auth(user));
         await orderService.cancelById(String(order._id), auth(user));
 
-        const result = await getForOrder(String(order._id), asOwner());
+        const result = await getForOrder(String(order._id), asAdmin());
 
         expect((result as { data?: Record<string, unknown> }).data?.actions).toMatchObject({
             pay: false

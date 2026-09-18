@@ -68,7 +68,7 @@ export const SEED_MODERATOR_PASSWORD =
 
 /** The logins for the demo accounts. */
 export const seedCredentials = {
-    owner: { email: SEED_OWNER_EMAIL, password: SEED_OWNER_PASSWORD },
+    admin: { email: SEED_OWNER_EMAIL, password: SEED_OWNER_PASSWORD },
     user: { email: SEED_USER_EMAIL, password: SEED_USER_PASSWORD },
     editor: { email: SEED_EDITOR_EMAIL, password: SEED_EDITOR_PASSWORD },
     moderator: { email: SEED_MODERATOR_EMAIL, password: SEED_MODERATOR_PASSWORD }
@@ -101,7 +101,7 @@ export const seedAccessModel = (): Promise<void> =>
     bootstrapAccessModel('The Demo Shop')
         .then((tenant) =>
             Promise.all([
-                assignRole(SEED_OWNER_ID, String(tenant._id), 'tenant', 'owner'),
+                assignRole(SEED_OWNER_ID, String(tenant._id), 'tenant', 'admin'),
                 assignRole(SEED_OWNER_ID, null, 'platform', 'operator'),
                 assignRole(SEED_USER_ID, String(tenant._id), 'tenant', 'customer'),
                 assignRole(SEED_EDITOR_ID, String(tenant._id), 'tenant', 'editor'),

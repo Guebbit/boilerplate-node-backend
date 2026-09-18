@@ -447,7 +447,7 @@ describe('POST /payments/order/{orderId}/refund', () => {
 
 describe('POST /payments/order/{orderId}/offline', () => {
     it('matches the contract for recording money by hand', async () => {
-        const { bearer: adminBearer } = await authenticateAs('owner');
+        const { bearer: adminBearer } = await authenticateAs('admin');
         const { order } = await authenticateWithOrder();
 
         const response = await api()
@@ -475,7 +475,7 @@ describe('POST /payments/order/{orderId}/offline', () => {
     });
 
     it('matches the error contract for an order that does not exist', async () => {
-        const { bearer } = await authenticateAs('owner');
+        const { bearer } = await authenticateAs('admin');
 
         const response = await api()
             .post(`/payments/order/${MISSING_ID}/offline`)
@@ -487,7 +487,7 @@ describe('POST /payments/order/{orderId}/offline', () => {
     });
 
     it('matches the error contract for a method the contract does not allow', async () => {
-        const { bearer } = await authenticateAs('owner');
+        const { bearer } = await authenticateAs('admin');
         const { order } = await authenticateWithOrder();
 
         const response = await api()
@@ -500,7 +500,7 @@ describe('POST /payments/order/{orderId}/offline', () => {
     });
 
     it('matches the error contract for an order already paid', async () => {
-        const { bearer } = await authenticateAs('owner');
+        const { bearer } = await authenticateAs('admin');
         const { order } = await authenticateWithOrder();
         await api()
             .post(`/payments/order/${String(order._id)}/offline`)
@@ -520,7 +520,7 @@ describe('POST /payments/order/{orderId}/offline', () => {
 
 describe('GET /payments/order-by-reference', () => {
     it('matches the contract for the order a reference names', async () => {
-        const { bearer } = await authenticateAs('owner');
+        const { bearer } = await authenticateAs('admin');
         const { order, reference } = await transferOrder();
 
         const response = await api()
@@ -534,7 +534,7 @@ describe('GET /payments/order-by-reference', () => {
     });
 
     it('matches the error contract for a reference that fails its check digits', async () => {
-        const { bearer } = await authenticateAs('owner');
+        const { bearer } = await authenticateAs('admin');
         const { reference } = await transferOrder();
         const lastChar = reference.at(-1)!;
         const typo = `${reference.slice(0, -1)}${lastChar === '0' ? '1' : '0'}`;
@@ -561,7 +561,7 @@ describe('GET /payments/order-by-reference', () => {
     });
 
     it('matches the error contract for a request that names no reference at all', async () => {
-        const { bearer } = await authenticateAs('owner');
+        const { bearer } = await authenticateAs('admin');
 
         const response = await api()
             .get('/payments/order-by-reference')

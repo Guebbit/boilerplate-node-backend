@@ -82,7 +82,7 @@ describe('writing a product through a multipart body', () => {
     afterEach(emptyFileSandbox);
 
     it('creates a product, decoding the string-transported price', async () => {
-        const { bearer } = await authenticateAs('owner');
+        const { bearer } = await authenticateAs('admin');
 
         const response = await api()
             .post('/products')
@@ -110,7 +110,7 @@ describe('writing a product through a multipart body', () => {
     });
 
     it('updates a product, decoding the string-transported price', async () => {
-        const { bearer } = await authenticateAs('owner');
+        const { bearer } = await authenticateAs('admin');
 
         const created = await api()
             .post('/products')
@@ -132,7 +132,7 @@ describe('writing a product through a multipart body', () => {
     });
 
     it('decodes the boolean alongside the number', async () => {
-        const { bearer } = await authenticateAs('owner');
+        const { bearer } = await authenticateAs('admin');
 
         const response = await api()
             .post('/products')
@@ -152,7 +152,7 @@ describe('writing a product through a multipart body', () => {
     });
 
     it('defaults active to true when the form omits it', async () => {
-        const { bearer } = await authenticateAs('owner');
+        const { bearer } = await authenticateAs('admin');
 
         const response = await api()
             .post('/products')
@@ -169,7 +169,7 @@ describe('writing a product through a multipart body', () => {
     });
 
     it('still rejects a price that is not a number at all', async () => {
-        const { bearer } = await authenticateAs('owner');
+        const { bearer } = await authenticateAs('admin');
 
         const response = await api()
             .post('/products')

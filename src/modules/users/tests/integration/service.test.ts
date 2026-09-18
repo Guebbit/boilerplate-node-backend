@@ -101,7 +101,7 @@ describe('userService.validateData', () => {
         expect(errors.length).toBeGreaterThan(0);
     });
 
-    it.each(['owner', 'customer', 'manager'])('accepts a declared role name (%s)', (role) => {
+    it.each(['admin', 'customer', 'manager'])('accepts a declared role name (%s)', (role) => {
         const errors = userService.validateData({
             email: 'valid@example.com',
             username: 'validuser',
@@ -309,12 +309,12 @@ describe('userService.create', () => {
                 email: 'superadmin@example.com',
                 username: 'superadmin',
                 password: PLAIN_PASSWORD,
-                role: 'owner'
+                role: 'admin'
             },
-            callerContextAs('owner')
+            callerContextAs('admin')
         );
 
-        expect(user.role).toBe('owner');
+        expect(user.role).toBe('admin');
     });
 
     describe('with no password', () => {
@@ -401,15 +401,15 @@ describe('userService.updateById', () => {
             id,
             {
                 username: 'new-name',
-                role: 'owner'
+                role: 'admin'
             },
-            callerContextAs('owner')
+            callerContextAs('admin')
         );
 
         expect(result.success).toBe(true);
         const updated = (result as { data: UserDocument }).data;
         expect(updated.username).toBe('new-name');
-        expect(updated.role).toBe('owner');
+        expect(updated.role).toBe('admin');
     });
 
     it('changes the password when a non-empty password is supplied', async () => {
@@ -667,8 +667,8 @@ describe('userService.remove', () => {
         // customer/other roles above) — and `assertNotLastAdministrator` counts administrators
         // through the stored ROLE rows, so those need seeding too, not just the membership.
         await seedPresetRoles();
-        const user = await createUser({ role: 'owner' });
-        await assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'owner');
+        const user = await createUser({ role: 'admin' });
+        await assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'admin');
 
         const result = await userService.remove(user, true);
 

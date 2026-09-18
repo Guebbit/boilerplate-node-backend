@@ -61,13 +61,13 @@ export const SHOP_SUBJECTS: Readonly<Record<string, string>> = {
 };
 
 /**
- * The owner and the ordinary user — id, login and, where seeded, one representative row — the pair
+ * The admin and the ordinary user — id, login and, where seeded, one representative row — the pair
  * every generated example that needs a *working* request draws from. Re-exported from
  * `@scenarios/accounts` rather than duplicated: that file is the one place credentials must stay
  * fixed against the paired frontend's own `.env` copy.
  */
 export const SUBJECTS = {
-    owner: { id: SEED_OWNER_ID, email: SEED_OWNER_EMAIL, password: SEED_OWNER_PASSWORD },
+    admin: { id: SEED_OWNER_ID, email: SEED_OWNER_EMAIL, password: SEED_OWNER_PASSWORD },
     user: { id: SEED_USER_ID, email: SEED_USER_EMAIL, password: SEED_USER_PASSWORD },
     product: {
         id: SEED_PRODUCT_IDS.dogFoodStandard,

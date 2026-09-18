@@ -166,9 +166,9 @@ const CUSTOMER_ORDERS: Line[][] = [
  * would be gone by the time anyone looked. Only four people have one — absence and an empty cart
  * are the same state, so "has never added anything" is most of the customer base's fixture.
  */
-const CARTS: [who: 'owner' | keyof typeof SEED_CUSTOMER_IDS, lines: Line[]][] = [
+const CARTS: [who: 'admin' | keyof typeof SEED_CUSTOMER_IDS, lines: Line[]][] = [
     [
-        'owner',
+        'admin',
         [
             { productId: SEED_PRODUCT_IDS.dogFoodStandard, quantity: 2 },
             { productId: SEED_PRODUCT_IDS.dogBedPremium, quantity: 3 }
@@ -327,11 +327,11 @@ const signOutEveryone = (callers: Caller[]): Promise<void> =>
  *
  * @param base - every filler shopper, as {@link signInCustomerBase} signed them in
  * @param owner - the shop owner's own caller
- * @param who - a `SEED_CUSTOMER_IDS` key, or `'owner'`
+ * @param who - a `SEED_CUSTOMER_IDS` key, or `'admin'`
  * @throws {Error} when nothing signed in under that name
  */
 const shopperFor = (base: ReadonlyMap<string, Caller>, owner: Caller, who: string): Caller => {
-    const shopper = who === 'owner' ? owner : base.get(who);
+    const shopper = who === 'admin' ? owner : base.get(who);
     if (!shopper) throw new Error(`shop history: no signed-in caller for "${who}"`);
 
     return shopper;
