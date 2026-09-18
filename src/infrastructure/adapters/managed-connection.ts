@@ -11,7 +11,14 @@
  */
 
 import { logger } from '@infrastructure/adapters/logger';
-import type { DependencyStatus } from '@infrastructure/observability/dependency-health';
+
+/**
+ * One dependency's state, in the only four words `GET /observability/health` uses. `disabled` is
+ * not a failure and never degrades the service — a deployment without Redis or RabbitMQ is
+ * supported, and reporting it as broken would train readers to ignore the field. Mongo has no
+ * `disabled` (it has no `isEnabled` concept — connecting is always attempted).
+ */
+export type DependencyStatus = 'ready' | 'connecting' | 'unavailable' | 'disabled';
 
 /** What an adapter has to supply: how to open, how to check, how to close. */
 export interface ManagedConnectionOptions<THandle> {

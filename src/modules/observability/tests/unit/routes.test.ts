@@ -12,7 +12,7 @@ import type { Request, Response } from 'express';
 import { routeSignatures, guardsOn, routeTable } from '@tests/routes';
 import { asStub } from '@tests/stub';
 
-jest.mock('@infrastructure/observability/stream', () => ({
+jest.mock('@modules/observability/stream', () => ({
     __esModule: true,
     streamObservabilityMetrics: jest.fn()
 }));
@@ -32,8 +32,8 @@ jest.mock('@kernel/middlewares/authorizations', () => ({
  * it real also means the content type asserted below is the one the client library actually
  * negotiates, rather than a string this test invented and then agreed with itself about.
  */
-jest.mock('@infrastructure/observability/metrics-http', () => ({
-    ...jest.requireActual('@infrastructure/observability/metrics-http'),
+jest.mock('@infrastructure/observability/metrics-registry', () => ({
+    ...jest.requireActual('@infrastructure/observability/metrics-registry'),
     __esModule: true,
     getPrometheusMetrics: jest.fn()
 }));
@@ -44,9 +44,12 @@ jest.mock('@infrastructure/adapters/logger', () => ({
 }));
 
 import { router } from '@modules/observability/routes';
-import { streamObservabilityMetrics } from '@infrastructure/observability/stream';
+import { streamObservabilityMetrics } from '@modules/observability/stream';
 import { stillHoldsKeyViaCookie } from '@kernel/middlewares/authorizations';
-import { getPrometheusMetrics, metricsRegistry } from '@infrastructure/observability/metrics-http';
+import {
+    getPrometheusMetrics,
+    metricsRegistry
+} from '@infrastructure/observability/metrics-registry';
 import { logger } from '@infrastructure/adapters/logger';
 
 /** The last handler mounted on a route — the inline one, past its guard. */

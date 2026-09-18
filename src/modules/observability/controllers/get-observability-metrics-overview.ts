@@ -12,13 +12,10 @@ import type { Request, Response } from 'express';
 import type { ObservabilityMetricsSummary } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { catchAs } from '@infrastructure/http/controller';
-import {
-    getHttpRequestCounters,
-    httpInflightRequests,
-    getLatencyPercentiles,
-    metricsRegistry
-} from '@infrastructure/observability/metrics-http';
-import { processSnapshot } from '@infrastructure/observability/process-snapshot';
+import { httpInflightRequests } from '@infrastructure/observability/metrics-http';
+import { metricsRegistry } from '@infrastructure/observability/metrics-registry';
+import { getHttpRequestCounters, getLatencyPercentiles } from '../metrics';
+import { processSnapshot } from '../process-snapshot';
 
 /** One sample of a prom-client counter. */
 interface MetricSample {

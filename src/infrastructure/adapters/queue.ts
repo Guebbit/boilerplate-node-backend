@@ -27,7 +27,7 @@ import amqplib, {
 } from 'amqplib';
 import type { ZodType } from 'zod';
 import { logger } from '@infrastructure/adapters/logger';
-import type { DependencyStatus } from '@infrastructure/observability/dependency-health';
+import type { DependencyStatus } from '@infrastructure/adapters/managed-connection';
 import { WORKER_CHANNELS } from '@types';
 import { environmentFlag } from '@infrastructure/runtime/environment';
 
@@ -186,7 +186,7 @@ const getChannel = (): Channel | undefined => {
 
 /**
  * What this adapter's connection is doing, for `GET /observability/health`. No I/O — see the
- * header of `infrastructure/observability/dependency-health.ts` for why a health endpoint never
+ * header of `modules/observability/dependency-health.ts` for why a health endpoint never
  * dials the broker; `ready`/`unavailable` cover every "not disabled" state, `connecting` included,
  * since amqplib's recovery makes no distinction visible from out here.
  */

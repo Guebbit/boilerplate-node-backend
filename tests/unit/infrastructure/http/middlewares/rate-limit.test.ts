@@ -1,52 +1,19 @@
 /**
  * `src/infrastructure/http/middlewares/rate-limit.ts` — the budgets no one module owns (the
- * global brake, the api-key budget, the upload budget) and the metrics scrape guard. Every other
- * module's own budgets are pinned in that module's own `tests/unit/rate-limits.test.ts` (e.g.
- * `src/modules/account/tests/unit/rate-limits.test.ts`); the
- * relationships BETWEEN a module's budget and this file's global one — "stays a small fraction of
- * the browsing budget" — are cross-cutting and live in
- * `tests/cross-cutting/rate-limit-budgets.test.ts`.
- *
- * `isMetricsScraper` is the substance here. It is the only credential check in the codebase that
- * does not go through the JWT middleware, because Prometheus cannot log in, and it protects an
- * endpoint whose body is a map of when the service is weakest. Three properties are asserted
- * separately because each one fails silently on its own:
- *
- *   - **deny by default.** With `NODE_METRICS_TOKEN` unset the endpoint must refuse, not open.
- *     An open metrics endpoint reached by forgetting an environment variable is the failure this
- *     branch exists to prevent, so it is pinned rather than left to the integration suite.
- *   - **the scheme is required.** A bare token in the header must not authenticate. Accepting one
- *     would mean the credential is read from a header shape no client should send, which is one
- *     more place for it to leak from.
- *   - **length mismatches must not throw.** `timingSafeEqual` raises on unequal lengths, so the
- *     lengths are folded into the boolean first. Remove that guard and every wrong-length token
- *     becomes a 500 — and a length oracle.
+ * global brake, the api-key budget, the upload budget). Every other module's own budgets are
+ * pinned in that module's own `tests/unit/rate-limits.test.ts` (e.g.
+ * `src/modules/account/tests/unit/rate-limits.test.ts`); the relationships BETWEEN a module's
+ * budget and this file's global one — "stays a small fraction of the browsing budget" — are
+ * cross-cutting and live in `tests/cross-cutting/rate-limit-budgets.test.ts`. The metrics scrape
+ * guard, `isMetricsScraper`, moved to `src/modules/observability` (`TIER_AUDIT_STRUCTURE.md` A4)
+ * and is pinned in that module's own `tests/unit/metrics-scraper.test.ts`.
  */
-import { asStub } from '@tests/stub';
-import type { Request } from 'express';
 import {
     DEFAULT_RATE_LIMIT_MAX,
     DEFAULT_RATE_LIMIT_WINDOW_MS,
     DEFAULT_API_KEY_RATE_LIMIT_MAX,
-    DEFAULT_UPLOAD_RATE_LIMIT_MAX,
-    isMetricsScraper
+    DEFAULT_UPLOAD_RATE_LIMIT_MAX
 } from '@infrastructure/http/middlewares/rate-limit';
-import { makeResponseStub } from '@tests/express';
-
-/** Captures the status/body pair `rejectResponse` writes, without an HTTP server. */
-
-const makeRequest = (authorization?: string) =>
-    asStub<Request>({
-        header: (name: string) =>
-            name.toLowerCase() === 'authorization' ? authorization : undefined
-    });
-
-const originalToken = process.env.NODE_METRICS_TOKEN;
-
-afterEach(() => {
-    if (originalToken === undefined) delete process.env.NODE_METRICS_TOKEN;
-    else process.env.NODE_METRICS_TOKEN = originalToken;
-});
 
 describe('rate limit defaults', () => {
     it('measures the browsing budget per minute', () => {
@@ -73,100 +40,3 @@ describe('rate limit defaults', () => {
  * through `express-rate-limit`'s middleware, which `no-restricted-imports` treats as an
  * integration concern: see `src/modules/feedback/tests/integration/submission-rate-limit.test.ts`.
  */
-
-describe('isMetricsScraper', () => {
-    it('refuses every request when no token is configured', () => {
-        delete process.env.NODE_METRICS_TOKEN;
-        const response = makeResponseStub();
-        const next = jest.fn();
-
-        isMetricsScraper(makeRequest('Bearer anything'), response, next);
-
-        expect(response.status).toHaveBeenCalledWith(503);
-        expect(next).not.toHaveBeenCalled();
-    });
-
-    it('admits a request carrying the exact token', () => {
-        process.env.NODE_METRICS_TOKEN = 'scrape-me';
-        const response = makeResponseStub();
-        const next = jest.fn();
-
-        isMetricsScraper(makeRequest('Bearer scrape-me'), response, next);
-
-        expect(next).toHaveBeenCalledTimes(1);
-        expect(response.status).not.toHaveBeenCalled();
-    });
-
-    it('rejects the right token sent without the Bearer scheme', () => {
-        process.env.NODE_METRICS_TOKEN = 'scrape-me';
-        const response = makeResponseStub();
-        const next = jest.fn();
-
-        isMetricsScraper(makeRequest('scrape-me'), response, next);
-
-        expect(response.status).toHaveBeenCalledWith(401);
-        expect(next).not.toHaveBeenCalled();
-    });
-
-    it('rejects a different scheme carrying the right value', () => {
-        process.env.NODE_METRICS_TOKEN = 'scrape-me';
-        const response = makeResponseStub();
-        const next = jest.fn();
-
-        isMetricsScraper(makeRequest('Basic scrape-me'), response, next);
-
-        expect(response.status).toHaveBeenCalledWith(401);
-        expect(next).not.toHaveBeenCalled();
-    });
-
-    it('rejects a missing Authorization header', () => {
-        process.env.NODE_METRICS_TOKEN = 'scrape-me';
-        const response = makeResponseStub();
-        const next = jest.fn();
-
-        isMetricsScraper(makeRequest(), response, next);
-
-        expect(response.status).toHaveBeenCalledWith(401);
-        expect(next).not.toHaveBeenCalled();
-    });
-
-    it('answers 401 rather than throwing when the token length differs', () => {
-        // `timingSafeEqual` throws on a length mismatch. Without the length comparison folded
-        // into `matches`, this case leaves the middleware as an unhandled throw — and the throw
-        // itself distinguishes a wrong-length token from a wrong-value one, which is the oracle.
-        process.env.NODE_METRICS_TOKEN = 'scrape-me';
-        const response = makeResponseStub();
-        const next = jest.fn();
-
-        expect(() => isMetricsScraper(makeRequest('Bearer short'), response, next)).not.toThrow();
-        expect(response.status).toHaveBeenCalledWith(401);
-        expect(next).not.toHaveBeenCalled();
-    });
-
-    it('rejects an equal-length token that differs in one byte', () => {
-        // Same length, so the comparison actually reaches `timingSafeEqual` rather than being
-        // short-circuited by the length guard — this is the case that proves the guard is not
-        // the only thing rejecting anything.
-        process.env.NODE_METRICS_TOKEN = 'scrape-me';
-        const response = makeResponseStub();
-        const next = jest.fn();
-
-        isMetricsScraper(makeRequest('Bearer scrape-mf'), response, next);
-
-        expect(response.status).toHaveBeenCalledWith(401);
-        expect(next).not.toHaveBeenCalled();
-    });
-
-    it('rejects an empty configured token as unconfigured', () => {
-        // `!expected` treats '' as unset, which is the safe reading: an empty string in the
-        // environment is a variable someone meant to fill in.
-        process.env.NODE_METRICS_TOKEN = '';
-        const response = makeResponseStub();
-        const next = jest.fn();
-
-        isMetricsScraper(makeRequest('Bearer '), response, next);
-
-        expect(response.status).toHaveBeenCalledWith(503);
-        expect(next).not.toHaveBeenCalled();
-    });
-});

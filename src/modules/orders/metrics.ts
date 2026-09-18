@@ -5,7 +5,7 @@
  */
 
 import { Counter } from 'prom-client';
-import { metricsRegistry } from '@infrastructure/observability/metrics-http';
+import { metricsRegistry } from '@infrastructure/observability/metrics-registry';
 
 /**
  * Admin-created orders.

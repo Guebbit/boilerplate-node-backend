@@ -5,7 +5,7 @@
  */
 
 import { Counter } from 'prom-client';
-import { metricsRegistry } from '@infrastructure/observability/metrics-http';
+import { metricsRegistry } from '@infrastructure/observability/metrics-registry';
 
 /**
  * Audit entries the compliance log recorded but the queryable trail did not.

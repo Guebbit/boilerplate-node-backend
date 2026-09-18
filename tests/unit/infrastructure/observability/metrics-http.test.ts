@@ -5,10 +5,9 @@ import {
     UNMATCHED_ROUTE,
     recordRequestMetric,
     incrementInflight,
-    decrementInflight,
-    getPrometheusMetrics,
-    percentileFromHistogramBuckets
+    decrementInflight
 } from '@infrastructure/observability/metrics-http';
+import { getPrometheusMetrics } from '@infrastructure/observability/metrics-registry';
 
 /** A request as Express leaves it once routing has run — which is when the label is read. */
 const routed = (baseUrl: string, path?: unknown) =>
@@ -87,34 +86,5 @@ describe('incrementInflight / decrementInflight', () => {
         decrementInflight();
         const metrics = await getPrometheusMetrics();
         expect(metrics).toContain('http_requests_in_flight');
-    });
-});
-
-describe('getPrometheusMetrics — standard families', () => {
-    it('includes process_uptime_seconds', async () => {
-        const metrics = await getPrometheusMetrics();
-        expect(metrics).toContain('# HELP process_uptime_seconds');
-    });
-
-    it('includes nodejs_eventloop_lag_seconds (prom-client default)', async () => {
-        const metrics = await getPrometheusMetrics();
-        expect(metrics).toContain('nodejs_eventloop_lag_seconds');
-    });
-});
-
-describe('percentileFromHistogramBuckets', () => {
-    it('returns 0 for empty histograms', () => {
-        expect(percentileFromHistogramBuckets([], 0, 0.95)).toBe(0);
-    });
-
-    it('picks first bucket whose cumulative count reaches percentile threshold', () => {
-        const buckets = [
-            { upperBound: 10, cumulativeCount: 2 },
-            { upperBound: 25, cumulativeCount: 5 },
-            { upperBound: 50, cumulativeCount: 9 }
-        ];
-
-        expect(percentileFromHistogramBuckets(buckets, 10, 0.5)).toBe(25);
-        expect(percentileFromHistogramBuckets(buckets, 10, 0.95)).toBe(50);
     });
 });

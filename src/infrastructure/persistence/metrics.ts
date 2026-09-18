@@ -5,7 +5,7 @@
  */
 
 import { Counter } from 'prom-client';
-import { metricsRegistry } from '@infrastructure/observability/metrics-http';
+import { metricsRegistry } from '@infrastructure/observability/metrics-registry';
 
 /** Every call `createRepository`'s factory methods make to Mongoose. */
 export const databaseQueriesTotal = new Counter({

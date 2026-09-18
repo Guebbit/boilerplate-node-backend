@@ -1,14 +1,14 @@
 /**
  * @module
  * Cache metrics (Prometheus). One counter, and it exists because a log line is not alertable.
- * See `metrics-http.ts` for why infrastructure registers its own metrics against the shared
- * registry.
+ * Registers against the shared registry the same way every module's own `metrics.ts` does — see
+ * `metrics-registry.ts`.
  *
  * See: docs/tools/prometheus.md
  */
 
 import { Counter } from 'prom-client';
-import { metricsRegistry } from './metrics-http';
+import { metricsRegistry } from './metrics-registry';
 
 /**
  * Invalidations that could not reach Redis, by tag.

@@ -10,7 +10,7 @@
 import { asStub } from '@tests/stub';
 import { getObservabilityMetricsOverview } from '@modules/observability/controllers/get-observability-metrics-overview';
 import { successResponse } from '@infrastructure/http/response';
-import { metricsRegistry } from '@infrastructure/observability/metrics-http';
+import { metricsRegistry } from '@infrastructure/observability/metrics-registry';
 
 /*
  * Loading the MANIFESTS, not the counters.

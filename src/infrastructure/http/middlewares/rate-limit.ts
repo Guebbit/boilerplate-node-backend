@@ -15,12 +15,9 @@
 
 import { createHash } from 'node:crypto';
 import { isIPv4 } from 'node:net';
-import type { NextFunction, Request, RequestHandler, Response } from 'express';
+import type { Request, RequestHandler, Response } from 'express';
 import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import type { RateLimitInfo } from 'express-rate-limit';
-import { constantTimeEqual } from '@infrastructure/security/constant-time';
-import { rejectResponse } from '@infrastructure/http/response';
-import { logger } from '@infrastructure/adapters/logger';
 import { t } from '@infrastructure/i18n';
 import {
     emitAuditEvent,
@@ -293,40 +290,3 @@ export const INFRASTRUCTURE_RATE_LIMITS: readonly RateLimitBudget[] = [
     API_KEY_RATE_LIMIT_BUDGET,
     UPLOAD_RATE_LIMIT_BUDGET
 ];
-
-/**
- * Guards the Prometheus scrape endpoint with a static bearer credential — Prometheus cannot hold a
- * session, so the bearer token the other observability routes check
- * `platform.observability.any.read` on is not available to it.
- *
- * DENY by default when `NODE_METRICS_TOKEN` is unset, and `constantTimeEqual` rather than `===`,
- * which would leak the token's prefix to anyone willing to measure.
- *
- * See: docs/tools/security.md#why-the-metrics-endpoint-has-its-own-credential
- */
-export const isMetricsScraper = (request: Request, response: Response, next: NextFunction) => {
-    const expected = process.env.NODE_METRICS_TOKEN;
-
-    if (!expected) {
-        logger.warn({
-            message:
-                'NODE_METRICS_TOKEN is not set — /observability/metrics is refusing every request.'
-        });
-        rejectResponse(response, 503, []);
-        return;
-    }
-
-    // The scheme is required, not stripped-if-present: a bare token would mean the credential is
-    // read from a header shape no client should be sending — one more way for it to leak.
-    const authorization = request.header('Authorization') ?? '';
-    const provided = authorization.startsWith('Bearer ')
-        ? authorization.slice('Bearer '.length)
-        : '';
-
-    if (!constantTimeEqual(expected, provided)) {
-        rejectResponse(response, 401, []);
-        return;
-    }
-
-    next();
-};

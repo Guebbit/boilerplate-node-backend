@@ -33,9 +33,13 @@ flowchart LR
 
 ## The story
 
-This module owns **URLs, not data**. Everything it serves beyond the audit read comes from
-`infrastructure/observability`, which measures the process rather than any domain — so it reads its
-own numbers off infrastructure and owns no collection at all. That is also why it has no `model.ts`
+This module owns **URLs, not data**. The readiness fold, job health, the process reader, the SSE
+hub and the scrape guard are its own files (`dependency-health.ts`, `job-health.ts`,
+`process-snapshot.ts`, `stream.ts`, `metrics-scraper.ts`) — only the shared Prometheus registry and
+the HTTP request counters stay in `infrastructure/observability`, since every module registers its
+own counters against that same registry (`metrics-registry.ts`, `metrics-http.ts`); this module's
+own `metrics.ts` turns those counters into the overview endpoint's and the SSE stream's numbers.
+Beyond the audit read this module owns no collection at all, which is also why it has no `model.ts`
 and no `repository.ts`.
 
 ::: tip The barrel has nothing to promise
@@ -64,21 +68,24 @@ one reading a collection at all.
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 28, 'rankSpacing': 60}}}%%
 flowchart LR
-    H["/health<br/><i>normal guard</i>"] --> K["infrastructure/observability<br/><i>measures the process, not a domain</i>"]
+    H["/health<br/><i>normal guard</i>"] --> K["this module's own files<br/><i>readiness, job health, process reader, the scrape guard</i>"]
     MO["/metrics overview<br/><i>normal guard</i>"] --> K
     SC["/metrics scrape<br/><i>static credential — a scraper has no session</i>"] --> K
     EV["/events · SSE<br/><i>cookie — EventSource cannot send a header</i>"] --> K
+    K --> R["infrastructure/observability<br/><i>the shared Prometheus registry and HTTP counters</i>"]
     AU["/audit<br/><i>normal guard</i>"] --> AL["audit-logs<br/><i>the one collection behind a route here</i>"]
     K --> AD["frontend admin"]
     AU --> AD
     EV --> RT["frontend realtime"]
 
     classDef route fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef own fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef infra fill:#ede9fe,stroke:#7c3aed,color:#111827;
     classDef peer fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef ui fill:#fce7f3,stroke:#db2777,color:#111827;
     class H,MO,SC,EV,AU route;
-    class K infra;
+    class K own;
+    class R infra;
     class AL peer;
     class AD,RT ui;
 ```

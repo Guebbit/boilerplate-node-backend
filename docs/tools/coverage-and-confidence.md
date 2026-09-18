@@ -222,8 +222,8 @@ it measures, and the two shapes fail differently:
   matching file separately, and Jest prints one failure per file, naming it.
 
 Only the second is a gate. Under the pooled form this repo passed a 70% floor on `src/middlewares/` <!-- doc-paths:ignore -->
-while `auth-jwt.ts`, `locale.ts` and `security.ts` each sat at 0% — and `security.ts` holds <!-- doc-paths:ignore -->
-`isMetricsScraper`, the credential check on the Prometheus endpoint.
+while `auth-jwt.ts`, `locale.ts` and `metrics-scraper.ts` each sat at 0% — and `metrics-scraper.ts` <!-- doc-paths:ignore -->
+holds `isMetricsScraper`, the credential check on the Prometheus endpoint.
 
 ### The three tiers a floor takes
 

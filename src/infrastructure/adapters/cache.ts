@@ -11,8 +11,10 @@
 // `RedisClientType` is the resulting client's type, needed for the generic below.
 import { createClient, type RedisClientType } from 'redis';
 import { logger } from '@infrastructure/adapters/logger';
-import { manageConnection } from '@infrastructure/adapters/managed-connection';
-import type { DependencyStatus } from '@infrastructure/observability/dependency-health';
+import {
+    manageConnection,
+    type DependencyStatus
+} from '@infrastructure/adapters/managed-connection';
 import { environmentFlag } from '@infrastructure/runtime/environment';
 
 /**
@@ -106,7 +108,7 @@ const cacheConnection = manageConnection<RedisClientType>({
  * What this adapter's connection is doing, for `GET /observability/health`.
  *
  * Reads memoised state rather than pinging, so health reports what the next lookup will actually
- * do — see the header of `infrastructure/observability/dependency-health.ts` for why a health
+ * do — see the header of `modules/observability/dependency-health.ts` for why a health
  * endpoint does no I/O.
  */
 export const cacheState = (): DependencyStatus => cacheConnection.state();

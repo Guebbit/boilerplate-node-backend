@@ -3,14 +3,14 @@
  * Domain gauges this module owns — see `modules/account/metrics.ts` for why they live in the
  * module rather than in `infrastructure`, and how the overview endpoint reads them without
  * importing here. Both are bound to unused underscore-prefixed variables, the same way
- * `metrics-http.ts` does it: registering themselves is the constructor's whole job, and nothing
- * reads the handles.
+ * `metrics-registry.ts`'s two process gauges do it: registering themselves is the constructor's
+ * whole job, and nothing reads the handles.
  *
  * See: docs/modules/inventory.md
  */
 
 import { Gauge } from 'prom-client';
-import { metricsRegistry } from '@infrastructure/observability/metrics-http';
+import { metricsRegistry } from '@infrastructure/observability/metrics-registry';
 import { productService } from '@modules/products';
 import { lowStockThreshold } from './config';
 

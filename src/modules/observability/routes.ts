@@ -16,12 +16,15 @@ import {
     requirePermissionViaCookie,
     stillHoldsKeyViaCookie
 } from '@kernel/middlewares/authorizations';
-import { isMetricsScraper } from '@infrastructure/http/middlewares/rate-limit';
+import { isMetricsScraper } from './metrics-scraper';
 import { getObservabilityHealth } from './controllers/get-observability-health';
 import { getObservabilityMetricsOverview } from './controllers/get-observability-metrics-overview';
 import { getObservabilityAuditLogs } from './controllers/get-observability-audit';
-import { getPrometheusMetrics, metricsRegistry } from '@infrastructure/observability/metrics-http';
-import { streamObservabilityMetrics } from '@infrastructure/observability/stream';
+import {
+    getPrometheusMetrics,
+    metricsRegistry
+} from '@infrastructure/observability/metrics-registry';
+import { streamObservabilityMetrics } from './stream';
 import { logger } from '@infrastructure/adapters/logger';
 
 /** Express router for observability endpoints mounted at /observability. */

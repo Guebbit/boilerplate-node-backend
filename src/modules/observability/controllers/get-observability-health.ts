@@ -14,9 +14,9 @@ import os from 'node:os';
 import { successResponse } from '@infrastructure/http/response';
 import { catchAs } from '@infrastructure/http/controller';
 import { resolveAnalyticsProvider } from '@infrastructure/observability/analytics';
-import { dependencyHealth, overallStatus } from '@infrastructure/observability/dependency-health';
-import { jobHealth } from '@infrastructure/observability/job-health';
-import { processSnapshot } from '@infrastructure/observability/process-snapshot';
+import { dependencyHealth, overallStatus } from '../dependency-health';
+import { jobHealth } from '../job-health';
+import { processSnapshot } from '../process-snapshot';
 
 /**
  * GET /observability/health

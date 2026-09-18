@@ -215,7 +215,7 @@ Every channel here describes something that actually crosses a process boundary 
 
 ## Realtime event names
 
-All SSE and queue names used at runtime come from the `OBSERVABILITY_CHANNELS` and `WORKER_CHANNELS` constants generated into `src/types/asyncapi.generated.ts` — the SSE frame names in `src/infrastructure/observability/stream.ts`, the queue names in `src/infrastructure/adapters/queue.ts`.  
+All SSE and queue names used at runtime come from the `OBSERVABILITY_CHANNELS` and `WORKER_CHANNELS` constants generated into `src/types/asyncapi.generated.ts` — the SSE frame names in `src/modules/observability/stream.ts`, the queue names in `src/infrastructure/adapters/queue.ts`.  
 There are no handwritten duplicate string constants — `asyncapi.yaml` is the single source of truth.
 
 ## CI enforcement
