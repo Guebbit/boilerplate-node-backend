@@ -11,7 +11,6 @@
 import { auditLogger } from '@infrastructure/adapters/logger';
 import { getActiveSpanContext } from '@infrastructure/observability/tracer';
 import type { CallerContext } from '@types';
-import { wildcardKeyFor } from '@infrastructure/authorization/keys';
 
 /**
  * Action constants — domain.resource.verb dot-notation, so a log backend can filter by prefix
@@ -194,23 +193,23 @@ export const extractRequestContext = (
 
 /**
  * Resolve actor role from the caller context.
+ *
+ * `admin`/`user`/`anonymous` used to collapse into three cases here, the first decided by
+ * "holds the scope wildcard" — a fact `infrastructure` could ask of the caller's own permission
+ * list. There is no wildcard any more: "unrestricted" now means "holds every key this scope
+ * declares", which needs the full declared-key set, and that set is `kernel`-owned. Infrastructure
+ * may not reach the kernel (`kernel/permissions.ts` is exactly where that fact would come from),
+ * so this can only tell an authenticated caller from an anonymous one. A call site that already
+ * knows it is auditing an unrestricted actor's action — `account`'s login/profile/verification
+ * flows, which import `kernel/permissions.ts`'s `isUnrestrictedRole` freely — passes `actor_role`
+ * explicitly and never reaches this default.
  * @param context - the caller context built once in the controller
  * @returns the actor's role
  */
 const resolveActorRole = (context: CallerContext): AuditEvent['actor_role'] => {
-    /*
-     * `admin` here is the trail's word for UNRESTRICTED, not a role name. Roles are data a
-     * deployment may rename or add to; the audit vocabulary is closed and its values outlive
-     * them, so the test is "holds the scope's wildcard" rather than "is called owner".
-     *
-     * Order matters: most-privileged first, since an unrestricted caller also has an id.
-     */
-    if (context.caller.permissions.includes(wildcardKeyFor(context.caller.scope))) return 'admin';
-    // A caller id present without the wildcard → an authenticated regular user.
-    if (context.caller.id) return 'user';
     // No caller id at all: an unauthenticated request. Still audited — failed logins and
     // blocked access attempts are exactly the events worth keeping.
-    return 'anonymous';
+    return context.caller.id ? 'user' : 'anonymous';
 };
 
 /**

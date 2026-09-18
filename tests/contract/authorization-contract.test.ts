@@ -4,7 +4,7 @@
  * must answer 401 to a callerless request, every route behind `requirePermission` must answer 403 to a
  * logged-in non-admin, and — the sweep that closes the gap left by every intermediate tenant role
  * never being driven through the HTTP surface — every such route must agree with
- * `shared/authorization-roles.yaml` for EACH of the seven non-owner tenant roles, not just one
+ * `shared/authorization-roles.yaml` for EACH of the seven non-admin tenant roles, not just one
  * generic non-admin. `request-contract.test.ts` is this file's mirror image, sweeping request
  * BODIES against the contract instead of AUTHORIZATION. One table-driven case per route, rather
  * than one hand-written case per module's own contract file: the guard wiring per route is still
@@ -102,11 +102,12 @@ describe('every route requiring an admin (contract-derived)', () => {
 });
 
 /**
- * Every preset tenant role except `owner`. `owner` is excluded on purpose: `all.manage` holds
- * every key by construction, so a case for it would assert nothing but the wildcard's own
- * definition, which `shared/authorization-conformance.yaml` already covers at the model level.
+ * Every preset tenant role except `admin`. `admin` is excluded on purpose: it holds every
+ * declared tenant key by construction, so a case for it here would just re-assert the role file
+ * one key at a time — `tests/unit/kernel/permissions.test.ts` already covers that at the model
+ * level, once, for every key.
  */
-const NON_OWNER_TENANT_ROLES = [
+const NON_ADMIN_TENANT_ROLES = [
     'customer',
     'manager',
     'warehouse',
@@ -115,7 +116,7 @@ const NON_OWNER_TENANT_ROLES = [
     'moderator'
 ] as const;
 
-describe('every guarded route agrees with the role file, for every non-owner role (contract-derived)', () => {
+describe('every guarded route agrees with the role file, for every non-admin role (contract-derived)', () => {
     const guarded = routes.filter(
         (route): route is MountedRoute & { permissionKey: string } =>
             route.permissionKey !== undefined
@@ -124,7 +125,7 @@ describe('every guarded route agrees with the role file, for every non-owner rol
     it.each(guarded.map((route) => [signature(route), route] as const))(
         '%s answers 403 to exactly the roles that lack its key',
         async (_signature, route) => {
-            for (const role of NON_OWNER_TENANT_ROLES) {
+            for (const role of NON_ADMIN_TENANT_ROLES) {
                 // The same question `requirePermissionGuard` asks of the caller it resolves — a
                 // tenant-scope role never holds a `platform.` key, so a platform route's answer is
                 // "false" for every one of these, and the loop asserts 403 across the board.

@@ -36,9 +36,9 @@ const EVERYTHING = 100_000;
  *
  * The permission list is the role's OWN keys unioned with the anonymous baseline — exactly what
  * `keysInScope` computes for tenant scope, restated here because that helper is private to
- * `kernel/permissions.ts`. `holdsKey`, not a raw list membership check, is what then reads it: the
- * minter may hold the wildcard (`all.manage`) rather than the specific key by name, and only
- * `holdsKey`'s ability model knows a wildcard-holder still holds everything beneath it.
+ * `kernel/permissions.ts`. `holdsKey`, not a raw list membership check, is what then reads it —
+ * the CASL ability it builds is what a mint-floor check should ask, the same as any other route
+ * guard, rather than this file re-deriving its own answer from the raw list.
  *
  * `findAuthenticatableById` — not `findById` — for the same reason `account/module.ts`'s own
  * resolver uses it: a deactivated or soft-deleted minter must stop granting access on their very

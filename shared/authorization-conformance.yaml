@@ -24,6 +24,57 @@
 
 version: 1
 
+# Every tenant key `admin` holds — spelled out once and reused via YAML anchor below, for cases
+# that need "the most privileged tenant caller conceivable" rather than one specific key. Kept
+# identical to `authorization-roles.yaml`'s own `admin` entry BY HAND: there is no schema link
+# between the two files, so a key added to one and not the other is a review problem, not a
+# machine-caught one — `tests/unit/kernel/permissions.test.ts` only checks the real preset role,
+# never this fixture copy.
+admin-permissions: &admin_permissions
+    - products.self.read
+    - products.any.read
+    - products.any.create
+    - products.any.update
+    - products.any.delete
+    - cart.self.checkout
+    - orders.self.read
+    - orders.any.read
+    - orders.any.create
+    - orders.any.update
+    - orders.any.delete
+    - payments.self.read
+    - payments.any.read
+    - payments.any.create
+    - payments.any.update
+    - inventory.any.read
+    - inventory.any.create
+    - inventory.any.sweep
+    - delivery.any.read
+    - delivery.any.update
+    - feedback.any.read
+    - feedback.any.update
+    - feedback.any.delete
+    - locales.self.read
+    - locales.any.read
+    - locales.any.create
+    - locales.any.update
+    - locales.any.delete
+    - translations.any.read
+    - translations.any.update
+    - users.any.read
+    - users.any.create
+    - users.any.update
+    - users.any.delete
+    - tokens.any.delete
+    - audit.any.read
+    - webhooks.any.read
+    - webhooks.any.create
+    - webhooks.any.update
+    - webhooks.any.delete
+    - apikeys.any.read
+    - apikeys.any.create
+    - apikeys.any.delete
+
 cases:
     # =============================================================================================
     # The scope invariant, both directions. These two are the reason the file exists.
@@ -36,15 +87,8 @@ cases:
       resource: { tenantId: shop_1, userId: usr_1 }
       expect: deny
 
-    - name: a platform operator holding every platform key still cannot read a shop's content
-      caller: { id: op_1, scope: platform, tenantId: null, permissions: [platform.all.manage] }
-      action: read
-      subject: Order
-      resource: { tenantId: shop_1, userId: usr_1 }
-      expect: deny
-
-    - name: a shop owner cannot read platform operational data
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [all.manage] }
+    - name: a shop admin cannot read platform operational data
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: *admin_permissions }
       action: read
       subject: ObservabilitySnapshot
       resource: {}
@@ -57,40 +101,9 @@ cases:
       resource: {}
       expect: allow
 
-    - name: all.manage is scoped, so it does not satisfy a platform key
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [all.manage] }
+    - name: holding every declared tenant key still never satisfies a bare manage action
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: *admin_permissions }
       action: manage
-      subject: ObservabilitySnapshot
-      resource: {}
-      expect: deny
-
-    # A wildcard from the OTHER scope is not this caller's wildcard. Without these two, an
-    # implementation that recognises `all.manage` by its spelling rather than by the caller's
-    # scope hands a tenant caller the platform and a platform caller a shop.
-    - name: a tenant caller holding the platform wildcard is denied the platform
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [platform.all.manage] }
-      action: read
-      subject: ObservabilitySnapshot
-      resource: {}
-      expect: deny
-
-    - name: a tenant caller holding the platform wildcard is not thereby a shop owner
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [platform.all.manage] }
-      action: read
-      subject: Product
-      resource: { tenantId: shop_1, active: true }
-      expect: deny
-
-    - name: a platform caller holding the tenant wildcard is denied the shop
-      caller: { id: op_1, scope: platform, tenantId: null, permissions: [all.manage] }
-      action: read
-      subject: Order
-      resource: { tenantId: shop_1, userId: usr_1 }
-      expect: deny
-
-    - name: a platform caller holding the tenant wildcard is not thereby an operator
-      caller: { id: op_1, scope: platform, tenantId: null, permissions: [all.manage] }
-      action: read
       subject: ObservabilitySnapshot
       resource: {}
       expect: deny
@@ -111,26 +124,19 @@ cases:
       resource: { tenantId: shop_1, active: true }
       expect: deny
 
-    - name: platform.all.manage is scoped, so it does not satisfy a bare key
-      caller: { id: op_1, scope: platform, tenantId: null, permissions: [platform.all.manage] }
-      action: manage
-      subject: Product
-      resource: { tenantId: shop_1, active: true }
-      expect: deny
-
     # =============================================================================================
     # Tenancy. A caller resolved into one shop can never reach another, whatever they hold.
     # =============================================================================================
 
-    - name: a shop owner cannot read another shop's order
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [all.manage] }
+    - name: a shop admin cannot read another shop's order
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: *admin_permissions }
       action: read
       subject: Order
       resource: { tenantId: shop_2, userId: usr_9 }
       expect: deny
 
-    - name: a shop owner can read their own shop's order
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [all.manage] }
+    - name: a shop admin can read their own shop's order
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: *admin_permissions }
       action: read
       subject: Order
       resource: { tenantId: shop_1, userId: usr_9 }
@@ -332,8 +338,8 @@ cases:
       resource: { tenantId: shop_1 }
       expect: deny
 
-    - name: a payment cannot be deleted, because no key grants it — not even the scope wildcard
-      caller: { id: usr_3, scope: tenant, tenantId: shop_1, permissions: [all.manage] }
+    - name: a payment cannot be deleted, because no key grants it — not even holding every other payment key
+      caller: { id: usr_3, scope: tenant, tenantId: shop_1, permissions: [payments.self.read, payments.any.read, payments.any.create, payments.any.update] }
       action: delete
       subject: Payment
       resource: { tenantId: shop_1, userId: usr_2 }
@@ -350,8 +356,8 @@ cases:
       resource: { tenantId: shop_1, active: true }
       expect: deny
 
-    - name: an audit row cannot be updated, because no key grants it
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [all.manage] }
+    - name: an audit row cannot be updated, because no key grants it — not even holding every audit key
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [audit.any.read] }
       action: update
       subject: AuditLog
       resource: { tenantId: shop_1 }
@@ -364,8 +370,8 @@ cases:
       resource: { tenantId: shop_1 }
       expect: allow
 
-    - name: an unknown subject is denied rather than defaulted
-      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: [all.manage] }
+    - name: an unknown subject is denied rather than defaulted, even for the most privileged caller
+      caller: { id: usr_1, scope: tenant, tenantId: shop_1, permissions: *admin_permissions }
       action: read
       subject: NoSuchThing
       resource: { tenantId: shop_1 }

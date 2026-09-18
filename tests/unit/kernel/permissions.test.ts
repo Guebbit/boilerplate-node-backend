@@ -19,7 +19,6 @@ const validKeysDocument = {
     version: 1,
     actions: ['read'],
     scopes: { tenant: 'Content belonging to one shop.', platform: 'Shared operational data.' },
-    wildcards: { subject: 'all', action: 'manage' },
     keys: [
         {
             key: 'products.self.read',
@@ -116,5 +115,36 @@ describe('the real shared authorization files', () => {
         expect(PERMISSION_KEYS.length).toBeGreaterThan(0);
         expect(PRESET_ROLES.length).toBeGreaterThan(0);
         expect(ANONYMOUS_ROLE.name).toBeTruthy();
+    });
+
+    // There is no wildcard any more: `admin` is unrestricted only because it lists every tenant
+    // key by name. This is what stops a newly declared key from being silently forgotten off it —
+    // the one thing the old scope wildcard used to guarantee for free.
+    it('grants admin every declared tenant key by name', () => {
+        const admin = PRESET_ROLES.find((role) => role.name === 'admin');
+        expect(admin).toBeDefined();
+
+        const tenantKeys = PERMISSION_KEYS.filter((key) => key.scope === 'tenant').map(
+            (key) => key.key
+        );
+        const held = new Set(admin!.permissions);
+        const missing = tenantKeys.filter((key) => !held.has(key));
+
+        expect(missing).toEqual([]);
+    });
+
+    // The mirror case: admin is tenant-scoped only, so it must never pick up a platform key —
+    // holding one would let a shop's own role reach across the tenant/platform wall the two-scope
+    // split exists to prevent.
+    it('grants admin no platform key', () => {
+        const admin = PRESET_ROLES.find((role) => role.name === 'admin');
+        expect(admin).toBeDefined();
+
+        const platformKeys = PERMISSION_KEYS.filter((key) => key.scope === 'platform').map(
+            (key) => key.key
+        );
+        const held = new Set(admin!.permissions);
+
+        expect(platformKeys.some((key) => held.has(key))).toBe(false);
     });
 });

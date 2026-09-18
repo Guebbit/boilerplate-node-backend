@@ -111,9 +111,8 @@ Reads published products, the dictionary the shop is rendered in, and the delive
 
 <!-- role-matrix:start -->
 
-The roles above after the evaluator has had them: `all.manage` expanded into every key it
-grants, and the `guest` baseline folded in. This is what a route guard and a listing
-actually answer.
+The roles above after the evaluator has had them, the `guest` baseline folded in. This is
+what a route guard and a listing actually answer.
 
 | Role         | products | cart | orders | payments | inventory | delivery | feedback | locales | users | account | audit-logs | webhooks | api-keys | observability |
 | ------------ | -------- | ---- | ------ | -------- | --------- | -------- | -------- | ------- | ----- | ------- | ---------- | -------- | -------- | ------------- |

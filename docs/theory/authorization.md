@@ -91,8 +91,6 @@ it decides what to render, never what is allowed, and every request is re-evalua
 ```
 tenant scope     <family>.<breadth>.<action>             knowledge.any.read · tasks.self.update
 platform scope   platform.<family>.<breadth>.<action>    platform.taxonomy.any.merge
-wildcards        all.manage                              everything in this scope
-                 platform.all.manage                      — never both scopes
 ```
 
 **Breadth is always written, never implied.** `orders.self.read` is the caller's own orders,
@@ -101,16 +99,16 @@ A key you can grep for by shape beats a key you have to know the default of — 
 `any` is noise on most of the file, since most families have no owner to be `self` about in the
 first place.
 
-**There is no per-family `manage` any more.** A wildcard that expanded to "every action a family
-declares" made a wide read reachable only by also handing out delete — the fix this model exists
-to demonstrate, on `orders`/`payments`: the support desk needed to read an order that was never
-its own, and the only way to say that was `orders.manage`, which also grants deleting it. Breadth
-on the key itself says "read everyone's, change nothing" directly, with no wildcard involved.
-
-**The one wildcard that survives is the SCOPE wildcard, `all.manage`.** It expands to every key
-DECLARED in the caller's scope — never to CASL's own unbounded `manage`, so a key nothing declares
-grants nothing even to the wildcard. `platform.observability.any.read` and nothing else declares a
-platform key, so `platform.all.manage` is, today, exactly that one key plus nothing.
+**There is no wildcard of any kind.** A per-family `manage` used to expand to "every action a
+family declares", which made a wide read reachable only by also handing out delete — the fix this
+model exists to demonstrate, on `orders`/`payments`: the support desk needed to read an order that
+was never its own, and the only way to say that was `orders.manage`, which also grants deleting
+it. Breadth on the key itself says "read everyone's, change nothing" directly, with no wildcard
+involved. A SCOPE wildcard, `all.manage`, survived longer as `admin`'s one shortcut for "every
+declared key in this scope" — it is gone too. `admin` now holds every declared tenant key **by
+name**, spelled out in `shared/authorization-roles.yaml` exactly like every other role, so a key a
+new route needs is a line added to that file, not an assumption the wildcard was already covering
+it — see that file's own closing note for why.
 
 **A family needs a concrete key for every action a route asks about.** `apikeys` once declared
 only a read and a `manage`, so "holds every concrete key in the family" reduced to "holds the

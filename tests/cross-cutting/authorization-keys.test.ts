@@ -13,10 +13,10 @@
 import {
     ANONYMOUS_ROLE,
     assertDeclared,
+    isUnrestrictedRole,
     PERMISSION_KEYS,
     PRESET_ROLES,
     scopeOfKey,
-    wildcardKeyFor,
     type RoleLookup
 } from '@kernel/permissions';
 
@@ -34,7 +34,7 @@ describe('the declared keys', () => {
         expect(declared.size).toBe(PERMISSION_KEYS.length);
     });
 
-    it('name the action their key ends with, or expand as a wildcard', () => {
+    it('name the action their key ends with', () => {
         for (const key of PERMISSION_KEYS) {
             expect(key.key.endsWith(`.${key.action}`)).toBe(true);
         }
@@ -66,12 +66,27 @@ describe('the preset roles', () => {
         }
     );
 
-    it('include exactly one unrestricted role per scope, and it is spelled as a wildcard', () => {
-        const unrestricted = PRESET_ROLES.filter((role) =>
-            role.permissions.includes(wildcardKeyFor(role.scope))
+    it('include exactly one unrestricted TENANT role, holding every tenant key by name', () => {
+        const unrestricted = PRESET_ROLES.filter(
+            (role) => role.scope === 'tenant' && isUnrestrictedRole(role.name, role.scope)
         );
 
         expect(unrestricted.map((role) => role.name)).toEqual(['admin']);
+    });
+
+    // "Unrestricted" is a derived fact now — holds every key its own scope currently declares —
+    // not a token, so it can be trivially true where a scope declares very few keys. `operator` is
+    // the honest example: platform scope has exactly one declared key today
+    // (`platform.observability.any.read`), so holding it alone already satisfies "every platform
+    // key". That is NOT the same claim as "operator is a super-admin" — `operator` still holds no
+    // bare (tenant) key, so it cannot touch a single shop's content, which is the invariant that
+    // actually matters and is asserted elsewhere (`shared/authorization-roles.yaml`'s own
+    // description, and the contract suite). This pins today's fact so a second platform key being
+    // declared — which would make it false — is a deliberate change to notice, not a surprise.
+    it('marks operator unrestricted in platform scope, today — one declared platform key', () => {
+        const platformKeys = PERMISSION_KEYS.filter((key) => key.scope === 'platform');
+        expect(platformKeys).toHaveLength(1);
+        expect(isUnrestrictedRole('operator', 'platform')).toBe(true);
     });
 });
 
@@ -84,8 +99,8 @@ describe('assertDeclared', () => {
         expect(() => assertDeclared('product.read')).toThrow(/not declared/);
     });
 
-    it('accepts the wildcard of either scope, which is not a declared key', () => {
-        expect(() => assertDeclared('all.manage')).not.toThrow();
-        expect(() => assertDeclared('platform.all.manage')).not.toThrow();
+    it('refuses the old wildcard spelling — there is no exception for it any more', () => {
+        expect(() => assertDeclared('all.manage')).toThrow(/not declared/);
+        expect(() => assertDeclared('platform.all.manage')).toThrow(/not declared/);
     });
 });

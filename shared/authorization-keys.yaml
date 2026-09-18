@@ -20,8 +20,8 @@
 # the caller's own rows (`cart.self.checkout`) or to the narrow, default reading a family gives a
 # customer (`products.self.read`); `any` everywhere else, including every key with no owner to
 # scope by at all. An omitted breadth reads as "someone forgot one" — a key you can grep for by
-# shape beats a key you have to know the default of. There used to be a per-family `manage`
-# wildcard too; it is gone; see the note at the foot of this file.
+# shape beats a key you have to know the default of. There is no wildcard of any kind any more,
+# per-family or scope-wide; see the note at the foot of this file.
 
 version: 1
 
@@ -54,21 +54,6 @@ actions:
 scopes:
     tenant: Content belonging to one shop. Keys are bare.
     platform: Shared operational data, across shops. Keys are prefixed `platform.`.
-
-# Wildcards, spelled here so nothing else has to special-case the strings.
-#
-# `all.manage` EXPANDS TO EVERY DECLARED KEY IN ITS OWN SCOPE, and that is a narrower reading than
-# CASL's, where `manage` on `all` is unbounded. The narrower one is deliberate: it makes
-# "a key no module declares grants nothing" true of the wildcard too, so a shop owner cannot edit
-# an audit row merely because nothing thought to forbid it. Adding a key is then the only way to
-# widen anybody, including the owner — which is the property that makes this file the whole model.
-#
-# `manage` here is the one place the word still means "any action at all" — CASL's own semantics,
-# reserved for this scope-wide grant. No per-family echo of it survives, which is exactly what
-# retired the family-expansion machinery this file used to need.
-wildcards:
-    subject: all # `all.manage` — every declared key in this scope, and only this scope
-    action: manage # `<subject>.manage` — any declared action on that subject
 
 # Step-up — the third axis, declared on the KEY rather than on a route.
 #
@@ -267,8 +252,8 @@ keys:
       scope: tenant
       description: Record a receipt or an adjustment. Stock never moves without one.
     # Not a CRUD verb — see `actions:` above. Guards the one route that clears expired reservation
-    # holds on a schedule; granted to no preset role, so only `owner` reaches it, through
-    # `all.manage`, exactly as the wide key it replaces was reached. See `inventory/routes.ts`.
+    # holds on a schedule; granted to no preset role but `admin`, who holds it by name like every
+    # other key. See `inventory/routes.ts`.
     - key: inventory.any.sweep
       module: inventory
       subject: StockLevel
@@ -476,12 +461,18 @@ keys:
       scope: platform
       description: Read health, metrics overview and the operational audit.
 
-# WHY THE PER-FAMILY `manage` KEY IS GONE
+# WHY THERE IS NO WILDCARD OF ANY KIND ANY MORE
 #
-# It used to expand, unconditionally, to every action its family declared — which was the only way
-# to say "read everyone's, change nothing" for a family whose narrow read carried a condition. That
-# made the family's own write keys reachable through a route asking only for the wide read, and it
-# meant breadth was something a wildcard implied rather than something a role stated. `all.manage`
-# — the SCOPE wildcard, `owner`'s alone — is unaffected: it still expands to every declared key in
-# its scope, and now that breadth is written on the keys themselves, no expansion-time exception is
-# needed to get it right.
+# The per-family `manage` key used to expand, unconditionally, to every action its family declared
+# — which was the only way to say "read everyone's, change nothing" for a family whose narrow read
+# carried a condition. That made the family's own write keys reachable through a route asking only
+# for the wide read, and it meant breadth was something a wildcard implied rather than something a
+# role stated. It went first, and breadth has been written on the keys themselves ever since.
+#
+# `all.manage` — the SCOPE wildcard, `admin`'s alone — outlived it for a while, but the same
+# argument applies one level up: "a key no module declares grants nothing" is only true of the
+# wildcard as long as nothing reads it as a shortcut instead. `admin` now holds every declared
+# tenant key BY NAME, spelled out in `authorization-roles.yaml`, the same way every other role
+# does. A new key that should reach `admin` is now a line in that file, not an assumption the
+# wildcard was already covering it — the property this whole file exists for, applied to the one
+# role that used to be the exception.

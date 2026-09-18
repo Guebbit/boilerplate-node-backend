@@ -12,7 +12,7 @@
 
 import { Types } from 'mongoose';
 import type { AuthorizationScope } from '@types';
-import { assertDeclared, findRole, wildcardKeyFor } from '@kernel/permissions';
+import { assertDeclared, findRole, PERMISSION_KEYS } from '@kernel/permissions';
 import { membershipModel, roleModel, tenantModel } from './models';
 import type { MembershipDocument, RoleDocument, TenantDocument } from './models';
 
@@ -135,9 +135,7 @@ export const assignRole = (
 
         if (granter) {
             const held = new Set(granter);
-            const escalated = permissions.filter(
-                (key) => !held.has(key) && !held.has(wildcardKeyFor(scope))
-            );
+            const escalated = permissions.filter((key) => !held.has(key));
 
             if (escalated.length > 0) {
                 throw new AccessInvariantError(
@@ -230,15 +228,23 @@ const restoreIfNowUnadministered = (
             });
     });
 
-/** Everyone holding the scope's wildcard in a place, by user id. */
+/**
+ * Everyone holding an unrestricted role in a place, by user id.
+ *
+ * "Unrestricted" is no longer one token to match — there is no wildcard — so a role counts when
+ * its stored `permissions` array is a SUPERSET of every key this scope currently declares. `$all`
+ * is Mongo's own set-containment operator, so this stays one query rather than a fetch-then-filter
+ * in application code; it is never called with an empty list, since both scopes always declare at
+ * least one key.
+ */
 export const administratorsOf = (
     tenantId: string | null,
     scope: AuthorizationScope
 ): Promise<string[]> => {
-    const wildcard = wildcardKeyFor(scope);
+    const required = PERMISSION_KEYS.filter((key) => key.scope === scope).map((key) => key.key);
 
     return roleModel
-        .find({ scope, permissions: wildcard, $or: [{ tenantId }, { tenantId: null }] })
+        .find({ scope, permissions: { $all: required }, $or: [{ tenantId }, { tenantId: null }] })
         .exec()
         .then((roles) => roles.map((role) => role.name))
         .then((names) =>

@@ -19,19 +19,13 @@ import path from 'node:path';
 import { parse } from 'yaml';
 import { z } from 'zod';
 import type { AuthContext, AuthorizationScope, Caller, PlatformCaller, TenantCaller } from '@types';
-import {
-    scopeOfKey,
-    wildcardKeyFor,
-    WILDCARD_ACTION,
-    WILDCARD_SUBJECT
-} from '@infrastructure/authorization/keys';
+import { scopeOfKey } from '@infrastructure/authorization/keys';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**
  * The action vocabulary a declared KEY may carry, as a runtime array so both the type below and
  * the Zod schema that validates the shared YAML are drawn from the one list. `manage` is
- * deliberately absent: it survives only as the two scope wildcards' action (`all.manage`,
- * `platform.all.manage`), spelled directly in `wildcards:`, never as an individual key's own
+ * deliberately absent: there is no wildcard of any kind any more, so nothing declares it as ITS
  * action. `checkout` and `sweep` are the two additions beyond CASL's own CRUD set —
  * `cart.self.checkout`'s and `inventory.any.sweep`'s actions, and nowhere else. See each key's own
  * description in `shared/authorization-keys.yaml`.
@@ -130,10 +124,6 @@ export const keysDocumentSchema = z.object({
     version: z.number(),
     actions: z.array(z.enum(PERMISSION_ACTIONS)),
     scopes: z.record(z.enum(AUTHORIZATION_SCOPES), z.string()),
-    // `string`, not the action enum: the wildcard action is CASL's own `manage`, which is no
-    // longer one of the per-key actions, and the check just below is what catches the YAML
-    // spelling it any other way.
-    wildcards: z.object({ subject: z.string(), action: z.string() }),
     keys: z.array(permissionKeySchema)
 });
 
@@ -176,32 +166,13 @@ const keysDocument = readShared('authorization-keys.yaml', keysDocumentSchema);
 
 const rolesDocument = readShared('authorization-roles.yaml', rolesDocumentSchema);
 
-/*
- * The grammar is owned by `@infrastructure/authorization/keys` — the audit trail needs it and may
- * not reach the kernel. What the kernel owns is the guarantee that the shared file still agrees
- * with it: a rename of either wildcard in `authorization-keys.yaml` would otherwise leave the two
- * halves of the model quietly answering different questions.
- */
-if (
-    keysDocument.wildcards.subject !== WILDCARD_SUBJECT ||
-    keysDocument.wildcards.action !== WILDCARD_ACTION
-) {
-    throw new Error(
-        `[permissions] shared/authorization-keys.yaml spells its wildcards ` +
-            `"${keysDocument.wildcards.subject}.${keysDocument.wildcards.action}", but the grammar in ` +
-            `infrastructure/authorization/keys.ts says "${WILDCARD_SUBJECT}.${WILDCARD_ACTION}". ` +
-            `Change both, or neither.`
-    );
-}
-
 /** Every declared key, in the order the shared file lists them. */
 export const PERMISSION_KEYS: readonly PermissionKey[] = keysDocument.keys;
 
 /**
  * Every CASL subject a declared key names, deduplicated and sorted — published on
  * `GET /account/abilities` so a client's `meta.can` rules can be typed against the real set
- * instead of an unchecked string. Never includes the wildcard subject: `all.manage` is not a key
- * a route would name in `meta.can`, only something a role may hold.
+ * instead of an unchecked string.
  */
 export const PERMISSION_SUBJECTS: readonly string[] = [
     ...new Set(PERMISSION_KEYS.map((entry) => entry.subject))
@@ -292,10 +263,10 @@ export const findKey = (key: string): PermissionKey | undefined => byKey.get(key
  * looks like a role that grants something. Failing where the grant is made is the only place the
  * mistake is still attached to whoever made it.
  *
- * @throws Error when no module declares the key and it is not this scope's wildcard
+ * @throws Error when no module declares the key
  */
 export const assertDeclared = (key: string): void => {
-    if (byKey.has(key) || key === wildcardKeyFor(scopeOfKey(key))) {
+    if (byKey.has(key)) {
         return;
     }
 
@@ -396,14 +367,31 @@ export const callerForSubject = (context: AuthContext, subject: string): Caller 
     callerInScope(context, scopeOfSubject(subject));
 
 /**
- * Does this caller hold the wildcard key in a scope — unrestricted, within that scope only.
- *
- * Role names are data a deployment may rename or add to; "holds the wildcard" is a property of
- * the permission model itself, which is why the audit trail, `requirePermission` and the domain actor all
- * ask this rather than comparing a name.
+ * Every key declared in one scope — the set a caller must hold entirely to count as unrestricted,
+ * now that no single wildcard token stands in for it. Computed once: `PERMISSION_KEYS` is fixed
+ * for the process's lifetime.
  */
-export const isUnrestricted = (caller: Caller): boolean =>
-    caller.permissions.includes(wildcardKeyFor(caller.scope));
+const declaredKeysOfScope = new Map<AuthorizationScope, readonly string[]>(
+    AUTHORIZATION_SCOPES.map((scope) => [
+        scope,
+        PERMISSION_KEYS.filter((entry) => entry.scope === scope).map((entry) => entry.key)
+    ])
+);
+
+/**
+ * Does this caller hold EVERY declared key in their own scope — unrestricted, within that scope
+ * only.
+ *
+ * Role names are data a deployment may rename or add to; "holds every key" is a property of the
+ * permission model itself, which is why `requirePermission` and the domain actor ask this rather
+ * than comparing a name. There is no single token for it any more: `admin` is unrestricted because
+ * `authorization-roles.yaml` lists every tenant key by name, not because it holds a shortcut that
+ * means the same thing — see `authorization-keys.yaml`'s closing note.
+ */
+export const isUnrestricted = (caller: Caller): boolean => {
+    const held = new Set(caller.permissions);
+    return (declaredKeysOfScope.get(caller.scope) ?? []).every((key) => held.has(key));
+};
 
 /**
  * The application acting on nobody's behalf — a sweep, a job, a domain event with no request
@@ -441,11 +429,13 @@ export const SYSTEM_ACTOR: AuthContext = {
 export const isUnrestrictedRole = (
     name: string | null | undefined,
     scope: AuthorizationScope = 'tenant'
-): boolean => Boolean(name) && permissionsOfRole(name!).includes(wildcardKeyFor(scope));
+): boolean => {
+    if (!name) {
+        return false;
+    }
 
-export {
-    scopeOfKey,
-    wildcardKeyFor,
-    WILDCARD_ACTION,
-    WILDCARD_SUBJECT
-} from '@infrastructure/authorization/keys';
+    const held = new Set(permissionsOfRole(name));
+    return (declaredKeysOfScope.get(scope) ?? []).every((key) => held.has(key));
+};
+
+export { scopeOfKey } from '@infrastructure/authorization/keys';

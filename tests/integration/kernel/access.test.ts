@@ -36,7 +36,7 @@ import {
 } from '@scenarios/accounts';
 import { userRepository } from '@modules/users/tests/factories';
 import { shopModules } from '@scenarios/index';
-import { PRESET_ROLES, wildcardKeyFor } from '@kernel/permissions';
+import { PERMISSION_KEYS, PRESET_ROLES } from '@kernel/permissions';
 import { asStub } from '@tests/stub';
 
 setupTestDb();
@@ -117,8 +117,8 @@ describe('membership across tenants', () => {
 
         // Owning one shop says nothing about the other. If these merged, "a member of several
         // associations with different roles in each" would mean the widest role everywhere.
-        expect(inNorth).toContain(wildcardKeyFor('tenant'));
-        expect(inSouth).not.toContain(wildcardKeyFor('tenant'));
+        expect(inNorth).toContain('apikeys.any.delete');
+        expect(inSouth).not.toContain('apikeys.any.delete');
     });
 
     it('holds one role per person per place, so a reassignment replaces rather than adds', async () => {
@@ -272,17 +272,20 @@ describe('the invariants', () => {
 
     it('counts administrators by what they HOLD, not by what they are called', async () => {
         const shop = await ensureTenant('shop', 'The Shop');
+        const everyTenantKey = PERMISSION_KEYS.filter((key) => key.scope === 'tenant').map(
+            (key) => key.key
+        );
         await roleModel.create({
             name: 'steward',
             scope: 'tenant',
             tenantId: String(shop._id),
-            permissions: [wildcardKeyFor('tenant')],
+            permissions: everyTenantKey,
             preset: false
         });
         await assignRole('person-1', String(shop._id), 'tenant', 'steward');
 
         // A deployment may rename or invent roles. The invariant has to survive that, so it asks
-        // which rows hold the wildcard rather than which rows are called `owner`.
+        // which rows hold every declared key, not which rows are called `admin`.
         expect(await administratorsOf(String(shop._id), 'tenant')).toEqual(['person-1']);
     });
 

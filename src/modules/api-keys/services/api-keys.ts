@@ -31,9 +31,8 @@ import { apiKeysAuditActions } from '../audit';
  * Three conditions, all required: the key must be DECLARED (an invented string grants nothing
  * while looking like it does — `assertDeclared`'s own reasoning), TENANT-scoped (a credential is
  * tenant-scoped only, see `docs/tools/security.md#machine-to-machine-credentials`), and actually
- * HELD by the minter right now. `holdsKey` rather than a raw `permissions.includes` — a caller
- * holding the wildcard (`all.manage`) may mint a key naming any one specific key beneath it, the
- * same way every other permission check in this codebase already resolves `manage`.
+ * HELD by the minter right now. `holdsKey`, the same ability-backed check every other route guard
+ * in this codebase uses, rather than a raw `permissions.includes` against the minter's own list.
  */
 const isMintable = (key: string, caller: Caller): boolean =>
     findKey(key)?.scope === 'tenant' && holdsKey(caller, key);

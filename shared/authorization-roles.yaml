@@ -16,10 +16,12 @@
 # — except `admin`, the shop's one superuser account rather than a job. Reusing the others means
 # the permission model is exercised by the demo rather than only by its own tests.
 #
-# EVERY GRANT BELOW IS SPELLED OUT. There is no per-family `manage` wildcard any more — breadth is
-# a segment on the key itself (`<family>.self.read` vs `<family>.any.read`), so a role that reads
-# widely says `any` and a role that reads only its own says `self`, and nothing has to be inferred
-# from which wildcard a role happens to hold.
+# EVERY GRANT BELOW IS SPELLED OUT, `admin` INCLUDED. There is no wildcard of any kind any more —
+# breadth is a segment on the key itself (`<family>.self.read` vs `<family>.any.read`), so a role
+# that reads widely says `any` and a role that reads only its own says `self`, and nothing has to
+# be inferred from which wildcard a role happens to hold. `admin` lists every declared tenant key
+# by name for the same reason every other role does: a key nothing lists grants nothing, and that
+# is now true of `admin` too — see `authorization-keys.yaml`'s closing note.
 
 version: 1
 
@@ -32,8 +34,8 @@ roles:
     # description in `shared/authorization-keys.yaml` and docs/theory/authorization.md.
     #
     # THERE IS NO UNVERIFIED MANAGER. A role is something an operator GRANTS, and granting it IS
-    # the vouching — so every staff role below holds `cart.self.checkout` explicitly (`admin` via
-    # `all.manage`), and this is the only tenant role that may not.
+    # the vouching — so every staff role below holds `cart.self.checkout` explicitly, `admin`
+    # included, and this is the only tenant role that may not.
     - name: unverified
       scope: tenant
       title: A signed-up account, address unproven
@@ -191,9 +193,53 @@ roles:
       title: The administrator
       description: >-
           Unrestricted within this shop, and only within it — and note that it says nothing
-          about the platform. One role cannot reach both scopes, which is the point.
+          about the platform. One role cannot reach both scopes, which is the point. Every tenant
+          key below is held by name; the conformance suite refuses a declared tenant key this list
+          omits, so adding a key here can never again be optional.
       permissions:
-          - all.manage
+          - products.self.read
+          - products.any.read
+          - products.any.create
+          - products.any.update
+          - products.any.delete
+          - cart.self.checkout
+          - orders.self.read
+          - orders.any.read
+          - orders.any.create
+          - orders.any.update
+          - orders.any.delete
+          - payments.self.read
+          - payments.any.read
+          - payments.any.create
+          - payments.any.update
+          - inventory.any.read
+          - inventory.any.create
+          - inventory.any.sweep
+          - delivery.any.read
+          - delivery.any.update
+          - feedback.any.read
+          - feedback.any.update
+          - feedback.any.delete
+          - locales.self.read
+          - locales.any.read
+          - locales.any.create
+          - locales.any.update
+          - locales.any.delete
+          - translations.any.read
+          - translations.any.update
+          - users.any.read
+          - users.any.create
+          - users.any.update
+          - users.any.delete
+          - tokens.any.delete
+          - audit.any.read
+          - webhooks.any.read
+          - webhooks.any.create
+          - webhooks.any.update
+          - webhooks.any.delete
+          - apikeys.any.read
+          - apikeys.any.create
+          - apikeys.any.delete
 
     # -- platform scope ------------------------------------------------------------------------
     - name: operator

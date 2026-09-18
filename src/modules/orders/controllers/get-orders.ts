@@ -37,8 +37,8 @@ export const getOrders = createSearchController({
     entity: 'orders',
     schema: searchOrdersQuerySchema,
     // Non-admin callers cannot filter by arbitrary userId; orderService.callerScope enforces their
-    // own. `orders.any.read`, not the scope wildcard — a moderator or manager holds this key
-    // without holding `all.manage`, and asking for the wildcard silently dropped their filter.
+    // own. `orders.any.read` by name — a moderator or manager holds exactly this key, and asking
+    // for anything broader would have missed them and silently dropped their filter.
     extendInput: (input, request) => ({
         userId:
             request.authContext &&

@@ -65,9 +65,9 @@ export const withActions = (
             CONFIRMABLE_PAYMENT_STATUSES.includes(payment.status) &&
             Boolean(order) &&
             canTransition(order!.status, OrderStatus.paid, 'system'),
-        // Only an operator returns money, and only money that actually arrived. `payments.any.update`,
-        // not the scope wildcard — a moderator holds this key without holding `all.manage`, and
-        // asking for the wildcard hid the refund action from them despite the key they do hold.
+        // Only an operator returns money, and only money that actually arrived.
+        // `payments.any.update` by name — a moderator holds exactly this key, and asking for
+        // anything broader would have hidden the refund action despite the key they do hold.
         refund:
             authContext !== undefined &&
             holdsKey(callerForSubject(authContext, 'Payment'), 'payments.any.update') &&

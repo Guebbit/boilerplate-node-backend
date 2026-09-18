@@ -40,9 +40,9 @@ export const ownerScope = (userId: string): Record<string, unknown> =>
  * `system` names moves that follow a fact from outside the application, and no request may
  * claim it.
  *
- * Gated on `orders.any.update`, the same key `cancelById` asks for its own operator/customer
- * split — not the scope wildcard, which a moderator or manager never holds and would silently
- * reduce them to the customer's lifecycle column.
+ * Gated on `orders.any.update` by name, the same key `cancelById` asks for its own
+ * operator/customer split — a broader check would have missed a moderator or manager and
+ * silently reduced them to the customer's lifecycle column.
  * @returns the actor whose permissions apply
  */
 export const actorOf = (authContext?: AuthContext): OrderActor =>

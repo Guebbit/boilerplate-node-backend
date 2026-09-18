@@ -7,7 +7,7 @@
  *                not "rejected", because it also guards public routes. It must always call
  *                `next()` exactly once, on every path, or the request hangs.
  *   `isAuth`   — *required* identification. Fails closed with 401.
- *   `requirePermission(WILDCARD)`  — *required* elevation. Fails closed, and the status says which check refused:
+ *   `requirePermission(ADMIN_ONLY_KEY)`  — *required* elevation. Fails closed, and the status says which check refused:
  *                401 with no credentials at all (as `isAuth` does), 403 for a caller without the key.
  *                Both bodies stay generic; the reason is recorded in the audit trail only.
  *
@@ -33,7 +33,6 @@ import { makeResponseStub } from '@tests/express';
 import { asCustomer, asAdmin } from '../../support/callers';
 import { callerInScope } from '@kernel/permissions';
 import type { AuthContext } from '@types';
-import { wildcardKeyFor } from '@kernel/permissions';
 
 // Only the sink is replaced; `buildAuditEvent` and the `coreAuditActions` vocabulary stay real, so an
 // event that stops matching the real builder's shape fails here rather than in production.
@@ -50,11 +49,15 @@ jest.mock('@infrastructure/observability/audit', () => ({
  *   - a rejection means the token is bad;
  *   - resolving `undefined` means the token was fine but names nobody.
  *
- * `requirePermissionViaCookie(WILDCARD)` turns the first into 401 and the second into 403, so the two must stay
+ * `requirePermissionViaCookie(ADMIN_ONLY_KEY)` turns the first into 401 and the second into 403, so the two must stay
  * distinguishable in the fake exactly as they are in production.
  */
-/** The shop's wildcard — what the deleted blanket guards used to check, spelled as a key. */
-const WILDCARD = wildcardKeyFor('tenant');
+/**
+ * A key only `admin` holds — stands in for "the elevated permission" throughout this file, the
+ * same role the deleted blanket guards used to reach through the scope wildcard, now reached by
+ * naming one of the keys `admin` holds explicitly.
+ */
+const ADMIN_ONLY_KEY = 'apikeys.any.delete';
 
 const fromAccessToken = jest.fn<Promise<unknown>, [string]>();
 const fromRefreshToken = jest.fn<Promise<unknown>, [string]>();
@@ -309,7 +312,7 @@ describe('requirePermission', () => {
         const next = jest.fn();
         const response = makeResponseStub();
 
-        requirePermission(WILDCARD)(
+        requirePermission(ADMIN_ONLY_KEY)(
             makeRequest({ authContext: asAdmin('user-1') }),
             response,
             next
@@ -323,7 +326,7 @@ describe('requirePermission', () => {
         const next = jest.fn();
         const response = makeResponseStub();
 
-        requirePermission(WILDCARD)(
+        requirePermission(ADMIN_ONLY_KEY)(
             makeRequest({ authContext: asCustomer('user-1') }),
             response,
             next
@@ -339,7 +342,7 @@ describe('requirePermission', () => {
         const next = jest.fn();
         const response = makeResponseStub();
 
-        requirePermission(WILDCARD)(
+        requirePermission(ADMIN_ONLY_KEY)(
             makeRequest({ authContext: asCustomer('user-1') }),
             response,
             next
@@ -355,14 +358,14 @@ describe('requirePermission', () => {
         const next = jest.fn();
         const response = makeResponseStub();
 
-        requirePermission(WILDCARD)(makeRequest(), response, next);
+        requirePermission(ADMIN_ONLY_KEY)(makeRequest(), response, next);
 
         expect(next).not.toHaveBeenCalled();
         expect(response.status).toHaveBeenCalledWith(401);
     });
 
     it('distinguishes not-authenticated from not-permitted in the audit trail', () => {
-        requirePermission(WILDCARD)(makeRequest(), makeResponseStub(), jest.fn());
+        requirePermission(ADMIN_ONLY_KEY)(makeRequest(), makeResponseStub(), jest.fn());
 
         expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -379,7 +382,7 @@ describe('requirePermission', () => {
     it('attributes a not-permitted denial to the actual user, not to anonymous', () => {
         // The whole value of the audit record: "who tried". Falling back to 'anonymous' here
         // would erase the identity of a real user probing admin routes.
-        requirePermission(WILDCARD)(
+        requirePermission(ADMIN_ONLY_KEY)(
             makeRequest({ authContext: asCustomer('user-9') }),
             makeResponseStub(),
             jest.fn()
@@ -405,10 +408,10 @@ describe('requirePermission', () => {
          * trail (`reason`, asserted above), not disclosed to whoever is probing.
          */
         const unauthenticated = makeResponseStub();
-        requirePermission(WILDCARD)(makeRequest(), unauthenticated, jest.fn());
+        requirePermission(ADMIN_ONLY_KEY)(makeRequest(), unauthenticated, jest.fn());
 
         const nonAdmin = makeResponseStub();
-        requirePermission(WILDCARD)(
+        requirePermission(ADMIN_ONLY_KEY)(
             makeRequest({ authContext: asCustomer('user-9') }),
             nonAdmin,
             jest.fn()
@@ -420,7 +423,7 @@ describe('requirePermission', () => {
 });
 
 /**
- * `requirePermissionViaCookie(WILDCARD)` — admin elevation proved by the refresh COOKIE rather than a bearer header.
+ * `requirePermissionViaCookie(ADMIN_ONLY_KEY)` — admin elevation proved by the refresh COOKIE rather than a bearer header.
  *
  * It exists for the requests a browser makes without JavaScript setting a header: a PDF invoice
  * opened in a new tab, an `EventSource` stream. Those cannot carry `Authorization`, so the
@@ -443,7 +446,7 @@ describe('requirePermissionViaCookie', () => {
         const response = makeResponseStub();
         const next = jest.fn();
 
-        requirePermissionViaCookie(WILDCARD)(
+        requirePermissionViaCookie(ADMIN_ONLY_KEY)(
             makeCookieRequest(),
             response,
             asStub<NextFunction>(next)
@@ -458,7 +461,7 @@ describe('requirePermissionViaCookie', () => {
     it('rejects an empty cookie value the same way as a missing one', () => {
         const response = makeResponseStub();
 
-        requirePermissionViaCookie(WILDCARD)(
+        requirePermissionViaCookie(ADMIN_ONLY_KEY)(
             makeCookieRequest(''),
             response,
             asStub<NextFunction>(jest.fn())
@@ -473,7 +476,7 @@ describe('requirePermissionViaCookie', () => {
         mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser as never);
 
         await runUntilNext(
-            requirePermissionViaCookie(WILDCARD),
+            requirePermissionViaCookie(ADMIN_ONLY_KEY),
             makeCookieRequest('cookie.jwt'),
             makeResponseStub()
         );
@@ -486,7 +489,7 @@ describe('requirePermissionViaCookie', () => {
         mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser as never);
 
         const next = await runUntilNext(
-            requirePermissionViaCookie(WILDCARD),
+            requirePermissionViaCookie(ADMIN_ONLY_KEY),
             makeCookieRequest('cookie.jwt'),
             makeResponseStub()
         );
@@ -500,7 +503,7 @@ describe('requirePermissionViaCookie', () => {
         mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser as never);
         const request = makeCookieRequest('cookie.jwt');
 
-        await runUntilNext(requirePermissionViaCookie(WILDCARD), request, makeResponseStub());
+        await runUntilNext(requirePermissionViaCookie(ADMIN_ONLY_KEY), request, makeResponseStub());
 
         expect(request.authContext).toEqual(adminUser);
         expect(request.caller).toEqual(callerInScope(adminUser, 'tenant'));
@@ -513,7 +516,7 @@ describe('requirePermissionViaCookie', () => {
         const response = makeResponseStub();
         const next = jest.fn();
 
-        requirePermissionViaCookie(WILDCARD)(
+        requirePermissionViaCookie(ADMIN_ONLY_KEY)(
             makeCookieRequest('cookie.jwt'),
             response,
             asStub<NextFunction>(next)
@@ -529,7 +532,7 @@ describe('requirePermissionViaCookie', () => {
         mockedVerifyRefreshToken.mockResolvedValueOnce(undefined as never);
         const response = makeResponseStub();
 
-        requirePermissionViaCookie(WILDCARD)(
+        requirePermissionViaCookie(ADMIN_ONLY_KEY)(
             makeCookieRequest('cookie.jwt'),
             response,
             asStub<NextFunction>(jest.fn())
@@ -542,7 +545,7 @@ describe('requirePermissionViaCookie', () => {
     it('records a forbidden attempt in the audit trail', async () => {
         mockedVerifyRefreshToken.mockResolvedValueOnce(asCustomer('user-1') as never);
 
-        requirePermissionViaCookie(WILDCARD)(
+        requirePermissionViaCookie(ADMIN_ONLY_KEY)(
             makeCookieRequest('cookie.jwt'),
             makeResponseStub(),
             asStub<NextFunction>(jest.fn())
@@ -562,7 +565,7 @@ describe('requirePermissionViaCookie', () => {
         // `user?.id ?? 'anonymous'` — an audit row with an empty actor is a row nobody can act on.
         mockedVerifyRefreshToken.mockResolvedValueOnce(undefined as never);
 
-        requirePermissionViaCookie(WILDCARD)(
+        requirePermissionViaCookie(ADMIN_ONLY_KEY)(
             makeCookieRequest('cookie.jwt'),
             makeResponseStub(),
             asStub<NextFunction>(jest.fn())
@@ -581,7 +584,7 @@ describe('requirePermissionViaCookie', () => {
         const response = makeResponseStub();
         const next = jest.fn();
 
-        requirePermissionViaCookie(WILDCARD)(
+        requirePermissionViaCookie(ADMIN_ONLY_KEY)(
             makeCookieRequest('forged.jwt'),
             response,
             asStub<NextFunction>(next)
@@ -598,7 +601,7 @@ describe('requirePermissionViaCookie', () => {
         mockedVerifyRefreshToken.mockRejectedValueOnce(new Error('mongo is down'));
         const response = makeResponseStub();
 
-        requirePermissionViaCookie(WILDCARD)(
+        requirePermissionViaCookie(ADMIN_ONLY_KEY)(
             makeCookieRequest('cookie.jwt'),
             response,
             asStub<NextFunction>(jest.fn())
@@ -622,7 +625,7 @@ describe('stillHoldsKeyViaCookie', () => {
         mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser as never);
 
         await expect(
-            stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', WILDCARD)
+            stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', ADMIN_ONLY_KEY)
         ).resolves.toBe(true);
     });
 
@@ -630,7 +633,7 @@ describe('stillHoldsKeyViaCookie', () => {
         mockedVerifyRefreshToken.mockResolvedValueOnce(asCustomer('user-1') as never);
 
         await expect(
-            stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', WILDCARD)
+            stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', ADMIN_ONLY_KEY)
         ).resolves.toBe(false);
     });
 
@@ -638,7 +641,7 @@ describe('stillHoldsKeyViaCookie', () => {
         mockedVerifyRefreshToken.mockResolvedValueOnce(undefined as never);
 
         await expect(
-            stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', WILDCARD)
+            stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', ADMIN_ONLY_KEY)
         ).resolves.toBe(false);
     });
 
@@ -648,14 +651,14 @@ describe('stillHoldsKeyViaCookie', () => {
         mockedVerifyRefreshToken.mockRejectedValueOnce(new Error('mongo is down'));
 
         await expect(
-            stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', WILDCARD)
+            stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', ADMIN_ONLY_KEY)
         ).resolves.toBe(false);
     });
 
     it('audits the refusal the same way the connect-time guard does', async () => {
         mockedVerifyRefreshToken.mockResolvedValueOnce(asCustomer('user-1') as never);
 
-        await stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', WILDCARD);
+        await stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', ADMIN_ONLY_KEY);
 
         expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -669,7 +672,7 @@ describe('stillHoldsKeyViaCookie', () => {
     it('does not audit a passing recheck', async () => {
         mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser as never);
 
-        await stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', WILDCARD);
+        await stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', ADMIN_ONLY_KEY);
 
         expect(mockedEmitAuditEvent).not.toHaveBeenCalled();
     });

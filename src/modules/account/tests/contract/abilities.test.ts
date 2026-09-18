@@ -98,8 +98,9 @@ describe('GET /account/abilities', () => {
     });
 
     it('keeps the two scopes apart in the one payload', async () => {
-        // This account is a shop owner AND the installation's operator — two memberships, which is
-        // what makes it the one caller that can prove the lists do not leak into each other.
+        // This account is the shop's admin AND the installation's operator — two memberships,
+        // which is what makes it the one caller that can prove the lists do not leak into each
+        // other.
         const { bearer } = await authenticateAs('admin');
 
         const response = await api()
@@ -108,7 +109,7 @@ describe('GET /account/abilities', () => {
             .expect(200);
 
         // The scope invariant, reaching the client: the platform key is answerable ONLY from the
-        // platform list, and the shop's unrestricted `all.manage` does not reach it.
+        // platform list — holding every tenant key, `admin` included, does not reach it.
         expect(
             abilityFrom(response.body, 'platform').can('read', subject('ObservabilitySnapshot', {}))
         ).toBe(true);
