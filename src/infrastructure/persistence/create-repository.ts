@@ -12,15 +12,6 @@
 
 import { Types } from 'mongoose';
 import type { Model, Document, QueryFilter } from 'mongoose';
-
-/**
- * What `.lean()` actually hands back: `TDocument`'s own fields, none of `Document`'s instance
- * machinery (`save`, `toObject`, `isNew`, …) and no `id` virtual — `.lean()` skips virtuals, so a
- * lean read never has one. `_id` is restored explicitly: `Document` declares it too, so the
- * `Omit` would otherwise drop it along with everything else `Document` owns.
- */
-export type Lean<TDocument extends Document> = Omit<TDocument, keyof Document | 'id'> &
-    Pick<TDocument, '_id'>;
 import {
     normalizePagination,
     buildPaginatedMeta,
@@ -33,6 +24,15 @@ import {
 } from './search';
 import { trackDatabaseQuery } from './metrics';
 import type { SerializeTransform } from './serialize';
+
+/**
+ * What `.lean()` actually hands back: `TDocument`'s own fields, none of `Document`'s instance
+ * machinery (`save`, `toObject`, `isNew`, …) and no `id` virtual — `.lean()` skips virtuals, so a
+ * lean read never has one. `_id` is restored explicitly: `Document` declares it too, so the
+ * `Omit` would otherwise drop it along with everything else `Document` owns.
+ */
+export type Lean<TDocument extends Document> = Omit<TDocument, keyof Document | 'id'> &
+    Pick<TDocument, '_id'>;
 
 /**
  * The ceiling `findAll` applies when a caller names no limit. A backstop against an unbounded
