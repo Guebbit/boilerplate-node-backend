@@ -3,12 +3,12 @@
  * `requirePermission` key by default too, unless the route is listed in {@link WRITE_EXCEPTIONS}
  * below with a reason.
  *
- * The twelve per-module `routes.test.ts` suites each state their own module's authorization in
- * full, and that stays valuable — mount order, cache tags, and upload fields are genuinely
- * per-module. But "every write demands a permission key" is an app-wide property, and stating it twelve
- * times locally enforces it zero times globally: a thirteenth module with no `routes.test.ts` of
- * its own would be guarded by nothing. This file states the property once, for every routed
- * module at once, so a new module inherits the guarantee instead of needing to opt into it.
+ * Each routed module's own `routes.test.ts` suite states its own authorization in full, and that
+ * stays valuable — mount order, cache tags, and upload fields are genuinely per-module. But "every
+ * write demands a permission key" is an app-wide property, and stating it locally, once per
+ * module, enforces it globally nowhere: a module with no `routes.test.ts` of its own would be
+ * guarded by nothing. This file states the property once, for every routed module at once, so a
+ * new module inherits the guarantee instead of needing to opt into it.
  *
  * `WRITE_EXCEPTIONS` is the actual guardrail's shape: MOST writes here are somebody's own resource
  * (a cart, a wishlist, an address book, a session) rather than a staff action, so the exception
@@ -35,6 +35,7 @@ jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
 );
 
 import { router as accountRouter } from '@modules/account/routes';
+import { router as addressesRouter } from '@modules/addresses/routes';
 import { router as antibotRouter } from '@modules/antibot/routes';
 import { router as apiKeysRouter } from '@modules/api-keys/routes';
 import { router as auditLogsRouter } from '@modules/audit-logs/routes';
@@ -62,6 +63,7 @@ const MODULES_ROOT = path.join(__dirname, '..', '..', 'src', 'modules');
  */
 const ROUTED_MODULES: Record<string, Router> = {
     account: accountRouter,
+    addresses: addressesRouter,
     antibot: antibotRouter,
     'api-keys': apiKeysRouter,
     'audit-logs': auditLogsRouter,
@@ -194,15 +196,15 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: true,
         reason: "revoking one of the caller's own sessions"
     },
-    'account POST /addresses': {
+    'addresses POST /addresses': {
         requiresAuth: true,
         reason: "adding to the caller's own address book"
     },
-    'account PUT /addresses/:addressId': {
+    'addresses PUT /addresses/:addressId': {
         requiresAuth: true,
         reason: "editing an entry in the caller's own address book"
     },
-    'account DELETE /addresses/:addressId': {
+    'addresses DELETE /addresses/:addressId': {
         requiresAuth: true,
         reason: "removing an entry from the caller's own address book"
     },

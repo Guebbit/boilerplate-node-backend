@@ -49,15 +49,15 @@ describe('the declared keys and the modules that own them', () => {
     );
 
     it('leave a module that introduces none claiming none', () => {
-        // `cart`, `wishlist` and `antibot` are *your own things* or infrastructure — what you may
-        // do with them follows from being signed in, not from a role. An empty claim here is a
-        // decision, and a key appearing under one of them would be a change of model.
+        // `addresses`, `cart`, `wishlist` and `antibot` are *your own things* or infrastructure —
+        // what you may do with them follows from being signed in, not from a role. An empty claim
+        // here is a decision, and a key appearing under one of them would be a change of model.
         const keyless = [...claimed.entries()]
             .filter(([, keys]) => keys.length === 0)
             .map(([module]) => module)
             .toSorted();
 
-        expect(keyless).toEqual(['antibot', 'wishlist']);
+        expect(keyless).toEqual(['addresses', 'antibot', 'wishlist']);
     });
 
     it('find every key somewhere, so the two lists are the same set', () => {

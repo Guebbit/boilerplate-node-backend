@@ -1,7 +1,8 @@
 /**
  * @module
  * Express router for the account module: auth (login, signup, refresh, logout), password reset,
- * email verification, sessions, and the address book. Destructive and session-eviction routes
+ * email verification, and sessions. The address book shares this router's `/account` prefix from
+ * its own module — see `@modules/addresses/routes`. Destructive and session-eviction routes
  * (`DELETE /`, `POST /logout-all`, `DELETE /sessions/:sessionId`) and an email change on `PUT /`
  * additionally require a fresh session (`requireFreshAuth`/`requireFreshAuthWhen`).
  * See `./module.ts` for the mount point and `docs/modules/account.md` for the story.
@@ -58,9 +59,6 @@ import { postVerifyConfirm } from './controllers/post-verify-confirm';
 import { postEmailChangeConfirm } from './controllers/post-email-change-confirm';
 import { deleteExpiredTokens } from './controllers/delete-expired-tokens';
 import { postAccountExport } from './controllers/post-account-export';
-import { getAddresses } from './controllers/get-addresses';
-import { postAddress, putAddress } from './controllers/write-addresses';
-import { deleteAddress } from './controllers/delete-address';
 import { deleteAccountRequest } from './controllers/delete-account-request';
 import { deleteAccountConfirm } from './controllers/delete-account-confirm';
 import { getOAuthProviders } from './controllers/get-oauth-providers';
@@ -206,18 +204,6 @@ router.delete(
     requireFreshAuth(REAUTH_TIME_SENSITIVE),
     deleteSession
 );
-
-// GET /account/addresses — the caller's address book (requires auth)
-router.get('/addresses', isAuth, getAddresses);
-
-// POST /account/addresses — add an entry (requires auth)
-router.post('/addresses', isAuth, postAddress);
-
-// PUT /account/addresses/:addressId — update an entry (requires auth)
-router.put('/addresses/:addressId', isAuth, putAddress);
-
-// DELETE /account/addresses/:addressId — remove an entry (requires auth)
-router.delete('/addresses/:addressId', isAuth, deleteAddress);
 
 // POST /account/verify-request — re-send the verification email (requires auth)
 router.post('/verify-request', credentialLimiters, isAuth, postVerifyRequest);

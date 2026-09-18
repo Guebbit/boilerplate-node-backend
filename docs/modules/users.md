@@ -18,6 +18,7 @@ graph cannot see._
 flowchart LR
     users["users<br/><i>this module</i>"]
     account["account"]
+    addresses["addresses"]
     api_keys["api-keys"]
     cart["cart"]
     delivery["delivery"]
@@ -27,6 +28,7 @@ flowchart LR
     wishlist["wishlist"]
 
     account --> users
+    addresses --> users
     api_keys --> users
     cart --> users
     delivery --> users
@@ -34,8 +36,8 @@ flowchart LR
     payments --> users
     webhooks --> users
     wishlist --> users
-    users -. "user.deleted" .-> account
     users -. "user.setup-requested" .-> account
+    users -. "user.deleted" .-> addresses
     users -. "user.deleted" .-> cart
     users -. "user.deleted" .-> orders
     users -. "user.deleted" .-> payments
@@ -46,7 +48,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class account,api_keys,delivery,payments,webhooks,wishlist supporting;
+    class account,addresses,api_keys,delivery,payments,webhooks,wishlist supporting;
     class users centre;
 ```
 

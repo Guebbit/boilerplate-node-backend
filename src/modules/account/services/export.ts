@@ -31,7 +31,7 @@ import { cartService } from '@modules/cart';
 import { wishlistService } from '@modules/wishlist';
 import { auditLogService } from '@modules/audit-logs';
 import { findOwnTickets } from '@modules/feedback';
-import { addressesGet } from './addresses';
+import { addressesGet } from '@modules/addresses';
 import { accountAuditActions } from '../audit';
 
 /** A live refresh session, metadata only — never the token value; see the field's own comment. */

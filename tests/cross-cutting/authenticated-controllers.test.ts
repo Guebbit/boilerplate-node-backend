@@ -17,6 +17,7 @@ jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
 );
 
 import { router as accountRouter } from '@modules/account/routes';
+import { router as addressesRouter } from '@modules/addresses/routes';
 import { router as cartRouter } from '@modules/cart/routes';
 import { router as deliveryRouter } from '@modules/delivery/routes';
 import { router as feedbackRouter } from '@modules/feedback/routes';
@@ -51,12 +52,13 @@ const MODULES_ROOT = path.join(__dirname, '..', '..', 'src', 'modules');
 const moduleNames = (): string[] => readdirSync(MODULES_ROOT);
 
 /**
- * Modules that mount a router, imported directly — the same twelve
+ * Modules that mount a router, imported directly — the same ones
  * `tests/cross-cutting/write-routes-are-guarded.test.ts` imports, and for the same reason: this
  * file needs the real mounted stack, not a re-parse of the source that produced it.
  */
 const ROUTED_MODULES: Record<string, Router> = {
     account: accountRouter,
+    addresses: addressesRouter,
     cart: cartRouter,
     delivery: deliveryRouter,
     feedback: feedbackRouter,

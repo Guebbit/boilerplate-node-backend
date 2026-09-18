@@ -1,7 +1,7 @@
 # account
 
 ::: tip At a glance
-**Owns** — every way into an account: signup, login, [OAuth](./account-oauth.md), [two-factor auth](./account-two-factor.md), refresh, re-auth, password reset, session listing and revocation, logout-everywhere, two-step deletion — plus the address book.
+**Owns** — every way into an account: signup, login, [OAuth](./account-oauth.md), [two-factor auth](./account-two-factor.md), refresh, re-auth, password reset, session listing and revocation, logout-everywhere, two-step deletion. No collection of its own — see [`addresses`](./addresses.md) for the one that used to live here.
 **Depends on** — [`users`](./users.md), whose record it authenticates. The repo's only `shared-kernel` edge.
 **Breaks if you change** — the token lifetimes or the cookie flags. Every guard in the app resolves through this module.
 :::
@@ -17,6 +17,7 @@ graph cannot see._
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
 flowchart LR
     account["account<br/><i>this module</i>"]
+    addresses["addresses"]
     audit_logs["audit-logs"]
     cart["cart"]
     delivery["delivery"]
@@ -26,7 +27,7 @@ flowchart LR
     users["users"]
     wishlist["wishlist"]
 
-    cart --> account
+    account --> addresses
     account --> audit_logs
     account --> cart
     account --> delivery
@@ -35,7 +36,6 @@ flowchart LR
     account --> payments
     account --> users
     account --> wishlist
-    users -. "user.deleted" .-> account
     users -. "user.setup-requested" .-> account
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -43,7 +43,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class delivery,payments,users,wishlist supporting;
+    class addresses,delivery,payments,users,wishlist supporting;
     class audit_logs,feedback generic;
     class account centre;
 ```
@@ -57,16 +57,16 @@ auth resolver at import time — not in a boot step — because installing a fun
 connection, and every guard in the application depends on it existing before the first request
 arrives.
 
-It owns exactly one collection, and it is not the one you would guess. The User record belongs to
-[`users`](./users.md) and is reached through that module's barrel; what this module owns outright
-is the **address book**, one document per account, and a destroyed account takes its book with it
-through the same `user.deleted` event the cart and wishlist listen for.
+It owns no collection of its own. The User record belongs to [`users`](./users.md) and is reached
+through that module's barrel; the address book that used to live here moved to its own module,
+[`addresses`](./addresses.md), once nothing else needed `account` to hold it — see that page for
+why.
 
 An account nobody has signed into in a long time is a live account with no live purpose —
 `npm run reap:inactive-accounts` (`docker/crontab`, nightly, disabled by default via
-`NODE_INACTIVE_ACCOUNT_DAYS=0`) warns, then soft-, then hard-deletes one, the hard delete going
-through the same `user.deleted` cascade above. See
-[Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full mechanism.
+`NODE_INACTIVE_ACCOUNT_DAYS=0`) warns, then soft-, then hard-deletes one, the hard delete firing the
+same `user.deleted` event [`addresses`](./addresses.md), `cart` and `wishlist` each answer on their
+own collection. See [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full mechanism.
 
 ::: tip The barrel is one line wide, and that is the story
 `session/`, `two-factor/` and `oauth/` are three folders and not one exported symbol between them.
@@ -76,10 +76,6 @@ sibling has ever reached for a token, a factor or a provider — even the admin 
 [`users`](./users.md) clears the fields rather than importing anything from here. Proving who
 somebody is _is_ what `account` is, and none of it is anyone else's business.
 :::
-
-What the barrel does publish is `addressForCheckout` — the single address an order ships to. The
-address CRUD stays internal, served by this module's own routes. That one function is the whole of
-the cart's `customer-supplier` arrow.
 
 ## The pipeline
 
@@ -103,14 +99,13 @@ flowchart LR
     T --> G["every guarded request<br/><i>the kernel asks, this module answers</i>"]
     LO["logout everywhere"] -.->|revokes| RC
     US["users"] -. "user.setup-requested" .-> SU["setup link sent"]
-    US -. "user.deleted" .-> AB["address book emptied"]
 
     classDef entry fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef token fill:#ede9fe,stroke:#7c3aed,color:#111827;
     classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
     class S,L,LO,US,OA entry;
     class T,RC,IS token;
-    class V,G,SU,AB,CH done;
+    class V,G,SU,CH done;
 ```
 
 ::: warning The two entries are not held to the same bar
@@ -171,6 +166,7 @@ up-to-24-hours between the two.
 - [Sessions](./account-sessions.md) — the token mechanics, in detail
 - [Two-factor authentication](./account-two-factor.md) — the registry, and the enrollment state machine
 - [OAuth](./account-oauth.md) — the provider port and the three outcomes of a callback
+- [`addresses`](./addresses.md) — shares the `/account` URL prefix and the frontend screen
 - [`users`](./users.md) — the collection this module shares
 - [Security](../tools/security.md) — hashing, cookies, the headers around them, and this module's own rate-limit budgets
 - [Request Flow](../theory/request-flow.md) — where the guard sits in a request

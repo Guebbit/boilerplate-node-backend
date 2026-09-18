@@ -18,6 +18,7 @@ graph cannot see._
 flowchart LR
     cart["cart<br/><i>this module</i>"]
     account["account"]
+    addresses["addresses"]
     delivery["delivery"]
     inventory["inventory"]
     orders["orders"]
@@ -28,7 +29,7 @@ flowchart LR
 
     account --> cart
     wishlist --> cart
-    cart --> account
+    cart --> addresses
     cart --> delivery
     cart --> inventory
     cart --> orders
@@ -43,7 +44,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class orders,products core;
-    class account,delivery,inventory,payments,users,wishlist supporting;
+    class account,addresses,delivery,inventory,payments,users,wishlist supporting;
     class cart centre;
 ```
 

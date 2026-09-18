@@ -1,0 +1,3 @@
+subdomain: supporting
+dependsOn:
+    - users # USER_DELETED, to clear an erased account's book — never a service call

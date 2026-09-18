@@ -1100,6 +1100,89 @@ components:
                     type: string
                     format: date-time
 
+        # `POST /account/export`'s answer (`account/openapi.yaml`) — here, not in that module's
+        # own fragment, because a module fragment lints standalone and cannot reference a
+        # sibling's schema. This envelope is exactly that: one field per module that contributes
+        # a section, most of them owned by a module other than `account`.
+        AccountExportResponse:
+            type: object
+            additionalProperties: false
+            required:
+                [
+                    exportedAt,
+                    profile,
+                    addresses,
+                    orders,
+                    payments,
+                    shipments,
+                    cart,
+                    wishlist,
+                    sessions,
+                    auditLog
+                ]
+            properties:
+                exportedAt:
+                    type: string
+                    format: date-time
+                profile:
+                    $ref: '#/components/schemas/User'
+                addresses:
+                    type: array
+                    items:
+                        $ref: '../../src/modules/addresses/openapi.yaml#/components/schemas/Address'
+                orders:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Order'
+                payments:
+                    type: array
+                    items:
+                        $ref: '../../src/modules/account/openapi.yaml#/components/schemas/ExportPayment'
+                shipments:
+                    type: array
+                    items:
+                        $ref: '../../src/modules/account/openapi.yaml#/components/schemas/ExportShipment'
+                cart:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/CartItem'
+                wishlist:
+                    type: array
+                    items:
+                        type: object
+                        additionalProperties: false
+                        required: [productId]
+                        properties:
+                            productId:
+                                $ref: '#/components/schemas/Id'
+                sessions:
+                    type: array
+                    items:
+                        $ref: '../../src/modules/account/openapi.yaml#/components/schemas/ExportSession'
+                auditLog:
+                    type: array
+                    items:
+                        $ref: '../../src/modules/account/openapi.yaml#/components/schemas/ExportAuditEntry'
+                feedback:
+                    type: array
+                    description: Present only when `NODE_EXPORT_INCLUDE_FEEDBACK=true`.
+                    items:
+                        $ref: '../../src/modules/account/openapi.yaml#/components/schemas/ExportFeedbackTicket'
+
+        AccountExportEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/AccountExportResponse'
+
         # For the path-form deletes, which need no id — `{id}` already carries it — but do
         # read the flag from a body as readily as from the query.
         HardDeleteRequest:
@@ -1207,9 +1290,9 @@ paths:
     /account/sessions/{sessionId}:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1sessions~1{sessionId}'
     /account/addresses:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1addresses'
+        $ref: '../../src/modules/addresses/openapi.yaml#/paths/~1account~1addresses'
     /account/addresses/{addressId}:
-        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1addresses~1{addressId}'
+        $ref: '../../src/modules/addresses/openapi.yaml#/paths/~1account~1addresses~1{addressId}'
     /account/verify-request:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1verify-request'
     /account/verify-confirm:

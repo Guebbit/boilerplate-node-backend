@@ -18,7 +18,7 @@
  * shape, by its own docblock — no endpoint serves a raw locale entry, the locale tier-merge builds
  * the response instead. Parsing a stored row against an unrelated response schema would be a false
  * guardrail, not a true one. Address books are the one STORED shape checked anyway:
- * `@modules/account/model.ts` says each entry already serializes as the contract's `Address`,
+ * `@modules/addresses/model.ts` says each entry already serializes as the contract's `Address`,
  * through the same `applySerialization` a real response path would use if one read a raw book —
  * so it is that guarantee under test, not the entry point's absence.
  */
@@ -35,7 +35,7 @@ import { orderService } from '@modules/orders';
 import { paymentModel } from '@modules/payments/model';
 import { userModel } from '@modules/users/model';
 import { auditLogModel } from '@modules/audit-logs/model';
-import { addressBookModel } from '@modules/account/model';
+import { addressBookModel } from '@modules/addresses/model';
 import { reservationModel } from '@modules/inventory/model';
 import { SEED_OWNER_ID, SEED_USER_ID } from '@scenarios/accounts';
 import { enabledModules } from '../../../src/modules';

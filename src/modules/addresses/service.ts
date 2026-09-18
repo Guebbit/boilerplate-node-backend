@@ -1,10 +1,8 @@
 /**
  * @module
- * The address book — the one collection this module owns outright. Every endpoint answers the
- * whole book (`{ addresses }`), never one entry: the invariant worth seeing after any write is
- * "exactly one default", and that's a property of the list, not of one entry. A slice of
- * `./index`'s service rather than its own — see `./index` for why the account's two aggregates
- * share one namespace.
+ * The address book — the one collection this module owns. Every endpoint answers the whole book
+ * (`{ addresses }`), never one entry: the invariant worth seeing after any write is "exactly one
+ * default", and that's a property of the list, not of one entry.
  */
 
 import { t } from '@infrastructure/i18n';
@@ -15,8 +13,8 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import type { Address, AddressInput, UpdateAddressRequest } from '@types';
-import { addressBookRepository } from '../repository';
-import type { AddressBookDocument, AddressItem } from '../model';
+import { addressBookRepository } from './repository';
+import type { AddressBookDocument, AddressItem } from './model';
 
 /** The book as `openapi.yaml` declares it: `AddressesResponse`, built rather than serialized. */
 export interface AddressesView {
@@ -52,7 +50,7 @@ export const addressAdd = (
 ): Promise<ResponseSuccess<AddressesView> | ResponseReject> =>
     addressBookRepository
         .addEntry(userId, entry)
-        .then((book) => generateSuccess(toView(book), 200, t('account.addresses.added')));
+        .then((book) => generateSuccess(toView(book), 200, t('addresses.added')));
 
 /** Update one entry of the caller's own book; someone else's id is the same 404 as a bogus one. */
 export const addressUpdate = (
@@ -61,8 +59,8 @@ export const addressUpdate = (
     changes: UpdateAddressRequest
 ): Promise<ResponseSuccess<AddressesView> | ResponseReject> =>
     addressBookRepository.updateEntry(userId, addressId, changes).then((book) => {
-        if (!book) return generateReject(404, [t('account.addresses.not-found')]);
-        return generateSuccess(toView(book), 200, t('account.addresses.updated'));
+        if (!book) return generateReject(404, [t('addresses.not-found')]);
+        return generateSuccess(toView(book), 200, t('addresses.updated'));
     });
 
 /** Remove one entry; the repository keeps the one-default invariant. */
@@ -71,8 +69,8 @@ export const addressRemove = (
     addressId: string
 ): Promise<ResponseSuccess<AddressesView> | ResponseReject> =>
     addressBookRepository.removeEntry(userId, addressId).then((book) => {
-        if (!book) return generateReject(404, [t('account.addresses.not-found')]);
-        return generateSuccess(toView(book), 200, t('account.addresses.removed'));
+        if (!book) return generateReject(404, [t('addresses.not-found')]);
+        return generateSuccess(toView(book), 200, t('addresses.removed'));
     });
 
 /**
@@ -94,8 +92,3 @@ export const addressForCheckout = (
 /** What a hard account deletion owes the book — see `module.ts`'s subscription. */
 export const addressesDeleteByUserId = (userId: string): Promise<void> =>
     addressBookRepository.deleteByUserId(userId);
-
-/*
- * No namespace object here. These six are members of `addressService` in `./index` instead —
- * see the note there on why the module's service is split into three namespaces rather than one.
- */

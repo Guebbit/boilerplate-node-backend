@@ -1,13 +1,12 @@
 /**
  * @module
- * `DELETE /account/addresses/:addressId` controller — thin HTTP adapter over
- * `addressService.addressRemove`.
+ * `DELETE /account/addresses/:addressId` controller — thin HTTP adapter over `addressRemove`.
  */
 
 import type { Request, Response } from 'express';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { AddressesResponse } from '@types';
-import { addressService } from '../services';
+import { addressRemove } from '../service';
 import { catchAs, refused } from '@infrastructure/http/controller';
 
 /**
@@ -20,8 +19,7 @@ export const deleteAddress = (request: Request<{ addressId: string }>, response:
     const { id } = request.authContext!;
     const { addressId } = request.params;
 
-    return addressService
-        .addressRemove(id, addressId)
+    return addressRemove(id, addressId)
         .then((result) => {
             if (refused(response, result)) return;
 

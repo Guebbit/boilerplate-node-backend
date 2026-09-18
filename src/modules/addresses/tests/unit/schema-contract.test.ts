@@ -6,7 +6,7 @@
  * rather than against `cartSchema` directly, since a sibling's `model.ts` is off-limits.
  */
 
-import { addressBookSchema } from '@modules/account/model';
+import { addressBookSchema } from '@modules/addresses/model';
 import {
     defaultOf,
     indexOptionSpecs,

@@ -37,7 +37,7 @@ import {
 import type { ProductDocument } from '@modules/products';
 import { userService } from '@modules/users';
 import { inventoryService } from '@modules/inventory';
-import { addressForCheckout, type AddressItem } from '@modules/account';
+import { addressForCheckout, type AddressItem } from '@modules/addresses';
 import { findShippingMethod, priceShipping } from '@modules/delivery';
 import { buildReference, paymentService } from '@modules/payments';
 import type { CallerContext } from '@types';

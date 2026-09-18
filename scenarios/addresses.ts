@@ -9,8 +9,8 @@
 import { Types } from 'mongoose';
 import { SEED_OWNER_ID, SEED_USER_ID } from '@scenarios/accounts';
 import { type SeedOutcome, insertIfAbsentForOwner } from '@scenarios/seed';
-import { makeAddressBook } from '@modules/account/factories';
-import { addressBookRepository } from '@modules/account/repository';
+import { makeAddressBook } from '@modules/addresses/factories';
+import { addressBookRepository } from '@modules/addresses/repository';
 
 /**
  * The two seeded books: the owner's (two entries) and the ordinary customer's (one).

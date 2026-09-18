@@ -1,12 +1,12 @@
 /**
  * @module
- * `GET /account/addresses` controller — thin HTTP adapter over `addressService.addressesGet`.
+ * `GET /account/addresses` controller — thin HTTP adapter over `addressesGet`.
  */
 
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import type { AddressesResponse } from '@types';
-import { addressService } from '../services';
+import { addressesGet } from '../service';
 import { catchAs } from '@infrastructure/http/controller';
 
 /**
@@ -20,8 +20,7 @@ export const getAddresses = (request: Request, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */
     const { id } = request.authContext!;
 
-    return addressService
-        .addressesGet(id)
+    return addressesGet(id)
         .then((view) => {
             successResponse<AddressesResponse>(response, view);
         })

@@ -42,11 +42,11 @@ covered, and a new module inherits the guarantee instead of opting into it.
 
 ## Trusting something the client controls
 
-| Attack                                | How it works                                      | This boilerplate                                                                                                                                                                                |
-| ------------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Parameter tampering                   | `role=admin` or `userId=…` in the body, trusted   | The buyer is `authContext.id`, never a body field. Naming someone else's address refuses the checkout before anything is written — `cart/services/checkout.ts`, `account/services/addresses.ts` |
-| Referer / origin-based access control | a spoofable header used as authorization          | No surface: no guard reads `Referer`. CORS uses the origin allowlist for what the BROWSER may read, which is not an authorization decision — `app/security.ts`                                  |
-| IP-based trust                        | `X-Forwarded-For` honoured from untrusted proxies | No guard is IP-based. `trust proxy` is a HOP COUNT from `NODE_TRUST_PROXY_HOPS`, never `true`, so even the rate limiter counts back from the forgeable end — `app/security.ts`                  |
+| Attack                                | How it works                                      | This boilerplate                                                                                                                                                                       |
+| ------------------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Parameter tampering                   | `role=admin` or `userId=…` in the body, trusted   | The buyer is `authContext.id`, never a body field. Naming someone else's address refuses the checkout before anything is written — `cart/services/checkout.ts`, `addresses/service.ts` |
+| Referer / origin-based access control | a spoofable header used as authorization          | No surface: no guard reads `Referer`. CORS uses the origin allowlist for what the BROWSER may read, which is not an authorization decision — `app/security.ts`                         |
+| IP-based trust                        | `X-Forwarded-For` honoured from untrusted proxies | No guard is IP-based. `trust proxy` is a HOP COUNT from `NODE_TRUST_PROXY_HOPS`, never `true`, so even the rate limiter counts back from the forgeable end — `app/security.ts`         |
 
 ## Bypassing the check rather than passing it
 

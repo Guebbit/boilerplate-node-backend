@@ -135,12 +135,6 @@
             "unknown-provider": "This sign-in method isn't available.",
             "invalid-state": "This sign-in attempt has expired. Please try again.",
             "invalid-verifier": "This sign-in attempt has expired. Please try again."
-        },
-        "addresses": {
-            "added": "Address saved.",
-            "updated": "Address updated.",
-            "removed": "Address removed.",
-            "not-found": "The requested address was not found"
         }
     }
 }

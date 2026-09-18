@@ -41,6 +41,7 @@ outside the markers, including the warning below, is written by hand.
 %%{init: {'flowchart': {'nodeSpacing': 26, 'rankSpacing': 52}}}%%
 flowchart TD
     account
+    addresses
     antibot
     api_keys["api-keys"]
     audit_logs["audit-logs"]
@@ -57,6 +58,7 @@ flowchart TD
     webhooks
     wishlist
 
+    account --> addresses
     account --> audit_logs
     account --> cart
     account --> delivery
@@ -65,8 +67,9 @@ flowchart TD
     account --> payments
     account --> users
     account --> wishlist
+    addresses --> users
     api_keys --> users
-    cart --> account
+    cart --> addresses
     cart --> delivery
     cart --> inventory
     cart --> orders
@@ -95,29 +98,30 @@ flowchart TD
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef isolated fill:#f4f4f5,stroke:#a1a1aa,color:#52525b,stroke-dasharray:4 3;
     class cart,orders,products core;
-    class account,api_keys,delivery,inventory,payments,users,webhooks,wishlist supporting;
+    class account,addresses,api_keys,delivery,inventory,payments,users,webhooks,wishlist supporting;
     class audit_logs,feedback,observability generic;
     class antibot,locales isolated;
 ```
 
-|                 | Reaches                                                                 | Reached by                                                              |
-| --------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `account`       | audit-logs, cart, delivery, feedback, orders, payments, users, wishlist | cart                                                                    |
-| `cart`          | account, delivery, inventory, orders, payments, products, users         | account, wishlist                                                       |
-| `orders`        | inventory, products, users                                              | account, cart, delivery, payments, webhooks                             |
-| `users`         | —                                                                       | account, api-keys, cart, delivery, orders, payments, webhooks, wishlist |
-| `payments`      | inventory, orders, users                                                | account, cart, webhooks                                                 |
-| `delivery`      | orders, users                                                           | account, cart                                                           |
-| `inventory`     | products                                                                | cart, orders, payments                                                  |
-| `products`      | —                                                                       | cart, inventory, orders, wishlist                                       |
-| `wishlist`      | cart, products, users                                                   | account                                                                 |
-| `webhooks`      | orders, payments, users                                                 | —                                                                       |
-| `audit-logs`    | —                                                                       | account, observability                                                  |
-| `api-keys`      | users                                                                   | —                                                                       |
-| `feedback`      | —                                                                       | account                                                                 |
-| `observability` | audit-logs                                                              | —                                                                       |
-| `antibot`       | —                                                                       | —                                                                       |
-| `locales`       | —                                                                       | —                                                                       |
+|                 | Reaches                                                                            | Reached by                                                                         |
+| --------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `account`       | addresses, audit-logs, cart, delivery, feedback, orders, payments, users, wishlist | —                                                                                  |
+| `cart`          | addresses, delivery, inventory, orders, payments, products, users                  | account, wishlist                                                                  |
+| `users`         | —                                                                                  | account, addresses, api-keys, cart, delivery, orders, payments, webhooks, wishlist |
+| `orders`        | inventory, products, users                                                         | account, cart, delivery, payments, webhooks                                        |
+| `payments`      | inventory, orders, users                                                           | account, cart, webhooks                                                            |
+| `delivery`      | orders, users                                                                      | account, cart                                                                      |
+| `inventory`     | products                                                                           | cart, orders, payments                                                             |
+| `products`      | —                                                                                  | cart, inventory, orders, wishlist                                                  |
+| `wishlist`      | cart, products, users                                                              | account                                                                            |
+| `addresses`     | users                                                                              | account, cart                                                                      |
+| `webhooks`      | orders, payments, users                                                            | —                                                                                  |
+| `audit-logs`    | —                                                                                  | account, observability                                                             |
+| `api-keys`      | users                                                                              | —                                                                                  |
+| `feedback`      | —                                                                                  | account                                                                            |
+| `observability` | audit-logs                                                                         | —                                                                                  |
+| `antibot`       | —                                                                                  | —                                                                                  |
+| `locales`       | —                                                                                  | —                                                                                  |
 
 <!-- module-graph:end -->
 

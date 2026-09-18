@@ -4,8 +4,8 @@
  * everywhere, and the two-step account deletion. A second service over `users`' record rather
  * than a merged one — `/account` and `/users` are different mounts.
  *
- * Owns:        the address book, outright. The User record stays with `users`, kept replaceable
- *              for a future identity provider.
+ * Owns:        no collection of its own — the address book moved to `addresses`. The User record
+ *              stays with `users`, kept replaceable for a future identity provider.
  * Shares:      the User document with `users` — the repo's one shared kernel, invisible to the
  *              import graph. Both read and write it, so a schema change there is agreed twice.
  * Reaches far: `POST /account/export`. A data export is inherently cross-cutting, and the
@@ -21,9 +21,8 @@ import { registerAuthResolver } from '@kernel/authentication';
 import { rolesOf } from '@kernel/access/store';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { onDomainEvent } from '@kernel/events';
-import { userService, USER_DELETED, USER_SETUP_REQUESTED } from '@modules/users';
+import { userService, USER_SETUP_REQUESTED } from '@modules/users';
 import { verifyAccessToken, verifyRefreshToken, type TokenData } from './session/jwt';
-import { addressesDeleteByUserId } from './services/addresses';
 import { requestAccountSetup } from './services/authentication';
 import { router } from './routes';
 import { accountRateLimits } from './rate-limits';
@@ -154,8 +153,6 @@ export default {
         }
     ],
     subscribe: () => {
-        // A destroyed account takes its address book with it — the same event cart and wishlist listen for.
-        onDomainEvent(USER_DELETED, ({ userId }) => addressesDeleteByUserId(userId));
         /*
          * `users` creates a passwordless account and asks for a way in; this module owns the
          * tokens and mail that provide one. A deleted user before the event fires resolves to

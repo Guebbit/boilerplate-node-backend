@@ -8,7 +8,9 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/factories';
-import { addressService } from '@modules/account/services';
+// Relative, not the barrel: a module's own tests may not import its own `index.ts` (CLAUDE.md's
+// barrel rules apply to tests too), so this reaches the sibling file directly.
+import * as addressService from '../../service';
 import { cartService } from '@modules/cart';
 import { countOrders } from '@modules/orders/tests/factories';
 import { createProduct, readProduct } from '@modules/products/tests/factories';

@@ -135,12 +135,6 @@
             "unknown-provider": "Questo metodo di accesso non è disponibile.",
             "invalid-state": "Questo tentativo di accesso è scaduto. Riprova.",
             "invalid-verifier": "Questo tentativo di accesso è scaduto. Riprova."
-        },
-        "addresses": {
-            "added": "Indirizzo salvato.",
-            "updated": "Indirizzo aggiornato.",
-            "removed": "Indirizzo rimosso.",
-            "not-found": "L'indirizzo richiesto non è stato trovato"
         }
     }
 }

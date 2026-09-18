@@ -15,7 +15,7 @@
  */
 
 import type { Express } from 'express';
-import { seedAddressBooksCollection } from './account';
+import { seedAddressBooksCollection } from './addresses';
 import { seedLocalesCollection } from './locales';
 import { seedProductsCollection } from './products';
 import { seedUsersCollection } from './users';
@@ -46,7 +46,7 @@ export interface ScenarioModule {
  * compile-time check reads the literal keys straight off `keyof typeof shopModules`.
  */
 export const shopModules = {
-    account: {
+    addresses: {
         seed: seedAddressBooksCollection
     },
     locales: {

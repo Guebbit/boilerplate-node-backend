@@ -39,8 +39,16 @@ const MODULES_ROOT = path.join(__dirname, '../../src/modules');
  * caller who, by construction, has no account and no resource yet — there is no subject an audit
  * row could name. A refusal is already visible where it matters: `rate-limit.ts`'s own limiters
  * audit a spent budget, and a burst of solved-but-refused challenges is exactly that shape.
+ * `addresses` edits the caller's own book — the same "your own thing" shape as `wishlist` — and
+ * was never audited while it still lived inside `account`; nothing about the move changes that.
  */
-const EXPECTED_NON_AUDITING: string[] = ['antibot', 'audit-logs', 'observability', 'wishlist'];
+const EXPECTED_NON_AUDITING: string[] = [
+    'addresses',
+    'antibot',
+    'audit-logs',
+    'observability',
+    'wishlist'
+];
 
 /** Every directory under `src/modules/`. */
 const moduleFolders = (): string[] =>

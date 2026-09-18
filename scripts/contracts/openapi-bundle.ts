@@ -34,6 +34,7 @@ export const MODULE_SECTIONS = [
     'audit-logs',
     'antibot',
     'account',
+    'addresses',
     'users',
     'feedback',
     'products',

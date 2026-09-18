@@ -12,6 +12,7 @@
 
 import type { AppModule } from '@kernel/registry';
 import account from './modules/account/module';
+import addresses from './modules/addresses/module';
 import antibot from './modules/antibot/module';
 import apiKeys from './modules/api-keys/module';
 import auditLogs from './modules/audit-logs/module';
@@ -31,6 +32,7 @@ import wishlist from './modules/wishlist/module';
 /** Every module this build serves, in the one list the app tier, docs and scripts all walk. */
 export const enabledModules: AppModule[] = [
     account,
+    addresses,
     antibot,
     apiKeys,
     auditLogs,
@@ -61,6 +63,7 @@ export const enabledModules: AppModule[] = [
  */
 export type ModuleName =
     | 'account'
+    | 'addresses'
     | 'antibot'
     | 'api-keys'
     | 'audit-logs'

@@ -44,6 +44,10 @@ interface Pairing {
 
 const FRONTEND_PAIRING: Readonly<Partial<Record<string, Pairing>>> = {
     account: { counterparts: ['account'] },
+    addresses: {
+        counterparts: ['account'],
+        why: "The address book's own screen lives in the frontend's account module, alongside the profile — same URL prefix, same reason `account` and `addresses` share `/account` on the backend."
+    },
     antibot: {
         counterparts: [],
         why: 'It has no screen of its own — whichever form is guarded (signup, reset, contact) calls `POST /antibot/challenge` and attaches the solved headers inline, in the frontend module that owns that form.'

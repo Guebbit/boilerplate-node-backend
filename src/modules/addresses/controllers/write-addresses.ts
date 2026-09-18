@@ -11,14 +11,14 @@ import type { Request, Response } from 'express';
 import { AddAddressBody, UpdateAddressBody } from '@api/schemas.zod';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { AddressInput, UpdateAddressRequest, AddressesResponse } from '@types';
-import { addressService } from '../services';
+import { addressAdd, addressUpdate } from '../service';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
  * POST /account/addresses — add an entry.
  * The first entry becomes the default automatically; a later one claims the slot only by saying
  * so, demoting the holder in the same write — one read-modify-write, owned by `repository.ts`
- * (see its docblock and `services/addresses.ts`).
+ * (see its docblock and `service.ts`).
  */
 export const postAddress = (
     request: Request<unknown, unknown, AddressInput>,
@@ -30,8 +30,7 @@ export const postAddress = (
     const body = parseBody(AddAddressBody, request.body, response);
     if (!body) return;
 
-    return addressService
-        .addressAdd(id, body)
+    return addressAdd(id, body)
         .then((result) => {
             if (refused(response, result)) return;
             const { data, message } = result;
@@ -62,8 +61,7 @@ export const putAddress = (
     const body = parseBody(UpdateAddressBody, request.body, response);
     if (!body) return;
 
-    return addressService
-        .addressUpdate(id, addressId, body)
+    return addressUpdate(id, addressId, body)
         .then((result) => {
             if (refused(response, result)) return;
             const { data, message } = result;

@@ -146,6 +146,7 @@ export default withMermaid(
                         text: 'supporting',
                         collapsed: false,
                         items: [
+                            { text: 'addresses', link: '/modules/addresses' },
                             { text: 'api-keys', link: '/modules/api-keys' },
                             { text: 'delivery', link: '/modules/delivery' },
                             {

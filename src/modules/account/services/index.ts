@@ -1,16 +1,14 @@
 /**
  * @module
- * Account service — authentication, the profile a person manages, two-factor, and the address
- * book. A folder rather than one file because it passed ~300 lines, split by what each operation
- * does — see `docs/theory/layers.md`.
+ * Account service — authentication, the profile a person manages, and two-factor. A folder rather
+ * than one file because it passed ~300 lines, split by what each operation does — see
+ * `docs/theory/layers.md`.
  *
  * `accountService`:   login, signup, profile, verification, tokens, OAuth.
  * `twoFactorService`: enrollment, removal, backup codes, the login challenge.
- * `addressService`:   the address book's CRUD, plus the address a checkout resolves.
  *
- * Three, not one:  none of the three groups calls another, so one object each keeps a caller of
- *                  `accountService.login` from being coupled, to TypeScript, to 2FA and the
- *                  address book as well.
+ * Two, not one:    neither group calls the other, so one object each keeps a caller of
+ *                  `accountService.login` from being coupled, to TypeScript, to 2FA as well.
  * Prefer direct:   import the one function you need from its own file when a caller needs only a
  *                  name or two; the namespaces exist so the surface can still be browsed by name.
  * Below this:      `../session/` — JWT signing, the refresh cookie, shared expiry. Nothing
@@ -19,9 +17,9 @@
  * `./export` is NOT imported here, on purpose. It reaches `cart`/`wishlist`/`orders`/… for the
  * data-export payload, and this file is what the barrel (`../index.ts`) publishes wholesale — one
  * static import away from `exportOwnData` puts every one of those modules' barrels in this
- * module's own reachability, which is exactly how `cart`'s checkout (itself reaching back into
- * `account` for an address) turned into a real import cycle. `../controllers/post-account-export`
- * imports `./export` directly instead — this module's own file, not a barrel concern.
+ * module's own reachability, which is how a sibling importing `@modules/account` for anything at
+ * all risks a cycle. `../controllers/post-account-export` imports `./export` directly instead —
+ * this module's own file, not a barrel concern.
  */
 
 import * as authentication from './authentication';
@@ -31,7 +29,6 @@ import * as tokens from './tokens';
 import * as tokenCleanup from './token-cleanup';
 import * as oauth from './oauth';
 import * as twoFactor from './two-factor';
-import * as addresses from './addresses';
 
 /*
  * Published by name as well as on the namespace, for the callers that import a single function
@@ -55,7 +52,6 @@ export {
     OAuthEmailUnverifiedError,
     OAuthAccountUnverifiedError
 } from './oauth';
-export { addressForCheckout } from './addresses';
 
 /**
  * Core account functions: login, signup, profile, verification, session tokens, the
@@ -109,17 +105,4 @@ export const twoFactorService = {
     regenerateBackupCodes: twoFactor.regenerateBackupCodes,
     sendLoginCode: twoFactor.sendLoginCode,
     verifyLoginChallenge: twoFactor.verifyLoginChallenge
-};
-
-/**
- * The address book: list, add, update, remove, and the two cross-cutting reads (checkout's
- * lookup, the cascade delete when a user account goes away).
- */
-export const addressService = {
-    addressesGet: addresses.addressesGet,
-    addressAdd: addresses.addressAdd,
-    addressUpdate: addresses.addressUpdate,
-    addressRemove: addresses.addressRemove,
-    addressForCheckout: addresses.addressForCheckout,
-    addressesDeleteByUserId: addresses.addressesDeleteByUserId
 };

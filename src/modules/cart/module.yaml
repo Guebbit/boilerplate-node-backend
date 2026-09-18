@@ -1,6 +1,6 @@
 subdomain: core
 dependsOn:
-    - account # the checkout's delivery address
+    - addresses # the checkout's delivery address
     - delivery # shipping price, pure functions
     - inventory # stock holds during checkout
     - orders # the order a checkout creates
