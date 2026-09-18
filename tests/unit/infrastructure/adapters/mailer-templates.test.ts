@@ -30,6 +30,7 @@ import {
     bankTransferExpiredEmail
 } from '@modules/orders/emails';
 import { shipmentShippedEmail } from '@modules/delivery/emails';
+import { subscriptionDisabledEmail } from '@modules/webhooks/emails';
 
 describe('email templates', () => {
     it('resolves to a directory that exists', () => {
@@ -107,6 +108,10 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }]
     }),
     'delivery.shipment-shipped.ejs': shipmentShippedEmail(locale, 'Ada', 'TRK-0000TEST'),
+    'webhooks.subscription-disabled.ejs': subscriptionDisabledEmail(
+        locale,
+        'https://example.com/hook'
+    ),
     'feedback.contact.ejs': contactRequestEmail(locale, {
         name: 'Ada',
         email: 'ada@example.com',
