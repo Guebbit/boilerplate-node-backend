@@ -56,6 +56,18 @@ export const canTransition = (from: OrderStatus, to: OrderStatus, actor: OrderAc
         : Boolean(ORDER_LIFECYCLE[from][to]?.includes(actor));
 
 /**
+ * Whether an order in `status` may still be paid — the one question every payment door asks
+ * instead of comparing a status literal of its own. `pending` only: `canTransition` alone also
+ * answers `true` for `paid → paid`, since `system` may echo-write it on the webhook's own retries,
+ * but that echo is not a fresh offer to pay — a caller asking "can I pay this" must get `false`
+ * once it already has been.
+ * @param status - current status
+ * @returns whether a payment attempt against this order should be allowed
+ */
+export const isPayable = (status: OrderStatus): boolean =>
+    canTransition(status, OrderStatus.paid, 'system') && status !== OrderStatus.paid;
+
+/**
  * @param from - current status
  * @param actor - who is asking
  * @returns statuses `actor` may move to from `from`, in contract order — what a 409 should offer
@@ -92,6 +104,6 @@ export const orderActionsFor = (status: OrderStatus, actor: OrderActor): OrderAc
         // Asked as `system`, and so absent from `transitions`: paying is a move no request makes.
         // A client needs the answer anyway — it is what decides whether to offer the card form on
         // an order that has no payment record yet.
-        pay: canTransition(status, OrderStatus.paid, 'system') && status !== OrderStatus.paid
+        pay: isPayable(status)
     };
 };

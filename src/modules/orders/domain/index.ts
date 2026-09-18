@@ -17,6 +17,7 @@ export { checkOrderLines } from './rules';
 // answer that already has a name.
 export {
     canTransition,
+    isPayable,
     statusesReachableFrom,
     statusesLeadingTo,
     orderActionsFor

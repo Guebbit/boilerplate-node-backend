@@ -11,6 +11,7 @@ import { OrderStatus } from '@types';
 import {
     ORDER_LIFECYCLE,
     canTransition,
+    isPayable,
     orderActionsFor,
     statusesLeadingTo,
     statusesReachableFrom,
@@ -177,6 +178,25 @@ describe('canTransition', () => {
         expect(statusesReachableFrom(OrderStatus.paid, 'customer')).toEqual([
             OrderStatus.cancelled
         ]);
+    });
+});
+
+describe('isPayable', () => {
+    it('is true for pending alone, over every status', () => {
+        for (const status of EVERY_STATUS)
+            expect(isPayable(status)).toBe(status === OrderStatus.pending);
+    });
+
+    it('refuses the echo `system` may still write onto `paid`', () => {
+        // `canTransition(paid, paid, 'system')` is `true` (the webhook's own retries) — `isPayable`
+        // must not surface that as "you may pay this order again".
+        expect(canTransition(OrderStatus.paid, OrderStatus.paid, 'system')).toBe(true);
+        expect(isPayable(OrderStatus.paid)).toBe(false);
+    });
+
+    it('agrees with `orderActionsFor`\'s `pay` field for every status', () => {
+        for (const status of EVERY_STATUS)
+            expect(orderActionsFor(status, 'admin').pay).toBe(isPayable(status));
     });
 });
 
