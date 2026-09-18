@@ -15,8 +15,8 @@ import { mkdir, rm } from 'node:fs/promises';
 import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
-import { startEphemeralMongo } from '@infrastructure/runtime/ephemeral-mongo';
-import { startInProcessMongod } from '@tests/ephemeral-mongod';
+import { startEphemeralMongo } from '@scenarios/support/ephemeral-mongo';
+import { startInProcessMongod } from '@scenarios/support/ephemeral-mongod';
 
 const REPO_ROOT = path.join(__dirname, '../../..');
 

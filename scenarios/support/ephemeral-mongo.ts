@@ -12,19 +12,20 @@
  * capability either existing path lacks, and it is the one branch that would make a container
  * engine mandatory just to run a test.
  *
- * Actually starting one is NOT this module's job, on purpose: `mongodb-memory-server` is a
- * devDependency, and `not-to-dev-dep` (`.dependency-cruiser.cjs`) bars anything under `src/` from
- * reaching one — a production install runs `npm ci --omit=dev` and this file ships there. Every
- * caller supplies that half as `startInProcess`; the one shared implementation lives in
- * `tests/support/ephemeral-mongod.ts`, which `scenarios/run-server.ts` cannot import
- * (`eslint-plugin-boundaries` bars `scenarios/` from reaching `tests/`) and so keeps its own copy.
+ * Actually starting one is NOT this module's job, on purpose — kept as a separate concern from the
+ * resolver even though both now live under `scenarios/support/`, which may import
+ * `mongodb-memory-server` freely: `not-to-dev-dep` (`.dependency-cruiser.cjs`) only bars `src/`,
+ * and this folder is omitted from a production image regardless. Every caller supplies that half
+ * as `startInProcess`; `./ephemeral-mongod.ts` is the one shared implementation, for
+ * `scenarios/run-server.ts`, `tests/support/global-setup.ts` and `tests/cluster/support/cluster.ts`
+ * alike.
  */
 
 import { existsSync } from 'node:fs';
 // Relative, not the `@infrastructure` alias: this module is loaded from `tests/support/
 // global-setup.ts`, which jest loads outside its normal module resolution — `moduleNameMapper`
 // does not apply there, so the alias would resolve at `tsc`/`eslint` time and fail at runtime.
-import { logger } from '../adapters/logger';
+import { logger } from '../../src/infrastructure/adapters/logger';
 
 /** A running Mongo, and the way to stop it. */
 export interface EphemeralMongo {

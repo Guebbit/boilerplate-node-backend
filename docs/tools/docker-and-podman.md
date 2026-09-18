@@ -165,7 +165,7 @@ to run it, and only one is a CI job:
 
 Hermetic is the stronger claim — no compose, no network, no `depends_on` — so it is what CI gates
 on. Wired is the everyday-dev shape: run it by hand before merging a change that touches the image
-or the env-var resolvers (`src/infrastructure/runtime/ephemeral-mongo.ts`,
+or the env-var resolvers (`scenarios/support/ephemeral-mongo.ts`,
 `tests/cluster/support/redis.ts`).
 
 `docker-compose.test.yml` gives itself its own compose project `name:` on purpose — without one,

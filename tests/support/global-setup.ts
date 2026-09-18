@@ -3,11 +3,8 @@ import path from 'node:path';
 // Relative paths, not the `@infrastructure`/`@tests` aliases every other file in this directory
 // uses: `globalSetup` is loaded outside jest's normal module resolution, where `moduleNameMapper`
 // does not apply — an alias resolves at `tsc`/`eslint` time but fails at jest's own runtime.
-import {
-    startEphemeralMongo,
-    type EphemeralMongo
-} from '../../src/infrastructure/runtime/ephemeral-mongo';
-import { startInProcessMongod } from './ephemeral-mongod';
+import { startEphemeralMongo, type EphemeralMongo } from '../../scenarios/support/ephemeral-mongo';
+import { startInProcessMongod } from '../../scenarios/support/ephemeral-mongod';
 import { FILE_SANDBOX_ROOT_VARIABLE } from './file-sandbox';
 
 /**

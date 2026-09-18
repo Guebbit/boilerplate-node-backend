@@ -1,12 +1,12 @@
 /**
  * @module
- * Actually starts an in-process `mongod` — the half of `startEphemeralMongo`
- * (`@infrastructure/runtime/ephemeral-mongo`) that cannot live in `src/`, because
- * `mongodb-memory-server` is a devDependency and `not-to-dev-dep` bars `src/` from reaching one.
+ * Actually starts an in-process `mongod` — the half of `startEphemeralMongo` (`./ephemeral-mongo.ts`)
+ * that must stay out of `src/`, because `mongodb-memory-server` is a devDependency and
+ * `not-to-dev-dep` bars `src/` from reaching one.
  *
- * Shared by `global-setup.ts` and `tests/cluster/support/cluster.ts` — both under `tests/`, where
- * that rule does not apply. `scenarios/run-server.ts` cannot import this (`eslint-plugin-
- * boundaries` bars `scenarios/` from reaching `tests/`) and keeps its own small copy instead.
+ * Shared by `scenarios/run-server.ts`, `tests/support/global-setup.ts` and
+ * `tests/cluster/support/cluster.ts` — `tests/` may import `scenarios/`, so one copy serves all
+ * three rather than `run-server.ts` keeping its own small one.
  */
 
 import { MongoMemoryServer } from 'mongodb-memory-server';
@@ -14,7 +14,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 // global-setup.ts`, which jest loads outside its normal module resolution — `moduleNameMapper`
 // does not apply there, so the alias would resolve at `tsc`/`eslint` time and fail at runtime.
 import { logger } from '../../src/infrastructure/adapters/logger';
-import type { EphemeralMongo } from '../../src/infrastructure/runtime/ephemeral-mongo';
+import type { EphemeralMongo } from './ephemeral-mongo';
 
 /**
  * How long `MongoMemoryServer.create()` gets before its stall is treated as a hang rather than a
@@ -46,10 +46,10 @@ const toEphemeralMongo = (server: MongoMemoryServer): EphemeralMongo => ({
  * `setInterval` keeps running past a timeout's rejection regardless — reporting the error and then
  * hanging on that interval is not better than hanging outright.
  *
- * @param dbPath - where the server keeps its data; a temp directory of the library's own choosing
+ * @param databasePath - where the server keeps its data; a temp directory of the library's own choosing
  * when omitted.
  */
-export const startInProcessMongod = (dbPath: string | undefined): Promise<EphemeralMongo> => {
+export const startInProcessMongod = (databasePath: string | undefined): Promise<EphemeralMongo> => {
     let timer: NodeJS.Timeout | undefined;
 
     const timeout = new Promise<never>((_resolve, reject) => {
@@ -66,11 +66,11 @@ export const startInProcessMongod = (dbPath: string | undefined): Promise<Epheme
         );
     });
 
-    // `mongodb-memory-server`: starts a real `mongod` against `dbPath` (or a temp directory of its
+    // `mongodb-memory-server`: starts a real `mongod` against `databasePath` (or a temp directory of its
     // own choosing when omitted) and returns a handle exposing its connection string and `stop()`.
     // https://typegoose.github.io/mongodb-memory-server/
     return Promise.race([
-        MongoMemoryServer.create(dbPath ? { instance: { dbPath } } : undefined),
+        MongoMemoryServer.create(databasePath ? { instance: { dbPath: databasePath } } : undefined),
         timeout
     ])
         .then(toEphemeralMongo)

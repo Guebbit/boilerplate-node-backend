@@ -2,15 +2,14 @@
  * `startEphemeralMongo` — the three-way resolver: an external URI wins outright, otherwise the
  * pre-installed-binary check runs before handing off to the caller's `startInProcess`.
  *
- * `startInProcess` is a plain `jest.fn()` here, never a real `mongodb-memory-server` boot — this
- * file lives in `src/` precisely because it never reaches that devDependency (`not-to-dev-dep`);
- * a real boot belongs to the integration suites that already exercise one through
- * `tests/support/ephemeral-mongod.ts` (`tests/integration/app-health.test.ts`).
+ * `startInProcess` is a plain `jest.fn()` here, never a real `mongodb-memory-server` boot — a real
+ * boot belongs to the integration suites that already exercise one through
+ * `scenarios/support/ephemeral-mongod.ts` (`tests/integration/app-health.test.ts`).
  */
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { startEphemeralMongo, type EphemeralMongo } from '@infrastructure/runtime/ephemeral-mongo';
+import { startEphemeralMongo, type EphemeralMongo } from '@scenarios/support/ephemeral-mongo';
 
 const startInProcess = jest.fn(
     (_dbPath: string | undefined): Promise<EphemeralMongo> =>

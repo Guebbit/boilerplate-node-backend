@@ -20,23 +20,10 @@
  *
  * See: docs/tools/demo-profile.md
  */
-import { MongoMemoryServer } from 'mongodb-memory-server';
 import { enableDemoProfile } from '@infrastructure/runtime/demo-profile';
-import { startEphemeralMongo, type EphemeralMongo } from '@infrastructure/runtime/ephemeral-mongo';
+import { startEphemeralMongo } from './support/ephemeral-mongo';
+import { startInProcessMongod } from './support/ephemeral-mongod';
 import { DEMO_BANK_TRANSFER, SCRIPTED_RATE_LIMITS } from './rate-limits';
-
-/**
- * Actually starts an in-process `mongod` — the half `startEphemeralMongo` cannot do itself, since
- * `mongodb-memory-server` is a devDependency `src/` may not reach. `tests/support/
- * ephemeral-mongod.ts` is the same logic for the test suites; this profile keeps its own copy
- * rather than importing it, because `scenarios/` may not reach `tests/` either
- * (`eslint-plugin-boundaries`).
- */
-const startInProcessMongod = (): Promise<EphemeralMongo> =>
-    MongoMemoryServer.create().then((server) => ({
-        uri: server.getUri(),
-        stop: () => server.stop().then(() => undefined)
-    }));
 
 const REQUIRED_DEFAULTS: Record<string, string> = {
     NODE_ENV: 'development',
