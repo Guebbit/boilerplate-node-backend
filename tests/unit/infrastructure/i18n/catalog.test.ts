@@ -9,6 +9,7 @@
 import {
     listSupportedLocales,
     loadLocaleResources,
+    localeCandidatesFor,
     readLocaleDictionary,
     resetSupportedLocales
 } from '@infrastructure/i18n';
@@ -86,5 +87,36 @@ describe('locale discovery', () => {
 
     it('carries the shared keys a module did not contribute to', () => {
         expect(readLocaleDictionary('en').users).toMatchObject(enUsers.users);
+    });
+});
+
+describe('localeCandidatesFor', () => {
+    const originalFallback = process.env.NODE_FALLBACK_LOCALE;
+
+    beforeEach(() => {
+        process.env.NODE_FALLBACK_LOCALE = 'en';
+    });
+
+    afterEach(() => {
+        if (originalFallback === undefined) delete process.env.NODE_FALLBACK_LOCALE;
+        else process.env.NODE_FALLBACK_LOCALE = originalFallback;
+    });
+
+    it('builds the exact, base and fallback chain for a region-tagged locale', () => {
+        expect(localeCandidatesFor('it-CH')).toEqual(['it-CH', 'it', 'en']);
+    });
+
+    it('does not repeat a base tag requested directly', () => {
+        expect(localeCandidatesFor('it')).toEqual(['it', 'en']);
+    });
+
+    it('does not repeat the fallback when it is itself requested', () => {
+        expect(localeCandidatesFor('en')).toEqual(['en']);
+    });
+
+    it('does not repeat a region-tagged fallback locale', () => {
+        process.env.NODE_FALLBACK_LOCALE = 'pt-BR';
+
+        expect(localeCandidatesFor('pt-BR')).toEqual(['pt-BR', 'pt']);
     });
 });

@@ -126,18 +126,19 @@ differs per entity; the surface holds everything the entity does not change.
 
 ## `i18n/` — one language per request
 
-Four change drivers, four files, one barrel. Every caller imports `@infrastructure/i18n` and does
+Three change drivers, three files, one barrel. Every caller imports `@infrastructure/i18n` and does
 not care which file answers. Inside the directory, `overrides` reads `catalog`; `context` reads
-`catalog`; `translation` reads `catalog` and `context`. `Accept-Language` negotiation lives outside
-this directory entirely, in `http/middlewares/locale.ts`.
+`catalog`. `Accept-Language` negotiation lives outside this directory entirely, in
+`http/middlewares/locale.ts` — and so does the translation port for user-authored content, in
+`kernel/translation.ts` (the same inversion `kernel/authentication.ts` uses: the kernel declares
+the hook, `modules/locales` answers it).
 
-| File                                     | What it is                                                                                                                                                                                                                             | Read next                                 |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `src/infrastructure/i18n/index.ts`       | The barrel — the whole published surface of the module, so the files below can be rearranged without touching an import site.                                                                                                          | [Internationalisation](../tools/i18n.md)  |
-| `src/infrastructure/i18n/catalog.ts`     | Where translations come from: which languages exist, the per-module dictionary merge, and the resources `i18next.init()` is handed at boot.                                                                                            | [Internationalisation](../tools/i18n.md)  |
-| `src/infrastructure/i18n/overrides.ts`   | The admin-editable database overlay on top of the deployed files, and the timer that re-reads it. Deletable as a unit — nothing imports it back.                                                                                       | [Internationalisation](../tools/i18n.md)  |
-| `src/infrastructure/i18n/context.ts`     | The `AsyncLocalStorage` carrying one request's translator, and the ambient `t` everything else imports. The concurrency-critical part: a global "current language" answers one request in another's.                                   | [Request Flow](../theory/request-flow.md) |
-| `src/infrastructure/i18n/translation.ts` | The translation port for user-authored content — a product's title in the caller's language — and the cascade that takes those rows with a hard delete. `modules/locales` registers the implementation, so this tier never imports it. | [Internationalisation](../tools/i18n.md)  |
+| File                                   | What it is                                                                                                                                                                                                                               | Read next                                 |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `src/infrastructure/i18n/index.ts`     | The barrel — the whole published surface of the module, so the files below can be rearranged without touching an import site.                                                                                                            | [Internationalisation](../tools/i18n.md)  |
+| `src/infrastructure/i18n/catalog.ts`   | Where translations come from: which languages exist, the per-module dictionary merge, the resources `i18next.init()` is handed at boot, and `localeCandidatesFor` — the pure fallback-chain maths the translation port's resolver walks. | [Internationalisation](../tools/i18n.md)  |
+| `src/infrastructure/i18n/overrides.ts` | The admin-editable database overlay on top of the deployed files, and the timer that re-reads it. Deletable as a unit — nothing imports it back.                                                                                         | [Internationalisation](../tools/i18n.md)  |
+| `src/infrastructure/i18n/context.ts`   | The `AsyncLocalStorage` carrying one request's translator, and the ambient `t` everything else imports. The concurrency-critical part: a global "current language" answers one request in another's.                                     | [Request Flow](../theory/request-flow.md) |
 
 ## `security/` — primitives nobody hand-rolls
 

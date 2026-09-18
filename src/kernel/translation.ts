@@ -2,22 +2,25 @@
  * @module
  * The translation port: how a read path resolves user-authored content — a product's title, a
  * category's description — into a caller's language, and how a HARD delete of that content takes
- * its translation rows with it. Registered by `modules/locales` the same way `./overrides`
- * registers its provider, so this file stays free of any `src/modules/*` import and a decorator
- * over `createRepository` can depend on it without a cycle.
+ * its translation rows with it. Registered by `modules/locales` the same way `kernel/authentication.ts`'s
+ * `AuthResolver` is registered by `account` — the kernel declares the hook, the module answers, so
+ * a decorator over `createRepository` can depend on it without importing `src/modules/*` and
+ * risking a cycle.
  *
  * `removeAll` is the only removal shape here: a `null` in a PATCH and a language's own delete
  * cascade are both driven from inside `modules/locales` itself, against its own repository — this
  * port exists only for the direction nothing else can reach, a product's hard delete asking its
  * translations to go with it.
  *
+ * `localeCandidatesFor` — pure locale-chain maths, no port, no registration — stays in
+ * `@infrastructure/i18n`, next to `getFallbackLocale`.
+ *
  * See: docs/tools/i18n.md
  */
 
 import type { UpsertTranslationsRequest } from '@types';
 import type { ResponseReject } from '@infrastructure/http/response';
-import { getFallbackLocale } from './catalog';
-import { getCurrentLocale } from './context';
+import { getCurrentLocale, localeCandidatesFor } from '@infrastructure/i18n';
 
 /**
  * One entity's translated field values, keyed by field name — `{ title, description }` for a
@@ -226,17 +229,6 @@ export const readAllTranslations = (
         ? translationPort.readAll(entityType, entityId)
         : Promise.resolve(new Map<string, TranslatedFields>());
 
-/**
- * The locale chain a resolver query walks, most specific first: the exact tag, its base language,
- * then the deployment's fallback — deduplicated, since a base tag requested directly (`it`) must
- * not appear twice. All three are known before any query runs, which is what keeps resolution to
- * one index arm per page rather than a per-entity lookup.
- */
-export const localeCandidatesFor = (locale: string): string[] => {
-    const base = locale.split('-')[0];
-    return [...new Set([locale, base, getFallbackLocale()])].filter((tag) => tag.length > 0);
-};
-
 /** The one thing {@link applyTranslations} needs from an already wire-shaped item. */
 export interface Translatable {
     id: string;
@@ -244,9 +236,9 @@ export interface Translatable {
 
 /**
  * Overlays each item's resolved translated fields onto its ALREADY wire-shaped copy — one batched
- * query for the whole page, via {@link resolveTranslations} and {@link localeCandidatesFor} bound
- * to the ambient locale `runWithLocaleContext` carries. No signature threading: the read path
- * that calls this needs no locale parameter of its own.
+ * query for the whole page, via {@link resolveTranslations} and `localeCandidatesFor` bound to
+ * the ambient locale `runWithLocaleContext` carries. No signature threading: the read path that
+ * calls this needs no locale parameter of its own.
  *
  * Deliberately NOT for a hydrated Mongoose document: spreading one loses whatever its own
  * `toJSON` transform computes (a virtual like `available`, `_id` → `id`, dates to ISO strings),

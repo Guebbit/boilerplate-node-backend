@@ -1,24 +1,24 @@
 /**
- * The translation port: register/resolve/remove/search, the locale-candidate chain a resolver
- * query walks, and `applyTranslations` — the overlay a read path runs on an already wire-shaped
- * page.
+ * The translation port: register/resolve/remove/search, and `applyTranslations` — the overlay a
+ * read path runs on an already wire-shaped page. `localeCandidatesFor`'s own cases live in
+ * `tests/unit/infrastructure/i18n/catalog.test.ts` — pure locale-chain maths, no port, no
+ * registration, so it stays with `@infrastructure/i18n` rather than moving here with the port.
  *
  * Mirrors `overrides.test.ts` in spirit — unregistered has to be a safe, ordinary state, since a
  * unit test that never imports `modules/locales` must not throw resolving a product's title.
  */
 import {
     applyTranslations,
-    localeCandidatesFor,
     planTranslations,
     readAllTranslations,
     registerTranslationPort,
     removeTranslations,
     resolveTranslations,
-    runWithLocale,
     searchTranslatedEntityIds,
     writeTranslations,
     type TranslationPort
-} from '@infrastructure/i18n';
+} from '@kernel/translation';
+import { runWithLocale } from '@infrastructure/i18n';
 
 const ORIGINAL_FALLBACK = process.env.NODE_FALLBACK_LOCALE;
 
@@ -174,30 +174,6 @@ describe('readAllTranslations', () => {
 
         await expect(readAllTranslations('product', 'p1')).resolves.toBe(rows);
         expect(port.readAll).toHaveBeenCalledWith('product', 'p1');
-    });
-});
-
-describe('localeCandidatesFor', () => {
-    beforeEach(() => {
-        process.env.NODE_FALLBACK_LOCALE = 'en';
-    });
-
-    it('builds the exact, base and fallback chain for a region-tagged locale', () => {
-        expect(localeCandidatesFor('it-CH')).toEqual(['it-CH', 'it', 'en']);
-    });
-
-    it('does not repeat a base tag requested directly', () => {
-        expect(localeCandidatesFor('it')).toEqual(['it', 'en']);
-    });
-
-    it('does not repeat the fallback when it is itself requested', () => {
-        expect(localeCandidatesFor('en')).toEqual(['en']);
-    });
-
-    it('does not repeat a region-tagged fallback locale', () => {
-        process.env.NODE_FALLBACK_LOCALE = 'pt-BR';
-
-        expect(localeCandidatesFor('pt-BR')).toEqual(['pt-BR', 'pt']);
     });
 });
 

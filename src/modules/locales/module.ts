@@ -13,7 +13,8 @@
 
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
-import { registerLocaleOverrideProvider, registerTranslationPort } from '@infrastructure/i18n';
+import { registerLocaleOverrideProvider } from '@infrastructure/i18n';
+import { registerTranslationPort } from '@kernel/translation';
 import { router } from './routes';
 import { localeService } from './services';
 import { translationRepository } from './repository';

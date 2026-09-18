@@ -102,8 +102,8 @@ export interface ModuleConsumer {
  * A module's declaration that one of its collections carries user-authored content a translation
  * write needs to validate against and invalidate the cache of.
  *
- * `infrastructure/i18n`'s translation resolver cannot import `src/modules/*` either (same wall as
- * {@link ImageTarget}: `translation.ts` cannot be an import from `products` into `locales`, per
+ * `kernel/translation.ts`'s translation resolver cannot import `src/modules/*` either (same wall
+ * as {@link ImageTarget}: it cannot be an import from `products` into `locales`, per
  * docs/theory/modules.md and `boundaries/dependencies` in `eslint.config.ts`). A module registers
  * this instead, keyed under `translatables` on its manifest by the `entityType` string a
  * translation row and the `/translations/{entityType}/{id}` route both use.

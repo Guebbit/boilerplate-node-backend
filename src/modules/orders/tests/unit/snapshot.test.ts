@@ -8,7 +8,7 @@
  */
 
 import { Types } from 'mongoose';
-import { registerTranslationPort, type TranslationPort } from '@infrastructure/i18n';
+import { registerTranslationPort, type TranslationPort } from '@kernel/translation';
 import { freezeOrderLines, resolveSnapshotProducts } from '../../services/snapshot';
 
 /** A port double whose methods are jest mocks by default, overridable per test. */

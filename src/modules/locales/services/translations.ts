@@ -6,12 +6,8 @@
  */
 
 import type { TranslationFields, TranslationOrigin, UpsertTranslationsRequest } from '@types';
-import {
-    getFallbackLocale,
-    t,
-    type TranslationWritePlan,
-    type TranslationWriteSlot
-} from '@infrastructure/i18n';
+import { getFallbackLocale, t } from '@infrastructure/i18n';
+import type { TranslationWritePlan, TranslationWriteSlot } from '@kernel/translation';
 import {
     generateReject,
     generateSuccess,
@@ -207,11 +203,11 @@ const writePlannedTranslations = async (
 };
 
 /**
- * {@link planTranslationWrites}, shaped for the `@infrastructure/i18n` port — which cannot import
- * this module's own `PlannedWrite` (the wall `translation.ts`'s header names), so its `plan`
- * capability is typed against `TranslationWriteSlot` instead: the same shape, minus `origin`,
- * which a caller writing its own document alongside the translations (`productService.write`) has
- * no use for.
+ * {@link planTranslationWrites}, shaped for the `@kernel/translation` port — which cannot import
+ * this module's own `PlannedWrite` (the wall `kernel/translation.ts`'s header names), so its
+ * `plan` capability is typed against `TranslationWriteSlot` instead: the same shape, minus
+ * `origin`, which a caller writing its own document alongside the translations
+ * (`productService.write`) has no use for.
  */
 export const planForPort = (
     entityType: string,

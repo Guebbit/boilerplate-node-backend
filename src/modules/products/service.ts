@@ -4,19 +4,16 @@
  * the repository and stays the one place a controller may call into.
  */
 
+import { getCurrentLocale, getFallbackLocale, localeCandidatesFor, t } from '@infrastructure/i18n';
 import {
     applyTranslations,
-    getCurrentLocale,
-    getFallbackLocale,
     isTranslationPlan,
-    localeCandidatesFor,
     planTranslations,
     readAllTranslations,
     removeTranslations,
     searchTranslatedEntityIds,
-    t,
     writeTranslations
-} from '@infrastructure/i18n';
+} from '@kernel/translation';
 import type {
     SearchProductsRequest,
     Product,

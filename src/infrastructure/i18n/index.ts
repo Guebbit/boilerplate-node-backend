@@ -2,14 +2,14 @@
  * @module
  * Request-scoped i18n barrel — import `t` from here, never from `'i18next'` directly, since its
  * default export is one global instance with one active language and this file keeps that global
- * out of the request path (see `./context`). Re-exports `./catalog` (translations), `./overrides`
- * (admin overlay), `./context` (per-request `t`), `./negotiate` (`Accept-Language` matching) and
- * `./translation` (user-authored content, resolved by a registered port); all ~70 import sites
- * say `@infrastructure/i18n`.
+ * out of the request path (see `./context`). Re-exports `./catalog` (translations, including the
+ * pure `localeCandidatesFor` chain), `./overrides` (admin overlay) and `./context` (per-request
+ * `t`); all ~70 import sites say `@infrastructure/i18n`.
  *
- * `Accept-Language` matching itself is not re-exported here any more — `attachLocale`
- * (`http/middlewares/locale.ts`) calls Express's own `request.acceptsLanguages` directly, ordering
- * `listSupportedLocales()` fallback-first, instead of a hand-rolled parser.
+ * Two things this directory used to own live elsewhere now: `Accept-Language` matching is
+ * `attachLocale`'s own `request.acceptsLanguages` call (`http/middlewares/locale.ts`), not a
+ * hand-rolled parser; the translation PORT — a module's published vocabulary — is
+ * `kernel/translation.ts`, the same inversion `kernel/authentication.ts` already uses.
  *
  * See: docs/tools/i18n.md
  */
@@ -19,6 +19,7 @@ export {
     getFallbackLocale,
     listSupportedLocales,
     loadLocaleResources,
+    localeCandidatesFor,
     readLocaleDictionary,
     registerLocaleDirectories,
     resetSupportedLocales
@@ -45,21 +46,3 @@ export {
     translator,
     type LocaleContext
 } from './context';
-
-export {
-    applyTranslations,
-    isTranslationPlan,
-    localeCandidatesFor,
-    planTranslations,
-    readAllTranslations,
-    registerTranslationPort,
-    removeTranslations,
-    resolveTranslations,
-    searchTranslatedEntityIds,
-    writeTranslations,
-    type TranslatedFields,
-    type Translatable,
-    type TranslationPort,
-    type TranslationWritePlan,
-    type TranslationWriteSlot
-} from './translation';

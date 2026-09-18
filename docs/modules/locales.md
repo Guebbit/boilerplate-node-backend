@@ -140,13 +140,13 @@ is a 422 too — deleting it would leave the entity with nothing to fall back to
 
 ### What happens when the translated thing goes away
 
-| event                          | what happens to its translation rows                                                                                                                                                                         |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| A product is **soft**-deleted  | Rows survive — a restore must not come back with no name in any language.                                                                                                                                    |
-| A product is **hard**-deleted  | Rows are removed in the SAME operation, through `@infrastructure/i18n`'s port — never via the `product.deleted` event, which fires on both delete paths with an identical payload and can't tell them apart. |
-| A language is deleted          | Its rows cascade with it, the way `localeEntrySchema` rows already do (`src/modules/locales/repository.ts`'s `deleteLocaleCascade`), reported back as a count.                                               |
-| A language is only deactivated | Nothing — deactivating hides a language, it doesn't retire it.                                                                                                                                               |
-| The FALLBACK locale itself     | Cannot be deleted or deactivated (`src/modules/locales/services/languages.ts`'s `rejectFallbackLocale`) — every entity's source row lives in it.                                                             |
+| event                          | what happens to its translation rows                                                                                                                                                                        |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A product is **soft**-deleted  | Rows survive — a restore must not come back with no name in any language.                                                                                                                                   |
+| A product is **hard**-deleted  | Rows are removed in the SAME operation, through `@kernel/translation`'s port — never via the `product.deleted` event, which fires on both delete paths with an identical payload and can't tell them apart. |
+| A language is deleted          | Its rows cascade with it, the way `localeEntrySchema` rows already do (`src/modules/locales/repository.ts`'s `deleteLocaleCascade`), reported back as a count.                                              |
+| A language is only deactivated | Nothing — deactivating hides a language, it doesn't retire it.                                                                                                                                              |
+| The FALLBACK locale itself     | Cannot be deleted or deactivated (`src/modules/locales/services/languages.ts`'s `rejectFallbackLocale`) — every entity's source row lives in it.                                                            |
 
 ## Related pages
 

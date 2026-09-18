@@ -31,12 +31,8 @@ import { makeProduct, type ProductOverrides } from '@modules/products/factories'
 import { productModel } from '@modules/products/model';
 import { insertIfAbsent, type SeedOutcome } from '@scenarios/seed';
 import { productRepository } from '@modules/products/repository';
-import {
-    getFallbackLocale,
-    isTranslationPlan,
-    planTranslations,
-    writeTranslations
-} from '@infrastructure/i18n';
+import { getFallbackLocale } from '@infrastructure/i18n';
+import { isTranslationPlan, planTranslations, writeTranslations } from '@kernel/translation';
 import type { ProductTranslationFields, UpsertTranslationsRequest } from '@types';
 
 /**

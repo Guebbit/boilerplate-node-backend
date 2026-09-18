@@ -25,6 +25,21 @@ export const getDefaultLocale = (): string => process.env.NODE_DEFAULT_LOCALE ??
 /** The locale a MISSING KEY falls back to. Same lazy read, same `.env-example` default. */
 export const getFallbackLocale = (): string => process.env.NODE_FALLBACK_LOCALE ?? 'en';
 
+/**
+ * The locale chain a resolver query walks, most specific first: the exact tag, its base language,
+ * then the deployment's fallback — deduplicated, since a base tag requested directly (`it`) must
+ * not appear twice. All three are known before any query runs, which is what keeps resolution to
+ * one index arm per page rather than a per-entity lookup.
+ *
+ * Pure locale-chain maths, no port, no registration — this is why it stays here rather than with
+ * `kernel/translation.ts`'s port, the one thing in that file this repo's own precedent
+ * (`kernel/authentication.ts`) would not move: a helper with no state and no module to answer it.
+ */
+export const localeCandidatesFor = (locale: string): string[] => {
+    const base = locale.split('-')[0];
+    return [...new Set([locale, base, getFallbackLocale()])].filter((tag) => tag.length > 0);
+};
+
 /** Memoised result of {@link listSupportedLocales}; `undefined` until the first call. */
 let supportedLocalesCache: string[] | undefined;
 

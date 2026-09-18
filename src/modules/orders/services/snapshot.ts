@@ -2,11 +2,12 @@
  * @module
  * Resolving a catalogue product into the order line snapshot an order freezes. Lives in
  * `services/`, not `../domain`: the domain tier touches no infrastructure, and this reaches
- * `@infrastructure/i18n` on purpose.
+ * `@infrastructure/i18n` and `@kernel/translation` on purpose.
  */
 
 import type { Types } from 'mongoose';
-import { localeCandidatesFor, resolveTranslations, runWithLocale } from '@infrastructure/i18n';
+import { localeCandidatesFor, runWithLocale } from '@infrastructure/i18n';
+import { resolveTranslations } from '@kernel/translation';
 import { resolveTaxRate, type ProductSnapshot } from '@modules/products';
 import type { OrderDocumentItem } from '../model';
 
