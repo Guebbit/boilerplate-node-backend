@@ -1,7 +1,8 @@
 # products
 
 ::: tip At a glance
-**Owns** — the catalogue: what the shop sells, and the two stock counters that sit on every product row.
+**Owns** — the catalogue: what the shop sells. `onHand`/`reserved`/`available` sit on every product
+row too, but as a read-only mirror — [`inventory`](./inventory.md) owns the counters themselves.
 **Depends on** — nothing. It is the leaf four other domains conform to.
 **Breaks if you change** — `productSchema`. `orders` embeds it, so an order's history is literally this shape.
 :::
@@ -53,10 +54,10 @@ reference. As an import that would be a cycle. As `product.deleted` it is produc
 two modules listening, and the arrow still points one way.
 
 ::: warning The one field-ownership split worth remembering
-`onHand` and `reserved` live on the product document so a catalogue read needs no join — but
-**this module never writes them.** Every change goes through a transition in
-[`inventory`](./inventory.md). A write to either counter from anywhere else is a bug, not a
-shortcut.
+`onHand`/`reserved`/`available` live on the product document so a catalogue read needs no join —
+but they are a MIRROR, not the source. [`inventory`](./inventory.md) owns the real counters in its
+own collection, and the only reason this document carries a copy at all is read performance. A
+write to any of the three from anywhere but `inventory`'s own sync is a bug, not a shortcut.
 :::
 
 Deletion is soft: `active` and `deletedAt`, with a restore route, because an order that embedded a
@@ -113,11 +114,11 @@ an already-serialized page in one batched query. See
 
 ::: warning The document's own `title`/`description` are a derived index column, not the wire shape
 `productSchema`'s `title`/`description` (`src/modules/products/model.ts`) exist only so Mongo has
-something to sort — the stock board's `{ available: 1, title: 1, _id: 1 }` tie-break
-(`src/modules/products/repository.ts:325`) — and something to run free-text search against
-(`repository.ts:89`'s `searchable.text`/`regex`). They are written only when the FALLBACK-locale
-translation row changes, never read back into an API response: a public read always goes through
-the resolver above.
+something to sort — [`inventory`](./inventory.md)'s stock board joins against this column for its
+own `{ available: 1, 'product.title': 1, _id: 1 }` tie-break — and something to run free-text
+search against (`repository.ts:89`'s `searchable.text`/`regex`). They are written only when the
+FALLBACK-locale translation row changes, never read back into an API response: a public read
+always goes through the resolver above.
 :::
 
 ### Writing translated content

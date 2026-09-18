@@ -617,42 +617,18 @@ const findManyByIds = (ids: readonly string[]) =>
         productRepository.findAll({ _id: { $in: ids.map((id) => toObjectId(id)) } })
     );
 
-/*
- * The counter transitions below are conditional writes on `onHand`/`reserved`; which one is legal
- * when belongs to `@modules/inventory` (`writerFor`'s table), not here — this is the door, not the
- * rule.
+/**
+ * Mirror `@modules/inventory`'s stock level onto this product's own document, purely so a
+ * catalogue read still needs no join. `@modules/inventory` is this function's only legitimate
+ * caller — it is the sole writer of `onHand`/`reserved`, this is the door, never a place that
+ * decides whether a change is legal. See
+ * `docs/modules/inventory.md#why-products-still-carries-a-copy`.
+ *
+ * @param productId - the product whose cached counters are being brought into step
+ * @param counters - the values `@modules/inventory` just committed as the source of truth
  */
-
-/** Hold units for an order that has not been paid for. */
-const reserveUnits = (productId: string, quantity: number) =>
-    productRepository.reserveUnits(productId, quantity);
-
-/** Turn a hold into a sale — the units leave and stop being reserved. */
-const commitUnits = (productId: string, quantity: number) =>
-    productRepository.commitUnits(productId, quantity);
-
-/** Give up a hold — the units are still here and become sellable again. */
-const releaseUnits = (productId: string, quantity: number) =>
-    productRepository.releaseUnits(productId, quantity);
-
-/** New stock arriving — `onHand` grows. */
-const receiveUnits = (productId: string, quantity: number) =>
-    productRepository.receiveUnits(productId, quantity);
-
-/** A manual correction to `onHand`, signed. */
-const adjustUnits = (productId: string, delta: number) =>
-    productRepository.adjustUnits(productId, delta);
-
-/** How many products are at or below the given availability. */
-const countLowAvailability = (threshold: number) =>
-    productRepository.countLowAvailability(threshold);
-
-/** The total reserved across the whole catalogue. */
-const sumReserved = () => productRepository.sumReserved();
-
-/** A page of every product's counters and derived availability — the stock board's own read. */
-const availabilityPage = (options: { skip: number; limit: number; maxAvailable?: number }) =>
-    productRepository.availabilityPage(options);
+const syncStockCache = (productId: string, counters: { onHand: number; reserved: number }) =>
+    productRepository.syncStockCache(productId, counters);
 
 /** The service's public surface — every controller and cross-module caller goes through this. */
 export const productService = {
@@ -678,12 +654,5 @@ export const productService = {
     findByIdRaw,
     findPublicById,
     findManyByIds,
-    reserveUnits,
-    commitUnits,
-    releaseUnits,
-    receiveUnits,
-    adjustUnits,
-    countLowAvailability,
-    sumReserved,
-    availabilityPage
+    syncStockCache
 };

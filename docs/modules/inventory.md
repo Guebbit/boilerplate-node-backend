@@ -40,9 +40,11 @@ flowchart LR
 
 ## The story
 
-The counters live on the product document so a catalogue read needs no join — but
-[`products`](./products.md) never writes them, and neither does anyone else. **Every change to
-`onHand` or `reserved` is a transition here.**
+The counters live in this module's own `stocklevels` collection — one row per product, written
+only by `applyTransition`, beside the ledger row that explains every move. `products` keeps a
+synced copy of `onHand`/`reserved` on its own document purely so a catalogue read still needs no
+join; that copy is never the source of truth and this module never reads it back. **Every change
+to a stock count is a transition here.**
 
 There are four, and each has one caller:
 
@@ -72,6 +74,42 @@ a smaller feature.
 
 Deleting this module leaves a shop that cannot sell. That is the honest consequence of owning
 something.
+
+## Why `products` still carries a copy
+
+::: tip Design decision, flagged for review
+Made autonomously while Andrea was away, following this file's own stated constraint below rather
+than a fresh judgement call. Worth a second look, not a blocker.
+:::
+
+A catalogue read is the shop's most common query and must not need a join — that constraint predates
+this module owning its own collection and still holds. Three shapes were weighed for how a product
+read keeps showing `available` once the counters move here:
+
+1. **A separate `inventory` endpoint the storefront calls.** Rejected: it turns one catalogue read
+   into two round trips, which costs the same as the join the constraint exists to avoid — worse,
+   from the client's own timing.
+2. **`products` imports this module and reads live.** Rejected for the same reason: a live
+   cross-collection read at catalogue-read time is a join in every way that matters, just not
+   spelled `$lookup`.
+3. **`products` keeps a maintained projection.** Chosen. `onHand`/`reserved` stay columns on the
+   product document, but this module is still their only writer — `productService.syncStockCache`
+   sets them, and nothing else may.
+
+The sync is a **plain awaited function call inside `applyTransition`**, never a domain event. This
+module's own history already warns against event-driven counters — see "The story" above, and the
+old `product.stock_moved` event this codebase deliberately does not have any more: an event a
+listener can miss is fine for a fact nothing depends on, and wrong for one a catalogue page reads.
+Write order matters and is deliberate: the counter and its ledger row commit first, exactly as
+`applyTransition` has always done it — the transition IS the source of truth the moment it commits,
+regardless of whether the cache sync afterward succeeds. A failed sync is logged and left for the
+next transition on that product to correct, the same tolerance
+[`commitForOrder`](#the-pipeline) already applies to a refused counter write elsewhere in this file
+— never a reason to fail the transition that already committed.
+
+One consequence worth naming: this module keeps importing `products` (for a shortfall's title, and
+now for the cache sync) exactly as it does today. Nothing about this decision reverses that edge —
+only `products → inventory` would be a cycle, and nothing here creates it.
 
 ## The pipeline
 

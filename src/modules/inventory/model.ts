@@ -1,10 +1,10 @@
 /**
  * @module
- * The two collections this module owns: the ledger and the hold.
+ * The three collections this module owns: the stock level, the ledger, and the hold.
  *
- * Neither stores a stock LEVEL — the levels live on the product document, which this module is
- * the only writer of. A catalogue read is the most common query in the shop and must not need a
- * join, while the rules for changing a count are nobody's business but this module's.
+ * The stock level is the source of truth for `onHand`/`reserved` — `products` keeps a synced copy
+ * on its own document purely so a catalogue read needs no join, but never writes it and this
+ * module never reads that copy back. See `docs/modules/inventory.md#why-products-still-carries-a-copy`.
  *
  * See: docs/modules/inventory.md
  */
@@ -100,6 +100,75 @@ export const applyStockMovementTransform = applySerialization(stockMovementSchem
 export const stockMovementModel = model<StockMovementDocument, StockMovementModel>(
     'StockMovement',
     stockMovementSchema
+);
+
+/* ────────────────────────────────────────────────────────────────────────────────────────── */
+
+/** One product's stock counters — the source of truth `applyTransition` writes, one row each. */
+export interface StockLevelDocument extends Document {
+    productId: Types.ObjectId;
+    onHand: number;
+    reserved: number;
+    /**
+     * `onHand - reserved`, clamped at zero — stored and kept in step by `applyTransition` rather
+     * than derived at read time, so the stock board's `maxAvailable` narrowing runs against an
+     * indexed column instead of scanning to derive it first. `products/repository.ts`'s old
+     * `availabilityPage` named exactly this fix as the one it deliberately wasn't doing; owning
+     * the collection is what makes it free. The board's own tie-break sort still runs over the
+     * narrowed set in memory — see `./repository`'s `stockBoard`.
+     */
+    available: number;
+    createdAt?: Date;
+    updatedAt?: Date;
+}
+
+/** Stock level model type. Queries live in `./repository`, rules in `./service`. */
+export type StockLevelModel = Model<StockLevelDocument>;
+
+/**
+ * Mongoose Schema for a product's stock level. One document per product — `productId`'s unique
+ * index is what makes the opening-stock write (`PRODUCT_CREATED`'s listener) safe to run twice: a
+ * retried event finds the row already there and its own guarded write simply matches nothing.
+ */
+export const stockLevelSchema = new Schema<StockLevelDocument>(
+    {
+        productId: {
+            type: Schema.Types.ObjectId,
+            ref: 'Product',
+            required: true,
+            unique: true
+        },
+        onHand: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
+        reserved: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
+        available: {
+            type: Number,
+            default: 0,
+            min: 0
+        }
+    },
+    {
+        timestamps: true
+    }
+);
+
+/* The stock board's own query: scarcest first. */
+stockLevelSchema.index({ available: 1, _id: 1 }, { name: 'stocklevels_available__id' });
+
+/** `_id` → `id`, dates to ISO strings. */
+export const applyStockLevelTransform = applySerialization(stockLevelSchema);
+
+/** Mongoose model for the stock level collection. */
+export const stockLevelModel = model<StockLevelDocument, StockLevelModel>(
+    'StockLevel',
+    stockLevelSchema
 );
 
 /* ────────────────────────────────────────────────────────────────────────────────────────── */

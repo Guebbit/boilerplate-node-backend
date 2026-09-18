@@ -23,7 +23,7 @@ import {
     listLevels,
     listMovements
 } from '../../service';
-import { reservationRepository } from '../../repository';
+import { reservationRepository, stockLevelRepository } from '../../repository';
 import { reservationModel } from '../../model';
 import { inventoryAuditActions } from '../../audit';
 import * as auditPort from '@infrastructure/observability/audit';
@@ -373,18 +373,20 @@ describe('adjust', () => {
          * The write's guard covers both "the product exists" and "the correction fits", so a
          * vanished product and a blocked correction look identical to it. Deleting between the
          * pre-check and the write is the only way to reach that ambiguity — the wrong answer
-         * would waste an operator's time chasing a stock conflict that doesn't exist.
+         * would waste an operator's time chasing a stock conflict that doesn't exist. Spying on
+         * `applyDelta` (the actual guarded write, now inventory's own) rather than a products
+         * function — the product still exists at the pre-check above, it is deleted as a side
+         * effect of the write itself, simulating a race rather than mocking one out of existence.
          */
-        const blocked = productService.adjustUnits;
         const spy = jest
-            .spyOn(productService, 'adjustUnits')
-            .mockImplementation(async (id, delta) => {
+            .spyOn(stockLevelRepository, 'applyDelta')
+            .mockImplementation(async (id) => {
                 // Through the test factory's raw door, like any cross-module reach for a
                 // hydrated document — `eslint-plugin-boundaries` fails a spec that touches a
                 // sibling's model directly, and it is right to.
                 const doomed = await readProduct(id);
                 if (doomed) await deleteProduct(doomed);
-                return blocked(id, delta);
+                return false;
             });
 
         const result = await adjust(productId, -1, 'stocktake');
@@ -466,8 +468,8 @@ describe('listLevels', () => {
     it('deliberately disagrees with the metrics gauge over an inactive product', async () => {
         // docs/modules/inventory-reservations.md §"The threshold, and its two readers": this
         // reader (the stock board) counts the WHOLE catalogue, an admin restocking needs to see
-        // an inactive product too. `products_low_stock_total` (`productService
-        // .countLowAvailability`, see repository.test.ts) counts PUBLIC products only. "The two
+        // an inactive product too. `products_low_stock_total`
+        // (`stockLevelRepository.countLowAvailability`) counts PUBLIC products only. "The two
         // numbers will not match, and should not."
         process.env.NODE_LOW_STOCK_THRESHOLD = '5';
         await createProduct({ active: true, onHand: 2, reserved: 0 });
@@ -475,7 +477,7 @@ describe('listLevels', () => {
         const hidden = await createProduct({ active: false, onHand: 1, reserved: 0 });
 
         const board = await listLevels({ lowOnly: true });
-        const gauge = await productService.countLowAvailability(5);
+        const gauge = await stockLevelRepository.countLowAvailability(5);
 
         expect(board.meta.totalItems).toBe(3);
         expect(gauge).toBe(2);

@@ -7,6 +7,7 @@
  */
 
 import { Types } from 'mongoose';
+import type { QueryFilter } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import {
@@ -24,11 +25,11 @@ import {
     type PaginatedMeta,
     type PaginationInput
 } from '@infrastructure/persistence/search';
-import { counterDeltaFor, availabilityOf } from './domain';
+import { counterDeltaFor } from './domain';
 import { reservationTtlMinutes, lowStockThreshold } from './config';
-import { stockMovementRepository, reservationRepository } from './repository';
+import { stockLevelRepository, stockMovementRepository, reservationRepository } from './repository';
 import { RESERVATION_EXPIRED } from './events';
-import type { StockMovementDocument } from './model';
+import type { StockLevelDocument, StockMovementDocument } from './model';
 import type { CallerContext } from '@types';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
@@ -69,31 +70,35 @@ export interface MovementFilters {
 const SWEEP_BATCH_SIZE = 200;
 
 /**
- * Which repository call performs a given transition — kept as a table so it stays in sync with
- * `counterDeltaFor`'s reason→deltas table, asserted by `tests/unit/transitions.test.ts`.
+ * Which condition guards a given transition — kept as a table so it stays in sync with
+ * `counterDeltaFor`'s reason→deltas table, asserted by `tests/unit/transitions.test.ts`. `commit`
+ * and `adjust` read `onHand`/`reserved` directly rather than `available`, matching the invariant
+ * each protects: a sale must find both real, a correction must not cut below what's promised.
  *
  * @param reason - the transition
- * @returns the conditional write that performs it, answering whether it matched
+ * @param quantity - how many units; signed only for `adjust`
+ * @returns the Mongo condition `applyDelta` must match for the transition to apply
  */
-const writerFor = (
-    reason: StockMovementReason
-): ((productId: string, quantity: number) => Promise<boolean>) => {
+const conditionFor = (
+    reason: StockMovementReason,
+    quantity: number
+): QueryFilter<StockLevelDocument> => {
     switch (reason) {
         case StockMovementReason.reserve: {
-            return productService.reserveUnits;
+            return { available: { $gte: quantity } };
         }
         case StockMovementReason.commit: {
-            return productService.commitUnits;
+            return { onHand: { $gte: quantity }, reserved: { $gte: quantity } };
         }
         case StockMovementReason.release:
         case StockMovementReason.expire: {
-            return productService.releaseUnits;
+            return { reserved: { $gte: quantity } };
         }
         case StockMovementReason.receive: {
-            return productService.receiveUnits;
+            return {};
         }
         case StockMovementReason.adjust: {
-            return productService.adjustUnits;
+            return { $expr: { $gte: [{ $add: ['$onHand', quantity] }, '$reserved'] } };
         }
     }
 };
@@ -101,10 +106,14 @@ const writerFor = (
 /**
  * Move one product's counters and record why, or do neither.
  *
- * The chokepoint every stock change in the application passes through. The conditional write goes
- * first and its answer decides the rest: a refusal is not a movement, so no row is written.
+ * The chokepoint every stock change in the application passes through. `ensure` guarantees a row
+ * exists first — a product with no level yet reads as all-zero, the correct starting point for
+ * every transition including the very first `receive` — then the conditional write decides the
+ * rest: a refusal is not a movement, so no row is written. Last, this product's synced copy on
+ * `products` is brought into step; see `docs/modules/inventory.md#why-products-still-carries-a-copy`
+ * for why that sync is a plain call here and never a domain event.
  *
- * @param reason - the transition; decides both the write and the deltas recorded
+ * @param reason - the transition; decides the guard, the write and the deltas recorded
  * @param productId - the product whose counters move
  * @param quantity - how many units; signed only for `adjust`
  * @param context - what to record on the row beyond the deltas
@@ -116,15 +125,42 @@ const applyTransition = async (
     quantity: number,
     context: { reference?: string; note?: string } = {}
 ): Promise<boolean> => {
-    const moved = await writerFor(reason)(productId, quantity);
+    // Only read the product back when this product has no level row yet — the common case (every
+    // transition after the first) skips it entirely.
+    if (!(await stockLevelRepository.findByProductId(productId))) {
+        const product = await productService.findByIdRaw(productId);
+        await stockLevelRepository.ensure(productId, {
+            onHand: product?.onHand ?? 0,
+            reserved: product?.reserved ?? 0
+        });
+    }
+    const delta = counterDeltaFor(reason, quantity);
+    const moved = await stockLevelRepository.applyDelta(
+        productId,
+        conditionFor(reason, quantity),
+        delta
+    );
     if (!moved) return false;
 
     await stockMovementRepository.create({
         productId: new Types.ObjectId(productId),
         reason,
-        ...counterDeltaFor(reason, quantity),
+        ...delta,
         ...context
     });
+
+    const level = await stockLevelRepository.findByProductId(productId);
+    if (level)
+        await productService
+            .syncStockCache(productId, { onHand: level.onHand, reserved: level.reserved })
+            .catch((error: unknown) => {
+                // Never fails the transition that already committed — see the docblock above.
+                // The next transition on this product corrects the cache regardless.
+                logger.error({
+                    message: `Inventory: could not sync the catalogue's stock cache for product ${productId}`,
+                    error
+                });
+            });
 
     return true;
 };
@@ -133,18 +169,21 @@ const applyTransition = async (
  * One product's counters, read back after a write.
  *
  * @param productId - the product
- * @returns its level, or `null` if the product has since gone
+ * @returns its level, or `null` if the product has no level row (never received, or gone)
  */
 const levelFor = async (productId: string): Promise<InventoryLevel | null> => {
-    const product = await productService.findByIdRaw(productId);
-    if (!product) return null;
+    const [level, product] = await Promise.all([
+        stockLevelRepository.findByProductId(productId),
+        productService.findByIdRaw(productId)
+    ]);
+    if (!level || !product) return null;
 
     return {
-        productId: String(product._id),
+        productId: String(level.productId),
         title: product.title,
-        onHand: product.onHand ?? 0,
-        reserved: product.reserved ?? 0,
-        available: availabilityOf(product)
+        onHand: level.onHand,
+        reserved: level.reserved,
+        available: level.available
     };
 };
 
@@ -184,15 +223,20 @@ export const reserveForOrder = async (
         if (!held) {
             /*
              * Read the blocker back before unwinding, so the reported number is the one that
-             * actually refused this line, not what a pre-flight saw earlier. A deleted product
-             * reads as nothing available, which is true.
+             * actually refused this line, not what a pre-flight saw earlier. Read from this
+             * module's own level, the source of truth — never the product's synced copy, which
+             * can lag by one transition. A deleted product or a level that never existed reads as
+             * nothing available, which is true either way.
              */
-            const blocker = await productService.findByIdRaw(line.productId);
+            const [blockerLevel, blockerProduct] = await Promise.all([
+                stockLevelRepository.findByProductId(line.productId),
+                productService.findByIdRaw(line.productId)
+            ]);
             const shortfall: StockShortfall = {
                 productId: line.productId,
-                title: blocker?.title ?? '',
+                title: blockerProduct?.title ?? '',
                 requested: line.quantity,
-                available: blocker ? availabilityOf(blocker) : 0
+                available: blockerLevel?.available ?? 0
             };
 
             for (const undo of taken)
@@ -480,7 +524,7 @@ export const listLevels = async (
     filters: LevelFilters = {}
 ): Promise<{ items: InventoryLevel[]; meta: PaginatedMeta }> => {
     const pagination = normalizePagination(filters);
-    const { items, totalItems } = await productService.availabilityPage({
+    const { items, totalItems } = await stockLevelRepository.stockBoard({
         skip: pagination.skip,
         limit: pagination.pageSize,
         ...(filters.lowOnly ? { maxAvailable: lowStockThreshold() } : {})

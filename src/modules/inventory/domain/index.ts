@@ -9,3 +9,4 @@
  */
 
 export { counterDeltaFor, availabilityOf } from './transitions';
+export type { CounterDelta } from './transitions';

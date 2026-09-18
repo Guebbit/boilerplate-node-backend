@@ -1,17 +1,15 @@
 /**
  * @module
  * Inventory: the two counters, the reservation lifecycle, and the ledger that explains both.
- * Counters live on the product document (no join needed), but only this module writes them —
- * each transition is exactly-once via a conditionally claimed status, so a cancel racing the
- * sweep or a duplicate webhook still resolves to one winner.
+ * Counters live in this module's own `stocklevels` collection — each transition is exactly-once
+ * via a conditionally claimed status, so a cancel racing the sweep or a duplicate webhook still
+ * resolves to one winner.
  *
- * Not in the import graph: the counters are COLUMNS ON THE PRODUCT DOCUMENT. `products` declares
- *   them and this module is the only writer. Nothing in the import graph shows that, which is why
- *   it is written here.
- *
- * Depends on `products` (reads and writes the two counter columns directly). A new product's
- * opening stock arrives the other way, as `PRODUCT_CREATED` — `products` cannot import this module
- * back, so it emits instead of calling in.
+ * Depends on `products` for a title in a shortfall message, and to mirror every counter change
+ * onto its document so a catalogue read still needs no join — see
+ * `docs/modules/inventory.md#why-products-still-carries-a-copy`. A new product's opening stock
+ * arrives the other way, as `PRODUCT_CREATED` — `products` cannot import this module back, so it
+ * emits instead of calling in.
  *
  * See: docs/modules/inventory.md
  */
@@ -40,9 +38,11 @@ export default {
     /*
      * `products` cannot call this module back (it already imports `products`, and the graph must
      * stay acyclic — see `.dependency-cruiser.cjs`), so this is how a new product gets its opening
-     * stock: through the real `receive()`, the same call every other receipt uses. No audit
-     * context to pass — an admin already sees `ADMIN_PRODUCT_CREATED` for this row; a second,
-     * contextless stock-received entry would just be noise on top of it.
+     * stock: through the real `receive()`, the same call every other receipt uses — it creates
+     * this product's stock level row (via `applyTransition`'s `ensure`) and syncs the cache back
+     * onto the product document in the same call. No audit context to pass — an admin already sees
+     * `ADMIN_PRODUCT_CREATED` for this row; a second, contextless stock-received entry would just
+     * be noise on top of it.
      */
     subscribe: () => {
         onDomainEvent(PRODUCT_CREATED, ({ productId, onHand }) =>
