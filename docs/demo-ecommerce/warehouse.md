@@ -100,17 +100,22 @@ There is a stock board showing everything with a "show me only the low ones" fil
 In the demo, the Heavy-Duty Cat Scratching Post sits at zero — a permanent example of what the
 bottom of that list looks like.
 
-## Getting it out of the door
+## Getting parcels out of the door
+
+The same rule as the stock diary above applies here: **you record what happened, and the status
+follows from it — you never set the status directly.** There is no "mark it shipped" switch on its
+own; recording the handover IS what marks it shipped.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
     A["order is paid"] --> B["pack it"]
-    B --> C["mark it shipped"]
+    B --> C["record the handover<br/><i>tracking code, if the method needs one</i>"]
     C --> D["parcel record created"]
-    C --> E["tracking code generated"]
+    C --> E["order becomes<br/>shipped"]
     C --> F["customer emailed<br/><i>in their own language</i>"]
-    G["advance the courier<br/><i>a button</i>"] --> H["delivered"]
+    D --> G["record the arrival"]
+    G --> H["order becomes<br/>delivered"]
 
     classDef act fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef auto fill:#ccfbf1,stroke:#0f766e,color:#111827;
@@ -118,12 +123,21 @@ flowchart LR
     class D,E,F,H auto;
 ```
 
-The three things after "mark it shipped" all happen on their own. You do not create the parcel, or
-write the tracking number, or send the email.
+Only one shipping method in the demo actually needs a tracking code — the others move a parcel
+along with nothing but the record of the handover itself. Either way, the three things after
+recording the handover all happen on their own: you do not separately create the parcel, or write
+the status field, or send the email.
 
-**The courier is pretended.** In a real shop a delivery company would report progress; here there is
-a button that moves a parcel to _delivered_ so the last step of the journey can be shown without
-waiting for a van. → [`delivery`](../modules/delivery.md)
+**There is no courier simulation any more.** Recording the arrival is a real action on a real
+parcel, the same way recording the handover is — not a button standing in for a delivery company's
+own report. → [`delivery`](../modules/delivery.md)
+
+::: tip When the ordinary sequence does not fit
+A parcel scanned against the wrong order, or a correction needed outside the normal pack → ship →
+deliver order, goes through a manager's forced correction instead — see
+[Correcting a mistake](./manager.md#correcting-a-mistake). It still creates the same record; it
+just carries a reason and skips the ordinary gate.
+:::
 
 ## The words we used
 

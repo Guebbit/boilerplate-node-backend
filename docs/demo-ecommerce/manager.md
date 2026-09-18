@@ -8,15 +8,19 @@ Everything on this page needs the staff login (`root@root.it` / `Demo-Admin1!`).
 
 An order is never edited. It **moves**, one step at a time, and everyone can see where it is:
 
+Four kinds of hands move an order along — colour-coded below: the **customer** (blue), the
+**payment system** (green, nobody clicks anything), the **warehouse** (amber), and **you**, the
+shop manager (purple).
+
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
-    P["waiting for payment"] -->|"the customer pays"| PA["paid"]
-    PA -->|"you start packing"| PR["being prepared"]
-    PR -->|"you hand it to the courier"| SH["shipped"]
-    SH --> DE["delivered"]
-    P -.->|"cancelled, or 30 min passed"| CA["cancelled"]
-    PA -.->|"you cancel it"| CA
+    P["waiting for payment"] -->|"💳 the customer pays"| PA["paid"]
+    PA -->|"🧑‍💼 you start packing"| PR["being prepared"]
+    PR -->|"📦 warehouse records<br/>the parcel's handover"| SH["shipped"]
+    SH -->|"📦 warehouse records<br/>the parcel's arrival"| DE["delivered"]
+    P -.->|"customer cancels,<br/>or 30 min passed"| CA["cancelled"]
+    PA -.->|"🧑‍💼 you cancel it"| CA
     CA -.->|"money goes back<br/>unless you say otherwise"| RF["refunded"]
 
     classDef open fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -27,12 +31,21 @@ flowchart LR
     class CA,RF bad;
 ```
 
-Two of those steps happen without anyone pressing anything:
+One of those steps happens without anyone at the shop pressing anything — the payment confirming is
+a fact from outside the application, not a button:
 
-- Marking an order **shipped** creates the parcel, generates a tracking code, and emails the
-  customer — all by itself.
+- **The warehouse marks it shipped by recording the handover**, not the other way around — they
+  scan or type the tracking code (when the method needs one) into the shipment screen, and THAT is
+  what creates the parcel record, moves the order to **shipped**, and sends the customer their
+  tracking email. There is no separate "mark shipped" switch to forget.
 - Cancelling a **paid** order refunds it by default. Cancelling an unpaid one has nothing to refund,
   so it does not try.
+
+::: tip Fixing a mistake
+If a parcel was scanned against the wrong order, or a status needs correcting outside the normal
+sequence, you can force a move with a reason — see "Correcting a mistake" below. It is deliberately
+a separate, logged action, not a quiet edit.
+:::
 
 ::: warning Who cancelled decides whether the money goes back
 If the **customer** cancels, they are always refunded. That is the promise a paid order is
@@ -44,6 +57,32 @@ other way. Cancelling and refunding are one action by default and two when you n
 :::
 
 → [`orders`](../modules/orders.md) · [`payments`](../modules/payments.md)
+
+## Correcting a mistake
+
+The ordinary sequence above sometimes cannot be followed — a parcel was scanned against the wrong
+order, or fulfilment needs to be corrected out of the normal order. Staff with the right permission
+can force a move, but it always needs a reason, and it is always written down:
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 40}}}%%
+flowchart LR
+    M["something is wrong<br/>with the ordinary sequence"] --> R["you write down why"]
+    R --> C{"does a real parcel<br/>exist to record?"}
+    C -->|yes| F["force the ship/deliver<br/>screen — same fields,<br/>plus your reason"]
+    C -->|no| S["correct the status<br/>alone — no parcel,<br/>no email"]
+    F --> H["order's history shows<br/>who, when, and why"]
+    S --> H
+
+    classDef ask fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
+    class C ask;
+    class H done;
+```
+
+Neither path can move an order backward, and neither can ever mark one **paid** by hand — money
+landing is still the one fact only the payment system reports. The order's own page shows every
+correction, in order, so a customer support question always has an answer.
 
 ## The catalogue
 
