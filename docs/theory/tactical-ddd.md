@@ -57,9 +57,9 @@ stateDiagram-v2
     pending --> cancelled: customer, admin
     paid --> processing: admin
     paid --> cancelled: customer, admin
-    processing --> shipped: admin
+    processing --> shipped: system
     processing --> cancelled: admin
-    shipped --> delivered: admin
+    shipped --> delivered: system
     delivered --> [*]
     cancelled --> [*]
 ```
@@ -73,6 +73,53 @@ Three absences are load-bearing:
   past that the order is in the fulfilment queue and cancelling becomes an operator's decision.
 - **`shipped` has no cancel edge at all.** Goods in transit come back as a return, which is a flow
   of its own rather than a status the order rewinds into.
+
+An admin override (below) can still force any of these moves forward with a reason — the diagram
+above is the ORDINARY lifecycle, the one no override is involved in.
+
+### Who writes the status
+
+Two rules, and they are different rules. **Only `orders` writes a `status` field** — every other
+module that causes a move (`payments` on settlement, `delivery` on a parcel event) asks `orders` to
+make it, through `markPaid`/`markShipped`/`markDelivered`, and never touches the document itself.
+That is a placement rule: it says WHERE the write happens. **The table above is a permission rule:**
+it says WHO may ask for which move, `admin`/`customer`/`system` on each edge.
+
+`system` is not "no human involved" — every `system` move follows from a recorded fact a human (or
+an external service) already caused: money landing at the payment processor, a warehouse operator
+recording a parcel's handover. `system` means "this application did not decide it, it is reporting
+it" — the recording is what makes the move happen, not a person editing a field.
+
+| Move                     | Who asks                                     | What records the fact first                      |
+| ------------------------ | -------------------------------------------- | ------------------------------------------------ |
+| `pending` → `paid`       | `system`, via `payments`                     | the payment processor confirms the charge        |
+| `paid` → `processing`    | `admin`, via `orders.any.update`             | an operator decides to start fulfilment          |
+| `processing` → `shipped` | `system`, via `delivery`'s ship door         | a warehouse operator records the handover        |
+| `shipped` → `delivered`  | `system`, via `delivery`'s deliver door      | a warehouse operator records the arrival         |
+| any forward move         | `admin`, via `orders.any.override` (step-up) | an operator's own reason, recorded with the move |
+
+One reported move, end to end — the warehouse records a handover, `delivery` owns the parcel, and
+`orders` is the only thing that ever writes the status:
+
+```mermaid
+sequenceDiagram
+    participant W as warehouse operator
+    participant D as delivery
+    participant O as orders
+    participant L as listeners
+
+    W->>D: POST /delivery/order/{id}/ship<br/>{ trackingCode }
+    D->>D: create the parcel record
+    D->>O: markShipped(orderId)
+    O->>O: canTransition(processing, shipped, 'system')
+    O->>O: conditional write — updateStatusIfIn
+    O->>L: emit order.status_changed { from, to }
+    L-->>D: shipped email queued
+```
+
+`delivery` never assigns `order.status` itself — `markShipped` is the only door, and it is the same
+door whether the move is ordinary or `forced` through an override (the override only widens which
+`from` statuses are accepted, never who ends up writing the field).
 
 ### The actor is part of the table, not beside it
 
@@ -119,14 +166,13 @@ was `succeeded`, so the guard passed.
 
 ### How it is enforced
 
-Four call sites, all reading the same rows:
-
-| Call site                                           | Question asked                                  |
-| --------------------------------------------------- | ----------------------------------------------- |
-| `orders/services/crud.ts` — `update`                | `canTransition(from, to, 'admin')`              |
-| `orders/services/cancel.ts` — `cancelById`          | `statusesLeadingTo(cancelled, actorOf(caller))` |
-| `payments/services/intent.ts` — `createIntent`      | `canTransition(from, paid, 'system')`           |
-| `payments/services/settlement.ts` — `settlePayment` | `statusesLeadingTo(paid, 'system')`             |
+| Call site                                                              | Question asked                                                                                                                                                |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `orders/services/crud.ts` — `update`                                   | `canTransition(from, to, 'admin')` — refuses `cancelled`/`shipped`/`delivered` outright, see below                                                            |
+| `orders/services/cancel.ts` — `cancelById`                             | `statusesLeadingTo(cancelled, actorOf(caller))`                                                                                                               |
+| `orders/services/status.ts` — `markPaid`/`markShipped`/`markDelivered` | a fixed single `from` per function — each already knows the one legal source status for its own move, so there is no table lookup, only the conditional write |
+| `payments/services/intent.ts`/`settlement.ts`                          | `isPayable(status)` — asks `orders` the one question every payment door needs, never the table directly (see "One function, three doors" below)               |
+| `orders/services/override.ts`                                          | `canOverrideTo(from, to)` — its OWN rule, deliberately not `canTransition`: an override exists to skip the gate the ordinary table enforces                   |
 
 `cancelById` asks as the CALLER's actor, because the table answers differently for each: a customer
 may cancel from `pending` and `paid`, an operator also from `processing`.
@@ -139,6 +185,12 @@ is a SEQUENCE, not a field: the hold is released and `ORDER_CANCELLED` is announ
 refunds. Executed as an assignment plus a save, a paid order ends `cancelled` with the customer's
 money kept and the stock held until the sweep. `POST /orders/{id}/cancel` is the only path that runs
 it, for a customer and an operator alike.
+
+`update` refuses `shipped`/`delivered` for the same shape of reason, since Phase 4: those moves are
+never a field an admin assigns — they follow a parcel event `delivery` records, through
+`markShipped`/`markDelivered` (see "Who writes the status" above), or an admin override's own door
+when the ordinary sequence needs correcting. `PUT /orders/:id` covers only `paid → processing` and
+the fields that stay caller-editable.
 
 For the same reason `update` refuses to rewrite `items` while `inventory` still binds stock to the
 order (`ORDER_ITEMS_HELD`): the reservation froze its own copy of the basket, and a later commit

@@ -83,6 +83,13 @@ Anticorruption layer is deliberately absent from the list. It is the right patte
 do not control, and every module here is a sibling in this repo. `payments` does wrap an outside
 provider that way — behind `./providers`.
 
+A domain event is not a fifth kind — it is not an import, so it carries none of the four coupling
+costs above. A context's own event is published by that context alone: `orders` emits
+`order.status_changed`, never a sibling reporting the move on its behalf, the same way `orders` is
+the only writer of the status itself (see [Tactical DDD](./tactical-ddd.md#who-writes-the-status)).
+The dotted arrows in each module's own graph (`<!-- module-graph:… -->`) are this fact, drawn — the
+return path an import graph alone cannot show.
+
 ### Where the map lives
 
 Two places, on purpose, for two different questions. **Which** siblings a module may reach lives in
