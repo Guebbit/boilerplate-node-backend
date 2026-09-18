@@ -11,7 +11,7 @@ import type { CastError } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { readUploadedImage } from '@infrastructure/adapters/image-store';
+import { readUploadedImage } from '@infrastructure/http/middlewares/upload';
 import type { UpdateAccountRequest, UpdateAccountRequestMultipart, User } from '@types';
 import { accountService } from '../services';
 import { callerContextOf } from '@infrastructure/http/request';

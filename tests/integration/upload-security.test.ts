@@ -5,7 +5,7 @@ import { api } from '@tests/http';
 import { emptyFileSandbox } from '@tests/file-sandbox';
 import { setupTestDb } from '@tests/setup-test-db';
 import { PLAIN_PASSWORD } from '@modules/users/tests/factories';
-import { maxUploadBytes } from '@infrastructure/adapters/storage';
+import { maxUploadBytes } from '@infrastructure/http/middlewares/upload';
 
 /**
  * What actually reaches the disk.

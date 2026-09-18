@@ -56,7 +56,7 @@ flowchart LR
 | ------------------------------------------------ | --------------------------------------------------------------------- |
 | sharp wrapper — `digestImage`/`thumbnailImage`   | `src/infrastructure/adapters/image.ts`                                |
 | Storage — quarantine/promote/derivative/remove   | `src/infrastructure/adapters/image-store.ts`                          |
-| Upload middleware — quarantine + inline fallback | `src/infrastructure/adapters/storage.ts` → `quarantineUploadedImages` |
+| Upload middleware — quarantine + inline fallback | `src/infrastructure/http/middlewares/upload.ts` → `quarantineUploadedImages` |
 | Shared pipeline + queue worker + inline dispatch | `src/infrastructure/adapters/image.worker.ts`                         |
 | Queue name                                       | `src/infrastructure/adapters/queue.ts` → `IMAGE_QUEUE`                |
 | Worker registration                              | `src/app/workers.ts`                                                  |

@@ -8,7 +8,7 @@
  * handling of them, not where bytes land or how they are re-encoded.
  */
 import type { NextFunction, Request, Response } from 'express';
-import { quarantineUploadedImages } from '@infrastructure/adapters/storage';
+import { quarantineUploadedImages } from '@infrastructure/http/middlewares/upload';
 
 jest.mock('@infrastructure/adapters/image-store', () => ({
     imageStore: { quarantine: jest.fn(), removeQuarantined: jest.fn() }

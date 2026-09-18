@@ -13,7 +13,7 @@ import { open } from 'node:fs/promises';
 /**
  * One accepted image format: its real MIME type, any alias spelling a client may declare, the
  * exact bytes it must begin with, and the extension it's stored under. The single source of
- * truth for "what formats does this API accept" — `ACCEPTED_UPLOAD_MIMETYPES` in `storage.ts`
+ * truth for "what formats does this API accept" — `ACCEPTED_UPLOAD_MIMETYPES` in `http/middlewares/upload.ts`
  * derives from this list too, so adding a format is one entry here, not three.
  */
 interface ImageFormat {

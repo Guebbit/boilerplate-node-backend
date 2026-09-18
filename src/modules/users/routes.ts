@@ -9,7 +9,7 @@
 import { Router } from 'express';
 import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
 import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
-import { upload } from '@infrastructure/adapters/storage';
+import { upload } from '@infrastructure/http/middlewares/upload';
 import { getUsers, searchUsersKeyParameters } from './controllers/get-users';
 import { writeUsers } from './controllers/write-users';
 import { deleteUsers } from './controllers/delete-users';

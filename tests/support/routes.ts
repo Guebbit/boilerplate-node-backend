@@ -241,7 +241,7 @@ export const authGuardsMock = () => {
 };
 
 /**
- * Replacement for `@infrastructure/adapters/storage`'s `upload`.
+ * Replacement for `@infrastructure/http/middlewares/upload`'s `upload`.
  *
  * Calls THROUGH to the real `upload.single` and prepends the label, so the field name becomes
  * assertable without hiding `validateUploadedImages` / `quarantineUploadedImages` behind a stub — those
@@ -249,8 +249,8 @@ export const authGuardsMock = () => {
  * them removed.
  */
 export const storageMock = () => {
-    const actual = jest.requireActual<typeof import('@infrastructure/adapters/storage')>(
-        '@infrastructure/adapters/storage'
+    const actual = jest.requireActual<typeof import('@infrastructure/http/middlewares/upload')>(
+        '@infrastructure/http/middlewares/upload'
     );
     return {
         ...actual,

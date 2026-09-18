@@ -73,7 +73,7 @@ const fetchSourcePhoto = async (picsumSeed: string): Promise<Buffer> => {
     return Buffer.from(await response.arrayBuffer());
 };
 
-/** Same naming convention a real upload gets — see `storage.ts`'s `resolveUploadFilename`: 16
+/** Same naming convention a real upload gets — see `http/middlewares/upload.ts`'s `resolveUploadFilename`: 16
  * random bytes as hex, never a name derived from anything the caller supplied. */
 const randomName = (extension: string): string => `${randomBytes(16).toString('hex')}.${extension}`;
 

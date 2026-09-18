@@ -12,7 +12,7 @@ import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { t } from '@infrastructure/i18n';
 import { readInput, callerContextOf } from '@infrastructure/http/request';
-import { readUploadedImage } from '@infrastructure/adapters/image-store';
+import { readUploadedImage } from '@infrastructure/http/middlewares/upload';
 import type { CreateProductRequest, CreateProductRequestMultipart, Product } from '@types';
 
 /**

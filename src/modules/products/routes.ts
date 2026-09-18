@@ -8,7 +8,7 @@
 import { Router } from 'express';
 import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
 import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
-import { upload } from '@infrastructure/adapters/storage';
+import { upload } from '@infrastructure/http/middlewares/upload';
 import { getProducts, searchProductsKeyParameters } from './controllers/get-products';
 import { createProduct } from './controllers/create-product';
 import { updateProduct } from './controllers/update-product';

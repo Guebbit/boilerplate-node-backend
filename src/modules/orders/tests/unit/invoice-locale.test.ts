@@ -130,7 +130,7 @@ describe('the PDF worker renders the copy it was given', () => {
 
 /**
  * `upload.single` wraps multer so the request's locale survives the stream being consumed (see
- * `infrastructure/adapters/storage.ts`). Asserted at the unit level too, distinct from the
+ * `infrastructure/http/middlewares/upload.ts`). Asserted at the unit level too, distinct from the
  * integration suite's coverage of the mounted route.
  */
 describe('upload.single restores the locale', () => {
@@ -140,14 +140,14 @@ describe('upload.single restores the locale', () => {
      * and mounting only the first two would leave uploads staged with nothing pointing at them.
      */
     it('returns the full guard chain', async () => {
-        const { upload } = await import('@infrastructure/adapters/storage');
+        const { upload } = await import('@infrastructure/http/middlewares/upload');
         const handlers = upload.single('imageUpload');
 
         expect(handlers).toHaveLength(3);
     });
 
     it('re-enters the request locale', async () => {
-        const { upload } = await import('@infrastructure/adapters/storage');
+        const { upload } = await import('@infrastructure/http/middlewares/upload');
         const [localeAware] = upload.single('imageUpload');
 
         const observed = await runMiddleware(
@@ -162,7 +162,7 @@ describe('upload.single restores the locale', () => {
     });
 
     it('leaves the chain alone when no locale was negotiated', async () => {
-        const { upload } = await import('@infrastructure/adapters/storage');
+        const { upload } = await import('@infrastructure/http/middlewares/upload');
         const [localeAware] = upload.single('imageUpload');
 
         const observed = await runMiddleware(localeAware, asStub<Request>({ headers: {} }));

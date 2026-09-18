@@ -2,7 +2,7 @@
  * @module
  * Upload helpers — read side.
  *
- * The write side (where files land, how they are named) lives in `@infrastructure/adapters/storage`.
+ * The write side (where files land, how they are named) lives in `@infrastructure/http/middlewares/upload`.
  * This module only normalizes what multer left on the request.
  */
 

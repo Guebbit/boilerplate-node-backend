@@ -82,7 +82,7 @@ describe('Accept-Language negotiation', () => {
      * cases above all post JSON, where `express.json()` has already buffered the body before
      * `attachLocale`, so nothing awaits the stream afterwards and none of them could see it.
      *
-     * `src/infrastructure/adapters/storage.ts` re-enters the store after multer; this is the guard.
+     * `src/infrastructure/http/middlewares/upload.ts` re-enters the store after multer; this is the guard.
      */
     it('keeps the locale across a multipart upload', async () => {
         const response = await signupWith('it')

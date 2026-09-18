@@ -24,7 +24,7 @@ jest.mock('@infrastructure/http/middlewares/cache', () =>
 jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').securityMock()
 );
-jest.mock('@infrastructure/adapters/storage', () =>
+jest.mock('@infrastructure/http/middlewares/upload', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').storageMock()
 );
 jest.mock('@kernel/middlewares/authorizations', () =>

@@ -9,7 +9,7 @@
 import type { Request, Response } from 'express';
 import { accountService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { readUploadedImage } from '@infrastructure/adapters/image-store';
+import { readUploadedImage } from '@infrastructure/http/middlewares/upload';
 import type { SignupRequest, SignupRequestMultipart, User } from '@types';
 import type { CastError } from 'mongoose';
 import { rejectDatabaseError } from '@infrastructure/http/errors';

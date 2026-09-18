@@ -30,7 +30,7 @@ import {
     REAUTH_TIME_CRITICAL,
     REAUTH_TIME_SENSITIVE
 } from '@kernel/middlewares/authorizations';
-import { upload } from '@infrastructure/adapters/storage';
+import { upload } from '@infrastructure/http/middlewares/upload';
 import { getAccount } from './controllers/get-account';
 import { putAccount } from './controllers/put-account';
 import { postLogin } from './controllers/post-login';
