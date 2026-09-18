@@ -48,12 +48,14 @@ language is kept per context rather than shared.
 
 ## `delivery`
 
-| Term                | What it means here                                                                                                          |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| **Shipping method** | A named way to ship, with a rate rule. A closed set in `domain/rates.ts`, not a collection.                                 |
-| **Shipping cost**   | What a method charges for a given basket. Computed by a pure function so the cart can quote it without a shipment existing. |
-| **Shipment**        | The parcel record for an order that has actually shipped. Created on the status change, never before.                       |
-| **Courier**         | The carrier moving a shipment. Faked here, behind the same seam a real integration would use.                               |
+| Term                | What it means here                                                                                                                                                                                                                         |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Shipping method** | A named way to ship, with a rate rule. A closed set in `domain/rates.ts`, not a collection.                                                                                                                                                |
+| **Shipping cost**   | What a method charges for a given basket. Computed by a pure function so the cart can quote it without a shipment existing.                                                                                                                |
+| **Shipment**        | The parcel record for an order that has actually shipped. Recording it IS what moves the status — never the other way around.                                                                                                              |
+| **Handover**        | Staff recording that a parcel left the warehouse — the ship door's own act. Requires a tracking code when the method is tracked; creates the shipment and moves the order to `shipped`.                                                    |
+| **Delivery proof**  | Staff recording that a parcel arrived — the deliver door's own act, moving the order to `delivered`. No document is captured; the record itself is the proof.                                                                              |
+| **Override**        | A staff correction outside the ordinary sequence, always with a reason: `forced` on a handover/delivery-proof recording (still creates the real record), or status-only (no parcel, no email). Never reaches `paid`, never moves backward. |
 
 ## `feedback`
 
@@ -72,7 +74,7 @@ language is kept per context rather than shared.
 | **Reservation**    | One order’s hold on its units, with a deadline. Ends as a commit, a release or an expiry — never by being deleted.                               |
 | **Transition**     | One of the six ways a counter may move. Each implies a fixed pair of deltas (`domain/transitions.ts`) and each writes exactly one ledger row.    |
 | **Stock movement** | A ledger row: which product, which transition, and both signed deltas. Written by the same call that moved the counter, so it cannot be missing. |
-| **Sweep**          | The expiry tick. An operator is the cron, exactly as with the fake courier in `delivery`.                                                        |
+| **Sweep**          | The expiry tick. An operator is the cron — the application ships no scheduler of its own.                                                        |
 
 ## `locales`
 
@@ -94,14 +96,15 @@ language is kept per context rather than shared.
 
 ## `orders`
 
-| Term             | What it means here                                                                                                                                                                             |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Order**        | What a customer bought, frozen. Immutable in substance: only its status moves.                                                                                                                 |
-| **Order item**   | A line holding an embedded copy of the product as it stood at purchase time, not a reference to it.                                                                                            |
-| **Status**       | Where an order is in its lifecycle. A closed set from the contract, moving along the edges `domain/lifecycle.ts` declares — every guard in this module and in `payments` reads that one table. |
-| **Cancellation** | A status change that releases the order’s held units and triggers a refund. Legal from the statuses the lifecycle table gives a customer — `pending` and `paid`.                               |
-| **Expiry**       | A cancellation the shop initiates because the order’s hold on its units ran out before payment did. Arrives as `inventory.reservation_expired`.                                                |
-| **Total**        | Line price × quantity, summed in minor units and returned as a decimal. Computed, never stored as truth.                                                                                       |
+| Term             | What it means here                                                                                                                                                                                                                 |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Order**        | What a customer bought, frozen. Immutable in substance: only its status moves.                                                                                                                                                     |
+| **Order item**   | A line holding an embedded copy of the product as it stood at purchase time, not a reference to it.                                                                                                                                |
+| **Status**       | Where an order is in its lifecycle. A closed set from the contract, moving along the edges `domain/lifecycle.ts` declares — every guard in this module and in `payments` reads that one table.                                     |
+| **Cancellation** | A status change that releases the order’s held units and triggers a refund. Legal from the statuses the lifecycle table gives a customer — `pending` and `paid`.                                                                   |
+| **Expiry**       | A cancellation the shop initiates because the order’s hold on its units ran out before payment did. Arrives as `inventory.reservation_expired`.                                                                                    |
+| **Total**        | Line price × quantity, summed in minor units and returned as a decimal. Computed, never stored as truth.                                                                                                                           |
+| **Override**     | A staff correction of the status outside the ordinary lifecycle table, always with a reason and always recorded on the order — see `delivery`'s own entry for the two shapes it takes. Never reaches `paid`, never moves backward. |
 
 ## `payments`
 
