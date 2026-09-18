@@ -38,8 +38,21 @@ import { userRepository } from '@modules/users/tests/factories';
 import { shopModules } from '@scenarios/index';
 import { PERMISSION_KEYS, permissionsOfRole } from '@kernel/permissions';
 import { asStub } from '@tests/stub';
+import * as auditPort from '@infrastructure/observability/audit';
+import { observePort } from '@tests/ports';
+import { testCallerContext } from '@tests/caller-context';
+import { callerContextAs } from '@tests/callers';
+import { accessAuditActions } from '@modules/access/audit';
+
+/* Replaced, not spied on — see `tests/support/ports.ts` for why. */
+jest.mock('@infrastructure/observability/audit', () => ({
+    __esModule: true,
+    ...jest.requireActual('@infrastructure/observability/audit'),
+    emitAuditEvent: jest.fn()
+}));
 
 setupTestDb();
+afterEach(() => jest.restoreAllMocks());
 
 /** The user rows the last describe compares against — seeded only where it needs them. */
 const seedUsers = () => shopModules.users.seed();
@@ -324,5 +337,77 @@ describe('a role lives in exactly one place, the membership row', () => {
         await expect(
             assignRole('person-1', String(shop._id), 'tenant', 'not-a-real-role')
         ).rejects.toThrow(AccessInvariantError);
+    });
+});
+
+describe('auditing a role change', () => {
+    it('records a successful grant, naming the actor, the target and the role', async () => {
+        const shop = await ensureTenant('shop', 'The Shop');
+        const admin = callerContextAs('admin', 'admin-1');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        await assignRole('target-user', String(shop._id), 'tenant', 'manager', undefined, admin);
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accessAuditActions.ROLE_ASSIGNED,
+                outcome: 'success',
+                actor_user_id: 'admin-1',
+                target_type: 'user',
+                target_id: 'target-user',
+                metadata: expect.objectContaining({ role: 'manager' })
+            })
+        );
+    });
+
+    it('records a refused escalation as a failure, not silence', async () => {
+        const shop = await ensureTenant('shop', 'The Shop');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        await expect(
+            assignRole(
+                'target-user',
+                String(shop._id),
+                'tenant',
+                'admin',
+                ['feedback.any.read'],
+                testCallerContext
+            )
+        ).rejects.toThrow(AccessInvariantError);
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accessAuditActions.ROLE_ASSIGNED,
+                outcome: 'failure',
+                target_id: 'target-user'
+            })
+        );
+    });
+
+    it('records a revoke', async () => {
+        const shop = await ensureTenant('shop', 'The Shop');
+        await assignRole('owner-a', String(shop._id), 'tenant', 'admin');
+        await assignRole('owner-b', String(shop._id), 'tenant', 'admin');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        await revokeRole('owner-a', String(shop._id), 'tenant', testCallerContext);
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accessAuditActions.ROLE_REVOKED,
+                outcome: 'success',
+                target_id: 'owner-a',
+                metadata: expect.objectContaining({ role: 'admin' })
+            })
+        );
+    });
+
+    it('audits nothing when no caller context is given — a self-service or system caller', async () => {
+        const shop = await ensureTenant('shop', 'The Shop');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        await assignRole('target-user', String(shop._id), 'tenant', 'manager');
+
+        expect(auditSpy).not.toHaveBeenCalled();
     });
 });

@@ -130,7 +130,8 @@ export const create = (
                 DEPLOYMENT_TENANT_ID,
                 'tenant',
                 role,
-                context.caller.permissions
+                context.caller.permissions,
+                context
             ).then(() => user)
         )
         .then((user) => {
@@ -298,7 +299,8 @@ const updateSavedUser = (
                       DEPLOYMENT_TENANT_ID,
                       'tenant',
                       data.role,
-                      context.caller.permissions
+                      context.caller.permissions,
+                      context
                   ).then(() => undefined);
 
         return revoke

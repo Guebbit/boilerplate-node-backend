@@ -10,11 +10,13 @@
  * See: docs/theory/authorization.md · `shared/authorization-roles.yaml`
  */
 
-import type { AuthorizationScope } from '@types';
+import type { AuthorizationScope, CallerContext } from '@types';
 import { assertDeclared, findRole, PERMISSION_KEYS, PRESET_ROLES } from '@kernel/permissions';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { membershipRepository, tenantRepository } from './repository';
 import type { MembershipDocument, TenantDocument } from './model';
+import { accessAuditActions } from './audit';
 
 /** The one role self-service signup (or an OAuth signup a provider already vouches for) may ever
  * grant — never a caller-supplied name. See {@link assignDefaultRole}. */
@@ -66,6 +68,11 @@ export const membershipIn = (
  *
  * @param granter - the keys the person MAKING the grant holds, or `undefined` for a seeder, a
  *   migration or an operator on the console — the three callers with nobody to escalate from
+ * @param context - the caller context to audit this grant (or its refusal) against. `undefined`
+ *   for a self-service/system caller with no request to attribute it to — see
+ *   {@link assignDefaultRole} and `users/service.ts`'s `USER_SETUP_REQUESTED` handler for the same
+ *   reasoning. An escalation attempt is audited as a FAILURE, not skipped: it is the single most
+ *   useful entry this vocabulary can produce.
  * @throws AccessInvariantError synchronously refused as a REJECTION, never a thrown exception —
  *   every check below runs inside the promise chain on purpose, so a caller doing
  *   `assignRole(...).catch(...)` (every caller in this codebase does) sees a rejection, not an
@@ -77,9 +84,10 @@ export const assignRole = (
     tenantId: string | null,
     scope: AuthorizationScope,
     roleName: string,
-    granter?: readonly string[]
-): Promise<MembershipDocument> =>
-    Promise.resolve().then(() => {
+    granter?: readonly string[],
+    context?: CallerContext
+): Promise<MembershipDocument> => {
+    const attempt = Promise.resolve().then(() => {
         const lowered = roleName.toLowerCase();
         const role = findRole(lowered);
         const permissions = role?.scope === scope ? role.permissions : undefined;
@@ -110,6 +118,36 @@ export const assignRole = (
 
         return membershipRepository.upsertRole(userId, tenantId, scope, lowered);
     });
+
+    if (!context) return attempt;
+
+    return attempt.then(
+        (membership) => {
+            emitAuditEvent(
+                buildAuditEvent(context, {
+                    action: accessAuditActions.ROLE_ASSIGNED,
+                    outcome: 'success',
+                    target_type: 'user',
+                    target_id: userId,
+                    metadata: { role: roleName.toLowerCase(), tenantId, scope }
+                })
+            );
+            return membership;
+        },
+        (error: unknown) => {
+            emitAuditEvent(
+                buildAuditEvent(context, {
+                    action: accessAuditActions.ROLE_ASSIGNED,
+                    outcome: 'failure',
+                    target_type: 'user',
+                    target_id: userId,
+                    metadata: { role: roleName.toLowerCase(), tenantId, scope }
+                })
+            );
+            throw error;
+        }
+    );
+};
 
 /**
  * The only role self-service signup (or an OAuth signup a provider already vouches for) may ever
@@ -162,21 +200,60 @@ export const promoteVerifiedCustomer = (userId: string, tenantId: string): Promi
  * same refusal, which is the weaker but still-safe guarantee this shape buys without a transaction:
  * the set is never left with nobody who can administer it, even though a genuine tie over-refuses
  * rather than letting one revoke through.
+ *
+ * @param context - the caller to audit this revoke against, or `undefined` for a system caller
+ *   with no request to attribute it to (e.g. the account-deletion cascade in `users/service.ts`'s
+ *   `remove`, which has no `CallerContext` to pass — see {@link assignRole}'s own docblock).
  */
 export const revokeRole = (
     userId: string,
     tenantId: string | null,
-    scope: AuthorizationScope
-): Promise<void> =>
-    membershipIn(userId, tenantId, scope).then((membership) => {
+    scope: AuthorizationScope,
+    context?: CallerContext
+): Promise<void> => {
+    const attempt = membershipIn(userId, tenantId, scope).then((membership) => {
         if (!membership) {
-            return;
+            return undefined;
         }
 
         return membershipRepository
             .deleteById(membership._id)
-            .then(() => restoreIfNowUnadministered(tenantId, scope, membership));
+            .then(() => restoreIfNowUnadministered(tenantId, scope, membership))
+            .then(() => membership.role);
     });
+
+    if (!context) return attempt.then(() => undefined);
+
+    return attempt.then(
+        (role) => {
+            // `role` is `undefined` when there was nothing to revoke — no membership existed, so
+            // there is nothing to record.
+            if (role) {
+                emitAuditEvent(
+                    buildAuditEvent(context, {
+                        action: accessAuditActions.ROLE_REVOKED,
+                        outcome: 'success',
+                        target_type: 'user',
+                        target_id: userId,
+                        metadata: { role, tenantId, scope }
+                    })
+                );
+            }
+        },
+        (error: unknown) => {
+            emitAuditEvent(
+                buildAuditEvent(context, {
+                    action: accessAuditActions.ROLE_REVOKED,
+                    outcome: 'failure',
+                    target_type: 'user',
+                    target_id: userId,
+                    metadata: { tenantId, scope }
+                })
+            );
+            throw error;
+        }
+    );
+};
 
 /**
  * Puts a just-deleted membership back and refuses, if deleting it left nobody who can administer
