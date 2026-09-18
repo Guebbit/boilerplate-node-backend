@@ -32,7 +32,12 @@ describe('GET /orders/{id}/invoice — pre-VAT vs. VAT orders', () => {
     it('renders no VAT table or shop identity for an order frozen before VAT existed', async () => {
         const { bearer, user } = await authenticateAs('owner');
         const product = await createProduct();
-        const order = await createOrder(user, [toOrderItem(product, 2)]);
+        // `invoicePdfStatus: 'ready'` with nothing actually stored falls back to rendering
+        // inline (see `get-order-invoice.ts`) — what lets this exercise the download route
+        // through the mocked renderer above without a real queued worker ever having run.
+        const order = await createOrder(user, [toOrderItem(product, 2)], {
+            invoicePdfStatus: 'ready'
+        });
 
         const response = await api()
             .get(`/orders/${String(order._id)}/invoice`)
@@ -46,7 +51,9 @@ describe('GET /orders/{id}/invoice — pre-VAT vs. VAT orders', () => {
     it('renders the VAT table and totals for an order with a frozen rate on every line', async () => {
         const { bearer, user } = await authenticateAs('owner');
         const product = await createProduct();
-        const order = await createOrder(user, [taxedLine(String(product._id), 19.9, 0.22)]);
+        const order = await createOrder(user, [taxedLine(String(product._id), 19.9, 0.22)], {
+            invoicePdfStatus: 'ready'
+        });
 
         const response = await api()
             .get(`/orders/${String(order._id)}/invoice`)

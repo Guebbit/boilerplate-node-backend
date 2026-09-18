@@ -56,7 +56,12 @@ describe('GET /orders/{id}/invoice — the number-and-date block', () => {
     it('renders no number or date for an order with no invoice number', async () => {
         const { bearer, user } = await authenticateAs('owner');
         const product = await createProduct();
-        const order = await createOrder(user, [toOrderItem(product, 1)]);
+        // `invoicePdfStatus: 'ready'` with nothing actually stored falls back to rendering
+        // inline (see `get-order-invoice.ts`) — what lets this exercise the download route
+        // through the mocked renderer above without a real queued worker ever having run.
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            invoicePdfStatus: 'ready'
+        });
 
         const response = await api()
             .get(`/orders/${String(order._id)}/invoice`)
@@ -71,7 +76,8 @@ describe('GET /orders/{id}/invoice — the number-and-date block', () => {
         const { bearer, user } = await authenticateAs('owner');
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)], {
-            invoiceNumber: '2026-000041'
+            invoiceNumber: '2026-000041',
+            invoicePdfStatus: 'ready'
         });
 
         const response = await api()
