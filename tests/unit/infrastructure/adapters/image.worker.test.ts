@@ -3,10 +3,10 @@
  * (the queue consumer) and `enqueueImageDigest` (what a module calls right after persisting a
  * document with a `pendingImageKey`).
  *
- * Mirrors `workers.test.ts`'s framing for the other two workers: the same three-outcome contract
- * (ack / dead-letter / requeue) applies here, plus a fourth case unique to this pipeline — a
- * writeback that matches no document, which must clean up the files it just promoted on BOTH the
- * queued and the inline path (see `settleWriteback`).
+ * Mirrors `email.worker.test.ts`'s framing for the domainless email worker: the same
+ * three-outcome contract (ack / dead-letter / requeue) applies here, plus a fourth case unique to
+ * this pipeline — a writeback that matches no document, which must clean up the files it just
+ * promoted on BOTH the queued and the inline path (see `settleWriteback`).
  *
  * sharp, the store and the queue are all mocked: what is under test is the pipeline's decisions,
  * not image encoding or persistence.
