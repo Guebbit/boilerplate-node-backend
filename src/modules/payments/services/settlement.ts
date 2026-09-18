@@ -16,7 +16,7 @@ import {
 import { emitDomainEvent } from '@kernel/events';
 import { OrderStatus } from '@types';
 import type { PaymentStatus, AuthContext } from '@types';
-import { orderService, statusesLeadingTo, ORDER_STATUS_CHANGED } from '@modules/orders';
+import { orderService } from '@modules/orders';
 import { PAYMENT_SUCCEEDED, PAYMENT_FAILED } from '../events';
 import { inventoryService } from '@modules/inventory';
 import type { CallerContext } from '@types';
@@ -117,14 +117,10 @@ export const settlePayment = (
             });
 
     // The order's move IS the gate (module rule 2), and it is conditional, so exactly one of two
-    // racing settlements gets past it.
+    // racing settlements gets past it. `markPaid` is `orders`' own conditional write — this
+    // module reports the fact, it never writes the order's status itself.
     return orderService
-        .updateStatusIfIn(
-            orderId,
-            statusesLeadingTo(OrderStatus.paid, 'system'),
-            OrderStatus.paid,
-            {}
-        )
+        .markPaid(orderId)
         .then(async (paidOrder) => {
             const succeeded = await paymentRepository.updateStatusIfIn(
                 orderId,
@@ -170,11 +166,6 @@ export const settlePayment = (
              */
             await inventoryService.commitForOrder(orderId);
 
-            await emitDomainEvent(ORDER_STATUS_CHANGED, {
-                orderId,
-                from: 'pending',
-                to: 'paid'
-            });
             // Fire-and-forget, like `PAYMENT_FAILED` above: `webhooks` reacts to this from its own
             // `subscribe()` hook, and a slow or failing listener there must not delay the response
             // this settlement's callers (confirm, sync, the provider webhook) are already sending.
