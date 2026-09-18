@@ -48,6 +48,16 @@ a breaking change is one a generated client cannot absorb without being regenera
   a lookup: missing ids are silently absent from the page rather than a 404, an empty array is a
   422 (never "everything"), and the cap is 100 ids per request. The single-item routes
   (`GET /products/{id}`, etc.) are unaffected. `userId`/`productId` on `GET /orders` stay scalar.
+- **Every outbound webhook delivery body is now the Standard Webhooks envelope**, `{ type,
+timestamp, data }`, instead of the bare per-event payload (`asyncapi.yaml`, `webhooks`
+  module — a queue/realtime contract, not `openapi.yaml`, but the same "a generated client must
+  regenerate" reasoning applies). `type` is the event name (`order.created`, `payment.failed`, …),
+  `timestamp` is when the event occurred (stable across every retry of one delivery), and `data`
+  is exactly the payload the old body was. A subscriber reading `orderId`/`paymentId`/`refund`
+  off the top level must read them off `data` instead; the id stays in the `webhook-id` header,
+  never repeated in the body. Fixes the gap where two event types sharing a subscription's filter
+  (`payment.succeeded`/`payment.failed`, both `{paymentId, orderId}`) could not be told apart
+  without inspecting which URL received them.
 
 ### Breaking — deployment
 

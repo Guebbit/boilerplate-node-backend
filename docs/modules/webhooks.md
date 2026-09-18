@@ -31,11 +31,11 @@ flowchart LR
 Real uses, one mechanism:
 
 - **A Slack channel that pings on every paid order** — through a thin translator in front of
-  Slack's incoming-webhook URL. A delivery's body is the bare event payload (`{orderId}` for
-  `payment.succeeded`); Slack requires a `text`/`blocks` body, so pointing a subscription straight
+  Slack's incoming-webhook URL. A delivery's body is `{ type: 'payment.succeeded', timestamp,
+data: {orderId} }`; Slack requires a `text`/`blocks` body, so pointing a subscription straight
   at Slack's URL gets every delivery rejected until the subscription auto-disables.
 - **A partner's fulfilment system that ships on order.** They subscribe to `order.created`; each
-  delivery names the order (`{orderId}`), and their warehouse looks it up and starts packing
+  delivery names the order (`data.orderId`), and their warehouse looks it up and starts packing
   without waiting on a nightly export.
 - **A reconciliation endpoint that reverses failed or cancelled orders in near-real-time.**
   `payment.failed` and `order.cancelled` reach a small endpoint of your own — a publicly reachable
@@ -156,6 +156,13 @@ verifies with no custom code — the format is the interoperable part; the ~30 l
 around it are not worth a dependency. A subscription's secret ring is a list, not one value, so
 `PATCH .../subscriptions/:id` can rotate without downtime: two active secrets sign two
 space-separated `v1,...` values in one header during the overlap.
+
+**The body is the Standard Webhooks envelope too.** `{ type, timestamp, data }` — `type` is the
+event name (`order.created`, `payment.failed`, …), `timestamp` is when the event occurred (fixed
+across every retry of one delivery, unlike `webhook-timestamp`, which is stamped fresh on each
+attempt), and `data` is the per-event payload `asyncapi.yaml` already documented. Built once, in
+`services/attempt.ts`, from the delivery row's own `eventType`/`createdAt`/`payload` — the id
+stays in `webhook-id` alone, never repeated in the body.
 
 **The SSRF guard resolves, THEN validates, THEN pins.** `infrastructure/adapters/ssrf-guard.ts` —
 generic, infrastructure-owned, not this module's — looks up a subscription's hostname itself,

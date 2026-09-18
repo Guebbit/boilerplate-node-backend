@@ -174,7 +174,15 @@ export const attemptDelivery = (
         url: subscription.url,
         secrets,
         eventId: delivery.eventId,
-        payload: delivery.payload,
+        // The Standard Webhooks envelope: `type` lets a subscriber on more than one event tell
+        // them apart without inspecting `data`'s shape; `timestamp` is `delivery.createdAt` (when
+        // the event occurred) rather than `Date.now()`, so it stays identical across every retry
+        // of the same delivery — see `../asyncapi.yaml`'s own header for the full shape.
+        payload: {
+            type: delivery.eventType,
+            timestamp: delivery.createdAt.toISOString(),
+            data: delivery.payload
+        },
         // `undefined` outside development/test, or with no sink configured — see the SSRF
         // guard's own docblock for what this one exemption does and does not relax.
         allowedInsecureHost: getWebhookDemoAllowedHost()

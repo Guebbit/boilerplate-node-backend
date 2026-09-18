@@ -179,6 +179,14 @@ describe('a successful delivery', () => {
             })
         ).toBe(true);
 
+        // The Standard Webhooks envelope — `type` names the event, `data` is the bare payload the
+        // job carried. See `../../asyncapi.yaml`'s own header for the full shape.
+        expect(JSON.parse(received.body) as unknown).toEqual({
+            type: job.eventType,
+            timestamp: job.occurredAt,
+            data: job.data
+        });
+
         const delivery = await webhookDeliveryRepository.findById(job.deliveryId);
         expect(delivery?.status).toBe('succeeded');
         expect(delivery?.responseCode).toBe(200);

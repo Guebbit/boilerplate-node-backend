@@ -15,6 +15,13 @@
 # republishes the ones a subscription's filter matches, signed, to the URL it names. The SIX names
 # below are the shop's worked example; a deployment with no orders declares its own here and
 # deletes this file along with the rest of the module.
+#
+# Every body is the Standard Webhooks envelope, `{ type, timestamp, data }` — `type` names the
+# event (so a subscriber on more than one event type can tell them apart without inspecting
+# `data`'s shape), `timestamp` is when the underlying event occurred (stable across retries of the
+# same delivery), and `data` is the per-event payload below, unchanged. The `webhook-id`/
+# `webhook-timestamp`/`webhook-signature` headers carry the delivery id and signature — see
+# `transport/webhook-signing.ts`; `id` is NOT repeated in the body.
 asyncapi: 3.0.0
 info:
     title: Webhooks async contract
@@ -150,34 +157,68 @@ components:
         OrderCreatedEvent:
             name: OrderCreatedEvent
             title: Order created
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
             payload:
-                $ref: '#/components/schemas/OrderIdPayload'
+                $ref: '#/components/schemas/OrderCreatedEnvelope'
         OrderPaidEvent:
             name: OrderPaidEvent
             title: Order paid
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
             payload:
-                $ref: '#/components/schemas/OrderIdPayload'
+                $ref: '#/components/schemas/OrderPaidEnvelope'
         OrderShippedEvent:
             name: OrderShippedEvent
             title: Order shipped
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
             payload:
-                $ref: '#/components/schemas/OrderIdPayload'
+                $ref: '#/components/schemas/OrderShippedEnvelope'
         OrderCancelledEvent:
             name: OrderCancelledEvent
             title: Order cancelled
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
             payload:
-                $ref: '#/components/schemas/OrderCancelledPayload'
+                $ref: '#/components/schemas/OrderCancelledEnvelope'
         PaymentSucceededEvent:
             name: PaymentSucceededEvent
             title: Payment succeeded
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
             payload:
-                $ref: '#/components/schemas/PaymentEventPayload'
+                $ref: '#/components/schemas/PaymentSucceededEnvelope'
         PaymentFailedEvent:
             name: PaymentFailedEvent
             title: Payment failed
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
             payload:
-                $ref: '#/components/schemas/PaymentEventPayload'
+                $ref: '#/components/schemas/PaymentFailedEnvelope'
     schemas:
+        WebhookHeaders:
+            type: object
+            description: >-
+                The three Standard Webhooks headers every delivery carries — see
+                `transport/webhook-signing.ts`. Documented here for the subscriber reading this
+                catalogue; nothing in this repo generates types off a message's `headers`.
+            required:
+                - webhook-id
+                - webhook-timestamp
+                - webhook-signature
+            properties:
+                webhook-id:
+                    type: string
+                    description: >-
+                        Shared by every subscription this event fanned out to, and by every retry
+                        of one delivery — the id a subscriber dedupes on.
+                webhook-timestamp:
+                    type: string
+                    description: Unix seconds when this attempt was signed, folded into the signature.
+                webhook-signature:
+                    type: string
+                    description: 'One or more space-separated `v1,<base64 HMAC-SHA256>` values.'
         OrderIdPayload:
             type: object
             required:
@@ -210,4 +251,106 @@ components:
                     type: string
                 orderId:
                     type: string
+            additionalProperties: false
+        OrderCreatedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    type: string
+                    enum:
+                        - order.created
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/OrderIdPayload'
+            additionalProperties: false
+        OrderPaidEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    type: string
+                    enum:
+                        - order.paid
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/OrderIdPayload'
+            additionalProperties: false
+        OrderShippedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    type: string
+                    enum:
+                        - order.shipped
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/OrderIdPayload'
+            additionalProperties: false
+        OrderCancelledEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    type: string
+                    enum:
+                        - order.cancelled
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/OrderCancelledPayload'
+            additionalProperties: false
+        PaymentSucceededEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    type: string
+                    enum:
+                        - payment.succeeded
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/PaymentEventPayload'
+            additionalProperties: false
+        PaymentFailedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    type: string
+                    enum:
+                        - payment.failed
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/PaymentEventPayload'
             additionalProperties: false
