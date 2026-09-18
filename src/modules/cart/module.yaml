@@ -2,8 +2,7 @@ subdomain: core
 dependsOn:
     - addresses # the checkout's delivery address
     - delivery # shipping price, pure functions
-    - inventory # stock holds during checkout
-    - orders # the order a checkout creates
-    - payments # the charge, and the RF reference a bank transfer quotes
+    - orders # placeOrder — the one function every order is written through
+    - payments # listPaymentMethods, to validate the requested method
     - products # prices and availability
     - users # the buyer

@@ -4,7 +4,7 @@
 only one where a race can cost a customer money.
 
 ::: tip At a glance
-**Touches** — six modules, in a fixed order, and the order is the correctness.
+**Touches** — five modules, in a fixed order, and the order is the correctness.
 **Costs** — one order, one reservation, one emptied cart, one email — the confirmation, or the
 bank-transfer instructions when that is the method chosen.
 **Breaks if you change** — the sequence below, or the conditional cart clear at the end.
@@ -12,9 +12,9 @@ bank-transfer instructions when that is the method chosen.
 
 ## Why this page exists
 
-[`cart`](./cart.md) declares seven dependency edges, more than any other module, and every one of
-them is here. Reading the manifest tells you _that_ checkout is a customer of five contexts;
-this page is _why_, and in what order.
+[`cart`](./cart.md) declares more dependency edges than any other module, and every one of them is
+here. Reading the manifest tells you _that_ checkout is a customer of five contexts; this page is
+_why_, and in what order.
 
 ## The sequence
 
@@ -31,10 +31,9 @@ flowchart TD
     B --> C["5 · resolve the address<br/><i>account — addressForCheckout</i>"]
     C --> D["6 · join the lines against the catalogue<br/><i>products</i>"]
     D --> E["7 · evaluate the rules<br/><i>cart/domain</i>"]
-    E --> F["8 · hold the units<br/><i>inventory — reserveForOrder</i>"]
-    F --> G["9 · write the order<br/><i>orders</i>"]
-    G --> H["10 · empty the cart, conditionally<br/><i>cart — on the __v it was read at</i>"]
-    H --> I["11 · queue the email<br/><i>confirmation, or transfer instructions</i>"]
+    E --> F["8 · placeOrder<br/><i>orders — freeze lines, invoice number,<br/>mint transfer reference, hold stock, write</i>"]
+    F --> H["9 · empty the cart, conditionally<br/><i>cart — on the __v it was read at</i>"]
+    H --> I["10 · queue the email<br/><i>orders picks confirmation vs. transfer<br/>instructions off the order's paymentMethod</i>"]
 
     R["refuse — nothing written"]
     A -.->|"no account"| R
@@ -44,6 +43,7 @@ flowchart TD
     C -.->|"not the caller's address"| R
     D -.->|"product gone"| R
     E -.->|"rule says no"| R
+    F -.->|"stock gone"| R
 
     L["lost the race — retract"]
     H -.->|"__v moved"| L
@@ -53,28 +53,34 @@ flowchart TD
     classDef write fill:#ede9fe,stroke:#7c3aed,color:#111827;
     classDef bad fill:#fee2e2,stroke:#b91c1c,color:#111827;
     class A,P,Q,B,C,D,E read;
-    class F,G,H,I write;
+    class F,H,I write;
     class R,L,M bad;
 ```
 
-Steps 1–7 are reads and refusals. Steps 8–11 are the writes, and from step 8 onward a failure has
-something to undo.
+Steps 1–7 are reads and refusals — genuinely checkout's own job: deciding whether this basket, this
+account and this address are allowed to become an order at all. **Step 8 is not checkout's write —
+it's checkout handing everything it resolved to [`orders`'](./orders.md) `placeOrder`**, the one
+function every order (this checkout, the admin's own `POST /orders`) is written through. Checkout
+never freezes a line, allocates an invoice number, or mints a `bank_transfer` reference itself; it
+only decides whether the attempt should happen, then reads the verdict `placeOrder` hands back.
+Steps 9–10 are checkout's own again: clearing the cart is what makes the race in the next section
+possible, and only checkout knows which basket it was clearing.
 
 ## What crosses each edge
 
-| Module                        | Edge                 | What checkout actually asks for                                                                                                                                                      |
-| ----------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [`users`](./users.md)         | `conformist`         | The account record. An order records the address it was placed from, so a checkout for an account that no longer exists is the one cart operation that can still 404.                |
-| [`payments`](./payments.md)   | `customer-supplier`  | `listPaymentMethods` — the same list `GET /payments/methods` answers, so checkout and that endpoint can never disagree about what this deployment offers.                            |
-| [`delivery`](./delivery.md)   | `published-language` | `findShippingMethod` and `priceShipping` — pure functions. The cart never learns that a shipment record exists.                                                                      |
-| [`account`](./account.md)     | `customer-supplier`  | `addressForCheckout` — the one address this order ships to. The address CRUD stays behind that module's routes.                                                                      |
-| [`products`](./products.md)   | `conformist`         | Catalogue documents, read as they are, to price lines and pre-flight availability.                                                                                                   |
-| [`inventory`](./inventory.md) | `customer-supplier`  | `reserveForOrder` to hold the basket — for as long as the chosen method's window says — and the hold given back when the cart race is lost. Checkout never touches a counter itself. |
-| [`orders`](./orders.md)       | `customer-supplier`  | `createRaw`, and `countOpenBankTransfers` for the open-transfer cap — this is the one place an order is made outside the admin routes.                                               |
+| Module                        | Edge                 | What checkout actually asks for                                                                                                                                       |
+| ----------------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`users`](./users.md)         | `conformist`         | The account record. An order records the address it was placed from, so a checkout for an account that no longer exists is the one cart operation that can still 404. |
+| [`payments`](./payments.md)   | `customer-supplier`  | `listPaymentMethods` — the same list `GET /payments/methods` answers, so checkout and that endpoint can never disagree about what this deployment offers.             |
+| [`delivery`](./delivery.md)   | `published-language` | `findShippingMethod` and `priceShipping` — pure functions. The cart never learns that a shipment record exists.                                                       |
+| [`addresses`](./addresses.md) | `customer-supplier`  | `addressForCheckout` — the one address this order ships to. The address CRUD stays behind that module's routes.                                                       |
+| [`products`](./products.md)   | `conformist`         | Catalogue documents, read as they are, to price lines and pre-flight availability.                                                                                    |
+| [`orders`](./orders.md)       | `customer-supplier`  | `placeOrder` — the one function every order is written through, admin's own `POST /orders` included — and `countOpenBankTransfers` for the open-transfer cap.         |
 
-::: tip The basket is mapped, not handed over
-`inventory` is given product ids and quantities, nothing else. Mapping the lines rather than passing
-them is what keeps that module from ever learning what a cart is.
+::: tip The basket is mapped, not handed over — inside `placeOrder`, not here
+`inventory` is given product ids and quantities, nothing else — `placeOrder`'s job now, not
+checkout's. Mapping the lines rather than passing the whole basket is what keeps `inventory` from
+ever learning what a cart is; checkout itself no longer imports `inventory` at all.
 :::
 
 ## The race, and why it is a 409

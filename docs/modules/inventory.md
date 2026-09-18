@@ -17,12 +17,10 @@ graph cannot see._
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
 flowchart LR
     inventory["inventory<br/><i>this module</i>"]
-    cart["cart"]
     orders["orders"]
     payments["payments"]
     products["products"]
 
-    cart --> inventory
     orders --> inventory
     payments --> inventory
     inventory --> products
@@ -33,7 +31,7 @@ flowchart LR
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
-    class cart,orders,products core;
+    class orders,products core;
     class payments supporting;
     class inventory centre;
 ```

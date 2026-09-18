@@ -24,7 +24,6 @@ flowchart LR
     cart --> delivery
     delivery --> orders
     delivery --> users
-    orders -. "order.status_changed" .-> delivery
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;

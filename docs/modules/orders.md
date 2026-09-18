@@ -34,7 +34,6 @@ flowchart LR
     orders --> users
     inventory -. "inventory.reservation_expired" .-> orders
     users -. "user.deleted" .-> orders
-    orders -. "order.status_changed" .-> delivery
     orders -. "order.cancelled" .-> payments
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -93,6 +92,28 @@ amounts, line items and dates survive, only the person is gone (an order is an i
 deleted outright, unlike `payments`' abandoned attempts). `npm run sweep:order-effects` re-announces
 `order.cancelled` for a refund the event bus's one delivery attempt did not carry through. See
 [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full mechanism.
+
+## Creating an order
+
+Every order, whoever makes it, is written through exactly one function — `placeOrder`
+(`services/place.ts`): freeze the lines against the catalogue, allocate the invoice number, mint a
+`bank_transfer` reference when that's the payment method (minted from the same id the write is
+about to land on, so a retried place cannot mint a second one for the same order), hold the stock,
+write the row. Everything caller-specific — payment-method validation, the open-transfer cap,
+resolving a shipping address or method, cart pre-flight and clearing — stays with the caller;
+`placeOrder` only takes what it needs to write and hold. See [Checkout](./cart-checkout.md#the-sequence)
+for the storefront path in full.
+
+`POST /orders` is the OTHER caller — the admin path — and it is deliberately minimal, because it
+exists for manual corrections, not as a second sales channel:
+
+- it takes a buyer, an email and line items, and nothing else — no payment method, no address, no
+  shipping method, and no frontend screen behind it;
+- it holds stock for the default reservation window like any other order, so an unpaid correction
+  order is cancelled by the same nightly sweep as an abandoned checkout;
+- carrying no address or shipping, it cannot be fulfilled through the warehouse's normal
+  ship/deliver flow — moving it forward is the admin override's job (see below), not a parcel
+  someone can actually hand over.
 
 ## The pipeline
 
