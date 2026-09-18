@@ -139,12 +139,15 @@ export const recordOfflinePayment = (
 /**
  * Move an order along the lifecycle as an operator would, one transition at a time.
  *
- * One request per step on purpose: `canTransition` refuses a jump, and a shortcut that wrote the
- * final status directly would skip every transition's own side effects — the shipment, the stock
- * movement and the audit row that make this dataset worth more than a written one.
+ * `PUT /orders/{id}` only — `shipped`/`delivered` are not requestable through it any more (see
+ * {@link shipOrder}, {@link deliverOrder}), so `statuses` here is for the moves that still are
+ * (`processing`, an admin correction). One request per step on purpose: `canTransition` refuses a
+ * jump, and a shortcut that wrote the final status directly would skip every transition's own
+ * side effects — the stock movement and the audit row that make this dataset worth more than a
+ * written one.
  *
  * @param owner - a caller holding `orders.any.update`
- * @param statuses - the transitions in order, e.g. `['processing', 'shipped']`
+ * @param statuses - the transitions in order, e.g. `['processing']`
  */
 export const advanceOrder = async (
     owner: Caller,
@@ -155,15 +158,24 @@ export const advanceOrder = async (
 };
 
 /**
- * One courier tick: every parcel currently `shipped` is delivered.
- *
- * Global, with no body — so an order meant to stay in transit has to be shipped AFTER the tick
- * that delivered the others.
+ * Record a parcel's handover to the carrier — the door that moves an order `processing → shipped`
+ * now. `trackingCode` is only required for a `tracked` method; every order this scenario ships
+ * uses one that is not, so it stays unset.
  *
  * @param owner - a caller holding `delivery.any.update`
  */
-export const advanceCourier = (owner: Caller): Promise<void> =>
-    owner.call('POST', '/delivery/advance').then(() => undefined);
+export const shipOrder = (owner: Caller, orderId: string, trackingCode?: string): Promise<void> =>
+    owner
+        .call('POST', `/delivery/order/${orderId}/ship`, trackingCode ? { trackingCode } : {})
+        .then(() => undefined);
+
+/**
+ * Record a parcel's arrival — the door that moves an order `shipped → delivered` now.
+ *
+ * @param owner - a caller holding `delivery.any.update`
+ */
+export const deliverOrder = (owner: Caller, orderId: string): Promise<void> =>
+    owner.call('POST', `/delivery/order/${orderId}/deliver`).then(() => undefined);
 
 /**
  * Cancel an order. `refund` is the operator's choice alone — a customer cancelling their own paid

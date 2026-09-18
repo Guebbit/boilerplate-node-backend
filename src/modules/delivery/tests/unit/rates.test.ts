@@ -9,7 +9,12 @@ import { findShippingMethod, priceShipping, SHIPPING_METHODS } from '../../domai
 
 describe('findShippingMethod', () => {
     it('finds a method by id', () => {
-        expect(findShippingMethod('express')).toEqual({ id: 'express', price: 15 });
+        expect(findShippingMethod('express')).toEqual({
+            id: 'express',
+            price: 15,
+            tracked: true,
+            maxInsuredValue: 500
+        });
     });
 
     it('returns undefined for an id this shop does not offer', () => {
@@ -50,5 +55,11 @@ describe('SHIPPING_METHODS', () => {
         // The table this shop quotes from is committed data, not user input — this is the canary
         // for a typo that would otherwise only surface as a wrong number at checkout.
         for (const method of SHIPPING_METHODS) expect(method.price).toBeGreaterThanOrEqual(0);
+    });
+
+    it('gives every method a real boolean tracked flag', () => {
+        // The shipping door reads this to decide whether a code is required — an accidentally
+        // missing flag here would surface as `undefined` there, not a clean refusal.
+        for (const method of SHIPPING_METHODS) expect(typeof method.tracked).toBe('boolean');
     });
 });

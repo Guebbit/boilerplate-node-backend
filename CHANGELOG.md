@@ -56,6 +56,17 @@ a breaking change is one a generated client cannot absorb without being regenera
   filtering by role needs a two-step resolve (membership rows holding that role, then the users
   among them) the generic search filter can't express, and it is not rebuilt yet. No deployment
   of this boilerplate held real account data yet, so no migration script was needed.
+- **`POST /delivery/advance` (the fake courier tick) is removed**, replaced by
+  `POST /delivery/order/{orderId}/ship` and `POST /delivery/order/{orderId}/deliver` — staff
+  records one parcel's handover or arrival at a time, instead of advancing every parcel on a truck
+  together. `PUT /orders/{id}` no longer accepts `status: 'shipped'` or `'delivered'` from anyone;
+  these two doors are the only way an order reaches either now.
+- **`ShippingMethod` gains a required `tracked` field** (and an optional `maxInsuredValue`). The
+  shipping door reads it live, by the order's `shippingMethod` id, to decide whether
+  `POST /delivery/order/{orderId}/ship` requires a `trackingCode` — refused with a named 422 when a
+  tracked method's code is missing.
+- **`Shipment.trackingCode` is optional**, not required — a parcel sent by an untracked method
+  carries none.
 - **Every outbound webhook delivery body is now the Standard Webhooks envelope**, `{ type,
 timestamp, data }`, instead of the bare per-event payload (`asyncapi.yaml`, `webhooks`
   module — a queue/realtime contract, not `openapi.yaml`, but the same "a generated client must

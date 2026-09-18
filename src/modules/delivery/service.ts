@@ -1,10 +1,9 @@
 /**
  * @module
- * Delivery — shipments and the fake courier, downstream of the order's status machine. The
- * module never moves an order to `shipped` itself: it answers `ORDER_STATUS_CHANGED`, creating
- * the parcel, minting the tracking code, and sending the email. The reverse move (`shipped →
- * delivered`) is the fake courier, a job function behind an admin endpoint since this repo has
- * no scheduler. See: docs/modules/delivery.md
+ * Delivery — shipments, one order at a time. Staff records a parcel's handover through
+ * {@link recordShipment} and its arrival through {@link recordDelivery}; each writes the parcel
+ * FIRST, then reports the fact to `orders` — `orders` is the only status writer, this module only
+ * ever asks it to move. See: docs/modules/delivery.md
  */
 
 import { t, getDefaultLocale } from '@infrastructure/i18n';
@@ -17,13 +16,13 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import type { ShippingMethodsResponse, Shipment, AuthContext } from '@types';
-import { emitDomainEvent } from '@kernel/events';
+import { OrderStatus } from '@types';
 import type { CallerContext } from '@types';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { deliveryAuditActions } from './audit';
-import { orderService, ORDER_STATUS_CHANGED } from '@modules/orders';
+import { orderService, canTransition } from '@modules/orders';
 import { userService } from '@modules/users';
-import { SHIPPING_METHODS } from './domain';
+import { SHIPPING_METHODS, findShippingMethod } from './domain';
 import { shipmentShippedEmail } from './emails';
 import { shipmentRepository } from './repository';
 import type { ShipmentDocument } from './model';
@@ -37,8 +36,8 @@ const listMethods = (): ResponseSuccess<ShippingMethodsResponse> =>
 const toShipmentResponse = (shipment: ShipmentDocument): Shipment => ({
     id: String(shipment._id),
     orderId: String(shipment.orderId),
-    trackingCode: shipment.trackingCode,
     status: shipment.status,
+    ...(shipment.trackingCode ? { trackingCode: shipment.trackingCode } : {}),
     ...(shipment.deliveredAt ? { deliveredAt: shipment.deliveredAt.toISOString() } : {}),
     ...(shipment.createdAt ? { createdAt: shipment.createdAt.toISOString() } : {}),
     ...(shipment.updatedAt ? { updatedAt: shipment.updatedAt.toISOString() } : {})
@@ -63,95 +62,116 @@ export const getForOrder = (
     });
 
 /**
- * `ORDER_STATUS_CHANGED`'s listener: creates the parcel once, idempotently — the upsert re-finds
- * an existing shipment, so an admin toggling status cannot spam the customer with re-sends.
- * Locale comes from the user record if one exists; the email address is always the order's.
- * @param orderId - the order that moved
+ * Record a parcel's handover to the carrier — the shipping door. Writes the parcel FIRST, then
+ * asks `orders` to move: an order not currently `processing` refuses before anything is written,
+ * so a stray call never creates a parcel for an order that cannot ship.
+ * @param orderId - the order to ship
+ * @param trackingCode - the carrier's handle; required when the method is `tracked`
+ * @param context - the caller, for the audit entry
  */
-export const shipOrder = async (orderId: string): Promise<void> => {
-    const order = await orderService.getById(orderId);
-    if (!order) return;
+export const recordShipment = (
+    orderId: string,
+    trackingCode: string | undefined,
+    context: CallerContext
+): Promise<ResponseSuccess<Shipment> | ResponseReject> =>
+    orderService.getById(orderId).then((order) => {
+        if (!order) return generateReject(404, [t('delivery.order-not-found')]);
+        // Asked of the order lifecycle rather than a status literal, same reasoning `orders`'
+        // own `isPayable` callers follow: this module cannot drift off the rule's owner.
+        if (!canTransition(order.status, OrderStatus.shipped, 'system'))
+            return generateReject(409, [
+                { code: 'ORDER_NOT_PROCESSING', message: t('delivery.not-processing') }
+            ]);
 
-    const existing = await shipmentRepository.findByOrderId(orderId);
-    // The tracking code is deterministic from the order id — the fake courier has no counter to
-    // collide, and re-shipping the same order re-mints the same code, which is what the upsert wants.
-    const shipment = await shipmentRepository.upsertForOrder(
-        orderId,
-        `TRK-${orderId.slice(-8).toUpperCase()}`
-    );
-    if (existing) return;
+        const method = order.shippingMethod ? findShippingMethod(order.shippingMethod) : undefined;
+        if (method?.tracked && !trackingCode)
+            return generateReject(422, [
+                { code: 'DELIVERY_TRACKING_CODE_REQUIRED', message: t('delivery.tracking-code-required') }
+            ]);
 
-    // `order.userId` is absent once a detach has erased the account — nothing to
-    // look up, same as the pre-existing "id points at nobody" case just below.
-    const user = order.userId
-        ? await userService.getById(String(order.userId)).catch(() => null)
-        : null;
-    const mail = shipmentShippedEmail(
-        user?.locale ?? getDefaultLocale(),
-        user?.username ?? order.email,
-        shipment.trackingCode
-    );
-    void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
-    logger.info(`Order ${orderId} shipped as ${shipment.trackingCode}`);
-};
+        return shipmentRepository.upsertForOrder(orderId, trackingCode).then((shipment) =>
+            orderService.markShipped(orderId).then((moved) => {
+                // The parcel write above is idempotent (unique on orderId); this order's own
+                // move is what is actually at-most-once — a racing loser lands here.
+                if (!moved)
+                    return generateReject(409, [
+                        { code: 'ORDER_NOT_PROCESSING', message: t('delivery.not-processing') }
+                    ]);
+
+                // `order.userId` is absent once a detach has erased the account — nothing to
+                // look up, the pre-existing "id points at nobody" case just below covers the rest.
+                return (
+                    order.userId
+                        ? userService.getById(String(order.userId)).catch(() => null)
+                        : Promise.resolve(null)
+                ).then((user) => {
+                    const mail = shipmentShippedEmail(
+                        user?.locale ?? getDefaultLocale(),
+                        user?.username ?? order.email,
+                        shipment.trackingCode
+                    );
+                    void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
+                    logger.info(`Order ${orderId} shipped as ${shipment.trackingCode ?? '(untracked)'}`);
+
+                    emitAuditEvent(
+                        buildAuditEvent(context, {
+                            action: deliveryAuditActions.ADMIN_ORDER_SHIPPED,
+                            outcome: 'success',
+                            target_type: 'order',
+                            target_id: orderId
+                        })
+                    );
+
+                    return generateSuccess(toShipmentResponse(shipment));
+                });
+            })
+        );
+    });
 
 /**
- * The fake courier's tick: every parcel on a truck arrives. A job function, not a schedule (see
- * module docblock). Per parcel, the ORDER moves first through the conditional `shipped →
- * delivered`, resolving a racing admin write to one winner; only a moved order's shipment is then
- * stamped, so the parcel record can lag the order for a beat but never contradict it. The log
- * line is the contract, same as the token cleanup's.
- * @returns how many parcels arrived
+ * Record a parcel's arrival — the delivery door. Stamps the shipment FIRST, then asks `orders`
+ * to move: an order not currently `shipped` refuses before anything is written.
+ * @param orderId - the order that arrived
+ * @param context - the caller, for the audit entry
  */
-export const runCourierAdvance = async (context: CallerContext): Promise<number> => {
-    const shipments = await shipmentRepository.findAllShipped();
-    let advanced = 0;
+export const recordDelivery = (
+    orderId: string,
+    context: CallerContext
+): Promise<ResponseSuccess<Shipment> | ResponseReject> =>
+    orderService.getById(orderId).then((order) => {
+        if (!order) return generateReject(404, [t('delivery.order-not-found')]);
+        if (!canTransition(order.status, OrderStatus.delivered, 'system'))
+            return generateReject(409, [
+                { code: 'ORDER_NOT_SHIPPED', message: t('delivery.not-shippable-for-delivery') }
+            ]);
 
-    for (const shipment of shipments) {
-        const order = await orderService.updateStatusIfIn(
-            String(shipment.orderId),
-            ['shipped'],
-            'delivered',
-            {}
-        );
-        if (!order) continue;
+        return shipmentRepository
+            .updateStatusIfIn(orderId, ['shipped'], 'delivered', { deliveredAt: new Date() })
+            .then((shipment) => {
+                if (!shipment)
+                    return generateReject(409, [
+                        { code: 'ORDER_NOT_SHIPPED', message: t('delivery.not-shippable-for-delivery') }
+                    ]);
 
-        /*
-         * Conditional for the same race-safety reason as the order move above: `findAllShipped`
-         * read this document earlier, and a second tick may be updating it right now, so an
-         * unconditional write could stamp `deliveredAt` twice and record the wrong finish time.
-         * The result is not checked — the count already comes from the ORDER's conditional move
-         * above; `null` here just means another tick already stamped this delivery, not a failure.
-         */
-        await shipmentRepository.updateStatusIfIn(
-            String(shipment.orderId),
-            ['shipped'],
-            'delivered',
-            {
-                deliveredAt: new Date()
-            }
-        );
-        advanced += 1;
+                return orderService.markDelivered(orderId).then((moved) => {
+                    if (!moved)
+                        return generateReject(409, [
+                            { code: 'ORDER_NOT_SHIPPED', message: t('delivery.not-shippable-for-delivery') }
+                        ]);
 
-        await emitDomainEvent(ORDER_STATUS_CHANGED, {
-            orderId: String(shipment.orderId),
-            from: 'shipped',
-            to: 'delivered'
-        });
-    }
+                    emitAuditEvent(
+                        buildAuditEvent(context, {
+                            action: deliveryAuditActions.ADMIN_ORDER_DELIVERED,
+                            outcome: 'success',
+                            target_type: 'order',
+                            target_id: orderId
+                        })
+                    );
 
-    logger.info(`Courier advance: ${advanced} of ${shipments.length} parcels delivered`);
-
-    emitAuditEvent(
-        buildAuditEvent(context, {
-            action: deliveryAuditActions.ADMIN_COURIER_ADVANCED,
-            outcome: 'success',
-            metadata: { advanced }
-        })
-    );
-
-    return advanced;
-};
+                    return generateSuccess(toShipmentResponse(shipment));
+                });
+            });
+    });
 
 /**
  * Every shipment behind a set of orders — for the account data export, called with the caller's
@@ -163,14 +183,10 @@ export const runCourierAdvance = async (context: CallerContext): Promise<number>
 export const findShipmentsForOrders = (orderIds: string[]): Promise<ShipmentDocument[]> =>
     orderIds.length === 0 ? Promise.resolve([]) : shipmentRepository.findByOrderIds(orderIds);
 
-/**
- * The module's one service handle. `shipOrder` sits on it like the rest — called through this
- * module's own subscription, not from outside — so no member is left off for a caller to learn
- * to import differently.
- */
+/** The module's one service handle — every controller in this module goes through it. */
 export const deliveryService = {
     listMethods,
     getForOrder,
-    shipOrder,
-    runCourierAdvance
+    recordShipment,
+    recordDelivery
 };

@@ -25,8 +25,9 @@ import { SEED_CUSTOMER_EMAILS, SEED_CUSTOMER_IDS } from '../users';
 import { PLAIN_PASSWORD } from '@modules/users/factories';
 import { signIn, type Caller } from './client';
 import {
-    advanceCourier,
     advanceOrder,
+    shipOrder,
+    deliverOrder,
     cancelOrder,
     CARD,
     checkout,
@@ -358,9 +359,9 @@ const requireBankTransfer = (owner: Caller): Promise<void> =>
 /**
  * Drive the whole history against a running app, oldest row first.
  *
- * The ORDER of what follows is the specification: `POST /delivery/advance` is one global tick
- * with no body, so an order meant to stay in transit has to be shipped after the tick that
- * delivered the rest. The same reasoning puts the ban last.
+ * The ORDER of what follows is the specification: every order shipped before the delivery block
+ * below is delivered together there, so an order meant to stay in transit has to be shipped
+ * after it. The same reasoning puts the ban last.
  *
  * @param baseUrl - a listening app, without a trailing slash
  * @returns the subject ids and per-order ages the backdating pass needs
@@ -388,6 +389,9 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
     };
 
     // ── The customer base's volume, and the `customer` account's own long history ──────────────
+    // Every order shipped in this block is delivered together, below — everything shipped AFTER
+    // that point stays in transit, which is what makes `order.shipped` below mean something.
+    const shippedBeforeDelivery: string[] = [];
     const base = await signInCustomerBase(baseUrl);
     for (const { customer: who, lines } of FILLER_ORDERS) {
         const orderId = dated(
@@ -396,20 +400,26 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
                 lines.map(([index, quantity]) => ({ productId: fillerProductId(index), quantity }))
             )
         );
-        await advanceOrder(owner, orderId, ['processing', 'shipped']);
+        await advanceOrder(owner, orderId, ['processing']);
+        await shipOrder(owner, orderId);
+        shippedBeforeDelivery.push(orderId);
     }
 
     for (const lines of CUSTOMER_ORDERS) {
         const orderId = dated(await checkoutAndPay(customer, lines));
-        await advanceOrder(owner, orderId, ['processing', 'shipped']);
+        await advanceOrder(owner, orderId, ['processing']);
+        await shipOrder(owner, orderId);
+        shippedBeforeDelivery.push(orderId);
     }
 
-    // The one named row that has to be delivered rather than in transit — placed before the tick.
+    // The one named row that has to be delivered rather than in transit — placed before the rest.
     subjects['order.delivered'] = dated(await checkoutAndPay(customer, DOG_FOOD(1)));
-    await advanceOrder(owner, subjects['order.delivered'], ['processing', 'shipped']);
+    await advanceOrder(owner, subjects['order.delivered'], ['processing']);
+    await shipOrder(owner, subjects['order.delivered']);
+    shippedBeforeDelivery.push(subjects['order.delivered']);
 
-    // One tick delivers every parcel above. Everything shipped after this line stays in transit.
-    await advanceCourier(owner);
+    // Every parcel shipped above arrives. Everything shipped after this line stays in transit.
+    for (const orderId of shippedBeforeDelivery) await deliverOrder(owner, orderId);
 
     // ── The named rows, each a branch the storefront or the admin actually has a screen for ────
     subjects['order.paid'] = dated(await checkoutAndPay(customer, DOG_FOOD(2)));
@@ -462,7 +472,8 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
         })
     );
     await submitCard(owner, await openPayment(owner, subjects['order.shipped']), CARD.visa);
-    await advanceOrder(owner, subjects['order.shipped'], ['processing', 'shipped']);
+    await advanceOrder(owner, subjects['order.shipped'], ['processing']);
+    await shipOrder(owner, subjects['order.shipped']);
 
     /*
      * SECURITY_HOLES_7_STORAGE_QUOTA (decision 2): an order line resolves its picture LIVE

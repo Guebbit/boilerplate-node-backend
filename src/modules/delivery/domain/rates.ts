@@ -11,11 +11,13 @@ import type { ShippingMethod } from '@types';
 /**
  * The methods this shop offers. Flat rates on purpose — weight/zone matrices are real-project
  * concerns with no demo value. `pickup` proves "cheapest method" and "no method" stay distinct.
+ * `tracked` decides whether `POST /delivery/order/{orderId}/ship` requires a tracking code —
+ * `express` is the one method worth the carrier's own visibility; `standard` and `pickup` are not.
  */
 export const SHIPPING_METHODS: readonly ShippingMethod[] = [
-    { id: 'standard', price: 5, freeAbove: 100 },
-    { id: 'express', price: 15 },
-    { id: 'pickup', price: 0 }
+    { id: 'standard', price: 5, freeAbove: 100, tracked: false },
+    { id: 'express', price: 15, tracked: true, maxInsuredValue: 500 },
+    { id: 'pickup', price: 0, tracked: false }
 ];
 
 /** The method behind an id, or undefined — the caller decides what absence answers. */

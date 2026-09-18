@@ -1,11 +1,10 @@
 /**
  * @module
- * Delivery — the rates rules, the shipment lifecycle, and the fake courier. What is worth
- * pinning: the free-above rule prices against the items total alone; `shipped` produces exactly
- * one parcel and one email however many times the status wobbles; and the courier tick moves the
- * order first, then the parcel, so the two can lag but never contradict. Real Mongo
- * (`setupTestDb`); the shipped email is asserted through the mocked queue, the cart's
- * confirmation-email seam.
+ * Delivery — the rates rules and the shipment lifecycle. What is worth pinning: the free-above
+ * rule prices against the items total alone; `ship` writes the parcel and moves the order
+ * together, and refuses an order that is not `processing`; `deliver` does the same for
+ * `shipped → delivered`. Real Mongo (`setupTestDb`); the shipped email is asserted through the
+ * mocked queue, the cart's confirmation-email seam.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -14,19 +13,11 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
-import { registerModules } from '@kernel/registry';
-import { resetDomainEvents } from '@kernel/events';
 import { orderService } from '@modules/orders';
-import { saveOrder } from '@modules/orders/tests/factories';
 import { OrderStatus } from '@types';
 import { findShippingMethod, priceShipping, SHIPPING_METHODS } from '@modules/delivery/domain';
-import { shipOrder, runCourierAdvance, getForOrder } from '@modules/delivery/service';
+import { recordShipment, recordDelivery, getForOrder } from '@modules/delivery/service';
 import { shipmentRepository } from '@modules/delivery/repository';
-import deliveryModule from '@modules/delivery/module';
-import inventoryModule from '@modules/inventory/module';
-import ordersModule from '@modules/orders/module';
-import productsModule from '@modules/products/module';
-import usersModule from '@modules/users/module';
 import type { ResponseReject } from '@infrastructure/http/response';
 import { asCustomer } from '../../../../../tests/support/callers';
 
@@ -40,11 +31,19 @@ setupTestDb();
 
 const asReject = (result: unknown) => result as ResponseReject;
 
-const shippedOrderFor = async () => {
+/** An order ready to ship — `processing`, no shipping method frozen (so `tracked` is `false`). */
+const processingOrderFor = async () => {
     const user = await createUser();
     const product = await createProduct({ price: 10 });
-    const order = await createOrder(user, [toOrderItem(product, 1)]);
-    await orderService.updateStatusIfIn(String(order._id), ['pending'], 'shipped');
+    const order = await createOrder(user, [toOrderItem(product, 1)], {
+        status: OrderStatus.processing
+    });
+    return { user, order };
+};
+
+const shippedOrderFor = async () => {
+    const { user, order } = await processingOrderFor();
+    await recordShipment(String(order._id), 'TRK-TESTFIXTURE', testCallerContext);
     return { user, order };
 };
 
@@ -72,65 +71,111 @@ describe('rates', () => {
     it('an unknown id is undefined — the caller decides what absence answers', () => {
         expect(findShippingMethod('teleport')).toBeUndefined();
     });
+
+    it('express is the one method that requires a tracking code', () => {
+        expect(SHIPPING_METHODS.filter((method) => method.tracked).map(({ id }) => id)).toEqual([
+            'express'
+        ]);
+    });
 });
 
-describe('shipOrder', () => {
-    it('creates the parcel and sends the tracking email once', async () => {
+describe('recordShipment', () => {
+    it('writes the parcel, moves the order, and sends the tracking email once', async () => {
         mockEnqueueEmail.mockClear();
-        const { order } = await shippedOrderFor();
+        const { order } = await processingOrderFor();
 
-        await shipOrder(String(order._id));
+        const result = await recordShipment(String(order._id), 'TRK-ABCDEF12', testCallerContext);
 
+        expect(result.success).toBe(true);
         const shipment = await shipmentRepository.findByOrderId(String(order._id));
         expect(shipment!.status).toBe('shipped');
-        expect(shipment!.trackingCode).toBe(`TRK-${String(order._id).slice(-8).toUpperCase()}`);
+        expect(shipment!.trackingCode).toBe('TRK-ABCDEF12');
+        const stored = await orderService.getById(String(order._id));
+        expect(stored!.status).toBe(OrderStatus.shipped);
         expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
         const [envelope, template, data] = mockEnqueueEmail.mock.calls[0];
         expect(envelope.to).toBe(order.email);
         expect(template).toBe('delivery.shipment-shipped');
-        expect(String(data?.tracking)).toContain(shipment!.trackingCode);
+        expect(String(data?.tracking)).toContain('TRK-ABCDEF12');
     });
 
-    it('is idempotent — a wobbling status neither re-mints the code nor re-sends the email', async () => {
-        mockEnqueueEmail.mockClear();
-        const { order } = await shippedOrderFor();
+    it('refuses an order that is not processing', async () => {
+        const { order } = await processingOrderFor();
+        await recordShipment(String(order._id), 'TRK-FIRST0001', testCallerContext);
 
-        await shipOrder(String(order._id));
-        await shipOrder(String(order._id));
+        const result = await recordShipment(String(order._id), 'TRK-SECOND002', testCallerContext);
 
-        await expect(shipmentRepository.count({})).resolves.toBe(1);
-        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+        expect(asReject(result).status).toBe(409);
+        expect(asReject(result).errors[0].code).toBe('ORDER_NOT_PROCESSING');
+    });
+
+    it('refuses a missing tracking code for a tracked method, and never writes the parcel', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 10 });
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.processing,
+            shippingMethod: 'express'
+        });
+
+        const result = await recordShipment(String(order._id), undefined, testCallerContext);
+
+        expect(asReject(result).status).toBe(422);
+        expect(asReject(result).errors[0].code).toBe('DELIVERY_TRACKING_CODE_REQUIRED');
+        await expect(shipmentRepository.findByOrderId(String(order._id))).resolves.toBeNull();
+    });
+
+    it('allows an untracked method to ship with no code at all', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 10 });
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.processing,
+            shippingMethod: 'standard'
+        });
+
+        const result = await recordShipment(String(order._id), undefined, testCallerContext);
+
+        expect(result.success).toBe(true);
+        const shipment = await shipmentRepository.findByOrderId(String(order._id));
+        expect(shipment!.trackingCode).toBeUndefined();
     });
 });
 
-describe('runCourierAdvance', () => {
-    it('delivers every parcel on a truck, order first', async () => {
+describe('recordDelivery', () => {
+    it('stamps the parcel and moves the order', async () => {
         const { order } = await shippedOrderFor();
-        await shipOrder(String(order._id));
 
-        const advanced = await runCourierAdvance(testCallerContext);
+        const result = await recordDelivery(String(order._id), testCallerContext);
 
-        expect(advanced).toBe(1);
+        expect(result.success).toBe(true);
         const stored = await orderService.getById(String(order._id));
-        expect(stored!.status).toBe('delivered');
+        expect(stored!.status).toBe(OrderStatus.delivered);
         const shipment = await shipmentRepository.findByOrderId(String(order._id));
         expect(shipment!.status).toBe('delivered');
         expect(shipment!.deliveredAt).toBeInstanceOf(Date);
     });
 
-    it('a second tick finds an empty truck', async () => {
-        const { order } = await shippedOrderFor();
-        await shipOrder(String(order._id));
-        await runCourierAdvance(testCallerContext);
+    it('refuses an order that has not shipped', async () => {
+        const { order } = await processingOrderFor();
 
-        await expect(runCourierAdvance(testCallerContext)).resolves.toBe(0);
+        const result = await recordDelivery(String(order._id), testCallerContext);
+
+        expect(asReject(result).status).toBe(409);
+        expect(asReject(result).errors[0].code).toBe('ORDER_NOT_SHIPPED');
+    });
+
+    it('refuses a second delivery of the same parcel', async () => {
+        const { order } = await shippedOrderFor();
+        await recordDelivery(String(order._id), testCallerContext);
+
+        const result = await recordDelivery(String(order._id), testCallerContext);
+
+        expect(asReject(result).status).toBe(409);
     });
 });
 
 describe('getForOrder', () => {
     it('answers the owner, refuses a stranger as absence, and distinguishes "not shipped yet"', async () => {
         const { user, order } = await shippedOrderFor();
-        await shipOrder(String(order._id));
         const stranger = await createUser({ email: 'stranger@example.com' });
 
         const own = await getForOrder(String(order._id), asCustomer(user.id));
@@ -144,42 +189,5 @@ describe('getForOrder', () => {
         const unshipped = await createOrder(user, [toOrderItem(product, 1)]);
         const early = await getForOrder(String(unshipped._id), asCustomer(user.id));
         expect(asReject(early).status).toBe(404);
-    });
-});
-
-/*
- * The subscription: an admin write moving an order to `shipped` must be enough — no controller
- * may need to remember to call delivery. Registry required, same shape as every event suite.
- */
-describe('shipment rides the status change', () => {
-    beforeEach(() => {
-        registerModules([
-            productsModule,
-            usersModule,
-            inventoryModule,
-            ordersModule,
-            deliveryModule
-        ]);
-    });
-
-    afterEach(() => {
-        resetDomainEvents();
-    });
-
-    it('the staff status write alone produces the parcel', async () => {
-        const user = await createUser();
-        const product = await createProduct();
-        const order = await createOrder(user, [toOrderItem(product, 1)]);
-
-        // `shipped` follows `processing` and nothing else. Set on the document rather than driven
-        // through the payment flow — how it reached the queue is not what this test is about.
-        order.status = OrderStatus.processing;
-        await saveOrder(order);
-
-        const result = await orderService.update(order, { status: 'shipped' });
-
-        expect(result.success).toBe(true);
-        const shipment = await shipmentRepository.findByOrderId(String(order._id));
-        expect(shipment).not.toBeNull();
     });
 });

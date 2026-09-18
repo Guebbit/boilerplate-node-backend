@@ -1,17 +1,18 @@
 /**
  * @module
- * Contract tests for /delivery. Three routes, three audiences: the methods list is public, the
- * shipment read is the owner's, the courier tick is staff's. These pin that each contract branch
- * is reached over HTTP; the courier's ordering rules live in the unit suite.
+ * Contract tests for /delivery. Four routes, three audiences: the methods list is public, the
+ * shipment read is the owner's, the two write doors are staff's. These pin that each contract
+ * branch is reached over HTTP; the moves' own rules live in the unit and integration suites.
  */
 
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
+import { testCallerContext } from '@tests/caller-context';
 import { api, authenticateAs } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
-import { orderService } from '@modules/orders';
-import { shipOrder } from '@modules/delivery/service';
+import { deliveryService } from '@modules/delivery/service';
+import { OrderStatus } from '@types';
 
 setupTestDb();
 
@@ -19,9 +20,10 @@ setupTestDb();
 const authenticateWithShipment = async () => {
     const { user, bearer } = await authenticateAs('user');
     const product = await createProduct();
-    const order = await createOrder(user, [toOrderItem(product, 1)]);
-    await orderService.updateStatusIfIn(String(order._id), ['pending'], 'shipped');
-    await shipOrder(String(order._id));
+    const order = await createOrder(user, [toOrderItem(product, 1)], {
+        status: OrderStatus.processing
+    });
+    await deliveryService.recordShipment(String(order._id), 'TRK-CONTRACT1', testCallerContext);
     return { bearer, order };
 };
 
@@ -62,15 +64,53 @@ describe('GET /delivery/order/{orderId}', () => {
     });
 });
 
-describe('POST /delivery/advance', () => {
-    it('matches the contract and reports the parcels that arrived', async () => {
-        await authenticateWithShipment();
-        const { bearer } = await authenticateAs('admin');
+describe('POST /delivery/order/{orderId}/ship', () => {
+    it('matches the contract and moves the order to shipped', async () => {
+        const { user, bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.processing
+        });
 
-        const response = await api().post('/delivery/advance').set('Authorization', bearer);
+        const response = await api()
+            .post(`/delivery/order/${String(order._id)}/ship`)
+            .set('Authorization', bearer)
+            .send({ trackingCode: 'TRK-SHIPDOOR1' });
 
         expect(response.status).toBe(200);
-        expect(response.body.data.advanced).toBe(1);
+        expect(response.body.data.trackingCode).toBe('TRK-SHIPDOOR1');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract when a tracked method has no code', async () => {
+        const { user, bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.processing,
+            shippingMethod: 'express'
+        });
+
+        const response = await api()
+            .post(`/delivery/order/${String(order._id)}/ship`)
+            .set('Authorization', bearer)
+            .send({});
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('POST /delivery/order/{orderId}/deliver', () => {
+    it('matches the contract and moves the order to delivered', async () => {
+        const { order } = await authenticateWithShipment();
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .post(`/delivery/order/${String(order._id)}/deliver`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.status).toBe('delivered');
         expect(response).toSatisfyApiSpec();
     });
 });

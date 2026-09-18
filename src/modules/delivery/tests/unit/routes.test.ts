@@ -1,8 +1,8 @@
 /**
  * @module
- * The delivery route table. Three routes, three different audiences — the guards are per route,
+ * The delivery route table. Four routes, three different audiences — the guards are per route,
  * so each one is its own decision rather than an inherited default. That's the arrangement most
- * likely to drift: a fourth route added here gets no guard at all unless someone remembers, which
+ * likely to drift: a fifth route added here gets no guard at all unless someone remembers, which
  * is what the sweep at the end of this file is for.
  */
 
@@ -14,7 +14,8 @@ describe('delivery routes', () => {
         expect(routeSignatures(router)).toEqual([
             'GET /methods',
             'GET /order/:orderId',
-            'POST /advance'
+            'POST /order/:orderId/ship',
+            'POST /order/:orderId/deliver'
         ]);
     });
 
@@ -34,10 +35,16 @@ describe('delivery routes', () => {
         expect(guards).not.toContain('requirePermissionGuard');
     });
 
-    it('restricts the courier tick to an operator', () => {
-        // `POST /advance` moves every parcel forward — an operator standing in for a cron. Open
-        // to any logged-in caller, a customer could advance the whole shop's deliveries.
-        expect(guardsOn(router, 'POST /advance')).toContain('requirePermissionGuard');
+    it('restricts recording a shipment to an operator', () => {
+        // A customer could otherwise move their own order forward, or anyone else's — this is
+        // staff's own write, not the order owner's.
+        expect(guardsOn(router, 'POST /order/:orderId/ship')).toContain('requirePermissionGuard');
+    });
+
+    it('restricts recording a delivery to an operator', () => {
+        expect(guardsOn(router, 'POST /order/:orderId/deliver')).toContain(
+            'requirePermissionGuard'
+        );
     });
 
     it('leaves nothing but the methods list unauthenticated', () => {

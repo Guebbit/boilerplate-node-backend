@@ -14,8 +14,8 @@ import { ShipmentStatus } from '@types';
 /** A dispatched parcel, one per order. */
 export interface ShipmentDocument extends Document {
     orderId: Types.ObjectId;
-    /** The courier's handle on the parcel — fake here, but shaped like the real thing. */
-    trackingCode: string;
+    /** The carrier's handle on the parcel. Absent for a method that carries no tracking. */
+    trackingCode?: string;
     status: ShipmentStatus;
     deliveredAt?: Date;
     createdAt?: Date;
@@ -35,8 +35,7 @@ export const shipmentSchema = new Schema<ShipmentDocument>(
             unique: true
         },
         trackingCode: {
-            type: String,
-            required: true
+            type: String
         },
         status: {
             type: String,

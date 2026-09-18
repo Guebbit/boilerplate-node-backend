@@ -5,7 +5,7 @@
 <main class="centered">
     <h1><%= greeting %></h1>
     <p><%= body %></p>
-    <p><%= tracking %></p>
+    <% if (typeof tracking !== "undefined") { %><p><%= tracking %></p><% } %>
 </main>
 <%- include("../layouts/default-footer.ejs"); %>
 </body>

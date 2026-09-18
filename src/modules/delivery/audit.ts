@@ -4,12 +4,10 @@
  * augmentation rather than in a shared enum.
  */
 
-/**
- * One action: the courier tick is the only request-shaped thing delivery does. The shipment
- * creation itself rides the order status change, which the admin order write already audits.
- */
+/** The two doors staff writes through: recording a handover, and recording an arrival. */
 export const deliveryAuditActions = {
-    ADMIN_COURIER_ADVANCED: 'admin.courier.advanced'
+    ADMIN_ORDER_SHIPPED: 'admin.order.shipped',
+    ADMIN_ORDER_DELIVERED: 'admin.order.delivered'
 } as const;
 
 /** Registers this module's action shape into the shared `AuditActionMap`. */

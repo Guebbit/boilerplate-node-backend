@@ -19,10 +19,12 @@ import {
 } from '@tests/schema';
 
 describe('shipmentSchema', () => {
-    it('requires the order it belongs to and the code that tracks it', () => {
+    it('requires only the order it belongs to', () => {
+        // `trackingCode` is optional: required by the shipping door only when the order's method
+        // is `tracked` (a service-level rule, not a schema one — an untracked parcel has none).
         // `deliveredAt` is absent until it arrives — its absence IS "in transit", which is why it
         // carries no default.
-        expect(requiredPaths(shipmentSchema)).toEqual(['orderId', 'trackingCode']);
+        expect(requiredPaths(shipmentSchema)).toEqual(['orderId']);
     });
 
     it('allows at most one shipment per order, in the database', () => {

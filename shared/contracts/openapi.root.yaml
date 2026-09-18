@@ -1460,8 +1460,10 @@ paths:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1methods'
     /delivery/order/{orderId}:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}'
-    /delivery/advance:
-        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1advance'
+    /delivery/order/{orderId}/ship:
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}~1ship'
+    /delivery/order/{orderId}/deliver:
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}~1deliver'
 
     # ---------- inventory ----------
     /inventory/levels:

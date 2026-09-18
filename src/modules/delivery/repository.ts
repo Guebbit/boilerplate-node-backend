@@ -19,8 +19,7 @@ import {
 export const shipmentRepository: Repository<ShipmentDocument> & {
     findByOrderId: (orderId: string) => Promise<ShipmentDocument | null>;
     findByOrderIds: (orderIds: string[]) => Promise<ShipmentDocument[]>;
-    upsertForOrder: (orderId: string, trackingCode: string) => Promise<ShipmentDocument>;
-    findAllShipped: () => Promise<ShipmentDocument[]>;
+    upsertForOrder: (orderId: string, trackingCode?: string) => Promise<ShipmentDocument>;
     updateStatusIfIn: (
         orderId: string,
         from: readonly ShipmentStatus[],
@@ -45,21 +44,24 @@ export const shipmentRepository: Repository<ShipmentDocument> & {
         shipmentModel.find({ orderId: { $in: orderIds.map((id) => toObjectId(id)) } }).exec(),
 
     /**
-     * Create the shipment for an order, idempotently: `unique` on `orderId` plus the upsert
-     * means an order re-entering `shipped` (admin fixing a status mistake) finds its existing
-     * parcel rather than minting a second tracking code.
+     * Create the shipment for an order, idempotently: `unique` on `orderId` plus the upsert means
+     * two callers racing the same first-time `ship` only one inserts, and `$setOnInsert` never
+     * touches an existing document — the loser's own `trackingCode` argument is simply discarded
+     * rather than clobbering the winner's.
      */
-    upsertForOrder: (orderId: string, trackingCode: string) =>
+    upsertForOrder: (orderId: string, trackingCode?: string) =>
         shipmentModel
             .findOneAndUpdate(
                 { orderId: toObjectId(orderId) },
-                { $setOnInsert: { trackingCode, status: 'shipped' } },
+                {
+                    $setOnInsert: {
+                        status: 'shipped',
+                        ...(trackingCode ? { trackingCode } : {})
+                    }
+                },
                 { upsert: true, returnDocument: 'after' }
             )
             .exec(),
-
-    /** Every parcel still on a truck — the fake courier's work list. */
-    findAllShipped: () => shipmentModel.find({ status: 'shipped' }).exec(),
 
     /**
      * Move a parcel between statuses, but only from one of the expected ones — atomically, the
