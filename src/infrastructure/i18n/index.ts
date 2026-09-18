@@ -7,6 +7,10 @@
  * `./translation` (user-authored content, resolved by a registered port); all ~70 import sites
  * say `@infrastructure/i18n`.
  *
+ * `Accept-Language` matching itself is not re-exported here any more — `attachLocale`
+ * (`http/middlewares/locale.ts`) calls Express's own `request.acceptsLanguages` directly, ordering
+ * `listSupportedLocales()` fallback-first, instead of a hand-rolled parser.
+ *
  * See: docs/tools/i18n.md
  */
 
@@ -41,8 +45,6 @@ export {
     translator,
     type LocaleContext
 } from './context';
-
-export { negotiateLocale } from './negotiate';
 
 export {
     applyTranslations,

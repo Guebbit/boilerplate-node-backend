@@ -7,7 +7,37 @@
  */
 
 import type { NextFunction, Request, Response } from 'express';
-import { createLocaleContext, negotiateLocale, runWithLocaleContext } from '@infrastructure/i18n';
+import {
+    createLocaleContext,
+    getFallbackLocale,
+    listSupportedLocales,
+    runWithLocaleContext
+} from '@infrastructure/i18n';
+
+/**
+ * Picks the best supported locale for the request's `Accept-Language` header.
+ *
+ * `request.acceptsLanguages` (Express, via `accepts`/`negotiator`) handles q-weights, `*` and
+ * `en-GB` → `en` region-prefix matching — the same ground `CLAUDE.md` says not to reimplement by
+ * hand. `false` (nothing offered matches, or the header explicitly refuses everything) falls back,
+ * same as no header at all.
+ *
+ * The fallback locale goes FIRST in the offered list: `negotiator` answers a bare `*` — or no
+ * header — with the first candidate offered, so that is what makes both cases resolve to the
+ * fallback rather than an arbitrary supported locale.
+ *
+ * @param request - only `acceptsLanguages` is read off it, so a stub needs no more than that
+ */
+const negotiateLocale = (request: Pick<Request, 'acceptsLanguages'>): string => {
+    const supported = listSupportedLocales();
+    const fallback = supported.includes(getFallbackLocale())
+        ? getFallbackLocale()
+        : (supported[0] ?? getFallbackLocale());
+    const offered = [fallback, ...supported.filter((locale) => locale !== fallback)];
+
+    const negotiated = request.acceptsLanguages(...offered);
+    return typeof negotiated === 'string' ? negotiated : fallback;
+};
 
 /**
  * Negotiates the request's language and runs the rest of the chain inside it.
@@ -20,7 +50,7 @@ import { createLocaleContext, negotiateLocale, runWithLocaleContext } from '@inf
  * the same fault the `Vary: Authorization` note in `cache.ts` describes, different header.
  */
 export const attachLocale = (request: Request, response: Response, next: NextFunction): void => {
-    const context = createLocaleContext(negotiateLocale(request.get('accept-language')));
+    const context = createLocaleContext(negotiateLocale(request));
 
     // On the request for code that has one to hand...
     request.locale = context.locale;

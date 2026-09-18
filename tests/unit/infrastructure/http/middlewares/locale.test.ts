@@ -18,15 +18,27 @@
  * whatever CORS already put there rather than replace it.
  */
 import { asStub } from '@tests/stub';
+import express from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import { attachLocale } from '@infrastructure/http/middlewares/locale';
-import { getCurrentLocale, getLocaleContext, listSupportedLocales } from '@infrastructure/i18n';
+import {
+    getCurrentLocale,
+    getFallbackLocale,
+    getLocaleContext,
+    listSupportedLocales
+} from '@infrastructure/i18n';
 
+/**
+ * A request whose `acceptsLanguages` is the REAL Express implementation (`accepts`/`negotiator`
+ * under it), not a hand-rolled stand-in — `Object.create(express.request)` picks up every method
+ * on the prototype the framework itself serves requests through, headers included.
+ */
 const makeRequest = (acceptLanguage?: string) =>
-    asStub<Request>({
-        get: (name: string) =>
-            name.toLowerCase() === 'accept-language' ? acceptLanguage : undefined
-    });
+    asStub<Request>(
+        Object.assign(Object.create(express.request) as Request, {
+            headers: acceptLanguage === undefined ? {} : { 'accept-language': acceptLanguage }
+        })
+    );
 
 const makeResponse = () =>
     asStub<Response & { set: jest.Mock; vary: jest.Mock }>({
@@ -103,5 +115,64 @@ describe('attachLocale', () => {
         attachLocale(makeRequest('en'), makeResponse(), next as NextFunction);
 
         expect(next).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+        ['it', 'it'],
+        ['IT', 'it'],
+        ['it-CH', 'it'],
+        ['en-GB', 'en']
+    ])('resolves %s to %s', (header, expected) => {
+        const request = makeRequest(header);
+
+        attachLocale(request, makeResponse(), jest.fn() as NextFunction);
+
+        expect(request.locale).toBe(expected);
+    });
+
+    it('prefers the highest q-weight over header order', () => {
+        const request = makeRequest('en;q=0.8,it;q=0.9');
+
+        attachLocale(request, makeResponse(), jest.fn() as NextFunction);
+
+        expect(request.locale).toBe('it');
+    });
+
+    it('ignores an entry the client explicitly refused with q=0', () => {
+        const request = makeRequest('it;q=0,en;q=0.5');
+
+        attachLocale(request, makeResponse(), jest.fn() as NextFunction);
+
+        expect(request.locale).toBe('en');
+    });
+
+    /**
+     * The two behaviour deltas from switching off the hand-rolled parser onto Express's own
+     * `acceptsLanguages` (`accepts`/`negotiator`). Both are deliberate, documented trade-offs, not
+     * regressions — see `TIER_AUDIT_STRUCTURE.md` C6 for the reasoning.
+     */
+    describe('behaviour deltas from the hand-rolled parser', () => {
+        it('drops a tag with an unparseable q-weight, rather than treating it as full weight', () => {
+            // Old `negotiateLocale`: an unparseable weight ('banana') fell back to full weight, so
+            // 'it' won. `negotiator` drops the tag outright instead, so the request falls through
+            // to the fallback locale.
+            const request = makeRequest('it;q=banana');
+
+            attachLocale(request, makeResponse(), jest.fn() as NextFunction);
+
+            expect(request.locale).not.toBe('it');
+            expect(request.locale).toBe(getFallbackLocale());
+        });
+
+        it('resolves a bare wildcard to the fallback locale, same as before', () => {
+            // Old `negotiateLocale` special-cased '*' to mean "give me the default". `negotiator`
+            // instead returns the first candidate OFFERED for a wildcard — `attachLocale` orders
+            // the fallback first specifically so this still lands on the same answer.
+            const request = makeRequest('*');
+
+            attachLocale(request, makeResponse(), jest.fn() as NextFunction);
+
+            expect(request.locale).toBe(getFallbackLocale());
+        });
     });
 });
