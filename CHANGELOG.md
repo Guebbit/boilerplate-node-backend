@@ -209,6 +209,12 @@ deployment reseeds after pulling this change rather than migrating in place.
   candidate password (a bundled list, then the HIBP k-anonymity range API), so a signup form can
   warn before the account exists. Additive; the four password-SET paths enforce the same two
   checks server-side regardless of what this endpoint answers.
+- **`Order` gains `shippingNetAmount`, `shippingTaxAmount` and `taxSummary[]`.** Shipping's own VAT
+  split, and one row per distinct rate charged on the order (goods and shipping folded together,
+  since shipping is taxed at each line's own rate rather than carrying one of its own). `netTotal`
+  stays goods-only as before; `taxTotal` is unchanged too — both were already correct, only their
+  descriptions were fixed to say so explicitly. Additive; all three are absent on a pre-VAT order,
+  same as `netTotal`/`taxTotal` already are.
 
 ## [3.0.0] - 2026-08-23
 

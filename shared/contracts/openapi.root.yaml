@@ -970,6 +970,33 @@ components:
                         make that move: a client starts the flow with `POST /payments/intent` and
                         the provider's yes does the rest.
 
+        # One VAT rate's slice of the whole order — goods and shipping folded into the same row,
+        # since shipping is taxed at each line's own rate rather than carrying one of its own. See
+        # `src/modules/orders/domain/tax.ts`.
+        OrderTaxSummaryRow:
+            type: object
+            additionalProperties: false
+            required: [rate, netAmount, taxAmount, grossAmount]
+            properties:
+                rate:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: The decimal rate this row is for (`0.22` for 22%) — never repeated across rows.
+                netAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                taxAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                grossAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: '`netAmount + taxAmount`, not re-derived from a price.'
+
         Order:
             type: object
             additionalProperties: false
@@ -1015,7 +1042,10 @@ components:
                     format: double
                     minimum: 0
                     readOnly: true
-                    description: Sum of every line's `netAmount` — the goods total excluding VAT. Absent on a pre-VAT order.
+                    description: >-
+                        Sum of every line's `netAmount` — the goods total excluding VAT, GOODS
+                        ONLY. Shipping's own net amount is `shippingNetAmount`, not folded in here.
+                        Absent on a pre-VAT order.
                 taxTotal:
                     type: number
                     format: double
@@ -1026,6 +1056,34 @@ components:
                         on `shippingCost` — apportioned pro-rata across the lines by value and
                         taxed at each line's own rate, since delivery is taxed as ancillary to what
                         it delivers. Absent on a pre-VAT order.
+                shippingNetAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: >-
+                        Shipping's own net amount, summed across every line it was apportioned
+                        onto — `netTotal` stays goods-only, this is the rest of the split. Absent
+                        on a pre-VAT order.
+                shippingTaxAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: >-
+                        Shipping's own tax amount, summed across every line it was apportioned
+                        onto — already folded into `taxTotal`, published separately so an invoice
+                        can print it as its own line. Absent on a pre-VAT order.
+                taxSummary:
+                    type: array
+                    readOnly: true
+                    items:
+                        $ref: '#/components/schemas/OrderTaxSummaryRow'
+                    description: >-
+                        One row per distinct VAT rate charged on this order, sorted ascending.
+                        Reconciles exactly: summed `netAmount` is `netTotal` + `shippingNetAmount`,
+                        summed `taxAmount` is `taxTotal`, and summed `grossAmount` is `totalPrice`.
+                        Absent on a pre-VAT order.
                 notes:
                     type: string
                     description: Optional order notes

@@ -475,9 +475,10 @@ const applyOrderTotals = (serialized: Record<string, unknown>) => {
 };
 
 /**
- * Derives each line's `taxAmount`/`netAmount` and the order's `netTotal`/`taxTotal` from the
- * lines' frozen `taxRate` — added onto the already-normalized items `applyOrderItems` produced.
- * Adds nothing at all on a pre-VAT order (any line missing `taxRate`): see `orderTaxBreakdown`.
+ * Derives each line's `taxAmount`/`netAmount`, the order's `netTotal`/`taxTotal`, shipping's own
+ * `shippingNetAmount`/`shippingTaxAmount` split, and the per-rate `taxSummary` from the lines'
+ * frozen `taxRate` — added onto the already-normalized items `applyOrderItems` produced. Adds
+ * nothing at all on a pre-VAT order (any line missing `taxRate`): see `orderTaxBreakdown`.
  */
 const applyOrderTax = (serialized: Record<string, unknown>) => {
     const items = Array.isArray(serialized.items) ? serialized.items : [];
@@ -495,6 +496,9 @@ const applyOrderTax = (serialized: Record<string, unknown>) => {
     }
     serialized.netTotal = breakdown.netTotal;
     serialized.taxTotal = breakdown.taxTotal;
+    serialized.shippingNetAmount = breakdown.shippingNetAmount;
+    serialized.shippingTaxAmount = breakdown.shippingTaxAmount;
+    serialized.taxSummary = breakdown.taxSummary;
 };
 
 /**
