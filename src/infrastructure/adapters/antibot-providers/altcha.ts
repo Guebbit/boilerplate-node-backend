@@ -12,6 +12,7 @@ import { verify } from 'altcha-lib/frameworks/shared';
 import type { HumanChallengeProvider } from './index';
 import type { RungVerdict } from '../antibot-verdict';
 import { altchaStore } from './altcha-store';
+import { environmentNumber } from '@infrastructure/runtime/environment';
 import type { AntibotChallenge } from '@types';
 
 /**
@@ -41,9 +42,11 @@ const signatureSecret = (): string => {
     return secret;
 };
 
-/** Higher taxes a bot's CPU and an honest visitor's alike — raise it only as far as abuse justifies. */
-const cost = (): number =>
-    Number.parseInt(process.env.NODE_ANTIBOT_ALTCHA_COST ?? '', 10) || DEFAULT_COST;
+/**
+ * Higher taxes a bot's CPU and an honest visitor's alike — raise it only as far as abuse
+ * justifies. `min: 1` — a `0` cost is not a smaller challenge, it is no challenge at all.
+ */
+const cost = (): number => environmentNumber('NODE_ANTIBOT_ALTCHA_COST', DEFAULT_COST, 1);
 
 /**
  * altcha-lib: build a signed challenge for the widget to solve. `expiresAt` is what makes a stale

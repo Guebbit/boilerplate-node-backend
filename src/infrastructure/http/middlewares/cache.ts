@@ -59,15 +59,13 @@ const STALE_IF_ERROR_SECONDS = 300;
  */
 const DEFAULT_DEV_TTL_MAX_SECONDS = 30;
 
-/** Reads `NODE_REDIS_CACHE_DEV_TTL_MAX`, falling back to {@link DEFAULT_DEV_TTL_MAX_SECONDS}. */
-const getDevelopmentTtlMax = (): number => {
-    const raw = process.env.NODE_REDIS_CACHE_DEV_TTL_MAX;
-    if (raw === undefined || raw.trim() === '') return DEFAULT_DEV_TTL_MAX_SECONDS;
-
-    const parsed = Number(raw);
-    // A non-numeric or negative value is a config typo; fall back rather than cache forever.
-    return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_DEV_TTL_MAX_SECONDS;
-};
+/**
+ * Reads `NODE_REDIS_CACHE_DEV_TTL_MAX`, falling back to {@link DEFAULT_DEV_TTL_MAX_SECONDS}.
+ * `min: 0` — `0` is a legal value here (see {@link resolveCacheTtl}, "no cap"), so only a
+ * negative or non-numeric value is the config typo that falls back.
+ */
+const getDevelopmentTtlMax = (): number =>
+    environmentNumber('NODE_REDIS_CACHE_DEV_TTL_MAX', DEFAULT_DEV_TTL_MAX_SECONDS, 0);
 
 /**
  * Clamp a route's declared TTL to the development ceiling.

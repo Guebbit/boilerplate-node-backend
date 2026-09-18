@@ -15,6 +15,7 @@ import { stopCache } from '@infrastructure/adapters/cache';
 import { stopRateLimitStore } from '@infrastructure/http/middlewares/rate-limit-store';
 import { stopQueue } from '@infrastructure/adapters/queue';
 import { stopLocaleOverrideRefresh } from '@infrastructure/i18n';
+import { environmentNumber } from '@infrastructure/runtime/environment';
 
 /** Upper bound on graceful shutdown before we stop being polite and kill the process. */
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 15_000;
@@ -26,15 +27,10 @@ const DEFAULT_SHUTDOWN_TIMEOUT_MS = 15_000;
  * `terminationGracePeriodSeconds`, default 30 s; Docker `stop_grace_period`, default 10 s),
  * otherwise the platform SIGKILLs the container mid-drain and the timeout never fires.
  */
-export const getShutdownTimeoutMs = () => {
-    const parsedTimeout = Number.parseInt(
-        process.env.NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS ?? String(DEFAULT_SHUTDOWN_TIMEOUT_MS),
-        10
-    );
-    // `parseInt` returns NaN on garbage input ('abc', ''), which would make the timer fire
-    // immediately — fall back instead of shipping a broken grace period.
-    return Number.isNaN(parsedTimeout) ? DEFAULT_SHUTDOWN_TIMEOUT_MS : parsedTimeout;
-};
+export const getShutdownTimeoutMs = () =>
+    // `min: 1` — zero or negative would fire the forced-exit timer immediately, which is not a
+    // grace period at all, so garbage and non-positive input both fall back to the default.
+    environmentNumber('NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS', DEFAULT_SHUTDOWN_TIMEOUT_MS, 1);
 
 /**
  * Promisify server.close() — resolves once all connections are drained.
