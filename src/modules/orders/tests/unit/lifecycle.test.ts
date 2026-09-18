@@ -73,6 +73,37 @@ describe('who may write `paid`', () => {
     });
 });
 
+describe('who may write `shipped` and `delivered`', () => {
+    it('lets nothing but a recorded parcel fact reach either', () => {
+        // Neither is a request a human makes directly any more — `delivery`'s own doors record the
+        // handover/arrival first, then report it here. See
+        // `src/modules/orders/services/status.ts`.
+        for (const actor of EVERY_ACTOR) {
+            expect(statusesLeadingTo(OrderStatus.shipped, actor)).toEqual(
+                actor === 'system' ? [OrderStatus.processing] : []
+            );
+            expect(statusesLeadingTo(OrderStatus.delivered, actor)).toEqual(
+                actor === 'system' ? [OrderStatus.shipped] : []
+            );
+        }
+    });
+
+    it('refuses an admin writing either by hand', () => {
+        // The generic `PUT /orders/:id` used to allow this; `src/modules/orders/services/status.ts`'s
+        // doors (reached only through `delivery`) are what may move an order here now.
+        expect(canTransition(OrderStatus.processing, OrderStatus.shipped, 'admin')).toBe(false);
+        expect(canTransition(OrderStatus.shipped, OrderStatus.delivered, 'admin')).toBe(false);
+    });
+
+    it('matches the single `from` status.ts hardcodes for each', () => {
+        // `src/modules/orders/services/status.ts`'s `markShipped`/`markDelivered` each write from
+        // ONE literal status rather than asking this table — this is what keeps that assumption
+        // honest if a future edge changes it.
+        expect(statusesLeadingTo(OrderStatus.shipped, 'system')).toEqual([OrderStatus.processing]);
+        expect(statusesLeadingTo(OrderStatus.delivered, 'system')).toEqual([OrderStatus.shipped]);
+    });
+});
+
 describe('who may cancel', () => {
     it('stops a customer once the order is in the queue', () => {
         // The refund listener is what makes `paid` cancellable.

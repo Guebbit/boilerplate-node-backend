@@ -24,6 +24,7 @@ import {
 import { detachUserId, anonymizeDueOrders } from './retention';
 import { callerScope, ownerScope, withActions } from './scope';
 import { cancelById, retryPendingEffects } from './cancel';
+import { markPaid, markShipped, markDelivered } from './status';
 
 /*
  * Every operation is published by name as well as through the object below, exactly as the single
@@ -47,6 +48,7 @@ export {
     removeById
 } from './crud';
 export { cancelById, retryPendingEffects } from './cancel';
+export { markPaid, markShipped, markDelivered } from './status';
 export { detachUserId, anonymizeDueOrders } from './retention';
 export { callerScope, actorOf, ownerScope, withActions } from './scope';
 export { freezeOrderLines } from './snapshot';
@@ -68,6 +70,9 @@ export const orderService = {
     updateById,
     remove,
     removeById,
+    markPaid,
+    markShipped,
+    markDelivered,
     detachUserId,
     anonymizeDueOrders,
     cancelById,

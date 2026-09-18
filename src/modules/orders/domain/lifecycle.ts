@@ -31,11 +31,16 @@ export const ORDER_LIFECYCLE: Readonly<
         [OrderStatus.cancelled]: ['customer', 'admin']
     },
     [OrderStatus.processing]: {
-        [OrderStatus.shipped]: ['admin'],
+        // `system`, not `admin`: this follows a parcel's handover being recorded through
+        // `delivery`'s own door, never a direct admin write — see
+        // `src/modules/orders/services/status.ts`'s `markShipped`.
+        [OrderStatus.shipped]: ['system'],
         [OrderStatus.cancelled]: ['admin']
     },
     [OrderStatus.shipped]: {
-        [OrderStatus.delivered]: ['admin']
+        // `system` likewise — a parcel's arrival, recorded through `delivery`'s own door. See
+        // `src/modules/orders/services/status.ts`'s `markDelivered`.
+        [OrderStatus.delivered]: ['system']
     },
     [OrderStatus.delivered]: {},
     [OrderStatus.cancelled]: {}
