@@ -5,8 +5,9 @@
  * `src/modules/account/tests/unit/rate-limits.test.ts`); the relationships BETWEEN a module's
  * budget and this file's global one — "stays a small fraction of the browsing budget" — are
  * cross-cutting and live in `tests/cross-cutting/rate-limit-budgets.test.ts`. The metrics scrape
- * guard, `isMetricsScraper`, moved to `src/modules/observability` (`TIER_AUDIT_STRUCTURE.md` A4)
- * and is pinned in that module's own `tests/unit/metrics-scraper.test.ts`.
+ * guard, `isMetricsScraper`, moved to `src/modules/observability` — it guards one module's own
+ * route, not a shared budget — and is pinned in that module's own
+ * `tests/unit/metrics-scraper.test.ts`.
  */
 import {
     DEFAULT_RATE_LIMIT_MAX,

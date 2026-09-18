@@ -526,10 +526,10 @@ describe('invalidateCacheTags', () => {
 
 /**
  * `invalidateCacheTagsLogged` — the shared body behind the HTTP cache middleware's
- * `invalidateCache` and the image digest worker's writeback invalidation (`TIER_AUDIT_STRUCTURE.md`
- * A6). `reachable: false` only ever fed a mock in those two callers' own tests, so it had no direct
- * test: this is the observability contract itself — a stale-serving write must show up as a metric
- * and a log line, not disappear silently.
+ * `invalidateCache` and the image digest worker's writeback invalidation. `reachable: false` only
+ * ever fed a mock in those two callers' own tests, so it had no direct test: this is the
+ * observability contract itself — a stale-serving write must show up as a metric and a log line,
+ * not disappear silently.
  */
 describe('invalidateCacheTagsLogged', () => {
     beforeEach(() => {

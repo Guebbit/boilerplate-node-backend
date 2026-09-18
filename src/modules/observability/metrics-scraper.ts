@@ -1,8 +1,8 @@
 /**
  * @module
  * Guards the Prometheus scrape endpoint with a static bearer credential. Not rate limiting — it
- * is a static-bearer auth guard for this module's one route, `GET /observability/metrics`
- * (`TIER_AUDIT_STRUCTURE.md` A4) — so it lives beside the route it guards rather than in
+ * is a static-bearer auth guard for this module's one route, `GET /observability/metrics`, so it
+ * lives beside the route it guards rather than in
  * `infrastructure/http/middlewares/rate-limit.ts`, and stays off the module's barrel: it is
  * wiring, not published language.
  */

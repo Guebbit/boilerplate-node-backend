@@ -943,10 +943,9 @@ describe('the per-entry size limit', () => {
 
 /**
  * `invalidateCacheTagsLogged` itself — the reachable/unreachable split, the metric and the log
- * line — moved to `adapters/cache.ts` (`TIER_AUDIT_STRUCTURE.md` A6): it is cache-adapter
- * business, shared with the image digest worker, not something specific to this middleware. What
- * is left to pin here is this middleware's own job: call it after a successful write, skip it
- * after a failed one.
+ * line — moved to `adapters/cache.ts`: it is cache-adapter business, shared with the image digest
+ * worker, not something specific to this middleware. What is left to pin here is this
+ * middleware's own job: call it after a successful write, skip it after a failed one.
  */
 describe('invalidateCache', () => {
     beforeEach(() => {

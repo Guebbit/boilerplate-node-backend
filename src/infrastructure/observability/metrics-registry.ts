@@ -2,8 +2,8 @@
  * @module
  * The shared prom-client registry, and the process-wide metrics that describe the registry itself
  * rather than any one domain: default Node.js/process collectors, uptime, and the heap ceiling.
- * Split from `metrics-http.ts` (A5, `TIER_AUDIT_STRUCTURE.md`) so a file named for HTTP is not
- * where every module's `metrics.ts` reaches for the registry it registers onto.
+ * Split from `metrics-http.ts` so a file named for HTTP is not where every module's `metrics.ts`
+ * reaches for the registry it registers onto.
  *
  * See: docs/tools/opentelemetry.md
  */

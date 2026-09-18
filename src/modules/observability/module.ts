@@ -3,8 +3,9 @@
  * The operator-facing view of the running service: health, a metrics overview, the live SSE
  * stream, the Prometheus scrape endpoint, and the audit trail. Depends on `audit-logs` for
  * `GET /observability/audit`; the readiness fold, job health, the process reader, the SSE hub and
- * the scrape guard are this module's own files (`TIER_AUDIT_STRUCTURE.md` A3/A4) — only the
- * Prometheus registry and the HTTP counters it reads by name stay in `infrastructure/observability`,
+ * the scrape guard are this module's own files — they implement this module's own routes and
+ * nothing else imports them — only the Prometheus registry and the HTTP counters it reads by name
+ * stay in `infrastructure/observability`,
  * since every module registers onto that same registry. Every route is authenticated, but not
  * with the same style — see `routes.ts`. The barrel is empty: this module owns URLs, not data, so
  * it has nothing to promise a sibling.
