@@ -4,7 +4,7 @@
 any domain. It is the bottom tier — it never knows modules exist, and `eslint.config.ts` stops it
 finding out.
 
-Nine subdirectories, each a different kind of substrate.
+Eight subdirectories, each a different kind of substrate.
 
 Rows group files that serve one feature, so a row may name several.
 
@@ -20,7 +20,6 @@ flowchart LR
     Http --> Persist["persistence/<br/><i>document ↔ payload</i>"]
     Obs["observability/<br/><i>logs, metrics, traces</i>"]
     I18n["i18n/<br/><i>one language per request</i>"]
-    Obs --> Auth["authorization/<br/><i>how a key is spelled</i>"]
     Sec["security/<br/><i>primitives nobody hand-rolls</i>"]
 
     classDef a fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -30,7 +29,7 @@ flowchart LR
     class Runtime,Adapters a;
     class Http,Persist,Surfaces b;
     class Obs,I18n c;
-    class Auth,Sec d;
+    class Sec d;
 ```
 
 ## `runtime/` — boot and shutdown
@@ -140,15 +139,6 @@ not care which file answers. Inside the directory, `overrides` and `negotiate` e
 | `src/infrastructure/i18n/context.ts`     | The `AsyncLocalStorage` carrying one request's translator, and the ambient `t` everything else imports. The concurrency-critical part: a global "current language" answers one request in another's.                                   | [Request Flow](../theory/request-flow.md) |
 | `src/infrastructure/i18n/negotiate.ts`   | Turns an `Accept-Language` header into one supported locale — q-weights, region tags, and a fallback that never throws on a malformed header.                                                                                          | [Request Flow](../theory/request-flow.md) |
 | `src/infrastructure/i18n/translation.ts` | The translation port for user-authored content — a product's title in the caller's language — and the cascade that takes those rows with a hard delete. `modules/locales` registers the implementation, so this tier never imports it. | [Internationalisation](../tools/i18n.md)  |
-
-## `authorization/` — how a key is spelled
-
-The one part of the authorization model that is pure string logic. It sits here rather than in
-`src/kernel/` because the audit trail needs it, and infrastructure may not reach the kernel.
-
-| File                                       | What it is                                                                                                                                                                                                                                          | Read next                                                                                     |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `src/infrastructure/authorization/keys.ts` | The `<subject>.<action>` grammar: which scope a key belongs to, read from its spelling, and the wildcard key for each scope. `kernel/permissions.ts` asserts at load that `shared/authorization-keys.yaml` still spells its wildcards the same way. | [The key grammar](../theory/authorization.md#the-key-grammar-and-the-invariant-it-exists-for) |
 
 ## `security/` — primitives nobody hand-rolls
 

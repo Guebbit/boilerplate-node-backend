@@ -4,9 +4,10 @@
  * PHP twin reads byte-for-byte identically — `shared/authorization-keys.yaml` and
  * `shared/authorization-roles.yaml`.
  *
- * ROLES ARE DATA, PERMISSIONS ARE CODE. A deployment may create roles at runtime; it may never
- * invent a key, because a key nothing checks grants nothing while looking like it grants
- * something. `assertDeclared` is where that stops being a sentence.
+ * ROLES ARE DATA, PERMISSIONS ARE CODE. What a role holds is fixed by these two files, the same
+ * for every deployment; a deployment may never invent a key, because a key nothing checks grants
+ * nothing while looking like it grants something. `assertDeclared` is where that stops being a
+ * sentence.
  *
  * Read once at import, not per request: the file is small, it cannot change while the process
  * lives, and parsing it per request would put YAML on the hot path of every authorization
@@ -19,8 +20,20 @@ import path from 'node:path';
 import { parse } from 'yaml';
 import { z } from 'zod';
 import type { AuthContext, AuthorizationScope, Caller, PlatformCaller, TenantCaller } from '@types';
-import { scopeOfKey } from '@infrastructure/authorization/keys';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+
+/**
+ * The prefix that marks a platform key.
+ *
+ * Bare keys are tenant keys and prefixed ones are platform keys, and that asymmetry is the whole
+ * safety property: a bare key can never be satisfied by a platform-scope caller, and a
+ * `platform.` key can never be satisfied by a tenant-scope one.
+ */
+const PLATFORM_PREFIX = 'platform.';
+
+/** Which scope a key belongs to, read from its spelling rather than from a lookup. */
+export const scopeOfKey = (key: string): AuthorizationScope =>
+    key.startsWith(PLATFORM_PREFIX) ? 'platform' : 'tenant';
 
 /**
  * The action vocabulary a declared KEY may carry, as a runtime array so both the type below and
@@ -437,5 +450,3 @@ export const isUnrestrictedRole = (
     const held = new Set(permissionsOfRole(name));
     return (declaredKeysOfScope.get(scope) ?? []).every((key) => held.has(key));
 };
-
-export { scopeOfKey } from '@infrastructure/authorization/keys';
