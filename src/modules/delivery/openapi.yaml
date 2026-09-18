@@ -8,9 +8,17 @@ paths:
         get:
             tags: [Delivery]
             summary: List shipping methods
-            description: The shipping methods this shop offers — flat rates and free-above thresholds. Public, because what shipping costs is pre-purchase information; the authoritative pricing still happens at checkout, against the lines actually bought, so a client showing these numbers cannot commit the shop to a stale rate.
+            description: The shipping methods this shop offers — flat rates and free-above thresholds. Public, because what shipping costs is pre-purchase information; the authoritative pricing still happens at checkout, against the lines actually bought, so a client showing these numbers cannot commit the shop to a stale rate. `weight` is advisory filtering for this list only — checkout re-checks the chosen method against the basket's real weight server-side and refuses one that doesn't fit, so a stale or omitted query value cannot buy a method this endpoint would have hidden.
             operationId: listShippingMethods
             security: []
+            parameters:
+                - name: weight
+                  in: query
+                  required: false
+                  schema:
+                      type: integer
+                      minimum: 0
+                  description: The current basket's total weight in grams, computed by the caller. Omitted returns every method regardless of weight range.
             responses:
                 '200':
                     description: The methods
@@ -149,6 +157,14 @@ components:
                     format: double
                     minimum: 0
                     description: The most this method insures a parcel for. Informational only — nothing in this application enforces it against an order's total.
+                minWeight:
+                    type: integer
+                    minimum: 0
+                    description: Grams. Absent means no floor. Enforced — GET /delivery/methods?weight= omits a method the basket doesn't reach, and checkout refuses one chosen outside its range.
+                maxWeight:
+                    type: integer
+                    minimum: 0
+                    description: Grams. Absent means no ceiling. Enforced the same way as minWeight.
 
         ShippingMethodsResponse:
             type: object

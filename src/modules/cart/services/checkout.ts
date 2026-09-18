@@ -28,13 +28,13 @@ import {
 import type { ProductDocument } from '@modules/products';
 import { userService } from '@modules/users';
 import { addressForCheckout, type AddressItem } from '@modules/addresses';
-import { findShippingMethod, priceShipping } from '@modules/delivery';
+import { findShippingMethod, methodFitsWeight, priceShipping } from '@modules/delivery';
 import { paymentService } from '@modules/payments';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { cartAnalyticsEvents } from '../analytics';
 import { cartRepository } from '../repository';
-import { evaluateCheckout } from '../domain';
+import { evaluateCheckout, basketWeight } from '../domain';
 import { isJoined, readCartLines } from './view';
 
 /**
@@ -189,6 +189,19 @@ const runCheckout = async (
             {
                 code: 'CART_SHIPPING_NOT_APPLICABLE',
                 message: t('cart.shipping-not-applicable')
+            }
+        ]);
+
+    /*
+     * Enforced here, not just at `GET /delivery/methods`: that list is advisory (it filters by
+     * whatever weight the CLIENT last computed), so the basket's real weight — joined
+     * server-side, right now — is what actually decides whether the chosen method may carry it.
+     */
+    if (shippingMethod && !methodFitsWeight(shippingMethod, basketWeight(joined)))
+        return generateReject(409, [
+            {
+                code: 'CART_SHIPPING_METHOD_WEIGHT',
+                message: t('cart.shipping-method-weight')
             }
         ]);
 

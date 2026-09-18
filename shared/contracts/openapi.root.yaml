@@ -727,6 +727,12 @@ components:
                 requiresShipping:
                     type: boolean
                     default: true
+                # Grams. Absent counts as 0 for shipping-method filtering (`GET /delivery/methods`,
+                # checkout's weight-range refusal) — a product missing this is silently routed as
+                # weightless, not refused, so the admin form warns rather than requiring it outright.
+                weight:
+                    type: integer
+                    minimum: 0
                 imageUrl:
                     $ref: '#/components/schemas/ImageUrl'
                 thumbnailUrl:
@@ -835,6 +841,11 @@ components:
                 requiresShipping:
                     type: boolean
                     default: true
+                # Grams, frozen at order-creation time — same convention as `Product.weight`,
+                # same "absent counts as 0" rule the shipping-method filter/refusal already apply.
+                weight:
+                    type: integer
+                    minimum: 0
                 categories:
                     type: array
                     items:

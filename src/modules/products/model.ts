@@ -238,6 +238,15 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
             type: Boolean,
             default: true
         },
+        /*
+         * Grams, optional. Absent counts as 0 wherever a basket's weight is summed
+         * (`delivery`'s shipping-method filter, `cart`'s checkout refusal) — not a concern of
+         * this module's own, which is why there is no default here the way `onHand` has one.
+         */
+        weight: {
+            type: Number,
+            min: 0
+        },
         deletedAt: {
             type: Date
         }
@@ -306,6 +315,7 @@ export const toProduct = (document: ProductDocument): Product => {
         ...(document.requiresShipping === undefined
             ? {}
             : { requiresShipping: document.requiresShipping }),
+        ...(document.weight === undefined ? {} : { weight: document.weight }),
         ...(document.imageUrl === undefined ? {} : { imageUrl: document.imageUrl }),
         ...(document.thumbnailUrl === undefined ? {} : { thumbnailUrl: document.thumbnailUrl }),
         ...(document.categories === undefined ? {} : { categories: document.categories }),

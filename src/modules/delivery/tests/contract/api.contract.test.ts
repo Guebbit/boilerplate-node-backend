@@ -35,6 +35,17 @@ describe('GET /delivery/methods', () => {
         expect(response.body.data.methods.length).toBeGreaterThan(0);
         expect(response).toSatisfyApiSpec();
     });
+
+    it('filters out a method the given weight does not fit', async () => {
+        // Over express's 5000g ceiling, under standard's 30000g one.
+        const response = await api().get('/delivery/methods').query({ weight: 10_000 });
+
+        expect(response.status).toBe(200);
+        const ids = (response.body.data.methods as { id: string }[]).map(({ id }) => id);
+        expect(ids).toContain('standard');
+        expect(ids).not.toContain('express');
+        expect(response).toSatisfyApiSpec();
+    });
 });
 
 describe('GET /delivery/order/{orderId}', () => {

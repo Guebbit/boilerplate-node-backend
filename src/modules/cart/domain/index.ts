@@ -4,4 +4,4 @@
  * See `docs/theory/domain-layer.md`.
  */
 
-export { evaluateCheckout } from './rules';
+export { evaluateCheckout, basketWeight } from './rules';

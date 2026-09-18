@@ -216,6 +216,8 @@ const orderLineProductSchema = new Schema(
         tags: { type: [String] },
         active: { type: Boolean },
         requiresShipping: { type: Boolean },
+        /** Grams, frozen the same as every other line field — see `Product.weight`. */
+        weight: { type: Number, min: 0 },
         deletedAt: { type: Date },
         /*
          * The decimal rate this line was actually charged, resolved from the product's `taxClass`

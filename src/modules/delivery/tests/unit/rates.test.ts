@@ -5,7 +5,13 @@
  * database to prove a shipment persists; the pricing rule itself does not, and belongs here.
  */
 
-import { findShippingMethod, priceShipping, SHIPPING_METHODS } from '../../domain/rates';
+import {
+    findShippingMethod,
+    priceShipping,
+    methodFitsWeight,
+    methodsForWeight,
+    SHIPPING_METHODS
+} from '../../domain/rates';
 
 describe('findShippingMethod', () => {
     it('finds a method by id', () => {
@@ -13,7 +19,8 @@ describe('findShippingMethod', () => {
             id: 'express',
             price: 15,
             tracked: true,
-            maxInsuredValue: 500
+            maxInsuredValue: 500,
+            maxWeight: 5000
         });
     });
 
@@ -47,6 +54,52 @@ describe('priceShipping', () => {
         const pickup = findShippingMethod('pickup')!;
 
         expect(priceShipping(pickup, 0)).toBe(0);
+    });
+});
+
+describe('methodFitsWeight', () => {
+    it('fits any weight when the method names no range', () => {
+        const pickup = findShippingMethod('pickup')!;
+
+        expect(methodFitsWeight(pickup, 0)).toBe(true);
+        expect(methodFitsWeight(pickup, 1_000_000)).toBe(true);
+    });
+
+    it('refuses a basket over the method’s maxWeight', () => {
+        const express = findShippingMethod('express')!;
+
+        expect(methodFitsWeight(express, 5000)).toBe(true);
+        expect(methodFitsWeight(express, 5001)).toBe(false);
+    });
+
+    it('refuses a basket under the method’s minWeight', () => {
+        // No shipped method actually declares one today — proven against a value built
+        // in-line, not `SHIPPING_METHODS`, so this rule stays covered either way.
+        expect(methodFitsWeight({ id: 'heavy', price: 0, tracked: false, minWeight: 1000 }, 999)).toBe(
+            false
+        );
+        expect(methodFitsWeight({ id: 'heavy', price: 0, tracked: false, minWeight: 1000 }, 1000)).toBe(
+            true
+        );
+    });
+});
+
+describe('methodsForWeight', () => {
+    it('returns every method when no weight is given', () => {
+        expect(methodsForWeight(undefined)).toEqual(SHIPPING_METHODS);
+    });
+
+    it('excludes a method a heavy basket does not fit', () => {
+        // Over express's 5000g ceiling, under standard's 30000g one, pickup has no ceiling.
+        const methods = methodsForWeight(10_000).map(({ id }) => id);
+
+        expect(methods).toEqual(['standard', 'pickup']);
+    });
+
+    it('excludes every method with a ceiling once the basket clears all of them', () => {
+        const methods = methodsForWeight(40_000).map(({ id }) => id);
+
+        expect(methods).toEqual(['pickup']);
     });
 });
 

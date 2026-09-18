@@ -96,6 +96,17 @@ export const pageSizeSchema = z.preprocess(
 export const paginationSchema = z.object({ page: pageSchema, pageSize: pageSizeSchema });
 
 /**
+ * A basket weight in grams, as a caller sends it in a query string: coerced for the same reason
+ * {@link pageSchema} is, and blank-to-undefined for the same reason too — `?weight=` is what an
+ * untouched field submits, and `Number('')` coerces to `0`, not "omitted", which would silently
+ * turn a caller who sent nothing into one asking for a weightless basket.
+ */
+export const weightSchema = z.preprocess(
+    blankToUndefined,
+    z.coerce.number().int().min(0).optional()
+);
+
+/**
  * `analyticsConsent` as `PUT /account`'s multipart body may carry it: `multipart/form-data`
  * types every value as a string, and `'false'` is truthy, the same trap {@link hardDeleteSchema}
  * guards against. Decodes the recognised spellings via `parseFormBoolean`; anything else reaches

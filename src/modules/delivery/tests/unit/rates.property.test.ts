@@ -7,7 +7,12 @@
  */
 import fc from 'fast-check';
 import { PROPERTY_RUNS } from '@tests/knobs';
-import { findShippingMethod, priceShipping, SHIPPING_METHODS } from '../../domain/rates';
+import {
+    findShippingMethod,
+    priceShipping,
+    methodFitsWeight,
+    SHIPPING_METHODS
+} from '../../domain/rates';
 
 /** One seed for the file, and one place to change it; the count is `TEST_PROPERTY_RUNS`. */
 const RUN = { seed: 20_260_902, numRuns: PROPERTY_RUNS, endOnFailure: true } as const;
@@ -78,6 +83,26 @@ describe('priceShipping — the free-shipping threshold', () => {
 
                 expect(priceShipping(express, total)).toBe(express.price);
             }),
+            RUN
+        );
+    });
+});
+
+describe('methodFitsWeight — the declared range holds both ways', () => {
+    it('fits exactly the [minWeight, maxWeight] range each method declares, nothing either side of it', () => {
+        fc.assert(
+            fc.property(
+                fc.constantFrom(...SHIPPING_METHODS),
+                fc.integer({ min: 0, max: 1e6 }),
+                (method, weight) => {
+                    const fits = methodFitsWeight(method, weight);
+                    const belowFloor = method.minWeight !== undefined && weight < method.minWeight;
+                    const aboveCeiling =
+                        method.maxWeight !== undefined && weight > method.maxWeight;
+
+                    expect(fits).toBe(!belowFloor && !aboveCeiling);
+                }
+            ),
             RUN
         );
     });

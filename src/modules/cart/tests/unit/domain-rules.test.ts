@@ -5,7 +5,7 @@
  * No mocks, no database. The verdict-to-status mapping is covered in `service.test.ts`.
  */
 
-import { evaluateCheckout, type CartLineCandidate } from '../../domain/rules';
+import { evaluateCheckout, basketWeight, type CartLineCandidate } from '../../domain/rules';
 import { availabilityOf } from '@modules/inventory';
 
 /**
@@ -95,6 +95,26 @@ describe('evaluateCheckout', () => {
             ok: false,
             reason: 'product-unavailable'
         });
+    });
+});
+
+describe('basketWeight', () => {
+    it('sums each line’s weight times its quantity', () => {
+        expect(
+            basketWeight([
+                { quantity: 2, product: { weight: 300 } },
+                { quantity: 1, product: { weight: 1000 } }
+            ])
+        ).toBe(1600);
+    });
+
+    it('treats a missing weight as zero, not a refusal', () => {
+        expect(basketWeight([{ quantity: 3, product: {} }])).toBe(0);
+        expect(basketWeight([{ quantity: 3, product: null }])).toBe(0);
+    });
+
+    it('is zero for an empty basket', () => {
+        expect(basketWeight([])).toBe(0);
     });
 });
 

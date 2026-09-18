@@ -671,6 +671,40 @@ describe('orderConfirm', () => {
         await expect(countOrders({ userId: user._id })).resolves.toBe(0);
     });
 
+    it('refuses a shipping method the basket is too heavy for', async () => {
+        const user = await createUser();
+        // Express's ceiling is 5000g; two of these clear it.
+        const product = await createProduct({ weight: 3000 });
+        await cartItemSetById(user.id, String(product._id), 2);
+
+        const result = await orderConfirm(user.id, testCallerContext, undefined, 'express');
+
+        expect(asReject(result).status).toBe(409);
+        expect(asReject(result).errors[0].code).toBe('CART_SHIPPING_METHOD_WEIGHT');
+        await expect(countOrders({ userId: user._id })).resolves.toBe(0);
+    });
+
+    it('accepts the same basket under a method with room for it', async () => {
+        const user = await createUser();
+        // Over express's 5000g ceiling, comfortably under standard's 30000g one.
+        const product = await createProduct({ weight: 3000 });
+        await cartItemSetById(user.id, String(product._id), 2);
+
+        const result = await orderConfirm(user.id, testCallerContext, undefined, 'standard');
+
+        expect(result.success).toBe(true);
+    });
+
+    it('treats a product with no weight as weighing nothing, never refusing on that account', async () => {
+        const user = await createUser();
+        const product = await createProduct(); // no `weight` override
+        await cartItemSetById(user.id, String(product._id), 1);
+
+        const result = await orderConfirm(user.id, testCallerContext, undefined, 'express');
+
+        expect(result.success).toBe(true);
+    });
+
     it('checks out a digital-only cart with no method at all, same as any other', async () => {
         const user = await createUser();
         const ebook = await createProduct({ requiresShipping: false });

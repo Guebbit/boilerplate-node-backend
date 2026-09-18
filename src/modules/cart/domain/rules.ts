@@ -37,6 +37,27 @@ export interface CheckoutShortfall {
 const availableUnits = (product?: { onHand?: number; reserved?: number } | null): number =>
     Math.max(0, (product?.onHand ?? 0) - (product?.reserved ?? 0));
 
+/** A cart line as {@link basketWeight} sees it — only the field it actually sums. */
+export interface WeighedCartLine {
+    quantity?: number;
+    product?: { weight?: number } | null;
+}
+
+/**
+ * The basket's total weight, in grams — every line's `product.weight` (absent counts as 0, the
+ * same rule `Product.weight` documents) times its quantity, summed. Used both to filter
+ * `GET /delivery/methods` (advisory) and to refuse a checkout whose chosen method doesn't fit
+ * (enforced) — see `services/checkout.ts`.
+ *
+ * @param lines - the basket's lines, joined to their products
+ * @returns the basket's total weight in grams
+ */
+export const basketWeight = (lines: readonly WeighedCartLine[]): number =>
+    lines.reduce(
+        (total, { product, quantity }) => total + (product?.weight ?? 0) * (quantity ?? 0),
+        0
+    );
+
 /**
  * Reasons are named, not numbered: the checkout-failure analytics event reports them verbatim.
  *

@@ -23,15 +23,21 @@ import { deliveryAuditActions } from './audit';
 import { orderService, canTransition, canOverrideTo } from '@modules/orders';
 import { userService } from '@modules/users';
 import { holdsKey } from '@kernel/ability';
-import { SHIPPING_METHODS, findShippingMethod } from './domain';
+import { findShippingMethod, methodsForWeight } from './domain';
 import { shipmentShippedEmail } from './emails';
 import { shipmentRepository } from './repository';
 import type { ShipmentDocument } from './model';
 
-/** The methods list, for the checkout page's selector. Static, so always a success. */
-const listMethods = (): ResponseSuccess<ShippingMethodsResponse> =>
-    // `SHIPPING_METHODS` is `readonly` (frozen table); the response owns a fresh, mutable copy.
-    generateSuccess({ methods: [...SHIPPING_METHODS] });
+/**
+ * The methods list, for the checkout page's selector. Static, so always a success.
+ * @param weight - the caller's current basket weight in grams, or `undefined` for every method
+ *   regardless of range — this is advisory filtering only; `cart`'s checkout re-checks the chosen
+ *   method against the real basket server-side, so a stale or omitted value here cannot buy a
+ *   method this list would have hidden.
+ */
+const listMethods = (weight?: number): ResponseSuccess<ShippingMethodsResponse> =>
+    // `methodsForWeight` already returns a fresh array — `SHIPPING_METHODS` itself is `readonly`.
+    generateSuccess({ methods: [...methodsForWeight(weight)] });
 
 /** The shipment as `openapi.yaml` declares it: `Shipment`, built rather than serialized. */
 const toShipmentResponse = (shipment: ShipmentDocument): Shipment => ({
@@ -79,12 +85,13 @@ const refuseUnearnedForce = (
 ): ResponseReject | undefined => {
     if (!forced) return undefined;
     if (!holdsKey(context.caller, 'orders.any.override'))
-        return generateReject(403, [
-            { code: 'FORBIDDEN', message: t('generic.error-forbidden') }
-        ]);
+        return generateReject(403, [{ code: 'FORBIDDEN', message: t('generic.error-forbidden') }]);
     if (!reason)
         return generateReject(422, [
-            { code: 'DELIVERY_OVERRIDE_REASON_REQUIRED', message: t('delivery.override-reason-required') }
+            {
+                code: 'DELIVERY_OVERRIDE_REASON_REQUIRED',
+                message: t('delivery.override-reason-required')
+            }
         ]);
     return undefined;
 };
@@ -126,7 +133,10 @@ export const recordShipment = (
         const method = order.shippingMethod ? findShippingMethod(order.shippingMethod) : undefined;
         if (method?.tracked && !trackingCode)
             return generateReject(422, [
-                { code: 'DELIVERY_TRACKING_CODE_REQUIRED', message: t('delivery.tracking-code-required') }
+                {
+                    code: 'DELIVERY_TRACKING_CODE_REQUIRED',
+                    message: t('delivery.tracking-code-required')
+                }
             ]);
 
         return shipmentRepository.upsertForOrder(orderId, trackingCode).then((shipment) => {
@@ -154,8 +164,14 @@ export const recordShipment = (
                         user?.username ?? order.email,
                         shipment.trackingCode
                     );
-                    void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
-                    logger.info(`Order ${orderId} shipped as ${shipment.trackingCode ?? '(untracked)'}`);
+                    void enqueueEmail(
+                        { to: order.email, subject: mail.subject },
+                        mail.template,
+                        mail.data
+                    );
+                    logger.info(
+                        `Order ${orderId} shipped as ${shipment.trackingCode ?? '(untracked)'}`
+                    );
 
                     emitAuditEvent(
                         buildAuditEvent(context, {
@@ -209,7 +225,10 @@ export const recordDelivery = (
             .then((shipment) => {
                 if (!shipment)
                     return generateReject(409, [
-                        { code: 'ORDER_NOT_SHIPPED', message: t('delivery.not-shippable-for-delivery') }
+                        {
+                            code: 'ORDER_NOT_SHIPPED',
+                            message: t('delivery.not-shippable-for-delivery')
+                        }
                     ]);
 
                 const moveOrder = forced
@@ -219,7 +238,10 @@ export const recordDelivery = (
                 return moveOrder.then((moved) => {
                     if (!moved)
                         return generateReject(409, [
-                            { code: 'ORDER_NOT_SHIPPED', message: t('delivery.not-shippable-for-delivery') }
+                            {
+                                code: 'ORDER_NOT_SHIPPED',
+                                message: t('delivery.not-shippable-for-delivery')
+                            }
                         ]);
 
                     emitAuditEvent(

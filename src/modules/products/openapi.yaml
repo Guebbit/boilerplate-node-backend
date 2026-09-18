@@ -392,6 +392,10 @@ components:
                 requiresShipping:
                     type: boolean
                     default: true
+                weight:
+                    type: integer
+                    minimum: 0
+                    description: Grams. Absent counts as 0 for shipping-method filtering — the editor warns when it's missing.
                 imageUrl:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
                 thumbnailUrl:
@@ -578,6 +582,10 @@ components:
                 requiresShipping:
                     type: boolean
                     default: true
+                weight:
+                    type: integer
+                    minimum: 0
+                    description: Grams. Absent counts as 0 for shipping-method filtering.
                 imageUrl:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
                 categories:
@@ -629,6 +637,10 @@ components:
                 requiresShipping:
                     type: boolean
                     default: true
+                weight:
+                    type: integer
+                    minimum: 0
+                    description: Grams. Absent counts as 0 for shipping-method filtering.
                 imageUpload:
                     # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
@@ -662,6 +674,10 @@ components:
                     type: boolean
                 requiresShipping:
                     type: boolean
+                weight:
+                    type: integer
+                    minimum: 0
+                    description: Grams. Absent counts as 0 for shipping-method filtering.
                 imageUrl:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
                 categories:
@@ -693,6 +709,10 @@ components:
                     type: boolean
                 requiresShipping:
                     type: boolean
+                weight:
+                    type: integer
+                    minimum: 0
+                    description: Grams. Absent counts as 0 for shipping-method filtering.
                 imageUpload:
                     # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
