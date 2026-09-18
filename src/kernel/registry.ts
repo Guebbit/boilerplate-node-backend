@@ -128,6 +128,33 @@ export interface TranslatableTarget {
 }
 
 /**
+ * Who a data-subject export is about. `email` because one module (`feedback`, tickets are not
+ * tied to an account) matches its rows by address, not by id.
+ */
+export interface PersonalDataSubject {
+    userId: string;
+    email: string;
+}
+
+/**
+ * What one module holds about one person, for a data-subject export (GDPR Art. 15 and 20).
+ *
+ * `infrastructure/adapters/*` and the kernel itself may not import `src/modules/*` — the same wall
+ * {@link ImageTarget} and {@link TranslatableTarget} are built around — so `account`, which
+ * assembles the export, cannot read every sibling's data directly either without importing them
+ * all, which is exactly the cycle risk this manifest field removes. A module declares its own
+ * section instead; the app tier collects every enabled module's and hands `account` the result the
+ * same way it hands `locales` its `translatables` lookup.
+ */
+export interface PersonalDataSection {
+    /** The key this section takes in the export envelope — matches the contract's property name. */
+    section: string;
+
+    /** Everything this module holds about the subject, already in wire shape. */
+    collect: (subject: PersonalDataSubject) => Promise<unknown>;
+}
+
+/**
  * Everything a module declares about itself.
  *
  * Keep this small: a field only one module ever fills belongs behind that module's own barrel, and
@@ -261,6 +288,17 @@ export interface AppModule {
      * `INFRASTRUCTURE_RATE_LIMITS`.
      */
     rateLimits?: readonly RateLimitBudget[];
+
+    /**
+     * What this module holds about one person, for `POST /account/export` — see
+     * {@link PersonalDataSection}. REQUIRED, not optional: a new module cannot compile without
+     * answering. `'none'` is the explicit, reviewed answer for a module with nothing personal to
+     * export (infrastructure, or a collection with no user-linked field);
+     * `tests/cross-cutting/personal-data-sections.test.ts` refuses `'none'` from a module whose
+     * models carry an obvious one (`userId`, `createdByUserId`, an email the subject owns) — the
+     * "you said nothing, but you hold something" case a type alone cannot catch.
+     */
+    personalData: readonly PersonalDataSection[] | 'none';
 }
 
 /**
@@ -313,6 +351,24 @@ export const resolveTranslatables = (
 ): Readonly<Record<string, TranslatableTarget | undefined>> =>
     Object.fromEntries(
         appModules.flatMap((appModule) => Object.entries(appModule.translatables ?? {}))
+    );
+
+/**
+ * Every registered module's {@link PersonalDataSection}s, flattened in declaration order —
+ * `'none'` contributes nothing.
+ *
+ * Built from the passed-in list for the same reason {@link resolveImageTargets} is: this file must
+ * stay free of any `src/modules/*` import. `src/app.ts` builds this once and hands it to `account`
+ * the same way it hands `locales` its `translatables` lookup — see
+ * `modules/account/services/personal-data-registry.ts`.
+ *
+ * @param appModules - the enabled module list
+ */
+export const resolvePersonalDataSections = (
+    appModules: AppModule[]
+): readonly PersonalDataSection[] =>
+    appModules.flatMap((appModule) =>
+        appModule.personalData === 'none' ? [] : appModule.personalData
     );
 
 /**

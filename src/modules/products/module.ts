@@ -74,5 +74,8 @@ export default {
             'product.inStock',
             'product.rich'
         ]
-    }
+    },
+    // The catalogue — nothing here is scoped to a person. An order's line embeds its own frozen
+    // snapshot, and that copy is `orders`' section to export, not this module's.
+    personalData: 'none'
 } satisfies AppModule;

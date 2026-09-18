@@ -12,9 +12,12 @@
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
-import { ORDER_STATUS_CHANGED } from '@modules/orders';
+import { ORDER_STATUS_CHANGED, search, ownerScope } from '@modules/orders';
 import { router } from './routes';
-import { shipOrder } from './service';
+import { shipOrder, findShipmentsForOrders } from './service';
+
+/** Read past `search`'s own page-size default — a data-subject export answers "all of it". */
+const EVERYTHING = 100_000;
 
 /** This module's manifest entry: routes, the `ORDER_STATUS_CHANGED` subscription, and its locales. */
 export default {
@@ -27,6 +30,23 @@ export default {
      */
     permissions: ['delivery.any.read', 'delivery.any.update'],
     routes: router,
+    personalData: [
+        {
+            section: 'shipments',
+            // `delivery -> orders` already exists (see the module docblock); the shipment read
+            // itself needs the caller's own order ids first, the same `.search()` normalization
+            // trap `orders/module.ts`'s own export section navigates — `.search()` turns `_id`
+            // into `id` on the way out, so `._id` reads as `undefined` despite the type's claim.
+            collect: (subject) =>
+                search({ pageSize: EVERYTHING }, ownerScope(subject.userId)).then((page) =>
+                    findShipmentsForOrders(
+                        page.items.map((order) =>
+                            String((order as typeof order & { id?: string }).id ?? order._id)
+                        )
+                    )
+                )
+        }
+    ],
     subscribe: () => {
         onDomainEvent(ORDER_STATUS_CHANGED, ({ orderId, to }) => {
             if (to === 'shipped') return shipOrder(orderId);

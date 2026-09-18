@@ -40,5 +40,8 @@ export default {
     requiredConfig: [
         { key: 'NODE_METRICS_TOKEN', minLength: 0, placeholder: 'change-me-dev-metrics-token' }
     ],
-    locales: path.join(__dirname, 'locales')
+    locales: path.join(__dirname, 'locales'),
+    // Infrastructure — health, metrics, the audit read endpoint, the SSE stream. Owns no
+    // collection of its own; records nothing personal.
+    personalData: 'none'
 } satisfies AppModule;

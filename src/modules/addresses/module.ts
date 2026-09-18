@@ -16,7 +16,7 @@ import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
 import { USER_DELETED } from '@modules/users';
-import { addressesDeleteByUserId } from './service';
+import { addressesDeleteByUserId, addressesGet } from './service';
 import { router } from './routes';
 
 /** This module's manifest entry: routes, event subscriptions, and locales. */
@@ -24,6 +24,12 @@ export default {
     name: 'addresses',
     basePath: '/account',
     routes: router,
+    personalData: [
+        {
+            section: 'addresses',
+            collect: (subject) => addressesGet(subject.userId).then((view) => view.addresses)
+        }
+    ],
     subscribe: () => {
         // A destroyed account takes its address book with it — the same event `account`, `cart`
         // and `wishlist` each listen for on their own collection.

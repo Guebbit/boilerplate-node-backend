@@ -14,7 +14,33 @@ import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
 import { userRepository } from './repository';
+import { userService } from './service';
+import { isLiveRefreshSession, type Token } from './model';
 import './events';
+
+/** A live refresh session, metadata only — never the token value; see the field's own comment. */
+interface ExportSession {
+    id: string;
+    type: 'refresh';
+    /** The refresh-token VALUE never appears here — it is as good as a password. */
+    expiration?: string;
+    lastUsedAt?: string;
+}
+
+/**
+ * This caller's own live refresh sessions, metadata only — keeps `type` (a stored `Session`
+ * doesn't carry it, since its one filter already fixes it; an export naming every field is worth
+ * the one extra key).
+ */
+const ownSessions = (tokens: Token[]): ExportSession[] =>
+    tokens
+        .filter((token) => isLiveRefreshSession(token))
+        .map((token) => ({
+            id: String(token._id),
+            type: 'refresh' as const,
+            ...(token.expiration ? { expiration: token.expiration.toISOString() } : {}),
+            ...(token.lastUsedAt ? { lastUsedAt: token.lastUsedAt.toISOString() } : {})
+        }));
 
 /** This module's manifest entry: routes, locales, and the image writeback target. */
 export default {
@@ -32,5 +58,23 @@ export default {
      * `account`'s signup and profile-update flows write through this same `userRepository` —
      * there is no separate `users` collection for them to register their own target under.
      */
-    imageTargets: { users: { writeback: userRepository.writebackImage } }
+    imageTargets: { users: { writeback: userRepository.writebackImage } },
+    personalData: [
+        // `undefined` when the subject's own row is gone — `account`'s assembly answers 404 for
+        // this section specifically, since nothing else in the export means anything without it.
+        {
+            section: 'profile',
+            collect: (subject) => userService.findByIdWithCredentials(subject.userId)
+        },
+        {
+            section: 'sessions',
+            // `findByIdWithCredentials` again rather than sharing `profile`'s read: each section's
+            // `collect` is independent by design (see `kernel/registry.ts`'s own docblock), and a
+            // data export is not a hot path worth optimizing a second query out of.
+            collect: (subject) =>
+                userService
+                    .findByIdWithCredentials(subject.userId)
+                    .then((user) => (user ? ownSessions(user.tokens) : []))
+        }
+    ]
 } satisfies AppModule;

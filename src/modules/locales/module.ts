@@ -82,5 +82,9 @@ export default {
      * the last one in the repo with no translations of its own, which was funny and also a bug:
      * a 409 on a key collision was reaching admins in English regardless of what they asked for.
      */
-    locales: path.join(__dirname, 'locales')
+    locales: path.join(__dirname, 'locales'),
+    // `translatedBy` is staff attribution on a `translations.any.update` action (a plain name
+    // string, not a stored reference), not an end-customer's own data — nothing here is ever
+    // reachable by a `POST /account/export` subject.
+    personalData: 'none'
 } satisfies AppModule;

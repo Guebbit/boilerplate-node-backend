@@ -15,7 +15,7 @@ import { onDomainEvent } from '@kernel/events';
 import { router } from './routes';
 import { PRODUCT_DELETED } from '@modules/products';
 import { USER_DELETED } from '@modules/users';
-import { cartDeleteByUserId, productRemoveFromCartsById } from './services';
+import { cartDeleteByUserId, productRemoveFromCartsById, cartGet } from './services';
 
 /** This module's manifest entry: routes, event subscriptions, and locales. */
 export default {
@@ -29,6 +29,18 @@ export default {
      */
     permissions: ['cart.self.checkout'],
     routes: router,
+    personalData: [
+        {
+            section: 'cart',
+            // Stripped to the stored line, not the joined product: the product's own name/price
+            // is catalogue data, not the caller's, and the shared `CartItem` contract this maps
+            // onto is `additionalProperties: false`.
+            collect: (subject) =>
+                cartGet(subject.userId).then((lines) =>
+                    lines.map(({ productId, quantity }) => ({ productId, quantity }))
+                )
+        }
+    ],
     subscribe: () => {
         onDomainEvent(PRODUCT_DELETED, ({ productId }) => productRemoveFromCartsById(productId));
         onDomainEvent(USER_DELETED, ({ userId }) => cartDeleteByUserId(userId));

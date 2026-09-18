@@ -20,11 +20,9 @@ graph cannot see._
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
 flowchart LR
     addresses["addresses<br/><i>this module</i>"]
-    account["account"]
     cart["cart"]
     users["users"]
 
-    account --> addresses
     cart --> addresses
     addresses --> users
     users -. "user.deleted" .-> addresses
@@ -34,7 +32,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart core;
-    class account,users supporting;
+    class users supporting;
     class addresses centre;
 ```
 

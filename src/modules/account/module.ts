@@ -8,9 +8,11 @@
  *              stays with `users`, kept replaceable for a future identity provider.
  * Shares:      the User document with `users` — the repo's one shared kernel, invisible to the
  *              import graph. Both read and write it, so a schema change there is agreed twice.
- * Reaches far: `POST /account/export`. A data export is inherently cross-cutting, and the
- *              alternative — an event asking each module to publish its own slice — is an async
- *              fan-out with nothing to wait on it. See `services/export.ts`.
+ * Reaches far: `POST /account/export`, without an import graph to show for it — every module
+ *              declares its own `personalData` section (`@kernel/registry.ts`), `src/app.ts`
+ *              resolves the list at boot and hands it in through
+ *              `./services/personal-data-registry.ts`, and this module only assembles what it is
+ *              given. See `services/export.ts`.
  *
  * See: docs/modules/account.md
  */
@@ -26,6 +28,9 @@ import { verifyAccessToken, verifyRefreshToken, type TokenData } from './session
 import { requestAccountSetup } from './services/authentication';
 import { router } from './routes';
 import { accountRateLimits } from './rate-limits';
+
+/** Published for `src/app.ts` alone — see `./services/personal-data-registry.ts`'s own docblock. */
+export { setPersonalDataSections } from './services/personal-data-registry';
 
 /*
  * This module answers the kernel's "who is making this request". Registered at import time
@@ -131,6 +136,9 @@ export default {
     routes: router,
     /** The credential/signup/reset/MFA/password-check budgets — see `./rate-limits.ts`. */
     rateLimits: accountRateLimits,
+    // No collection of its own — see the module docblock. `POST /account/export` assembles every
+    // OTHER module's section; this module contributes none of its own data to it.
+    personalData: 'none',
     /*
      * `.env-example` ships both as literal placeholders that sign and verify perfectly —
      * `getAccessTokenRing`/`getRefreshTokenRing` (`session/config.ts`) read `process.env.X ?? ''`

@@ -32,7 +32,8 @@ describe('module-declared variables', () => {
         const modules: AppModule[] = [
             {
                 name: 'demo',
-                requiredConfig: [{ key: 'SECRET', minLength: 1, placeholder: 'change-me' }]
+                requiredConfig: [{ key: 'SECRET', minLength: 1, placeholder: 'change-me' }],
+                personalData: 'none'
             }
         ];
 
@@ -44,8 +45,16 @@ describe('module-declared variables', () => {
         configure();
         process.env.SECRET = '';
         const modules: AppModule[] = [
-            { name: 'demo', requiredConfig: [{ key: 'SECRET', minLength: 8, placeholder: 'x' }] },
-            { name: 'demo-two', requiredConfig: [{ key: 'SECRET_TWO', minLength: 1 }] }
+            {
+                name: 'demo',
+                requiredConfig: [{ key: 'SECRET', minLength: 8, placeholder: 'x' }],
+                personalData: 'none'
+            },
+            {
+                name: 'demo-two',
+                requiredConfig: [{ key: 'SECRET_TWO', minLength: 1 }],
+                personalData: 'none'
+            }
         ];
 
         expect(() => assertRequiredConfig(modules)).toThrow(
@@ -62,7 +71,8 @@ describe('module-declared variables', () => {
         const modules: AppModule[] = [
             {
                 name: 'demo',
-                requiredConfig: [{ key: 'SECRET', minLength: 16, placeholder: 'change-me' }]
+                requiredConfig: [{ key: 'SECRET', minLength: 16, placeholder: 'change-me' }],
+                personalData: 'none'
             }
         ];
 
@@ -75,7 +85,8 @@ describe('module-declared variables', () => {
         const modules: AppModule[] = [
             {
                 name: 'demo',
-                requiredConfig: [{ key: 'SECRET', minLength: 16, placeholder: 'change-me' }]
+                requiredConfig: [{ key: 'SECRET', minLength: 16, placeholder: 'change-me' }],
+                personalData: 'none'
             }
         ];
 
@@ -102,7 +113,9 @@ describe('module-declared forbiddenInProduction — forbidden, not required', ()
     // `SECRET` stands in for a module's own forbidden variable here — the mechanism under test is
     // generic; `src/modules/webhooks/tests/unit/module.test.ts` covers the real
     // NODE_WEBHOOK_DEMO_SINK_URL case against this module's actual manifest entry.
-    const modules: AppModule[] = [{ name: 'demo', forbiddenInProduction: ['SECRET'] }];
+    const modules: AppModule[] = [
+        { name: 'demo', forbiddenInProduction: ['SECRET'], personalData: 'none' }
+    ];
 
     it('accepts it set outside production', () => {
         configure();
@@ -159,7 +172,9 @@ describe('nonModuleChecks — what a caller other than a module contributes', ()
 
     it('runs a caller-declared custom check alongside every module customCheck', () => {
         configure();
-        const modules: AppModule[] = [{ name: 'demo', customCheck: () => ['FROM_MODULE'] }];
+        const modules: AppModule[] = [
+            { name: 'demo', customCheck: () => ['FROM_MODULE'], personalData: 'none' }
+        ];
 
         expect(() =>
             assertRequiredConfig(modules, { customChecks: [() => ['FROM_CALLER']] })

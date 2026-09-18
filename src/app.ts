@@ -35,9 +35,14 @@ import {
     startLocaleOverrideRefresh
 } from '@infrastructure/i18n';
 
-import { registerModules, resolveTranslatables } from '@kernel/registry';
+import {
+    registerModules,
+    resolveTranslatables,
+    resolvePersonalDataSections
+} from '@kernel/registry';
 import { enabledModules } from './modules';
 import { setTranslatables } from '@modules/locales/module';
+import { setPersonalDataSections } from '@modules/account/module';
 import { APP_NON_MODULE_CHECKS } from '@app/required-config';
 
 import { applyServerTimeouts, installSecurity } from '@app/security';
@@ -220,6 +225,13 @@ registerModules(enabledModules, APP_NON_MODULE_CHECKS);
  * process actually starts listening.
  */
 setTranslatables(resolveTranslatables(enabledModules));
+
+/*
+ * Same reasoning, same shape, for `account`'s data export: it cannot import every sibling to
+ * collect a `POST /account/export` section, so the app tier resolves the list once here and hands
+ * it in.
+ */
+setPersonalDataSections(resolvePersonalDataSections(enabledModules));
 
 installSecurity(app);
 installRequestContext(app);

@@ -17,34 +17,16 @@ graph cannot see._
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
 flowchart LR
     account["account<br/><i>this module</i>"]
-    addresses["addresses"]
-    audit_logs["audit-logs"]
-    cart["cart"]
-    delivery["delivery"]
-    feedback["feedback"]
-    orders["orders"]
-    payments["payments"]
     users["users"]
-    wishlist["wishlist"]
 
-    account --> addresses
-    account --> audit_logs
-    account --> cart
-    account --> delivery
-    account --> feedback
-    account --> orders
-    account --> payments
     account --> users
-    account --> wishlist
     users -. "user.setup-requested" .-> account
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
-    class cart,orders core;
-    class addresses,delivery,payments,users,wishlist supporting;
-    class audit_logs,feedback generic;
+    class users supporting;
     class account centre;
 ```
 

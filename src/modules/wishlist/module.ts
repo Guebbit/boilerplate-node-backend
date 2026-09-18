@@ -15,13 +15,20 @@ import { onDomainEvent } from '@kernel/events';
 import { PRODUCT_DELETED } from '@modules/products';
 import { USER_DELETED } from '@modules/users';
 import { router } from './routes';
-import { wishlistDeleteByUserId, productRemoveFromWishlistsById } from './service';
+import { wishlistDeleteByUserId, productRemoveFromWishlistsById, wishlistService } from './service';
 
 /** This module's manifest entry: routes, event subscriptions, and locales. */
 export default {
     name: 'wishlist',
     basePath: '/wishlist',
     routes: router,
+    personalData: [
+        {
+            section: 'wishlist',
+            collect: (subject) =>
+                wishlistService.wishlistGet(subject.userId).then((view) => view.items)
+        }
+    ],
     subscribe: () => {
         onDomainEvent(PRODUCT_DELETED, ({ productId }) =>
             productRemoveFromWishlistsById(productId)

@@ -7,14 +7,19 @@
  * that question is answered by each module's own `module.yaml`, enforced by
  * `.dependency-cruiser.cjs`, not by anything `registerModules` does at boot.
  */
-import { registerModules, resolveTranslatables, type AppModule } from '@kernel/registry';
+import {
+    registerModules,
+    resolveTranslatables,
+    resolvePersonalDataSections,
+    type AppModule
+} from '@kernel/registry';
 
 it('calls subscribe on every module that declares one', () => {
     const first = jest.fn();
     const second = jest.fn();
     const modules: AppModule[] = [
-        { name: 'first', subscribe: first },
-        { name: 'second', subscribe: second }
+        { name: 'first', subscribe: first, personalData: 'none' },
+        { name: 'second', subscribe: second, personalData: 'none' }
     ];
 
     registerModules(modules);
@@ -29,7 +34,10 @@ it('skips a module with no subscribe, rather than treating it as a mistake', () 
     const subscribe = jest.fn();
 
     expect(() =>
-        registerModules([{ name: 'headless' }, { name: 'listener', subscribe }])
+        registerModules([
+            { name: 'headless', personalData: 'none' },
+            { name: 'listener', subscribe, personalData: 'none' }
+        ])
     ).not.toThrow();
     expect(subscribe).toHaveBeenCalledTimes(1);
 });
@@ -46,13 +54,15 @@ describe('resolveTranslatables', () => {
                 name: 'products',
                 translatables: {
                     product: { collection: 'products', fields: ['title'], cacheTag: 'products' }
-                }
+                },
+                personalData: 'none'
             },
             {
                 name: 'pages',
                 translatables: {
                     page: { collection: 'pages', fields: ['body'], cacheTag: 'pages' }
-                }
+                },
+                personalData: 'none'
             }
         ];
 
@@ -63,6 +73,59 @@ describe('resolveTranslatables', () => {
     });
 
     it('is an empty lookup when no module declares one', () => {
-        expect(resolveTranslatables([{ name: 'headless' }])).toEqual({});
+        expect(resolveTranslatables([{ name: 'headless', personalData: 'none' }])).toEqual({});
+    });
+});
+
+/**
+ * `resolvePersonalDataSections` — the same flattening as `resolveTranslatables`, into a flat
+ * array rather than a lookup: several modules may each contribute one section, in declaration
+ * order, and `'none'` contributes nothing.
+ */
+describe('resolvePersonalDataSections', () => {
+    it('flattens every module into one array, in declaration order', () => {
+        const usersCollect = jest.fn();
+        const addressesCollect = jest.fn();
+        const modules: AppModule[] = [
+            { name: 'users', personalData: [{ section: 'profile', collect: usersCollect }] },
+            {
+                name: 'addresses',
+                personalData: [{ section: 'addresses', collect: addressesCollect }]
+            },
+            { name: 'antibot', personalData: 'none' }
+        ];
+
+        expect(resolvePersonalDataSections(modules)).toEqual([
+            { section: 'profile', collect: usersCollect },
+            { section: 'addresses', collect: addressesCollect }
+        ]);
+    });
+
+    it('is an empty array when every module says none', () => {
+        expect(
+            resolvePersonalDataSections([
+                { name: 'antibot', personalData: 'none' },
+                { name: 'observability', personalData: 'none' }
+            ])
+        ).toEqual([]);
+    });
+
+    it('collects every section a single module contributes, not just its first', () => {
+        const profile = jest.fn();
+        const sessions = jest.fn();
+        const modules: AppModule[] = [
+            {
+                name: 'users',
+                personalData: [
+                    { section: 'profile', collect: profile },
+                    { section: 'sessions', collect: sessions }
+                ]
+            }
+        ];
+
+        expect(resolvePersonalDataSections(modules)).toEqual([
+            { section: 'profile', collect: profile },
+            { section: 'sessions', collect: sessions }
+        ]);
     });
 });

@@ -24,6 +24,9 @@ import { apiKeyRepository } from './repository';
 import { verifyApiKey, parseApiKeyToken, displayIdOf } from './credentials';
 import type { ApiKeyDocument } from './model';
 
+/** Read past `search`'s own page-size default — a data-subject export answers "all of it". */
+const EVERYTHING = 100_000;
+
 /**
  * The minter's CURRENT tenant caller, re-derived rather than trusted from the key's own stored
  * permission snapshot — the check-time half of "a key holds a subset of the minter's permissions,
@@ -108,5 +111,23 @@ export default {
      * `tests/cross-cutting/module-permissions.test.ts` refuses a key in the shared file
      * whose module is gone.
      */
-    permissions: ['apikeys.any.read', 'apikeys.any.create', 'apikeys.any.delete']
+    permissions: ['apikeys.any.read', 'apikeys.any.create', 'apikeys.any.delete'],
+    personalData: [
+        {
+            section: 'apiKeys',
+            // Metadata only, never a secret — the same transform the admin list already applies
+            // (`model.ts#applyApiKeyTransform` omits `hash`) drops the secret here too; nothing
+            // module-specific to redact beyond what the wire shape already never carries.
+            collect: (subject) =>
+                apiKeyRepository
+                    .search(
+                        { pageSize: EVERYTHING },
+                        { createdByUserId: subject.userId },
+                        {
+                            createdAt: -1
+                        }
+                    )
+                    .then((page) => page.items)
+        }
+    ]
 } satisfies AppModule;

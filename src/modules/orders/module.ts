@@ -24,10 +24,13 @@ import { RESERVATION_EXPIRED } from '@modules/inventory';
 import { USER_DELETED } from '@modules/users';
 import { WORKER_CHANNELS, OrderInvoicePdfJobPayloadSchema } from '@types';
 import { router } from './routes';
-import { cancelById, detachUserId } from './services';
+import { cancelById, detachUserId, search, ownerScope } from './services';
 import { enqueueInvoicePdfJob, handleInvoicePdfJob } from './transport/invoice-pdf';
 // Also installs this module's other event declarations (ORDER_CANCELLED, ORDER_STATUS_CHANGED).
 import { ORDER_CREATED } from './events';
+
+/** Read past `search`'s own page-size default — a data-subject export answers "all of it". */
+const EVERYTHING = 100_000;
 
 /** This module's manifest entry: routes, the shop-identity config gate, event subscriptions, and locales. */
 export default {
@@ -49,6 +52,15 @@ export default {
     // The invoice prints the shop's own jurisdiction, and an invoice with no country on it is not
     // one. The other two identity fields (`./config`) are genuinely optional, so neither is here.
     requiredConfig: [{ key: 'NODE_SHOP_COUNTRY', minLength: 1 }],
+    personalData: [
+        {
+            section: 'orders',
+            collect: (subject) =>
+                search({ pageSize: EVERYTHING }, ownerScope(subject.userId)).then(
+                    (page) => page.items
+                )
+        }
+    ],
     /*
      * A hold that timed out takes its order with it — the units are already released by the
      * time this fires; what `inventory` cannot do is cancel an order without importing this

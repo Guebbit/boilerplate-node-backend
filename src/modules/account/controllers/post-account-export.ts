@@ -13,20 +13,22 @@ import { catchAs, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
- * POST /account/export — the caller's own data, assembled from every collection that holds some.
+ * POST /account/export — the caller's own data, assembled from every registered
+ * {@link import('@kernel/registry').PersonalDataSection}.
  *
- * NOT typed `successResponse<AccountExportResponse>`: `result.data` (`AccountExportPayload`, see
- * `services/export.ts`) carries raw documents for `profile`/`orders`/`shipments`/`auditLog` whose
- * contract-shaped fields (`User`'s ISO timestamps, `Order.totalItems/totalQuantity/totalPrice`,
- * `Shipment.id`, `ExportAuditEntry.timestamp` as a string) exist only after each schema's own
- * `toJSON` transform runs, never on the document type itself. Closing that gap needs a wire mapper
- * per document type — `orders`/`delivery`/`audit-logs` do not export one today.
+ * NOT typed `successResponse<AccountExportResponse>`: each section's own `collect` returns raw
+ * documents whose contract-shaped fields (`User`'s ISO timestamps, `Order`'s computed totals,
+ * `Shipment.id`, an audit entry's `timestamp` as a string) exist only after that document's own
+ * `toJSON` transform runs, never on the document type itself — and this controller has no way to
+ * know every contributing module's shape statically. Closing that gap needs a wire mapper per
+ * document type; the envelope validation on the way out is what actually holds this to the
+ * contract today.
  */
 export const postAccountExport = (request: Request, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */
-    const { id } = request.authContext!;
+    const { id, email } = request.authContext!;
 
-    return exportOwnData(id, callerContextOf(request))
+    return exportOwnData(id, email, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
             successResponse(response, result.data);

@@ -17,11 +17,14 @@
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { registerAuditSink } from '@infrastructure/observability/audit';
-import { auditLogService } from './service';
+import { auditLogService, search } from './service';
 import { router } from './routes';
 
 // Installs the persistence sink at import time — see the module header for why here, not app.ts.
 registerAuditSink(auditLogService.record);
+
+/** Read past `search`'s own page-size default — a data-subject export answers "all of it". */
+const EVERYTHING = 100_000;
 
 /** This module's manifest entry. */
 export default {
@@ -29,6 +32,15 @@ export default {
     basePath: '/audit',
     routes: router,
     locales: path.join(__dirname, 'locales'),
+    personalData: [
+        {
+            section: 'auditLog',
+            // The actor's own rows only — an export that read past the caller would be the exact
+            // leak Art. 15 exists to prevent.
+            collect: (subject) =>
+                search({ actor: subject.userId, pageSize: EVERYTHING }).then((page) => page.items)
+        }
+    ],
     /**
      * The permission key this module introduces. Read only, and deliberately: nothing edits an
      * audit row, so no module declares a key that would let anything try.

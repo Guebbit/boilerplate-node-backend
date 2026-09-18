@@ -1118,7 +1118,8 @@ components:
                     cart,
                     wishlist,
                     sessions,
-                    auditLog
+                    auditLog,
+                    apiKeys
                 ]
             properties:
                 exportedAt:
@@ -1134,6 +1135,13 @@ components:
                     type: array
                     items:
                         $ref: '#/components/schemas/Order'
+                # Previously absent — `api-keys` recorded `createdByUserId` and appeared in no
+                # export. Metadata only, same as the admin's own list: no `hash`, no way to forge
+                # a credential from what a caller downloads about themselves.
+                apiKeys:
+                    type: array
+                    items:
+                        $ref: '../../src/modules/api-keys/openapi.yaml#/components/schemas/ApiKey'
                 payments:
                     type: array
                     items:

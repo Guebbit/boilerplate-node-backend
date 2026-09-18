@@ -15,5 +15,8 @@ import { router } from './routes';
 export default {
     name: 'antibot',
     basePath: '/antibot',
-    routes: router
+    routes: router,
+    // No persistence, no collection — a stateless challenge issued to a caller who, by
+    // construction, has no account yet.
+    personalData: 'none'
 } satisfies AppModule;

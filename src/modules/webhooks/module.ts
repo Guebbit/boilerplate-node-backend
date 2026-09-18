@@ -65,5 +65,8 @@ export default {
     // The one variable in this repo that must be ABSENT under NODE_ENV=production — see
     // `kernel/required-config.ts`'s `forbiddenUnderProduction` for the generic check, and
     // `config.ts`'s `getWebhookDemoAllowedHost` for the second, narrower gate this backs up.
-    forbiddenInProduction: ['NODE_WEBHOOK_DEMO_SINK_URL']
+    forbiddenInProduction: ['NODE_WEBHOOK_DEMO_SINK_URL'],
+    // `ownerEmail` on a subscription is whoever configured the shop's integration — an operator,
+    // not a `POST /account/export` subject. Nothing here is ever a customer's own data.
+    personalData: 'none'
 } satisfies AppModule;

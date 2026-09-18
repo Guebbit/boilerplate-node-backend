@@ -55,5 +55,8 @@ export default {
      * `scenarios/flows/shop-history.ts`. A reservation is also never serialized to a client
      * (see `./model`), so there is nothing to export even if there were something to seed.
      */
-    locales: path.join(__dirname, 'locales')
+    locales: path.join(__dirname, 'locales'),
+    // Stock movements and holds are keyed by product and order, never by person — see the
+    // `subscribe` comment above on why a reservation is never even serialized to a client.
+    personalData: 'none'
 } satisfies AppModule;
