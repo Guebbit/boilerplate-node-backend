@@ -20,7 +20,7 @@
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { registerAuthResolver } from '@kernel/authentication';
-import { rolesOf } from '@kernel/access/store';
+import { rolesOf } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { onDomainEvent } from '@kernel/events';
 import { userService, USER_SETUP_REQUESTED } from '@modules/users';

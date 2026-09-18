@@ -95,7 +95,7 @@ describe('user credential exposure', () => {
             const user = await withTokens();
 
             // No `role` here: it is a membership fact now, never a column on this document —
-            // `kernel/access/store.ts` is the sole authority, and `toUser` takes the caller's
+            // `@modules/access` is the sole authority, and `toUser` takes the caller's
             // current role as an explicit parameter instead of reading one off the schema.
             expect(Object.keys(user.toJSON() as object).toSorted()).toEqual([
                 'active',

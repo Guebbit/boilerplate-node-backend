@@ -8,8 +8,7 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAsRole } from '@tests/http';
-import { ensureTenant } from '@kernel/access/store';
-import { DEPLOYMENT_TENANT_SLUG } from '@kernel/access/seed';
+import { ensureTenant, DEPLOYMENT_TENANT_SLUG } from '@modules/access';
 
 setupTestDb();
 

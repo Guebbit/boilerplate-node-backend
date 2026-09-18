@@ -16,7 +16,7 @@ import type { AppModule } from '@kernel/registry';
 import { registerCredentialResolver, type ResolvedCredential } from '@kernel/authentication';
 import { permissionsOfRole, ANONYMOUS_ROLE } from '@kernel/permissions';
 import { holdsKey } from '@kernel/ability';
-import { rolesOf } from '@kernel/access/store';
+import { rolesOf } from '@modules/access';
 import { userService } from '@modules/users';
 import type { Caller } from '@types';
 import { router } from './routes';

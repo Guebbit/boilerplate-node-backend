@@ -16,7 +16,7 @@ import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation } from '@infrastructure/http/controller';
 import type { LoginRequest, LoginOutcome } from '@types';
 import { isUnrestrictedRole } from '@kernel/permissions';
-import { rolesOf } from '@kernel/access/store';
+import { rolesOf } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /** The "remember me" tiers the contract declares, checked against the enum the cookies use. */

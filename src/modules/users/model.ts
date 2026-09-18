@@ -103,7 +103,7 @@ export const isLiveRefreshSession = (token: Token): boolean =>
  * The full user record shape backing Mongoose documents. `createdAt`, `updatedAt`, `deletedAt`,
  * `twoFactorEnabledAt` and `verifiedAt` are omitted from the wire `User` contract and redeclared
  * as `Date` below — the contract carries ISO strings, the document carries real dates. `role` is
- * omitted outright: the document holds no role of its own any more — `kernel/access/store.ts`'s
+ * omitted outright: the document holds no role of its own any more — `@modules/access`'s
  * membership rows are the only place one is stored — so nothing here may read or write it.
  * {@link toUser} takes the caller's current role as an explicit parameter instead.
  */

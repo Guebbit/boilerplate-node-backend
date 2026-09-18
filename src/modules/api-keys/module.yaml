@@ -1,3 +1,4 @@
 subdomain: supporting
 dependsOn:
+    - access # rolesOf, to re-derive the minter's current role at check time
     - users # hashToken, and re-deriving the minter's current permissions at check time

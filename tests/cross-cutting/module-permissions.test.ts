@@ -52,12 +52,15 @@ describe('the declared keys and the modules that own them', () => {
         // `addresses`, `cart`, `wishlist` and `antibot` are *your own things* or infrastructure —
         // what you may do with them follows from being signed in, not from a role. An empty claim
         // here is a decision, and a key appearing under one of them would be a change of model.
+        // `access` is different: it has no routes at all, so there is nothing a key could gate —
+        // the route guard that reads it (`permissions.ts`/`ability.ts`) is what claims keys, not
+        // the domain the guard asks about.
         const keyless = [...claimed.entries()]
             .filter(([, keys]) => keys.length === 0)
             .map(([module]) => module)
             .toSorted();
 
-        expect(keyless).toEqual(['addresses', 'antibot', 'wishlist']);
+        expect(keyless).toEqual(['access', 'addresses', 'antibot', 'wishlist']);
     });
 
     it('find every key somewhere, so the two lists are the same set', () => {

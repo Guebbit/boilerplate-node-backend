@@ -41,7 +41,7 @@ import {
     revokeRole,
     promoteVerifiedCustomer,
     AccessInvariantError
-} from '@kernel/access/store';
+} from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**

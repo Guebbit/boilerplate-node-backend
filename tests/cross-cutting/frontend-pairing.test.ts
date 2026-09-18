@@ -1,11 +1,11 @@
 /**
  * Every domain here names the module that answers it in `boilerplate-vue-frontend`.
  *
- * Eleven of fourteen domains exist on both sides under the same name. The other three don't —
- * `antibot` because it has no screen of its own, `audit-logs` and `observability` because two
- * backend modules serve one frontend screen between them — and neither does the frontend's one
- * extra module. An asymmetry that is real architecture rather than drift, and that is written
- * down nowhere else in either repository.
+ * Eleven of fifteen domains exist on both sides under the same name. The other four don't —
+ * `access` because it is routeless and has no screen of its own to have, `antibot` for the same
+ * reason, `audit-logs` and `observability` because two backend modules serve one frontend screen
+ * between them — and neither does the frontend's one extra module. An asymmetry that is real
+ * architecture rather than drift, and that is written down nowhere else in either repository.
  *
  * STATED, NOT DERIVED. A name matcher would call `audit-logs` unpaired, which is exactly the wrong
  * answer: the trail lives here, the endpoint that reads it belongs to `observability`, and the
@@ -43,6 +43,10 @@ interface Pairing {
 }
 
 const FRONTEND_PAIRING: Readonly<Partial<Record<string, Pairing>>> = {
+    access: {
+        counterparts: [],
+        why: "Routeless — tenants and memberships back every other module's auth resolution, but nothing renders a screen for them directly; role assignment happens through the frontend's own users/account admin views."
+    },
     account: { counterparts: ['account'] },
     addresses: {
         counterparts: ['account'],

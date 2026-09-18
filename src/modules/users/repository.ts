@@ -86,10 +86,9 @@ export const userRepository: Repository<UserDocument> & {
              * deactivated accounts" and "show me deleted accounts" are different questions.
              */
             // No `role` filter here any more: the document carries no `role` column to match
-            // against — see `kernel/access/store.ts`. Filtering a search by role needs a two-step
+            // against — see `@modules/access`. Filtering a search by role needs a two-step
             // resolve (membership rows holding that role, then the users among those ids) that
-            // this generic `exact` filter can't express; deliberately not rebuilt yet, see
-            // DDD_FIX.md Phase 2.3's follow-up note.
+            // this generic `exact` filter can't express; deliberately not rebuilt yet.
             booleans: { active: 'active' }
         }
     }),

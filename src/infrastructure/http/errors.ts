@@ -95,9 +95,9 @@ export function databaseErrorInterpreter(error: unknown): [number, string] {
         // twelve models. Detected by `name`, same reason as BSONError above.
         if ((error as { name?: string }).name === 'ValidationError')
             return [422, 'Invalid request'];
-        // `@kernel/access/store`'s `AccessInvariantError` — an undeclared role, a privilege
+        // `@modules/access`'s `AccessInvariantError` — an undeclared role, a privilege
         // escalation, or a shop's last administrator. Named rather than imported: `infrastructure`
-        // sits below `kernel` and may not reach up into it, same reason `AuditSink` is a port instead
+        // may not reach up into a module, same reason `AuditSink` is a port instead
         // of a direct call — but the STATUS this deserves is a request-shape/state-conflict question
         // exactly like the other four branches above, not the server's fault, so it belongs here and
         // not as a one-off `.catch()` at each of `users`' three write paths.

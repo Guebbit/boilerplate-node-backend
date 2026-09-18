@@ -18,7 +18,7 @@ import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { isUnrestrictedRole } from '@kernel/permissions';
-import { rolesOf } from '@kernel/access/store';
+import { rolesOf } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { readMfaChallengeCookie, destroyMfaChallengeCookie } from '../oauth/mfa-redirect';
 

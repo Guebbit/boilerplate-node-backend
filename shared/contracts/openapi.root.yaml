@@ -1111,6 +1111,7 @@ components:
                 [
                     exportedAt,
                     profile,
+                    roles,
                     addresses,
                     orders,
                     payments,
@@ -1127,6 +1128,22 @@ components:
                     format: date-time
                 profile:
                     $ref: '#/components/schemas/User'
+                # Previously absent — a role lives in a membership row, not a field on the user
+                # document, so `profile` alone no longer says what this account may do. Scope only,
+                # never the tenant id: this deployment ships one shop, so the id would name nothing
+                # a subject could recognise.
+                roles:
+                    type: array
+                    items:
+                        type: object
+                        additionalProperties: false
+                        required: [role, scope]
+                        properties:
+                            role:
+                                type: string
+                            scope:
+                                type: string
+                                enum: [tenant, platform]
                 addresses:
                     type: array
                     items:

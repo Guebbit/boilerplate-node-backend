@@ -17,7 +17,7 @@ import { userModel } from '@modules/users/model';
 import { productModel } from '@modules/products/model';
 import { orderModel } from '@modules/orders/model';
 import { localeModel } from '@modules/locales/model';
-import { membershipModel } from '@kernel/access/models';
+import { membershipModel } from '@modules/access/model';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { seedCredentials } from '@scenarios/accounts';
 

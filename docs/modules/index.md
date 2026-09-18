@@ -40,6 +40,7 @@ outside the markers, including the warning below, is written by hand.
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 26, 'rankSpacing': 52}}}%%
 flowchart TD
+    access
     account
     addresses
     antibot
@@ -58,8 +59,10 @@ flowchart TD
     webhooks
     wishlist
 
+    account --> access
     account --> users
     addresses --> users
+    api_keys --> access
     api_keys --> users
     cart --> addresses
     cart --> delivery
@@ -78,6 +81,7 @@ flowchart TD
     payments --> inventory
     payments --> orders
     payments --> users
+    users --> access
     webhooks --> orders
     webhooks --> payments
     webhooks --> users
@@ -90,25 +94,26 @@ flowchart TD
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef isolated fill:#f4f4f5,stroke:#a1a1aa,color:#52525b,stroke-dasharray:4 3;
     class cart,orders,products core;
-    class account,addresses,api_keys,delivery,inventory,payments,users,webhooks,wishlist supporting;
+    class access,account,addresses,api_keys,delivery,inventory,payments,users,webhooks,wishlist supporting;
     class audit_logs,observability generic;
     class antibot,feedback,locales isolated;
 ```
 
 |                 | Reaches                                                           | Reached by                                                                         |
 | --------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `users`         | —                                                                 | account, addresses, api-keys, cart, delivery, orders, payments, webhooks, wishlist |
+| `users`         | access                                                            | account, addresses, api-keys, cart, delivery, orders, payments, webhooks, wishlist |
 | `cart`          | addresses, delivery, inventory, orders, payments, products, users | wishlist                                                                           |
 | `orders`        | inventory, products, users                                        | cart, delivery, payments, webhooks                                                 |
 | `payments`      | inventory, orders, users                                          | cart, webhooks                                                                     |
 | `inventory`     | products                                                          | cart, orders, payments                                                             |
 | `products`      | —                                                                 | cart, inventory, orders, wishlist                                                  |
+| `access`        | —                                                                 | account, api-keys, users                                                           |
 | `delivery`      | orders, users                                                     | cart                                                                               |
 | `webhooks`      | orders, payments, users                                           | —                                                                                  |
 | `wishlist`      | cart, products, users                                             | —                                                                                  |
+| `account`       | access, users                                                     | —                                                                                  |
 | `addresses`     | users                                                             | cart                                                                               |
-| `account`       | users                                                             | —                                                                                  |
-| `api-keys`      | users                                                             | —                                                                                  |
+| `api-keys`      | access, users                                                     | —                                                                                  |
 | `audit-logs`    | —                                                                 | observability                                                                      |
 | `observability` | audit-logs                                                        | —                                                                                  |
 | `antibot`       | —                                                                 | —                                                                                  |

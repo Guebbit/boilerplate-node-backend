@@ -35,7 +35,7 @@ import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/a
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
 import { rotateRefreshToken, TokenReuseError } from '../session/jwt';
-import { assignDefaultRole } from '@kernel/access/store';
+import { assignDefaultRole } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**

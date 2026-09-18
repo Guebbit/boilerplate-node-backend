@@ -145,10 +145,10 @@ enforced per key.
   cases, most of them denials, run by both backends. All three byte-identical in the PHP twin.
 - **`kernel/permissions.ts`** turns an account's two role names into the keys for ONE scope;
   **`kernel/ability.ts`** builds the CASL ability and answers `holdsKey`.
-- **`kernel/access/`** stores the ASSIGNMENT half — tenants and memberships, never a role's own
+- **`@modules/access`** stores the ASSIGNMENT half — tenants and memberships, never a role's own
   permissions — with the invariants as refusals: the last administrator cannot be removed, a
   granter cannot hand over what they do not hold, self-service signup can grant nothing but the
-  default role.
+  default role. Routeless — `account`, `api-keys` and `users` are its only consumers.
 - **`kernel/access/query.ts`** compiles the rules into the Mongo filter every scoped read spreads,
   so a key that grants more returns more without anybody editing a fragment.
 - **`GET /account/abilities`** publishes the packed rules; the frontend evaluates _those_, not a

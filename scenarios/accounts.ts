@@ -9,8 +9,7 @@
  * See: docs/tools/demo-profile.md#the-named-accounts
  */
 
-import { assignRole } from '@kernel/access/store';
-import { bootstrapAccessModel } from '@kernel/access/seed';
+import { assignRole, bootstrapAccessModel } from '@modules/access';
 
 /** The demo owner's id — 24-char hex, and a real ObjectId: its leading bytes date it to February 2024. */
 export const SEED_OWNER_ID = '65dd2bdb923652b7800fe180';

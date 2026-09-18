@@ -8,7 +8,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
-import { membershipIn } from '@kernel/access/store';
+import { membershipIn } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { grantAccess, GrantAccessError } from '../../../db/access-grant';
 

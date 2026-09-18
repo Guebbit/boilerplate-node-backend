@@ -111,7 +111,7 @@ sequenceDiagram
     participant C as Caller
     participant R as account/module.ts resolve()
     participant U as userService
-    participant S as kernel/access/store.ts rolesOf()
+    participant S as access/service.ts rolesOf()
     participant P as kernel/permissions.ts callerInScope()
 
     C->>R: bearer token
@@ -124,7 +124,7 @@ sequenceDiagram
     P-->>C: Caller — tenantId proven `string` in tenant scope, `null` in platform scope
 ```
 
-**There is no lookup.** `DEPLOYMENT_TENANT_ID` is a constant in `@kernel/access/seed` — the Django
+**There is no lookup.** `DEPLOYMENT_TENANT_ID` is a constant in `@kernel/access/tenant` — the Django
 `SITE_ID` pattern: one organisation per database means its id can be fixed at build time instead of
 resolved at boot. `AuthContext.tenantId` is a plain, non-nullable `string`; `Caller` is a
 discriminated union on `scope`, so a tenant-scope caller's id is proven by the type, not asserted

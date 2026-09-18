@@ -11,7 +11,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { TEST_TENANT_ID } from '@tests/callers';
 import type { TenantCallerContext } from '@types';
 import { userRepository } from '@modules/users/tests/factories';
-import { assignRole } from '@kernel/access/store';
+import { assignRole } from '@modules/access';
 import { permissionsOfRole } from '@kernel/permissions';
 import { resolveCredential } from '@kernel/authentication';
 // `module.ts`'s side effect (`registerCredentialResolver`) is what makes `resolveCredential`

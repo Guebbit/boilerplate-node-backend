@@ -23,7 +23,7 @@ import type { EmailVerificationRequested } from '@types';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
 import { isUnrestrictedRole } from '@kernel/permissions';
-import { promoteVerifiedCustomer, rolesOf } from '@kernel/access/store';
+import { promoteVerifiedCustomer, rolesOf } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**

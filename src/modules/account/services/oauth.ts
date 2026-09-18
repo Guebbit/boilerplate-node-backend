@@ -15,7 +15,7 @@ import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/a
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
 import type { OAuthIdentity } from '../oauth/providers/port';
-import { assignRole } from '@kernel/access/store';
+import { assignRole } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**

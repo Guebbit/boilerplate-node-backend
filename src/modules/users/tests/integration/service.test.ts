@@ -16,7 +16,7 @@ import { userRepository } from '../../repository';
 import { usersAuditActions } from '@modules/users/audit';
 import * as auditPort from '@infrastructure/observability/audit';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
-import { rolesOf } from '@kernel/access/store';
+import { rolesOf } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
 import type { UserDocument } from '../../model';

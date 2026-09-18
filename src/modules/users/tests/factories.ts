@@ -11,7 +11,7 @@
 
 import type { UserDocument } from '../model';
 import { userRepository } from '../repository';
-import { assignRole } from '@kernel/access/store';
+import { assignRole } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { makeUser } from '../factories';
 import type { UserOverrides } from '../factories';

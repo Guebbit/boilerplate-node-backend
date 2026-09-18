@@ -32,7 +32,7 @@ import userImages from './users-images.generated.json';
 import { makeUser } from '@modules/users/factories';
 import { insertIfAbsent, type SeedOutcome } from '@scenarios/seed';
 import { userRepository } from '@modules/users/repository';
-import { assignRole } from '@kernel/access/store';
+import { assignRole } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**

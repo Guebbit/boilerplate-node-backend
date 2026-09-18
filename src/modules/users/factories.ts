@@ -6,7 +6,7 @@
  * factory's guess. The password stays PLAINTEXT through the builder; `userSchema`'s pre-save hook
  * hashes it on the way into Mongo, and a hash written here would drift from that hook. No `role`
  * override: the document holds none any more, only a membership does — a fixture needing one
- * calls `assignRole`/`assignDefaultRole` (`@kernel/access/store`) separately, against the id this
+ * calls `assignRole`/`assignDefaultRole` (`@modules/access`) separately, against the id this
  * builder returns.
  */
 

@@ -32,7 +32,7 @@ import * as analyticsPort from '@infrastructure/observability/analytics';
 import { accountAuditActions } from '../../audit';
 import { accountAnalyticsEvents } from '../../analytics';
 import { observePort } from '@tests/ports';
-import { rolesOf } from '@kernel/access/store';
+import { rolesOf } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /*

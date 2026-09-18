@@ -7,7 +7,7 @@
 
 import { userService } from '../service';
 import { createItemController } from '@infrastructure/surfaces/create-item-controller';
-import { rolesOf } from '@kernel/access/store';
+import { rolesOf } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**

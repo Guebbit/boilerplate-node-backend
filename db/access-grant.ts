@@ -5,7 +5,7 @@
  * connection and parses `process.argv` on import, which a test cannot drive per case.
  */
 
-import { assignRole } from '@kernel/access/store';
+import { assignRole } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { userService } from '@modules/users';
 import type { AuthorizationScope } from '@types';

@@ -17,6 +17,7 @@ graph cannot see._
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
 flowchart LR
     users["users<br/><i>this module</i>"]
+    access["access"]
     account["account"]
     addresses["addresses"]
     api_keys["api-keys"]
@@ -36,6 +37,7 @@ flowchart LR
     payments --> users
     webhooks --> users
     wishlist --> users
+    users --> access
     users -. "user.setup-requested" .-> account
     users -. "user.deleted" .-> addresses
     users -. "user.deleted" .-> cart
@@ -48,7 +50,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class account,addresses,api_keys,delivery,payments,webhooks,wishlist supporting;
+    class access,account,addresses,api_keys,delivery,payments,webhooks,wishlist supporting;
     class users centre;
 ```
 
