@@ -124,19 +124,21 @@ export const overrideStatus = (
                 }
             ]);
 
-        return applyOverride(orderId, order.status, to, 'status', reason, context).then((updated) => {
-            if (!updated)
-                // Lost a race against another write since the read above — same shape as the
-                // ordinary `update`'s 409, not a 404: the order still exists.
-                return generateReject(409, [
-                    {
-                        code: 'ORDER_OVERRIDE_NOT_ALLOWED',
-                        message: t('orders.override.not-allowed'),
-                        details: { from: order.status, to }
-                    }
-                ]);
-            return generateSuccess(updated);
-        });
+        return applyOverride(orderId, order.status, to, 'status', reason, context).then(
+            (updated) => {
+                if (!updated)
+                    // Lost a race against another write since the read above — same shape as the
+                    // ordinary `update`'s 409, not a 404: the order still exists.
+                    return generateReject(409, [
+                        {
+                            code: 'ORDER_OVERRIDE_NOT_ALLOWED',
+                            message: t('orders.override.not-allowed'),
+                            details: { from: order.status, to }
+                        }
+                    ]);
+                return generateSuccess(updated);
+            }
+        );
     });
 
 /**

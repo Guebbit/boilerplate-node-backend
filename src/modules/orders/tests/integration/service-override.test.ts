@@ -64,7 +64,12 @@ describe('overrideStatus', () => {
         const order = await seedOrder(OrderStatus.pending);
         const context = callerContextAs('admin', 'admin-1');
 
-        const result = await overrideStatus(String(order._id), OrderStatus.paid, 'trying anyway', context);
+        const result = await overrideStatus(
+            String(order._id),
+            OrderStatus.paid,
+            'trying anyway',
+            context
+        );
 
         expect(result.success).toBe(false);
     });
@@ -101,7 +106,12 @@ describe('forceMove', () => {
         const order = await seedOrder(OrderStatus.paid);
         const context = callerContextAs('admin', 'admin-1');
 
-        const updated = await forceMove(String(order._id), 'shipped', 'skipped processing on purpose', context);
+        const updated = await forceMove(
+            String(order._id),
+            'shipped',
+            'skipped processing on purpose',
+            context
+        );
 
         expect(updated?.status).toBe(OrderStatus.shipped);
         const stored = await readOrder(String(order._id));

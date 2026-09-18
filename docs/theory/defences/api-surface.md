@@ -37,7 +37,7 @@ The attacker's best move against a typed API is to make it choose a different ty
 | ---------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Bulk / export endpoints            | one call returns everything, with no quota              | `POST /account/export` answers the caller's OWN data and requires a fresh session; staff listings page at 100 rows, with `page` capped too — `account/routes.ts`, `infrastructure/http/schemas.ts` |
 | Missing rate limits per key / user | quotas absent or IP-only                                | The global brake is per address (`infrastructure/http/middlewares/rate-limit.ts`); `credentialLimiters` adds a per-ACCOUNT budget on the credential routes specifically — `account/rate-limits.ts` |
-| API key leakage                    | a key in client code, a mobile bundle, or a public repo | The one static credential is `NODE_METRICS_TOKEN`, compared with `timingSafeEqual` and DENIED by default when unset — `metrics-scraper.ts#isMetricsScraper`                                             |
+| API key leakage                    | a key in client code, a mobile bundle, or a public repo | The one static credential is `NODE_METRICS_TOKEN`, compared with `timingSafeEqual` and DENIED by default when unset — `metrics-scraper.ts#isMetricsScraper`                                        |
 
 ## Consuming, and being consumed
 

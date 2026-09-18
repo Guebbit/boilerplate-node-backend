@@ -75,12 +75,12 @@ describe('methodFitsWeight', () => {
     it('refuses a basket under the method’s minWeight', () => {
         // No shipped method actually declares one today — proven against a value built
         // in-line, not `SHIPPING_METHODS`, so this rule stays covered either way.
-        expect(methodFitsWeight({ id: 'heavy', price: 0, tracked: false, minWeight: 1000 }, 999)).toBe(
-            false
-        );
-        expect(methodFitsWeight({ id: 'heavy', price: 0, tracked: false, minWeight: 1000 }, 1000)).toBe(
-            true
-        );
+        expect(
+            methodFitsWeight({ id: 'heavy', price: 0, tracked: false, minWeight: 1000 }, 999)
+        ).toBe(false);
+        expect(
+            methodFitsWeight({ id: 'heavy', price: 0, tracked: false, minWeight: 1000 }, 1000)
+        ).toBe(true);
     });
 });
 

@@ -227,7 +227,7 @@ describe('isPayable', () => {
         expect(isPayable(OrderStatus.paid)).toBe(false);
     });
 
-    it('agrees with `orderActionsFor`\'s `pay` field for every status', () => {
+    it("agrees with `orderActionsFor`'s `pay` field for every status", () => {
         for (const status of EVERY_STATUS)
             expect(orderActionsFor(status, 'admin').pay).toBe(isPayable(status));
     });
@@ -289,14 +289,19 @@ describe('orderActionsFor', () => {
 });
 
 describe('canOverrideTo — the admin override, forward only, never onto paid or cancelled', () => {
-    const OVERRIDABLE_DESTINATIONS = [OrderStatus.processing, OrderStatus.shipped, OrderStatus.delivered];
+    const OVERRIDABLE_DESTINATIONS = [
+        OrderStatus.processing,
+        OrderStatus.shipped,
+        OrderStatus.delivered
+    ];
 
     it('never allows paid as a destination, from any status', () => {
         for (const from of EVERY_STATUS) expect(canOverrideTo(from, OrderStatus.paid)).toBe(false);
     });
 
     it('never allows cancelled as a destination, from any status', () => {
-        for (const from of EVERY_STATUS) expect(canOverrideTo(from, OrderStatus.cancelled)).toBe(false);
+        for (const from of EVERY_STATUS)
+            expect(canOverrideTo(from, OrderStatus.cancelled)).toBe(false);
     });
 
     it('never moves a cancelled order anywhere — it has left the fulfilment sequence', () => {
@@ -313,11 +318,12 @@ describe('canOverrideTo — the admin override, forward only, never onto paid or
     });
 
     it('refuses a no-op — an override always moves the order somewhere new', () => {
-        for (const status of OVERRIDABLE_DESTINATIONS) expect(canOverrideTo(status, status)).toBe(false);
+        for (const status of OVERRIDABLE_DESTINATIONS)
+            expect(canOverrideTo(status, status)).toBe(false);
     });
 });
 
-describe('statusesOverridableInto — the conditional write\'s own `from` set', () => {
+describe("statusesOverridableInto — the conditional write's own `from` set", () => {
     it('is every status strictly earlier than the destination in the fulfilment sequence', () => {
         expect(statusesOverridableInto(OrderStatus.shipped)).toEqual([
             OrderStatus.pending,

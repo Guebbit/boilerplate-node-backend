@@ -119,60 +119,58 @@ export const settlePayment = (
     // The order's move IS the gate (module rule 2), and it is conditional, so exactly one of two
     // racing settlements gets past it. `markPaid` is `orders`' own conditional write — this
     // module reports the fact, it never writes the order's status itself.
-    return orderService
-        .markPaid(orderId)
-        .then(async (paidOrder) => {
-            const succeeded = await paymentRepository.updateStatusIfIn(
-                orderId,
-                SETTLEABLE_PAYMENT_STATUSES,
-                'succeeded',
-                extra
-            );
+    return orderService.markPaid(orderId).then(async (paidOrder) => {
+        const succeeded = await paymentRepository.updateStatusIfIn(
+            orderId,
+            SETTLEABLE_PAYMENT_STATUSES,
+            'succeeded',
+            extra
+        );
 
-            // Neither write moved anything: an earlier call already settled this payment (both
-            // writes are terminal-once-applied), or this delivery lost every race there was —
-            // either way, whoever won already did (or is doing) the rest, or there is nothing to
-            // do. Acting again here is exactly the double-commit / wrongful-refund this guards.
-            if (!succeeded) return { payment, orderLost: false };
+        // Neither write moved anything: an earlier call already settled this payment (both
+        // writes are terminal-once-applied), or this delivery lost every race there was —
+        // either way, whoever won already did (or is doing) the rest, or there is nothing to
+        // do. Acting again here is exactly the double-commit / wrongful-refund this guards.
+        if (!succeeded) return { payment, orderLost: false };
 
-            // `paidOrder` is null in TWO different cases a redelivered event can now reach: this
-            // order was raced to `paid` by another settlement of the same charge (nothing lost —
-            // just not this call's doing), or it genuinely can no longer get there (cancelled). A
-            // stale `paidOrder` is not enough to tell them apart; the order's CURRENT status is.
-            const orderNow = paidOrder ?? (await orderService.getById(orderId));
-            const orderIsPaid = orderNow?.status === OrderStatus.paid;
+        // `paidOrder` is null in TWO different cases a redelivered event can now reach: this
+        // order was raced to `paid` by another settlement of the same charge (nothing lost —
+        // just not this call's doing), or it genuinely can no longer get there (cancelled). A
+        // stale `paidOrder` is not enough to tell them apart; the order's CURRENT status is.
+        const orderNow = paidOrder ?? (await orderService.getById(orderId));
+        const orderIsPaid = orderNow?.status === OrderStatus.paid;
 
-            if (!orderIsPaid) {
-                /*
-                 * The money moved but the order was gone (cancelled, or a racing tab won). Put it
-                 * straight back — the invariant is the module docblock's rule 2. `performRefund`
-                 * rather than a bare `provider.refund`, so the payment ends up saying `refunded`
-                 * and the at-most-once guard is the same one every other refund goes through.
-                 */
-                const refunded = await performRefund(orderId);
-                return { payment: refunded ?? succeeded, orderLost: true };
-            }
-
+        if (!orderIsPaid) {
             /*
-             * The units finally leave — held since checkout, recoverable until now.
-             *
-             * Reached at most once per order: `succeeded` above is itself an at-most-once write
-             * (terminal once applied), and this is the only call whose `succeeded` write can ever
-             * be truthy — `paidOrder`'s own race no longer gates this, since a redelivered event
-             * can legitimately lose it while still being the one true settlement. The result is not
-             * checked: `false` covers both a harmless replay (the hold is already `committed`) and
-             * a hold an expiry sweep beat the payment to — the customer has a paid order either
-             * way, and `inventory` tells the two apart and alarms only the second.
+             * The money moved but the order was gone (cancelled, or a racing tab won). Put it
+             * straight back — the invariant is the module docblock's rule 2. `performRefund`
+             * rather than a bare `provider.refund`, so the payment ends up saying `refunded`
+             * and the at-most-once guard is the same one every other refund goes through.
              */
-            await inventoryService.commitForOrder(orderId);
+            const refunded = await performRefund(orderId);
+            return { payment: refunded ?? succeeded, orderLost: true };
+        }
 
-            // Fire-and-forget, like `PAYMENT_FAILED` above: `webhooks` reacts to this from its own
-            // `subscribe()` hook, and a slow or failing listener there must not delay the response
-            // this settlement's callers (confirm, sync, the provider webhook) are already sending.
-            void emitDomainEvent(PAYMENT_SUCCEEDED, { paymentId: String(succeeded._id), orderId });
+        /*
+         * The units finally leave — held since checkout, recoverable until now.
+         *
+         * Reached at most once per order: `succeeded` above is itself an at-most-once write
+         * (terminal once applied), and this is the only call whose `succeeded` write can ever
+         * be truthy — `paidOrder`'s own race no longer gates this, since a redelivered event
+         * can legitimately lose it while still being the one true settlement. The result is not
+         * checked: `false` covers both a harmless replay (the hold is already `committed`) and
+         * a hold an expiry sweep beat the payment to — the customer has a paid order either
+         * way, and `inventory` tells the two apart and alarms only the second.
+         */
+        await inventoryService.commitForOrder(orderId);
 
-            return { payment: succeeded, orderLost: false };
-        });
+        // Fire-and-forget, like `PAYMENT_FAILED` above: `webhooks` reacts to this from its own
+        // `subscribe()` hook, and a slow or failing listener there must not delay the response
+        // this settlement's callers (confirm, sync, the provider webhook) are already sending.
+        void emitDomainEvent(PAYMENT_SUCCEEDED, { paymentId: String(succeeded._id), orderId });
+
+        return { payment: succeeded, orderLost: false };
+    });
 };
 
 /**

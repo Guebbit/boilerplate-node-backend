@@ -52,18 +52,18 @@ flowchart LR
 
 ## Where the code lives
 
-| Concern                                          | File                                                                  |
-| ------------------------------------------------ | --------------------------------------------------------------------- |
-| sharp wrapper — `digestImage`/`thumbnailImage`   | `src/infrastructure/adapters/image.ts`                                |
-| Storage — quarantine/promote/derivative/remove   | `src/infrastructure/adapters/image-store.ts`                          |
+| Concern                                          | File                                                                         |
+| ------------------------------------------------ | ---------------------------------------------------------------------------- |
+| sharp wrapper — `digestImage`/`thumbnailImage`   | `src/infrastructure/adapters/image.ts`                                       |
+| Storage — quarantine/promote/derivative/remove   | `src/infrastructure/adapters/image-store.ts`                                 |
 | Upload middleware — quarantine + inline fallback | `src/infrastructure/http/middlewares/upload.ts` → `quarantineUploadedImages` |
-| Shared pipeline + queue worker + inline dispatch | `src/infrastructure/adapters/image.worker.ts`                         |
-| Queue name                                       | `src/infrastructure/adapters/queue.ts` → `IMAGE_QUEUE`                |
-| Worker registration                              | `src/app/workers.ts`                                                  |
-| Module writeback registration                    | `src/kernel/registry.ts` → `ImageTarget`, `resolveImageTargets`       |
-| `products` writeback                             | `src/modules/products/repository.ts` → `writebackImage`               |
-| `users`/`account` writeback                      | `src/modules/users/repository.ts` → `writebackImage`                  |
-| Quarantine reaper                                | `ops/reap-quarantine.ts`                                              |
+| Shared pipeline + queue worker + inline dispatch | `src/infrastructure/adapters/image.worker.ts`                                |
+| Queue name                                       | `src/infrastructure/adapters/queue.ts` → `IMAGE_QUEUE`                       |
+| Worker registration                              | `src/app/workers.ts`                                                         |
+| Module writeback registration                    | `src/kernel/registry.ts` → `ImageTarget`, `resolveImageTargets`              |
+| `products` writeback                             | `src/modules/products/repository.ts` → `writebackImage`                      |
+| `users`/`account` writeback                      | `src/modules/users/repository.ts` → `writebackImage`                         |
+| Quarantine reaper                                | `ops/reap-quarantine.ts`                                                     |
 
 ## How it's used
 

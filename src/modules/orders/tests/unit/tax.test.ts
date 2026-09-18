@@ -161,9 +161,9 @@ describe('orderTaxBreakdown — shippingNetAmount/shippingTaxAmount', () => {
         expect(breakdown?.shippingByRate.map((row) => row.rate)).toEqual([0.1, 0.22]);
         // Equal-value lines split shipping 50/50: 5.00 taxed at each line's own rate.
         const at22 = breakdown?.shippingByRate.find((row) => row.rate === 0.22);
-        expect(Math.round((at22?.netAmount ?? 0) * 100) + Math.round((at22?.taxAmount ?? 0) * 100)).toBe(
-            500
-        );
+        expect(
+            Math.round((at22?.netAmount ?? 0) * 100) + Math.round((at22?.taxAmount ?? 0) * 100)
+        ).toBe(500);
     });
 
     it('sums to the order-level shippingNetAmount/shippingTaxAmount across rows', () => {
