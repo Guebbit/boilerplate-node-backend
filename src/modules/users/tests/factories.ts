@@ -60,7 +60,7 @@ export const createUser = (overrides: UserOverrides = {}): Promise<UserDocument>
  * `root`'s: through `assignRole`, tenant-less (`tenantId: null`, matching `platform`'s own
  * tenant-less-by-definition rule).
  */
-export const createOwnerUser = (overrides: UserOverrides = {}): Promise<UserDocument> =>
+export const createAdminUser = (overrides: UserOverrides = {}): Promise<UserDocument> =>
     createUser({
         role: 'admin',
         email: 'owner@example.com',

@@ -8,7 +8,7 @@
  */
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
-import { api, authenticateAs } from '@tests/http';
+import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
@@ -61,6 +61,29 @@ describe('GET /orders — the filters it now publishes', () => {
         expect(byNotes.status).toBe(200);
         expect(byNotes.body.data.items.map((o: { id: string }) => o.id)).toEqual([
             String(pending._id)
+        ]);
+    });
+
+    /*
+     * The bug this pins: `orders.any.read` is held by name, not through the scope wildcard a
+     * moderator never holds — asking for the wildcard alone silently dropped this filter for
+     * them, so a moderator narrowing to one customer's orders got everyone's instead.
+     */
+    it("honours a moderator's userId filter, not just an admin's", async () => {
+        const { bearer } = await authenticateAsRole('moderator');
+        const product = await createProduct();
+        const userA = await createUser({ email: 'user-a@example.com', username: 'user-a' });
+        const userB = await createUser({ email: 'user-b@example.com', username: 'user-b' });
+        const orderA = await createOrder(userA, [toOrderItem(product, 1)]);
+        await createOrder(userB, [toOrderItem(product, 1)]);
+
+        const response = await api()
+            .get(`/orders?userId=${String(userA._id)}`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items.map((o: { id: string }) => o.id)).toEqual([
+            String(orderA._id)
         ]);
     });
 

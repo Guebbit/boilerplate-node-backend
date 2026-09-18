@@ -21,7 +21,7 @@ import * as analyticsPort from '@infrastructure/observability/analytics';
 import { ordersAuditActions } from '../../audit';
 import { ordersAnalyticsEvents } from '../../analytics';
 import { observePort } from '@tests/ports';
-import { asCustomer, asAdmin } from '../../../../../tests/support/callers';
+import { asCustomer, asAdmin, asModerator } from '../../../../../tests/support/callers';
 
 // The queue, not the copy: `mail-copy.test.ts` pins what the email says.
 jest.mock('@infrastructure/adapters/mailer', () => ({
@@ -191,6 +191,18 @@ describe('cancelById — who gets their money back', () => {
         await orderService.cancelById(String(order._id), asAdmin());
 
         expect(cancellations).toEqual([{ orderId: String(order._id), refund: true }]);
+    });
+
+    it('lets a moderator cancel without returning the money too', async () => {
+        // The bug this pins: `orders.any.update` is held by name, not through the scope
+        // wildcard a moderator never holds — asking for the wildcard alone forced a refund
+        // this operator had a reason not to make.
+        const user = await createUser();
+        const order = await seedOrder(user);
+
+        await orderService.cancelById(String(order._id), asModerator(), { refund: false });
+
+        expect(cancellations).toEqual([{ orderId: String(order._id), refund: false }]);
     });
 
     it('announces the cancellation either way', async () => {

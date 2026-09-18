@@ -5,7 +5,8 @@
  * `withActions` puts the answer on the wire.
  */
 
-import { callerForSubject, isUnrestricted } from '@kernel/permissions';
+import { callerForSubject } from '@kernel/permissions';
+import { holdsKey } from '@kernel/ability';
 import type { AuthContext, Order } from '@types';
 import type { OrderDocument } from '../model';
 import { accessibleFilter } from '@kernel/access/query';
@@ -38,10 +39,16 @@ export const ownerScope = (userId: string): Record<string, unknown> =>
  * Which column of the lifecycle table a caller reads. Two actors reach the HTTP surface;
  * `system` names moves that follow a fact from outside the application, and no request may
  * claim it.
+ *
+ * Gated on `orders.any.update`, the same key `cancelById` asks for its own operator/customer
+ * split — not the scope wildcard, which a moderator or manager never holds and would silently
+ * reduce them to the customer's lifecycle column.
  * @returns the actor whose permissions apply
  */
 export const actorOf = (authContext?: AuthContext): OrderActor =>
-    authContext && isUnrestricted(callerForSubject(authContext, 'Order')) ? 'admin' : 'customer';
+    authContext && holdsKey(callerForSubject(authContext, 'Order'), 'orders.any.update')
+        ? 'admin'
+        : 'customer';
 
 /**
  * The single-order response body: the order as it serializes, plus what this caller may do to

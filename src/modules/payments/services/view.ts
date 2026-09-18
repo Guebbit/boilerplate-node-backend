@@ -4,7 +4,8 @@
  * what it sees, the same shape `orders`' `OrderActions` publishes.
  */
 
-import { callerForSubject, isUnrestricted } from '@kernel/permissions';
+import { callerForSubject } from '@kernel/permissions';
+import { holdsKey } from '@kernel/ability';
 import { t } from '@infrastructure/i18n';
 import {
     generateSuccess,
@@ -64,10 +65,12 @@ export const withActions = (
             CONFIRMABLE_PAYMENT_STATUSES.includes(payment.status) &&
             Boolean(order) &&
             canTransition(order!.status, OrderStatus.paid, 'system'),
-        // Only an operator returns money, and only money that actually arrived.
+        // Only an operator returns money, and only money that actually arrived. `payments.any.update`,
+        // not the scope wildcard — a moderator holds this key without holding `all.manage`, and
+        // asking for the wildcard hid the refund action from them despite the key they do hold.
         refund:
             authContext !== undefined &&
-            isUnrestricted(callerForSubject(authContext, 'Payment')) &&
+            holdsKey(callerForSubject(authContext, 'Payment'), 'payments.any.update') &&
             payment.status === REFUNDABLE_PAYMENT_STATUS
     }
 });

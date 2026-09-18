@@ -6,7 +6,8 @@
  * `retryPendingEffects` is what discharges it when the announcement was not enough.
  */
 
-import { callerForSubject, isUnrestricted, SYSTEM_ACTOR } from '@kernel/permissions';
+import { callerForSubject, SYSTEM_ACTOR } from '@kernel/permissions';
+import { holdsKey } from '@kernel/ability';
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import { environmentNumber } from '@infrastructure/runtime/environment';
@@ -60,9 +61,13 @@ export const cancelById = (
      * A customer is always refunded — that is the promise `paid` is cancellable on, and it is not
      * theirs to waive. Only an operator chooses, because only an operator has a reason to cancel
      * without returning the money: a replacement going out, a correction, a refund handled apart.
+     *
+     * `orders.any.update`, not the scope wildcard: a moderator or warehouse operator holds this
+     * key without holding `all.manage`, and asking for the wildcard silently treated them as a
+     * customer, forcing a refund they had a reason not to make.
      */
     const refund =
-        authContext && isUnrestricted(callerForSubject(authContext, 'Order'))
+        authContext && holdsKey(callerForSubject(authContext, 'Order'), 'orders.any.update')
             ? (options.refund ?? true)
             : true;
 

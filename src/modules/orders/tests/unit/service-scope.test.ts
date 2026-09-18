@@ -18,8 +18,8 @@
  */
 
 import { Types } from 'mongoose';
-import { orderService } from '../../services';
-import { asCustomer, asAdmin } from '../../../../../tests/support/callers';
+import { orderService, actorOf } from '../../services';
+import { asCustomer, asAdmin, asModerator } from '../../../../../tests/support/callers';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 
@@ -58,5 +58,26 @@ describe('orderService.callerScope', () => {
         // A condition whose placeholder cannot be resolved drops its whole rule rather than
         // resolving to `{ userId: null }`, which is a perfectly good filter over unowned rows.
         expect(orderService.callerScope(asCustomer(''))).toEqual(MATCHES_NOTHING);
+    });
+});
+
+describe('actorOf', () => {
+    it('reads a customer off the customer lifecycle column', () => {
+        expect(actorOf(asCustomer(USER_ID))).toBe('customer');
+    });
+
+    it('reads an admin off the admin lifecycle column', () => {
+        expect(actorOf(asAdmin(USER_ID))).toBe('admin');
+    });
+
+    it('reads a moderator off the admin lifecycle column, not the customer one', () => {
+        // The bug this pins: `orders.any.update` is held by name, not through the scope
+        // wildcard, so asking for the wildcard alone silently treated a moderator as a
+        // customer here.
+        expect(actorOf(asModerator(USER_ID))).toBe('admin');
+    });
+
+    it('reads the customer column when there is no auth context at all', () => {
+        expect(actorOf(undefined)).toBe('customer');
     });
 });

@@ -4,7 +4,8 @@
  * factory, scoped through the caller's own visibility.
  */
 
-import { callerForSubject, isUnrestricted } from '@kernel/permissions';
+import { callerForSubject } from '@kernel/permissions';
+import { holdsKey } from '@kernel/ability';
 import { SearchOrdersBody } from '@api/schemas.zod';
 import { orderService } from '../services';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -35,10 +36,13 @@ export const searchOrdersKeyParameters = Object.keys(searchOrdersQuerySchema.sha
 export const getOrders = createSearchController({
     entity: 'orders',
     schema: searchOrdersQuerySchema,
-    // Non-admin callers cannot filter by arbitrary userId; orderService.callerScope enforces their own.
+    // Non-admin callers cannot filter by arbitrary userId; orderService.callerScope enforces their
+    // own. `orders.any.read`, not the scope wildcard — a moderator or manager holds this key
+    // without holding `all.manage`, and asking for the wildcard silently dropped their filter.
     extendInput: (input, request) => ({
         userId:
-            request.authContext && isUnrestricted(callerForSubject(request.authContext, 'Order'))
+            request.authContext &&
+            holdsKey(callerForSubject(request.authContext, 'Order'), 'orders.any.read')
                 ? (input.userId as string | undefined)
                 : undefined
     }),

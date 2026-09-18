@@ -37,7 +37,7 @@ import accountModule from '@modules/account/module';
 import cartModule from '@modules/cart/module';
 import deliveryModule from '@modules/delivery/module';
 import type { ResponseReject } from '@infrastructure/http/response';
-import { asCustomer, asAdmin } from '../../../../../tests/support/callers';
+import { asCustomer, asAdmin, asModerator } from '../../../../../tests/support/callers';
 
 setupTestDb();
 
@@ -269,6 +269,23 @@ describe('getForOrder', () => {
 
         expect(own.success).toBe(true);
         expect(asReject(other).status).toBe(404);
+    });
+
+    /*
+     * The bug this pins: `payments.any.update` is held by name, not through the scope wildcard
+     * a moderator never holds — asking for the wildcard alone hid the refund action from them
+     * despite the key they do hold, on a payment an operator has every reason to refund.
+     */
+    it('offers the refund action to a moderator, not just an admin', async () => {
+        const { user, order } = await paidOrder();
+
+        const asAdminResult = await getForOrder(String(order._id), asAdmin());
+        const asModResult = await getForOrder(String(order._id), asModerator());
+        const asSelfResult = await getForOrder(String(order._id), auth(user));
+
+        expect(asAdminResult.data?.actions?.refund).toBe(true);
+        expect(asModResult.data?.actions?.refund).toBe(true);
+        expect(asSelfResult.data?.actions?.refund).toBe(false);
     });
 });
 
