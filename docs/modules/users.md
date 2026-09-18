@@ -23,6 +23,7 @@ flowchart LR
     delivery["delivery"]
     orders["orders"]
     payments["payments"]
+    webhooks["webhooks"]
     wishlist["wishlist"]
 
     account --> users
@@ -31,6 +32,7 @@ flowchart LR
     delivery --> users
     orders --> users
     payments --> users
+    webhooks --> users
     wishlist --> users
     users -. "user.deleted" .-> account
     users -. "user.setup-requested" .-> account
@@ -44,7 +46,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class account,api_keys,delivery,payments,wishlist supporting;
+    class account,api_keys,delivery,payments,webhooks,wishlist supporting;
     class users centre;
 ```
 

@@ -61,16 +61,18 @@ flowchart LR
     webhooks["webhooks<br/><i>this module</i>"]
     orders["orders"]
     payments["payments"]
+    users["users"]
 
     webhooks --> orders
     webhooks --> payments
+    webhooks --> users
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class orders core;
-    class payments supporting;
+    class payments,users supporting;
     class webhooks centre;
 ```
 
