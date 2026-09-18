@@ -25,6 +25,9 @@ import { WEBHOOK_MAX_ATTEMPTS, WEBHOOK_MAX_CONSECUTIVE_FAILURES } from '@modules
 import type { WebhookDeliverJobPayload } from '@types';
 import type { WebhookSubscriptionDocument } from '@modules/webhooks/model';
 import { callerAs, TEST_TENANT_ID } from '@tests/callers';
+import * as auditPort from '@infrastructure/observability/audit';
+import { observePort } from '@tests/ports';
+import { webhooksAuditActions } from '@modules/webhooks/audit';
 
 // The real `node:https`, with this suite's own throwaway CA injected into every request — see
 // `https-test-server.ts`'s own doc for why `NODE_TLS_REJECT_UNAUTHORIZED` does NOT work here.
@@ -62,14 +65,31 @@ jest.mock('@infrastructure/adapters/ssrf-guard', () => {
     };
 });
 
+/** The auto-disable notice's one call — asserted directly rather than through the 'log' transport. */
+const enqueueEmailMock = jest.fn().mockResolvedValue(undefined);
+jest.mock('@infrastructure/adapters/mailer', () => ({
+    enqueueEmail: (...args: unknown[]) => enqueueEmailMock(...args)
+}));
+
+// Replaced, not spied on — `jest.spyOn` cannot redefine the non-configurable getter a CommonJS
+// namespace import exposes. Same pattern `account`'s own integration suites use.
+jest.mock('@infrastructure/observability/audit', () => ({
+    __esModule: true,
+    ...jest.requireActual('@infrastructure/observability/audit'),
+    emitAuditEvent: jest.fn()
+}));
+
 setupTestDb();
+
+beforeEach(() => enqueueEmailMock.mockClear());
 
 const context = { caller: callerAs('manager'), analyticsConsent: false };
 
 /** A subscription document with one ring secret, saved for real. */
 const createSubscription = (
     url: string,
-    eventTypes: string[] = ['*']
+    eventTypes: string[] = ['*'],
+    ownerEmail?: string
 ): Promise<WebhookSubscriptionDocument> => {
     const { entry } = mintRingSecret();
 
@@ -79,6 +99,7 @@ const createSubscription = (
         eventTypes,
         enabled: true,
         consecutiveFailures: 0,
+        ownerEmail,
         secrets: [entry]
     });
 };
@@ -241,6 +262,58 @@ describe('sustained failure', () => {
         expect(reloadedSubscription?.consecutiveFailures).toBe(WEBHOOK_MAX_CONSECUTIVE_FAILURES);
         expect(reloadedSubscription?.enabled).toBe(false);
         expect(reloadedSubscription?.disabledAt).toBeInstanceOf(Date);
+    });
+
+    it('notifies the subscription owner once auto-disabled', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const subscription = await createSubscription(
+            `${server.url}/hook`,
+            ['*'],
+            'owner@example.com'
+        );
+
+        for (let chain = 0; chain < WEBHOOK_MAX_CONSECUTIVE_FAILURES; chain++) {
+            const job = await createPendingDelivery(subscription, `order.paid.notice.${chain}`);
+            await runChainToCompletion(job);
+        }
+
+        expect(enqueueEmailMock).toHaveBeenCalledTimes(1);
+        expect(enqueueEmailMock).toHaveBeenCalledWith(
+            expect.objectContaining({ to: 'owner@example.com' }),
+            'webhooks.subscription-disabled',
+            expect.objectContaining({ url: `${server.url}/hook` })
+        );
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                actor_user_id: 'system',
+                action: webhooksAuditActions.SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED,
+                target_type: 'webhook_subscription',
+                target_id: String(subscription._id)
+            })
+        );
+    });
+
+    it('sends no notice for a subscription that predates ownerEmail, but still audits it', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        // No `ownerEmail` — `createSubscription`'s third argument defaults to `undefined`, the
+        // same shape a subscription created before this field existed carries.
+        const subscription = await createSubscription(`${server.url}/hook`);
+
+        for (let chain = 0; chain < WEBHOOK_MAX_CONSECUTIVE_FAILURES; chain++) {
+            const job = await createPendingDelivery(subscription, `order.paid.nonotice.${chain}`);
+            await runChainToCompletion(job);
+        }
+
+        expect(enqueueEmailMock).not.toHaveBeenCalled();
+        // The email is the courtesy; the audit trail is the record — one missing must not cost
+        // the other.
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: webhooksAuditActions.SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED,
+                target_id: String(subscription._id)
+            })
+        );
     });
 
     it('a chain that succeeds resets the streak, so it never auto-disables on unrelated blips', async () => {

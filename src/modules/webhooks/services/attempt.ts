@@ -13,13 +13,55 @@
  * dropped, never retried — whatever re-claimed the row in the meantime owns its outcome now.
  */
 
+import { enqueueEmail } from '@infrastructure/adapters/mailer';
+import { getDefaultLocale } from '@infrastructure/i18n';
+import { emitAuditEvent } from '@infrastructure/observability/audit';
+import type { AuditEvent } from '@infrastructure/observability/audit';
 import { deliverWebhook } from '../transport/webhook-delivery';
 import type { WebhookDeliverJobPayload } from '@types';
 import { webhookSubscriptionRepository, webhookDeliveryRepository } from '../repository';
 import { activeRingSecrets } from '../secrets';
 import { getWebhookDemoAllowedHost } from '../config';
 import { nextAttemptAt, shouldAutoDisable } from '../domain';
+import { subscriptionDisabledEmail } from '../emails';
+import { webhooksAuditActions } from '../audit';
 import type { WebhookDeliveryDocument, WebhookSubscriptionDocument } from '../model';
+
+/**
+ * Tell whoever created a subscription that it was just auto-disabled — best-effort, fire-and-
+ * forget the same way every other queued notification in this codebase is (see
+ * `orders/services/crud.ts`'s own confirmation-mail call for the precedent). A no-op when
+ * `disable` found nothing to disable (a second exhausted chain finalizing moments later — see
+ * `repository.ts#disable`'s own conditional write).
+ *
+ * Deliberately NOT the operator-facing alert (`QueueJobsParked`) — that is Alertmanager's job, for
+ * a different audience; this is the one person who configured THIS endpoint hearing about it. The
+ * audit entry lands regardless of whether an email could be sent (no `ownerEmail` on a
+ * subscription that predates the field); the email is the courtesy, the audit trail is the record.
+ */
+const notifyOwnerOfAutoDisable = (subscription: WebhookSubscriptionDocument | null): void => {
+    if (!subscription) return;
+
+    // No `CallerContext` behind this — see `../audit.ts`'s own note on why `actor_user_id` is the
+    // literal string `'system'` rather than attributing it to whichever worker process ran this.
+    emitAuditEvent({
+        actor_user_id: 'system',
+        actor_role: 'admin',
+        actor_scope: 'tenant',
+        action: webhooksAuditActions.SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED,
+        outcome: 'success',
+        target_type: 'webhook_subscription',
+        target_id: String(subscription._id)
+    } satisfies AuditEvent);
+
+    if (!subscription.ownerEmail) return;
+    const mail = subscriptionDisabledEmail(getDefaultLocale(), subscription.url);
+    void enqueueEmail(
+        { to: subscription.ownerEmail, subject: mail.subject },
+        mail.template,
+        mail.data
+    );
+};
 
 /**
  * Finalize a claimed delivery with nothing to attempt it against — its subscription was deleted
@@ -98,7 +140,10 @@ const recordFailure = (
                     if (updated && shouldAutoDisable(updated.consecutiveFailures))
                         return webhookSubscriptionRepository
                             .disable(subscriptionId)
-                            .then(() => saved);
+                            .then((disabled) => {
+                                notifyOwnerOfAutoDisable(disabled);
+                                return saved;
+                            });
                     return saved;
                 });
         });

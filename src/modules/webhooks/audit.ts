@@ -11,7 +11,11 @@ export const webhooksAuditActions = {
     ADMIN_WEBHOOK_SUBSCRIPTION_CREATED: 'admin.webhook_subscription.created',
     ADMIN_WEBHOOK_SUBSCRIPTION_UPDATED: 'admin.webhook_subscription.updated',
     ADMIN_WEBHOOK_SUBSCRIPTION_DELETED: 'admin.webhook_subscription.deleted',
-    ADMIN_WEBHOOK_DELIVERY_REPLAYED: 'admin.webhook_delivery.replayed'
+    ADMIN_WEBHOOK_DELIVERY_REPLAYED: 'admin.webhook_delivery.replayed',
+    /** `system.` — no caller behind it: `services/attempt.ts`'s own consecutive-failure streak
+     *  decided this, not a request. `actor_user_id: 'system'` records that plainly rather than
+     *  attributing it to whichever worker process happened to run the failing delivery. */
+    SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED: 'system.webhook_subscription.auto_disabled'
 } as const;
 
 /** Registers this module's actions into the app-wide `AuditActionMap` union. */

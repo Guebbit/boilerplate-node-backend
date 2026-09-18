@@ -28,6 +28,7 @@ Grafana reads Prometheus for all metric charts and dashboards.
 | `http_requests_in_flight`                    | concurrency at a glance                                |
 | `cache_invalidation_failures_total`          | writes whose stale cached response survived            |
 | `cache_requests_total`                       | `setCache` lookups by outcome — hit/miss/stale/refresh |
+| `queue_jobs_dead_lettered_total`             | jobs parked in a `<queue>.dead`, by queue name         |
 | `auth_login_total`, `cart_checkout_total`, … | business counters                                      |
 | `process_*` and `nodejs_*`                   | default `prom-client` runtime metrics                  |
 
@@ -40,13 +41,14 @@ derived from the URL grows the registry for the life of the process.
 
 Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`:
 
-| Alert                  | Condition                           | Severity |
-| ---------------------- | ----------------------------------- | -------- |
-| `ApiDown`              | scrape target unreachable > 1 min   | critical |
-| `HighErrorRate`        | error rate > 5 % over 5 min         | warning  |
-| `HighP95Latency`       | p95 latency > 2 s over 5 min        | warning  |
-| `HighInFlightRequests` | > 100 concurrent requests for 2 min | warning  |
-| `HighHeapUsage`        | heap > 90 % for 5 min               | warning  |
+| Alert                  | Condition                                           | Severity |
+| ---------------------- | --------------------------------------------------- | -------- |
+| `ApiDown`              | scrape target unreachable > 1 min                   | critical |
+| `HighErrorRate`        | error rate > 5 % over 5 min                         | warning  |
+| `HighP95Latency`       | p95 latency > 2 s over 5 min                        | warning  |
+| `HighInFlightRequests` | > 100 concurrent requests for 2 min                 | warning  |
+| `HighHeapUsage`        | heap > 90 % for 5 min                               | warning  |
+| `QueueJobsParked`      | any job parked in `<queue>.dead` in the last 15 min | warning  |
 
 ## Alertmanager
 

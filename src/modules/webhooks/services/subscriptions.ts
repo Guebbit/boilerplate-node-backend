@@ -18,6 +18,7 @@ import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/a
 import type { TenantCallerContext } from '@types';
 import type { PaginatedResult } from '@infrastructure/persistence/create-repository';
 import type { CreateWebhookSubscriptionRequest, UpdateWebhookSubscriptionRequest } from '@types';
+import { userService } from '@modules/users';
 import type { WebhookSubscriptionDocument } from '../model';
 import { webhookSubscriptionRepository } from '../repository';
 import { mintRingSecret, removeRingSecret } from '../secrets';
@@ -121,16 +122,28 @@ export const create = (
         if (count >= getWebhookSubscriptionCap())
             return generateReject(422, [t('webhooks.subscription-cap-reached')]);
 
-        const { entry, plaintext } = mintRingSecret();
-        return webhookSubscriptionRepository
-            .create({
-                tenant,
-                url: body.url,
-                description: body.description,
-                eventTypes: body.eventTypes,
-                secrets: [entry]
-            } as Partial<WebhookSubscriptionDocument>)
-            .then((subscription) => finalizeCreate(subscription, plaintext, tenant, context));
+        // Best-effort, and never fatal to the create: an id `getById` can't resolve to a document
+        // (a deleted-mid-request account) or can't even cast (never a real caller id in
+        // production, only a test fixture standing in for one) still creates the subscription —
+        // it just has nobody to notify later, the same as one that predates this field entirely.
+        return userService
+            .getById(context.caller.id ?? undefined)
+            .catch(() => undefined)
+            .then((owner) => {
+                const { entry, plaintext } = mintRingSecret();
+                return webhookSubscriptionRepository
+                    .create({
+                        tenant,
+                        url: body.url,
+                        description: body.description,
+                        eventTypes: body.eventTypes,
+                        ownerEmail: owner?.email,
+                        secrets: [entry]
+                    } as Partial<WebhookSubscriptionDocument>)
+                    .then((subscription) =>
+                        finalizeCreate(subscription, plaintext, tenant, context)
+                    );
+            });
     });
 };
 

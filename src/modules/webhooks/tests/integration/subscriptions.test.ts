@@ -9,6 +9,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { create } from '@modules/webhooks/services/subscriptions';
 import { webhookSubscriptionRepository } from '@modules/webhooks/repository';
 import { callerAs, TEST_TENANT_ID } from '@tests/callers';
+import { createUser } from '@modules/users/tests/factories';
 
 setupTestDb();
 
@@ -59,5 +60,44 @@ describe('create — the subscription cap boundary', () => {
             }
         );
         expect(stored.items).toHaveLength(1);
+    });
+});
+
+describe('create — captures the owner email', () => {
+    it("stores the creating caller's email, off the wire, for the auto-disable notice", async () => {
+        const user = await createUser({ email: 'creator@example.com' });
+        const asUser = { caller: callerAs('manager', String(user._id)), analyticsConsent: false };
+
+        const result = await create(subscriptionBody('https://example.com/owner-hook'), asUser);
+
+        expect(result.success).toBe(true);
+        if (!result.success || !result.data) throw new Error('unreachable — asserted above');
+        // Never on the wire — `applyWebhookSubscriptionTransform` omits it (see `../../model.ts`).
+        expect(
+            (result.data.subscription.toJSON() as { ownerEmail?: string }).ownerEmail
+        ).toBeUndefined();
+
+        const stored = await webhookSubscriptionRepository.findById(
+            String(result.data.subscription._id)
+        );
+        expect(stored?.ownerEmail).toBe('creator@example.com');
+    });
+
+    it('creates the subscription even when the caller id cannot be resolved to a user', async () => {
+        // `callerAs('manager')`'s default id ('test-user') is not a real ObjectId — the shape a
+        // stub/anonymous caller would have, never a real authenticated one in production.
+        const asStubCaller = { caller: callerAs('manager'), analyticsConsent: false };
+
+        const result = await create(
+            subscriptionBody('https://example.com/no-owner-hook'),
+            asStubCaller
+        );
+
+        expect(result.success).toBe(true);
+        if (!result.success || !result.data) throw new Error('unreachable — asserted above');
+        const stored = await webhookSubscriptionRepository.findById(
+            String(result.data.subscription._id)
+        );
+        expect(stored?.ownerEmail).toBeUndefined();
     });
 });

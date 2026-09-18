@@ -107,10 +107,21 @@ flowchart LR
     HTTP -->|2xx| OK["status: succeeded"]
     HTTP -->|fail, attempts left| BACK["status: pending<br/>nextAttemptAt scheduled"]
     HTTP -->|fail, exhausted| DIS{"consecutive<br/>exhausted chains<br/>over threshold?"}
-    DIS -->|yes| OFF["subscription disabled"]
+    DIS -->|yes| OFF["subscription disabled<br/>+ owner emailed"]
     DIS -->|no| DONE["status: exhausted"]
     BACK -.->|sweep, per minute<br/>publishes, does not claim| Q
 ```
+
+**The owner hears about their own endpoint; operators hear about the queue.** Once a subscription
+auto-disables, `services/attempt.ts#notifyOwnerOfAutoDisable` emails whoever created it — the
+address captured on the subscription at `POST /webhooks/subscriptions` time
+(`WebhookSubscriptionDocument.ownerEmail`, resolved from the caller's own user record, never on the
+wire). Best-effort and fire-and-forget, the same as every other queued notification in this
+codebase; silently skipped for a subscription that predates the field, or whose creator's id never
+resolved to a user. This is deliberately a DIFFERENT channel from the operator-facing
+`QueueJobsParked` alert on parked deliveries (`docs/tools/prometheus.md`) — one person's endpoint
+failing is not the same signal as the queue itself being unhealthy, and the two audiences never
+share a line.
 
 **Delayed retry rides the cron container, not the broker.** `webhookdeliveries.nextAttemptAt`
 carries when a failed row is due again; `npm run sweep:webhook-retries` (`ops/sweep-webhook-retries.ts`)

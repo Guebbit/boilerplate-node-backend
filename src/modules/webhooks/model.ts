@@ -34,6 +34,13 @@ export interface WebhookSubscriptionDocument extends Document {
     enabled: boolean;
     consecutiveFailures: number;
     disabledAt?: Date;
+    /**
+     * The email of whoever created this subscription, captured at creation time — who
+     * `services/attempt.ts`'s auto-disable notice reaches. Absent on a subscription that predates
+     * this field, or one created by a caller `users/service.ts#getById` could not resolve; either
+     * way, no notice is sent, silently — the audit entry auto-disable already writes is not lost.
+     */
+    ownerEmail?: string;
     secrets: WebhookSecretRingEntry[];
     createdAt: Date;
     updatedAt: Date;
@@ -62,6 +69,9 @@ export const webhookSubscriptionSchema = new Schema<
             required: true
         },
         description: {
+            type: String
+        },
+        ownerEmail: {
             type: String
         },
         eventTypes: {
@@ -121,7 +131,7 @@ webhookSubscriptionSchema.index({ enabled: 1, eventTypes: 1 });
  * could derive anything from it.
  */
 export const applyWebhookSubscriptionTransform = applySerialization(webhookSubscriptionSchema, {
-    omit: ['tenant'],
+    omit: ['tenant', 'ownerEmail'],
     after: (serialized) => {
         const secrets = serialized.secrets as WebhookSecretRingEntry[] | undefined;
         serialized.secretIds = (secrets ?? []).map((entry) => entry.id);
