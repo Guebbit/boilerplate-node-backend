@@ -70,7 +70,27 @@ the relationship _kind_ and _reasoning_ stay in `module.ts`'s docblock instead o
 
 `A → B → A` compiles, lints and runs. It fails only in whichever order the module system happens to
 initialise it, as an `undefined is not a function` at boot, far from either file. No per-file rule
-can see one, because no file in a cycle is doing anything wrong on its own.
+can see one, because no file in a cycle is doing anything wrong on its own — the failure is a
+property of the two modules together, not of either one alone.
+
+`.dependency-cruiser.modules.cjs`, wired into the same `check:dependencies` script, is the rule
+that DOES see it: `scope: 'folder'` aggregates every file into its `src/modules/<name>` folder
+first, then runs cycle detection over the folders — so two modules that reach each other through
+different files, several hops apart, still fail here even though no single file-level rule in
+`.dependency-cruiser.cjs` was ever broken. `account ↔ cart` was exactly this shape before the
+address book moved into its own module: `cart`'s checkout imported `account` for one function,
+`account`'s data export imported `cart` for another, and neither import broke a per-file rule on
+its own.
+
+It runs as its own cruise over `src/modules` alone, not folded into the main config's `forbidden`
+list, because `scope: 'folder'` rules cannot filter which PATH a cycle runs through — cruising
+`src tests` together reports dozens of false cycles purely through test-support code that imports
+several modules' `tests/factories.ts` back and forth. `tests/` is excluded from this cruise
+entirely rather than filtered after the fact.
+
+The fix for a real cycle is always the same: the sibling that has to reach back moves the read onto
+the domain event bus (`kernel/events.ts`) instead — see any module already listening for
+`USER_DELETED` for the shape.
 
 ## Two settings that decide whether the rules mean anything
 

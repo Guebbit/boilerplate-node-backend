@@ -1226,14 +1226,16 @@ export default tseslint.config(
      * `tsconfig` project, so the type-aware program is switched off — for these files it would be
      * a parser error, not a finding. Everything syntax-level still applies.
      *
-     * `.dependency-cruiser.cjs` is CommonJS rather than TypeScript, and is here for the same
-     * reason: outside the project, so type-aware rules cannot run on it.
+     * `.dependency-cruiser.cjs` and `.dependency-cruiser.modules.cjs` are CommonJS rather than
+     * TypeScript, and are here for the same reason: outside the project, so type-aware rules
+     * cannot run on them.
      */
     {
         files: [
             'eslint.config.ts',
             'orval.config.ts',
             '.dependency-cruiser.cjs',
+            '.dependency-cruiser.modules.cjs',
             'jest.config.cluster.js',
             'docs/.vitepress/**/*.{ts,mts}'
         ],
