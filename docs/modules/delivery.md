@@ -1,7 +1,7 @@
 # delivery
 
 ::: tip At a glance
-**Owns** — shipping rates, shipment records, and the fake courier that moves them along.
+**Owns** — shipping rates and shipment records: who handed a parcel over, and who recorded its arrival.
 **Depends on** — [`orders`](./orders.md) for the order a parcel is about, [`users`](./users.md) for the recipient's language.
 **Breaks if you change** — `findShippingMethod` or `priceShipping`. The cart prices a checkout through both.
 :::
@@ -53,32 +53,47 @@ The shipping selector, the parcel records and the costs go with it. Orders simpl
 removal, not a broken build.
 :::
 
-The courier is fake, like the payment provider, and for the same reason: `shipped → delivered` has
-to be reachable in tests and in the demo profile without an integration. `unique: true` on
-`orderId` keeps it to one parcel per order.
+There is no courier simulation any more — a parcel moves only when staff record it, through this
+module's own doors. `unique: true` on `orderId` keeps it to one parcel per order.
+
+Each shipping method (`domain/rates.ts`) says, informationally, whether it is `tracked` and, if so,
+its `maxInsuredValue` — standard is untracked, express is tracked and insured, pickup is untracked.
+`tracked` is what `POST /delivery/order/{orderId}/ship` enforces: a tracking code is required for a
+tracked method, refused with a named 422 otherwise.
 
 ## The pipeline
 
 Two halves that never touch. The cart only ever reaches the pure rates on the left; the parcel on
-the right is this module's own business.
+the right is this module's own business — and this module is the one that TELLS `orders` to move
+the status, never the other way around (see [Tactical DDD](../theory/tactical-ddd.md#who-writes-the-status)).
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
     CA["cart<br/><i>pricing a checkout</i>"] -->|"findShippingMethod · priceShipping"| RA["pure rates<br/><i>domain/ — no HTTP, no record</i>"]
-    OR["orders"] -. "order.status_changed → shipped" .-> SH["shipment created<br/><i>one per order</i>"]
-    SH --> TR["tracking code"]
+    S1["staff<br/>POST .../ship<br/>{trackingCode}"] --> SH["shipment created<br/><i>one per order</i>"]
+    SH --> MS["orders.markShipped"]
     SH --> EM["shipped email<br/><i>in the recipient's language — users</i>"]
-    AD["admin<br/><i>POST /delivery/advance — a button, not a schedule</i>"] --> DV["delivered"]
-    SH --> DV
+    S2["staff<br/>POST .../deliver"] --> DV["arrival recorded"]
+    DV --> MD["orders.markDelivered"]
+    OV["admin override<br/><i>forced: true, reason</i>"] -.->|"skips the ordinary gate"| S1
+    OV -.-> S2
 
     classDef pure fill:#ccfbf1,stroke:#0f766e,color:#111827;
     classDef own fill:#ede9fe,stroke:#7c3aed,color:#111827;
     classDef peer fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef override fill:#fef3c7,stroke:#d97706,color:#111827;
     class RA pure;
-    class SH,TR,EM,DV own;
-    class CA,OR,AD peer;
+    class SH,EM,DV own;
+    class CA,S1,S2,MS,MD peer;
+    class OV override;
 ```
+
+Both doors take an optional `forced`/`reason` pair from a caller holding `orders.any.override`: the
+regular operation still runs — the parcel record, the tracking code if the method requires one, the
+email — but the status write skips the ordinary gate ("processing only", "shipped only") the way an
+uncorrected shipment cannot. See [orders](./orders.md#the-admin-override) for the two override
+modes in full; this module only ever runs the "forced" one, since it always creates a real parcel.
 
 ## Related pages
 

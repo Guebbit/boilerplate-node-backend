@@ -70,12 +70,16 @@ that, never re-resolve against whoever is reading it now — see
 
 The status enum is the module's public vocabulary:
 
-| Status                                 | What it means                                | Who moves it                            |
-| -------------------------------------- | -------------------------------------------- | --------------------------------------- |
-| `pending`                              | created, unpaid, units held                  | checkout or an admin                    |
-| `paid`                                 | money taken, units committed                 | [`payments`](./payments.md) on confirm  |
-| `processing` · `shipped` · `delivered` | fulfilment                                   | admin, then [`delivery`](./delivery.md) |
-| `cancelled`                            | units released, refund issued if one was due | admin, or an expired hold               |
+| Status                  | What it means                                | Who moves it                                                       |
+| ----------------------- | -------------------------------------------- | ------------------------------------------------------------------ |
+| `pending`               | created, unpaid, units held                  | checkout or an admin                                               |
+| `paid`                  | money taken, units committed                 | [`payments`](./payments.md) on confirm                             |
+| `processing`            | fulfilment started                           | admin                                                              |
+| `shipped` · `delivered` | fulfilment                                   | [`delivery`](./delivery.md), reporting a recorded handover/arrival |
+| `cancelled`             | units released, refund issued if one was due | admin, or an expired hold                                          |
+
+Any of these except `paid` (`system`-only, absolute) can also be reached by an admin override with
+a reason — see [Who writes the status](#who-writes-the-status) below.
 
 ::: warning Two modules reach back, and both do it through events
 [`inventory`](./inventory.md) cancels an order when its hold times out (`reservation.expired`), and
@@ -123,13 +127,12 @@ module announcing and a sibling reacting.
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
-    P["pending<br/><i>created · units held</i>"] -->|"payments confirms"| PA["paid<br/><i>units committed</i>"]
+    P["pending<br/><i>created · units held</i>"] -->|"payments confirms<br/>(system)"| PA["paid<br/><i>units committed</i>"]
     PA -->|admin| PR["processing"]
-    PR -->|admin| SH["shipped"]
-    SH -->|"delivery advances"| DE["delivered"]
+    PR -->|"system, via<br/>delivery's ship door"| SH["shipped"]
+    SH -->|"system, via<br/>delivery's deliver door"| DE["delivered"]
     P -.->|"admin · or an expired hold"| CA["cancelled<br/><i>units released</i>"]
     PA -.->|"admin · refund due"| CA
-    SH -. "order.status_changed" .-> DL["delivery<br/><i>creates the parcel</i>"]
     CA -. "order.cancelled" .-> PM["payments<br/><i>refunds if one was due</i>"]
 
     classDef open fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -139,8 +142,42 @@ flowchart LR
     class P,PR,SH open;
     class PA,DE done;
     class CA bad;
-    class DL,PM peer;
+    class PM peer;
 ```
+
+Every one of these edges is still written by `orders` alone — `delivery`, `payments` and an admin
+override all ASK for a move, never assign the field themselves. See
+[Tactical DDD](../theory/tactical-ddd.md#who-writes-the-status) for the placement rule and
+[Who writes the status](#who-writes-the-status) below for the permission rule and the override.
+
+## Who writes the status
+
+| Move                     | Who asks                                                 | Through                                |
+| ------------------------ | -------------------------------------------------------- | -------------------------------------- |
+| `pending` → `paid`       | `system`                                                 | `payments`' settlement, on confirm     |
+| `paid` → `processing`    | `admin`                                                  | `PUT /orders/:id`, `orders.any.update` |
+| `processing` → `shipped` | `system`                                                 | `POST /delivery/order/{id}/ship`       |
+| `shipped` → `delivered`  | `system`                                                 | `POST /delivery/order/{id}/deliver`    |
+| any status → `cancelled` | `customer` (own order, `pending`/`paid` only) or `admin` | `POST /orders/{id}/cancel`             |
+
+### The admin override
+
+A correction the ordinary table above cannot express — a mis-scanned parcel, a shipment recorded
+against the wrong order — needs `orders.any.override`, a step-up permission granted to `admin` by
+name. Two modes, both requiring a `reason`, both writing an embedded override-history entry
+(who, when, from → to, mode, reason) plus an audit event:
+
+- **Forced** — the delivery doors (`ship`/`deliver`) accept `forced: true` alongside the ordinary
+  request. The regular operation still runs: a parcel record is created, a tracking code is
+  required if the method needs one, the shipped email still sends. Only the status GATE is skipped
+  — it may jump past `processing`, but never lands on `paid` (that stays `system`-only, absolute,
+  echo included).
+- **Status-only** — `POST /orders/{id}/status-override` with `{ to, reason }` moves the status
+  alone, forward to `processing`/`shipped`/`delivered` only. No parcel, no shipped email — but
+  webhooks still fire, since a subscriber's own view of the order genuinely changed.
+
+`PUT /orders/:id` never accepts `shipped`/`delivered` from anyone, override holder included — the
+override's own two doors are the only way to reach those statuses outside the ordinary sequence.
 
 ## The invoice pipeline
 

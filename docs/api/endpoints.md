@@ -57,7 +57,9 @@ Per-user saved products — ids only, joined client-side like the cart's lines. 
 
 > The domain behind these routes: [`orders`](../modules/orders.md) · routes and middleware: `src/modules/orders/routes.ts`
 
-Orders are normally created via checkout but can also be created manually with `orders.any.create`. Each order has a PDF invoice available for download. Reads are scoped to the caller's own orders unless they hold a wider `orders.*` key, in which case the same route answers for the whole shop — one route, narrowed by the rules rather than branched on a role.
+Orders are normally created via checkout but can also be created manually (a correction, not a sales channel — see [orders](../modules/orders.md#creating-an-order)). Each order has a PDF invoice available for download. Reads are scoped to the caller's own orders unless they hold a wider `orders.*` key, in which case the same route answers for the whole shop — one route, narrowed by the rules rather than branched on a role.
+
+`orders` is the only writer of a `status` — `payments` and `delivery` each report a move through it rather than writing the field themselves. `POST /orders/{id}/status-override` and the `forced`/`reason` fields on delivery's own doors are the one exception: an `orders.any.override` holder correcting a status the ordinary rules refuse, always with a reason, always recorded (see [orders](../modules/orders.md#the-admin-override)).
 
 ## Payments
 
@@ -69,7 +71,7 @@ An order's money, behind a provider port (`NODE_PAYMENT_PROVIDER`, default `fake
 
 > The domain behind these routes: [`delivery`](../modules/delivery.md) · routes and middleware: `src/modules/delivery/routes.ts`
 
-Shipping rates as pure domain rules (flat rates, free-above thresholds), priced authoritatively at checkout via `POST /cart/checkout`'s `shippingMethodId`. An order reaching `shipped` (an `orders.any.update` status write) automatically gets a shipment, a tracking code and the shipped email; the fake courier is a button, not a schedule — this repo deliberately has no cron.
+Shipping rates as pure domain rules (flat rates, free-above thresholds), priced authoritatively at checkout via `POST /cart/checkout`'s `shippingMethodId`. There is no courier simulation: `POST /delivery/order/{orderId}/ship` and `.../deliver` are staff recording a real handover and a real arrival, one order at a time, each door then reporting the move to `orders` — never the other way around. A tracked method's own `ship` call refuses with a named 422 unless it carries a `trackingCode`.
 
 ## Inventory
 
@@ -90,7 +92,7 @@ Six transitions move them, each a conditional write paired with the ledger row t
 
 A checkout is **all-or-nothing** — the shop never silently ships fewer units than were ordered, because an order is what the customer agreed to buy. What it does do is say exactly what blocked it: a refusal carries `errors[0].details.lines`, one entry per short line with `productId`, `title`, `requested` and `available`, so a basket is fixed in one pass rather than one refusal per line. That holds on both refusal paths — the pre-flight, and the conditional reserve that decides a race, where the reported figure is read back at the moment the write refused.
 
-Units therefore leave the shop only when they are paid for; an unpaid order costs availability for the length of its window (`NODE_RESERVATION_TTL_MINUTES`, default 30) and nothing more. The application ships no scheduler, so the sweep is driven from outside — a cron entry, the platform's scheduled job, or an operator — exactly as with the courier's `POST /delivery/advance`. Run it at least as often as the window, or holds outlive their deadline by the gap.
+Units therefore leave the shop only when they are paid for; an unpaid order costs availability for the length of its window (`NODE_RESERVATION_TTL_MINUTES`, default 30) and nothing more. The application ships no scheduler, so the sweep is driven from outside — a cron entry, the platform's scheduled job, or an operator. Run it at least as often as the window, or holds outlive their deadline by the gap.
 
 Both reads page and report `meta.totalItems`, and neither is bounded in the service. The ledger is the record an audit works through, so a read answering only the newest rows would misreport history as complete; the board sorts on availability, which is derived, so mongod projects it in an aggregation rather than the service loading every product to sort in memory. The low-stock threshold (`NODE_LOW_STOCK_THRESHOLD`) is shared by the board's `lowOnly` filter and the `products_low_stock_total` gauge, but the two count different populations on purpose: the board spans the whole catalogue, because somebody restocking needs to see an inactive product's units, while the gauge counts only publicly visible products, because an alert about stock nobody can buy is noise. Both measure AVAILABILITY rather than units on hand.
 
