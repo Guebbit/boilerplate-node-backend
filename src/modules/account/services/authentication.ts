@@ -418,7 +418,7 @@ export const signup = (
                               // cleanup still tell the two apart.
                               Promise.resolve(
                                   generateSuccess<UserDocument>(
-                                      userService.build({
+                                      userService.buildSignupDecoy({
                                           email,
                                           username,
                                           imageUrl: imageUrl ?? '',
@@ -436,7 +436,7 @@ export const signup = (
                                               t('account.signup.email-already-used')
                                           ]);
                                       return userService
-                                          .createRaw({
+                                          .registerSelfService({
                                               username,
                                               email,
                                               imageUrl: imageUrl ?? '',
@@ -521,9 +521,7 @@ export const login = (
     return (
         userService
             // `password` is select:false — this is one of the few flows that legitimately needs it.
-            // `active: { $ne: false }` — not `true`, since a pre-migration row has no field at all —
-            // blocks a deactivated account at the front door, same clause `findAuthenticatableById` uses.
-            .findOneWithCredentials({ email, active: { $ne: false }, deletedAt: undefined })
+            .findForLogin(email)
             .then((user) => {
                 // Compare against DUMMY_PASSWORD_HASH on a miss, so an
                 // unknown email costs the same as a wrong password — an unconditional `return`

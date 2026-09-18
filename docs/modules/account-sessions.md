@@ -127,7 +127,9 @@ That is also why `session/` is a folder rather than a published layer: nothing o
 walls may import it, so it needs no barrel of its own.
 :::
 
-What the barrel does publish is `addressForCheckout` — one function, for [`cart`](./cart.md).
+`account`'s own barrel publishes nothing this page's flows produce either — `session/` stays
+entirely internal. What `account` used to publish, `addressForCheckout`, left with the address
+book when it moved to its own module — see [`addresses`](./addresses.md).
 
 ## The two shared tails
 

@@ -209,9 +209,12 @@ export const requestEmailVerificationFor = (
  * unproven address
  * (`shared/authorization-roles.yaml`'s "no unverified manager" rule) made that decision already.
  *
- * Mutates only — the caller's own save is what persists it, so a verification can ride along in a
- * write the caller was making anyway. Exported for `passwordResetChange`, whose spent token
- * proves the same mailbox this one does.
+ * Mutates only, deliberately unpersisted: `profile.ts#passwordResetChange` is the one remaining
+ * caller, passing this as `passwordChange`'s `beforeSave` so a verification can ride along in the
+ * SAME write `userService.setPassword` already makes — a spent reset token proves the same
+ * mailbox a verify token does. `completeEmailVerification`/`completeEmailChange` below used to
+ * call this too; both now call the equivalent `userService` operation directly, which does its
+ * own mutating-and-persisting in one step.
  *
  * @param user - the account whose address was just proven
  */
@@ -230,8 +233,7 @@ export const completeEmailVerification = (
     user: UserDocument,
     context: CallerContext
 ): Promise<UserDocument> => {
-    markVerified(user);
-    return userService.save(user).then((saved) => {
+    return userService.markEmailVerified(user).then((saved) => {
         emitAuditEvent(
             buildAuditEvent(context, {
                 action: accountAuditActions.AUTH_EMAIL_VERIFY_COMPLETED,
@@ -267,11 +269,7 @@ export const completeEmailChange = (
     // one always sets `pendingEmail` first — this is unreachable outside a caller bug.
     if (!newEmail) return Promise.resolve(user);
 
-    user.email = newEmail;
-    user.pendingEmail = undefined;
-    markVerified(user);
-
-    return userService.save(user).then((saved) =>
+    return userService.applyEmailChange(user, newEmail).then((saved) =>
         saved
             .tokenRemoveAll(TokenType.REFRESH)
             .catch(() => undefined)

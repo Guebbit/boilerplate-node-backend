@@ -64,16 +64,11 @@ import {
 const RESEND_TOO_SOON_CODE = 'TWO_FACTOR_RESEND_TOO_SOON';
 
 /**
- * Persist a document whose method array was mutated in place.
- *
- * `markModified` is not belt-and-braces here: several of these paths UNSET fields on a
- * subdocument (a spent code, a replaced secret), and Mongoose does not always see a delete inside
- * an array element as a change — the write would silently do nothing.
+ * Persist a document whose method array was mutated in place — see
+ * `users/service.ts#persistTwoFactorMethods` for why `markModified` matters here.
  */
-const saveMethods = (user: UserDocument): Promise<UserDocument> => {
-    user.markModified('twoFactorMethods');
-    return userService.save(user);
-};
+const saveMethods = (user: UserDocument): Promise<UserDocument> =>
+    userService.persistTwoFactorMethods(user);
 
 /**
  * Record one method-scoped 2FA action and pass the outcome through untouched. Both halves are

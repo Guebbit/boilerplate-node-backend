@@ -1,11 +1,3 @@
 subdomain: supporting
 dependsOn:
-    - addresses # read for POST /account/export's personal-data assembly
-    - audit-logs # read for POST /account/export's personal-data assembly
-    - cart # read for POST /account/export's personal-data assembly
-    - delivery # read for POST /account/export's personal-data assembly
-    - feedback # read for POST /account/export's personal-data assembly
-    - orders # read for POST /account/export's personal-data assembly
-    - payments # read for POST /account/export's personal-data assembly
     - users # the User document — the repo's one shared kernel
-    - wishlist # read for POST /account/export's personal-data assembly

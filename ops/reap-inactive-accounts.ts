@@ -101,10 +101,7 @@ const warn = (user: UserDocument): Promise<void> => {
         GRACE_DAYS
     );
     return enqueueEmail({ to: user.email, subject: mail.subject }, mail.template, mail.data).then(
-        () => {
-            user.inactivityWarnedAt = new Date();
-            return userService.save(user).then(() => undefined);
-        }
+        () => userService.markInactivityWarned(user).then(() => undefined)
     );
 };
 

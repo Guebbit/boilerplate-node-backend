@@ -103,10 +103,9 @@ export const passwordChange = (
     return assertPasswordNotBreached(password).then((breachErrors) => {
         if (breachErrors.length > 0) return generateReject(422, breachErrors);
 
-        user.password = password;
         beforeSave?.(user);
         return userService
-            .save(user)
+            .setPassword(user, password)
             .then((savedUser) =>
                 savedUser
                     .tokenRemoveAll(TokenType.REFRESH)

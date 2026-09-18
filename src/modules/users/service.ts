@@ -1,7 +1,11 @@
 /**
  * @module
- * User Admin Service — single responsibility: admin-facing user CRUD and search.
- * For auth — signup, login, password reset, tokens — see the `account` module.
+ * The User document: admin-facing CRUD and search, plus the named identity operations
+ * `account` calls to authenticate, register, verify and 2FA-protect it — the `users` end of the
+ * one shared-kernel relationship in this repo (`docs/theory/strategic-ddd.md` §5). Three regions,
+ * in order below: admin CRUD/search, the identity operations, the inactivity reaper's own reads.
+ * The flows themselves — HTTP, sessions, emails, rate limits, anti-automation — stay in `account`;
+ * this file only ever enforces what the document itself requires.
  *
  * See: docs/modules/users.md
  */
@@ -490,12 +494,13 @@ export const removeById = (
 
 /*
  * `account` end of the one shared-kernel relationship in this repo (`docs/theory/strategic-ddd.md`
- * §5): the User document it authenticates, resets, links to OAuth, and 2FA-protects. Everything
- * below is a thin pass-through to `userRepository`, named for the question it answers so
- * `account`'s files read `userService.findByIdWithCredentials(...)` and the like directly. `save`
- * stays a pass-through on purpose: `account` builds up a mutated `UserDocument` across many fields
- * (password, 2FA, sessions, tokens) before persisting it, which is exactly the co-administration
- * the shared kernel exists to allow, not a generic write handle handed to an unrelated caller.
+ * §5): the User document it authenticates, resets, links to OAuth, and 2FA-protects. Read-only
+ * lookups below are still thin pass-throughs to `userRepository`, named for the question they
+ * answer. WRITES are not: a raw `save`/`build`/`create`/`findOneWithCredentials(where)` published
+ * on the barrel is a write (or an arbitrary-filter read) handle any future sibling could import
+ * and use for anything, not only `account`. Every write operation below enforces what the
+ * document requires by construction instead — it takes only the fields its one caller actually
+ * has, and does only the one mutation its name promises.
  */
 
 /** An authenticatable account by id — `active`/soft-delete already excluded by the query. */
@@ -504,10 +509,25 @@ const findAuthenticatableById = (id: string) => userRepository.findAuthenticatab
 /** The hydrated document with every `select: false` field loaded (password, tokens, 2FA). */
 const findByIdWithCredentials = (id: string) => userRepository.findByIdWithCredentials(id);
 
-/** The first user matching a credentialed filter, `select: false` fields included. */
-const findOneWithCredentials = (
-    where: Parameters<typeof userRepository.findOneWithCredentials>[0]
-) => userRepository.findOneWithCredentials(where);
+/**
+ * The credentialed account attempting an email/password login, `select: false` fields (the
+ * password hash) included. `active: { $ne: false }` — not `true`, since a pre-migration row has
+ * no field at all — blocks a deactivated account at the front door, same clause
+ * `findAuthenticatableById` uses.
+ */
+const findForLogin = (email: string | undefined) =>
+    userRepository.findOneWithCredentials({ email, active: { $ne: false }, deletedAt: undefined });
+
+/**
+ * The credentialed account already linked to this federated identity, if any — `select: false`
+ * fields included because a caller may need to build a 2FA login challenge off
+ * `user.twoFactorMethods` right after.
+ */
+const findByOAuthIdentity = (provider: string, providerId: string) =>
+    userRepository.findOneWithCredentials({
+        'oauthAccounts.provider': provider,
+        'oauthAccounts.providerId': providerId
+    });
 
 /** The hydrated document with the pending-email-change field loaded. */
 const findByIdWithPendingEmail = (id: string) => userRepository.findByIdWithPendingEmail(id);
@@ -527,22 +547,90 @@ const findByToken = (token: string, type: Parameters<typeof userRepository.findB
 /** The account currently holding this exact token value, any type. */
 const findByTokenValue = (token: string) => userRepository.findByTokenValue(token);
 
-/** Persist an already-loaded, already-mutated document — see the file docblock above. */
-const save = (user: UserDocument) => userRepository.save(user);
+/**
+ * Set an account's password — `account/services/profile.ts`'s `passwordChange` is the only
+ * caller, itself the funnel both a password reset and an authenticated password change go
+ * through. Takes the already-loaded, already-validated account: `passwordChange` refuses a weak
+ * or breached password well before this point, so nothing here re-checks either.
+ */
+const setPassword = (user: UserDocument, password: string): Promise<UserDocument> => {
+    user.password = password;
+    return userRepository.save(user);
+};
+
+/**
+ * Prove an account's email: stamp `verifiedAt`, and promote a still-`unverified` role to
+ * `customer` — the one promotion self-service verification may make on its own. Takes the
+ * already-loaded holder of the spent token, not an id: `completeEmailVerification`'s caller
+ * already found and spent it (see that file's own docblock on why finding and spending are two
+ * calls), and a second fetch here would just be a redundant round trip.
+ */
+const markEmailVerified = (user: UserDocument): Promise<UserDocument> => {
+    user.verifiedAt = new Date();
+    if (user.role === 'unverified') user.role = 'customer';
+    return userRepository.save(user);
+};
+
+/**
+ * Swap a proven `pendingEmail` into `email`, and mark the account verified — the new address just
+ * proved itself. Same `unverified` → `customer` promotion as {@link markEmailVerified}, since an
+ * email change can be the first proof an `unverified` signup ever completes. Revoking the
+ * account's refresh tokens afterward is the caller's job, not this operation's — `save` here
+ * answers with the document a token-revoke call needs, nothing more.
+ */
+const applyEmailChange = (user: UserDocument, newEmail: string): Promise<UserDocument> => {
+    user.email = newEmail;
+    user.pendingEmail = undefined;
+    user.verifiedAt = new Date();
+    if (user.role === 'unverified') user.role = 'customer';
+    return userRepository.save(user);
+};
+
+/**
+ * Stamp that an inactive account has been warned, so the reaper (`ops/reap-inactive-accounts.ts`)
+ * does not warn it twice. The one field this operation may touch.
+ */
+const markInactivityWarned = (user: UserDocument): Promise<UserDocument> => {
+    user.inactivityWarnedAt = new Date();
+    return userRepository.save(user);
+};
+
+/**
+ * Persist a 2FA method array mutated in place — `account/services/two-factor.ts`'s own
+ * `saveMethods` calls this as its last step, for every enrollment, confirmation, removal, disable
+ * and backup-code action. `markModified` is not belt-and-braces: several of those paths UNSET a
+ * field on a subdocument (a spent code, a replaced secret), and Mongoose does not always see a
+ * delete inside an array element as a change on its own — the write would silently do nothing.
+ * The mutation itself stays `account`'s: this operation only knows "persist whatever changed",
+ * the same way a `save` on any other ORM does once a caller already holds a loaded, owned document.
+ */
+const persistTwoFactorMethods = (user: UserDocument): Promise<UserDocument> => {
+    user.markModified('twoFactorMethods');
+    return userRepository.save(user);
+};
 
 /**
  * Construct a document WITHOUT persisting it — signup's anti-automation deception path answers
  * with a document that looks real and was never written, so a policy-refused attempt gets nothing
  * to distinguish it from a genuine one.
  */
-const build = (data: Parameters<typeof userRepository.build>[0]) => userRepository.build(data);
+const buildSignupDecoy = (data: Parameters<typeof userRepository.build>[0]) =>
+    userRepository.build(data);
 
 /**
- * The raw insert `create` above builds toward — self-service signup runs its OWN orchestration
- * (anti-automation checks, the duplicate-email pre-check, the verification email), never
- * `create()`'s admin-panel one (role assignment, admin audit/analytics).
+ * A self-service signup, from the request's own fields — `account`'s OWN orchestration
+ * (anti-automation checks, the duplicate-email pre-check, the verification email) runs around
+ * this, never `create()`'s admin-panel one (role assignment, admin audit/analytics).
  */
-const createRaw = (data: Parameters<typeof userRepository.create>[0]) =>
+const registerSelfService = (data: Parameters<typeof userRepository.create>[0]) =>
+    userRepository.create(data);
+
+/**
+ * An account minted from a federated identity — the provider vouches for it, so it skips
+ * `unverified` entirely (`verifiedAt`/`role` are set at the call site, not defaulted here) the
+ * same way an operator-created account does.
+ */
+const registerFromOAuth = (data: Parameters<typeof userRepository.create>[0]) =>
     userRepository.create(data);
 
 /** Whether an account already exists for this email — signup's duplicate-email pre-check. */
@@ -594,8 +682,9 @@ export const userService = {
     search,
     getById,
     create,
-    createRaw,
-    build,
+    registerSelfService,
+    registerFromOAuth,
+    buildSignupDecoy,
     update,
     updateById,
     remove,
@@ -605,12 +694,17 @@ export const userService = {
     emailTaken,
     findAuthenticatableById,
     findByIdWithCredentials,
-    findOneWithCredentials,
+    findForLogin,
+    findByOAuthIdentity,
     findByIdWithPendingEmail,
     emailOrPendingEmailTaken,
     findByToken,
     findByTokenValue,
-    save,
+    setPassword,
+    markEmailVerified,
+    applyEmailChange,
+    markInactivityWarned,
+    persistTwoFactorMethods,
     sessionRemove,
     tokenRemoveByValue,
     tokenRemoveExpired,

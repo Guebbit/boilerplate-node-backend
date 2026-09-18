@@ -125,7 +125,7 @@ const signupFromOAuth = (
     context: CallerContext
 ): Promise<UserDocument> =>
     userService
-        .createRaw({
+        .registerFromOAuth({
             email: identity.email,
             // No display name from the provider: the address is at least unique, unlike a blank.
             username: identity.name ?? identity.email,
@@ -187,10 +187,7 @@ export const loginOrCreateFromOAuth = (
         // WITH credentials, unlike every other lookup in this file: `recordLogin` below may need
         // to build a 2FA login challenge off `user.twoFactorMethods`, which is `select: false` —
         // see 1b in docs/theory/defences/authentication.md#federated-login.
-        .findOneWithCredentials({
-            'oauthAccounts.provider': provider,
-            'oauthAccounts.providerId': identity.providerId
-        })
+        .findByOAuthIdentity(provider, identity.providerId)
         .then((existing) => {
             if (existing) return recordLogin(existing, provider, context);
 
