@@ -29,8 +29,13 @@
                 "column-rate": "Aliquota IVA",
                 "column-tax": "IVA",
                 "column-gross": "Totale",
+                "shipping-title": "Spedizione",
+                "shipping-row": "Spedizione, tassata al {{rate}}",
+                "summary-title": "Riepilogo IVA",
+                "summary-row": "Tassato al {{rate}}",
                 "net-total": "Totale imponibile",
                 "tax-total": "Totale IVA",
+                "grand-total": "Totale generale",
                 "vat-number": "Partita IVA: {{number}}",
                 "vat-number-missing": "Partita IVA non configurata"
             }

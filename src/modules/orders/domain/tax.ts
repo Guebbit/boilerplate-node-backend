@@ -63,6 +63,17 @@ export interface OrderTaxBreakdown {
      * {@link taxTotal}, and summed `grossAmount` is the order's `totalPrice`.
      */
     taxSummary: TaxRateSummary[];
+    /**
+     * Shipping's OWN slice of {@link taxSummary}, broken out per rate — what lets an invoice print
+     * "shipping, taxed at 22%: €4.10 net, €0.90 tax" as its own row instead of folding it silently
+     * into the goods total at that rate. Not part of the public contract (`model.ts` does not copy
+     * this onto a serialized order): the order response only needs the order-level
+     * {@link shippingNetAmount}/{@link shippingTaxAmount} sums, the invoice needs the per-rate
+     * detail. Same rates as `taxSummary`, same sort order, but a rate with zero shipping apportioned
+     * to it (only possible when `shippingCost` is absent or zero) is left out rather than printed
+     * as an empty row.
+     */
+    shippingByRate: TaxRateSummary[];
 }
 
 /** An order, as far as its VAT breakdown is concerned. */
@@ -135,6 +146,7 @@ export const orderTaxBreakdown = ({
     let shippingNetTotal: Money = NO_MONEY;
     let shippingTaxTotal: Money = NO_MONEY;
     const byRate = new Map<number, { net: Money; tax: Money }>();
+    const shippingByRateMap = new Map<number, { net: Money; tax: Money }>();
 
     const lines = items.map((item, index) => {
         // Every rate was checked present just above — proven, not merely assumed, so `!` applies.
@@ -152,18 +164,20 @@ export const orderTaxBreakdown = ({
         shippingNetTotal = addMoney(shippingNetTotal, shippingNet);
         shippingTaxTotal = addMoney(shippingTaxTotal, shippingTax);
         foldIntoRate(byRate, rate, addMoney(net, shippingNet), addMoney(tax, shippingTax));
+        foldIntoRate(shippingByRateMap, rate, shippingNet, shippingTax);
 
         return { taxAmount: toDecimalAmount(tax), netAmount: toDecimalAmount(net) };
     });
 
-    const taxSummary = [...byRate.entries()]
-        .toSorted(([left], [right]) => left - right)
-        .map(([rate, { net, tax }]) => ({
-            rate,
-            netAmount: toDecimalAmount(net),
-            taxAmount: toDecimalAmount(tax),
-            grossAmount: toDecimalAmount(addMoney(net, tax))
-        }));
+    const summaryRowsOf = (source: Map<number, { net: Money; tax: Money }>): TaxRateSummary[] =>
+        [...source.entries()]
+            .toSorted(([left], [right]) => left - right)
+            .map(([rate, { net, tax }]) => ({
+                rate,
+                netAmount: toDecimalAmount(net),
+                taxAmount: toDecimalAmount(tax),
+                grossAmount: toDecimalAmount(addMoney(net, tax))
+            }));
 
     return {
         lines,
@@ -171,6 +185,12 @@ export const orderTaxBreakdown = ({
         taxTotal: toDecimalAmount(taxTotal),
         shippingNetAmount: toDecimalAmount(shippingNetTotal),
         shippingTaxAmount: toDecimalAmount(shippingTaxTotal),
-        taxSummary
+        taxSummary: summaryRowsOf(byRate),
+        // A rate whose whole shipping share rounded down to zero (only possible with no shipping
+        // cost at all, since `apportion`'s weights are strictly positive for any priced line) is
+        // filtered out rather than printed as an empty row on the invoice.
+        shippingByRate: summaryRowsOf(shippingByRateMap).filter(
+            (row) => row.netAmount > 0 || row.taxAmount > 0
+        )
     };
 };

@@ -5,8 +5,13 @@
  * least able to check it. `orderTotal` itself is covered by `totals.property.test.ts`; here it's
  * only asserted that this builder USES it rather than recomputing a second, drifting answer.
  */
-import { orderConfirmEmail, invoiceDocument, type OrderLines } from '@modules/orders/emails';
-import { orderTotal } from '@modules/orders/domain';
+import {
+    orderConfirmEmail,
+    invoiceDocument,
+    type OrderLines,
+    type InvoiceVatBlock
+} from '@modules/orders/emails';
+import { orderTotal, orderTaxBreakdown } from '@modules/orders/domain';
 
 const NAME = 'Ada Lovelace';
 const ORDER_ID = 'order-1';
@@ -187,5 +192,94 @@ describe('invoiceDocument', () => {
 
         expect(english[0]).toContain(collidingTitle);
         expect(italian[0]).toContain(collidingTitle);
+    });
+});
+
+/** A single-line, single-rate order for the VAT-block tests — anything simpler risks masking a bug. */
+const VAT_ORDER = {
+    items: [{ quantity: 5, product: { title: 'Widget', price: 19.99, taxRate: 0.22 } }],
+    id: 'vat-order-1'
+};
+
+/** Matches `invoiceCurrency()`'s default (`.env-example`'s `NODE_DEFAULT_CURRENCY`, unset here). */
+const eur = new Intl.NumberFormat('en', { style: 'currency', currency: 'EUR' });
+
+describe('invoiceDocument — the VAT block', () => {
+    it('is absent on a pre-VAT order — no taxRate on any line', () => {
+        const { vat } = invoiceDocument('en', { ...ORDER, id: 'x' });
+
+        expect(vat).toBeUndefined();
+    });
+
+    it('computes grossAmount from netAmount + taxAmount, never from a float multiply of price × quantity', () => {
+        // The exact case the plan named: 19.99 × 5 is 99.94999999999999 in IEEE 754, not 99.95 —
+        // if this ever re-derives from the price again instead of the already-reconciled pair
+        // beside it, a rate where that drift survives rounding would print a wrong total.
+        const vat = invoiceDocument('en', VAT_ORDER).vat as InvoiceVatBlock;
+        const breakdown = orderTaxBreakdown(VAT_ORDER)!;
+
+        expect(vat.rows[0].grossAmount).toBe(
+            eur.format(breakdown.lines[0].netAmount + breakdown.lines[0].taxAmount)
+        );
+    });
+
+    it('formats every amount through Intl.NumberFormat, not a raw number', () => {
+        const vat = invoiceDocument('en', VAT_ORDER).vat as InvoiceVatBlock;
+
+        for (const value of [
+            vat.rows[0].unitPrice,
+            vat.rows[0].netAmount,
+            vat.rows[0].taxAmount,
+            vat.rows[0].grossAmount,
+            vat.netTotal,
+            vat.taxTotal,
+            vat.grandTotal
+        ])
+            expect(typeof value).toBe('string');
+    });
+
+    it('prints the grand total as the amount actually paid — every line plus shipping', () => {
+        const withShipping = { ...VAT_ORDER, shippingCost: 4.5 };
+        const vat = invoiceDocument('en', withShipping).vat as InvoiceVatBlock;
+
+        expect(vat.grandTotal).toBe(eur.format(orderTotal(withShipping)));
+    });
+
+    it('has no shipping table when the order chose no delivery method', () => {
+        const vat = invoiceDocument('en', VAT_ORDER).vat as InvoiceVatBlock;
+
+        expect(vat.shipping).toBeUndefined();
+    });
+
+    it('has one shipping row per rate shipping was apportioned to and taxed at', () => {
+        const order = {
+            items: [
+                { quantity: 1, product: { title: 'A', price: 10, taxRate: 0.22 } },
+                { quantity: 1, product: { title: 'B', price: 10, taxRate: 0.1 } }
+            ],
+            shippingCost: 10,
+            id: 'x'
+        };
+        const vat = invoiceDocument('en', order).vat as InvoiceVatBlock;
+
+        expect(vat.shipping?.rows).toHaveLength(2);
+        expect(vat.shipping?.rows.map((row) => row.taxRateLabel).toSorted()).toEqual([
+            '10%',
+            '22%'
+        ]);
+    });
+
+    it('has one summary row per distinct rate, combining goods and shipping', () => {
+        const order = {
+            items: [
+                { quantity: 1, product: { title: 'A', price: 10, taxRate: 0.22 } },
+                { quantity: 1, product: { title: 'B', price: 10, taxRate: 0.22 } }
+            ],
+            id: 'x'
+        };
+        const vat = invoiceDocument('en', order).vat as InvoiceVatBlock;
+
+        // Two lines at the SAME rate merge into one summary row, unlike the per-line table above.
+        expect(vat.summaryRows).toHaveLength(1);
     });
 });

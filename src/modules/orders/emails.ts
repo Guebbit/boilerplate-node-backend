@@ -10,8 +10,8 @@
 import type { TFunction } from 'i18next';
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
-import { shopCountry, shopLegalName, shopVatNumber } from './config';
-import { orderTotal, orderTaxBreakdown } from './domain';
+import { invoiceCurrency, shopCountry, shopLegalName, shopVatNumber } from './config';
+import { orderTotal, orderTaxBreakdown, type TaxRateSummary } from './domain';
 import type { OrderTransferInstructions } from '@types';
 
 /**
@@ -219,18 +219,38 @@ const buildInvoiceMeta = (
 export interface InvoiceVatRow {
     description: string;
     quantity: number;
-    unitPrice: number;
-    netAmount: number;
+    unitPrice: string;
+    netAmount: string;
     /** Formatted here, not in the template — `0.22` becomes `"22%"` once, not on every render. */
     taxRateLabel: string;
-    taxAmount: number;
-    grossAmount: number;
+    taxAmount: string;
+    /**
+     * `netAmount + taxAmount`, never re-derived from `unitPrice × quantity` — that multiply is a
+     * float operation the way JavaScript does it (`19.99 × 5` is `99.94999999999999`, not
+     * `99.95`), so it drifted from the two columns beside it. This is the invoice's own promise:
+     * the columns must add back up to what was charged, to the cent.
+     */
+    grossAmount: string;
+}
+
+/**
+ * One row of a rate-grouped table — the shipping-by-rate breakdown or the per-rate summary, both
+ * the same shape. `description` carries what differs between a per-line row and one of these:
+ * "which rate", not "which product".
+ */
+export interface InvoiceTaxSummaryRow {
+    description: string;
+    netAmount: string;
+    taxRateLabel: string;
+    taxAmount: string;
+    grossAmount: string;
 }
 
 /**
  * The invoice's VAT table and the shop's own legal identity — present only on an order that
  * actually carries VAT figures. `undefined` renders no block at all, rather than one implying a
- * rate that was never charged.
+ * rate that was never charged. Every amount is ALREADY formatted for `locale` — the template only
+ * interpolates, same rule as `taxRateLabel`'s own comment always held for the rate column alone.
  */
 export interface InvoiceVatBlock {
     columns: {
@@ -243,10 +263,22 @@ export interface InvoiceVatBlock {
         gross: string;
     };
     rows: InvoiceVatRow[];
+    /** Absent (never an empty-titled table) on an order with no delivery method or free shipping. */
+    shipping?: {
+        title: string;
+        /** One row per rate shipping was actually apportioned to and taxed at. */
+        rows: InvoiceTaxSummaryRow[];
+    };
+    summaryTitle: string;
+    /** One row per distinct rate charged on the order, goods and shipping combined. */
+    summaryRows: InvoiceTaxSummaryRow[];
     netTotalLabel: string;
-    netTotal: number;
+    netTotal: string;
     taxTotalLabel: string;
-    taxTotal: number;
+    taxTotal: string;
+    grandTotalLabel: string;
+    /** `orderTotal(order)` — every line's gross plus shipping, the amount actually paid. */
+    grandTotal: string;
     supplier: {
         /** Absent when `NODE_SHOP_LEGAL_NAME` is unset — the template omits the row entirely. */
         legalName?: string;
@@ -257,28 +289,51 @@ export interface InvoiceVatBlock {
     };
 }
 
+/** A decimal rate (`0.22`) as the invoice prints it (`"22%"`) — formatted once, not per cell. */
+const percent = (rate: number): string => `${Math.round(rate * 100)}%`;
+
 /**
  * Builds the invoice's VAT table, recomputing the breakdown fresh from the order's frozen lines —
  * same reasoning `orderTotal` already applies to the grand total in this file: the controller may
  * hand this an untransformed document, so nothing here may assume a derived field was already
  * computed. `undefined` on a pre-VAT order, which is the caller's signal to render no VAT block.
- * @param t - this document's translator, already fixed to its locale
+ * @param locale - the document's language, for `Intl.NumberFormat` — every amount below goes
+ *   through it, in `invoiceCurrency()`'s configured currency
+ * @param t - this document's translator, already fixed to `locale`
  * @param order - the order the invoice is for
  * @returns the VAT block, or `undefined` when the order carries no VAT figures
  */
-const buildVatBlock = (t: TFunction, order: InvoiceOrder): InvoiceVatBlock | undefined => {
+const buildVatBlock = (
+    locale: string,
+    t: TFunction,
+    order: InvoiceOrder
+): InvoiceVatBlock | undefined => {
     const breakdown = orderTaxBreakdown(order);
     if (!breakdown) return undefined;
+
+    // One instance, reused for every amount on the invoice — this is a real allocation
+    // (constructing a Collator/PluralRules under the hood), not worth paying once per cell.
+    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat
+    const money = new Intl.NumberFormat(locale, { style: 'currency', currency: invoiceCurrency() });
+
+    const summaryRowOf = (row: TaxRateSummary, description: string): InvoiceTaxSummaryRow => ({
+        description,
+        netAmount: money.format(row.netAmount),
+        taxRateLabel: percent(row.rate),
+        taxAmount: money.format(row.taxAmount),
+        grossAmount: money.format(row.grossAmount)
+    });
 
     const rows = order.items.map((item, index) => ({
         description: item.product.title,
         quantity: item.quantity,
-        unitPrice: item.product.price,
-        netAmount: breakdown.lines[index].netAmount,
-        // A rate is a fraction (0.22); the invoice prints the percentage a customer expects.
-        taxRateLabel: `${Math.round((item.product.taxRate ?? 0) * 100)}%`,
-        taxAmount: breakdown.lines[index].taxAmount,
-        grossAmount: item.product.price * item.quantity
+        unitPrice: money.format(item.product.price),
+        netAmount: money.format(breakdown.lines[index].netAmount),
+        taxRateLabel: percent(item.product.taxRate ?? 0),
+        taxAmount: money.format(breakdown.lines[index].taxAmount),
+        grossAmount: money.format(
+            breakdown.lines[index].netAmount + breakdown.lines[index].taxAmount
+        )
     }));
 
     return {
@@ -292,10 +347,28 @@ const buildVatBlock = (t: TFunction, order: InvoiceOrder): InvoiceVatBlock | und
             gross: t('orders.invoice.vat.column-gross')
         },
         rows,
+        shipping:
+            breakdown.shippingByRate.length === 0
+                ? undefined
+                : {
+                      title: t('orders.invoice.vat.shipping-title'),
+                      rows: breakdown.shippingByRate.map((row) =>
+                          summaryRowOf(
+                              row,
+                              t('orders.invoice.vat.shipping-row', { rate: percent(row.rate) })
+                          )
+                      )
+                  },
+        summaryTitle: t('orders.invoice.vat.summary-title'),
+        summaryRows: breakdown.taxSummary.map((row) =>
+            summaryRowOf(row, t('orders.invoice.vat.summary-row', { rate: percent(row.rate) }))
+        ),
         netTotalLabel: t('orders.invoice.vat.net-total'),
-        netTotal: breakdown.netTotal,
+        netTotal: money.format(breakdown.netTotal),
         taxTotalLabel: t('orders.invoice.vat.tax-total'),
-        taxTotal: breakdown.taxTotal,
+        taxTotal: money.format(breakdown.taxTotal),
+        grandTotalLabel: t('orders.invoice.vat.grand-total'),
+        grandTotal: money.format(orderTotal(order)),
         supplier: {
             legalName: shopLegalName(),
             vatNumberLine: shopVatNumber()
@@ -327,7 +400,7 @@ export const invoiceDocument = (locale: string, order: InvoiceOrder): Record<str
                 price: item.product.price
             })
         ),
-        vat: buildVatBlock(t, order),
+        vat: buildVatBlock(locale, t, order),
         meta: buildInvoiceMeta(locale, t, order)
     };
 };

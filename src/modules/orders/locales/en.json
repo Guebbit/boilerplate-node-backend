@@ -29,8 +29,13 @@
                 "column-rate": "VAT rate",
                 "column-tax": "VAT",
                 "column-gross": "Total",
+                "shipping-title": "Shipping",
+                "shipping-row": "Shipping, taxed at {{rate}}",
+                "summary-title": "VAT summary",
+                "summary-row": "Taxed at {{rate}}",
                 "net-total": "Net total",
                 "tax-total": "VAT total",
+                "grand-total": "Grand total",
                 "vat-number": "VAT number: {{number}}",
                 "vat-number-missing": "VAT number not configured"
             }

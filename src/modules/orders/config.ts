@@ -43,6 +43,15 @@ export const shopLegalName = (): string | undefined =>
     process.env.NODE_SHOP_LEGAL_NAME || undefined;
 
 /**
+ * The ISO-4217 code every amount on the invoice is formatted in. Same env var and default
+ * `payments/config.ts#defaultCurrency` reads — `orders` cannot import `payments` (the dependency
+ * runs the other way), so this is its own one-line read rather than a cross-module reach; a shop
+ * that ever needs a second currency needs a real design, not two modules quietly disagreeing.
+ * @returns the configured ISO-4217 currency code
+ */
+export const invoiceCurrency = (): string => process.env.NODE_DEFAULT_CURRENCY ?? 'EUR';
+
+/**
  * The account name a transfer should be made out to. Unset means transfer is not offered at all.
  * @returns the configured beneficiary, or `undefined`
  */

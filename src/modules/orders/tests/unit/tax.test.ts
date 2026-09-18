@@ -30,7 +30,8 @@ describe('orderTaxBreakdown — the pre-VAT order', () => {
             taxTotal: 0,
             shippingNetAmount: 0,
             shippingTaxAmount: 0,
-            taxSummary: []
+            taxSummary: [],
+            shippingByRate: []
         });
     });
 });
@@ -143,6 +144,41 @@ describe('orderTaxBreakdown — shippingNetAmount/shippingTaxAmount', () => {
 
         expect(breakdown?.shippingNetAmount).toBe(0);
         expect(breakdown?.shippingTaxAmount).toBe(0);
+    });
+
+    it('leaves shippingByRate empty when there is no shipping cost to apportion', () => {
+        const breakdown = orderTaxBreakdown({ items: [line(19.9, 1, 0.22)] });
+
+        expect(breakdown?.shippingByRate).toEqual([]);
+    });
+
+    it("splits shipping's own net/tax per rate, one row per rate that actually got a share", () => {
+        const breakdown = orderTaxBreakdown({
+            items: [line(10, 1, 0.22), line(10, 1, 0.1)],
+            shippingCost: 10
+        });
+
+        expect(breakdown?.shippingByRate.map((row) => row.rate)).toEqual([0.1, 0.22]);
+        // Equal-value lines split shipping 50/50: 5.00 taxed at each line's own rate.
+        const at22 = breakdown?.shippingByRate.find((row) => row.rate === 0.22);
+        expect(Math.round((at22?.netAmount ?? 0) * 100) + Math.round((at22?.taxAmount ?? 0) * 100)).toBe(
+            500
+        );
+    });
+
+    it('sums to the order-level shippingNetAmount/shippingTaxAmount across rows', () => {
+        const breakdown = orderTaxBreakdown({
+            items: [line(19.9, 3, 0.22), line(5.5, 1, 0.1), line(100, 2, 0)],
+            shippingCost: 12.3
+        });
+        const rows = breakdown?.shippingByRate ?? [];
+
+        expect(Math.round(rows.reduce((sum, row) => sum + row.netAmount, 0) * 100)).toBe(
+            Math.round((breakdown?.shippingNetAmount ?? 0) * 100)
+        );
+        expect(Math.round(rows.reduce((sum, row) => sum + row.taxAmount, 0) * 100)).toBe(
+            Math.round((breakdown?.shippingTaxAmount ?? 0) * 100)
+        );
     });
 
     it("reconstructs shipping's own gross cost from its net plus tax, to the cent", () => {
