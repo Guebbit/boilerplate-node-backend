@@ -61,6 +61,14 @@ its `maxInsuredValue` — standard is untracked, express is tracked and insured,
 `tracked` is what `POST /delivery/order/{orderId}/ship` enforces: a tracking code is required for a
 tracked method, refused with a named 422 otherwise.
 
+A method may also declare `minWeight`/`maxWeight`, grams — express caps at 5000g, standard at
+30000g, pickup at neither. Unlike `tracked`, this one IS enforced against the basket:
+`GET /delivery/methods?weight=` filters the list (advisory — a stale or omitted value only hides a
+method a client would have seen anyway), and `cart`'s checkout refuses a chosen method whose range
+the real basket doesn't fit (`CART_SHIPPING_METHOD_WEIGHT`, 409) — the server-side check, against
+the lines actually joined, is what actually decides. A product with no `weight` set counts as 0g,
+never as a refusal on its own account.
+
 ## The pipeline
 
 Two halves that never touch. The cart only ever reaches the pure rates on the left; the parcel on

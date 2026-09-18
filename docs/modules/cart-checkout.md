@@ -30,7 +30,7 @@ flowchart TD
     Q --> B["4 · resolve the shipping method<br/><i>delivery — pure function</i>"]
     B --> C["5 · resolve the address<br/><i>account — addressForCheckout</i>"]
     C --> D["6 · join the lines against the catalogue<br/><i>products</i>"]
-    D --> E["7 · evaluate the rules<br/><i>cart/domain</i>"]
+    D --> E["7 · evaluate the rules,<br/>and the method's weight range<br/><i>cart/domain — basketWeight vs. the joined lines</i>"]
     E --> F["8 · placeOrder<br/><i>orders — freeze lines, invoice number,<br/>mint transfer reference, hold stock, write</i>"]
     F --> H["9 · empty the cart, conditionally<br/><i>cart — on the __v it was read at</i>"]
     H --> I["10 · queue the email<br/><i>orders picks confirmation vs. transfer<br/>instructions off the order's paymentMethod</i>"]
@@ -42,7 +42,7 @@ flowchart TD
     B -.->|"unknown method"| R
     C -.->|"not the caller's address"| R
     D -.->|"product gone"| R
-    E -.->|"rule says no"| R
+    E -.->|"rule says no, or the basket<br/>doesn't fit the chosen method's<br/>weight range"| R
     F -.->|"stock gone"| R
 
     L["lost the race — retract"]
@@ -58,7 +58,12 @@ flowchart TD
 ```
 
 Steps 1–7 are reads and refusals — genuinely checkout's own job: deciding whether this basket, this
-account and this address are allowed to become an order at all. **Step 8 is not checkout's write —
+account and this address are allowed to become an order at all. Step 7's weight check is the
+authoritative one: `GET /delivery/methods?weight=` (used to build the selector) is advisory only,
+computed client-side from whatever the caller last summed — this step re-sums the joined lines'
+real `weight` server-side and refuses a chosen method the basket doesn't actually fit
+(`CART_SHIPPING_METHOD_WEIGHT`), so a stale or omitted query value on the list can never buy a
+method that list would have hidden. **Step 8 is not checkout's write —
 it's checkout handing everything it resolved to [`orders`'](./orders.md) `placeOrder`**, the one
 function every order (this checkout, the admin's own `POST /orders`) is written through. Checkout
 never freezes a line, allocates an invoice number, or mints a `bank_transfer` reference itself; it

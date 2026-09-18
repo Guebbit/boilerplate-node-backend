@@ -61,6 +61,23 @@ the basket can be fixed in one pass instead of discovering the next problem afte
 If it all agrees, the goods are **set aside**: still on the shelf, but promised to that order and no
 longer sellable to anyone else.
 
+### Why can't I pick express?
+
+Every shipping method has a weight it will actually carry — a courier's own limit, not a shop rule.
+A basket heavier than a method's ceiling simply doesn't offer that method at checkout.
+
+```mermaid
+flowchart LR
+    B["basket weight"] --> S{"fits express?<br/>≤ 5000g"}
+    S -->|yes| E["express offered"]
+    S -->|no| F{"fits standard?<br/>≤ 30000g"}
+    F -->|yes| ST["standard offered"]
+    F -->|no| P["pickup only<br/>— no weight ceiling"]
+```
+
+A product with no weight recorded counts as weightless — it never keeps a method off the list on
+its own.
+
 ## The 30-minute hold
 
 Setting goods aside is a promise with a deadline.
