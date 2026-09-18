@@ -79,19 +79,15 @@ export const getById = (
 /**
  * Report that an order was created — from the admin route or a customer's checkout
  * (`@modules/cart`'s `orderConfirm`), split out since the two paths' writes share only this
- * fact. `actorRole` defaults to the caller's role, but checkout overrides it to `'user'`: a
- * purchase is a customer action regardless of the account making it.
+ * fact. The audit records the buyer's real role, whatever it is: no forced override, per
+ * D1-Q10's "real role names everywhere" (`DDD_FIX.md` D3.4) — an admin placing their own order
+ * is audited as `admin`, same as any other action they take.
  */
-export const recordCreated = (
-    order: OrderDocument,
-    context: CallerContext,
-    actorRole?: 'user' | 'admin'
-): void => {
+export const recordCreated = (order: OrderDocument, context: CallerContext): void => {
     emitAuditEvent(
         buildAuditEvent(context, {
             action: ordersAuditActions.ORDER_CREATED,
             outcome: 'success',
-            ...(actorRole ? { actor_role: actorRole } : {}),
             target_type: 'order',
             target_id: String(order._id)
         })

@@ -286,11 +286,11 @@ export const orderConfirm = (
         .then((result) => {
             /*
              * `order_created` fires here too, not just from the admin route's `create()` —
-             * see docs/tools/observability-layer.md. `actorRole` is forced to `'user'`:
-             * a purchase is a customer action even on an admin's account.
+             * see docs/tools/observability-layer.md. The audit records the caller's real role,
+             * whatever it is — no forced override (`DDD_FIX.md` D3.4).
              */
             if (result.success && result.data) {
-                orderService.recordCreated(result.data, context, 'user');
+                orderService.recordCreated(result.data, context);
                 emitAnalyticsEvent({
                     ...buildAnalyticsBase(context),
                     event: cartAnalyticsEvents.CHECKOUT_COMPLETED,
