@@ -14,8 +14,8 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { OrderStatus, PaymentMethod } from '@types';
-import { orderService, orderTotal } from '@modules/orders';
+import { PaymentMethod } from '@types';
+import { orderService, orderTotal, isPayable } from '@modules/orders';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import type { CallerContext } from '@types';
@@ -59,7 +59,9 @@ export const recordOfflinePayment = (
 
     return orderService.getById(orderId).then((order) => {
         if (!order) return generateReject(404, [t('payments.order-not-found')]);
-        if (order.status !== OrderStatus.pending)
+        // Asked of the order lifecycle rather than compared against a literal here, so this
+        // module cannot drift from the owner of the rule.
+        if (!isPayable(order.status))
             return generateReject(409, [
                 { code: 'PAYMENT_ORDER_NOT_PAYABLE', message: t('payments.order-not-payable') }
             ]);

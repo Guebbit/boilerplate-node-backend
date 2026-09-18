@@ -12,9 +12,8 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { OrderStatus } from '@types';
 import type { Payment, AuthContext } from '@types';
-import { orderService, orderTotal, canTransition } from '@modules/orders';
+import { orderService, orderTotal, isPayable } from '@modules/orders';
 import { userService } from '@modules/users';
 import { defaultCurrency } from '../config';
 import { resolvePaymentProvider } from '../providers';
@@ -71,9 +70,10 @@ export const createIntent = (
 ): Promise<ResponseSuccess<Payment> | ResponseReject> =>
     orderService.getById(orderId, orderService.callerScope(authContext)).then((order) => {
         if (!order) return generateReject(404, [t('payments.order-not-found')]);
-        // Payable means "can still reach `paid`" — asked of the order lifecycle rather than
-        // compared against a literal here, so this module cannot drift from the owner of the rule.
-        if (!canTransition(order.status, OrderStatus.paid, 'system'))
+        // Payable is asked of the order lifecycle rather than compared against a literal here, so
+        // this module cannot drift from the owner of the rule — and, unlike a bare `canTransition`
+        // check, correctly refuses a second intent on an order that is already `paid`.
+        if (!isPayable(order.status))
             return generateReject(409, [
                 { code: 'PAYMENT_ORDER_NOT_PAYABLE', message: t('payments.order-not-payable') }
             ]);

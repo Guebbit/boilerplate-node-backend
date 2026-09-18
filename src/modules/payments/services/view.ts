@@ -13,9 +13,8 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { OrderStatus } from '@types';
 import type { Payment, AuthContext } from '@types';
-import { orderService, canTransition } from '@modules/orders';
+import { orderService, isPayable } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { paymentRepository } from '../repository';
 import type { PaymentDocument } from '../model';
@@ -64,7 +63,7 @@ export const withActions = (
         pay:
             CONFIRMABLE_PAYMENT_STATUSES.includes(payment.status) &&
             Boolean(order) &&
-            canTransition(order!.status, OrderStatus.paid, 'system'),
+            isPayable(order!.status),
         // Only an operator returns money, and only money that actually arrived.
         // `payments.any.update` by name — a moderator holds exactly this key, and asking for
         // anything broader would have hidden the refund action despite the key they do hold.

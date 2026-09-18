@@ -551,6 +551,23 @@ describe('in-flight settlement', () => {
         expect(result.success && result.data?.actions?.pay).toBe(false);
     });
 
+    it('withdraws the pay action once the order is already paid', async () => {
+        // `isPayable` refuses the echo `system` may still write onto `paid` — this pins that the
+        // withdrawal actually reaches the wire, not just the domain function in isolation.
+        const { user, order } = await orderFor();
+        const intent = await createIntent(String(order._id), auth(user));
+        await confirmPayment(
+            String(intent.success && intent.data?.id),
+            GOOD_METHOD,
+            auth(user),
+            testCallerContext
+        );
+
+        const result = await getForOrder(String(order._id), auth(user));
+
+        expect(result.success && result.data?.actions?.pay).toBe(false);
+    });
+
     it('refuses to attach a second method to a payment already in flight', async () => {
         const { user, order } = await orderFor();
         const intent = await createIntent(String(order._id), auth(user));
