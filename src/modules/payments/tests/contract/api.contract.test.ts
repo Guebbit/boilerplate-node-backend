@@ -14,7 +14,7 @@ import { api, authenticateAs } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { signWebhookPayload, WEBHOOK_SIGNATURE_HEADER } from '@modules/payments/providers';
-import { buildReference } from '@modules/payments/domain/reference';
+import { buildReference } from '@modules/orders';
 import { paymentRepository } from '@modules/payments/repository';
 import { inventoryService } from '@modules/inventory';
 import { onDomainEvent } from '@kernel/events';

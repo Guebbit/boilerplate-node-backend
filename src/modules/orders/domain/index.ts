@@ -29,3 +29,6 @@ export type { OrderActor } from './lifecycle';
 /** The VAT breakdown an order's response and invoice both derive from its frozen lines. */
 export { orderTaxBreakdown } from './tax';
 export type { OrderTaxBreakdown, LineTaxBreakdown, TaxableLineItem } from './tax';
+
+/** The RF creditor reference `placeOrder` mints for a `bank_transfer` order, and its admin-side parse. */
+export { buildReference, parseReference } from './transfer-reference';

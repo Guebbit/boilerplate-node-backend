@@ -4,10 +4,11 @@
  * `@modules/inventory`'s `config.ts`: read per call so a change takes effect on the next intent,
  * not the next restart, and so a second reader doesn't transcribe its own copy of the fallback.
  *
- * The bank-transfer VALUES themselves (`bankTransferBeneficiary`/`Iban`/`Bic`) live in
- * `@infrastructure/adapters/bank-transfer` — `orders` needs them too, and may not import this
- * module. This file owns the one thing that IS this module's alone: validating them with
- * `ibantools` at boot, and listing the methods `GET /payments/methods` answers.
+ * The bank-transfer VALUES themselves (`bankTransferBeneficiary`/`Iban`/`Bic`) are `@modules/orders`'
+ * own config — `orders` renders `transferInstructions` and enforces the open-transfer cap, so it
+ * owns the business rule; this module already depends on `orders` for `markPaid`. This file owns
+ * the one thing that IS this module's alone: validating the configured values with `ibantools` at
+ * boot, and listing the methods `GET /payments/methods` answers.
  */
 
 import { electronicFormatIBAN, isValidBIC, isValidIBAN } from 'ibantools';
@@ -17,7 +18,7 @@ import {
     bankTransferEnabled,
     bankTransferHoldHours,
     bankTransferIban
-} from '@infrastructure/adapters/bank-transfer';
+} from '@modules/orders';
 
 /**
  * The currency every payment is denominated in — ISO-4217, one per deployment. Stamped onto each

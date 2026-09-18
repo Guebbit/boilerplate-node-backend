@@ -3,15 +3,16 @@
  * Order service — all business logic for the Order entity, and the one place a controller may call
  * into. A folder rather than one file because it passed ~300 lines; see `docs/theory/layers.md`.
  *
- * `crud.ts` reads and writes an order, `cancel.ts` runs the cancellation and the sweep behind its
- * marker, `retention.ts` answers an erased account, `scope.ts` decides who may see what.
+ * `place.ts` is the one function that writes a new order; `crud.ts` reads and amends one, and
+ * `retract.ts` undoes a write `place.ts` or checkout could not keep; `notify.ts` sends the
+ * placed-order email. `cancel.ts` runs the cancellation and the sweep behind its marker,
+ * `retention.ts` answers an erased account, `scope.ts` decides who may see what.
  */
 
 import {
     search,
     getById,
     create,
-    createRaw,
     countOpenBankTransfers,
     getByTransferReference,
     updateStatusIfIn,
@@ -21,6 +22,8 @@ import {
     remove,
     removeById
 } from './crud';
+import { placeOrder } from './place';
+import { sendOrderPlacedEmail } from './notify';
 import { detachUserId, anonymizeDueOrders } from './retention';
 import { callerScope, ownerScope, withActions } from './scope';
 import { cancelById, retryPendingEffects } from './cancel';
@@ -37,17 +40,18 @@ export {
     search,
     getById,
     create,
-    createRaw,
     countOpenBankTransfers,
     getByTransferReference,
     updateStatusIfIn,
     recordCreated,
-    retractOrder,
     update,
     updateById,
     remove,
     removeById
 } from './crud';
+export { retractOrder } from './retract';
+export { placeOrder, type PlaceOrderInput, type PlaceOrderOutcome } from './place';
+export { sendOrderPlacedEmail } from './notify';
 export { cancelById, retryPendingEffects } from './cancel';
 export { markPaid, markShipped, markDelivered } from './status';
 export { overrideStatus, forceMove } from './override';
@@ -55,6 +59,17 @@ export { detachUserId, anonymizeDueOrders } from './retention';
 export { callerScope, actorOf, ownerScope, withActions } from './scope';
 export { freezeOrderLines } from './snapshot';
 export { allocateInvoiceNumber } from './invoice-numbering';
+// Config getters, re-exported here (not directly from `../index.ts`) because a module's public
+// barrel may only publish services/domain/events/emails/model — see `local/barrel-allowed-sources`.
+export {
+    bankTransferBeneficiary,
+    bankTransferBic,
+    bankTransferEnabled,
+    bankTransferHoldHours,
+    bankTransferIban,
+    bankTransferIbanFriendly,
+    bankTransferMaxOpenPerAccount
+} from '../config';
 
 /** The service's public surface — every controller and cross-module caller goes through this. */
 export const orderService = {
@@ -63,7 +78,8 @@ export const orderService = {
     callerScope,
     ownerScope,
     create,
-    createRaw,
+    placeOrder,
+    sendOrderPlacedEmail,
     countOpenBankTransfers,
     getByTransferReference,
     updateStatusIfIn,

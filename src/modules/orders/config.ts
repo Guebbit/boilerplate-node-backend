@@ -1,13 +1,21 @@
 /**
  * @module
- * The shop's own identity as it appears on an invoice, read per call rather than captured at
- * import — the pattern `inventory/config.ts` sets, so a deployment can correct a legal name
- * without a restart.
+ * The shop's own identity as it appears on an invoice, plus the bank-transfer payment method's
+ * deployment config — both read per call rather than captured at import, the pattern
+ * `inventory/config.ts` sets, so a deployment can correct either without a restart.
  *
- * Owned by `orders` because `./emails`' invoice payload is the only reader. The VAT RATES are a
- * different thing with a different owner — `products` resolves those (`@modules/products`'s
- * `config.ts`), and this module only freezes the number it is handed.
+ * Owned by `orders` because `./emails`' invoice payload is the only reader of the shop identity.
+ * The bank-transfer values are owned here for a different reason: `orders` renders
+ * `transferInstructions` on its own responses AND enforces the open-transfer cap at order
+ * creation, so a business rule about how many pending transfers one account may hold belongs with
+ * the entity it constrains, not in `infrastructure`. `payments` and `cart` read these through
+ * `services/index.ts`'s re-export (a module's public barrel may only publish services/domain/
+ * events/emails/model, never a bare `config` — see `local/barrel-allowed-sources`); the VAT RATES
+ * are a different thing with a different owner — `products` resolves those
+ * (`@modules/products`'s `config.ts`), and this module only freezes the number it is handed.
  */
+
+import { environmentNumber } from '@infrastructure/runtime/environment';
 
 /**
  * The shop's own country — the ONLY jurisdiction VAT is ever charged at: no destination lookup,
@@ -33,3 +41,69 @@ export const shopVatNumber = (): string | undefined =>
  */
 export const shopLegalName = (): string | undefined =>
     process.env.NODE_SHOP_LEGAL_NAME || undefined;
+
+/**
+ * The account name a transfer should be made out to. Unset means transfer is not offered at all.
+ * @returns the configured beneficiary, or `undefined`
+ */
+export const bankTransferBeneficiary = (): string | undefined =>
+    process.env.NODE_BANK_TRANSFER_BENEFICIARY || undefined;
+
+/**
+ * The account IBAN, exactly as configured — whatever shape it was typed in, spaces included.
+ * `payments`' boot check runs it through `ibantools`' own `electronicFormatIBAN` before
+ * validating, so this getter does no normalising of its own.
+ * @returns the configured IBAN, or `undefined`
+ */
+export const bankTransferIban = (): string | undefined =>
+    process.env.NODE_BANK_TRANSFER_IBAN || undefined;
+
+/**
+ * The IBAN grouped into 4-character blocks, the way a bank's own transfer form shows one — what
+ * the customer actually copies. Not `ibantools`' `friendlyFormatIBAN`: that call belongs beside
+ * the validation it pairs with, in `payments`, and duplicating the package's one import here would
+ * cost `ibantools` its single-module ownership on the generated
+ * `docs/tools/package-dependencies.md` page, for a four-character chunking rule with no edge case
+ * to get wrong.
+ * @returns the grouped IBAN, or `undefined` when none is configured
+ */
+export const bankTransferIbanFriendly = (): string | undefined => {
+    const iban = bankTransferIban();
+    return iban
+        ?.replaceAll(/\s+/g, '')
+        .replaceAll(/(.{4})/g, '$1 ')
+        .trim();
+};
+
+/**
+ * The account's BIC/SWIFT code — optional even once transfer is offered, since a domestic IBAN
+ * is often enough on its own.
+ * @returns the configured BIC, or `undefined`
+ */
+export const bankTransferBic = (): string | undefined =>
+    process.env.NODE_BANK_TRANSFER_BIC || undefined;
+
+/**
+ * How long checkout holds stock for a `bank_transfer` order before the reservation sweep
+ * releases it — a week by default, since a transfer is not a same-day action the way a card is.
+ * @returns the hold window, in hours
+ */
+export const bankTransferHoldHours = (): number =>
+    environmentNumber('NODE_BANK_TRANSFER_HOLD_HOURS', 168, 1);
+
+/**
+ * How many of one account's orders may sit `pending` on a transfer at once. A week-long hold is
+ * otherwise free to take — this is what stops one account hoarding stock across many
+ * uncompleted orders.
+ * @returns the cap on open transfer orders per account
+ */
+export const bankTransferMaxOpenPerAccount = (): number =>
+    environmentNumber('NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT', 2, 0);
+
+/**
+ * Whether this deployment offers `bank_transfer` at all — both the beneficiary and the IBAN must
+ * be set. `GET /payments/methods` reads this; checkout refuses the method when it is `false`.
+ * @returns `true` once both are configured
+ */
+export const bankTransferEnabled = (): boolean =>
+    Boolean(bankTransferBeneficiary() && bankTransferIban());

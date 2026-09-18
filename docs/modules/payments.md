@@ -238,10 +238,11 @@ stateDiagram-v2
   exception: the RF code checkout minted for THIS order, stored once on `transferReference` and
   never recomputed. Present only while `paymentMethod` is `bank_transfer` and `status` is
   `pending`. See [Matching a transfer back to its order](#matching-a-transfer-back-to-its-order).
-- **`orders`, not `payments`, computes `transferInstructions`.** `payments` already depends on
-  `orders` (see this page's neighbourhood), so the reverse import would cycle. The beneficiary/IBAN/
-  BIC getters live in `@infrastructure/adapters/bank-transfer.ts` instead — plain values, no
-  `ibantools` — so both modules can reach them without one depending on the other. See
+- **`orders` owns the bank-transfer business rules outright**, `transferInstructions` and the
+  open-transfer cap alike — the reference-minting and open-transfer-cap config that used to sit in
+  `infrastructure` to dodge a cycle now lives in `orders/config.ts`, since `orders` is the entity
+  both rules constrain. `payments` and `cart` read it through `orders`' own barrel; `payments`
+  keeps the `ibantools` validation, the one thing that stays genuinely its own. See
   [Libraries a module owns](../theory/modules.md#libraries-a-module-owns).
 - **Two emails, and a card timeout gets neither.** Checkout sends the instructions and the deadline
   instead of the ordinary confirmation — there is nothing to confirm yet. The sweep's own expiry
@@ -266,14 +267,14 @@ flowchart LR
 - **The reference is an ISO 11649 "RF" creditor reference** — the standard SEPA reference field,
   e.g. `RF13 2EY8 H44V JAVZ KX80 JRL`. Its mod-97 check digits (ISO 7064 MOD 97-10, the same scheme
   IBAN itself uses) mean a mistyped code is REJECTED rather than silently matching the wrong order.
-  `payments/domain/reference.ts`'s `buildReference` mints it at checkout, from the order's own id
-  encoded as base-36 — lossless over every bit of the id, so two different orders can never mint
-  the same code the way a hash could, which is what makes `transferReference`'s unique index a
-  true invariant rather than a rarely-firing safety net.
-- **Minted once, at checkout, never recomputed.** `cart`'s checkout pre-generates the order's id so
-  the reference can be minted from it in the SAME write that creates the order — see
-  `OrderDocument.transferReference`'s own comment. Absent on a `card` order, and on a
-  `bank_transfer` order that predates this field.
+  `orders/domain/transfer-reference.ts`'s `buildReference` mints it as part of writing the order,
+  from the order's own id encoded as base-36 — lossless over every bit of the id, so two different
+  orders can never mint the same code the way a hash could, which is what makes
+  `transferReference`'s unique index a true invariant rather than a rarely-firing safety net.
+  `payments`' lookup endpoint imports `parseReference` from the same file.
+- **Minted once, in the same write that creates the order, never recomputed.** `orders`' `placeOrder`
+  mints it atomically as part of the write — see `OrderDocument.transferReference`'s own comment.
+  Absent on a `card` order, and on a `bank_transfer` order that predates this field.
 - **The lookup accepts the pre-existing case too.** `GET /payments/order-by-reference` also
   accepts a raw 24-character order id, so an order placed before this field existed still resolves
   — there is no backfill, and on a boilerplate there are ~zero pending transfer orders to backfill

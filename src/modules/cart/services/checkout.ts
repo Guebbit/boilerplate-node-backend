@@ -6,16 +6,9 @@
  * See: docs/modules/cart-checkout.md
  */
 
-import { Types } from 'mongoose';
 import type { CastError } from 'mongoose';
 import { getDefaultLocale, t } from '@infrastructure/i18n';
-import { enqueueEmail } from '@infrastructure/adapters/mailer';
-import {
-    bankTransferBeneficiary,
-    bankTransferBic,
-    bankTransferIbanFriendly,
-    bankTransferMaxOpenPerAccount
-} from '@infrastructure/adapters/bank-transfer';
+import { bankTransferMaxOpenPerAccount } from '@modules/orders';
 import {
     generateSuccess,
     generateReject,
@@ -26,36 +19,23 @@ import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import type { Lean } from '@infrastructure/persistence/create-repository';
 import {
     orderService,
-    orderConfirmEmail,
-    bankTransferInstructionsEmail,
-    freezeOrderLines,
-    allocateInvoiceNumber,
+    placeOrder,
+    sendOrderPlacedEmail,
     retractOrder,
     sumLineItems,
     type OrderDocument
 } from '@modules/orders';
 import type { ProductDocument } from '@modules/products';
 import { userService } from '@modules/users';
-import { inventoryService } from '@modules/inventory';
 import { addressForCheckout, type AddressItem } from '@modules/addresses';
 import { findShippingMethod, priceShipping } from '@modules/delivery';
-import { buildReference, paymentService } from '@modules/payments';
+import { paymentService } from '@modules/payments';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { cartAnalyticsEvents } from '../analytics';
 import { cartRepository } from '../repository';
 import { evaluateCheckout } from '../domain';
-import { isJoined, readCartLines, type JoinedCartLine } from './view';
-
-/**
- * The basket as `inventory` wants it — product ids and quantities, nothing else. Mapping here
- * rather than handing over the cart lines is what keeps `inventory` from learning what a cart is.
- *
- * @param lines - the checkout's resolved lines
- * @returns the same lines as stock claims
- */
-const toStockLines = (lines: readonly JoinedCartLine[]) =>
-    lines.map((line) => ({ productId: line.productId, quantity: line.quantity }));
+import { isJoined, readCartLines } from './view';
 
 /**
  * The snapshot an order embeds, from a book entry: the shipment's fields, none of the book's.
@@ -212,24 +192,6 @@ const runCheckout = async (
             }
         ]);
 
-    // Resolved into the buyer's language only now every check has passed — translation must
-    // never gate a purchase, so it runs strictly after the stock/shipping verdicts above.
-    // `.toObject()`: `freezeOrderLines` wants a plain object, and `product` here is a hydrated
-    // document from `readCartLines`'s `populate()` — see that function's own docblock. Cast, not
-    // inferred: `ProductDocument`'s untyped `DocType` generic makes Mongoose's own `toObject()`
-    // overload resolve to `any`; `Lean<ProductDocument>` is the plain shape it actually returns
-    // at runtime.
-    // Run alongside the freeze rather than after it — the two are independent, and the number
-    // must exist by the time the order below is written, not by the time it is downloaded.
-    const [orderItems, invoiceNumber] = await Promise.all([
-        freezeOrderLines(
-            buyerLocale,
-            joined.map(({ product }) => product.toObject() as Lean<ProductDocument>),
-            joined.map(({ quantity }) => quantity)
-        ),
-        allocateInvoiceNumber()
-    ]);
-
     /*
      * `bank_transfer`'s hold is `methodInfo.holdHours`, converted to the unit
      * `reserveForOrder` and `payBy` both want; `card` passes `undefined` through and gets
@@ -241,98 +203,63 @@ const runCheckout = async (
         holdMinutes === undefined ? undefined : new Date(Date.now() + holdMinutes * 60_000);
 
     /*
-     * Pre-generated so a `bank_transfer` order's RF reference can be minted from the SAME id the
-     * write below is about to create — the reference must name the row it will end up on, not a
-     * second id nobody else ever sees. `undefined` for `card`: nothing here reads a reference for
-     * a method that settles through the provider instead of an admin's eyes on a bank statement.
-     */
-    const orderId = new Types.ObjectId();
-    const transferReference =
-        requestedMethod === 'bank_transfer' ? buildReference(orderId.toHexString()) : undefined;
-
-    /*
-     * The order is written first, and the units are held against it. Forced
-     * rather than chosen: a hold is keyed by the order's id, and that key is what
-     * makes reserving exactly once. It is also the safer half — an order that
-     * briefly exists and is retracted is recoverable, units taken with nothing
-     * recording who took them are not.
-     */
-    const order = await orderService.createRaw({
-        _id: orderId,
-        userId: new Types.ObjectId(user.id),
-        email: user.email,
-        items: orderItems,
-        invoiceNumber,
-        paymentMethod: requestedMethod,
-        ...(payBy ? { payBy } : {}),
-        ...(transferReference ? { transferReference } : {}),
-        ...(address ? { shippingAddress: toShippingAddress(address) } : {}),
-        // The cost frozen against THESE lines' total — the free-above
-        // rule prices the basket being bought, not a later edit of it.
-        ...(shippingMethod
-            ? {
-                  shippingMethod: shippingMethod.id,
-                  shippingCost: priceShipping(shippingMethod, sumLineItems(orderItems).price)
-              }
-            : {})
-    } as Partial<OrderDocument>);
-
-    /*
-     * Hold the units. The verdict above was only the pre-flight; this is
-     * the half that holds under concurrency, and a loser gets `false`
-     * with nothing half-held — the reserve rolls its own lines back.
+     * The write itself — freezing the lines, allocating the invoice number, minting a
+     * `bank_transfer` reference and holding the stock — is `placeOrder`'s job; this function keeps
+     * only what is genuinely checkout's own: the pre-flight above, and the cart-clearing/lost-race
+     * handling below.
      *
-     * The units are not SOLD here. They stay on the shelf until the
-     * payment lands or the hold ends, so an unpaid order no longer
-     * removes stock from the world.
+     * `.toObject()`: `product` here is a hydrated document from `readCartLines`'s `populate()` —
+     * see that function's own docblock. Cast, not inferred: `ProductDocument`'s untyped `DocType`
+     * generic makes Mongoose's own `toObject()` overload resolve to `any`; `Lean<ProductDocument>`
+     * is the plain shape it actually returns at runtime.
      */
-    const outcome = await inventoryService.reserveForOrder(
-        String(order._id),
-        toStockLines(joined),
-        holdMinutes
-    );
-    if (!outcome.held) {
-        // Nothing is held — the reserve rolled its own lines back — so only the order goes.
-        await retractOrder(order, false);
+    const outcome = await placeOrder({
+        userId: user.id,
+        email: user.email,
+        locale: buyerLocale,
+        lines: joined.map((line) => ({
+            item: { productId: line.productId, quantity: line.quantity },
+            product: line.product.toObject() as Lean<ProductDocument>
+        })),
+        paymentMethod: requestedMethod,
+        payBy,
+        shipping: {
+            ...(address ? { address: toShippingAddress(address) } : {}),
+            ...(shippingMethod
+                ? {
+                      method: {
+                          id: shippingMethod.id,
+                          priceFor: (frozenLines) =>
+                              priceShipping(shippingMethod, sumLineItems(frozenLines).price)
+                      }
+                  }
+                : {}),
+            holdMinutes
+        }
+    });
+    if (!outcome.ok) {
+        // `no-lines`/`product-missing` should not occur here — `evaluateCheckout` above already
+        // proved the basket good — but map them defensively rather than assume the invariant.
+        if (outcome.reason !== 'insufficient-stock')
+            return generateReject(409, [
+                { code: 'CART_PRODUCT_UNAVAILABLE', message: t('cart.product-unavailable') }
+            ]);
         return generateReject(409, [
             {
                 code: 'CART_INSUFFICIENT_STOCK',
                 message: t('cart.insufficient-stock'),
-                // What actually blocked it, read at the moment it
-                // refused. Without this the customer is editing a cart
-                // by trial and error.
+                // What actually blocked it, read at the moment it refused. Without this the
+                // customer is editing a cart by trial and error.
                 details: { lines: outcome.shortfalls }
             }
         ]);
     }
+    const { order } = outcome;
 
     const clearedCart = await cartRepository.clearLinesIfUnchanged(userId, version);
     if (clearedCart) {
-        /*
-         * Sent from the service, not the controller: only this point knows the order
-         * stood. Same `buyerLocale` the snapshot above was frozen in, so the email and the
-         * order it describes never quote two different languages.
-         *
-         * A `bank_transfer` order gets the instructions and deadline instead of a
-         * confirmation — there is nothing to confirm yet. `beneficiary`/`iban` narrow to
-         * `string` here because `methodInfo` already proved the method offered, which
-         * `bankTransferEnabled()` only answers `true` when both are set.
-         */
-        const beneficiary = bankTransferBeneficiary();
-        const iban = bankTransferIbanFriendly();
-        const bic = bankTransferBic();
-        const mail =
-            requestedMethod === 'bank_transfer' && beneficiary && iban && payBy && transferReference
-                ? bankTransferInstructionsEmail(
-                      buyerLocale,
-                      user.username,
-                      order,
-                      { beneficiary, iban, ...(bic ? { bic } : {}), reference: transferReference },
-                      payBy,
-                      String(order._id)
-                  )
-                : orderConfirmEmail(buyerLocale, user.username, order, String(order._id));
-        void enqueueEmail({ to: user.email, subject: mail.subject }, mail.template, mail.data);
+        // Sent from the service, not the controller: only this point knows the order stood.
+        sendOrderPlacedEmail(order, buyerLocale, user.username, user.email);
         return generateSuccess<OrderDocument>(order);
     }
 

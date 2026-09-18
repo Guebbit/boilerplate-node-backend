@@ -1,10 +1,10 @@
 /**
- * `payments/domain/reference.ts` — the RF reference `buildReference` mints and `parseReference`
- * reads back, and the guarantees that matter for matching money to the right order: a round trip
- * survives, a mistyped character is rejected rather than silently resolving, and an order that
- * predates this field is still reachable through its raw id.
+ * `orders/domain/transfer-reference.ts` — the RF reference `buildReference` mints and
+ * `parseReference` reads back, and the guarantees that matter for matching money to the right
+ * order: a round trip survives, a mistyped character is rejected rather than silently resolving,
+ * and an order that predates this field is still reachable through its raw id.
  */
-import { buildReference, parseReference } from '../../domain/reference';
+import { buildReference, parseReference } from '../../domain/transfer-reference';
 
 /** A real ObjectId's hex, picked arbitrarily — any 24 hex characters exercise the same code path. */
 const ORDER_ID = '507f1f77bcf86cd799439011';

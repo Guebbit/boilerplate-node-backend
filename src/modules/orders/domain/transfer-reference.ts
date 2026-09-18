@@ -1,11 +1,16 @@
 /**
  * @module
- * The ISO 11649 "RF" creditor reference a `bank_transfer` checkout mints for an order, and the
+ * The ISO 11649 "RF" creditor reference `placeOrder` mints for a `bank_transfer` order, and the
  * matching admin-side parse — the code a customer writes into their transfer, read back off the
  * bank's own website. Mod-97 (ISO 7064 MOD 97-10, the same scheme IBAN itself uses) check digits
  * mean a mistyped code is rejected outright rather than silently matching the wrong order.
  *
- * Hand-rolled rather than a dependency: `ibantools` (this module's own IBAN/BIC library) has no
+ * Owned by `orders`, not `payments`: the reference names a row on THIS module's own collection,
+ * minted atomically as part of writing it, so a retried write can never mint two different
+ * references for the one order it belongs to. `payments`' lookup endpoint imports
+ * {@link parseReference} from here to read one back.
+ *
+ * Hand-rolled rather than a dependency: `ibantools` (`payments`' own IBAN/BIC library) has no
  * ISO 11649 support, and the arithmetic below has no edge case a library would need to absorb —
  * see `docs/modules/payments.md#libraries`.
  *

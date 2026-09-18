@@ -6,9 +6,6 @@
  */
 
 import { getDefaultLocale, t } from '@infrastructure/i18n';
-import { enqueueEmail } from '@infrastructure/adapters/mailer';
-import { logger } from '@infrastructure/adapters/logger';
-import { orderConfirmEmail } from '../emails';
 import { OrderStatus } from '@types';
 import type { SearchOrdersRequest, CartItem, UpdateOrderByIdRequest } from '@types';
 import type { OrderDocument, OrderPendingEffect } from '../model';
@@ -29,10 +26,11 @@ import { ordersAnalyticsEvents } from '../analytics';
 import { ordersAuditActions } from '../audit';
 import { ORDER_CREATED, ORDER_STATUS_CHANGED } from '../events';
 import { orderRepository } from '../repository';
-import { canTransition, checkOrderLines, statusesReachableFrom } from '../domain';
-import { freezeOrderLines } from './snapshot';
+import { canTransition, statusesReachableFrom } from '../domain';
 import { resolveCurrentImages } from './current';
-import { allocateInvoiceNumber } from './invoice-numbering';
+import { freezeOrderLines } from './snapshot';
+import { placeOrder } from './place';
+import { sendOrderPlacedEmail } from './notify';
 // `userId` is stored as an ObjectId, so writes have to coerce it. The rule (and its failure
 // mode on a malformed id) lives in the repository layer; this is the only import of it here.
 import { toObjectId } from '@infrastructure/persistence/create-repository';
@@ -110,21 +108,6 @@ export const recordCreated = (
 };
 
 /**
- * The uncomposed insert `create` (below) builds toward — `@modules/cart`'s checkout calls this
- * directly instead of `create`, because checkout runs its OWN version of the same steps
- * (`freezeOrderLines`, `allocateInvoiceNumber`, `inventoryService.reserveForOrder`,
- * {@link retractOrder}) inside its own read-cart/write-order/clear-cart sequence, and rolls the
- * whole thing back itself if clearing the cart fails. `create`'s orchestration would duplicate
- * that sequence rather than fit inside it. An interim door, not a settled one: checkout assembling
- * its own order-shaped object is exactly the granular-pieces seam a future `placeOrder` aggregate
- * method would fold both callers behind.
- *
- * @param data - an already-built order, snapshot and invoice number included
- */
-export const createRaw = (data: Partial<OrderDocument>): Promise<OrderDocument> =>
-    orderRepository.create(data);
-
-/**
  * How many `bank_transfer` orders this account has open right now — the cap checkout enforces
  * before letting a caller take a free week-long hold on more stock than they can be trusted with.
  *
@@ -136,7 +119,7 @@ export const countOpenBankTransfers = (userId: string): Promise<number> =>
 /**
  * The order a `bank_transfer` checkout stamped with this RF reference — `payments`' admin lookup,
  * which reads it back off a bank statement. Exact match only: normalizing what an admin pasted is
- * `payments/domain/reference.ts`'s job, before it gets here.
+ * `orders/domain/transfer-reference.ts`'s job, before it gets here.
  *
  * @param reference - an already-normalized RF reference
  * @returns the order, or `null` when no order carries it
@@ -159,40 +142,6 @@ export const updateStatusIfIn = (
 ): Promise<OrderDocument | null> => orderRepository.updateStatusIfIn(id, from, to, scope, effects);
 
 /**
- * Undo an order the request that wrote it cannot keep — the compensation both this module's
- * `create` and `@modules/cart`'s checkout run when a later step refuses.
- *
- * Never rejects: the refusal it precedes is already the right answer, and a failed cleanup must
- * not report it as a 500. Each step is guarded alone so neither aborts the other; the release
- * goes first, so it still names a live order. A refused reserve deletes the hold row outright,
- * so no sweep can find what is left behind — these logs are the only signal a human gets.
- *
- * @param order - the order being retracted
- * @param releaseHold - whether units are still held against it
- */
-export const retractOrder = (order: OrderDocument, releaseHold: boolean): Promise<void> => {
-    const orderId = String(order._id);
-
-    // The raw `error`, not a flattened message — `redactFormat` (`adapters/logger.ts`) serializes
-    // an `Error` into `{name, message, stack}` before JSON output.
-    const report = (message: string) => (error: unknown) => {
-        logger.error({
-            message,
-            orderId,
-            error
-        });
-    };
-
-    return (
-        releaseHold
-            ? inventoryService.releaseForOrder(orderId).catch(report('Rollback: hold not released'))
-            : Promise.resolve()
-    )
-        .then(() => orderRepository.deleteOne(order))
-        .catch(report('Rollback: order not deleted'));
-};
-
-/**
  * Create a new order from `{ productId, quantity }` items — looks up each product and stores a
  * full snapshot.
  * @param items - `{ productId, quantity }` pairs
@@ -209,67 +158,34 @@ export const create = async (
     context: CallerContext
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
     // The whole language chain — both the snapshot each line freezes and, further down, the
-    // confirmation email — decided once so the two cannot disagree. The BUYER's stored language,
+    // placed-order email — decided once so the two cannot disagree. The BUYER's stored language,
     // never the caller's: this endpoint lets an admin place an order for someone else, and
     // `context.locale` there is the admin's own UI language, not the recipient's. Same rule and
     // same lookup as `@modules/cart`'s checkout, so the two creation paths cannot diverge.
     const buyer = await userService.getById(userId);
     const buyerLocale = buyer?.locale ?? getDefaultLocale();
 
-    // One rule call, two outcomes. `Promise.all([])` settles without a query, so an empty basket
-    // still costs no round trip. The rule is in `domain/rules.ts`; mapping it to a status code
-    // and translated copy is this layer's job.
+    // `Promise.all([])` settles without a query, so an empty basket still costs no round trip.
     const resolvedItems = await Promise.all(
         items.map((item) =>
             productService.findByIdRaw(item.productId).then((product) => ({ item, product }))
         )
     );
 
-    const verdict = checkOrderLines(
-        resolvedItems.map(({ item, product }) => ({ quantity: item.quantity, product }))
-    );
-    if (!verdict.ok)
-        return verdict.reason === 'no-lines'
-            ? generateReject(422, [t('generic.error-missing-data')])
-            : generateReject(404, [t('products.not-found')]);
-
-    // Resolved into the buyer's language only now the lines are known good — translation must
-    // never gate a purchase, so it runs strictly after the availability verdict above. The
-    // invoice number is allocated alongside: the two are independent, and it must exist by the
-    // time the order below is written, not by the time it is downloaded.
-    const [orderItems, invoiceNumber] = await Promise.all([
-        freezeOrderLines(
-            buyerLocale,
-            resolvedItems.map(({ product }) => product!),
-            resolvedItems.map(({ item }) => item.quantity)
-        ),
-        allocateInvoiceNumber()
-    ]);
-
-    /*
-     * Write the order, then hold its units — a hold is keyed by the order it belongs to, so
-     * the order must exist first. The admin path sells the same shelf the storefront does:
-     * skipping the hold here is how a manual order oversells it, so this goes through the same
-     * `reserveForOrder` — one conditional write per line, all-or-nothing, rolled back by
-     * `inventory` if any line can't be covered.
-     */
-    const order = await orderRepository.create({
-        userId: toObjectId(userId),
+    // The admin path sells the same shelf the storefront does — the same write, freeze, invoice
+    // allocation and stock hold `placeOrder` runs for `@modules/cart`'s checkout, with no
+    // payment method or shipping: this endpoint offers neither.
+    const outcome = await placeOrder({
+        userId,
         email,
-        items: orderItems,
-        invoiceNumber
+        locale: buyerLocale,
+        lines: resolvedItems
     });
-
-    const outcome = await inventoryService.reserveForOrder(
-        String(order._id),
-        resolvedItems.map(({ item }) => ({
-            productId: item.productId,
-            quantity: item.quantity
-        }))
-    );
-    if (!outcome.held) {
-        // Nothing is held — the reserve rolled its own lines back — so only the order goes.
-        await retractOrder(order, false);
+    if (!outcome.ok) {
+        if (outcome.reason === 'no-lines')
+            return generateReject(422, [t('generic.error-missing-data')]);
+        if (outcome.reason === 'product-missing')
+            return generateReject(404, [t('products.not-found')]);
         return generateReject(409, [
             {
                 code: 'ORDER_INSUFFICIENT_STOCK',
@@ -279,17 +195,13 @@ export const create = async (
             }
         ]);
     }
+    const { order } = outcome;
 
     recordCreated(order, context);
 
-    /*
-     * The confirmation mail for THIS path only — `recordCreated` is shared with
-     * `@modules/cart`'s checkout, which sends its own, so mailing here too would double-send.
-     * Same `buyerLocale` the snapshot above was frozen in, so the email and the order it
-     * describes never quote two different languages.
-     */
-    const mail = orderConfirmEmail(buyerLocale, email, order, String(order._id));
-    void enqueueEmail({ to: email, subject: mail.subject }, mail.template, mail.data);
+    // `recordCreated` is shared with `@modules/cart`'s checkout, which sends its own placed-order
+    // email, so mailing here too would double-send if this weren't split per caller.
+    sendOrderPlacedEmail(order, buyerLocale, email, email);
 
     return generateSuccess(order, 201, t('orders.creation-success'));
 };

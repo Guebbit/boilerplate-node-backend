@@ -14,7 +14,7 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, readOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { getOrderByReference, recordOfflinePayment } from '@modules/payments/services';
-import { buildReference } from '@modules/payments/domain/reference';
+import { buildReference } from '@modules/orders';
 import type { ResponseReject } from '@infrastructure/http/response';
 
 setupTestDb();

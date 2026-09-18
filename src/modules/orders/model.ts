@@ -19,11 +19,7 @@ import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import type { ProductSnapshot } from '@modules/products';
 import { applySerialization } from '@infrastructure/persistence/serialize';
-import {
-    bankTransferBeneficiary,
-    bankTransferBic,
-    bankTransferIbanFriendly
-} from '@infrastructure/adapters/bank-transfer';
+import { bankTransferBeneficiary, bankTransferBic, bankTransferIbanFriendly } from './config';
 import { sumLineItems, orderTotal, type LineItem } from './domain/totals';
 import { orderTaxBreakdown, type TaxableLineItem } from './domain/tax';
 import { OrderStatus } from '@types';
@@ -141,7 +137,7 @@ export interface OrderDocument
     pendingEffects?: OrderPendingEffect[];
     /**
      * The RF creditor reference this order's `bank_transfer` checkout minted
-     * (`src/modules/payments/domain/reference.ts`'s `buildReference`), from the SAME id this write
+     * (`src/modules/orders/domain/transfer-reference.ts`'s `buildReference`), from the SAME id this write
      * creates — never recomputed afterwards. Absent on a `card` order, and on a `bank_transfer`
      * order that predates this field; `applyTransferInstructions` falls back to the raw id for the
      * latter case, and `GET /payments/order-by-reference` accepts the raw id too, for the same

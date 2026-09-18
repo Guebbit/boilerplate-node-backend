@@ -13,8 +13,7 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { orderService, type OrderDocument } from '@modules/orders';
-import { parseReference } from '../domain/reference';
+import { orderService, parseReference, type OrderDocument } from '@modules/orders';
 
 /**
  * Every raw ObjectId string `parseReference` returns is exactly 24 lowercase hex characters — a
