@@ -210,6 +210,33 @@ describe('getAuth', () => {
         expect(response.status).not.toHaveBeenCalled();
         expect(response.json).not.toHaveBeenCalled();
     });
+
+    it('resolves once when two mounted routers both apply it to the same request', async () => {
+        // Two modules sharing a URL prefix (`account`, `addresses`) both mount this guard on
+        // their own router; an unmatched request in the first falls through Express to the
+        // second. The JWT boundary must be hit once, not twice.
+        const resolved = { ...asAdmin('user-1'), username: 'tester', imageUrl: '/images/a.png' };
+        mockedVerifyAccessToken.mockResolvedValue(resolved as never);
+
+        const request = makeRequest({ authorization: 'Bearer valid.token' });
+        await runUntilNext(getAuth, request, makeResponseStub());
+        await runUntilNext(getAuth, request, makeResponseStub());
+
+        expect(mockedVerifyAccessToken).toHaveBeenCalledTimes(1);
+        expect(request.authContext).toEqual(resolved);
+    });
+
+    it('resolves once for a credential caller across two mounted routers', async () => {
+        const request = makeRequest();
+        request.caller = { kind: 'credential', credentialId: 'cred-1' } as never;
+
+        const next = await runUntilNext(getAuth, request, makeResponseStub());
+
+        // Already resolved (by whichever router ran first) — the second pass must not touch the
+        // JWT boundary at all, credential or not.
+        expect(next).toHaveBeenCalledTimes(1);
+        expect(mockedVerifyAccessToken).not.toHaveBeenCalled();
+    });
 });
 
 describe('isAuth', () => {

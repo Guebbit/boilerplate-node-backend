@@ -95,6 +95,16 @@ export const getTokenBearer = (request: Request) => request.header('Authorizatio
  * @param next - always called on the JWT path; called by `apiKeyLimiter` on the credential path
  */
 export const getAuth = (request: Request, response: Response, next: NextFunction) => {
+    // Two modules can share a URL prefix (e.g. `account` and `addresses` both under `/account`),
+    // each mounting this guard on its own router. An unmatched request in the first router falls
+    // through Express to the second, which would otherwise redo the JWT verify / user read /
+    // membership read — and spend a second unit of an `sk_` caller's request budget — for work
+    // already done. A caller already resolved (JWT or API key) is left exactly as-is.
+    if (request.authContext ?? request.caller) {
+        next();
+        return;
+    }
+
     const token = getTokenBearer(request);
 
     if (!token) {
