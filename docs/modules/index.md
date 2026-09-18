@@ -179,6 +179,8 @@ solved problem where modelling effort would be waste.
 - [`account`](./account.md) — `/account`. Who is making this request, plus the address book.
   Deeper: [Sessions](./account-sessions.md), [Two-factor auth](./account-two-factor.md),
   [OAuth](./account-oauth.md).
+- [`antibot`](./antibot.md) — `/antibot`. Rung 3 of the anti-automation ladder: the human-challenge
+  port, and the endpoint that tells a frontend which provider is active.
 - [`audit-logs`](./audit-logs.md) — headless. Owns the trail and no URL of its own.
 - [`feedback`](./feedback.md) — `/feedback`. Contact submissions and what an admin does with them.
 - [`locales`](./locales.md) — `/locales`. Language discovery and the API's own message dictionary.

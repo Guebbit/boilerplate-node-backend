@@ -66,7 +66,7 @@ Information disclosure feeds entry, entry feeds escalation, escalation feeds imp
 | [Injection](injection.md)                               | untrusted data interpreted as code — SQL, NoSQL, shell, template, CRLF | closed by one type gate at the boundary                    |
 | [Client-side](client-side.md)                           | XSS, CSRF, clickjacking, open redirect — attacks in the browser        | mostly the frontend's; the shared rows are here            |
 | [Authentication](authentication.md)                     | credentials, sessions, JWTs, 2FA, OAuth                                | the most-invested family in the repo                       |
-| [Authorization](authorization.md)                       | IDOR, privilege escalation, forced browsing, workflow bypass           | one app-wide assertion, not twelve local ones              |
+| [Authorization](authorization.md)                       | IDOR, privilege escalation, forced browsing, workflow bypass           | one app-wide assertion, not a local one per module         |
 | [Business logic, money and payments](business-logic.md) | price manipulation, races, refunds, the PSP                            | closed, except what needs a real processor                 |
 | [Files, uploads and paths](files-and-uploads.md)        | traversal, unrestricted upload, image bombs, stored XSS                | three gates in a fixed order                               |
 | [Server-side request forgery](ssrf.md)                  | the server made to fetch an attacker's URL                             | no surface — every outbound host is hard-coded             |

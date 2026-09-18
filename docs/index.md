@@ -92,7 +92,7 @@ Big picture: architecture, layers, and request flow.
 
 One page per domain, top to bottom: what it owns, who depends on it, its collection fields, its
 routes, and everything it emits.
-Start at [the whole map](./modules/) — thirteen domains grouped by subdomain, every node clickable.
+Start at [the whole map](./modules/) — every domain grouped by subdomain, every node clickable.
 
 ### [Tools](./tools/)
 

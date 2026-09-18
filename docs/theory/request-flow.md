@@ -186,7 +186,7 @@ Heavy tasks (email, PDF generation) are pushed to [RabbitMQ](../tools/rabbitmq.m
 
 `databaseErrorInterpreter` in `src/infrastructure/http/errors.ts` is the single place that decides
 which driver failures describe the **request** rather than the server. One function, so the answer
-is the same on all twelve models — a call-site `try`/`catch` is invisible to every endpoint that
+is the same on every model — a call-site `try`/`catch` is invisible to every endpoint that
 did not think to write one.
 
 | Raised by                    | Status | Why it is the caller's problem                                                                            |
@@ -222,7 +222,7 @@ the schema's `trim` reduces it to `''` and `required` refuses it — a 500 for a
 keyed route, found by `tests/fuzz/endpoints.fuzz.test.ts` on its third generated case.
 
 Closing it **at the contract** is still the better fix where the constraint can be expressed there.
-This branch is the floor under that, across all twelve models at once.
+This branch is the floor under that, across every model at once.
 
 ### Where a fifth branch goes
 

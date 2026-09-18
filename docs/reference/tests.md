@@ -5,7 +5,7 @@ _which_ test covers a rule is most of the value of having it.
 
 Tests live in two places, and the split is by scope rather than by taste. A test about **one
 module** lives inside that module. A test about **the system** — infrastructure, the kernel, or a
-rule that holds across all thirteen modules — lives in `tests/`.
+rule that holds across every module — lives in `tests/`.
 `eslint-plugin-boundaries` enforces the line, at the offending import rather than by naming a
 file — see `eslint.config.ts`.
 
@@ -136,7 +136,7 @@ what the `high`/`low`/`break` thresholds mean.
 
 ## `tests/cross-cutting/` — rules that hold across every module
 
-The house speciality: one file per architectural rule, asserted over all thirteen modules at once.
+The house speciality: one file per architectural rule, asserted over every module at once.
 A new module is covered the day it is added, without anyone writing a test for it.
 
 | File                                                        | What it guarantees                                                                                                                                                                                                                              | Read next                                                                                                                  |

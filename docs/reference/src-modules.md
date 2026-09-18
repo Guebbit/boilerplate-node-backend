@@ -1,7 +1,7 @@
 # Modules
 
-`src/modules/` is most of the repository, and almost none of it is unique. Fourteen domains are
-built from the same two dozen file shapes, so this page explains each **shape** once and then says
+`src/modules/` is most of the repository, and almost none of it is unique. Every domain is built
+from the same two dozen file shapes, so this page explains each **shape** once and then says
 which module carries which.
 
 A module is a typed value declared in its manifest, not a folder convention — see
@@ -46,7 +46,8 @@ flowchart TD
 
 ## The core shape
 
-Every module has these, and a reader who knows them knows thirteen of the fourteen.
+Most modules have all of these. `antibot` and `observability` are the exceptions — neither owns a
+collection, so neither has a `model.ts`/`repository.ts` — everything else here still holds.
 
 | Pattern                          | What it is                                                                                                                                                                                                                                                                                                          | Read next                                                                                                               |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
@@ -111,8 +112,8 @@ Every module also carries its own unit, contract and factory files. They are cat
 Per-module answers live on the [Modules](../modules/) pages, one per domain, listed on
 [its overview](../modules/index.md#every-module).
 
-Deliberately not restated here. This page says what a SHAPE is — one answer for all fourteen
-domains; a module page says what its domain DECIDED. Which module happens to carry a `metrics.ts`
+Deliberately not restated here. This page says what a SHAPE is — one answer for every
+domain; a module page says what its domain DECIDED. Which module happens to carry a `metrics.ts`
 today is neither, and is answered in one command:
 
 ```bash

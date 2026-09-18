@@ -188,8 +188,8 @@ Both halves are live:
 
 ### The folder is optional
 
-A few modules have one — `orders`, `cart`, `delivery` and `inventory` — out of thirteen. Creating
-an empty `domain/` to match a shape is how ceremony starts.
+A few modules have one — `orders`, `cart`, `delivery`, `inventory`, `payments` and `webhooks` — most
+don't. Creating an empty `domain/` to match a shape is how ceremony starts.
 
 **`delivery/domain/` is the shortest worked example, and the best argument for the folder.** It is
 two pure functions, `findShippingMethod` and `priceShipping`, and they are the module's _entire_

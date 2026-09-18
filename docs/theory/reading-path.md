@@ -55,7 +55,7 @@ order is behaviour, not documentation.
 
 ### 2 · `src/modules.ts` — what this build serves
 
-41 lines, mostly imports. Thirteen domains, one array.
+41 lines, mostly imports. Every domain, one array.
 
 **Take away:** enabling or disabling a domain is one line here. There is no filesystem discovery,
 no auto-registration, no magic.

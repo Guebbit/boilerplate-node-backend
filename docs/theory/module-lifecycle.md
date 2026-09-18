@@ -528,4 +528,4 @@ the spec and every spec operation mounted. Neither is a substitute for actually 
 - [Modules](./modules.md) — why the shape is what it is
 - [Layers](./layers.md) — the layer stack inside one module
 - [Contract Ownership & Fragmentation](../api/contract-fragmentation.md) — how fragments become bundles
-- [Modules overview](../modules/) — the thirteen pages this procedure adds to and removes from
+- [Modules overview](../modules/) — the module pages this procedure adds to and removes from

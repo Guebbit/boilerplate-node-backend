@@ -212,8 +212,8 @@ domain. A module's slice of the demo records lives in `scenarios/<name>.ts` inst
 outside this list — see [Data](../reference/data.md#the-demo-records).
 
 A module carries one of these only when it has something to declare, so they are not a per-module
-tax: the real spread is thirty files across thirteen modules, and `observability` has none of them.
-Collapsing them into central registries would trade that for a file every domain must edit.
+tax: most modules carry some subset of them, and `observability` has none of them. Collapsing them
+into central registries would trade that for a file every domain must edit.
 
 A module does not have to serve HTTP. The manifest is a union of two alternatives — one carrying
 `basePath` **and** `routes`, one carrying neither — so a domain that owns a collection and no URL is

@@ -29,9 +29,9 @@ existence through timing and error codes even when it refuses correctly.
 
 ## Function-level: may you call this at all
 
-One app-wide assertion rather than twelve local ones. The cross-cutting test enumerates the
+One app-wide assertion rather than a local one per module. The cross-cutting test enumerates the
 **effective** route table from the mounted routers, so a route nobody wrote a suite for is still
-covered, and a thirteenth module inherits the guarantee instead of opting into it.
+covered, and a new module inherits the guarantee instead of opting into it.
 
 | Attack                                     | How it works                                     | This boilerplate                                                                                                                                                           |
 | ------------------------------------------ | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

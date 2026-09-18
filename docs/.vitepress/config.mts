@@ -188,6 +188,7 @@ export default withMermaid(
                                     { text: 'OAuth', link: '/modules/account-oauth' }
                                 ]
                             },
+                            { text: 'antibot', link: '/modules/antibot' },
                             { text: 'audit-logs', link: '/modules/audit-logs' },
                             { text: 'feedback', link: '/modules/feedback' },
                             { text: 'locales', link: '/modules/locales' },
