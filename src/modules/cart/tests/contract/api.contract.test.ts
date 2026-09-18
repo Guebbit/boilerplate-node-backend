@@ -335,8 +335,8 @@ describe('POST /cart/checkout', () => {
                     // Grouped into 4s for display — see `bankTransferIbanFriendly`.
                     iban: 'DE89 3704 0044 0532 0130 00',
                     // The exact RF code is `buildReference`'s own concern
-                    // (`payments/tests/unit/reference.test.ts`) — this pins its shape, no longer
-                    // the order's own id.
+                    // (`orders/tests/unit/transfer-reference.test.ts`) — this pins its shape, no
+                    // longer the order's own id.
                     reference: expect.stringMatching(/^RF\d{2}[\dA-Z]{19}$/)
                 });
                 expect(response).toSatisfyApiSpec();

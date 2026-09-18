@@ -829,7 +829,8 @@ describe('orderConfirm — paymentMethod', () => {
             const serialized = raw as {
                 transferInstructions?: { beneficiary: string; iban: string; reference: string };
             };
-            // The exact code is `buildReference`'s own concern, pinned in `reference.test.ts`;
+            // The exact code is `buildReference`'s own concern, pinned in
+            // `transfer-reference.test.ts`;
             // what this pins is that checkout minted one and stamped it on the order BEFORE
             // quoting it back here, rather than the raw id the field replaced.
             expect(stored!.transferReference).toMatch(/^RF\d{2}[\dA-Z]{19}$/);
