@@ -46,6 +46,18 @@ flow — cash at the counter, a bank transfer once its reference is matched — 
 `POST /payments/order/{orderId}/offline`. It settles the order exactly as a card payment would: the
 order moves to `paid`, stock commits, the confirmation fires.
 
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
+flowchart LR
+    A["money arrives<br/><i>cash, or a transfer with its reference</i>"] --> B["you record it<br/><i>POST /payments/order/{orderId}/offline</i>"]
+    B --> C["the order is paid<br/><i>stock commits, the confirmation fires</i>"]
+
+    classDef you fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
+    class A,B you;
+    class C done;
+```
+
 An order already `paid` refuses a second recording, the same rule that refuses a second card
 intent — `orders` alone decides whether an order still awaits payment, and every door that could
 open a new one asks it before doing anything else. → [`payments`](../modules/payments.md)
