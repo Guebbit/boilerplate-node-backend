@@ -4,46 +4,26 @@
  *
  * Every case here sets `NODE_ENV` away from `test` first: the gate short-circuits under the test
  * environment, so a suite that left it alone would assert nothing at all.
+ *
+ * This file covers the MECHANISM only — what belongs to no module but is not the kernel's own
+ * either (`NODE_URL`, SMTP, antibot, the provider selectors) is asserted against
+ * `APP_NON_MODULE_CHECKS` in `tests/unit/app/required-config.test.ts`, the same split
+ * `TIER_AUDIT_STRUCTURE.md` A9 drew in the source: the kernel owns collecting and reporting, the
+ * app tier owns what its own variables are.
  */
-import { assertRequiredConfig } from '@kernel/required-config';
+import { assertRequiredConfig, checkSelector } from '@kernel/required-config';
 import { enableDemoProfile } from '@infrastructure/runtime/demo-profile';
+import { withoutEnvironmentInThisFile } from '@tests/environment';
 import type { AppModule } from '@kernel/registry';
 
-/** The variables the gate reads, restored after each case so ordering cannot matter. */
-const TOUCHED = [
-    'NODE_ENV',
-    'NODE_URL',
-    'NODE_CORS_ORIGIN',
-    'NODE_SMTP_HOST',
-    'NODE_SMTP_USER',
-    'NODE_SMTP_PASS',
-    'NODE_SMTP_SENDER',
-    'NODE_ANTIBOT_PROVIDER',
-    'NODE_ANTIBOT_ALTCHA_SECRET',
-    'NODE_ANTIBOT_TURNSTILE_SITE_KEY',
-    'NODE_ANTIBOT_TURNSTILE_SECRET',
-    'NODE_ANTIBOT_EMAIL_POLICY',
-    'SECRET'
-] as const;
+withoutEnvironmentInThisFile(['NODE_ENV', 'SECRET']);
 
-/** Every var in `TOUCHED` as it was found, so `afterEach` can restore an unset one as unset. */
-const original = new Map(TOUCHED.map((key) => [key, process.env[key]]));
-
-/** A deployment that satisfies every unconditional check, for a case to break one thing in. */
+/** A deployment away from the test/demo short-circuit, for a case to break one thing in. */
 const configure = (): void => {
     process.env.NODE_ENV = 'development';
-    process.env.NODE_URL = 'https://api.example.com/';
-    delete process.env.NODE_SMTP_HOST;
-    delete process.env.NODE_ANTIBOT_PROVIDER;
-    delete process.env.NODE_ANTIBOT_EMAIL_POLICY;
 };
 
-afterEach(() => {
-    for (const [key, value] of original)
-        if (value === undefined) delete process.env[key];
-        else process.env[key] = value;
-    enableDemoProfile(false);
-});
+afterEach(() => enableDemoProfile(false));
 
 describe('module-declared variables', () => {
     it('names a variable still set to its shipped placeholder', () => {
@@ -62,13 +42,15 @@ describe('module-declared variables', () => {
     it('names every offender at once, not just the first', () => {
         // The whole point of collecting before throwing: N mistakes must cost one restart, not N.
         configure();
-        delete process.env.NODE_URL;
         process.env.SECRET = '';
         const modules: AppModule[] = [
-            { name: 'demo', requiredConfig: [{ key: 'SECRET', minLength: 8, placeholder: 'x' }] }
+            { name: 'demo', requiredConfig: [{ key: 'SECRET', minLength: 8, placeholder: 'x' }] },
+            { name: 'demo-two', requiredConfig: [{ key: 'SECRET_TWO', minLength: 1 }] }
         ];
 
-        expect(() => assertRequiredConfig(modules)).toThrow(/SECRET.*NODE_URL|NODE_URL.*SECRET/);
+        expect(() => assertRequiredConfig(modules)).toThrow(
+            /SECRET.*SECRET_TWO|SECRET_TWO.*SECRET/
+        );
     });
 
     it('checks a comma-separated ring member-by-member, not the joined string', () => {
@@ -101,67 +83,9 @@ describe('module-declared variables', () => {
     });
 });
 
-describe('application-wide variables', () => {
-    it('refuses to boot with no NODE_URL', () => {
-        configure();
-        delete process.env.NODE_URL;
-
-        expect(() => assertRequiredConfig([])).toThrow(/NODE_URL/);
-    });
-
-    it('ignores an unset NODE_CORS_ORIGIN outside production', () => {
-        // `productionOnly`: the localhost fallback in `app/security.ts` is right for a developer
-        // and certainly wrong for a deployment, so only the deployment is asked about it.
-        configure();
-        delete process.env.NODE_CORS_ORIGIN;
-
-        expect(() => assertRequiredConfig([])).not.toThrow();
-    });
-
-    it('refuses to boot in production with no NODE_CORS_ORIGIN', () => {
-        configure();
-        process.env.NODE_ENV = 'production';
-        delete process.env.NODE_CORS_ORIGIN;
-
-        expect(() => assertRequiredConfig([])).toThrow(/NODE_CORS_ORIGIN/);
-    });
-});
-
-describe('the SMTP group', () => {
-    it('accepts mail left entirely unconfigured', () => {
-        // Unconfigured is a supported choice — the email second factor reports itself unavailable.
-        configure();
-
-        expect(() => assertRequiredConfig([])).not.toThrow();
-    });
-
-    it('refuses a host configured without its credentials', () => {
-        configure();
-        process.env.NODE_SMTP_HOST = 'mail.example.com';
-        delete process.env.NODE_SMTP_USER;
-        delete process.env.NODE_SMTP_PASS;
-        delete process.env.NODE_SMTP_SENDER;
-
-        expect(() => assertRequiredConfig([])).toThrow(
-            /NODE_SMTP_USER, NODE_SMTP_PASS, NODE_SMTP_SENDER/
-        );
-    });
-
-    it('accepts a fully configured host', () => {
-        configure();
-        process.env.NODE_SMTP_HOST = 'mail.example.com';
-        process.env.NODE_SMTP_USER = 'noreply@example.com';
-        process.env.NODE_SMTP_PASS = 'secret';
-        process.env.NODE_SMTP_SENDER = 'Example <noreply@example.com>';
-
-        expect(() => assertRequiredConfig([])).not.toThrow();
-    });
-});
-
 describe('the environments that skip the gate', () => {
     it('passes under NODE_ENV=test even with everything unset', () => {
         process.env.NODE_ENV = 'test';
-        delete process.env.NODE_URL;
 
         expect(() => assertRequiredConfig([])).not.toThrow();
     });
@@ -169,40 +93,6 @@ describe('the environments that skip the gate', () => {
     it('passes in the demo profile, which boots off a copied .env-example', () => {
         process.env.NODE_ENV = 'development';
         enableDemoProfile();
-        delete process.env.NODE_URL;
-
-        expect(() => assertRequiredConfig([])).not.toThrow();
-    });
-});
-
-describe('the antibot provider group', () => {
-    it('asks for nothing while the rung is off — the default', () => {
-        configure();
-
-        expect(() => assertRequiredConfig([])).not.toThrow();
-    });
-
-    it('refuses a self-hosted provider selected without its signing secret', () => {
-        configure();
-        process.env.NODE_ANTIBOT_PROVIDER = 'altcha';
-        delete process.env.NODE_ANTIBOT_ALTCHA_SECRET;
-
-        expect(() => assertRequiredConfig([])).toThrow(/NODE_ANTIBOT_ALTCHA_SECRET/);
-    });
-
-    it('refuses a vendor provider missing either half of its key pair', () => {
-        configure();
-        process.env.NODE_ANTIBOT_PROVIDER = 'turnstile';
-        process.env.NODE_ANTIBOT_TURNSTILE_SITE_KEY = 'site-key';
-        delete process.env.NODE_ANTIBOT_TURNSTILE_SECRET;
-
-        expect(() => assertRequiredConfig([])).toThrow(/NODE_ANTIBOT_TURNSTILE_SECRET/);
-    });
-
-    it('accepts a fully configured provider', () => {
-        configure();
-        process.env.NODE_ANTIBOT_PROVIDER = 'altcha';
-        process.env.NODE_ANTIBOT_ALTCHA_SECRET = 'an-altcha-signing-secret-value';
 
         expect(() => assertRequiredConfig([])).not.toThrow();
     });
@@ -224,7 +114,6 @@ describe('module-declared forbiddenInProduction — forbidden, not required', ()
     it('refuses to boot in production with it set', () => {
         configure();
         process.env.NODE_ENV = 'production';
-        process.env.NODE_CORS_ORIGIN = 'https://example.com';
         process.env.SECRET = 'a-real-secret-value';
 
         expect(() => assertRequiredConfig(modules)).toThrow(/SECRET/);
@@ -233,30 +122,47 @@ describe('module-declared forbiddenInProduction — forbidden, not required', ()
     it('accepts production with it unset', () => {
         configure();
         process.env.NODE_ENV = 'production';
-        process.env.NODE_CORS_ORIGIN = 'https://example.com';
 
         expect(() => assertRequiredConfig(modules)).not.toThrow();
     });
 });
 
-describe('the antibot email-policy group', () => {
-    it('asks for nothing while the policy is off — the default', () => {
+describe('checkSelector', () => {
+    it('reports nothing when the resolver does not throw', () => {
+        expect(checkSelector('FAKE_SELECTOR', () => 'ok')).toEqual([]);
+    });
+
+    it('names the variable when the resolver throws', () => {
+        expect(
+            checkSelector('FAKE_SELECTOR', () => {
+                throw new Error('unknown value');
+            })
+        ).toEqual(['FAKE_SELECTOR']);
+    });
+});
+
+describe('nonModuleChecks — what a caller other than a module contributes', () => {
+    it('is optional — omitting it entirely changes nothing', () => {
         configure();
 
         expect(() => assertRequiredConfig([])).not.toThrow();
     });
 
-    it.each(['disposable', 'mx'])('accepts a recognized policy (%s)', (policy) => {
+    it('folds a caller-declared required entry into the same refusal', () => {
         configure();
-        process.env.NODE_ANTIBOT_EMAIL_POLICY = policy;
+        delete process.env.CALLER_OWNED;
 
-        expect(() => assertRequiredConfig([])).not.toThrow();
+        expect(() =>
+            assertRequiredConfig([], { required: [{ key: 'CALLER_OWNED', minLength: 1 }] })
+        ).toThrow(/CALLER_OWNED/);
     });
 
-    it('refuses to boot on an unrecognized policy, rather than throwing at the first signup', () => {
+    it('runs a caller-declared custom check alongside every module customCheck', () => {
         configure();
-        process.env.NODE_ANTIBOT_EMAIL_POLICY = 'not-a-policy';
+        const modules: AppModule[] = [{ name: 'demo', customCheck: () => ['FROM_MODULE'] }];
 
-        expect(() => assertRequiredConfig([])).toThrow(/NODE_ANTIBOT_EMAIL_POLICY/);
+        expect(() =>
+            assertRequiredConfig(modules, { customChecks: [() => ['FROM_CALLER']] })
+        ).toThrow(/FROM_MODULE.*FROM_CALLER|FROM_CALLER.*FROM_MODULE/);
     });
 });

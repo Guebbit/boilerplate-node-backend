@@ -11,7 +11,7 @@
 
 import type { Router } from 'express';
 import type { ZodType } from 'zod';
-import { assertRequiredConfig } from '@kernel/required-config';
+import { assertRequiredConfig, type NonModuleChecks } from '@kernel/required-config';
 import type { RateLimitBudget } from '@types';
 
 /**
@@ -336,9 +336,14 @@ export const resolveRateLimits = (appModules: AppModule[]): readonly RateLimitBu
  * Config is asserted first, for the same "before the first route" reason.
  *
  * @param appModules - the enabled module list
+ * @param nonModuleChecks - passed straight through to {@link assertRequiredConfig} — this file
+ *   must stay free of any `src/app`/`src/modules/*` import, so the caller assembles it
  * @throws when {@link assertRequiredConfig} refuses to boot
  */
-export const registerModules = (appModules: AppModule[]): void => {
-    assertRequiredConfig(appModules);
+export const registerModules = (
+    appModules: AppModule[],
+    nonModuleChecks?: NonModuleChecks
+): void => {
+    assertRequiredConfig(appModules, nonModuleChecks);
     for (const appModule of appModules) appModule.subscribe?.();
 };

@@ -38,6 +38,7 @@ import {
 import { registerModules, resolveTranslatables } from '@kernel/registry';
 import { enabledModules } from './modules';
 import { setTranslatables } from '@modules/locales/module';
+import { APP_NON_MODULE_CHECKS } from '@app/required-config';
 
 import { applyServerTimeouts, installSecurity } from '@app/security';
 import { installRequestContext } from '@app/request-context';
@@ -208,7 +209,7 @@ export const stopServer = () => {
  * route exists. A cycle or a missing dependency stops the boot here, with the offending path named,
  * rather than surfacing as a 500 on whichever request happens to cross the gap first.
  */
-registerModules(enabledModules);
+registerModules(enabledModules, APP_NON_MODULE_CHECKS);
 
 /*
  * `locales` cannot collect every module's `translatables` entry itself — the same wall that keeps

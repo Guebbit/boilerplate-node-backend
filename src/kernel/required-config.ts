@@ -2,44 +2,46 @@
  * @module
  * The boot-time configuration gate: everything the application refuses to start without, checked
  * in one pass so a misconfigured deployment names every mistake at once instead of one per
- * restart. Modules declare their own on the manifest; what belongs to no module lives here.
+ * restart. Modules declare their own on the manifest; what belongs to no module — but is not the
+ * kernel's business either, since the kernel must never name one — is handed in by the caller as
+ * {@link NonModuleChecks} (`src/app/required-config.ts` is that caller today).
  *
  * See: docs/reference/ops.md
  */
 
 import { isDemoMode } from '@infrastructure/runtime/demo-profile';
-import { isEmailPolicy } from '@infrastructure/adapters/antibot';
 import type { AppModule, RequiredConfig } from '@kernel/registry';
 
 /**
- * Variables no single module owns.
- *
- * `NODE_URL` is unconditional: unset, `account/emails.ts` and `account/oauth/config.ts` build
- * relative links, so every password-reset mail and OAuth callback points nowhere — a failure that
- * surfaces as a support ticket, never as an error. `NODE_CORS_ORIGIN` is checked in production
- * only, where its `http://localhost:8080` fallback (`app/security.ts`) cannot be the right answer.
- *
- * Both are the app's own. The shop's jurisdiction and its two VAT rates are NOT — `orders` and
- * `products` declare those on their own manifests, so deleting either module deletes its gate.
+ * Checks owned by neither a module nor the kernel — the app tier's own variables, plus whatever
+ * else has nowhere better to live yet (see `src/app/required-config.ts`'s own docblock for the
+ * current list and why each entry is there rather than on a module).
  */
-const APP_REQUIRED_CONFIG: readonly RequiredConfig[] = [
-    { key: 'NODE_URL', minLength: 1 },
-    { key: 'NODE_CORS_ORIGIN', minLength: 1, productionOnly: true }
-];
+export interface NonModuleChecks {
+    /** Declarative entries, same shape a module's own `requiredConfig` uses. */
+    required?: readonly RequiredConfig[];
+    /** Cross-field or parsed checks, same shape a module's own `customCheck` returns. */
+    customChecks?: readonly (() => string[])[];
+}
 
 /**
- * The mailer's companions to `NODE_SMTP_HOST` — the ones a transport cannot authenticate or
- * address without.
+ * Turns a resolver that throws on an unrecognised selector into the shape every other check here
+ * produces — call it once at boot; a throw means the variable names an implementation this build
+ * does not have. The resolver's own thrown message (naming the variable and the allowed values) is
+ * what a caller sees if this probe is ever bypassed and the resolver runs for real later.
+ *
+ * @param key - the variable name to report if `resolve` throws
+ * @param resolve - the resolver to probe
+ * @returns `[key]` when `resolve` throws, `[]` when it does not
  */
-const SMTP_COMPANIONS = ['NODE_SMTP_USER', 'NODE_SMTP_PASS', 'NODE_SMTP_SENDER'] as const;
-
-/**
- * What each selectable human-challenge provider cannot run without. `none` — the default — needs
- * nothing, which is why the rung costs an untouched deployment no configuration at all.
- */
-const ANTIBOT_PROVIDER_SECRETS: Readonly<Record<string, readonly string[]>> = {
-    altcha: ['NODE_ANTIBOT_ALTCHA_SECRET'],
-    turnstile: ['NODE_ANTIBOT_TURNSTILE_SITE_KEY', 'NODE_ANTIBOT_TURNSTILE_SECRET']
+export const checkSelector = (key: string, resolve: () => unknown): string[] => {
+    // eslint-disable-next-line no-restricted-syntax -- the resolver's throw IS the signal this probes for; there is no safe wrapper for "does this synchronous call throw"
+    try {
+        resolve();
+        return [];
+    } catch {
+        return [key];
+    }
 };
 
 /**
@@ -58,41 +60,6 @@ const applies = ({ productionOnly }: RequiredConfig): boolean =>
 const fails = ({ key, minLength, placeholder }: RequiredConfig): boolean => {
     const value = process.env[key] ?? '';
     return value.split(',').some((member) => member.length < minLength || member === placeholder);
-};
-
-/**
- * SMTP is all-or-nothing rather than required: `account/two-factor/methods/email.ts` gates the
- * email second factor on `NODE_SMTP_HOST` being set at all, so leaving mail unconfigured is a
- * choice. A host set *without* its credentials is not — it builds a transport that only fails
- * when something first tries to send, which is a real user asking to reset a password.
- *
- * @returns the companion variables left unset alongside a configured host
- */
-const missingSmtpCompanions = (): string[] =>
-    process.env.NODE_SMTP_HOST ? SMTP_COMPANIONS.filter((key) => !process.env[key]) : [];
-
-/**
- * Selecting a human-challenge provider is a choice; selecting one without its secret is not. The
- * provider would throw on the first guarded request instead of at boot — a signup outage that
- * looks like a bug rather than a missing variable.
- *
- * @returns the variables the selected provider needs and does not have
- */
-const missingAntibotProviderSecrets = (): string[] =>
-    (ANTIBOT_PROVIDER_SECRETS[process.env.NODE_ANTIBOT_PROVIDER ?? 'none'] ?? []).filter(
-        (key) => !process.env[key]
-    );
-
-/**
- * Rung 2's own boot check, same reasoning as {@link missingAntibotProviderSecrets}: an unrecognized
- * `NODE_ANTIBOT_EMAIL_POLICY` would otherwise only throw on the first signup, in the middle of a
- * request, rather than at boot.
- *
- * @returns `['NODE_ANTIBOT_EMAIL_POLICY']` when the value is set and unrecognized, otherwise `[]`
- */
-const invalidEmailPolicy = (): string[] => {
-    const raw = process.env.NODE_ANTIBOT_EMAIL_POLICY;
-    return raw !== undefined && !isEmailPolicy(raw) ? ['NODE_ANTIBOT_EMAIL_POLICY'] : [];
 };
 
 /**
@@ -121,21 +88,24 @@ const forbiddenUnderProduction = (appModules: AppModule[]): string[] =>
  * across every module — not the first one, which would mean N restarts to find N mistakes.
  *
  * @param appModules - the enabled module list, each contributing its own `requiredConfig`
+ * @param nonModuleChecks - what belongs to neither a module nor the kernel — see
+ *   {@link NonModuleChecks}; omitted only by a caller with nothing of its own to add
  * @throws when any required variable fails its check, or the forbidden one is set, outside
  *   `NODE_ENV=test`/the demo profile
  */
-export const assertRequiredConfig = (appModules: AppModule[]): void => {
+export const assertRequiredConfig = (
+    appModules: AppModule[],
+    nonModuleChecks: NonModuleChecks = {}
+): void => {
     if (process.env.NODE_ENV === 'test' || isDemoMode()) return;
 
     const declared = [
         ...appModules.flatMap((appModule) => appModule.requiredConfig ?? []),
-        ...APP_REQUIRED_CONFIG
+        ...(nonModuleChecks.required ?? [])
     ];
     const offending = [
         ...declared.filter((entry) => applies(entry) && fails(entry)).map(({ key }) => key),
-        ...missingSmtpCompanions(),
-        ...missingAntibotProviderSecrets(),
-        ...invalidEmailPolicy(),
+        ...(nonModuleChecks.customChecks ?? []).flatMap((check) => check()),
         ...appModules.flatMap((appModule) => appModule.customCheck?.() ?? [])
     ];
     const forbidden = forbiddenUnderProduction(appModules);
