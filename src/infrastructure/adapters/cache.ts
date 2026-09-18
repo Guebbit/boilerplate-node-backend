@@ -16,6 +16,7 @@ import {
     type DependencyStatus
 } from '@infrastructure/adapters/managed-connection';
 import { environmentFlag } from '@infrastructure/runtime/environment';
+import { cacheInvalidationFailuresTotal } from '@infrastructure/observability/metrics-cache';
 
 /**
  * Prefix for every key this app owns. Redis has no namespaces beyond numbered databases, so
@@ -300,6 +301,31 @@ export const invalidateCacheTags = (tags: string[]): Promise<ClearCacheResult> =
             return { deleted: 0, reachable: false };
         });
 };
+
+/**
+ * Clears Redis cache groups, and logs plus counts the failure when Redis could not be reached —
+ * the shared body behind the HTTP cache middleware's own {@link invalidateCache} and the image
+ * digest worker's writeback-completion invalidation (`adapters/image.worker.ts` — a write and the
+ * async digest it kicks off are two separate mutations of the same document, and each clears the
+ * cache the same way).
+ *
+ * @param tags - the cache tags to clear, e.g. `['products']`
+ * @returns a promise resolving once the attempt, successful or not, is logged
+ */
+export const invalidateCacheTagsLogged = (tags: string[]): Promise<void> =>
+    invalidateCacheTags(tags).then(({ reachable }) => {
+        if (reachable) return;
+        /*
+         * The write (or digest) landed but its cached predecessor did not, so the endpoint serves
+         * a stale response until the TTL expires. The response may already be sent, so logging
+         * plus a counter — reachable from an alert, not just grep — is the only move left.
+         */
+        for (const tag of tags) cacheInvalidationFailuresTotal.inc({ tag });
+        logger.error({
+            message: 'Cache invalidation could not reach Redis; stale responses survive.',
+            tags
+        });
+    });
 
 /**
  * Outcome of a {@link clearCache} call.

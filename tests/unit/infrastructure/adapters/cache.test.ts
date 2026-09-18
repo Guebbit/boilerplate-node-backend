@@ -87,6 +87,21 @@ const freshCache = () => {
     return require('@infrastructure/adapters/cache') as typeof import('@infrastructure/adapters/cache');
 };
 
+/**
+ * The logger and cache-invalidation counter from the SAME fresh module epoch `freshCache()` just
+ * created — `invalidateCacheTagsLogged` reaches both directly, so asserting on them means
+ * re-requiring rather than the stale instances this file's own top-level imports would give.
+ */
+const freshObservability = () => {
+    /* eslint-disable @typescript-eslint/no-require-imports -- jest.resetModules demands a fresh synchronous require */
+    const { logger } =
+        require('@infrastructure/adapters/logger') as typeof import('@infrastructure/adapters/logger');
+    const { cacheInvalidationFailuresTotal } =
+        require('@infrastructure/observability/metrics-cache') as typeof import('@infrastructure/observability/metrics-cache');
+    /* eslint-enable @typescript-eslint/no-require-imports -- back to the ordinary rule below this helper */
+    return { logger, cacheInvalidationFailuresTotal };
+};
+
 /** Turn a list of key batches into the async iterable node-redis' `scanIterator` returns. */
 const scanBatches = (batches: string[][]) =>
     // eslint-disable-next-line @typescript-eslint/require-await -- the async wrapper is the contract: node-redis' scanIterator is an AsyncIterable
@@ -506,5 +521,45 @@ describe('invalidateCacheTags', () => {
             deleted: 0,
             reachable: true
         });
+    });
+});
+
+/**
+ * `invalidateCacheTagsLogged` — the shared body behind the HTTP cache middleware's
+ * `invalidateCache` and the image digest worker's writeback invalidation (`TIER_AUDIT_STRUCTURE.md`
+ * A6). `reachable: false` only ever fed a mock in those two callers' own tests, so it had no direct
+ * test: this is the observability contract itself — a stale-serving write must show up as a metric
+ * and a log line, not disappear silently.
+ */
+describe('invalidateCacheTagsLogged', () => {
+    beforeEach(() => {
+        process.env.NODE_REDIS_URL = 'redis://localhost:6379';
+        mockConnect.mockImplementation(() => Promise.resolve());
+        mockSMembers.mockImplementation(() => Promise.resolve([]));
+        mockDel.mockImplementation(() => Promise.resolve(1));
+    });
+
+    it('logs and counts the failure when invalidation could not reach Redis', async () => {
+        mockSMembers.mockImplementation(() => Promise.reject(new Error('connection reset')));
+
+        const cache = freshCache();
+        const { logger, cacheInvalidationFailuresTotal } = freshObservability();
+        const incSpy = jest.spyOn(cacheInvalidationFailuresTotal, 'inc');
+
+        await cache.invalidateCacheTagsLogged(['orders']);
+
+        expect(incSpy).toHaveBeenCalledWith({ tag: 'orders' });
+        expect(logger.error).toHaveBeenCalledWith(expect.objectContaining({ tags: ['orders'] }));
+    });
+
+    it('logs and counts nothing when invalidation reaches Redis', async () => {
+        const cache = freshCache();
+        const { logger, cacheInvalidationFailuresTotal } = freshObservability();
+        const incSpy = jest.spyOn(cacheInvalidationFailuresTotal, 'inc');
+
+        await cache.invalidateCacheTagsLogged(['orders']);
+
+        expect(incSpy).not.toHaveBeenCalled();
+        expect(logger.error).not.toHaveBeenCalled();
     });
 });

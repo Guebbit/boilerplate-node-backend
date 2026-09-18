@@ -18,7 +18,7 @@ import {
     type ResponseReject,
     type ResponseSuccess
 } from '@infrastructure/http/response';
-import { invalidateCacheTagsLogged } from '@infrastructure/http/middlewares/cache';
+import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
 import type { CallerContext } from '@types';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { localeAuditActions } from '../audit';

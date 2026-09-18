@@ -38,7 +38,7 @@ jest.mock('@infrastructure/adapters/queue', () => ({
     publishToQueue: jest.fn()
 }));
 
-jest.mock('@infrastructure/http/middlewares/cache', () => ({
+jest.mock('@infrastructure/adapters/cache', () => ({
     invalidateCacheTagsLogged: jest.fn()
 }));
 
@@ -46,7 +46,7 @@ import { imageStore } from '@infrastructure/adapters/image-store';
 import { digestImage, thumbnailImage } from '@infrastructure/adapters/image';
 import { identifyImage } from '@infrastructure/adapters/image-signatures';
 import { isQueueEnabled, publishToQueue } from '@infrastructure/adapters/queue';
-import { invalidateCacheTagsLogged } from '@infrastructure/http/middlewares/cache';
+import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
 import {
     digestQuarantinedImage,
     enqueueIfImagePending,

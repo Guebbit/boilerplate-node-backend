@@ -17,7 +17,7 @@ import { digestImage, thumbnailImage } from '@infrastructure/adapters/image';
 import type { ReencodableImageMime } from '@infrastructure/adapters/image';
 import { identifyImage } from '@infrastructure/adapters/image-signatures';
 import { IMAGE_QUEUE, isQueueEnabled, publishToQueue } from '@infrastructure/adapters/queue';
-import { invalidateCacheTagsLogged } from '@infrastructure/http/middlewares/cache';
+import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
 
 /* Queue name for image digest jobs — owned by the adapter, re-exported for the worker registry. */
 export { IMAGE_QUEUE } from '@infrastructure/adapters/queue';
