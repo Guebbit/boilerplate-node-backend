@@ -11,28 +11,16 @@
 import type { Request, Response } from 'express';
 import type { CastError } from 'mongoose';
 import { t } from '@infrastructure/i18n';
-import {
-    rejectResponse,
-    successResponse,
-    type ResponseErrorItem
-} from '@infrastructure/http/response';
+import { rejectResponse, successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { extractAndValidateId, readInput, callerContextOf } from '@infrastructure/http/request';
 import { hardDeleteSchema } from '@infrastructure/http/schemas';
-import { refused, rejectValidation } from '@infrastructure/http/controller';
+import { refused, rejectValidation, type ServiceResult } from '@infrastructure/http/controller';
 import {
     emitAuditEvent,
     buildAuditEvent,
     type AuditAction
 } from '@infrastructure/observability/audit';
-
-/** The envelope a `remove` answers with — the shape `generateSuccess`/`generateReject` produce. */
-interface RemoveResult {
-    success: boolean;
-    status: number;
-    message?: string;
-    errors?: ResponseErrorItem[];
-}
 
 /** What makes one entity's delete different from another's. */
 export interface DeleteControllerSpec {
@@ -42,7 +30,7 @@ export interface DeleteControllerSpec {
      */
     entity: string;
     /** The service call. `hardDelete` true destroys the row; false stamps `deletedAt`. */
-    remove: (id: string, hardDelete: boolean) => Promise<RemoveResult>;
+    remove: (id: string, hardDelete: boolean) => Promise<ServiceResult<unknown>>;
     /**
      * The module's own audit action for a successful delete — a fixed action, or a function of
      * `hardDelete` for a module where soft and hard delete are different enough facts to want

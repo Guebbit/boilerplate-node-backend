@@ -18,7 +18,7 @@ import { rejectDatabaseError } from './errors';
  * Structural, not the service's own union — `@infrastructure` cannot reach into a module, and
  * every service already produces this shape via `generateSuccess` / `generateReject`.
  */
-interface ServiceResult<TData> {
+export interface ServiceResult<TData> {
     success: boolean;
     status: number;
     message?: string;
