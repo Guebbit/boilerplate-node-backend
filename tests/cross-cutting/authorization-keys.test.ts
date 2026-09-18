@@ -17,11 +17,11 @@ import {
     PRESET_ROLES,
     scopeOfKey,
     wildcardKeyFor,
-    type PresetRole
+    type RoleLookup
 } from '@kernel/permissions';
 
 const declared = new Set(PERMISSION_KEYS.map((key) => key.key));
-const roles: PresetRole[] = [...PRESET_ROLES, ANONYMOUS_ROLE as PresetRole];
+const roles: RoleLookup[] = [...PRESET_ROLES, ANONYMOUS_ROLE];
 
 describe('the declared keys', () => {
     it('spell their scope the way the resolver reads it', () => {

@@ -17,6 +17,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';
+import { z } from 'zod';
 import type { AuthContext, AuthorizationScope, Caller, PlatformCaller, TenantCaller } from '@types';
 import {
     scopeOfKey,
@@ -27,16 +28,29 @@ import {
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**
- * The action vocabulary a declared KEY may carry. `manage` is deliberately absent: it survives
- * only as the two scope wildcards' action (`all.manage`, `platform.all.manage`), spelled directly
- * in `wildcards:`, never as an individual key's own action. `checkout` and `sweep` are the two
- * additions beyond CASL's own CRUD set — `cart.self.checkout`'s and `inventory.any.sweep`'s
- * actions, and nowhere else. See each key's own description in `shared/authorization-keys.yaml`.
+ * The action vocabulary a declared KEY may carry, as a runtime array so both the type below and
+ * the Zod schema that validates the shared YAML are drawn from the one list. `manage` is
+ * deliberately absent: it survives only as the two scope wildcards' action (`all.manage`,
+ * `platform.all.manage`), spelled directly in `wildcards:`, never as an individual key's own
+ * action. `checkout` and `sweep` are the two additions beyond CASL's own CRUD set —
+ * `cart.self.checkout`'s and `inventory.any.sweep`'s actions, and nowhere else. See each key's own
+ * description in `shared/authorization-keys.yaml`.
  */
-export type PermissionAction = 'read' | 'create' | 'update' | 'delete' | 'checkout' | 'sweep';
+const PERMISSION_ACTIONS = ['read', 'create', 'update', 'delete', 'checkout', 'sweep'] as const;
+
+/** See {@link PERMISSION_ACTIONS}. */
+export type PermissionAction = (typeof PERMISSION_ACTIONS)[number];
+
+/** The two scopes a key or role may carry — kept here as a runtime array purely to validate the shared YAML against {@link AuthorizationScope} without duplicating the literal elsewhere. */
+const AUTHORIZATION_SCOPES = [
+    'tenant',
+    'platform'
+] as const satisfies readonly AuthorizationScope[];
 
 /** How recently a caller must have proved themselves to use a key that demands it. */
 export type StepUpTier = 'critical' | 'sensitive';
+
+const stepUpTierSchema = z.enum(['critical', 'sensitive']);
 
 /**
  * One declared key.
@@ -77,6 +91,18 @@ export interface PermissionKey {
     deniedCode?: string;
 }
 
+const permissionKeySchema = z.object({
+    key: z.string(),
+    module: z.string(),
+    subject: z.string(),
+    action: z.enum(PERMISSION_ACTIONS),
+    scope: z.enum(AUTHORIZATION_SCOPES),
+    description: z.string(),
+    stepUp: stepUpTierSchema.optional(),
+    conditions: z.record(z.string(), z.unknown()).optional(),
+    deniedCode: z.string().optional()
+}) satisfies z.ZodType<PermissionKey>;
+
 /** A role the seeders create, and the keys it holds. Roles are data; the keys they name are not. */
 export interface PresetRole {
     name: string;
@@ -86,23 +112,69 @@ export interface PresetRole {
     permissions: readonly string[];
 }
 
-const SHARED = path.join(__dirname, '..', '..', 'shared');
+const presetRoleSchema = z.object({
+    name: z.string(),
+    scope: z.enum(AUTHORIZATION_SCOPES),
+    title: z.string(),
+    description: z.string(),
+    permissions: z.array(z.string())
+}) satisfies z.ZodType<PresetRole>;
 
-const readShared = (file: string): unknown => parse(readFileSync(path.join(SHARED, file), 'utf8'));
-
-const keysDocument = readShared('authorization-keys.yaml') as {
-    actions: PermissionAction[];
-    // `string`, not `PermissionAction`: the wildcard action is CASL's own `manage`, which is no
+/**
+ * The full shape of `shared/authorization-keys.yaml`. `version` and `scopes` are validated for
+ * shape (a malformed one should still fail loudly) even though only `wildcards`/`keys` are read
+ * downstream today. Exported so a unit test can assert on malformed fixtures directly, rather than
+ * reaching for the private `readShared`/filesystem path this module resolves at import.
+ */
+export const keysDocumentSchema = z.object({
+    version: z.number(),
+    actions: z.array(z.enum(PERMISSION_ACTIONS)),
+    scopes: z.record(z.enum(AUTHORIZATION_SCOPES), z.string()),
+    // `string`, not the action enum: the wildcard action is CASL's own `manage`, which is no
     // longer one of the per-key actions, and the check just below is what catches the YAML
     // spelling it any other way.
-    wildcards: { subject: string; action: string };
-    keys: PermissionKey[];
+    wildcards: z.object({ subject: z.string(), action: z.string() }),
+    keys: z.array(permissionKeySchema)
+});
+
+/** The full shape of `shared/authorization-roles.yaml`. See {@link keysDocumentSchema}. */
+export const rolesDocumentSchema = z.object({
+    version: z.number(),
+    roles: z.array(presetRoleSchema),
+    anonymous: z.object({
+        name: z.string(),
+        scope: z.enum(AUTHORIZATION_SCOPES),
+        permissions: z.array(z.string())
+    })
+});
+
+const SHARED = path.join(__dirname, '..', '..', 'shared');
+
+/**
+ * Parse one shared authorization file against `schema`, failing loudly and specifically — the
+ * "parse, don't validate" boundary this file's docblock promises. A YAML syntax error surfaces
+ * from `parse` itself; a shape error surfaces here, naming the file, the offending path and what
+ * was expected, via {@link z.prettifyError}.
+ * @param file - the filename under `shared/`
+ * @param schema - the Zod schema the parsed document must satisfy
+ * @throws Error naming `file` and every issue `schema` found
+ */
+const readShared = <T>(file: string, schema: z.ZodType<T>): T => {
+    const parsed: unknown = parse(readFileSync(path.join(SHARED, file), 'utf8'));
+    const result = schema.safeParse(parsed);
+
+    if (!result.success) {
+        throw new Error(
+            `[permissions] shared/${file} does not match its schema:\n${z.prettifyError(result.error)}`
+        );
+    }
+
+    return result.data;
 };
 
-const rolesDocument = readShared('authorization-roles.yaml') as {
-    roles: PresetRole[];
-    anonymous: { name: string; scope: AuthorizationScope; permissions: readonly string[] };
-};
+const keysDocument = readShared('authorization-keys.yaml', keysDocumentSchema);
+
+const rolesDocument = readShared('authorization-roles.yaml', rolesDocumentSchema);
 
 /*
  * The grammar is owned by `@infrastructure/authorization/keys` — the audit trail needs it and may
@@ -143,8 +215,15 @@ export const ANONYMOUS_ROLE = rolesDocument.anonymous;
 
 const byKey = new Map(PERMISSION_KEYS.map((entry) => [entry.key, entry]));
 
-const byRoleName = new Map(
-    [...PRESET_ROLES, ANONYMOUS_ROLE as PresetRole].map((role) => [role.name, role])
+/**
+ * What every caller of {@link findRole} actually reads off its result — `anonymous` in
+ * `shared/authorization-roles.yaml` carries no `title`/`description`, so this is the true shared
+ * shape rather than a cast pretending it does.
+ */
+export type RoleLookup = Pick<PresetRole, 'name' | 'scope' | 'permissions'>;
+
+const byRoleName = new Map<string, RoleLookup>(
+    [...PRESET_ROLES, ANONYMOUS_ROLE].map((role) => [role.name, role])
 );
 
 /**
@@ -154,7 +233,7 @@ const byRoleName = new Map(
  * it is a role this build did not ship. What it must never be is a caller with no permissions and
  * no complaint, which is why `permissionsOfRole` throws instead of returning an empty list.
  */
-export const findRole = (name: string): PresetRole | undefined => byRoleName.get(name);
+export const findRole = (name: string): RoleLookup | undefined => byRoleName.get(name);
 
 /**
  * The keys a role holds.
