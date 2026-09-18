@@ -149,6 +149,15 @@ Product prices are set per product. Delivery prices are fixed rules, not setting
 The customer's basket is priced by those same rules, so what they are quoted at checkout and what
 they are charged cannot disagree. → [`delivery`](../modules/delivery.md)
 
+::: tip Why the invoice splits shipping across rates
+Delivery has no VAT rate of its own — it is taxed as part of what it delivers. A basket with a
+standard-rated item and a reduced-rated item splits the €5 shipping fee between the two,
+proportionally to what each item cost, and each half is taxed at ITS OWN item's rate.
+
+The invoice still prints one summary line per rate, so a customer sees "22%: €X" and "10%: €Y"
+rather than one shipping line they have to reconcile by hand.
+:::
+
 ## Customers
 
 The staff side can list, search and open a customer account — enough to answer "who is this" while

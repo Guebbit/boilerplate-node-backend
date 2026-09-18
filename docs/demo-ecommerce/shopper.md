@@ -108,7 +108,9 @@ back: the shop is not asking "would you like to pay again", it already has the m
 ## Afterwards
 
 - **They see their own orders, and only their own.** → [`orders`](../modules/orders.md)
-- **They can download an invoice** as a PDF.
+- **They can download an invoice** as a PDF. It shows the VAT charged on each item, on the
+  shipping fee (charged at the same rate as the goods it delivered, split across rates if the
+  basket mixed two), and a summary table totalling every rate on the order at a glance.
 - **They can cancel.** If they had paid, the money goes back automatically.
 - **They can re-order** — one click puts everything from a past order back in the basket.
 - **They can track the parcel** once it ships. → [`delivery`](../modules/delivery.md)

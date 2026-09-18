@@ -417,11 +417,53 @@ flowchart TD
 If a type is ever genuinely shared across contexts, that rule needs revisiting first. That is a
 design decision, not a config edit.
 
+### Per-rate VAT, and where shipping's own split goes
+
+`orders/domain/tax.ts`'s `orderTaxBreakdown` answers three questions from the same pass over an
+order's frozen lines, not three separate ones:
+
+- **Per line** (`lines[]`) — goods only, what `netTotal`/`taxTotal` sum.
+- **Shipping's own split** (`shippingNetAmount`/`shippingTaxAmount`) — delivery carries no VAT
+  rate of its own; it is taxed as ancillary to what it delivers, apportioned pro-rata across the
+  lines by their own gross value (`apportion`, the same "remainder to the largest weight" rule
+  `money.ts` uses elsewhere), then taxed at _each line's own rate_. Two lines at different rates
+  split shipping's cost between them and pay two different amounts of tax on their own halves.
+- **Per rate** (`taxSummary[]`) — one row per DISTINCT rate charged on the order, goods and
+  shipping folded into the same row, since shipping was never a rate of its own to begin with.
+  This is what an invoice actually has to print: a customer does not care which line shipping's
+  22%-taxed share came from, only that the 22% column reconciles.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 40}}}%%
+flowchart LR
+    L1["line @ 22%"] --> R22["taxSummary<br/><i>rate 0.22</i>"]
+    L2["line @ 10%"] --> R10["taxSummary<br/><i>rate 0.10</i>"]
+    S["shippingCost"] -->|apportion, by gross value| SA["share @ 22%"] --> R22
+    S -->|apportion, by gross value| SB["share @ 10%"] --> R10
+
+    classDef row fill:#dcfce7,stroke:#16a34a,color:#111827;
+    class R22,R10 row;
+```
+
+Reconciliation is exact, in integer minor units, never approximated: summed `taxSummary.netAmount`
+is `netTotal + shippingNetAmount`, summed `taxAmount` is `taxTotal`, and summed `grossAmount` is
+the order's own `totalPrice` — `orders/tests/unit/tax.test.ts` asserts all three as properties, not
+as one hand-picked example.
+
+The invoice needs a fourth shape `orderTaxBreakdown` also returns but the wire contract never
+sees: `shippingByRate`, shipping's slice of `taxSummary` broken back OUT per rate — "shipping,
+taxed at 22%: €4.10 net, €0.90 tax" as its own printed row. `model.ts` does not copy it onto a
+serialized order; only `orders/emails.ts`'s invoice builder reads it, straight off its own call to
+`orderTaxBreakdown`.
+
 ### No currency in the type — yet
 
 The shop is single-currency per deployment: `payments/services/intent.ts` stamps `defaultCurrency()` on
-every payment and nothing reads a second one. A currency tag today would be a field with exactly one
-possible value, checked against itself.
+every payment, and `orders/emails.ts`'s invoice formats every amount in `invoiceCurrency()` — the
+same `NODE_DEFAULT_CURRENCY` read a second time, since `orders` cannot import `payments`
+(`orders → payments` is not an edge `module.yaml` allows). Nothing reads a second currency, in
+either module. A currency tag today would be a field with exactly one possible value, checked
+against itself.
 
 The day a second currency exists it belongs **on this type** rather than beside the amount — an
 `addMoney` that refuses a mismatch is precisely the reason to put it here. `payments/repository.ts`
