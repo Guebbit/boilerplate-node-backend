@@ -20,7 +20,7 @@ import {
     emptyDatabase,
     restoreDatabaseCopy,
     type DatabaseCopy
-} from '@infrastructure/runtime/database';
+} from '@infrastructure/runtime/database-snapshot';
 import { clearDemoOutbox, readDemoOutbox } from '@infrastructure/adapters/demo-outbox';
 import { clearCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';

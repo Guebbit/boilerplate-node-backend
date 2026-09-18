@@ -22,7 +22,7 @@
  */
 import 'dotenv/config';
 import { writeFile } from 'node:fs/promises';
-import { emptyDatabase, isDatabaseEmpty } from '@infrastructure/runtime/database';
+import { emptyDatabase, isDatabaseEmpty } from '@infrastructure/runtime/database-snapshot';
 import { clearCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
 import { runScript } from '../db/run-script';

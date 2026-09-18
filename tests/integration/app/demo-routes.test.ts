@@ -29,9 +29,9 @@ import { enabledModules } from '../../../src/modules';
  */
 const mockFailNextEmptyDatabase = { armed: false };
 
-jest.mock('@infrastructure/runtime/database', () => {
-    const actual = jest.requireActual<typeof import('@infrastructure/runtime/database')>(
-        '@infrastructure/runtime/database'
+jest.mock('@infrastructure/runtime/database-snapshot', () => {
+    const actual = jest.requireActual<typeof import('@infrastructure/runtime/database-snapshot')>(
+        '@infrastructure/runtime/database-snapshot'
     );
 
     return {
