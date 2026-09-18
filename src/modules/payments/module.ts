@@ -18,6 +18,8 @@ import { router } from './routes';
 import { refundForOrder, detachUserId } from './services';
 import { validateBankTransferConfig } from './config';
 import { paymentsRateLimits } from './rate-limits';
+import { checkSelector } from '@kernel/required-config';
+import { resolvePaymentProvider } from './providers';
 // Installs this module's event declarations (PAYMENT_SUCCEEDED, PAYMENT_FAILED).
 import './events';
 
@@ -52,10 +54,15 @@ export default {
             productionOnly: true
         }
     ],
-    // `NODE_BANK_TRANSFER_IBAN`/`_BIC` need `ibantools` to validate — a check `requiredConfig`
-    // cannot express — and `NODE_BANK_TRANSFER_IBAN` set with no `_BENEFICIARY` is a cross-field
-    // rule, not a per-variable one.
-    customCheck: validateBankTransferConfig,
+    // Two checks `requiredConfig` cannot express: `NODE_BANK_TRANSFER_IBAN`/`_BIC` need
+    // `ibantools` to validate, and `NODE_BANK_TRANSFER_IBAN` set with no `_BENEFICIARY` is a
+    // cross-field rule. Plus `NODE_PAYMENT_PROVIDER` itself — `resolvePaymentProvider` already
+    // throws a good message on an unknown name; this is what makes that throw happen at boot
+    // instead of on the first payment (`TIER_AUDIT_BUGS.md` §3).
+    customCheck: () => [
+        ...validateBankTransferConfig(),
+        ...checkSelector('NODE_PAYMENT_PROVIDER', resolvePaymentProvider)
+    ],
     subscribe: () => {
         onDomainEvent(ORDER_CANCELLED, ({ orderId, refund }) =>
             refund ? refundForOrder(orderId) : undefined

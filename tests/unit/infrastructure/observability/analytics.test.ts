@@ -151,6 +151,14 @@ describe('resolveAnalyticsProvider', () => {
 
         expect(resolveAnalyticsProvider().name).toBe('none');
     });
+
+    it('refuses an unknown provider name, naming the variable and the allowed set', () => {
+        process.env.NODE_ANALYTICS_PROVIDER = 'umamii';
+
+        expect(() => resolveAnalyticsProvider()).toThrow(
+            'Unknown NODE_ANALYTICS_PROVIDER: "umamii". Allowed: umami, posthog, none.'
+        );
+    });
 });
 
 // ─── Umami provider ───────────────────────────────────────────────────────────

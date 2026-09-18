@@ -135,6 +135,9 @@ const PROVIDERS: Record<string, PaymentProvider | undefined> = {
 export const resolvePaymentProvider = (): PaymentProvider => {
     const name = process.env.NODE_PAYMENT_PROVIDER ?? 'fake';
     const provider = PROVIDERS[name];
-    if (!provider) throw new Error(`Unknown NODE_PAYMENT_PROVIDER: "${name}"`);
+    if (!provider)
+        throw new Error(
+            `Unknown NODE_PAYMENT_PROVIDER: "${name}". Allowed: ${Object.keys(PROVIDERS).join(', ')}.`
+        );
     return provider;
 };

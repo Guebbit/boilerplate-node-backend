@@ -78,7 +78,10 @@ const PROVIDERS: Record<string, HumanChallengeProvider | undefined> = {
 export const resolveHumanChallengeProvider = (): HumanChallengeProvider => {
     const name = process.env.NODE_ANTIBOT_PROVIDER ?? 'none';
     const provider = PROVIDERS[name];
-    if (!provider) throw new Error(`Unknown NODE_ANTIBOT_PROVIDER: "${name}"`);
+    if (!provider)
+        throw new Error(
+            `Unknown NODE_ANTIBOT_PROVIDER: "${name}". Allowed: ${Object.keys(PROVIDERS).join(', ')}.`
+        );
     return provider;
 };
 

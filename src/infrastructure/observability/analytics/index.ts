@@ -107,8 +107,12 @@ export interface AnalyticsProvider {
 
 // ─── Registry ────────────────────────────────────────────────────────────────
 
-/** Every implementation this build knows. `none` is the spelling for "analytics off". */
-const PROVIDERS: Record<string, AnalyticsProvider> = {
+/**
+ * Every implementation this build knows. `none` is the spelling for "analytics off". Optional
+ * because most keys are absent — that is what makes the miss below a real check rather than dead
+ * code, the same reasoning `antibot-providers/index.ts#PROVIDERS` states for its own registry.
+ */
+const PROVIDERS: Record<string, AnalyticsProvider | undefined> = {
     umami: umamiAnalyticsProvider,
     posthog: posthogAnalyticsProvider,
     none: noneAnalyticsProvider
@@ -118,14 +122,25 @@ const PROVIDERS: Record<string, AnalyticsProvider> = {
 let provider: AnalyticsProvider | undefined;
 
 /**
- * The configured provider, memoised on first use. Lazy so tests can vary the env per case, and
- * so a typo'd `NODE_ANALYTICS_PROVIDER` throws loudly here rather than resolving to `undefined`
- * silently. Turning analytics off has its own spelling (`none`).
+ * The configured provider, memoised on first use. Lazy so tests can vary the env per case, and so
+ * a typo'd `NODE_ANALYTICS_PROVIDER` throws loudly here rather than resolving to `undefined`
+ * silently. Turning analytics off has its own spelling (`none`). Also probed once at boot
+ * (`src/app/required-config.ts`), so the typo is refused before the first request rather than on
+ * the first event emitted.
  *
  * @returns the implementation `NODE_ANALYTICS_PROVIDER` names (default `umami`)
+ * @throws {Error} when the variable names an implementation this build does not have
  */
 export const resolveAnalyticsProvider = (): AnalyticsProvider => {
-    provider ??= PROVIDERS[process.env.NODE_ANALYTICS_PROVIDER ?? 'umami'];
+    if (!provider) {
+        const name = process.env.NODE_ANALYTICS_PROVIDER ?? 'umami';
+        const found = PROVIDERS[name];
+        if (!found)
+            throw new Error(
+                `Unknown NODE_ANALYTICS_PROVIDER: "${name}". Allowed: ${Object.keys(PROVIDERS).join(', ')}.`
+            );
+        provider = found;
+    }
     return provider;
 };
 

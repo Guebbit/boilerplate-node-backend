@@ -56,8 +56,9 @@ to burn your domain's sending reputation using your own credits.
 ## Boot-time refusal
 
 An SMTP host configured without its credentials stops the boot rather than failing silently on the
-first password reset — `kernel/required-config.ts`. Mail that quietly does not send is worse than
-mail that fails loudly: the reset flow appears to work and the user simply never receives it.
+first password reset — `adapters/mailer.ts#missingSmtpCompanions`, folded into the boot gate by
+`app/required-config.ts`. Mail that quietly does not send is worse than mail that fails loudly: the
+reset flow appears to work and the user simply never receives it.
 
 ## Related
 

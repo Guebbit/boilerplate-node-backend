@@ -95,14 +95,40 @@ const MAIL_TRANSPORTS = new Set<string>(['smtp', 'log', 'outbox']);
  *
  * Below those, `NODE_MAIL_TRANSPORT` decides, and SMTP is what a deployment that says nothing
  * gets — the behaviour every existing caller already had.
+ *
+ * @throws {Error} when it is set to something none of the three transports recognise
  */
 export const resolveMailTransport = (): MailTransport => {
     if (isDemoMode()) return 'outbox';
     if (process.env.NODE_ENV === 'test') return 'log';
 
     const named = process.env.NODE_MAIL_TRANSPORT?.trim();
-    return named && MAIL_TRANSPORTS.has(named) ? (named as MailTransport) : 'smtp';
+    if (!named) return 'smtp';
+    if (!MAIL_TRANSPORTS.has(named))
+        throw new Error(
+            `Unknown NODE_MAIL_TRANSPORT: "${named}". Allowed: ${[...MAIL_TRANSPORTS].join(', ')}.`
+        );
+    return named as MailTransport;
 };
+
+/**
+ * The mailer's companions to `NODE_SMTP_HOST` — the ones a transport cannot authenticate or
+ * address without.
+ */
+const SMTP_COMPANIONS = ['NODE_SMTP_USER', 'NODE_SMTP_PASS', 'NODE_SMTP_SENDER'] as const;
+
+/**
+ * SMTP is all-or-nothing rather than required: `account/two-factor/methods/email.ts` gates the
+ * email second factor on `NODE_SMTP_HOST` being set at all, so leaving mail unconfigured is a
+ * choice. A host set *without* its credentials is not — it builds a transport that only fails
+ * when something first tries to send, which is a real user asking to reset a password. Called
+ * from the boot gate (`src/app/required-config.ts`), not the kernel — the kernel does not know
+ * this module owns SMTP.
+ *
+ * @returns the companion variables left unset alongside a configured host
+ */
+export const missingSmtpCompanions = (): string[] =>
+    process.env.NODE_SMTP_HOST ? SMTP_COMPANIONS.filter((key) => !process.env[key]) : [];
 
 /** The memoised transport. See {@link getTransporter}. */
 let transport: Transporter | undefined;

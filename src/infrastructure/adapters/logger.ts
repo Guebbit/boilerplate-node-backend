@@ -72,10 +72,19 @@ export const PERSONAL_FIELDS = new Set(['email', 'ip', 'phone', 'street', 'zip',
  */
 type PersonalFieldMode = 'hash' | 'redact' | 'plain';
 
-/** Reads `NODE_LOG_PERSONAL_FIELDS`, falling back to `hash` for anything unrecognised or unset. */
-const resolvePersonalFieldMode = (): PersonalFieldMode => {
+/**
+ * Reads `NODE_LOG_PERSONAL_FIELDS`, falling back to `hash` when it is unset. An explicit but
+ * unrecognised value throws rather than falling back the same way — silently keeping the safest
+ * mode is right for "unset", wrong for a typo nobody would otherwise notice. Exported so the boot
+ * gate (`src/app/required-config.ts`) can probe it once at startup instead of on the first log line.
+ *
+ * @throws {Error} when it is set to something none of the three modes recognise
+ */
+export const resolvePersonalFieldMode = (): PersonalFieldMode => {
     const raw = process.env.NODE_LOG_PERSONAL_FIELDS?.trim().toLowerCase();
-    return raw === 'redact' || raw === 'plain' ? raw : 'hash';
+    if (!raw) return 'hash';
+    if (raw === 'redact' || raw === 'plain' || raw === 'hash') return raw;
+    throw new Error(`Unknown NODE_LOG_PERSONAL_FIELDS: "${raw}". Allowed: hash, redact, plain.`);
 };
 
 /**

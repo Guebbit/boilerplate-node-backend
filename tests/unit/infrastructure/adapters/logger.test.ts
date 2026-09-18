@@ -19,7 +19,8 @@ import {
     PERSONAL_FIELDS,
     redactFormat,
     resolveLogLevel,
-    resolveConsoleFormat
+    resolveConsoleFormat,
+    resolvePersonalFieldMode
 } from '@infrastructure/adapters/logger';
 
 describe('redactSensitiveFields', () => {
@@ -363,15 +364,10 @@ describe('the personal-data policy', () => {
         expect(redacted.email).toBe('user@example.com');
     });
 
-    it('treats an unrecognised value the same as unset — hash, the private default', () => {
+    it('refuses an unrecognised value instead of silently falling back to hash', () => {
         process.env.NODE_LOG_PERSONAL_FIELDS = 'not-a-real-mode';
 
-        const redacted = redactSensitiveFields({ email: 'user@example.com' }) as Record<
-            string,
-            unknown
-        >;
-
-        expect(redacted.email).toMatch(/^sha256:[\da-f]{12}$/);
+        expect(() => resolvePersonalFieldMode()).toThrow(/Unknown NODE_LOG_PERSONAL_FIELDS/);
     });
 
     it('is case-insensitive for personal field names, like the sensitive-field policy', () => {
