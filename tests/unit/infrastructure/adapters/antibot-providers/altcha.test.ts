@@ -29,8 +29,10 @@ const solvedPayload = async () => {
 };
 
 describe('the altcha provider', () => {
-    it('points the widget at this server rather than a vendor', () => {
-        expect(altchaProvider.publicParameters()).toEqual({ challengeUrl: '/antibot/challenge' });
+    it('echoes back whatever challenge url the caller names, rather than hard-coding one', () => {
+        expect(altchaProvider.publicParameters('/antibot/challenge')).toEqual({
+            challengeUrl: '/antibot/challenge'
+        });
     });
 
     it('issues a signed challenge carrying the configured cost', async () => {

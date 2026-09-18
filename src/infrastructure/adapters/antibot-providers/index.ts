@@ -31,9 +31,12 @@ export interface HumanChallengeProvider {
      * What the frontend needs to render this provider's widget — a site key, a script URL. Public
      * by definition: everything here reaches the browser.
      *
+     * @param challengeUrl - where a self-hosted provider's widget fetches a challenge from — this
+     *   server's own route, named by the module that owns it (`modules/antibot`), never guessed
+     *   here. A vendor-hosted provider (its widget fetches from the vendor instead) ignores it.
      * @returns a flat string map, empty when there is nothing to render
      */
-    publicParameters(): Record<string, string>;
+    publicParameters(challengeUrl: string): Record<string, string>;
 
     /**
      * Hand the client something to work on, for a provider this deployment hosts itself. A

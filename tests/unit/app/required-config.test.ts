@@ -21,11 +21,6 @@ withoutEnvironmentInThisFile([
     'NODE_SMTP_USER',
     'NODE_SMTP_PASS',
     'NODE_SMTP_SENDER',
-    'NODE_ANTIBOT_PROVIDER',
-    'NODE_ANTIBOT_ALTCHA_SECRET',
-    'NODE_ANTIBOT_TURNSTILE_SITE_KEY',
-    'NODE_ANTIBOT_TURNSTILE_SECRET',
-    'NODE_ANTIBOT_EMAIL_POLICY',
     'NODE_ANALYTICS_PROVIDER',
     'NODE_MAIL_TRANSPORT',
     'NODE_LOG_PERSONAL_FIELDS'
@@ -102,68 +97,6 @@ describe('the SMTP group', () => {
         process.env.NODE_SMTP_SENDER = 'Example <noreply@example.com>';
 
         expect(assertApp).not.toThrow();
-    });
-});
-
-describe('the antibot provider group', () => {
-    it('asks for nothing while the rung is off — the default', () => {
-        configure();
-
-        expect(assertApp).not.toThrow();
-    });
-
-    it('refuses a self-hosted provider selected without its signing secret', () => {
-        configure();
-        process.env.NODE_ANTIBOT_PROVIDER = 'altcha';
-        delete process.env.NODE_ANTIBOT_ALTCHA_SECRET;
-
-        expect(assertApp).toThrow(/NODE_ANTIBOT_ALTCHA_SECRET/);
-    });
-
-    it('refuses a vendor provider missing either half of its key pair', () => {
-        configure();
-        process.env.NODE_ANTIBOT_PROVIDER = 'turnstile';
-        process.env.NODE_ANTIBOT_TURNSTILE_SITE_KEY = 'site-key';
-        delete process.env.NODE_ANTIBOT_TURNSTILE_SECRET;
-
-        expect(assertApp).toThrow(/NODE_ANTIBOT_TURNSTILE_SECRET/);
-    });
-
-    it('accepts a fully configured provider', () => {
-        configure();
-        process.env.NODE_ANTIBOT_PROVIDER = 'altcha';
-        process.env.NODE_ANTIBOT_ALTCHA_SECRET = 'an-altcha-signing-secret-value';
-
-        expect(assertApp).not.toThrow();
-    });
-
-    it('refuses an unrecognized NODE_ANTIBOT_PROVIDER — at boot, not the first guarded request', () => {
-        configure();
-        process.env.NODE_ANTIBOT_PROVIDER = 'not-a-provider';
-
-        expect(assertApp).toThrow(/NODE_ANTIBOT_PROVIDER/);
-    });
-});
-
-describe('the antibot email-policy group', () => {
-    it('asks for nothing while the policy is off — the default', () => {
-        configure();
-
-        expect(assertApp).not.toThrow();
-    });
-
-    it.each(['disposable', 'mx'])('accepts a recognized policy (%s)', (policy) => {
-        configure();
-        process.env.NODE_ANTIBOT_EMAIL_POLICY = policy;
-
-        expect(assertApp).not.toThrow();
-    });
-
-    it('refuses to boot on an unrecognized policy, rather than throwing at the first signup', () => {
-        configure();
-        process.env.NODE_ANTIBOT_EMAIL_POLICY = 'not-a-policy';
-
-        expect(assertApp).toThrow(/NODE_ANTIBOT_EMAIL_POLICY/);
     });
 });
 

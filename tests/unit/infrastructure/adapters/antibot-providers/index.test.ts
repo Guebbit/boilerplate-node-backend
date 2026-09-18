@@ -45,7 +45,7 @@ describe('the `none` provider', () => {
         delete process.env.NODE_ANTIBOT_PROVIDER;
         const provider = resolveHumanChallengeProvider();
 
-        expect(provider.publicParameters()).toEqual({});
+        expect(provider.publicParameters('/antibot/challenge')).toEqual({});
         await expect(provider.verify('anything')).resolves.toBe('ok');
     });
 });

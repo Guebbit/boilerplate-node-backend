@@ -81,8 +81,9 @@ const check = (payload: string): Promise<RungVerdict> =>
 /** ALTCHA behind the port: this server issues the challenge and verifies the solution. */
 export const altchaProvider: HumanChallengeProvider = {
     name: 'altcha',
-    // The widget needs no key — it is told where to fetch a challenge, and that route is ours.
-    publicParameters: () => ({ challengeUrl: '/antibot/challenge' }),
+    // The widget needs no key — it is told where to fetch a challenge, named by the caller
+    // (`modules/antibot`'s own controller), never hard-coded in this adapter.
+    publicParameters: (challengeUrl) => ({ challengeUrl }),
     issueChallenge: issue,
     verify: (token) => check(token).catch(() => 'refused' as RungVerdict)
 };

@@ -11,6 +11,13 @@ import { catchAs } from '@infrastructure/http/controller';
 import type { AntibotConfig } from '@types';
 
 /**
+ * This module's own route for {@link resolveHumanChallengeProvider}'s self-hosted providers to
+ * hand their widget — matches `module.ts`'s `basePath` plus `routes.ts`'s `/challenge`. Named
+ * here, in the module, rather than by the provider adapter itself (`TIER_AUDIT_STRUCTURE.md` B3).
+ */
+const CHALLENGE_URL = '/antibot/challenge';
+
+/**
  * GET /antibot/config (public)
  * Tells the frontend which human-challenge provider is active and what it needs to render the
  * widget, plus a `rungs` summary of every other rung's status. The default `none` provider answers
@@ -23,7 +30,7 @@ export const getAntibotConfig = (_request: Request, response: Response) =>
         .then((provider) =>
             successResponse<AntibotConfig>(response, {
                 provider: provider.name,
-                parameters: provider.publicParameters(),
+                parameters: provider.publicParameters(CHALLENGE_URL),
                 rungs: {
                     identityBudgets: true,
                     emailPolicy: resolveEmailPolicy()

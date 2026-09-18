@@ -6,10 +6,11 @@
  * environment, so a suite that left it alone would assert nothing at all.
  *
  * This file covers the MECHANISM only — what belongs to no module but is not the kernel's own
- * either (`NODE_URL`, SMTP, antibot, the provider selectors) is asserted against
- * `APP_NON_MODULE_CHECKS` in `tests/unit/app/required-config.test.ts`, the same split
- * `TIER_AUDIT_STRUCTURE.md` A9 drew in the source: the kernel owns collecting and reporting, the
- * app tier owns what its own variables are.
+ * either (`NODE_URL`, SMTP, the provider selectors) is asserted against `APP_NON_MODULE_CHECKS`
+ * in `tests/unit/app/required-config.test.ts`, the same split `TIER_AUDIT_STRUCTURE.md` A9 drew
+ * in the source: the kernel owns collecting and reporting, the app tier owns what its own
+ * variables are. Antibot's own checks moved onto its own manifest (B3) — see
+ * `src/modules/antibot/tests/unit/module.test.ts`.
  */
 import { assertRequiredConfig, checkSelector } from '@kernel/required-config';
 import { enableDemoProfile } from '@infrastructure/runtime/demo-profile';
