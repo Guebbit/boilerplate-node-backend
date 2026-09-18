@@ -189,10 +189,10 @@ describe('resolveMailTransport', () => {
         expect(resolveMailTransport()).toBe(named);
     });
 
-    it('falls back to SMTP for a name it does not know, rather than dropping the mail', () => {
+    it('refuses an unrecognised value instead of silently falling back to SMTP', () => {
         process.env.NODE_MAIL_TRANSPORT = 'carrier-pigeon';
 
-        expect(resolveMailTransport()).toBe('smtp');
+        expect(() => resolveMailTransport()).toThrow(/Unknown NODE_MAIL_TRANSPORT/);
     });
 
     it('keeps the demo profile on its outbox whatever the deployment asked for', () => {
