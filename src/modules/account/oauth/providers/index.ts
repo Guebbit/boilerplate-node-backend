@@ -7,7 +7,7 @@
  * restart-shaped memoisation to go stale.
  */
 
-import { isDemoMode } from '@infrastructure/adapters/demo-outbox';
+import { isDemoMode } from '@infrastructure/runtime/demo-profile';
 import { googleOAuthProvider } from './google';
 import { isOAuthProviderConfigured } from '../config';
 import { githubOAuthProvider } from './github';

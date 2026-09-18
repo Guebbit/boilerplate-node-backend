@@ -201,6 +201,7 @@ One function, no database, no HTTP. Fast enough to run from the pre-commit hook.
 | File                                                    | What it guarantees                                                                                                          | Read next                      |
 | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
 | `tests/unit/infrastructure/runtime/environment.test.ts` | The fail-fast boot check, tested exhaustively because it is small and because it decides whether the process starts at all. | [Runtime](../tools/runtime.md) |
+| `tests/unit/infrastructure/runtime/demo-profile.test.ts` | Demo mode is exactly `enableDemoProfile()` having been called, and production refuses it even then. | [Demo profile](../tools/demo-profile.md) |
 
 ### `tests/unit/infrastructure/adapters/`
 

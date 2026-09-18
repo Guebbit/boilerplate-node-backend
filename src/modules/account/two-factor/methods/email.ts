@@ -8,7 +8,7 @@
 
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
-import { isDemoMode } from '@infrastructure/adapters/demo-outbox';
+import { isDemoMode } from '@infrastructure/runtime/demo-profile';
 import type { CallerContext } from '@types';
 import type { TwoFactorMethodRecord, UserDocument } from '@modules/users';
 import type { TwoFactorDelivery } from '@types';

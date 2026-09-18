@@ -26,7 +26,7 @@ import { clearCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
 import { refreshLocaleOverrides } from '@infrastructure/i18n';
 
-export { isDemoMode } from '@infrastructure/adapters/demo-outbox';
+export { isDemoMode } from '@infrastructure/runtime/demo-profile';
 
 /**
  * Thrown for anything `scenarios/index.ts`'s `SCENARIOS` registry does not carry — by

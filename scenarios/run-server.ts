@@ -21,7 +21,7 @@
  * See: docs/tools/demo-profile.md
  */
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { enableDemoProfile } from '@infrastructure/adapters/demo-outbox';
+import { enableDemoProfile } from '@infrastructure/runtime/demo-profile';
 import { startEphemeralMongo, type EphemeralMongo } from '@infrastructure/runtime/ephemeral-mongo';
 import { DEMO_BANK_TRANSFER, SCRIPTED_RATE_LIMITS } from './rate-limits';
 

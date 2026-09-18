@@ -29,7 +29,8 @@ import {
 import type { EmailJobPayload } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import { environmentNumber } from '@infrastructure/runtime/environment';
-import { isDemoMode, recordDemoEmail } from '@infrastructure/adapters/demo-outbox';
+import { isDemoMode } from '@infrastructure/runtime/demo-profile';
+import { recordDemoEmail } from '@infrastructure/adapters/demo-outbox';
 import { withSpan } from '@infrastructure/observability/tracer';
 // The queue name comes from the adapter, not from the worker that drains it: producer and
 // consumer must agree on the spelling, and `infrastructure` may not import application code to get it.

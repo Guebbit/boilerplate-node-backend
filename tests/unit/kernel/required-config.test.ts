@@ -6,7 +6,7 @@
  * environment, so a suite that left it alone would assert nothing at all.
  */
 import { assertRequiredConfig } from '@kernel/required-config';
-import { enableDemoProfile } from '@infrastructure/adapters/demo-outbox';
+import { enableDemoProfile } from '@infrastructure/runtime/demo-profile';
 import type { AppModule } from '@kernel/registry';
 
 /** The variables the gate reads, restored after each case so ordering cannot matter. */

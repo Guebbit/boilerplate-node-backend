@@ -26,7 +26,7 @@ import {
     resetTransporter,
     resolveMailTransport
 } from '@infrastructure/adapters/mailer';
-import { enableDemoProfile } from '@infrastructure/adapters/demo-outbox';
+import { enableDemoProfile } from '@infrastructure/runtime/demo-profile';
 import { withoutEnvironmentInThisFile } from '@tests/environment';
 
 /**

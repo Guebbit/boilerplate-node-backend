@@ -7,7 +7,7 @@
  * See: docs/reference/ops.md
  */
 
-import { isDemoMode } from '@infrastructure/adapters/demo-outbox';
+import { isDemoMode } from '@infrastructure/runtime/demo-profile';
 import { isEmailPolicy } from '@infrastructure/adapters/antibot';
 import type { AppModule, RequiredConfig } from '@kernel/registry';
 

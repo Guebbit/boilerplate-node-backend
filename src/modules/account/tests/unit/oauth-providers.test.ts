@@ -9,7 +9,7 @@
 import { enabledProviders, resolveOAuthProvider } from '../../oauth/providers';
 import { FAKE_OAUTH_CODE, fakeOAuthProvider } from '../../oauth/providers/fake';
 import { generateCodeVerifier, codeChallengeOf } from '../../oauth/state';
-import { enableDemoProfile } from '@infrastructure/adapters/demo-outbox';
+import { enableDemoProfile } from '@infrastructure/runtime/demo-profile';
 
 /** Every env var a provider's "configured" check reads, restored after each test. */
 const OAUTH_ENV_KEYS = [

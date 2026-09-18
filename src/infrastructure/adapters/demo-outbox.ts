@@ -5,16 +5,14 @@
  * the email, or it is nothing. So in demo mode the mailer records every send here instead of
  * talking to nodemailer, and the demo router (`src/app/demo.ts`) serves it at `GET
  * /__test/emails`. Infrastructure-tier on purpose: the mailer may not reach up into `app`, so the
- * sink lives beside it. Inert unless {@link enableDemoProfile} was called.
- *
- * Gated on an in-process call, never on an env var: switching this on diverts mail, opens an
- * unauthenticated database wipe and skips the boot secrets gate, so no copied `.env` may be able
- * to do it. Nothing but `scenarios/run-server.ts` calls {@link enableDemoProfile}.
+ * sink lives beside it. Inert unless `enableDemoProfile` (`runtime/demo-profile.ts`) was called —
+ * this file only records; deciding whether the process is a demo lives there, since the boot
+ * gate, the mailer, `app.ts` and `scenarios/run-server.ts` all need that answer too and none of
+ * them are about an email sink.
  */
 
 import type { SendMailOptions } from 'nodemailer';
 import type { Data } from 'ejs';
-import { logger } from './logger';
 
 /** One recorded send, shaped for the e2e suite's outbox reader. */
 export interface DemoOutboxEmail {
@@ -29,41 +27,6 @@ export interface DemoOutboxEmail {
     /** Every primitive template variable, for specs that assert on rendered content. */
     lines: string[];
 }
-
-/** Set only by {@link enableDemoProfile}. Module-level: a restart clears it, same as the outbox. */
-let demoProfileEnabled = false;
-
-/**
- * Mark this process as the demo profile — the only way {@link isDemoMode} can return `true`.
- * Called once, in-process, by `scenarios/run-server.ts`, before `src/app.ts` (and
- * everything it wires) is even imported. A handful of tests call it directly to exercise the
- * demo surface without booting through that script; pass `false` to turn it back off, which
- * every such test must do in its own cleanup so the flag cannot leak into the next one.
- *
- * @param enabled - defaults to `true`; pass `false` to disable.
- */
-export const enableDemoProfile = (enabled = true): void => {
-    demoProfileEnabled = enabled;
-};
-
-/**
- * `NODE_ENV !== 'production'` stays a second gate even though nothing but
- * {@link enableDemoProfile} can request the demo profile now: `run-server.ts` only DEFAULTS
- * `NODE_ENV` to `development`, it does not override a shell's own `NODE_ENV=production`, so this
- * is what refuses that case rather than mounting anyway. Logs at `error` when it does — a fact
- * whoever owns that deployment needs to hear, not swallow.
- */
-export const isDemoMode = (): boolean => {
-    const isProduction = process.env.NODE_ENV === 'production';
-
-    if (demoProfileEnabled && isProduction)
-        logger.error({
-            message:
-                'enableDemoProfile() was called in a production environment. Refusing to mount the demo profile.'
-        });
-
-    return demoProfileEnabled && !isProduction;
-};
 
 /** Every send recorded this process. Module-level, not persisted: a restart clears it. */
 const outbox: DemoOutboxEmail[] = [];
