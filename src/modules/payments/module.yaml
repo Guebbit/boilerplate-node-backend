@@ -1,0 +1,5 @@
+subdomain: supporting
+dependsOn:
+    - inventory # confirm commits an order's held stock into a sale
+    - orders # a payment freezes an order's total; refunds answer ORDER_CANCELLED
+    - users # resolve the payer, detach on USER_DELETED

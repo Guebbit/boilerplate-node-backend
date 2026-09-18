@@ -3,8 +3,9 @@
  *
  * Two properties, and there is nothing else left to assert: every module's `subscribe` is called,
  * and a module that declares none is not a special case. There is no duplicate-name,
- * unknown-dependency or cycle check to assert: they validated a `dependsOn` field nothing read at
- * runtime, so the field and its checks are both gone.
+ * unknown-dependency or cycle check to assert: `AppModule` itself carries no `dependsOn` field —
+ * that question is answered by each module's own `module.yaml`, enforced by
+ * `.dependency-cruiser.cjs`, not by anything `registerModules` does at boot.
  */
 import { registerModules, resolveTranslatables, type AppModule } from '@kernel/registry';
 

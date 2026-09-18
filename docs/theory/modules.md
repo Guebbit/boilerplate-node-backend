@@ -355,11 +355,14 @@ export default {
 
 Every field is read by something: the router is mounted at `basePath`, `locales` is handed to
 i18next, `subscribe` attaches the module's event handlers. That is the bar for a field being here
-at all — the manifest used to also carry `subdomain` and a labelled `dependsOn` graph, which
-nothing read and three tests checked; see [Strategic DDD](./strategic-ddd.md) §2 and §4 for where
-that description lives now. It also used to carry `seeds`/`seedExport`/`demoShapes`: gone for the
-same reason — `scenarios/index.ts` reads a module's repository and factories directly, so a domain
-with no demo data carries nothing about demo data at all, not even an absent field.
+at all — the manifest used to also carry a `subdomain` string and a labelled `dependsOn` graph,
+which nothing read and three tests checked; it does not carry either any more. Both questions live
+next to the manifest instead, in the module's own `module.yaml` — one plain file, read by
+`.dependency-cruiser.cjs` as the enforced allow-list behind `check:dependencies`, not by the app at
+runtime — see [Strategic DDD](./strategic-ddd.md) §2 and §4 for why a sibling file succeeds where
+the old manifest field did not. It also used to carry `seeds`/`seedExport`/`demoShapes`: gone for a
+different reason — `scenarios/index.ts` reads a module's repository and factories directly, so a
+domain with no demo data carries nothing about demo data at all, not even an absent field.
 
 `basePath` and `routes` are both optional, so a domain that owns data but no URL is an ordinary
 entry rather than a special case — `audit-logs` declares neither and `app/routes.ts` mounts only

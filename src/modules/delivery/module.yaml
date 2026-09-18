@@ -1,0 +1,4 @@
+subdomain: supporting
+dependsOn:
+    - orders # a shipment is about an order
+    - users # to address the shipped email in the recipient's language

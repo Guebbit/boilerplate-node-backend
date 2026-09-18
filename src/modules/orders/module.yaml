@@ -1,0 +1,5 @@
+subdomain: core
+dependsOn:
+    - inventory # a claim on units, released on cancel or RESERVATION_EXPIRED
+    - products # a line copies the catalogue row's fields at purchase time
+    - users # USER_DELETED cascade, and a buyer's stored locale for emails

@@ -92,12 +92,13 @@ flowchart LR
 
 ### 1 · The folder
 
-At minimum a `module.ts`. Everything else is the domain's own business — add a file when the domain
-needs it, not because the table has a row for it.
+At minimum a `module.ts` and a `module.yaml`. Everything else is the domain's own business — add a
+file when the domain needs it, not because the table has a row for it.
 
 ```
 src/modules/<name>/
     module.ts                      the manifest — the only file src/modules.ts imports
+    module.yaml                    always — which siblings it may reach, and its subdomain; see strategic-ddd.md §2
     routes.ts                      if it serves HTTP
     controllers/*.ts               ditto
     service.ts                     if it has behaviour

@@ -1,0 +1,3 @@
+subdomain: supporting
+dependsOn:
+    - products # reads and writes the two counter columns directly

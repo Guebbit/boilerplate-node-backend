@@ -39,63 +39,60 @@
  * the call site; do not reach for it to make a convention feel official.
  */
 
+const fs = require('node:fs');
+const path = require('node:path');
+const { parse: parseYaml } = require('yaml');
+
 /**
  * Which siblings each module may reach, and nothing else may.
  *
- * The enforceable half of a per-manifest `dependsOn` field, without the field: declaring one
- * buys nothing at runtime and costs a reconciliation test to keep honest. What it genuinely
- * bought — a new cross-module coupling being a deliberate edit rather than a one-line import
- * nobody questions — is bought here instead, in one place, reported at the offending import.
+ * The enforceable half of each module's own `module.yaml#dependsOn`: declaring one there buys
+ * nothing at runtime by itself and costs a reconciliation test to keep honest. What it genuinely
+ * buys — a new cross-module coupling being a deliberate edit rather than a one-line import nobody
+ * questions — is bought here instead, read off every module's own file and enforced in one place,
+ * reported at the offending import.
  *
- * WHY the docblock still matters: this map holds the PAIR. What is reached across an edge, and why
- * it is that kind of relationship, is prose at the top of each `module.ts` — beside the imports it
- * describes, where a reader meets both at once, and where a coupling the import graph cannot see
- * (a shared document, a metric read by string, a TTL window another domain depends on)
- * can also be written down. A rule reconciled against imports could never hold one of those.
+ * WHY `module.ts`'s docblock still matters: `module.yaml` holds the EDGE only. What is reached
+ * across it, and why it is that kind of relationship, is prose at the top of each `module.ts` —
+ * beside the imports it describes, where a reader meets both at once, and where a coupling the
+ * import graph cannot see (a shared document, a metric read by string, a TTL window another domain
+ * depends on) can also be written down. A rule reconciled against imports could never hold one of
+ * those, and `module.yaml` is deliberately just the allow-list, not the reasoning.
+ *
+ * Fails closed on purpose: a module folder with no `module.yaml` gets `[]` — it may reach no
+ * sibling, never "no rule at all" — and a `dependsOn` that is not an array of strings throws,
+ * naming the offending file, rather than silently permitting everything.
  */
-const MODULE_EDGES = {
-    account: [
-        'users',
-        'orders',
-        'payments',
-        'delivery',
-        'cart',
-        'wishlist',
-        'audit-logs',
-        'feedback'
-    ],
-    cart: ['account', 'delivery', 'inventory', 'orders', 'payments', 'products', 'users'],
-    delivery: ['orders', 'users'],
-    inventory: ['products'],
-    observability: ['audit-logs'],
-    orders: ['inventory', 'products', 'users'],
-    payments: ['inventory', 'orders', 'users'],
-    wishlist: ['cart', 'products', 'users']
-};
+const MODULES_ROOT = path.join(__dirname, 'src', 'modules');
 
-/** Every module folder, so a module reaching a sibling it does not declare is refused by name. */
-const MODULE_NAMES = [
-    'account',
-    'audit-logs',
-    'cart',
-    'delivery',
-    'feedback',
-    'inventory',
-    'locales',
-    'observability',
-    'orders',
-    'payments',
-    'products',
-    'users',
-    'wishlist'
-];
+/** Every module folder — read from disk, so a new module needs no edit here to be covered. */
+const MODULE_NAMES = fs
+    .readdirSync(MODULES_ROOT, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .toSorted();
+
+/** `{ moduleName: dependsOn[] }`, read from each module's own `module.yaml`. */
+const MODULE_EDGES = Object.fromEntries(
+    MODULE_NAMES.map((name) => {
+        const descriptorPath = path.join(MODULES_ROOT, name, 'module.yaml');
+        if (!fs.existsSync(descriptorPath)) return [name, []];
+
+        const descriptor = parseYaml(fs.readFileSync(descriptorPath, 'utf8'));
+        const dependsOn = descriptor?.dependsOn;
+        if (!Array.isArray(dependsOn) || dependsOn.some((entry) => typeof entry !== 'string'))
+            throw new Error(`${descriptorPath}: "dependsOn" must be an array of module names`);
+
+        return [name, dependsOn];
+    })
+);
 
 /** One rule per module: it may reach itself and the siblings named above, and no others. */
 const moduleCouplingRules = MODULE_NAMES.map((name) => {
     const reaches = MODULE_EDGES[name] ?? [];
     return {
         name: `module-coupling-${name}`,
-        comment: `${name} may reach ${reaches.join(', ') || 'no sibling'}. A new one is a new coupling: add it to MODULE_EDGES and say in this module's docblock what it reaches for — or find a way not to need it. A sibling that has to reach back belongs on the event bus (kernel/events.ts), not in this list.`,
+        comment: `${name} may reach ${reaches.join(', ') || 'no sibling'}. A new one is a new coupling: add it to src/modules/${name}/module.yaml and say in this module's docblock what it reaches for — or find a way not to need it. A sibling that has to reach back belongs on the event bus (kernel/events.ts), not in this list.`,
         severity: 'error',
         from: { path: `^src/modules/${name}/`, pathNot: `^src/modules/${name}/tests/` },
         to: {

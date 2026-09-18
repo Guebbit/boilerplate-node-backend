@@ -37,6 +37,35 @@ edge:
 Three rules use it: the domain layer against persistence and against HTTP, and `infrastructure`
 against the domains above it.
 
+### Module coupling
+
+Every module folder carries its own `module.yaml`, an allow-list of the siblings it may reach:
+
+```yaml
+# src/modules/cart/module.yaml
+subdomain: core
+dependsOn:
+    - account # the checkout's delivery address
+    - orders # the order a checkout creates
+```
+
+`.dependency-cruiser.cjs` reads every `module.yaml` off disk and generates one `module-coupling-<name>`
+rule per module from it — a module reaching a sibling its own file does not list fails
+`check:dependencies`, reported at the offending import. There is no second copy of the map to drift:
+the file a module's own docblock and `dependsOn` field describe **is** the rule the graph enforces.
+
+Fails closed both ways: a module folder with no `module.yaml` may reach no sibling at all, rather
+than being silently exempt from the rule; a `dependsOn` that is not an array of strings throws,
+naming the offending file, instead of matching nothing. `tests/cross-cutting/module-descriptors.test.ts`
+is the separate hygiene check — every file exists, parses against a strict schema, and names only
+real, non-duplicate, alphabetically-ordered siblings — kept apart from this enforcement on purpose,
+so the enforcement config's own logic stays as small as the fail-closed guarantee requires.
+
+`scripts/docs/generate-module-graph.ts` reads the same files for each module's `subdomain` colour in
+the generated map at [Modules](../modules/index.md) — see
+[Strategic DDD](../theory/strategic-ddd.md#_2-context-map-—-how-a-module-reaches-its-siblings) for why
+the relationship _kind_ and _reasoning_ stay in `module.ts`'s docblock instead of here.
+
 ### Cycles
 
 `A → B → A` compiles, lints and runs. It fails only in whichever order the module system happens to

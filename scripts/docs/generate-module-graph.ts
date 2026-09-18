@@ -27,14 +27,18 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { format, resolveConfig } from 'prettier';
+import { parse as parseYaml } from 'yaml';
 
 const checkOnly = process.argv.includes('--check');
 
 /** The repo root, two levels up from `scripts/docs/`. */
 const ROOT = path.join(__dirname, '..', '..');
+
+/** Every module folder under `src/modules`. */
+const MODULES_ROOT = path.join(ROOT, 'src', 'modules');
 
 /** The index page carrying the whole-repo graph; each module page is found from its own name. */
 const PAGE = path.join(ROOT, 'docs', 'modules', 'index.md');
@@ -58,25 +62,24 @@ interface Target {
     body: string;
 }
 
-/** How each module is coloured, by the subdomain table in docs/theory/strategic-ddd.md. */
-const SUBDOMAIN: Readonly<Record<string, 'core' | 'supporting' | 'generic'>> = {
-    cart: 'core',
-    orders: 'core',
-    products: 'core',
-    delivery: 'supporting',
-    inventory: 'supporting',
-    payments: 'supporting',
-    wishlist: 'supporting',
-    account: 'supporting',
-    users: 'supporting',
-    webhooks: 'supporting',
-    'api-keys': 'supporting',
-    antibot: 'generic',
-    'audit-logs': 'generic',
-    locales: 'generic',
-    observability: 'generic',
-    feedback: 'generic'
-};
+/**
+ * How each module is coloured, read off its own `module.yaml#subdomain` — the label lives with the
+ * module, not in this script. A module folder with no descriptor is left out entirely rather than
+ * guessed at, so a forgotten `module.yaml` is missing from the map instead of silently mislabelled.
+ */
+const SUBDOMAIN: Readonly<Record<string, 'core' | 'supporting' | 'generic'>> = Object.fromEntries(
+    readdirSync(MODULES_ROOT, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .flatMap((name) => {
+            const descriptorPath = path.join(MODULES_ROOT, name, 'module.yaml');
+            if (!existsSync(descriptorPath)) return [];
+            const descriptor = parseYaml(readFileSync(descriptorPath, 'utf8')) as {
+                subdomain: 'core' | 'supporting' | 'generic';
+            };
+            return [[name, descriptor.subdomain]];
+        })
+);
 
 /** Every module -> module edge dependency-cruiser can see, read off its collapsed mermaid output. */
 const readEdges = (): [from: string, to: string][] => {

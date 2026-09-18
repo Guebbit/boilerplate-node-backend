@@ -1,0 +1,3 @@
+subdomain: supporting
+dependsOn:
+    - users # hashToken, and re-deriving the minter's current permissions at check time

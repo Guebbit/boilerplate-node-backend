@@ -1,0 +1,5 @@
+subdomain: supporting
+dependsOn:
+    - cart # move-to-cart writes a line
+    - products # a saved line is meaningless without one
+    - users # the list belongs to an account

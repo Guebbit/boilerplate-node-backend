@@ -1,0 +1,9 @@
+subdomain: core
+dependsOn:
+    - account # the checkout's delivery address
+    - delivery # shipping price, pure functions
+    - inventory # stock holds during checkout
+    - orders # the order a checkout creates
+    - payments # the charge, and the RF reference a bank transfer quotes
+    - products # prices and availability
+    - users # the buyer

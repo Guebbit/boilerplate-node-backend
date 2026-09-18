@@ -85,22 +85,28 @@ provider that way — behind `./providers`.
 
 ### Where the map lives
 
-In the docblock at the top of each module's `module.ts`, in prose, next to the imports it describes.
+Two places, on purpose, for two different questions. **Which** siblings a module may reach lives in
+its own `module.yaml#dependsOn` — a plain array of names, one per module folder, read by
+`.dependency-cruiser.cjs` and enforced as the allow-list behind `check:dependencies`. **What kind**
+of reach each edge is, and why it exists, stays in prose at the top of `module.ts`, next to the
+imports it describes.
 
-This used to be a `dependsOn` field on the manifest — a typed array of `{ module, as, because }`
-edges — with a 217-line cross-cutting test holding each edge to the four kinds above, checking the
-`because` was a sentence, and reconciling declared edges against real `import` statements. It is
-gone, and it is worth saying why, because the reasoning applies to any labelled-graph field
-someone is tempted to add back:
+An earlier version of this idea — a typed `dependsOn: { module, as, because }[]` field carrying both
+questions at once, with a 217-line cross-cutting test holding each edge to the four kinds above — was
+removed, for reasons worth restating now that a `dependsOn` field is back in a different shape:
 
-- **Nothing read it at runtime.** Not the registry, not the router, not the event bus. It was
-  documentation with a type annotation.
-- **It was self-reported.** Because it was not derived from real imports, it could not prove two
-  modules do not cycle — only that a developer's annotations agreed with each other.
-- **The enforcement that matters is structural and still there.** `eslint-plugin-boundaries` refuses
-  an import that reaches past a sibling's `index.ts`, and `check:dependencies` re-checks the graph
-  transitively. A module with no barrel cannot be imported by a sibling at all. Those are the rules
-  with teeth; `dependsOn` was a description sitting beside them.
+- **Nothing read it at runtime, and nothing enforced it.** Not the registry, not the router, not
+  `check:dependencies` — it was documentation with a type annotation, reconciled against real
+  imports only by a test a developer could forget to keep passing meaningfully.
+- **It duplicated the relationship KIND**, which this table already classifies, without adding
+  information a reader could not get from the docblock prose next to it.
+
+`module.yaml#dependsOn` avoids both: it carries the edge ONLY, no kind and no prose, and
+`.dependency-cruiser.cjs` reads it directly as the rule it enforces — an import outside a module's
+own `dependsOn` fails `check:dependencies`, the same gate CI runs. There is no second copy to drift:
+the file the config reads IS the map. The relationship kind (`conformist`, `customer-supplier`,
+`published-language`, `shared-kernel`) and the reasoning behind an edge still live where they always
+did, in `module.ts`'s docblock — `module.yaml` answers "may it", the docblock answers "why, and how".
 
 The twin makes the opposite call, and correctly: `boilerplate-php-laravel-backend` keeps its
 `dependsOn` edges because `ModuleRegistry::inDependencyOrder()` sorts the seeders with them —
@@ -163,12 +169,15 @@ mechanism is the deliverable; the first thing a real project should do is re-dec
 that table.
 :::
 
-This table is the whole of the classification. Each module used to also carry a `subdomain` field on
-its manifest, with a test refusing a `domain/` folder inside a `generic` one — and that test's own
-docblock conceded both halves of the problem: whether a classification stays HONEST was never
-checked (nothing stops every module drifting to `core`), and in a boilerplate the values are a
-worked example rather than a finding. A label nobody can be held to does not need a field, and a
-judgement call the reader has to make anyway reads better as a table than as a type error.
+This table keeps the definitions; the values themselves live on each module's own
+`module.yaml#subdomain` and are read from there into the generated map at `docs/modules/index.md`
+(`npm run docs:graph`) — so the table above is illustrative, not the source of truth for any one
+module's label. `tests/cross-cutting/module-descriptors.test.ts` only holds `subdomain` to being one
+of the three names; it does not — and an earlier version of this field, removed for exactly this
+reason, could not either — check that a classification stays HONEST (nothing stops every module
+drifting to `core`), or that a `generic` module carries no `domain/` folder. Placing the value with
+the module it describes is still worth doing, since a doc table can go stale the moment a new module
+lands and nothing points back at it; it is not a claim that the label is enforced beyond its spelling.
 
 ## 5. Published language — the barrel
 
