@@ -332,3 +332,80 @@ describe('replay', () => {
         expect(result.data.status).toBe(queuedAfter?.status);
     });
 });
+
+describe('the delivery lease', () => {
+    it('reclaims a stranded in-flight row once its lease has expired', async () => {
+        const server = await startHttpsTestServer((response) => response.writeHead(200).end('ok'));
+        const subscription = await createSubscription(`${server.url}/hook`);
+        const job = await createPendingDelivery(subscription);
+
+        // A worker that claimed the row and then crashed mid-attempt: `in-flight`, a lease already
+        // in the past, and a token nothing still holds.
+        const stranded = await webhookDeliveryRepository.findById(job.deliveryId);
+        if (!stranded) throw new Error('unreachable — asserted above');
+        stranded.status = 'in-flight';
+        stranded.leaseToken = 'a-dead-workers-token';
+        stranded.leaseExpiresAt = new Date(Date.now() - 1000);
+        await webhookDeliveryRepository.save(stranded);
+
+        const acked = await processDeliveryJob(job);
+        await server.close();
+
+        expect(acked).toBe(true);
+        const delivery = await webhookDeliveryRepository.findById(job.deliveryId);
+        expect(delivery?.status).toBe('succeeded');
+    });
+
+    it('lets exactly one of two concurrent claims on the same row win', async () => {
+        const subscription = await createSubscription('https://example.invalid/hook');
+        const job = await createPendingDelivery(subscription);
+
+        const [first, second] = await Promise.all([
+            webhookDeliveryRepository.claimPending(job.deliveryId),
+            webhookDeliveryRepository.claimPending(job.deliveryId)
+        ]);
+
+        const winners = [first, second].filter((claimed) => claimed !== null);
+        expect(winners).toHaveLength(1);
+    });
+
+    it("refuses a replay while a live worker's lease already holds the row", async () => {
+        const subscription = await createSubscription('https://example.invalid/hook');
+        const job = await createPendingDelivery(subscription);
+
+        // A live worker's claim, never completed — the row is still `in-flight` under a fresh
+        // lease when the replay below runs.
+        const claimed = await webhookDeliveryRepository.claimPending(job.deliveryId);
+        expect(claimed).not.toBeNull();
+
+        const result = await replayDelivery(job.deliveryId, context);
+
+        expect(result.success).toBe(false);
+        if (result.success) throw new Error('unreachable — asserted above');
+        expect(result.status).toBe(409);
+        expect(result.errors[0]?.code).toBe('WEBHOOK_DELIVERY_IN_PROGRESS');
+    });
+
+    it("drops an outcome write whose token no longer matches the row's current lease", async () => {
+        const subscription = await createSubscription('https://example.invalid/hook');
+        const job = await createPendingDelivery(subscription);
+
+        const claimed = await webhookDeliveryRepository.claimPending(job.deliveryId);
+        if (!claimed) throw new Error('unreachable — asserted above');
+        const staleToken = claimed.leaseToken;
+
+        // Something else re-claims the row before this (simulated) slow attempt writes its
+        // outcome — the same shape a real lease expiry followed by a reclaim would produce.
+        claimed.leaseToken = 'a-newer-claims-token';
+        await webhookDeliveryRepository.save(claimed);
+
+        const dropped = await webhookDeliveryRepository.applyOutcome(job.deliveryId, staleToken, {
+            status: 'succeeded'
+        });
+
+        expect(dropped).toBeNull();
+        const stored = await webhookDeliveryRepository.findById(job.deliveryId);
+        expect(stored?.status).toBe('in-flight');
+        expect(stored?.leaseToken).toBe('a-newer-claims-token');
+    });
+});

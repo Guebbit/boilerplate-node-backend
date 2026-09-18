@@ -92,11 +92,19 @@ describe('webhookDeliverySchema', () => {
         ]);
     });
 
-    it('leaves the outcome fields absent until an attempt actually lands', () => {
+    it('leaves the outcome and lease fields absent until an attempt actually lands', () => {
         // `responseCode`/`durationMs`/`error`/`nextAttemptAt` all mean something specific by their
         // absence (never attempted, no retry scheduled) — a `default` on any would misreport a row
-        // that has not been through `attemptDelivery` yet.
-        for (const path of ['responseCode', 'durationMs', 'error', 'nextAttemptAt'])
+        // that has not been through `attemptDelivery` yet. `leaseToken`/`leaseExpiresAt` the same:
+        // absent means never claimed, not "claimed by nobody in particular".
+        for (const path of [
+            'responseCode',
+            'durationMs',
+            'error',
+            'nextAttemptAt',
+            'leaseToken',
+            'leaseExpiresAt'
+        ])
             expect(requiredPaths(webhookDeliverySchema)).not.toContain(path);
     });
 
@@ -117,10 +125,11 @@ describe('webhookDeliverySchema', () => {
         ]);
     });
 
-    it('declares the log filters and the retry sweep index, plus the TTL sweep', () => {
+    it('declares the log filters, the retry sweep index and the stranded-lease index, plus the TTL sweep', () => {
         expect(indexSpecs(webhookDeliverySchema)).toEqual([
             'createdAt_1: createdAt+1',
             'status_1_createdAt_-1: status+1, createdAt-1',
+            'status_1_leaseExpiresAt_1: status+1, leaseExpiresAt+1',
             'status_1_nextAttemptAt_1: status+1, nextAttemptAt+1',
             'subscriptionId_1_createdAt_-1: subscriptionId+1, createdAt-1',
             'tenant_1_createdAt_-1: tenant+1, createdAt-1'
@@ -134,6 +143,7 @@ describe('webhookDeliverySchema', () => {
         expect(indexOptionSpecs(webhookDeliverySchema)).toEqual([
             `createdAt_1: expireAfterSeconds=${DELIVERY_RETENTION_SECONDS}`,
             'status_1_createdAt_-1: (none)',
+            'status_1_leaseExpiresAt_1: (none)',
             'status_1_nextAttemptAt_1: (none)',
             'subscriptionId_1_createdAt_-1: (none)',
             'tenant_1_createdAt_-1: (none)'

@@ -100,22 +100,42 @@ flowchart LR
     PUB --> MATCH{"matching<br/>subscriptions?"}
     MATCH -->|none| DROP["nothing"]
     MATCH -->|n| Q["worker.webhook.deliver<br/>one message per subscription"]
-    Q --> W["webhooks' own<br/>consumer (module.ts)"]
+    Q --> CLAIM{"claim the lease?<br/>pending, or a stranded<br/>expired in-flight row"}
+    CLAIM -->|no, live lease held| ACK["ack — nothing to do"]
+    CLAIM -->|yes| W["webhooks' own<br/>consumer (module.ts)"]
     W --> HTTP["signed POST<br/>SSRF-checked, timed out"]
     HTTP -->|2xx| OK["status: succeeded"]
     HTTP -->|fail, attempts left| BACK["status: pending<br/>nextAttemptAt scheduled"]
     HTTP -->|fail, exhausted| DIS{"consecutive<br/>exhausted chains<br/>over threshold?"}
     DIS -->|yes| OFF["subscription disabled"]
     DIS -->|no| DONE["status: exhausted"]
-    BACK -.->|sweep, per minute| Q
+    BACK -.->|sweep, per minute<br/>publishes, does not claim| Q
 ```
 
 **Delayed retry rides the cron container, not the broker.** `webhookdeliveries.nextAttemptAt`
 carries when a failed row is due again; `npm run sweep:webhook-retries` (`ops/sweep-webhook-retries.ts`)
-— the one job in `docker/crontab` that runs every minute instead of nightly — claims each due row
-and re-publishes it. `webhookDeliveryRepository.claimPending` (`pending` → `in-flight`) is the one
-atomic step that keeps the sweep and a fast-path worker from ever delivering the same attempt
-twice. See [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full mechanism.
+— the one job in `docker/crontab` that runs every minute instead of nightly — publishes every due
+row (and every stranded one, below) to the queue. See
+[Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full mechanism.
+
+**The sweep publishes; only a claim delivers — a visibility-timeout lease, the way SQS does it.**
+The sweep does NOT claim a row before publishing it: publishing is safe to do more than once (the
+claim below is what actually decides who sends), and a sweep that claimed first is exactly the bug
+this design replaced — every retry past the first attempt was silently acknowledged without ever
+being sent, because the sweep had already moved the row to `in-flight` before the worker's own
+claim ever ran. Now:
+
+- `webhookDeliveryRepository.claimPending` (worker/queue path) and `claimForReplay` (admin replay)
+  are the only two places a row becomes `in-flight` — each stamps a `leaseToken` and a
+  `leaseExpiresAt` well above the 10s delivery timeout, in the same atomic `findOneAndUpdate`.
+- `claimPending` matches `pending`, or an `in-flight` row whose lease has already expired — the
+  crash-recovery path for a worker that took the row and never finished. `claimForReplay` matches
+  anything NOT under a live lease, including a terminal `succeeded`/`exhausted` row, since replay's
+  whole point is re-sending one of those.
+- Every outcome write (`services/attempt.ts`) goes through `applyOutcome`, which applies only while
+  the writer's `leaseToken` still matches the row's current one — a write from a claim whose lease
+  has since expired and been reclaimed by something else is dropped, never retried.
+- Delivery stays at-least-once even with the lease: a receiver still de-duplicates on `webhook-id`.
 
 **Signing is Standard Webhooks, hand-rolled.** `transport/webhook-signing.ts` emits the
 `webhook-id`/`webhook-timestamp`/`webhook-signature` headers a growing set of the ecosystem already

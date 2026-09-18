@@ -138,11 +138,13 @@ export const webhookSubscriptionModel = model<
 /**
  * The states one delivery row moves through. See `./domain/backoff` for the retry ladder.
  *
- * `in-flight` is the atomic claim `repository.ts`'s `claimPending` makes before a worker actually
- * calls the endpoint — it exists so the sweep and a fast-path worker racing the same due row
- * cannot both deliver it, never as a state a caller sets directly. `failed` is unused today
- * (a failed attempt with retries left goes back to `pending` with a later `nextAttemptAt`; only
- * `exhausted` is terminal) and kept for a future per-attempt row without a contract change.
+ * `in-flight` is a LEASED claim — `repository.ts`'s `claimPending`/`claimForReplay` make it, with
+ * `leaseToken`/`leaseExpiresAt` stamped in the same write, before a worker or a replay actually
+ * calls the endpoint. It exists so the sweep (which only publishes, never claims) and a worker
+ * racing the same due row cannot both deliver it — never a state a caller sets directly. `failed`
+ * is unused today (a failed attempt with retries left goes back to `pending` with a later
+ * `nextAttemptAt`; only `exhausted` is terminal) and kept for a future per-attempt row without a
+ * contract change.
  */
 export type WebhookDeliveryStatus = 'pending' | 'in-flight' | 'succeeded' | 'failed' | 'exhausted';
 
@@ -159,6 +161,17 @@ export interface WebhookDeliveryDocument extends Document {
     durationMs?: number;
     error?: string;
     nextAttemptAt?: Date;
+    /**
+     * A visibility-timeout lease, the way SQS does it — set together, `undefined` on a row that
+     * has never been claimed. While `status` is `in-flight` and `leaseExpiresAt` is still in the
+     * future, this delivery is somebody's exclusive claim: `applyOutcome` writes only while its
+     * caller's token still matches, and neither `claimPending` nor `claimForReplay` will hand the
+     * row to anyone else. Once the lease expires, both treat the row as claimable again — the
+     * crash-recovery path for a worker that took the row and never finished.
+     */
+    leaseToken?: string;
+    /** See {@link leaseToken}. */
+    leaseExpiresAt?: Date;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -220,6 +233,12 @@ export const webhookDeliverySchema = new Schema<WebhookDeliveryDocument, Webhook
         },
         nextAttemptAt: {
             type: Date
+        },
+        leaseToken: {
+            type: String
+        },
+        leaseExpiresAt: {
+            type: Date
         }
     },
     { timestamps: true }
@@ -231,6 +250,8 @@ webhookDeliverySchema.index({ subscriptionId: 1, createdAt: -1 });
 webhookDeliverySchema.index({ status: 1, createdAt: -1 });
 // The retry sweep's own read: due, retryable rows, in no particular order — see `ops/sweep-webhook-retries.ts`.
 webhookDeliverySchema.index({ status: 1, nextAttemptAt: 1 });
+// The same read's other half: a STRANDED in-flight row whose lease already expired.
+webhookDeliverySchema.index({ status: 1, leaseExpiresAt: 1 });
 
 /*
  * TTL index — same caveat as every other TTL index in this repo (see `audit-logs/model.ts`):
@@ -243,9 +264,15 @@ webhookDeliverySchema.index(
     { expireAfterSeconds: deliveryRetentionDays * 24 * 60 * 60 }
 );
 
-/** Wire shape: `_id` → `id`, drops `tenant` (implicit in who is asking) and `payload` (not on the contract — the log is about the attempt, not a payload replay viewer). */
+/**
+ * Wire shape: `_id` → `id`, drops `tenant` (implicit in who is asking), `payload` (not on the
+ * contract — the log is about the attempt, not a payload replay viewer), and the lease pair
+ * (`leaseToken`/`leaseExpiresAt`) — internal claim bookkeeping, not a fact about the attempt the
+ * contract describes. Keeping the delivery-log response shape unchanged is deliberate: this is a
+ * correctness fix to the CLAIM, not a new field anyone asked to see.
+ */
 export const applyWebhookDeliveryTransform = applySerialization(webhookDeliverySchema, {
-    omit: ['tenant', 'payload']
+    omit: ['tenant', 'payload', 'leaseToken', 'leaseExpiresAt']
 });
 
 /** Delivery model entrypoint. Collection name `webhookdeliveries`. */

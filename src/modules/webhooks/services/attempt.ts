@@ -5,6 +5,12 @@
  * {@link processDeliveryJob} below (queued attempts, registered on `../module.ts`'s `consumers`
  * manifest entry) and `replay` (`./deliveries.ts`, a synchronous admin re-send) so the two paths
  * cannot drift on what "recording an outcome" means.
+ *
+ * `attemptDelivery` takes an ALREADY-CLAIMED row — `delivery.leaseToken` must be set, from
+ * `repository.ts`'s `claimPending` or `claimForReplay`. Every outcome write goes through
+ * `applyOutcome`, which only applies while that token still matches; see `../model.ts`'s
+ * `leaseToken` docblock for why. A write that loses the race (`applyOutcome` returns `null`) is
+ * dropped, never retried — whatever re-claimed the row in the meantime owns its outcome now.
  */
 
 import { deliverWebhook } from '../transport/webhook-delivery';
@@ -22,30 +28,32 @@ import type { WebhookDeliveryDocument, WebhookSubscriptionDocument } from '../mo
 const finalizeUndeliverable = (
     delivery: WebhookDeliveryDocument,
     error: string
-): Promise<WebhookDeliveryDocument> => {
-    delivery.status = 'exhausted';
-    delivery.error = error;
-    return webhookDeliveryRepository.save(delivery);
-};
+): Promise<WebhookDeliveryDocument | null> =>
+    webhookDeliveryRepository.applyOutcome(String(delivery._id), delivery.leaseToken, {
+        status: 'exhausted',
+        error
+    });
 
 /** Record a successful attempt: the row succeeds, and the subscription's failure streak resets. */
 const recordSuccess = (
     delivery: WebhookDeliveryDocument,
     responseCode: number | undefined,
     durationMs: number
-): Promise<WebhookDeliveryDocument> => {
-    delivery.status = 'succeeded';
-    delivery.responseCode = responseCode;
-    delivery.durationMs = durationMs;
-    delivery.error = undefined;
-    return webhookDeliveryRepository
-        .save(delivery)
+): Promise<WebhookDeliveryDocument | null> =>
+    webhookDeliveryRepository
+        .applyOutcome(String(delivery._id), delivery.leaseToken, {
+            status: 'succeeded',
+            responseCode,
+            durationMs,
+            error: undefined
+        })
         .then((saved) =>
-            webhookSubscriptionRepository
-                .recordOutcome(String(delivery.subscriptionId), true)
-                .then(() => saved)
+            saved
+                ? webhookSubscriptionRepository
+                      .recordOutcome(String(delivery.subscriptionId), true)
+                      .then(() => saved)
+                : null
         );
-};
 
 /**
  * Record a failed attempt: schedule the next retry if the backoff ladder has one left, otherwise
@@ -57,35 +65,43 @@ const recordFailure = (
     responseCode: number | undefined,
     durationMs: number,
     error: string | undefined
-): Promise<WebhookDeliveryDocument> => {
+): Promise<WebhookDeliveryDocument | null> => {
     const subscriptionId = String(delivery.subscriptionId);
     const retryAt = nextAttemptAt(delivery.attempt);
 
     if (retryAt) {
-        delivery.status = 'pending';
-        delivery.attempt += 1;
-        delivery.responseCode = responseCode;
-        delivery.durationMs = durationMs;
-        delivery.error = error;
-        delivery.nextAttemptAt = retryAt;
         // Left as `pending` for the sweep (or a fast retry, if one ever exists) to pick up —
         // no subscription write here: only a whole EXHAUSTED chain counts as a failure, per
         // reading of "sustained failure" as a whole chain giving up, not a single failed attempt.
-        return webhookDeliveryRepository.save(delivery);
+        return webhookDeliveryRepository.applyOutcome(String(delivery._id), delivery.leaseToken, {
+            status: 'pending',
+            attempt: delivery.attempt + 1,
+            responseCode,
+            durationMs,
+            error,
+            nextAttemptAt: retryAt
+        });
     }
 
-    delivery.status = 'exhausted';
-    delivery.responseCode = responseCode;
-    delivery.durationMs = durationMs;
-    delivery.error = error;
-
-    return webhookDeliveryRepository.save(delivery).then((saved) =>
-        webhookSubscriptionRepository.recordOutcome(subscriptionId, false).then((updated) => {
-            if (updated && shouldAutoDisable(updated.consecutiveFailures))
-                return webhookSubscriptionRepository.disable(subscriptionId).then(() => saved);
-            return saved;
+    return webhookDeliveryRepository
+        .applyOutcome(String(delivery._id), delivery.leaseToken, {
+            status: 'exhausted',
+            responseCode,
+            durationMs,
+            error
         })
-    );
+        .then((saved) => {
+            if (!saved) return null;
+            return webhookSubscriptionRepository
+                .recordOutcome(subscriptionId, false)
+                .then((updated) => {
+                    if (updated && shouldAutoDisable(updated.consecutiveFailures))
+                        return webhookSubscriptionRepository
+                            .disable(subscriptionId)
+                            .then(() => saved);
+                    return saved;
+                });
+        });
 };
 
 /**
@@ -93,11 +109,16 @@ const recordFailure = (
  * the outcome on `delivery`. Caller-supplied `subscription` (rather than re-fetched here) is what
  * lets `replay` and {@link processDeliveryJob} share this function despite loading it
  * differently — `processDeliveryJob` already fetched it to decide whether there is anything to send.
+ *
+ * @param delivery - an ALREADY-CLAIMED row (`delivery.leaseToken` set) — see the module docblock
+ * @returns the row as it stands after the outcome, or `null` if the claim was lost mid-attempt
+ *   (`applyOutcome` found a different token) — vanishingly rare given the lease's margin over the
+ *   HTTP timeout, but a real possibility under a serious stall, not a bug to paper over
  */
 export const attemptDelivery = (
     delivery: WebhookDeliveryDocument,
     subscription: WebhookSubscriptionDocument
-): Promise<WebhookDeliveryDocument> => {
+): Promise<WebhookDeliveryDocument | null> => {
     if (!subscription.enabled) return finalizeUndeliverable(delivery, 'Subscription is disabled');
 
     const secrets = activeRingSecrets(subscription.secrets);
@@ -123,7 +144,7 @@ export const attemptDelivery = (
 const deliverIfPossible = (
     delivery: WebhookDeliveryDocument,
     subscription: WebhookSubscriptionDocument | null
-): Promise<WebhookDeliveryDocument> =>
+): Promise<WebhookDeliveryDocument | null> =>
     subscription
         ? attemptDelivery(delivery, subscription)
         : finalizeUndeliverable(delivery, 'Subscription no longer exists');
@@ -135,8 +156,8 @@ const deliverIfPossible = (
  * consumer list, so deleting this module is enough to stop the queue meaning anything.
  *
  * @returns `true` (ack) once the row is claimed and settled, or when it was already claimed by a
- *   sibling (the sweep, or a redelivered duplicate) — nothing left for this delivery to do. A
- *   thrown/rejected write is left to reject, so `consumeFromQueue` requeues it as transient.
+ *   sibling (a live worker's lease, or a row already resolved) — nothing left for this delivery to
+ *   do. A thrown/rejected write is left to reject, so `consumeFromQueue` requeues it as transient.
  */
 export const processDeliveryJob = (payload: WebhookDeliverJobPayload): Promise<boolean> =>
     webhookDeliveryRepository.claimPending(payload.deliveryId).then((delivery) => {

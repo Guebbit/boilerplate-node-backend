@@ -4,6 +4,7 @@
  * the sweep's atomic claim, and finding every enabled subscription an event might match.
  */
 
+import { randomUUID } from 'node:crypto';
 import {
     createRepository,
     toObjectId,
@@ -96,38 +97,117 @@ const deliveryBase = createRepository<WebhookDeliveryDocument>(webhookDeliveryMo
 export const WEBHOOK_DELIVERY_SORT: Record<string, 1 | -1> = { createdAt: -1, _id: -1 };
 
 /**
- * Atomically claim ONE due delivery: `pending` → `in-flight`, only if it is still `pending`.
+ * Well above `transport/webhook-delivery.ts#DEFAULT_TIMEOUT_MS` (10s) — enough slack for the DB
+ * round trip and a GC pause, not so much that a worker that genuinely crashed mid-attempt strands
+ * its row for long before the sweep's stranded-lease read picks it up again.
+ */
+const LEASE_DURATION_MS = 60_000;
+
+/** A fresh lease: who is claiming, and until when. */
+const lease = (): { leaseToken: string; leaseExpiresAt: Date } => ({
+    leaseToken: randomUUID(),
+    leaseExpiresAt: new Date(Date.now() + LEASE_DURATION_MS)
+});
+
+/**
+ * Atomically claim one row for exclusive work: `pending` → `in-flight`, or a STRANDED `in-flight`
+ * row whose lease has already expired — a worker that crashed mid-attempt, or a sweep whose own
+ * queue publish never arrived. The queued/sweep path's own claim; see {@link claimForReplay} for
+ * the admin path, which may also reclaim a row already at a terminal status.
  *
- * The conditional filter is the whole mechanism — two callers racing this row (the sweep and a
- * fast-path worker that has not yet run) can both issue this write, and exactly one matches.
  * `findOneAndUpdate` rather than `find` + `updateOne`: the read and the write must be one atomic
  * step, or the race this exists to prevent just moves earlier.
  *
  * @param id - the delivery row to claim
- * @returns the claimed, now-`in-flight` document, or `null` if it was already claimed or resolved
+ * @returns the claimed row, now `in-flight` under a fresh lease (read `leaseToken` off it for
+ *   {@link applyOutcome}), or `null` if it is claimed by a live lease or already resolved
  */
 const claimPending = (id: string): Promise<WebhookDeliveryDocument | null> =>
     webhookDeliveryModel
         .findOneAndUpdate(
-            { _id: toObjectId(id), status: 'pending' },
-            { $set: { status: 'in-flight' } },
+            {
+                _id: toObjectId(id),
+                $or: [
+                    { status: 'pending' },
+                    { status: 'in-flight', leaseExpiresAt: { $lt: new Date() } }
+                ]
+            },
+            { $set: { status: 'in-flight', ...lease() } },
             { returnDocument: 'after' }
         )
         .exec();
 
 /**
- * Every delivery row due for an attempt right now, oldest first — the sweep's own read.
+ * The admin replay's own claim — same exclusive lease as {@link claimPending}, but over ANY status
+ * except a row under a live lease right now. Replay's whole point is re-sending a row that already
+ * reached a terminal status (`succeeded`, `exhausted`), which {@link claimPending} would correctly
+ * refuse to touch.
  *
- * Unclaimed on purpose: the sweep calls {@link claimPending} per row so a row already picked up by
- * the fast path (still `pending` here because the worker hasn't reached its own claim yet, or
- * already `in-flight` because it has) is handled by that one atomic step rather than by a second
- * query racing this one.
+ * @param id - the delivery row to claim
+ * @returns the claimed row, or `null` only when a live worker or another replay holds the lease
+ */
+const claimForReplay = (id: string): Promise<WebhookDeliveryDocument | null> =>
+    webhookDeliveryModel
+        .findOneAndUpdate(
+            {
+                _id: toObjectId(id),
+                $or: [{ status: { $ne: 'in-flight' } }, { leaseExpiresAt: { $lt: new Date() } }]
+            },
+            { $set: { status: 'in-flight', ...lease() } },
+            { returnDocument: 'after' }
+        )
+        .exec();
+
+/**
+ * Apply an outcome patch to a delivery, but ONLY while `leaseToken` still matches the claim writing
+ * it — a write from a superseded claim (its lease expired and something else has since picked the
+ * row up) must not clobber a newer attempt's state. `services/attempt.ts` is the one caller, and
+ * the one place a delivery's status legitimately moves past `in-flight`.
+ *
+ * @param id - the delivery row to update
+ * @param leaseToken - the token the claim that is writing this outcome was handed
+ * @param patch - the fields this outcome decided
+ * @returns the updated row, or `null` if `leaseToken` no longer matches — the write is dropped,
+ *   never retried: whatever holds the row now is responsible for its outcome
+ */
+const applyOutcome = (
+    id: string,
+    leaseToken: string | undefined,
+    patch: Partial<
+        Pick<
+            WebhookDeliveryDocument,
+            'status' | 'attempt' | 'responseCode' | 'durationMs' | 'error' | 'nextAttemptAt'
+        >
+    >
+): Promise<WebhookDeliveryDocument | null> =>
+    webhookDeliveryModel
+        .findOneAndUpdate(
+            { _id: toObjectId(id), leaseToken },
+            { $set: patch },
+            { returnDocument: 'after' }
+        )
+        .exec();
+
+/**
+ * Every delivery row due for an attempt right now, oldest first, PLUS any stranded `in-flight` row
+ * whose lease already expired — the sweep's own read.
+ *
+ * Published without claiming: `services/sweep.ts` no longer calls {@link claimPending} before
+ * publishing (the bug this lease design fixes — see `docs/modules/webhooks.md`'s lease section). A
+ * row this read returns may already be mid-attempt by the time the publish lands; the WORKER's own
+ * claim is what decides who actually does the one real HTTP attempt, so publishing an already-live
+ * row twice is safe, not a race.
  *
  * @param limit - the ceiling per sweep run, so one very late sweep does not enqueue an unbounded burst
  */
 const findDue = (limit: number): Promise<WebhookDeliveryDocument[]> =>
     webhookDeliveryModel
-        .find({ status: 'pending', nextAttemptAt: { $lte: new Date() } })
+        .find({
+            $or: [
+                { status: 'pending', nextAttemptAt: { $lte: new Date() } },
+                { status: 'in-flight', leaseExpiresAt: { $lt: new Date() } }
+            ]
+        })
         .sort({ nextAttemptAt: 1 })
         .limit(limit)
         .exec();
@@ -139,11 +219,15 @@ const findByEventId = (eventId: string): Promise<WebhookDeliveryDocument[]> =>
 /** Explicit annotation for the same TS7056 reason as {@link webhookSubscriptionRepository}. */
 export const webhookDeliveryRepository: Repository<WebhookDeliveryDocument> & {
     claimPending: typeof claimPending;
+    claimForReplay: typeof claimForReplay;
+    applyOutcome: typeof applyOutcome;
     findDue: typeof findDue;
     findByEventId: typeof findByEventId;
 } = {
     ...deliveryBase,
     claimPending,
+    claimForReplay,
+    applyOutcome,
     findDue,
     findByEventId
 };

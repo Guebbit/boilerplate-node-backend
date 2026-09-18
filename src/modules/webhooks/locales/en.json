@@ -2,6 +2,7 @@
     "webhooks": {
         "subscription-cap-reached": "This shop has reached its webhook subscription limit.",
         "ring-cannot-be-empty": "A subscription must keep at least one active secret.",
-        "subscription-not-found": "The subscription for this delivery no longer exists."
+        "subscription-not-found": "The subscription for this delivery no longer exists.",
+        "delivery-in-progress": "This delivery is already being attempted right now. Try again shortly."
     }
 }

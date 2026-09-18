@@ -1,11 +1,16 @@
 /**
  * @module
- * The retry sweep: enqueue every delivery due for another attempt. `ops/sweep-webhook-retries.ts`
- * runs {@link sweepDueWebhookDeliveries} on a schedule (per-minute, unlike the nightly `reap:*`
- * jobs — see the script's own header). Claims each due row atomically before publishing
- * (`webhookDeliveryRepository.claimPending`, `pending` -> `in-flight`) so a sweep overlapping its
- * own previous run, or racing the fast-path publish on a fresh event, cannot enqueue the same
- * delivery twice.
+ * The retry sweep: publish every delivery due for another attempt, plus any stranded `in-flight`
+ * row whose lease already expired (`ops/sweep-webhook-retries.ts` runs
+ * {@link sweepDueWebhookDeliveries} on a schedule, per-minute, unlike the nightly `reap:*` jobs —
+ * see the script's own header).
+ *
+ * Publishes WITHOUT claiming — the fix for the bug this lease design closes: only a worker
+ * (`./attempt.ts#processDeliveryJob`) or an admin replay actually claims a row, via
+ * `repository.ts`'s lease. A row published twice (this sweep's own overlapping runs, or the fast
+ * path racing a stranded-row republish) is safe: whichever claim lands first does the one real
+ * HTTP attempt, and every other delivery of the same message finds the row already under a live
+ * lease and acks as a no-op.
  */
 
 import { logger } from '@infrastructure/adapters/logger';
@@ -18,39 +23,31 @@ import type { WebhookDeliveryDocument } from '../model';
 /** The ceiling one sweep run enqueues, so a very late sweep cannot burst-publish an unbounded batch. */
 const SWEEP_BATCH_LIMIT = 200;
 
-/** Undo a claim the queue never accepted, so the row waits for the NEXT sweep instead of stranding `in-flight` forever. */
-const revertClaim = (delivery: WebhookDeliveryDocument): Promise<void> => {
-    delivery.status = 'pending';
-    return webhookDeliveryRepository.save(delivery).then(() => undefined);
+/** Publish one due row's next attempt. Never claims — see the module docblock. */
+const enqueue = (due: WebhookDeliveryDocument): Promise<void> => {
+    const payload: WebhookDeliverJobPayload = {
+        deliveryId: String(due._id),
+        subscriptionId: String(due.subscriptionId),
+        eventId: due.eventId,
+        eventType: due.eventType,
+        occurredAt: due.createdAt.toISOString(),
+        data: due.payload,
+        attempt: due.attempt
+    };
+
+    return publishToQueue<WebhookDeliverJobPayload>({
+        queue: WORKER_CHANNELS.WEBHOOK_DELIVER,
+        payload
+    }).then(() => undefined);
 };
 
-/** Claim one due row and enqueue it — or, if claimed first by a sibling, do nothing. */
-const claimAndEnqueue = (due: WebhookDeliveryDocument): Promise<void> =>
-    webhookDeliveryRepository.claimPending(String(due._id)).then((claimed) => {
-        if (!claimed) return undefined;
-
-        const payload: WebhookDeliverJobPayload = {
-            deliveryId: String(claimed._id),
-            subscriptionId: String(claimed.subscriptionId),
-            eventId: claimed.eventId,
-            eventType: claimed.eventType,
-            occurredAt: claimed.createdAt.toISOString(),
-            data: claimed.payload,
-            attempt: claimed.attempt
-        };
-
-        return publishToQueue<WebhookDeliverJobPayload>({
-            queue: WORKER_CHANNELS.WEBHOOK_DELIVER,
-            payload
-        }).then((published) => (published ? undefined : revertClaim(claimed)));
-    });
-
 /**
- * Enqueue every delivery due for a retry right now. Idempotent — a row already claimed by another
- * pass, or no longer `pending`, is simply skipped; see the module docblock.
+ * Enqueue every delivery due for a retry right now, plus every stranded lease — see
+ * `repository.ts#findDue`. Idempotent: publishing a row that is already being worked costs one
+ * wasted message, never a duplicate delivery — the claim in `./attempt.ts` is what actually decides.
  */
 export const sweepDueWebhookDeliveries = (): Promise<void> =>
     webhookDeliveryRepository.findDue(SWEEP_BATCH_LIMIT).then((due) => {
         logger.info({ message: 'webhooks: sweeping due retries', count: due.length });
-        return Promise.all(due.map((delivery) => claimAndEnqueue(delivery))).then(() => undefined);
+        return Promise.all(due.map((delivery) => enqueue(delivery))).then(() => undefined);
     });

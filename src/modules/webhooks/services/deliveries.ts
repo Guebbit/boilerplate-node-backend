@@ -54,6 +54,12 @@ export const list = (
         WEBHOOK_DELIVERY_SORT
     );
 
+/** The 409 both "somebody else holds the lease" cases below answer with. */
+const rejectInProgress = (): ResponseReject =>
+    generateReject(409, [
+        { code: 'WEBHOOK_DELIVERY_IN_PROGRESS', message: t('webhooks.delivery-in-progress') }
+    ]);
+
 /**
  * Re-send one delivery: signs and POSTs again, synchronously, against the subscription's CURRENT
  * url and secret ring — never the ones this row was originally attempted with. Updates the same
@@ -63,7 +69,11 @@ export const list = (
  * success or exhaustion. A caller-side bump on top of that would double-count the one real HTTP
  * attempt this makes.
  *
- * @returns a 404 outside this tenant's log, or when the subscription itself no longer exists
+ * Claims the row first (`repository.ts#claimForReplay`), the same lease a queued attempt takes —
+ * without it, replaying a delivery a live worker is mid-attempt on would double-send.
+ *
+ * @returns a 404 outside this tenant's log, or when the subscription itself no longer exists; a
+ *   409 when a live worker (or another replay) already holds the row's lease
  */
 export const replay = (
     id: string,
@@ -73,22 +83,28 @@ export const replay = (
         if (delivery?.tenant !== context.caller.tenantId)
             return generateReject(404, [t('generic.error-not-found')]);
 
-        return webhookSubscriptionRepository
-            .findById(String(delivery.subscriptionId))
-            .then((subscription) => {
-                if (!subscription)
-                    return generateReject(404, [t('webhooks.subscription-not-found')]);
+        return webhookDeliveryRepository.claimForReplay(id).then((claimed) => {
+            if (!claimed) return rejectInProgress();
 
-                return attemptDelivery(delivery, subscription).then((updated) => {
-                    emitAuditEvent(
-                        buildAuditEvent(context, {
-                            action: webhooksAuditActions.ADMIN_WEBHOOK_DELIVERY_REPLAYED,
-                            outcome: 'success',
-                            target_type: 'webhook_delivery',
-                            target_id: id
-                        })
-                    );
-                    return generateSuccess(updated);
+            return webhookSubscriptionRepository
+                .findById(String(claimed.subscriptionId))
+                .then((subscription) => {
+                    if (!subscription)
+                        return generateReject(404, [t('webhooks.subscription-not-found')]);
+
+                    return attemptDelivery(claimed, subscription).then((updated) => {
+                        if (!updated) return rejectInProgress();
+
+                        emitAuditEvent(
+                            buildAuditEvent(context, {
+                                action: webhooksAuditActions.ADMIN_WEBHOOK_DELIVERY_REPLAYED,
+                                outcome: 'success',
+                                target_type: 'webhook_delivery',
+                                target_id: id
+                            })
+                        );
+                        return generateSuccess(updated);
+                    });
                 });
-            });
+        });
     });
