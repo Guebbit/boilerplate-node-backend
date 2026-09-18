@@ -1,68 +1,19 @@
 /**
  * @module
- * Error types for the HTTP layer.
+ * The database-error interpreter — the single place a Mongo/Mongoose driver failure is mapped to
+ * an HTTP status, so all twelve models answer a duplicate key or a bad ObjectId the same way.
  *
- * Two pieces: `ExtendedError`, thrown for the central error middleware to translate into a
- * response; and the database-error interpreter, the single place a Mongo/Mongoose driver failure
- * is mapped to an HTTP status, so all twelve models answer a duplicate key or a bad ObjectId the
- * same way.
+ * A "throw with a status from anywhere" facility (`ExtendedError`) used to live here too. It had
+ * exactly one caller, whose constructor-side logging never ran — a middleware with the `Response`
+ * already in hand answers `rejectResponse` directly instead. If a genuine need for one resurfaces,
+ * the standard answer is `http-errors` (already in the tree transitively via Express), not a
+ * bespoke class.
  */
 
 import { logger } from '@infrastructure/adapters/logger';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { generateReject, rejectResponse } from './response';
 import type { Response } from 'express';
-
-/**
- * Carries the HTTP status alongside a thrown error, so a controller can `throw` and let the
- * central error middleware derive the response instead of passing status codes around by hand.
- *
- * `isOperational` distinguishes expected failures (validation, wrong password) — business
- * outcomes — from unexpected ones, which are bugs and get logged immediately, in the constructor.
- */
-export class ExtendedError extends Error {
-    // Error name or identifier. Redeclared (it exists on Error) so it can be `readonly`.
-    public readonly name: string;
-    // HTTP status code appropriate for this error (404, 500, etc)
-    public readonly httpCode: number;
-    // True for expected/business failures; false means a bug, logged in the constructor below.
-    public readonly isOperational: boolean;
-    // List of UI errors — user-facing messages, typically already translated, safe to return
-    // in the response body (unlike `stack` or raw driver messages).
-    public readonly errors: string[];
-
-    /**
-     * @param name - stable identifier, e.g. 'ValidationError'
-     * @param httpCode - status to send to the client
-     * @param isOperational - false means dangerous: an unexpected/programmer error, which is
-     *                        logged here on construction. Defaults to false so an unannotated
-     *                        throw is treated as the more serious case.
-     * @param errors - user-facing messages
-     */
-    constructor(name: string, httpCode: number, isOperational = false, errors: string[] = []) {
-        // Composed from name + errors so `error.message` alone is meaningful in a log line.
-        super(name + ': ' + errors.join('. '));
-        // ES5-era subclassing of a built-in loses the prototype link, silently breaking
-        // `instanceof ExtendedError`. `new.target` points at the actual subclass, so further
-        // subclasses keep working too.
-        Object.setPrototypeOf(this, new.target.prototype);
-        this.name = name;
-        this.httpCode = httpCode;
-        this.isOperational = isOperational;
-        this.errors = errors;
-        // Logged here, not by the caller: guarantees a record even if something swallows the
-        // throw. Operational errors are skipped — a wrong password is not an incident.
-        if (!isOperational)
-            logger.error({
-                message: this.message,
-                // Under `error`, not spread: `serializeError` (adapters/logger.ts) only strips
-                // stacks from production logs for values under this key.
-                error: this,
-                errors: this.errors,
-                httpCode: this.httpCode
-            });
-    }
-}
 
 /**
  * Decide which driver failures describe the REQUEST rather than the server — the single place

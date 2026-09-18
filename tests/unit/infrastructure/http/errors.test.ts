@@ -1,24 +1,16 @@
 /**
  * HTTP error types — `src/infrastructure/http/errors.ts`.
  *
- * Two units with quite different risk profiles:
- *
- *   `ExtendedError` — carries the HTTP status alongside the failure and decides, via
- *   `isOperational`, whether the failure is a business outcome or a bug worth logging. Getting
- *   the default wrong in either direction is costly: log everything and a wrong password becomes
- *   an incident; log nothing and a real bug disappears if a caller swallows the throw.
- *
- *   `databaseErrorInterpreter` — maps a driver or Mongoose error onto a `[httpCode, message]`
- *   tuple, and `rejectDatabaseError` turns that into a response. Between them they decide whether
- *   a failure is the client's fault or the server's, which is the difference between a 4xx a
- *   client can act on and a 500 that pages someone. Three of its branches exist because a real
- *   request produced the wrong one: a malformed id answered 500 on a PUBLIC endpoint and echoed
- *   the driver's prose into the body.
+ * `databaseErrorInterpreter` maps a driver or Mongoose error onto a `[httpCode, message]` tuple,
+ * and `rejectDatabaseError` turns that into a response. Between them they decide whether a
+ * failure is the client's fault or the server's, which is the difference between a 4xx a client
+ * can act on and a 500 that pages someone. Three of its branches exist because a real request
+ * produced the wrong one: a malformed id answered 500 on a PUBLIC endpoint and echoed the
+ * driver's prose into the body.
  */
 
 import { asStub } from '@tests/stub';
 import {
-    ExtendedError,
     databaseErrorInterpreter,
     rejectDatabaseEnvelope,
     rejectDatabaseError
@@ -48,94 +40,6 @@ const makeCastError = (): CastError =>
             value: 'abc'
         })
     );
-
-describe('ExtendedError', () => {
-    it('exposes the name, status, operational flag and user-facing errors it was given', () => {
-        const error = new ExtendedError('ValidationError', 422, true, ['Email is required']);
-
-        expect(error.name).toBe('ValidationError');
-        expect(error.httpCode).toBe(422);
-        expect(error.isOperational).toBe(true);
-        expect(error.errors).toEqual(['Email is required']);
-    });
-
-    it('composes `message` from the name and the joined errors', () => {
-        // The documented reason: `error.message` alone has to be meaningful in a log line, where
-        // the structured fields may not travel with it.
-        const error = new ExtendedError('ValidationError', 422, true, [
-            'Email is required',
-            'Password too short'
-        ]);
-
-        expect(error.message).toBe('ValidationError: Email is required. Password too short');
-    });
-
-    it('is a real Error and satisfies instanceof after prototype restoration', () => {
-        const error = new ExtendedError('NotFound', 404, true);
-
-        // The `Object.setPrototypeOf(this, new.target.prototype)` line exists precisely so these
-        // hold when the class is down-levelled; without it `instanceof ExtendedError` is false
-        // and every `catch` that branches on the type silently stops matching.
-        expect(error).toBeInstanceOf(ExtendedError);
-        expect(error).toBeInstanceOf(Error);
-        expect(error.stack).toBeDefined();
-    });
-
-    it('keeps instanceof working for a subclass', () => {
-        // `new.target` (rather than `ExtendedError.prototype`) is what makes this hold.
-        class NotFoundError extends ExtendedError {
-            constructor() {
-                super('NotFound', 404, true, ['Nothing here']);
-            }
-        }
-
-        const error = new NotFoundError();
-
-        expect(error).toBeInstanceOf(NotFoundError);
-        expect(error).toBeInstanceOf(ExtendedError);
-    });
-
-    it('defaults to non-operational, the more serious case', () => {
-        // Documented intent: "Defaults to false so an unannotated throw is treated as the more
-        // serious case." An unannotated throw must not be able to pass itself off as routine.
-        const error = new ExtendedError('Boom', 500);
-
-        expect(error.isOperational).toBe(false);
-        expect(error.errors).toEqual([]);
-    });
-
-    it('logs on construction when the error is NOT operational', () => {
-        new ExtendedError('UnexpectedFailure', 500, false, ['Something broke']);
-
-        expect(mockedLogger.error).toHaveBeenCalledTimes(1);
-        // The Error itself rides under `error`, which is the only key `redactFormat` hands to
-        // `serializeError` — and `serializeError` is where "no stack traces in production" is
-        // decided. Spelling `stack` and `name` out as fields of their own would put absolute
-        // container paths in the aggregated log store on exactly the failures this logs.
-        expect(mockedLogger.error).toHaveBeenCalledWith(
-            expect.objectContaining({
-                error: expect.objectContaining({ name: 'UnexpectedFailure' }),
-                httpCode: 500,
-                errors: ['Something broke'],
-                message: 'UnexpectedFailure: Something broke'
-            })
-        );
-    });
-
-    it('stays silent for an operational error', () => {
-        // "A wrong password is not an incident, and logging every one would drown the real
-        // signal." This assertion is the one that keeps that true.
-        new ExtendedError('Unauthorized', 401, true, ['Wrong credentials']);
-
-        expect(mockedLogger.error).not.toHaveBeenCalled();
-    });
-
-    it('logs the default-constructed error, since the default is non-operational', () => {
-        new ExtendedError('Boom', 500);
-
-        expect(mockedLogger.error).toHaveBeenCalledTimes(1);
-    });
-});
 
 describe('databaseErrorInterpreter', () => {
     it('maps an ordinary Error to a 500 carrying its message', () => {

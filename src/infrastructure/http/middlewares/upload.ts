@@ -31,7 +31,7 @@ import { digestQuarantinedImage } from '@infrastructure/adapters/image.worker';
 import { queueState } from '@infrastructure/adapters/queue';
 import { getFormFiles } from '@infrastructure/http/uploads';
 import { logger } from '@infrastructure/adapters/logger';
-import { ExtendedError } from '@infrastructure/http/errors';
+import { rejectResponse } from '@infrastructure/http/response';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 
 /**
@@ -217,10 +217,11 @@ const withLocaleRestored =
  * silently dropping the file, unlike `fileFilter` — the client should be told plainly.
  *
  * @param request - Express request already processed by a multer middleware.
- * @param _response - Unused; the error handler formats the rejection.
- * @param next - Called with an `ExtendedError` when any uploaded file fails the check.
+ * @param response - Answered directly with the 422; this is a middleware, not a controller
+ *   forwarding to the central error handler, so there is no reason to throw and unwind.
+ * @param next - Called with no argument to continue the chain, or with a genuine error.
  */
-export const validateUploadedImages: RequestHandler = (request, _response, next) => {
+export const validateUploadedImages: RequestHandler = (request, response, next) => {
     const paths = getFormFiles(request);
     if (!paths || paths.length === 0) {
         next();
@@ -256,15 +257,9 @@ export const validateUploadedImages: RequestHandler = (request, _response, next)
                 request_id: request.requestId
             });
 
-            return Promise.all(rejected.map((path) => deleteFile(path))).then(() =>
-                next(
-                    // `true` = operational: a client sent something invalid, which is expected
-                    // traffic, not a programmer error worth logging as one.
-                    new ExtendedError('Unprocessable Entity', 422, true, [
-                        t('generic.error-invalid-data')
-                    ])
-                )
-            );
+            return Promise.all(rejected.map((path) => deleteFile(path))).then(() => {
+                rejectResponse(response, 422, [t('generic.error-invalid-data')]);
+            });
         })
         .catch((error: unknown) => next(error));
 };

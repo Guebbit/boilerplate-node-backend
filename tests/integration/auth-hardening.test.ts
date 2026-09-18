@@ -240,23 +240,25 @@ describe('the 500 handler', () => {
 
     /**
      * The other side of the rule: an error whose text was CHOSEN is still returned. Losing that
-     * would turn every deliberate rejection into a blank 500.
+     * would turn every deliberate rejection into a blank 500. `MulterError` is the one throw
+     * shape this handler still translates by hand — everything else answers `rejectResponse`
+     * directly instead of unwinding through here.
      */
     it('still returns the copy a deliberate error carries', async () => {
         const { handleUncaughtError } = await import('@app/error-handling');
-        const errors = await import('@infrastructure/http/errors');
+        const multer = await import('multer');
 
         const throwing = express();
         throwing.get('/boom', () => {
-            throw new errors.ExtendedError('ValidationError', 422, true, ['Pick a shorter name']);
+            throw new multer.MulterError('LIMIT_FILE_SIZE', 'avatar');
         });
         throwing.use(handleUncaughtError);
 
         const response = await supertest(throwing).get('/boom');
 
-        expect(response.status).toBe(422);
+        expect(response.status).toBe(400);
         expect(response.body.errors).toContainEqual(
-            expect.objectContaining({ message: 'Pick a shorter name' })
+            expect.objectContaining({ message: 'File too large' })
         );
     });
 });

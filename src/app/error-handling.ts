@@ -10,7 +10,7 @@ import type { Express, Request, Response, NextFunction } from 'express';
 import { MulterError } from 'multer';
 import { logger, auditLogger } from '@infrastructure/adapters/logger';
 import { rejectResponse } from '@infrastructure/http/response';
-import { ExtendedError, databaseErrorInterpreter } from '@infrastructure/http/errors';
+import { databaseErrorInterpreter } from '@infrastructure/http/errors';
 import {
     getActiveSpanContext,
     recordErrorOnActiveSpan
@@ -34,8 +34,7 @@ export const handleUncaughtError = (
 
     recordErrorOnActiveSpan(error);
 
-    const status =
-        error instanceof MulterError ? 400 : error instanceof ExtendedError ? error.httpCode : 500;
+    const status = error instanceof MulterError ? 400 : 500;
 
     logger.error(`${error.name}: ${error.message}`, {
         request_id: request.requestId,
@@ -50,8 +49,6 @@ export const handleUncaughtError = (
                 message: error.message
             }
         ]);
-    if (error instanceof ExtendedError)
-        return rejectResponse(response, error.httpCode, error.errors);
     /*
      * A driver failure that is really a CLIENT error — a malformed ObjectId, a duplicate key.
      * `databaseErrorInterpreter` is the single place deciding which ones describe the request;
