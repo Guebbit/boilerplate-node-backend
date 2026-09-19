@@ -621,3 +621,36 @@ components:
                     type: string
                     format: date-time
                     description: When the money arrived. Must not be in the future. Defaults to now.
+
+        # Used by `POST /account/export` (`shared/contracts/openapi.root.yaml`) — minus `userId`
+        # and `actions`: `userId` is redundant (an export already scopes every payment to the
+        # caller) and `actions` is computed PER CALLER by `paymentService`'s own read path, which
+        # this endpoint's bulk read (`paymentService.findOwnPayments`) deliberately bypasses.
+        ExportPayment:
+            type: object
+            additionalProperties: false
+            required: [id, orderId, amount, currency, status, provider]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                amount:
+                    type: number
+                    format: double
+                    minimum: 0
+                currency:
+                    type: string
+                status:
+                    type: string
+                    enum: [requires_confirmation, requires_action, processing, succeeded, declined, refunded]
+                provider:
+                    type: string
+                cardLast4:
+                    type: string
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time

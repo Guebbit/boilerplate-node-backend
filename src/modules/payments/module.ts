@@ -11,6 +11,7 @@
 
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
+import type { ExportPayment } from '@types';
 import { onDomainEvent } from '@kernel/events';
 import { ORDER_CANCELLED } from '@modules/orders';
 import { USER_DELETED } from '@modules/users';
@@ -24,24 +25,11 @@ import { resolvePaymentProvider } from './providers';
 import './events';
 
 /**
- * One of the caller's own payments, minus `userId`: already scoped to the caller by the query
- * that found it, so naming their own id back to them adds nothing. A real plain object, not a
- * type-level `Omit` on the Mongoose document — `applyPaymentTransform` carries no such omission,
- * so returning the document itself would still serialize `userId`.
+ * {@link ExportPayment}, built from the real document — minus `userId`: already scoped to the
+ * caller by the query that found it, so naming their own id back to them adds nothing. A real
+ * plain object, not a type-level `Omit` on the Mongoose document — `applyPaymentTransform` carries
+ * no such omission, so returning the document itself would still serialize `userId`.
  */
-interface ExportPayment {
-    id: string;
-    orderId: string;
-    amount: number;
-    currency: string;
-    status: string;
-    provider: string;
-    cardLast4?: string;
-    createdAt?: string;
-    updatedAt?: string;
-}
-
-/** {@link ExportPayment}, built from the real document. */
 const toExportPayment = (
     payment: Awaited<ReturnType<typeof findOwnPayments>>[number]
 ): ExportPayment => ({

@@ -12,20 +12,12 @@
 
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
+import type { ExportSession } from '@types';
 import { router } from './routes';
 import { userRepository } from './repository';
 import { userService } from './service';
 import { isLiveRefreshSession, type Token } from './model';
 import './events';
-
-/** A live refresh session, metadata only — never the token value; see the field's own comment. */
-interface ExportSession {
-    id: string;
-    type: 'refresh';
-    /** The refresh-token VALUE never appears here — it is as good as a password. */
-    expiration?: string;
-    lastUsedAt?: string;
-}
 
 /**
  * This caller's own live refresh sessions, metadata only — keeps `type` (a stored `Session`

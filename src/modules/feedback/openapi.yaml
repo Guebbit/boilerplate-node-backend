@@ -277,3 +277,32 @@ components:
                         $ref: '#/components/schemas/FeedbackRequest'
                 meta:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
+
+        # Used by `POST /account/export` (`shared/contracts/openapi.root.yaml`) — `adminNotes` is
+        # deliberately absent: that field is staff's internal assessment of the ticket, not the
+        # submitter's data, and Art. 15(4) protects the rights of others (whoever wrote the note)
+        # the same way it protects the submitter's own. See `module.ts`'s `toExportFeedback` for
+        # where this gets built.
+        ExportFeedbackTicket:
+            type: object
+            additionalProperties: false
+            required: [id, email, subject, message, status]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                name:
+                    type: string
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                subject:
+                    type: string
+                message:
+                    type: string
+                status:
+                    type: string
+                respondedAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time

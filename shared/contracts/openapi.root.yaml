@@ -1231,11 +1231,11 @@ components:
                 payments:
                     type: array
                     items:
-                        $ref: '../../src/modules/account/openapi.yaml#/components/schemas/ExportPayment'
+                        $ref: '../../src/modules/payments/openapi.yaml#/components/schemas/ExportPayment'
                 shipments:
                     type: array
                     items:
-                        $ref: '../../src/modules/account/openapi.yaml#/components/schemas/ExportShipment'
+                        $ref: '../../src/modules/delivery/openapi.yaml#/components/schemas/ExportShipment'
                 cart:
                     type: array
                     items:
@@ -1252,16 +1252,16 @@ components:
                 sessions:
                     type: array
                     items:
-                        $ref: '../../src/modules/account/openapi.yaml#/components/schemas/ExportSession'
+                        $ref: '../../src/modules/users/openapi.yaml#/components/schemas/ExportSession'
                 auditLog:
                     type: array
                     items:
-                        $ref: '../../src/modules/account/openapi.yaml#/components/schemas/ExportAuditEntry'
+                        $ref: '../../src/modules/audit-logs/openapi.yaml#/components/schemas/ExportAuditEntry'
                 feedback:
                     type: array
                     description: Present only when `NODE_EXPORT_INCLUDE_FEEDBACK=true`.
                     items:
-                        $ref: '../../src/modules/account/openapi.yaml#/components/schemas/ExportFeedbackTicket'
+                        $ref: '../../src/modules/feedback/openapi.yaml#/components/schemas/ExportFeedbackTicket'
 
         AccountExportEnvelope:
             type: object

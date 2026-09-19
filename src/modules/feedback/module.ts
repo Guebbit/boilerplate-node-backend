@@ -9,31 +9,20 @@
 
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
+import type { ExportFeedbackTicket } from '@types';
 import { environmentFlag } from '@infrastructure/runtime/environment';
 import { router } from './routes';
 import { feedbackRateLimits } from './rate-limits';
 import { findOwnTickets } from './service';
 
 /**
- * One of the caller's own feedback tickets, minus `adminNotes`: that field is staff's internal
- * assessment of the ticket, not the submitter's data, and Art. 15(4) protects the rights of
- * others (whoever wrote the note) the same way it protects the submitter's own. A REAL plain
- * object, not a type-level `Omit` on the Mongoose document: the document's own `toJSON()` carries
- * no such omission, so returning the document itself would still serialize `adminNotes`
- * regardless of what a narrower TypeScript type here claimed.
+ * {@link ExportFeedbackTicket}, built from the real document — the one place `adminNotes` is
+ * dropped: that field is staff's internal assessment of the ticket, not the submitter's data, and
+ * Art. 15(4) protects the rights of others (whoever wrote the note) the same way it protects the
+ * submitter's own. A REAL plain object, not a type-level `Omit` on the Mongoose document: the
+ * document's own `toJSON()` carries no such omission, so returning the document itself would
+ * still serialize `adminNotes` regardless of what a narrower TypeScript type here claimed.
  */
-interface ExportFeedbackTicket {
-    id: string;
-    name?: string;
-    email: string;
-    subject: string;
-    message: string;
-    status: string;
-    respondedAt?: string;
-    createdAt?: string;
-}
-
-/** {@link ExportFeedbackTicket}, built from the real document — the one place `adminNotes` is dropped. */
 const toExportFeedback = (
     ticket: Awaited<ReturnType<typeof findOwnTickets>>[number]
 ): ExportFeedbackTicket => ({
