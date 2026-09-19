@@ -36,7 +36,8 @@ import { paymentModel } from '@modules/payments/model';
 import { userModel } from '@modules/users/model';
 import { auditLogModel } from '@modules/audit-logs/model';
 import { addressBookModel } from '@modules/addresses/model';
-import { reservationModel } from '@modules/inventory/model';
+import { reservationModel, stockMovementModel } from '@modules/inventory/model';
+import { Types } from 'mongoose';
 import { SEED_ADMIN_ID, SEED_USER_ID } from '@scenarios/accounts';
 import { enabledModules } from '../../../src/modules';
 import {
@@ -227,9 +228,28 @@ describe('the history reads as a history', () => {
 
     it('accounts for every unit of stock with a movement the app wrote', async () => {
         // Nothing seeds `onHand`: the catalogue starts empty and takes delivery through
-        // `POST /inventory/receipts`, so a product with stock and no receipt cannot exist.
-        const stocked = await productModel.countDocuments({ onHand: { $gt: 0 } }).exec();
-        expect(stocked).toBeGreaterThan(100);
+        // `POST /inventory/receipts`, so a product with stock and no receipt cannot exist. Rather
+        // than trust the mirror alone, this reconciles it against the ledger it was copied FROM —
+        // `stockmovements`'s own docblock: summing `onHandDelta` over a product's rows reproduces
+        // the counter, which is the module's stated source of truth
+        // (`docs/modules/inventory.md#why-products-still-carries-a-copy`).
+        const stocked = await productModel
+            .find({ onHand: { $gt: 0 } })
+            .select('_id onHand')
+            .exec();
+        expect(stocked.length).toBeGreaterThan(100);
+
+        const ledgerTotals = await stockMovementModel.aggregate<{
+            _id: Types.ObjectId;
+            total: number;
+        }>([
+            { $match: { productId: { $in: stocked.map((product) => product._id) } } },
+            { $group: { _id: '$productId', total: { $sum: '$onHandDelta' } } }
+        ]);
+        const totalByProductId = new Map(ledgerTotals.map((row) => [String(row._id), row.total]));
+
+        for (const product of stocked)
+            expect(totalByProductId.get(String(product._id))).toBe(product.onHand);
     });
 });
 

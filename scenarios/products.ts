@@ -28,7 +28,6 @@ export { fillerProductId } from './products-filler';
 import productImages from './products-images.generated.json';
 import { SEED_PRODUCT_IDS } from './subjects';
 import { makeProduct, type ProductOverrides } from '@modules/products/factories';
-import { productModel } from '@modules/products/model';
 import { insertIfAbsent, type SeedOutcome } from '@scenarios/seed';
 import { productRepository } from '@modules/products/repository';
 import { getFallbackLocale } from '@infrastructure/i18n';
@@ -132,10 +131,11 @@ const NAMED_PRODUCT_COPY: Record<keyof typeof SEED_PRODUCT_IDS, ProductCopy> = {
 /**
  * `makeProduct`, with the shelf empty.
  *
- * `onHand` defaults to 100 in the schema, which is right for a product created through the admin
- * API and wrong for every row here: the demo's stock arrives by opening receipt
- * (`scenarios/flows/shop-history.ts`), so that every unit on the shelf has a movement behind it.
- * Stated once rather than on each of the catalogue's rows.
+ * `onHand` already defaults to 0 in the schema, so this is a no-op override — kept as the one
+ * place every row in this file passes through, stating once (rather than as a comment repeated on
+ * each of the catalogue's rows) that the demo's stock arrives by opening receipt
+ * (`scenarios/flows/shop-history.ts`), never seeded directly, so every unit on the shelf has a
+ * movement behind it.
  *
  * @param overrides - exactly what `makeProduct` takes
  */
@@ -364,28 +364,4 @@ export const seedProductsCollection = (): Promise<SeedOutcome[]> =>
                         : Promise.resolve()
                 )
             ).then(() => outcomes)
-    );
-
-/**
- * Which of `./module`'s declared `scenario.shop` guarantees the seeded catalogue actually
- * satisfies — `scenarios/check.ts` calls this, never the fixtures directly, so a guarantee
- * failing here means the DATABASE lost the state, not just that a comment says it exists.
- *
- * `description: ''` is the schema's own default (`@modules/products/model`), so it uniquely
- * picks out {@link SEED_PRODUCT_IDS}'s `barebones` row: every other seeded product, named or
- * filler, states a real description.
- */
-export const checkProductGuarantees = (): Promise<string[]> =>
-    Promise.all([
-        productModel.exists({ deletedAt: { $exists: true } }),
-        productModel.exists({ active: false }),
-        productModel.exists({ onHand: 0 }),
-        productModel.exists({ description: '' })
-    ]).then(([softDeleted, inactive, outOfStock, barebones]) =>
-        [
-            softDeleted && 'product.softDeleted',
-            inactive && 'product.inactive',
-            outOfStock && 'product.outOfStock',
-            barebones && 'product.barebones'
-        ].filter((guarantee): guarantee is string => guarantee !== null)
     );
