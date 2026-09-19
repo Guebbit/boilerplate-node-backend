@@ -17,9 +17,10 @@ import {
 /**
  * Sum raw metric sample values from a prom-client get() result. A metric's `get()` returns one
  * entry per label combination, so totalling across every series is the only way to get one
- * overall number.
+ * overall number. Exported for `./controllers/get-observability-metrics-overview.ts`, which sums
+ * several counters of its own the same way.
  */
-const sumMetricValues = (values: { value: number }[]) =>
+export const sumMetricValues = (values: { value: number }[]) =>
     values.reduce((sum, value) => sum + value.value, 0);
 
 /** One histogram bucket: its upper bound and the *cumulative* count at or below it. */

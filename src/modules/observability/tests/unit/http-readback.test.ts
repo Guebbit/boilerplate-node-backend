@@ -1,4 +1,4 @@
-import { percentileFromHistogramBuckets } from '../../metrics';
+import { percentileFromHistogramBuckets } from '../../http-readback';
 
 describe('percentileFromHistogramBuckets', () => {
     it('returns 0 for empty histograms', () => {
