@@ -137,25 +137,19 @@ export const recordOfflinePayment = (
     owner.call('POST', `/payments/order/${orderId}/offline`, { method }).then(() => undefined);
 
 /**
- * Move an order along the lifecycle as an operator would, one transition at a time.
+ * Move an order one step along the lifecycle as an operator would.
  *
  * `PUT /orders/{id}` only — `shipped`/`delivered` are not requestable through it any more (see
- * {@link shipOrder}, {@link deliverOrder}), so `statuses` here is for the moves that still are
- * (`processing`, an admin correction). One request per step on purpose: `canTransition` refuses a
- * jump, and a shortcut that wrote the final status directly would skip every transition's own
- * side effects — the stock movement and the audit row that make this dataset worth more than a
+ * {@link shipOrder}, {@link deliverOrder}), so `status` here is for the move that still is
+ * (`processing`, an admin correction). One request, on purpose: `canTransition` refuses a jump,
+ * and a shortcut that wrote a later status directly would skip that transition's own side
+ * effects — the stock movement and the audit row that make this dataset worth more than a
  * written one.
  *
  * @param owner - a caller holding `orders.any.update`
- * @param statuses - the transitions in order, e.g. `['processing']`
  */
-export const advanceOrder = async (
-    owner: Caller,
-    orderId: string,
-    statuses: string[]
-): Promise<void> => {
-    for (const status of statuses) await owner.call('PUT', `/orders/${orderId}`, { status });
-};
+export const advanceOrder = (owner: Caller, orderId: string, status: string): Promise<void> =>
+    owner.call('PUT', `/orders/${orderId}`, { status }).then(() => undefined);
 
 /**
  * Record a parcel's handover to the carrier — the door that moves an order `processing → shipped`

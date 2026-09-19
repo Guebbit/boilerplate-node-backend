@@ -400,21 +400,21 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
                 lines.map(([index, quantity]) => ({ productId: fillerProductId(index), quantity }))
             )
         );
-        await advanceOrder(owner, orderId, ['processing']);
+        await advanceOrder(owner, orderId, 'processing');
         await shipOrder(owner, orderId);
         shippedBeforeDelivery.push(orderId);
     }
 
     for (const lines of CUSTOMER_ORDERS) {
         const orderId = dated(await checkoutAndPay(customer, lines));
-        await advanceOrder(owner, orderId, ['processing']);
+        await advanceOrder(owner, orderId, 'processing');
         await shipOrder(owner, orderId);
         shippedBeforeDelivery.push(orderId);
     }
 
     // The one named row that has to be delivered rather than in transit — placed before the rest.
     subjects['order.delivered'] = dated(await checkoutAndPay(customer, DOG_FOOD(1)));
-    await advanceOrder(owner, subjects['order.delivered'], ['processing']);
+    await advanceOrder(owner, subjects['order.delivered'], 'processing');
     await shipOrder(owner, subjects['order.delivered']);
     shippedBeforeDelivery.push(subjects['order.delivered']);
 
@@ -472,7 +472,7 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
         })
     );
     await submitCard(owner, await openPayment(owner, subjects['order.shipped']), CARD.visa);
-    await advanceOrder(owner, subjects['order.shipped'], ['processing']);
+    await advanceOrder(owner, subjects['order.shipped'], 'processing');
     await shipOrder(owner, subjects['order.shipped']);
 
     /*
