@@ -230,12 +230,12 @@ a re-created folder cannot quietly become a second home for domain code.
 There is also no top-level `middlewares/`, `jobs/`, `routes/` or `workers/`. Each was a directory
 named after a MECHANISM rather than a tier, and three of them held a single file:
 
-| Was                           | Is now                                          | Why                                            |
+| Was                           | Is now                                          | Why                                            |                           |
 | ----------------------------- | ----------------------------------------------- | ---------------------------------------------- | ------------------------- |
-| `src/middlewares/*`           | `src/infrastructure/http/middlewares/*`         | domain-free pipeline; survives with no modules |
+| `src/middlewares/*`           | `src/infrastructure/http/middlewares/*`         | domain-free pipeline; survives with no modules |                           |
 | `src/middlewares/auth-jwt.ts` | `src/kernel/middlewares/` + a port              | needed a user; see [Modules](./modules.md)     | <!-- doc-paths:ignore --> |
 | `src/jobs/token-cleanup.ts`   | `src/modules/account/services/token-cleanup.ts` | it is account's token lifecycle                | <!-- doc-paths:ignore --> |
-| `src/workers/*`               | `src/infrastructure/adapters/*.worker.ts`       | the consumer half of an adapter                |
+| `src/workers/*`               | `src/infrastructure/adapters/*.worker.ts`       | the consumer half of an adapter                |                           |
 | `src/routes/index.ts`         | `src/app/system-routes.ts`                      | the ping belongs to no domain                  | <!-- doc-paths:ignore --> |
 | `src/bootstrap/*`             | `src/app/*`                                     | assembling this application                    |
 | `src/core/*`                  | `src/infrastructure/*`                          | the name meant the opposite half elsewhere     |
@@ -329,7 +329,7 @@ Every module gets an `index.ts`, structurally, whether a sibling imports it toda
 convenience barrel (`export *` from services, domain rules, events and emails, plus `export type *`
 from the model) rather than the narrower "only what a sibling needs" rule this repo used to run;
 see [Strategic DDD §5](./strategic-ddd.md#_5-published-language-—-the-barrel) for the trade. A
-module nothing imports still publishes one, just an empty one — `observability` is the case — and
+module with nothing to publish yet still gets one, just an empty one — `antibot` is the case — and
 an empty barrel forbids import as structurally as no barrel would.
 
 ### Removing a domain

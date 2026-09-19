@@ -8,6 +8,20 @@ Prometheus, Loki, Tempo, Grafana, the OTel collector — and its config. This pa
 
 Five signals, one transport, one module.
 
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 50}}}%%
+flowchart LR
+    M["a module's own<br/><i>metrics.ts · audit.ts · analytics.ts</i>"] -->|declares onto| R["infrastructure's shared mechanism<br/><i>metrics-registry · audit map · analytics port</i>"]
+    R --> E["GET /observability/*<br/><i>reads by NAME, never by import</i>"]
+
+    classDef mod fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef infra fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef out fill:#dcfce7,stroke:#16a34a,color:#111827;
+    class M mod;
+    class R infra;
+    class E out;
+```
+
 | Signal          | Mechanism (infrastructure)                                                                                                                                        | What a module contributes                                                       | Where it goes                                                   |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | **Logs**        | `adapters/logger.ts` — Winston, JSON, two loggers                                                                                                                 | nothing; every tier just logs                                                   | stdout → Promtail → Loki                                        |

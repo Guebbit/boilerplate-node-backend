@@ -56,12 +56,12 @@ Both look like "coverage is fine" from the outside — 70%+ line coverage says n
 
 This came up in practice: "didn't we set a 70% threshold?" — yes, but for a different tool measuring a different thing. Four separate percentages exist across this project, and only one of them is what you're probably thinking of:
 
-| Where                                             | Measures                                                          | Number                                                                                                 | What happens if it's missed                                               |
-| ------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
-| `jest.config.js` → `coverageThreshold`            | **Line coverage** — did this code execute at all, during any test | 70% per file (some files exempted, with the exemption recorded)                                        | `npm run test:unit:coverage` fails outright, in CI's `test-unit` job      |
-| `stryker.config.json` → `thresholds.high` / `low` | Nothing enforced — just colours the HTML report green/yellow/red  | 80 / 60                                                                                                | Nothing. Decoration only.                                                 |
-| `stryker.config.json` → `thresholds.break`        | Has the **whole run's** score collapsed                           | **60** (mirrors the frontend's own `break: 60` — see [Thresholds](#thresholds--measured-not-invented)) | The mutation run itself exits non-zero                                    |
-| `mutation-baseline.json` (**the ratchet**)        | Did **this one file** score worse than it did last time           | no fixed number — compares each file only to its own history                                           | `npm run test:mutation:check` fails, naming the exact file that got worse |
+| Where                                             | Measures                                                          | Number                                                                                                  | What happens if it's missed                                               |
+| ------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `jest.config.js` → `coverageThreshold`            | **Line coverage** — did this code execute at all, during any test | 70% per file (some files exempted, with the exemption recorded)                                         | `npm run test:unit:coverage` fails outright, in CI's `test-unit` job      |
+| `stryker.config.json` → `thresholds.high` / `low` | Nothing enforced — just colours the HTML report green/yellow/red  | 80 / 60                                                                                                 | Nothing. Decoration only.                                                 |
+| `stryker.config.json` → `thresholds.break`        | Has the **whole run's** score collapsed                           | **60** (mirrors the frontend's own `break: 60` — see [Thresholds](#thresholds-—-measured-not-invented)) | The mutation run itself exits non-zero                                    |
+| `mutation-baseline.json` (**the ratchet**)        | Did **this one file** score worse than it did last time           | no fixed number — compares each file only to its own history                                            | `npm run test:mutation:check` fails, naming the exact file that got worse |
 
 The one that actually gates day-to-day work is the **last row** — the ratchet. `break` is a single global number, which means one strong file can hide one collapsing file behind the average; the ratchet can't be fooled that way because it checks every file against itself. See [The per-file ratchet](#the-per-file-ratchet) for how that comparison works, with a diagram.
 
@@ -252,7 +252,7 @@ and a thorough integration suite — on 2026-08-27:
 
 That is the same file, the same tests, and the same day. The 0% was never a statement about the
 repository's tests; it was a statement about the ruler. Read it beside
-[Reading a 0%](#reading-a-0--and-the-one-case-where-it-was-excluded-instead), which makes the same
+[Reading a 0%](#reading-a-0-—-and-the-one-case-where-it-was-excluded-instead), which makes the same
 point from the other direction.
 
 **Why it stays a separate run.** 196 mutants took 22 minutes, against roughly one second each under
@@ -1176,7 +1176,7 @@ No `mutation-baseline.json` existed in this checkout at all until 2026-08-27 —
 | ------------- | ---------- | ---------- |
 | **All files** | **28.66%** | **51.57%** |
 
-That reads much lower than the last pre-rewrite measurement (65.69% / 72.22%, 2026-08-12) — expected, not a regression. Controllers, `module.ts`, `demo.ts` <!-- doc-paths:ignore --> (per-module then; moved to `scenarios/<name>.ts` since) and the runtime wiring had all fallen out of `mutate` scope at some point and only came back recently; this is the first time they were actually measured, and most have zero unit tests by design (`tests/contract`/`tests/integration` cover them instead — see [Reading a 0%](#reading-a-0--and-the-one-case-where-it-was-excluded-instead)). Per-area, that shows up as one area dragging the whole number down:
+That reads much lower than the last pre-rewrite measurement (65.69% / 72.22%, 2026-08-12) — expected, not a regression. Controllers, `module.ts`, `demo.ts` <!-- doc-paths:ignore --> (per-module then; moved to `scenarios/<name>.ts` since) and the runtime wiring had all fallen out of `mutate` scope at some point and only came back recently; this is the first time they were actually measured, and most have zero unit tests by design (`tests/contract`/`tests/integration` cover them instead — see [Reading a 0%](#reading-a-0-—-and-the-one-case-where-it-was-excluded-instead)). Per-area, that shows up as one area dragging the whole number down:
 
 | Area                  | Mutants | Total     | Covered | Note                                                                                        |
 | --------------------- | ------- | --------- | ------- | ------------------------------------------------------------------------------------------- |
@@ -1184,7 +1184,7 @@ That reads much lower than the last pre-rewrite measurement (65.69% / 72.22%, 20
 | `src/infrastructure/` | 2396    | 63.85%    | 75.14%  | just above 60                                                                               |
 | `src/modules/`        | 5622    | **12.4%** | 29.54%  | most of the mutants in the whole run, and the entire reason the aggregate fails `break: 60` |
 
-Reading `total` against `covered` for `src/modules/`: they're far apart (12.4 vs 29.54), which per the rule in [`total` versus `covered`](#total-versus-covered--two-different-jobs) means most of the gap is **no coverage**, not weak assertions — write tests that reach the code before trying to sharpen anything.
+Reading `total` against `covered` for `src/modules/`: they're far apart (12.4 vs 29.54), which per the rule in [`total` versus `covered`](#total-versus-covered-—-two-different-jobs) means most of the gap is **no coverage**, not weak assertions — write tests that reach the code before trying to sharpen anything.
 
 **What is actually left to do, in order:**
 

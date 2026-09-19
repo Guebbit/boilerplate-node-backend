@@ -66,12 +66,18 @@ shared rule belongs to whichever domain OWNS it, exported through that module's 
 
 So `kernel` is small on purpose. It is the module system, and nothing else:
 
-| File                            | Why it cannot be infrastructure                                           |
-| ------------------------------- | ------------------------------------------------------------------------- |
-| `registry.ts`                   | it _is_ the module system — `AppModule`, the DAG check, `registerModules` |
-| `events.ts`                     | it exists so two modules can talk without importing each other            |
-| `authentication.ts`             | the socket `account` plugs into, so guards need no module import          |
-| `middlewares/authorizations.ts` | the guard that consumes that socket                                       |
+| File                            | Why it cannot be infrastructure                                                                          |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `registry.ts`                   | it _is_ the module system — `AppModule`, the DAG check, `registerModules`                                |
+| `events.ts`                     | it exists so two modules can talk without importing each other                                           |
+| `authentication.ts`             | the socket `account` plugs into, so guards need no module import                                         |
+| `middlewares/authorizations.ts` | the guard that consumes that socket                                                                      |
+| `permissions.ts`                | the declared keys and preset roles, read off the shared YAML the PHP twin reads                          |
+| `ability.ts`                    | a resolved caller's rules, built once per request from what `permissions.ts` declares                    |
+| `access/query.ts`               | a caller's rules turned into the Mongo filter that enforces them, so no module writes its own            |
+| `access/tenant.ts`              | the one shop's pinned `_id`, needed by `permissions.ts` before `@modules/access` can be imported         |
+| `required-config.ts`            | the boot-time gate collecting every module's — and no module's — required config                         |
+| `translation.ts`                | the hook `modules/locales` answers, so a decorator can resolve content without importing `src/modules/*` |
 
 The seed accounts' ids and credentials — the two demo identities `users`, `orders`, `cart` and
 `wishlist` each point at — are NOT here: they are pure scenario data, owned by none of the modules
@@ -79,25 +85,26 @@ that need them, so `scenarios/accounts.ts` holds them outside `src/` entirely ra
 kernel. A sibling gets what it needs to name a person without taking on the shape of a user, the
 same inversion as the auth port; the file's own header carries the full argument.
 
-Delete `src/modules/` and those four files lose their reason to exist. Everything else that is
-domain-free is `infrastructure`, no matter where it sits in the request lifecycle:
+Delete `src/modules/` and every file in the table above loses its reason to exist. Everything else
+that is domain-free is `infrastructure`, no matter where it sits in the request lifecycle:
 
-| Feature                        | Home                                                | Why it is not kernel                          |
-| ------------------------------ | --------------------------------------------------- | --------------------------------------------- |
-| response cache, `noStore`      | `infrastructure/http/middlewares/cache.ts`          | Express caching; no module needed             |
-| locale negotiation             | `infrastructure/http/middlewares/locale.ts`         | wraps `infrastructure/i18n`; no module needed |
-| observability context          | `infrastructure/http/request.ts`                    | built per request, not seeded by a middleware |
-| access logging                 | `infrastructure/http/middlewares/request-logger.ts` | reads tracer + metrics labels                 |
-| rate limiting, metrics scraper | `infrastructure/http/middlewares/rate-limit.ts`     | generic HTTP hardening                        |
-| conditional handler toggle     | `infrastructure/http/middlewares/route-flag.ts`     | imports nothing but Express                   |
-| email queue consumer           | `infrastructure/adapters/email.worker.ts`           | the consumer half of `adapters/mailer.ts`     |
-| worker registration at boot    | `app/workers.ts`                                    | names which queues _this_ build drains        |
+| Feature                     | Home                                                | Why it is not kernel                                                                         |
+| --------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| response cache, `noStore`   | `infrastructure/http/middlewares/cache.ts`          | Express caching; no module needed                                                            |
+| locale negotiation          | `infrastructure/http/middlewares/locale.ts`         | wraps `infrastructure/i18n`; no module needed                                                |
+| observability context       | `infrastructure/http/request.ts`                    | built per request, not seeded by a middleware                                                |
+| access logging              | `infrastructure/http/middlewares/request-logger.ts` | reads tracer + metrics labels                                                                |
+| rate limiting               | `infrastructure/http/middlewares/rate-limit.ts`     | generic HTTP hardening                                                                       |
+| Prometheus scrape guard     | `src/modules/observability/metrics-scraper.ts`      | guards one module's own route, not shared — see [observability](../modules/observability.md) |
+| conditional handler toggle  | `infrastructure/http/middlewares/route-flag.ts`     | imports nothing but Express                                                                  |
+| email queue consumer        | `infrastructure/adapters/email.worker.ts`           | the consumer half of `adapters/mailer.ts`                                                    |
+| worker registration at boot | `app/workers.ts`                                    | names which queues _this_ build drains                                                       |
 
 The test that keeps this honest: a `kernel` file may be imported by a module, but its **purpose**
 must dissolve if modules do. Being domain-free is not enough — most of `infrastructure` is
 domain-free too.
 
-Both tables describe the tree as it is. `src/kernel/` holds five files.
+Both tables describe the tree as it is.
 
 ### Why these names, and what everyone else calls them
 
@@ -217,11 +224,12 @@ Two naming details worth knowing, because both were confusing before:
 - **`infrastructure/runtime`** starts the _process's_ resources — database connection, env validation, the
   OTel SDK, signal handlers. No Express anywhere. It was once `core/bootstrap`, which made it look
   like a twin of the app tier's boot steps; it never was.
-- **queue consumers are `infrastructure`, not `kernel`.** Sending an email and rendering a PDF are verbs,
-  not domains, and neither one stops making sense in an app with no modules — so each consumer sits
-  beside the adapter it is the other half of. Only `registerWorkers()` is app-tier, because naming
-  which queues this build drains is an assembly fact. A domain-owned worker would belong to its
-  module; there is not one yet.
+- **a substrate queue consumer is `infrastructure`, not `kernel`.** Sending an email is a verb, not
+  a domain, and does not stop making sense in an app with no modules — so its consumer sits beside
+  the adapter it is the other half of. Only `registerWorkers()` is app-tier, because naming which
+  queues this build drains is an assembly fact. A domain-owned worker belongs to its module
+  instead: `webhooks`' delivery worker and `orders`' invoice-PDF worker both do, each declared on
+  its own module's manifest rather than `app/workers.ts`.
 
 ## What a module contains
 
@@ -391,7 +399,7 @@ thing itself. `subscribe` was the one field that broke it; six modules fill it t
 ::: tip The live version of this graph
 The diagram below explains the **rules**. The graph as it stands — every edge, labelled with its
 relationship and its reason, generated from the manifests — is
-[the map on the Modules overview](../modules/index.md#the-whole-map), and every node there links to
+[the map on the Modules overview](../modules/index.md#the-map), and every node there links to
 the domain's own page.
 :::
 

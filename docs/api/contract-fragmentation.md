@@ -124,33 +124,44 @@ lines across the sources are asserted by `contract-bundles.test.ts`. See
 ## Which fragment owns which operation
 
 The rule is the one the module registry already uses: **a module owns the paths under its
-`basePath`.** As of today the contract's 82 operations map onto the enabled modules like this:
+`basePath`.** The count of operations per module drifts every time a route is added, so it is not
+repeated here — `grep -c operationId: openapi.yaml` reads the true total, and
+`tests/cross-cutting/contract-bundles.test.ts` is what actually keeps a fragment honest about which
+paths it owns:
 
-| Module          | `basePath`       | OpenAPI tag(s)        | Ops |
-| --------------- | ---------------- | --------------------- | --- |
-| `account`       | `/account`       | `Auth` + `Account`    | 21  |
-| `orders`        | `/orders`        | `Orders`              | 11  |
-| `users`         | `/users`         | `Users`               | 9   |
-| `products`      | `/products`      | `Products`            | 10  |
-| `cart`          | `/cart`          | `Cart`                | 8   |
-| `wishlist`      | `/wishlist`      | `Wishlist`            | 4   |
-| `payments`      | `/payments`      | `Payments`            | 3   |
-| `delivery`      | `/delivery`      | `Delivery`            | 3   |
-| `inventory`     | `/inventory`     | `Inventory`           | 5   |
-| `observability` | `/observability` | `Observability`       | 5   |
-| `feedback`      | `/feedback`      | `Feedback`            | 3   |
-| `locales`       | `/locales`       | `System` (2 of 3)     | 2   |
-| `audit-logs`    | —                | —                     | 0   |
+| Module          | `basePath`       | OpenAPI tag(s)         |
+| --------------- | ----------------- | ---------------------- |
+| `account`       | `/account`        | `Auth` + `Account`     |
+| `addresses`     | `/account`        | `Account` (a subset — see below) |
+| `orders`        | `/orders`         | `Orders`                |
+| `users`         | `/users`          | `Users`                  |
+| `products`      | `/products`       | `Products`               |
+| `cart`          | `/cart`           | `Cart`                    |
+| `wishlist`      | `/wishlist`       | `Wishlist`                 |
+| `payments`      | `/payments`       | `Payments`                  |
+| `delivery`      | `/delivery`       | `Delivery`                   |
+| `inventory`     | `/inventory`      | `Inventory`                   |
+| `observability` | `/observability`  | `Observability`                |
+| `feedback`      | `/feedback`       | `Feedback`                       |
+| `locales`       | `/locales`        | `System` (all but `GET /`)        |
+| `webhooks`      | `/webhooks`       | `Webhooks`                          |
+| `api-keys`      | `/api-keys`       | `ApiKeys`                             |
+| `antibot`       | `/antibot`        | `Antibot`                               |
+| `audit-logs`    | `/audit`          | `Audit`                                   |
+| `access`        | —                  | —                                          |
 
-**The two rows that are not a clean split are the interesting ones**, and whoever does the work will
+**The rows that are not a clean split are the interesting ones**, and whoever does the work will
 hit them first:
 
 - **`GET /` — the health probe — belongs to no module.** It is the application shell answering for
   itself. It goes in a `shared` or `root` fragment alongside `components:`, not into a module.
-- **`audit-logs` has no HTTP surface of its own.** It is read through `GET /observability/audit`,
-  which lives in the `observability` fragment. A module with no paths simply contributes no
-  fragment — it is not an error, and it is a good sign: that module is consumed through another
-  one's API rather than exposing its own.
+- **`account` and `addresses` share a `basePath` and a tag.** Both mount at `/account`, and address
+  operations are tagged `Account` too — fragmenting by `basePath` still splits them correctly,
+  since `addresses`' own paths (`/account/addresses*`) never overlap `account`'s.
+- **`access` has no HTTP surface of its own** — headless by design, the one module whose manifest
+  declares neither `basePath` nor `routes`. A module with no paths simply contributes no fragment;
+  it is not an error, and it is a good sign: that module is consumed through the permission model
+  every other module's routes already go through, not through an API of its own.
 
 Also note that `Auth` and `Account` are two tags over one `basePath`. **Fragment by `basePath`, not
 by tag** — tags are a documentation grouping and one module may legitimately use several.

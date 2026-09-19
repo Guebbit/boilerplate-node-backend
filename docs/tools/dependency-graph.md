@@ -45,14 +45,33 @@ Every module folder carries its own `module.yaml`, an allow-list of the siblings
 # src/modules/cart/module.yaml
 subdomain: core
 dependsOn:
-    - account # the checkout's delivery address
-    - orders # the order a checkout creates
+    - addresses # the checkout's delivery address
+    - delivery # shipping price, pure functions
+    - orders # placeOrder — the one function every order is written through
+    - payments # listPaymentMethods, to validate the requested method
+    - products # prices and availability
+    - users # the buyer
 ```
 
 `.dependency-cruiser.cjs` reads every `module.yaml` off disk and generates one `module-coupling-<name>`
 rule per module from it — a module reaching a sibling its own file does not list fails
 `check:dependencies`, reported at the offending import. There is no second copy of the map to drift:
 the file a module's own docblock and `dependsOn` field describe **is** the rule the graph enforces.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 45}}}%%
+flowchart LR
+    Y["src/modules/&lt;name&gt;/module.yaml<br/><i>dependsOn: [...]</i>"] -->|read off disk| G["dependency-cruiser config<br/><i>.dependency-cruiser.cjs</i>"]
+    G -->|generates| R["module-coupling-&lt;name&gt;<br/><i>one allow-list rule per module</i>"]
+    R -->|enforced by| C["npm run check:dependencies"]
+
+    classDef src fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef gen fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef out fill:#dcfce7,stroke:#16a34a,color:#111827;
+    class Y src;
+    class G,R gen;
+    class C out;
+```
 
 Fails closed both ways: a module folder with no `module.yaml` may reach no sibling at all, rather
 than being silently exempt from the rule; a `dependsOn` that is not an array of strings throws,

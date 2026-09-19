@@ -157,7 +157,7 @@ this section doesn't restate it.
 **One place it stays half-scoped, deliberately not fixed:** the webhooks fan-out
 (`src/modules/webhooks/services/publish.ts`) matches every enabled subscription against an event
 with no tenant filter at all. Correct here — there is only one shop's subscriptions to match. See
-[§10](#10-what-we-deliberately-did-not-build) for what pooled would have to fix about exactly this.
+[§10](#_10-·-what-we-deliberately-did-not-build) for what pooled would have to fix about exactly this.
 
 ## 7 · The glossary of the three "tenants"
 

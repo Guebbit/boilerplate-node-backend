@@ -58,14 +58,17 @@ shared/contracts/asyncapi.workers.yaml         the RabbitMQ queues, which belong
 shared/contracts/asyncapi.root.yaml            version, id, info, tags — no channels, no servers
 ```
 
-Most worker queues are shared rather than owned by a module because the email, PDF and image
-workers are substrate — `src/app/workers.ts` over `src/infrastructure/adapters/queue.ts` —
-enqueued by whichever domain needs one. It is the async twin of filing `GET /` under `system` in
-the REST contract. A queue a single module owns outright, like `webhooks`' `worker.webhook.deliver`,
-gets its own PRIVATE section instead — `src/modules/webhooks/asyncapi.internal.yaml`, declaring no
-`servers` of its own (its one channel binds to `shared/contracts/asyncapi.workers.yaml`'s
-`rabbitmqLocal`, so a second declaration here would collide when the two sections merge) and left
-out of `lint:asyncapi:modules`'s glob for the same reason: it is valid only once bundled.
+Most worker queues are shared rather than owned by a module because the email and image workers
+are substrate — `src/app/workers.ts` over `src/infrastructure/adapters/queue.ts` — enqueued by
+whichever domain needs one. It is the async twin of filing `GET /` under `system` in the REST
+contract. A queue a single module owns outright gets its own PRIVATE section instead:
+`webhooks`' `worker.webhook.deliver` (`src/modules/webhooks/asyncapi.internal.yaml`) and `orders`'
+`worker.orders.invoice-generate` (`src/modules/orders/asyncapi.internal.yaml`) are the two today —
+the PDF worker moved out of the shared substrate once invoice generation became one module's own
+job. Each declares no `servers` of its own (its one channel binds to
+`shared/contracts/asyncapi.workers.yaml`'s `rabbitmqLocal`, so a second declaration here would
+collide when the two sections merge) and is left out of `lint:asyncapi:modules`'s glob for the
+same reason: it is valid only once bundled.
 
 This replaced a three-fragment layout (`channels.yaml`, `messages.yaml`, `schemas.yaml` per section) <!-- doc-paths:ignore -->
 whose pieces were half-objects that parsed as nothing until concatenated in the right order at the

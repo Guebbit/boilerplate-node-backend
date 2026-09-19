@@ -3,9 +3,9 @@
 **The first hour in the codebase.** Every other page here explains a concept; this one names the
 files, in order, and says what to skip.
 
-The repository is ~21,000 lines of production source across 13 modules, and ~33,000 with the
-co-located tests. You do not need to read them. Nine files carry the shape of the whole thing, and
-every module is a variation on one of them.
+The repository is a lot of production source across many modules, with even more in the co-located
+tests. You do not need to read them. Nine files carry the shape of the whole thing, and every
+module is a variation on one of them.
 
 ::: tip Before the code
 If you want the tool inventory first — what Redis, Prism, Stryker, Orval and the rest are doing
@@ -47,7 +47,7 @@ flowchart TD
 
 ### 1 · `src/app.ts` — how the server starts
 
-150 lines, and the only file that knows the boot order. Read the bottom half first: the six
+The only file that knows the boot order. Read the bottom half first: the six
 `install*` calls **are** the middleware stack, in the order a request travels it.
 
 **Take away:** security → request context → telemetry → static → routes → error handling. That
@@ -55,7 +55,7 @@ order is behaviour, not documentation.
 
 ### 2 · `src/modules.ts` — what this build serves
 
-41 lines, mostly imports. Every domain, one array.
+Mostly imports. Every domain, one array.
 
 **Take away:** enabling or disabling a domain is one line here. There is no filesystem discovery,
 no auto-registration, no magic.

@@ -90,13 +90,12 @@ an external service) already caused: money landing at the payment processor, a w
 recording a parcel's handover. `system` means "this application did not decide it, it is reporting
 it" — the recording is what makes the move happen, not a person editing a field.
 
-| Move                                          | Who asks                                     | What records the fact first                                                                         |
-| --------------------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `pending` → `paid`                            | `system`, via `payments`                     | the payment processor confirms the charge                                                           |
-| `paid` → `processing`                         | `admin`, via `orders.any.update`             | an operator decides to start fulfilment                                                             |
-| `processing` → `shipped`                      | `system`, via `delivery`'s ship door         | a warehouse operator records the handover                                                           |
-| `shipped` → `delivered`                       | `system`, via `delivery`'s deliver door      | a warehouse operator records the arrival                                                            |
-| forward to `processing`/`shipped`/`delivered` | `admin`, via `orders.any.override` (step-up) | an operator's own reason, recorded with the move — never lands on `paid`, which stays `system`-only |
+The full move/actor/door table lives on
+[Who writes the status](../modules/orders.md#who-writes-the-status) — one home for it, since a
+second copy here is exactly the kind of duplicate that drifted before. What that table does not
+say: WHAT records the fact before `orders` ever hears about it — the payment processor confirming
+a charge, a warehouse operator scanning a parcel, an operator's own typed reason for an override.
+`orders` only ever reports a fact something else already caused.
 
 One reported move, end to end — the warehouse records a handover, `delivery` owns the parcel, and
 `orders` is the only thing that ever writes the status:
@@ -188,7 +187,7 @@ refunds. Executed as an assignment plus a save, a paid order ends `cancelled` wi
 money kept and the stock held until the sweep. `POST /orders/{id}/cancel` is the only path that runs
 it, for a customer and an operator alike.
 
-`update` refuses `shipped`/`delivered` for the same shape of reason, since Phase 4: those moves are
+`update` refuses `shipped`/`delivered` for the same shape of reason: those moves are
 never a field an admin assigns — they follow a parcel event `delivery` records, through
 `markShipped`/`markDelivered` (see "Who writes the status" above), or an admin override's own door
 when the ordinary sequence needs correcting. `PUT /orders/:id` covers only `paid → processing` and

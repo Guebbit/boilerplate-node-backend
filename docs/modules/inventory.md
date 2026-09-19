@@ -80,11 +80,6 @@ something.
 
 ## Why `products` still carries a copy
 
-::: tip Design decision, flagged for review
-Made autonomously while Andrea was away, following this file's own stated constraint below rather
-than a fresh judgement call. Worth a second look, not a blocker.
-:::
-
 A catalogue read is the shop's most common query and must not need a join — that constraint predates
 this module owning its own collection and still holds. Three shapes were weighed for how a product
 read keeps showing `available` once the counters move here:

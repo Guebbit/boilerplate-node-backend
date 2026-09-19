@@ -115,9 +115,9 @@ flowchart LR
 
 Every module publishes one, whether a sibling imports it or not — see
 [Strategic DDD](./strategic-ddd.md#_5-published-language-—-the-barrel) for why a convenience
-barrel replaced the narrower "only what a sibling needs today" rule. A module nothing imports still
-publishes an empty one: `observability` is that case, and an empty barrel forbids import as surely
-as no barrel would, since there is nothing in it to reach for.
+barrel replaced the narrower "only what a sibling needs today" rule. A module with nothing to
+publish yet still gets an empty one: `antibot` is that case, and an empty barrel forbids import as
+surely as no barrel would, since there is nothing in it to reach for.
 
 ## Main strategies already present in the code
 

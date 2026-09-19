@@ -158,7 +158,9 @@ consumeFromQueue({
     prefetch: 5,
     handler: async (message) => {
         // Return true to ack. Return false ONLY for a job that will never be processable —
-        // it is dead-lettered permanently. Let anything transient reject: the broker requeues it.
+        // it is dead-lettered permanently. Let anything transient reject: nack routes it to
+        // `<queue>.retry` (TTL, no consumer), which expires back onto this queue — never an
+        // immediate broker requeue.
         await sendEmail(message);
         return true;
     }
@@ -301,9 +303,11 @@ Three rules the connection layer keeps because of how amqplib's own recovery wor
   connection parks the caller until reconnected, so `publishToQueue`/`consumeFromQueue` never call
   it directly — they read `currentChannel`, a plain variable `setup` sets and the channel's own
   `close` event clears, `undefined` meaning "take the slow lane".
-- **A channel can die while the connection lives.** Recovery only reacts to a CONNECTION drop; an
-  ordinary channel-level fault (a `PRECONDITION_FAILED`, say) is handled the same way it always
-  was — `error`/`close` listeners on the channel itself.
+- **A channel can die while the connection lives.** Recovery only reacts to a CONNECTION drop, so
+  a channel-only close (a `PRECONDITION_FAILED`, an ack on an unknown tag) needs its own handling:
+  `setupChannel`'s `close` listener re-opens a fresh channel after `CHANNEL_REOPEN_DELAY_MS` and
+  replays every consumer this process has ever registered onto it — the same `setup()` the
+  connection-level recovery runs, called by hand instead of by amqplib.
 
 `maxRetries` is `0` under `NODE_ENV=test`: amqplib's retry timer is never `.unref()`'d, so an
 unreachable broker — the routine case locally, since `.env` names the compose hostname, which
