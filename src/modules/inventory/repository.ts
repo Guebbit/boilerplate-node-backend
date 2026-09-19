@@ -24,14 +24,19 @@ import {
 import {
     createRepository,
     toObjectId,
+    type Lean,
     type Repository
 } from '@infrastructure/persistence/create-repository';
 import type { CounterDelta } from './domain';
 
-/** One row of the stock board, joined with the product's title for display. */
+/**
+ * One row of the stock board — this module's own counters ONLY, no product fields. The title a
+ * board actually displays is `products`' to give out, not this module's to join for: see
+ * `service.ts`'s `listLevels`, which asks `productService.findManyByIds` for the page it just
+ * read here — API composition rather than a database join across the module boundary.
+ */
 export interface StockLevelRow {
     productId: string;
-    title: string;
     onHand: number;
     reserved: number;
     available: number;
@@ -62,6 +67,7 @@ export const stockLevelRepository: Repository<StockLevelDocument> & {
         seed?: { onHand: number; reserved: number }
     ) => Promise<StockLevelDocument>;
     findByProductId: (productId: string) => Promise<StockLevelDocument | null>;
+    deleteByProductId: (productId: string) => Promise<void>;
     findManyByProductIds: (productIds: readonly string[]) => Promise<StockLevelDocument[]>;
     applyDelta: (
         productId: string,
@@ -73,7 +79,7 @@ export const stockLevelRepository: Repository<StockLevelDocument> & {
         limit: number;
         maxAvailable?: number;
     }) => Promise<{ items: StockLevelRow[]; totalItems: number }>;
-    countLowAvailability: (threshold: number) => Promise<number>;
+    lowAvailabilityProductIds: (threshold: number) => Promise<string[]>;
     sumReserved: () => Promise<number>;
 } = {
     ...createRepository<StockLevelDocument>(stockLevelModel, {
@@ -118,6 +124,20 @@ export const stockLevelRepository: Repository<StockLevelDocument> & {
         stockLevelModel.findOne({ productId: toObjectId(productId) }).exec(),
 
     /**
+     * Erase a product's level row outright — the hard-delete cascade's own half. Never called for
+     * a soft delete or its restore: those must find the counters exactly where they left them.
+     * `stockmovements` is deliberately untouched — the ledger is history, and a deleted product's
+     * past receipts and sales stay true even once nothing reads its counters any more.
+     *
+     * @param productId - the product just hard-deleted
+     */
+    deleteByProductId: (productId: string): Promise<void> =>
+        stockLevelModel
+            .deleteOne({ productId: toObjectId(productId) })
+            .exec()
+            .then(() => undefined),
+
+    /**
      * @param productIds - the products
      * @returns whichever of them have a level row, in no particular order
      */
@@ -154,85 +174,57 @@ export const stockLevelRepository: Repository<StockLevelDocument> & {
             .then(({ modifiedCount }) => modifiedCount > 0),
 
     /**
-     * A page of the stock board, scarcest first, `title` breaking a tie the same way
-     * `products`' old `availabilityPage` did (so a page boundary cannot show one product twice and
-     * another not at all). `available: { $lte: maxAvailable }` still narrows through the stored,
-     * indexed `available` column before the join — only the final tie-break sort runs over the
-     * narrowed set, in memory, and only on this admin-only, low-frequency endpoint; the constraint
-     * this module exists to satisfy is about the storefront catalogue read, not this one.
+     * A page of the stock board, scarcest first — THIS module's rows alone, no join. Sorted on
+     * `available` then `_id`: the `stocklevels_available__id` index already covers exactly this
+     * order, and `_id` is what breaks a tie between two equally scarce products deterministically
+     * (not alphabetically — `service.ts`'s `listLevels` reads titles back from `products` AFTER
+     * this page is settled, which is one round trip too late to sort by them). See
+     * `docs/theory/strategic-ddd.md` §5 and 1-D1's writeup: the board reads the real counters, and
+     * asks `products` for names through its service, never through a database join.
      *
      * @param options - `skip`/`limit` for the page, and `maxAvailable` to keep only scarce rows
-     * @returns the page and the count of everything matching
+     * @returns the page (titleless) and the count of everything matching
      */
-    stockBoard: ({ skip, limit, maxAvailable }) =>
-        stockLevelModel
-            .aggregate<{ items: StockLevelRow[]; total: { count: number }[] }>([
-                ...(maxAvailable === undefined
-                    ? []
-                    : [{ $match: { available: { $lte: maxAvailable } } }]),
-                {
-                    $lookup: {
-                        from: 'products',
-                        localField: 'productId',
-                        foreignField: '_id',
-                        as: 'product'
-                    }
-                },
-                { $unwind: '$product' },
-                {
-                    $facet: {
-                        items: [
-                            { $sort: { available: 1, 'product.title': 1, _id: 1 } },
-                            { $skip: skip },
-                            { $limit: limit },
-                            {
-                                $project: {
-                                    _id: 0,
-                                    productId: { $toString: '$productId' },
-                                    title: '$product.title',
-                                    onHand: 1,
-                                    reserved: 1,
-                                    available: 1
-                                }
-                            }
-                        ],
-                        total: [{ $count: 'count' }]
-                    }
-                }
-            ])
-            .then((results) => ({
-                items: results.at(0)?.items ?? [],
-                totalItems: results.at(0)?.total.at(0)?.count ?? 0
+    stockBoard: ({ skip, limit, maxAvailable }) => {
+        const where: QueryFilter<StockLevelDocument> =
+            maxAvailable === undefined ? {} : { available: { $lte: maxAvailable } };
+
+        return Promise.all([
+            stockLevelModel
+                .find({ ...where })
+                .sort({ available: 1, _id: 1 })
+                .skip(skip)
+                .limit(limit)
+                .lean<Lean<StockLevelDocument>[]>()
+                .exec(),
+            stockLevelModel.countDocuments({ ...where })
+        ]).then(([rows, totalItems]) => ({
+            items: rows.map((row) => ({
+                productId: String(row.productId),
+                onHand: row.onHand,
+                reserved: row.reserved,
+                available: row.available
             })),
+            totalItems
+        }));
+    },
 
     /**
-     * How many PUBLICLY VISIBLE products a buyer would find at or under `threshold` units. Counts
-     * AVAILABILITY, not `onHand` — fully-reserved stock reads as out of stock to a customer. Joins
-     * `products` to apply the same visibility scope `productRepository.publicScope()` defines
-     * (`active: true`, not soft-deleted) — duplicated here rather than threaded through a service
-     * call, the same trade this codebase already makes for `cart/domain/rules.ts`'s
-     * `availableUnits`; both are two conditions, not a rule likely to drift unnoticed.
+     * Every product id at or under `threshold` available units — the low-stock gauge's OWN half
+     * of the answer. Counts AVAILABILITY, not `onHand`: fully-reserved stock reads as out of
+     * stock to a customer. Deliberately NOT the count itself, and no join into `products` to
+     * apply its visibility rule here: `service.ts`'s `lowStockCount` asks `productService`'s own
+     * `countPublic` for that half, the same API-composition shape `stockBoard` uses.
      *
      * @param threshold - the low-availability mark
-     * @returns how many publicly visible products are at or under it
+     * @returns the candidate product ids, unfiltered by visibility
      */
-    countLowAvailability: (threshold: number) =>
+    lowAvailabilityProductIds: (threshold: number) =>
         stockLevelModel
-            .aggregate<{ count: number }>([
-                { $match: { available: { $lte: threshold } } },
-                {
-                    $lookup: {
-                        from: 'products',
-                        localField: 'productId',
-                        foreignField: '_id',
-                        as: 'product'
-                    }
-                },
-                { $unwind: '$product' },
-                { $match: { 'product.active': true, 'product.deletedAt': { $exists: false } } },
-                { $count: 'count' }
-            ])
-            .then((results) => results.at(0)?.count ?? 0),
+            .find({ available: { $lte: threshold } })
+            .lean<Lean<StockLevelDocument>[]>()
+            .exec()
+            .then((rows) => rows.map((row) => String(row.productId))),
 
     /**
      * Every unit currently promised to an open order, across the whole catalogue.

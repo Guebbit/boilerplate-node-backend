@@ -13,7 +13,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import type { Payment, AuthContext } from '@types';
-import { orderService, orderTotal, isPayable } from '@modules/orders';
+import { orderService, orderTotal, isPayable, unavailableLines } from '@modules/orders';
 import { userService } from '@modules/users';
 import { defaultCurrency } from '../config';
 import { resolvePaymentProvider } from '../providers';
@@ -78,39 +78,57 @@ export const createIntent = (
                 { code: 'PAYMENT_ORDER_NOT_PAYABLE', message: t('payments.order-not-payable') }
             ]);
 
-        const provider = resolvePaymentProvider();
+        /*
+         * Checked fresh against `products`, never against the order's own frozen snapshot: a
+         * product removed or deactivated AFTER this order was placed must still block the FIRST
+         * payment attempt against it — the auto-cancel `orders`' own listener runs is the normal
+         * door, this is the race backstop for the gap between the event and a payment already in
+         * flight. Named per line, like `CART_INSUFFICIENT_STOCK`'s `details.lines`.
+         */
+        return unavailableLines(order).then((unavailable) => {
+            if (unavailable.length > 0)
+                return generateReject(409, [
+                    {
+                        code: 'ORDER_PRODUCT_UNAVAILABLE',
+                        message: t('payments.order-product-unavailable'),
+                        details: { lines: unavailable }
+                    }
+                ]);
 
-        return resolvePayerId(order.userId ? String(order.userId) : undefined)
-            .then((payerId) =>
-                paymentRepository.upsertIntent(orderId, payerId, {
-                    amount: orderTotal(order),
-                    currency: defaultCurrency(),
-                    provider: provider.name
-                })
-            )
-            .then((payment) => {
-                if (!payment)
-                    return generateReject(409, [
-                        {
-                            code: 'PAYMENT_ORDER_NOT_PAYABLE',
-                            message: t('payments.order-not-payable')
-                        }
-                    ]);
+            const provider = resolvePaymentProvider();
 
-                return provider
-                    .prepare(
-                        { amount: payment.amount, currency: payment.currency },
-                        { orderId, paymentId: String(payment._id) }
-                    )
-                    .then(({ providerRef, clientSecret }) =>
-                        paymentRepository
-                            .attachProviderRef(String(payment._id), providerRef)
-                            .then((stored) => ({
-                                // `.toJSON()` applies the model's `_id` → `id` / date transform.
-                                ...((stored ?? payment).toJSON() as Payment),
-                                clientSecret
-                            }))
-                    )
-                    .then((prepared) => generateSuccess(prepared, 201));
-            });
+            return resolvePayerId(order.userId ? String(order.userId) : undefined)
+                .then((payerId) =>
+                    paymentRepository.upsertIntent(orderId, payerId, {
+                        amount: orderTotal(order),
+                        currency: defaultCurrency(),
+                        provider: provider.name
+                    })
+                )
+                .then((payment) => {
+                    if (!payment)
+                        return generateReject(409, [
+                            {
+                                code: 'PAYMENT_ORDER_NOT_PAYABLE',
+                                message: t('payments.order-not-payable')
+                            }
+                        ]);
+
+                    return provider
+                        .prepare(
+                            { amount: payment.amount, currency: payment.currency },
+                            { orderId, paymentId: String(payment._id) }
+                        )
+                        .then(({ providerRef, clientSecret }) =>
+                            paymentRepository
+                                .attachProviderRef(String(payment._id), providerRef)
+                                .then((stored) => ({
+                                    // `.toJSON()` applies the model's `_id` → `id` / date transform.
+                                    ...((stored ?? payment).toJSON() as Payment),
+                                    clientSecret
+                                }))
+                        )
+                        .then((prepared) => generateSuccess(prepared, 201));
+                });
+        });
     });

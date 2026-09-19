@@ -21,6 +21,7 @@ import {
     receive,
     adjust,
     listLevels,
+    lowStockCount,
     listMovements
 } from '../../service';
 import { reservationRepository, stockLevelRepository } from '../../repository';
@@ -441,13 +442,22 @@ describe('listLevels', () => {
         const result = await listLevels();
 
         // The two zero-availability rows sort ahead of the plentiful one, and they are
-        // distinguishable — which is the whole reason the board shows three numbers.
-        expect(result.items.map((level) => level.title)).toEqual(['All held', 'Empty', 'Plenty']);
-        expect(result.items).toEqual([
-            expect.objectContaining({ onHand: 30, reserved: 30, available: 0 }),
-            expect.objectContaining({ onHand: 0, reserved: 0, available: 0 }),
-            expect.objectContaining({ onHand: 100, reserved: 0, available: 100 })
-        ]);
+        // distinguishable — which is the whole reason the board shows three numbers. Which of
+        // the two comes first is deliberately unasserted: 1-D1's API-composition board breaks an
+        // availability tie by `_id`, not by title (no join to sort a title by any more), so their
+        // relative order is an implementation detail, not a contract.
+        expect(result.items.map((level) => level.available)).toEqual([0, 0, 100]);
+        expect(result.items.map((level) => level.title)).toEqual(
+            expect.arrayContaining(['All held', 'Empty'])
+        );
+        expect(result.items.at(-1)).toMatchObject({ title: 'Plenty', onHand: 100, available: 100 });
+        expect(result.items).toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({ onHand: 30, reserved: 30, available: 0 }),
+                expect.objectContaining({ onHand: 0, reserved: 0, available: 0 }),
+                expect.objectContaining({ onHand: 100, reserved: 0, available: 100 })
+            ])
+        );
         expect(result.meta).toMatchObject({ totalItems: 3, totalPages: 1 });
     });
 
@@ -468,16 +478,15 @@ describe('listLevels', () => {
     it('deliberately disagrees with the metrics gauge over an inactive product', async () => {
         // docs/modules/inventory-reservations.md §"The threshold, and its two readers": this
         // reader (the stock board) counts the WHOLE catalogue, an admin restocking needs to see
-        // an inactive product too. `products_low_stock_total`
-        // (`stockLevelRepository.countLowAvailability`) counts PUBLIC products only. "The two
-        // numbers will not match, and should not."
+        // an inactive product too. `products_low_stock_total` (`lowStockCount`) counts PUBLIC
+        // products only. "The two numbers will not match, and should not."
         process.env.NODE_LOW_STOCK_THRESHOLD = '5';
         await createProduct({ active: true, onHand: 2, reserved: 0 });
         await createProduct({ active: true, onHand: 40, reserved: 40 });
         const hidden = await createProduct({ active: false, onHand: 1, reserved: 0 });
 
         const board = await listLevels({ lowOnly: true });
-        const gauge = await stockLevelRepository.countLowAvailability(5);
+        const gauge = await lowStockCount();
 
         expect(board.meta.totalItems).toBe(3);
         expect(gauge).toBe(2);

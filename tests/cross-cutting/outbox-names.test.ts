@@ -132,7 +132,9 @@ it('publishes the set the pair agreed on', () => {
      * flow, the inactive-account reaper and the email second factor only exist on this backend so
      * far — and neither does the pending-email-change notice, nor bank transfer, which the PHP
      * twin has no equivalent feature for at all. `webhooks.subscription-disabled` is the same
-     * story: the PHP twin has no webhook module yet. The other eight are the agreed, mirrored set.
+     * story: the PHP twin has no webhook module yet. `orders.order-product-unavailable` (a hard
+     * delete or a deactivation cancelling a pending order) is likewise Node-only so far. The other
+     * eight are the agreed, mirrored set.
      */
     const agreed = [
         'account.delete-confirm',
@@ -147,6 +149,7 @@ it('publishes the set the pair agreed on', () => {
         'delivery.shipment-shipped',
         'feedback.contact',
         'orders.order-confirm',
+        'orders.order-product-unavailable',
         'orders.order-transfer-expired',
         'orders.order-transfer-instructions',
         'webhooks.subscription-disabled'

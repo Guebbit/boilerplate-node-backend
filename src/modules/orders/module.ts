@@ -22,9 +22,16 @@ import { SYSTEM_ACTOR } from '@kernel/permissions';
 import { onDomainEvent } from '@kernel/events';
 import { RESERVATION_EXPIRED } from '@modules/inventory';
 import { USER_DELETED } from '@modules/users';
+import { PRODUCT_DELETED, PRODUCT_DEACTIVATED } from '@modules/products';
 import { WORKER_CHANNELS, OrderInvoicePdfJobPayloadSchema } from '@types';
 import { router } from './routes';
-import { cancelById, detachUserId, search, ownerScope } from './services';
+import {
+    cancelById,
+    cancelPendingOrdersHolding,
+    detachUserId,
+    search,
+    ownerScope
+} from './services';
 import { enqueueInvoicePdfJob, handleInvoicePdfJob } from './transport/invoice-pdf';
 // Also installs this module's other event declarations (ORDER_CANCELLED, ORDER_STATUS_CHANGED).
 import { ORDER_CREATED } from './events';
@@ -80,6 +87,16 @@ export default {
         // leaves the order `pending` with nothing yet able to retry it (no dead-letter/parking
         // exists for any queue in this codebase today) — the same as every other queue's state.
         onDomainEvent(ORDER_CREATED, ({ orderId }) => enqueueInvoicePdfJob(orderId));
+        // Only the HARD half of a product's removal — a soft delete (or its restore) leaves a
+        // pending order's line exactly as it was, the same reasoning `inventory`'s own listener
+        // follows for the level row. Deactivation is unconditional: `product.deactivated` never
+        // fires for anything but the true→false flip.
+        onDomainEvent(PRODUCT_DELETED, ({ productId, hardDelete }) =>
+            hardDelete ? cancelPendingOrdersHolding(productId) : undefined
+        );
+        onDomainEvent(PRODUCT_DEACTIVATED, ({ productId }) =>
+            cancelPendingOrdersHolding(productId)
+        );
     },
     locales: path.join(__dirname, 'locales'),
     /*

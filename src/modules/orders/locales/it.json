@@ -63,8 +63,16 @@
             "greeting": "Ciao!",
             "body": "Non abbiamo ricevuto il tuo bonifico in tempo, quindi questo ordine è stato annullato e i suoi articoli sono stati rilasciati."
         },
+        "email-product-unavailable": {
+            "subject": "Il tuo ordine è stato annullato — un articolo non è più disponibile",
+            "meta-title": "Ordine annullato",
+            "greeting": "Ciao!",
+            "body": "Il seguente articolo non è più disponibile, quindi questo ordine è stato annullato e non è stato addebitato nulla:",
+            "line": "{{title}}"
+        },
         "items-held": "Gli articoli di questo ordine non possono essere modificati mentre le scorte sono impegnate o già vendute.",
         "insufficient-stock": "Alcuni articoli di questo ordine non sono più disponibili nella quantità richiesta — vedi `details.lines`.",
+        "product-unavailable": "Uno o più prodotti di questo ordine non sono più disponibili — vedi `details.lines`.",
         "invoice-pending": "La fattura è ancora in fase di generazione — riprova tra poco."
     }
 }

@@ -3,7 +3,7 @@
         "changed": "Il carrello è cambiato durante la conferma dell’ordine. Controllalo e riprova.",
         "empty": "Il tuo carrello è vuoto.",
         "product-removed": "Prodotto rimosso dal carrello.",
-        "product-unavailable": "Uno o più prodotti nel carrello non sono più disponibili.",
+        "product-unavailable": "Uno o più prodotti nel carrello non sono più disponibili — vedi `details.lines`.",
         "product-added": "Prodotto aggiunto al carrello.",
         "reorder": {
             "success": "Ordine aggiunto al carrello.",

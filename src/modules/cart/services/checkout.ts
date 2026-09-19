@@ -172,7 +172,12 @@ const runCheckout = async (
         return generateReject(404, [
             {
                 code: 'CART_PRODUCT_UNAVAILABLE',
-                message: t('cart.product-unavailable')
+                message: t('cart.product-unavailable'),
+                // Every unavailable line, the same reasoning `CART_INSUFFICIENT_STOCK` above
+                // already follows — a customer fixes the basket in one pass, not one refusal per
+                // line. `title` is absent for a hard-deleted product: there is nothing left to
+                // read one off.
+                details: { lines: verdict.lines }
             }
         ]);
     }

@@ -199,6 +199,20 @@ const findWithPendingEffects = (cutoff: Date, limit: number): Promise<OrderDocum
         .exec();
 
 /**
+ * Every still-`pending` order holding a line for this product — a hard delete or a deactivation's
+ * own query, to cancel each one at once rather than leaving it to a payment attempt's 409 to
+ * discover the product is gone. `items.product._id`, the same embedded-snapshot path `search`'s
+ * own `productId` filter reads (see this file's own top docblock) — never a reference, since an
+ * order keeps what was bought, not a pointer to the catalogue row.
+ *
+ * @param productId - the product just removed or deactivated
+ */
+const findPendingByProductId = (productId: string): Promise<OrderDocument[]> =>
+    orderModel
+        .find({ status: OrderStatus.pending, 'items.product._id': toObjectId(productId) })
+        .exec();
+
+/**
  * Discharge one effect, once its listener has actually returned.
  *
  * Conditional on the effect still being there, so a retry racing the original drain resolves at
@@ -384,6 +398,7 @@ export const orderRepository: Omit<Repository<OrderDocument>, 'search'> & {
         entry: OrderStatusOverride
     ) => Promise<OrderDocument | null>;
     findWithPendingEffects: (cutoff: Date, limit: number) => Promise<OrderDocument[]>;
+    findPendingByProductId: (productId: string) => Promise<OrderDocument[]>;
     clearPendingEffect: (orderId: string, effect: OrderPendingEffect) => Promise<boolean>;
     countOpenBankTransfers: (userId: string) => Promise<number>;
     detachUserId: (userId: string, anonymizeAfter: Date) => Promise<number>;
@@ -399,6 +414,7 @@ export const orderRepository: Omit<Repository<OrderDocument>, 'search'> & {
     updateStatusIfIn,
     applyStatusOverride,
     findWithPendingEffects,
+    findPendingByProductId,
     clearPendingEffect,
     countOpenBankTransfers,
     detachUserId,

@@ -29,10 +29,10 @@ export const createProduct = (
     >,
     response: Response
 ) => {
-    const { price, active, onHand, categories, tags, translations } = readInput(request, {
+    const { price, active, onHand, weight, categories, tags, translations } = readInput(request, {
         surface: 'create',
         booleans: ['active'],
-        numbers: ['price', 'onHand'],
+        numbers: ['price', 'onHand', 'weight'],
         stringArrays: ['categories', 'tags'],
         jsonFields: ['translations']
     });
@@ -47,7 +47,17 @@ export const createProduct = (
 
     return productService
         .writeCreate(
-            { ...request.body, price, active, onHand, categories, tags, translations, imageUrl },
+            {
+                ...request.body,
+                price,
+                active,
+                onHand,
+                weight,
+                categories,
+                tags,
+                translations,
+                imageUrl
+            },
             callerContextOf(request),
             { thumbnailUrl, pendingImageKey }
         )

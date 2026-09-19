@@ -12,20 +12,21 @@
 import { Gauge } from 'prom-client';
 import { metricsRegistry } from '@infrastructure/observability/metrics-registry';
 import { stockLevelRepository } from './repository';
-import { lowStockThreshold } from './config';
+import { lowStockCount } from './service';
 
 /**
  * How many products a customer would find unbuyable-ish, computed AT SCRAPE TIME via `collect`.
  * Counts AVAILABILITY, not units on hand — a product with forty units all reserved is out of
  * stock to every customer, so a gauge reading `onHand` would misreport it as available.
- * `countLowAvailability` does the subtraction inside mongod.
+ * `lowStockCount` composes this module's own counters with `products`' visibility rule — see
+ * that function's own docblock.
  */
 const _productsLowStockTotal = new Gauge({
     name: 'products_low_stock_total',
     help: 'Products whose available units are at or under the low-stock threshold.',
     registers: [metricsRegistry],
     async collect() {
-        this.set(await stockLevelRepository.countLowAvailability(lowStockThreshold()));
+        this.set(await lowStockCount());
     }
 });
 

@@ -118,7 +118,13 @@ export const settlePayment = (
 
     // The order's move IS the gate (module rule 2), and it is conditional, so exactly one of two
     // racing settlements gets past it. `markPaid` is `orders`' own conditional write — this
-    // module reports the fact, it never writes the order's status itself.
+    // module reports the fact, it never writes the order's status itself. `markPaid` fires
+    // `order.status_changed` (fire-and-forget) the moment the write lands, which is BEFORE
+    // `commitForOrder` below runs — a subscriber reacting to the status move sees `paid` before
+    // the reservation is actually committed. Safe today: `webhooks`, the one listener, forwards
+    // only `{ orderId }`, carries no stock figure that ordering could make stale, and nothing else
+    // in this application listens. Reorder the two (commit, then report) if a future listener
+    // ever needs to read committed stock in reaction to this event.
     return orderService.markPaid(orderId).then(async (paidOrder) => {
         const succeeded = await paymentRepository.updateStatusIfIn(
             orderId,

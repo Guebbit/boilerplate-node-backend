@@ -38,7 +38,7 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { productsAnalyticsEvents } from './analytics';
 import { productsAuditActions } from './audit';
-import { PRODUCT_DELETED, PRODUCT_CREATED } from './events';
+import { PRODUCT_DELETED, PRODUCT_CREATED, PRODUCT_DEACTIVATED } from './events';
 import { zodProductCreateSchema, zodProductUpdateSchema, toProduct } from './model';
 import type { ProductDocument } from './model';
 import { productRepository } from './repository';
@@ -318,6 +318,9 @@ export const update = (
     if (data.active !== undefined) product.active = data.active;
     if (data.categories !== undefined) product.categories = sanitizeStringArray(data.categories);
     if (data.tags !== undefined) product.tags = sanitizeStringArray(data.tags);
+    if (data.weight !== undefined) product.weight = data.weight;
+    if (data.taxClass !== undefined) product.taxClass = data.taxClass;
+    if (data.requiresShipping !== undefined) product.requiresShipping = data.requiresShipping;
 
     // If a new image was uploaded, update the url, thumbnail and pending key together — the three
     // travel as one unit, all produced by the same `readUploadedImage` call on the controller.
@@ -353,6 +356,10 @@ export const updateById = (
         // at the `.catch()` that has to tell them apart.
         if (!product) return generateReject(404, [t('products.not-found')]);
 
+        // Read before `update()` mutates `product.active` in place — the flip is the whole
+        // signal `PRODUCT_DEACTIVATED` exists to report, same shape `users`' ban/unban audit uses.
+        const wasActive = product.active;
+
         return update(product, data).then((updated) => {
             emitAuditEvent(
                 buildAuditEvent(context, {
@@ -362,7 +369,12 @@ export const updateById = (
                     target_id: id
                 })
             );
-            return generateSuccess(updated);
+
+            return (
+                wasActive !== false && updated.active === false
+                    ? emitDomainEvent(PRODUCT_DEACTIVATED, { productId: id })
+                    : Promise.resolve()
+            ).then(() => generateSuccess(updated));
         });
     });
 
@@ -542,11 +554,12 @@ export const remove = (
 
     // HARD delete
     // Translations go with it, in this same operation — through the port, never the
-    // `PRODUCT_DELETED` event above: that event fires on a SOFT delete too, with an identical
-    // payload, so a subscriber could not tell the two apart without an AsyncAPI change. Soft
-    // delete is a flip that doubles as a restore, and the rows must survive it.
+    // `PRODUCT_DELETED` event above: that event fires on a SOFT delete too, with the same
+    // `productId` — `hardDelete` on the payload is what lets a subscriber (`inventory`'s level
+    // row, `orders`' pending-order cancellation) tell the two apart. Soft delete is a flip that
+    // doubles as a restore, and both the rows and the counters must survive it.
     if (hardDelete)
-        return emitDomainEvent(PRODUCT_DELETED, { productId: id })
+        return emitDomainEvent(PRODUCT_DELETED, { productId: id, hardDelete: true })
             .then(() => productRepository.deleteOne(product))
             .then(() => removeTranslations('product', id))
             .then(() => imageStore.remove(product.imageUrl))
@@ -556,7 +569,7 @@ export const remove = (
     // A FLIP, not an assignment: run against an already soft-deleted product this restores it,
     // which is what the `hardDelete: false` half of `hardDeleteSchema` means.
     product.deletedAt = product.deletedAt ? undefined : new Date();
-    return emitDomainEvent(PRODUCT_DELETED, { productId: id })
+    return emitDomainEvent(PRODUCT_DELETED, { productId: id, hardDelete: false })
         .then(() => productRepository.save(product))
         .then((saved) => generateSuccess(saved, 200, t('products.soft-deleted')));
 };
@@ -615,6 +628,26 @@ const findManyByIds = (ids: readonly string[]) =>
     );
 
 /**
+ * How many of `ids` are still publicly visible — `@modules/inventory`'s low-stock gauge asks this
+ * rather than joining into this module's own collection to answer it itself (see
+ * `docs/theory/strategic-ddd.md` §5: "the service is the door"). Reuses the same
+ * `publicScope()` a stranger's own reads are narrowed to, so a role editing that rule never has
+ * to remember a second, hand-rolled copy of it living in a sibling module's aggregation pipeline.
+ *
+ * @param ids - candidate product ids
+ * @returns how many of them are active and not soft-deleted
+ */
+const countPublic = (ids: readonly string[]): Promise<number> =>
+    ids.length === 0
+        ? Promise.resolve(0)
+        : Promise.resolve().then(() =>
+              productRepository.count({
+                  ...productRepository.publicScope(),
+                  _id: { $in: ids.map((id) => toObjectId(id)) }
+              })
+          );
+
+/**
  * Mirror `@modules/inventory`'s stock level onto this product's own document, purely so a
  * catalogue read still needs no join. `@modules/inventory` is this function's only legitimate
  * caller — it is the sole writer of `onHand`/`reserved`, this is the door, never a place that
@@ -651,5 +684,6 @@ export const productService = {
     findByIdRaw,
     findPublicById,
     findManyByIds,
+    countPublic,
     syncStockCache
 };

@@ -6,7 +6,9 @@
  * `place.ts` is the one function that writes a new order; `crud.ts` reads and amends one, and
  * `retract.ts` undoes a write `place.ts` or checkout could not keep; `notify.ts` sends the
  * placed-order email. `cancel.ts` runs the cancellation and the sweep behind its marker,
- * `retention.ts` answers an erased account, `scope.ts` decides who may see what.
+ * `retention.ts` answers an erased account, `scope.ts` decides who may see what,
+ * `availability.ts` answers whether a line is still sellable and cancels an order that no longer
+ * is.
  */
 
 import {
@@ -28,6 +30,7 @@ import { callerScope, ownerScope, withActions } from './scope';
 import { cancelById, retryPendingEffects } from './cancel';
 import { markPaid, markShipped, markDelivered } from './status';
 import { overrideStatus, forceMove } from './override';
+import { unavailableLines } from './availability';
 
 /*
  * Every operation is published by name as well as through the object below, exactly as the single
@@ -55,6 +58,7 @@ export { markPaid, markShipped, markDelivered } from './status';
 export { overrideStatus, forceMove } from './override';
 export { detachUserId, anonymizeDueOrders } from './retention';
 export { callerScope, actorOf, ownerScope, withActions } from './scope';
+export { unavailableLines, cancelPendingOrdersHolding, type UnavailableLine } from './availability';
 export { freezeOrderLines } from './snapshot';
 export { allocateInvoiceNumber } from './invoice-numbering';
 // Config getters, re-exported here (not directly from `../index.ts`) because a module's public
@@ -94,5 +98,6 @@ export const orderService = {
     anonymizeDueOrders,
     cancelById,
     retryPendingEffects,
+    unavailableLines,
     withActions
 };

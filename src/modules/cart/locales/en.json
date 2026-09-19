@@ -3,7 +3,7 @@
         "changed": "Your cart changed while the order was being placed. Check it and try again.",
         "empty": "Your cart is empty.",
         "product-removed": "Product removed from cart.",
-        "product-unavailable": "One or more products in your cart are no longer available.",
+        "product-unavailable": "One or more products in your cart are no longer available — see `details.lines`.",
         "product-added": "Product successfully added to cart.",
         "reorder": {
             "success": "Order added to cart.",

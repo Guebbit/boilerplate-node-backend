@@ -27,7 +27,8 @@ import {
     orderConfirmEmail,
     invoiceDocument,
     bankTransferInstructionsEmail,
-    bankTransferExpiredEmail
+    bankTransferExpiredEmail,
+    productUnavailableCancelledEmail
 } from '@modules/orders/emails';
 import { shipmentShippedEmail } from '@modules/delivery/emails';
 import { subscriptionDisabledEmail } from '@modules/webhooks/emails';
@@ -107,6 +108,9 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
     'orders.order-transfer-expired.ejs': bankTransferExpiredEmail(locale, {
         items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }]
     }),
+    'orders.order-product-unavailable.ejs': productUnavailableCancelledEmail(locale, [
+        { title: 'Boiled sweets' }
+    ]),
     'delivery.shipment-shipped.ejs': shipmentShippedEmail(locale, 'Ada', 'TRK-0000TEST'),
     'webhooks.subscription-disabled.ejs': subscriptionDisabledEmail(
         locale,

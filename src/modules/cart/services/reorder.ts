@@ -40,11 +40,16 @@ interface ReorderLine {
 /**
  * Copy an order's lines back into the caller's cart.
  *
- * Scoped to the caller's OWN, still-visible orders (`callerScope`) — refilling someone else's
- * purchases would leak what they bought, not just misuse a privilege. Lines are re-resolved
- * against today's catalogue via `findPublicById`, and a vanished/inactive product is SKIPPED, not
- * refused, unlike `./items`' `upsertCartItem` — a total skip answers 409 `REORDER_UNAVAILABLE`
- * rather than an empty 200. Writes to the cart happen sequentially; see the loop below for why.
+ * Scoped to the caller's OWN, still-visible orders — `ownerScope`, never `callerScope`:
+ * `callerScope` is a ROLE-based read boundary (an admin's `orders.any.read` legitimately reads
+ * every order for search/support), which is the wrong question for a feature that fills MY cart
+ * from MY history — an admin reordering must not be able to refill their basket from a stranger's
+ * purchase. `deletedAt: null` alongside it, since `ownerScope` alone (unlike `callerScope`,
+ * whose `orders.self.read` condition already carries it) does not exclude a soft-deleted order.
+ * Lines are re-resolved against today's catalogue via `findPublicById`, and a vanished/inactive
+ * product is SKIPPED, not refused, unlike `./items`' `upsertCartItem` — a total skip answers 409
+ * `REORDER_UNAVAILABLE` rather than an empty 200. Writes to the cart happen sequentially; see the
+ * loop below for why.
  */
 export const reorderIntoCart = (
     authContext: AuthContext,
@@ -54,7 +59,7 @@ export const reorderIntoCart = (
     const userId = authContext.id;
 
     return orderService
-        .getById(orderId, orderService.callerScope(authContext))
+        .getById(orderId, { ...orderService.ownerScope(userId), deletedAt: null })
         .then<ResponseSuccess<CartView> | ResponseReject>((order) => {
             if (!order) return generateReject(404, [t('cart.reorder.order-not-found')]);
 

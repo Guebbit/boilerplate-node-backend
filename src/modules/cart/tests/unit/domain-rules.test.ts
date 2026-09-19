@@ -27,15 +27,36 @@ describe('evaluateCheckout', () => {
         expect(evaluateCheckout([line(1, 10), line(2, 10)])).toEqual({ ok: true });
     });
 
-    // `null` is the real case: `populate()` writes it when the product was deleted.
+    // `null` is the real case: `populate()` writes it when the product was hard-deleted.
     it.each([
         ['a deleted product (null)', null],
         ['an absent product (undefined)', undefined]
-    ])('refuses a cart holding %s', (_label, product) => {
-        expect(evaluateCheckout([line(1, 10), { quantity: 1, product }])).toEqual({
+    ])('refuses a cart holding %s, naming it with no title to offer', (_label, product) => {
+        expect(
+            evaluateCheckout([line(1, 10), { quantity: 1, product, productId: 'gone' }])
+        ).toEqual({
             ok: false,
-            reason: 'product-unavailable'
+            reason: 'product-unavailable',
+            lines: [{ productId: 'gone', title: undefined }]
         });
+    });
+
+    /*
+     * `populate()` follows the reference regardless of visibility — an inactive or soft-deleted
+     * product still joins, `active`/`deletedAt` and all, unlike a hard-deleted one. This is what
+     * lets a refusal here still NAME the product: the row is right there to read a title off.
+     */
+    it.each([
+        ['deactivated', { title: 'Old Favourite', active: false }],
+        ['soft-deleted', { title: 'Discontinued', deletedAt: new Date() }]
+    ])('refuses a cart holding a %s product, with its title', (_label, product) => {
+        expect(evaluateCheckout([line(1, 10), { quantity: 1, product, productId: 'p-1' }])).toEqual(
+            {
+                ok: false,
+                reason: 'product-unavailable',
+                lines: [{ productId: 'p-1', title: product.title }]
+            }
+        );
     });
 
     // Order matters: the two reasons map to different status codes and analytics categories.
@@ -91,9 +112,12 @@ describe('evaluateCheckout', () => {
     // Resolution outranks availability: a vanished product is the harder failure, and its 404
     // must not be masked by a 409 about a count nobody can see.
     it('reports an unresolved product before an unavailable one', () => {
-        expect(evaluateCheckout([{ quantity: 9, product: null }, line(6, 5)])).toEqual({
+        expect(
+            evaluateCheckout([{ quantity: 9, product: null, productId: 'gone' }, line(6, 5)])
+        ).toEqual({
             ok: false,
-            reason: 'product-unavailable'
+            reason: 'product-unavailable',
+            lines: [{ productId: 'gone', title: undefined }]
         });
     });
 });

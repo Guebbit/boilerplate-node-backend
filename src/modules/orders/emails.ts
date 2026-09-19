@@ -157,6 +157,36 @@ export const bankTransferExpiredEmail = (locale: string, order: OrderLines): Ema
 };
 
 /**
+ * The customer's answer to "what happened to my order" when it was cancelled because a product
+ * on it stopped being sellable — a hard delete, or a deactivation. Sent for every such
+ * cancellation, `bank_transfer` or `card` alike: unlike a payment-hold timeout, this happens with
+ * no warning the buyer could have expected, so it always deserves an explanation.
+ *
+ * @param unavailable - the lines that caused the cancellation, from `unavailableLines`
+ */
+export const productUnavailableCancelledEmail = (
+    locale: string,
+    unavailable: readonly { title: string }[]
+): EmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'orders.order-product-unavailable',
+        subject: t('orders.email-product-unavailable.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('orders.email-product-unavailable.meta-title'),
+            pageMetaLinks: [],
+            greeting: t('orders.email-product-unavailable.greeting'),
+            body: t('orders.email-product-unavailable.body'),
+            lines: unavailable.map((line) =>
+                t('orders.email-product-unavailable.line', { title: line.title })
+            ),
+            footer: t('email.footer')
+        }
+    };
+};
+
+/**
  * What the invoice needs beyond the lines: the order's id, for the document title, each line's
  * frozen `taxRate` — the VAT figures themselves are recomputed fresh by {@link buildVatBlock},
  * same reasoning as `orderTotal` below — and the two fields Art. 226 requires, `invoiceNumber`

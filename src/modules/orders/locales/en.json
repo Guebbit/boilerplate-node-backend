@@ -63,8 +63,16 @@
             "greeting": "Hello!",
             "body": "We didn't receive your bank transfer in time, so this order has been cancelled and its items released."
         },
+        "email-product-unavailable": {
+            "subject": "Your order was cancelled — an item is no longer available",
+            "meta-title": "Order cancelled",
+            "greeting": "Hello!",
+            "body": "The following item is no longer available, so this order has been cancelled and nothing was charged:",
+            "line": "{{title}}"
+        },
         "items-held": "This order's items cannot be changed while its stock is held or already sold.",
         "insufficient-stock": "Some items on this order are no longer available in the quantity requested — see `details.lines`.",
+        "product-unavailable": "One or more products on this order are no longer available — see `details.lines`.",
         "invoice-pending": "The invoice is still being generated — try again shortly."
     }
 }

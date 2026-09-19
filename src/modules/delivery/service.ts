@@ -220,23 +220,28 @@ export const recordDelivery = (
                 { code: 'ORDER_NOT_SHIPPED', message: t('delivery.not-shippable-for-delivery') }
             ]);
 
-        return shipmentRepository
-            .updateStatusIfIn(orderId, ['shipped'], 'delivered', { deliveredAt: new Date() })
-            .then((shipment) => {
-                if (!shipment)
-                    return generateReject(409, [
-                        {
-                            code: 'ORDER_NOT_SHIPPED',
-                            message: t('delivery.not-shippable-for-delivery')
-                        }
-                    ]);
+        /*
+         * The order moves FIRST, the shipment is stamped second — a parcel record is evidence the
+         * order arrived, not the other way round. Reversed from how this used to read: stamping
+         * the shipment first and then asking `orders` to move meant a refused order move left a
+         * `delivered` parcel paired with an order stuck at `shipped`, which nothing — forced
+         * included, since a forced move here still demands the shipment be `shipped` — could ever
+         * move forward again. A failed order move now leaves BOTH sides exactly where they stood.
+         */
+        const moveOrder = forced
+            ? orderService.forceMove(orderId, OrderStatus.delivered, reason!, context)
+            : orderService.markDelivered(orderId);
 
-                const moveOrder = forced
-                    ? orderService.forceMove(orderId, OrderStatus.delivered, reason!, context)
-                    : orderService.markDelivered(orderId);
+        return moveOrder.then((moved) => {
+            if (!moved)
+                return generateReject(409, [
+                    { code: 'ORDER_NOT_SHIPPED', message: t('delivery.not-shippable-for-delivery') }
+                ]);
 
-                return moveOrder.then((moved) => {
-                    if (!moved)
+            return shipmentRepository
+                .updateStatusIfIn(orderId, ['shipped'], 'delivered', { deliveredAt: new Date() })
+                .then((shipment) => {
+                    if (!shipment)
                         return generateReject(409, [
                             {
                                 code: 'ORDER_NOT_SHIPPED',
@@ -255,7 +260,7 @@ export const recordDelivery = (
 
                     return generateSuccess(toShipmentResponse(shipment));
                 });
-            });
+        });
     });
 };
 

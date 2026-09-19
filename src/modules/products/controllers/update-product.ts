@@ -29,17 +29,15 @@ export const updateProduct = (
     >,
     response: Response
 ) => {
-    const { id, price, active, requiresShipping, categories, tags, translations } = readInput(
-        request,
-        {
+    const { id, price, active, requiresShipping, weight, categories, tags, translations } =
+        readInput(request, {
             surface: 'write',
             ids: ['id'],
             booleans: ['active', 'requiresShipping'],
-            numbers: ['price'],
+            numbers: ['price', 'weight'],
             stringArrays: ['categories', 'tags'],
             jsonFields: ['translations']
-        }
-    );
+        });
 
     const {
         imageUrl = '',
@@ -61,6 +59,7 @@ export const updateProduct = (
                 price,
                 active,
                 requiresShipping,
+                weight,
                 categories,
                 tags,
                 translations,
