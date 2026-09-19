@@ -36,7 +36,8 @@ import { sendOrderPlacedEmail } from './notify';
 // `userId` is stored as an ObjectId, so writes have to coerce it. The rule (and its failure
 // mode on a malformed id) lives in the repository layer; this is the only import of it here.
 import { toObjectId } from '@infrastructure/persistence/create-repository';
-import type { PaginatedMeta } from '@infrastructure/persistence/search';
+import { readAll, MAX_CONFIGURED_PAGE_SIZE, type PaginatedMeta } from '@infrastructure/persistence/search';
+import { ownerScope } from './scope';
 
 /**
  * Search orders (DTO-friendly) — matches POST /orders/search in OpenAPI. `productId` filters
@@ -62,6 +63,25 @@ export const search = (
                 });
             return { items, meta: result.meta };
         })
+    );
+
+/**
+ * Every order id belonging to `userId` — the narrow read a sibling module needing only ids (not
+ * full order documents, and none of `search`'s image resolution or analytics emit) asks for,
+ * paged internally with `readAll` so an account with more orders than one page still gets every
+ * id. `.search()`'s items are typed as `OrderDocument` but arrive already transformed — `_id` is
+ * `id` by the time this reads it — so the fallback below covers a document `.search()` didn't.
+ * @param userId - the account whose own orders these are
+ */
+export const ownOrderIds = (userId: string): Promise<string[]> =>
+    readAll(
+        (page) =>
+            orderRepository
+                .search({ page, pageSize: MAX_CONFIGURED_PAGE_SIZE }, ownerScope(userId))
+                .then((result) => result.items),
+        MAX_CONFIGURED_PAGE_SIZE
+    ).then((orders) =>
+        orders.map((order) => String((order as typeof order & { id?: string }).id ?? order._id))
     );
 
 /**

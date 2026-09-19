@@ -329,8 +329,14 @@ export const callerFor = (context: AuthContext, key: string): Caller =>
  * Scope:    the baseline is the anonymous role's own, and applies only there. Folding bare tenant
  *           keys into a PLATFORM caller is the privilege confusion the two-scope split exists to
  *           prevent — an operator administers the installation and reads no shop's rows.
+ *
+ * Exported for `@modules/api-keys/module.ts`'s own floor check — re-deriving a minter's CURRENT
+ * permissions is the same "never trust a cached list" shape this file's own callers already need.
  */
-const keysInScope = (roleName: string | null, scope: AuthorizationScope): readonly string[] => {
+export const keysInScope = (
+    roleName: string | null,
+    scope: AuthorizationScope
+): readonly string[] => {
     const held = roleName ? permissionsOfRole(roleName) : [];
 
     if (scope !== ANONYMOUS_ROLE.scope) {

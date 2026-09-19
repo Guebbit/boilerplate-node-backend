@@ -38,7 +38,9 @@ hub and the scrape guard are its own files (`dependency-health.ts`, `job-health.
 `process-snapshot.ts`, `stream.ts`, `metrics-scraper.ts`) — only the shared Prometheus registry and
 the HTTP request counters stay in `infrastructure/observability`, since every module registers its
 own counters against that same registry (`metrics-registry.ts`, `metrics-http.ts`); this module's
-own `metrics.ts` turns those counters into the overview endpoint's and the SSE stream's numbers.
+own `http-readback.ts` turns those counters into the overview endpoint's and the SSE stream's
+numbers — named apart from every other module's own `metrics.ts` (a wiring file, never barrel-
+published) because this one holds read-back services instead of metric declarations.
 Beyond the audit read this module owns no collection at all, which is also why it has no `model.ts`
 and no `repository.ts`.
 

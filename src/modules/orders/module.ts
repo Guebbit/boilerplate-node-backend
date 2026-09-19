@@ -24,6 +24,7 @@ import { RESERVATION_EXPIRED } from '@modules/inventory';
 import { USER_DELETED } from '@modules/users';
 import { PRODUCT_DELETED, PRODUCT_DEACTIVATED } from '@modules/products';
 import { WORKER_CHANNELS, OrderInvoicePdfJobPayloadSchema } from '@types';
+import { readAll, MAX_CONFIGURED_PAGE_SIZE } from '@infrastructure/persistence/search';
 import { router } from './routes';
 import {
     cancelById,
@@ -35,9 +36,6 @@ import {
 import { enqueueInvoicePdfJob, handleInvoicePdfJob } from './transport/invoice-pdf';
 // Also installs this module's other event declarations (ORDER_CANCELLED, ORDER_STATUS_CHANGED).
 import { ORDER_CREATED } from './events';
-
-/** Read past `search`'s own page-size default — a data-subject export answers "all of it". */
-const EVERYTHING = 100_000;
 
 /** This module's manifest entry: routes, the shop-identity config gate, event subscriptions, and locales. */
 export default {
@@ -64,8 +62,13 @@ export default {
         {
             section: 'orders',
             collect: (subject) =>
-                search({ pageSize: EVERYTHING }, ownerScope(subject.userId)).then(
-                    (page) => page.items
+                readAll(
+                    (page) =>
+                        search(
+                            { page, pageSize: MAX_CONFIGURED_PAGE_SIZE },
+                            ownerScope(subject.userId)
+                        ).then((result) => result.items),
+                    MAX_CONFIGURED_PAGE_SIZE
                 )
         }
     ],

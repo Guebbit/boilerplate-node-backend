@@ -14,8 +14,9 @@
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { registerCredentialResolver, type ResolvedCredential } from '@kernel/authentication';
-import { permissionsOfRole, ANONYMOUS_ROLE, isUnrestricted } from '@kernel/permissions';
+import { keysInScope, isUnrestricted } from '@kernel/permissions';
 import { holdsKey } from '@kernel/ability';
+import { readAll, MAX_CONFIGURED_PAGE_SIZE } from '@infrastructure/persistence/search';
 import { rolesOf } from '@modules/access';
 import { userService } from '@modules/users';
 import type { Caller } from '@types';
@@ -24,21 +25,16 @@ import { apiKeyRepository } from './repository';
 import { verifyApiKey, parseApiKeyToken, displayIdOf } from './credentials';
 import type { ApiKeyDocument } from './model';
 
-/** Read past `search`'s own page-size default — a data-subject export answers "all of it". */
-const EVERYTHING = 100_000;
-
 /**
  * The minter's CURRENT tenant caller, re-derived rather than trusted from the key's own stored
  * permission snapshot — the check-time half of "a key holds a subset of the minter's permissions,
  * never more" (the mint-time half is `services/api-keys.ts#isMintable`). Same defensive shape as
  * `kernel/permissions.ts#keysInScope`'s own caller flooring: never trust a cached list, re-derive
- * from the authoritative source on every check.
- *
- * The permission list is the role's OWN keys unioned with the anonymous baseline — exactly what
- * `keysInScope` computes for tenant scope, restated here because that helper is private to
- * `kernel/permissions.ts`. `holdsKey`, not a raw list membership check, is what then reads it —
- * the CASL ability it builds is what a mint-floor check should ask, the same as any other route
- * guard, rather than this file re-deriving its own answer from the raw list.
+ * from the authoritative source on every check — `keysInScope` itself is what does that
+ * derivation, `roles.tenant` and all, so this stays a call rather than a second copy of it.
+ * `holdsKey`, not a raw list membership check, is what then reads the result — the CASL ability
+ * it builds is what a mint-floor check should ask, the same as any other route guard, rather than
+ * this file re-deriving its own answer from the raw list.
  *
  * `findAuthenticatableById` — not `findById` — for the same reason `account/module.ts`'s own
  * resolver uses it: a deactivated or soft-deleted minter must stop granting access on their very
@@ -50,15 +46,7 @@ const currentCallerOf = (apiKey: ApiKeyDocument): Promise<Caller | undefined> =>
         if (!user) return undefined;
 
         return rolesOf(apiKey.createdByUserId, apiKey.tenant).then((roles) => {
-            // `roles.tenant` may be `null` — no membership row exists — so this floors to the
-            // anonymous baseline alone, never throws. Same null-safety `keysInScope` gives every
-            // other caller; restated here because that helper is private to `kernel/permissions.ts`.
-            const permissions = [
-                ...new Set([
-                    ...(roles.tenant ? permissionsOfRole(roles.tenant) : []),
-                    ...ANONYMOUS_ROLE.permissions
-                ])
-            ];
+            const permissions = keysInScope(roles.tenant, 'tenant');
 
             return {
                 id: apiKey.createdByUserId,
@@ -127,15 +115,17 @@ export default {
             // (`model.ts#applyApiKeyTransform` omits `hash`) drops the secret here too; nothing
             // module-specific to redact beyond what the wire shape already never carries.
             collect: (subject) =>
-                apiKeyRepository
-                    .search(
-                        { pageSize: EVERYTHING },
-                        { createdByUserId: subject.userId },
-                        {
-                            createdAt: -1
-                        }
-                    )
-                    .then((page) => page.items)
+                readAll(
+                    (page) =>
+                        apiKeyRepository
+                            .search(
+                                { page, pageSize: MAX_CONFIGURED_PAGE_SIZE },
+                                { createdByUserId: subject.userId },
+                                { createdAt: -1 }
+                            )
+                            .then((result) => result.items),
+                    MAX_CONFIGURED_PAGE_SIZE
+                )
         }
     ]
 } satisfies AppModule;

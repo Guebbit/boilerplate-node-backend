@@ -14,7 +14,7 @@ import { successResponse } from '@infrastructure/http/response';
 import { catchAs } from '@infrastructure/http/controller';
 import { httpInflightRequests } from '@infrastructure/observability/metrics-http';
 import { metricsRegistry } from '@infrastructure/observability/metrics-registry';
-import { getHttpRequestCounters, getLatencyPercentiles } from '../metrics';
+import { getHttpRequestCounters, getLatencyPercentiles, sumMetricValues } from '../http-readback';
 import { processSnapshot } from '../process-snapshot';
 
 /** One sample of a prom-client counter. */
@@ -84,7 +84,7 @@ export const getObservabilityMetricsOverview = (_request: Request, response: Res
                 databaseErrorValues
             ]) => {
                 const snapshot = processSnapshot();
-                const inFlight = inflightMetric.values.reduce((s, v) => s + v.value, 0);
+                const inFlight = sumMetricValues(inflightMetric.values);
 
                 const data: ObservabilityMetricsSummary = {
                     http: {
@@ -101,13 +101,13 @@ export const getObservabilityMetricsOverview = (_request: Request, response: Res
                     },
                     business: {
                         checkoutSuccess: sumByLabel(checkoutValues, 'status', 'success'),
-                        ordersCreated: orderValues.reduce((s, v) => s + v.value, 0),
-                        lowStockProducts: lowStockValues.reduce((s, v) => s + v.value, 0),
-                        reservedUnits: reservedValues.reduce((s, v) => s + v.value, 0)
+                        ordersCreated: sumMetricValues(orderValues),
+                        lowStockProducts: sumMetricValues(lowStockValues),
+                        reservedUnits: sumMetricValues(reservedValues)
                     },
                     database: {
-                        queriesTotal: databaseQueryValues.reduce((s, v) => s + v.value, 0),
-                        errorsTotal: databaseErrorValues.reduce((s, v) => s + v.value, 0)
+                        queriesTotal: sumMetricValues(databaseQueryValues),
+                        errorsTotal: sumMetricValues(databaseErrorValues)
                     },
                     process: {
                         uptimeSeconds: snapshot.uptimeSeconds,

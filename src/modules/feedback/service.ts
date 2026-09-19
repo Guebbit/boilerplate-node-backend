@@ -27,7 +27,7 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { logger } from '@infrastructure/adapters/logger';
 import { checkEmailPolicy } from '@infrastructure/adapters/antibot';
 import { contactRequestEmail } from './emails';
-import type { PaginatedMeta } from '@infrastructure/persistence/search';
+import { readAll, MAX_CONFIGURED_PAGE_SIZE, type PaginatedMeta } from '@infrastructure/persistence/search';
 import type { Lean } from '@infrastructure/persistence/create-repository';
 import type { CallerContext } from '@types';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
@@ -261,7 +261,14 @@ export const remove = (
  * person — the caller of this function is what decides whether that guess is worth taking.
  */
 export const findOwnTickets = (email: string): Promise<Lean<FeedbackRequestDocument>[]> =>
-    feedbackRequestRepository.findAll({ email }, { limit: 100_000 });
+    readAll(
+        (page) =>
+            feedbackRequestRepository.findAll(
+                { email },
+                { skip: (page - 1) * MAX_CONFIGURED_PAGE_SIZE, limit: MAX_CONFIGURED_PAGE_SIZE }
+            ),
+        MAX_CONFIGURED_PAGE_SIZE
+    );
 
 /** The module's barrel export — used by the controllers in `./controllers`. */
 export const feedbackRequestService = {

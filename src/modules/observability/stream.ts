@@ -15,7 +15,7 @@ import {
     type ObservabilityMetricsPayload,
     type ObservabilityChannel
 } from '@types';
-import { getHttpRequestCounters } from './metrics';
+import { getHttpRequestCounters } from './http-readback';
 import { processSnapshot } from './process-snapshot';
 
 /**

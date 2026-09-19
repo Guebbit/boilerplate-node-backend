@@ -39,9 +39,10 @@ const FALLBACK_PAGE_SIZE = 10;
  *
  * Mirrors `PageSize.maximum` in `openapi.yaml` but is repeated rather than imported: a caller's
  * value is rejected with a 422 at the edge, while this env var never passes through a request
- * schema, so a typo here would otherwise silently disable paging for every search.
+ * schema, so a typo here would otherwise silently disable paging for every search. Exported for
+ * {@link readAll}'s own callers, which need the same ceiling as the page size to loop with.
  */
-const MAX_CONFIGURED_PAGE_SIZE = 100;
+export const MAX_CONFIGURED_PAGE_SIZE = 100;
 
 /**
  * Apply pagination defaults and derive the skip.
@@ -78,6 +79,30 @@ export const buildPaginatedMeta = (
     totalItems,
     totalPages: Math.ceil(totalItems / pagination.pageSize)
 });
+
+/**
+ * Pages through `fetchPage` until it returns fewer than `pageSize` items, and returns every item
+ * collected along the way — the "an incomplete Art. 15 answer must never look like a complete
+ * one" rule a personal-data export needs, answered once here instead of a per-module page-size
+ * cap that silently truncates past it. A short page is read as the last one: every caller asks
+ * `fetchPage` for a FIXED `pageSize`, so returning fewer can only mean nothing is left.
+ *
+ * @param fetchPage - fetch page N (1-based), already filtered/sorted; returns just that page's items
+ * @param pageSize - the fixed size every call to `fetchPage` is expected to request
+ * @returns every item across every page, in arrival order
+ */
+export const readAll = <TItem>(
+    fetchPage: (page: number) => Promise<TItem[]>,
+    pageSize: number
+): Promise<TItem[]> => {
+    const collectFrom = (page: number, collected: TItem[]): Promise<TItem[]> =>
+        fetchPage(page).then((items) => {
+            const soFar = [...collected, ...items];
+            return items.length < pageSize ? soFar : collectFrom(page + 1, soFar);
+        });
+
+    return collectFrom(1, []);
+};
 
 /**
  * Escapes every regex metacharacter, so a user's search text is matched literally.

@@ -23,7 +23,7 @@ const getHttpRequestCounters = jest.fn(() =>
     Promise.resolve({ totalRequests: 10, totalErrors: 2 })
 );
 
-jest.mock('../../metrics', () => ({
+jest.mock('../../http-readback', () => ({
     getHttpRequestCounters: () => getHttpRequestCounters()
 }));
 

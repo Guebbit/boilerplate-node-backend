@@ -48,7 +48,8 @@ export {
     update,
     updateById,
     remove,
-    removeById
+    removeById,
+    ownOrderIds
 } from './crud';
 export { retractOrder } from './retract';
 export { placeOrder, type PlaceOrderInput, type PlaceOrderOutcome } from './place';

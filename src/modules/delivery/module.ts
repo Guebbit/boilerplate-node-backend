@@ -11,12 +11,9 @@
 
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
-import { search, ownerScope } from '@modules/orders';
+import { ownOrderIds } from '@modules/orders';
 import { router } from './routes';
 import { findShipmentsForOrders } from './service';
-
-/** Read past `search`'s own page-size default — a data-subject export answers "all of it". */
-const EVERYTHING = 100_000;
 
 /** This module's manifest entry: routes, the export section, and its locales. */
 export default {
@@ -33,17 +30,11 @@ export default {
         {
             section: 'shipments',
             // `delivery -> orders` already exists (see the module docblock); the shipment read
-            // itself needs the caller's own order ids first, the same `.search()` normalization
-            // trap `orders/module.ts`'s own export section navigates — `.search()` turns `_id`
-            // into `id` on the way out, so `._id` reads as `undefined` despite the type's claim.
+            // itself needs the caller's own order ids first — `orders` publishes `ownOrderIds`
+            // for exactly this, so this module never has to page through full order documents
+            // (or navigate `.search()`'s own `_id`/`id` normalization trap) just to get them.
             collect: (subject) =>
-                search({ pageSize: EVERYTHING }, ownerScope(subject.userId)).then((page) =>
-                    findShipmentsForOrders(
-                        page.items.map((order) =>
-                            String((order as typeof order & { id?: string }).id ?? order._id)
-                        )
-                    )
-                )
+                ownOrderIds(subject.userId).then((orderIds) => findShipmentsForOrders(orderIds))
         }
     ],
     locales: path.join(__dirname, 'locales')
