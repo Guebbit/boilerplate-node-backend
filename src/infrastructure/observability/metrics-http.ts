@@ -6,7 +6,7 @@
  * answer "how is the service doing overall". The registry itself, the default process collectors
  * and `getPrometheusMetrics` live in `metrics-registry.ts`; the read-back functions that turn
  * these counters into `GET /observability/metrics/overview`'s JSON live in
- * `modules/observability/metrics.ts` — this file only defines and records them.
+ * `modules/observability/http-readback.ts` — this file only defines and records them.
  *
  * See: docs/tools/opentelemetry.md
  */
