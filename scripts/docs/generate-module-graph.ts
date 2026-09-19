@@ -30,7 +30,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { format, resolveConfig } from 'prettier';
-import { parse as parseYaml } from 'yaml';
+import { readModuleDescriptor } from './module-descriptor';
 
 const checkOnly = process.argv.includes('--check');
 
@@ -74,10 +74,7 @@ const SUBDOMAIN: Readonly<Record<string, 'core' | 'supporting' | 'generic'>> = O
         .flatMap((name) => {
             const descriptorPath = path.join(MODULES_ROOT, name, 'module.yaml');
             if (!existsSync(descriptorPath)) return [];
-            const descriptor = parseYaml(readFileSync(descriptorPath, 'utf8')) as {
-                subdomain: 'core' | 'supporting' | 'generic';
-            };
-            return [[name, descriptor.subdomain]];
+            return [[name, readModuleDescriptor(descriptorPath).subdomain]];
         })
 );
 

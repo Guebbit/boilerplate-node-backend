@@ -6,10 +6,9 @@
  * or an edge list out of alphabetical order.
  */
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
-import { parse as parseYaml } from 'yaml';
-import { z } from 'zod';
+import { readModuleDescriptor } from '../../scripts/docs/module-descriptor';
 
 const MODULES_ROOT = path.join(__dirname, '../../src/modules');
 
@@ -19,14 +18,6 @@ const moduleNames = readdirSync(MODULES_ROOT, { withFileTypes: true })
     .map((entry) => entry.name)
     .toSorted();
 
-/** `dependsOn` and `subdomain`, nothing else — an extra key is a typo or a misunderstanding of what this file is for. */
-const descriptorSchema = z
-    .object({
-        subdomain: z.enum(['core', 'supporting', 'generic']),
-        dependsOn: z.array(z.string())
-    })
-    .strict();
-
 describe.each(moduleNames)('%s/module.yaml', (name) => {
     const descriptorPath = path.join(MODULES_ROOT, name, 'module.yaml');
 
@@ -35,14 +26,11 @@ describe.each(moduleNames)('%s/module.yaml', (name) => {
     });
 
     it('parses against the strict schema', () => {
-        const raw = parseYaml(readFileSync(descriptorPath, 'utf8'));
-        expect(() => descriptorSchema.parse(raw)).not.toThrow();
+        expect(() => readModuleDescriptor(descriptorPath)).not.toThrow();
     });
 
     it('names only real modules, never itself, with no duplicates, alphabetically', () => {
-        const { dependsOn } = descriptorSchema.parse(
-            parseYaml(readFileSync(descriptorPath, 'utf8'))
-        );
+        const { dependsOn } = readModuleDescriptor(descriptorPath);
 
         expect(dependsOn).not.toContain(name);
         for (const sibling of dependsOn) expect(moduleNames).toContain(sibling);
