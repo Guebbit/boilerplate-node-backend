@@ -63,9 +63,12 @@ own collection, and the only reason this document carries a copy at all is read 
 write to any of the three from anywhere but `inventory`'s own sync is a bug, not a shortcut.
 :::
 
-Deletion is soft: `active` and `deletedAt`, with a restore route, because an order that embedded a
-product still has to render months later. The `active: 1, deletedAt: 1` index is what makes the
-public list cheap while the admin list can still see everything.
+Deletion is soft by default: `active` and `deletedAt`, with a restore route, because an order that
+embedded a product still has to render months later. An admin can still ask for a hard delete
+(`hardDelete: true`), which destroys the row outright — see
+[Removing or deactivating a product](#removing-or-deactivating-a-product) for what a hard delete
+means for the rest of the shop. The `active: 1, deletedAt: 1` index is what makes the public list
+cheap while the admin list can still see everything.
 
 ## The pipeline
 
@@ -88,6 +91,28 @@ flowchart LR
     class CA,WI,IN peer;
     class ST note;
 ```
+
+## Removing or deactivating a product
+
+A hard delete (`hardDelete: true`) or an update that flips `active` to `false` both mean the same
+thing to the rest of the shop: this product can no longer be sold. Each fires its own event —
+`product.deleted` (with `hardDelete` on the payload) or `product.deactivated` — and three modules
+react:
+
+- [`inventory`](./inventory.md) deletes the product's `stocklevels` row on a hard delete; a
+  deactivation leaves the counters alone, since the product still exists and might come back.
+- `orders` cancels every `pending` order still holding the product, as the `system` actor, and
+  emails the customer — the same auto-cancel path an expired stock hold uses, see
+  [Who writes the status](./orders.md#who-writes-the-status). `payments`' checkout start also
+  refuses with a 409 `ORDER_PRODUCT_UNAVAILABLE` naming the product, as a backstop for the race
+  between the event firing and a payment already in flight.
+- `cart`'s own unavailability check gained the same `active`/`deletedAt` guard it was missing
+  before — `CART_PRODUCT_UNAVAILABLE` now carries `details.lines` naming exactly which lines are
+  affected, instead of leaving the client to work it out.
+
+An admin can still record an **offline** payment against an order holding a since-removed or
+deactivated product — that path is deliberately not refused, since a human operator confirming
+money already received is not the race this guard exists to catch.
 
 ## Configuration
 
@@ -117,10 +142,11 @@ an already-serialized page in one batched query. See
 
 ::: warning The document's own `title`/`description` are a derived index column, not the wire shape
 `productSchema`'s `title`/`description` (`src/modules/products/model.ts`) exist only so Mongo has
-something to sort — [`inventory`](./inventory.md)'s stock board joins against this column for its
-own `{ available: 1, 'product.title': 1, _id: 1 }` tie-break — and something to run free-text
-search against (`productRepository`'s `createRepository` call, its `searchable.text`/`regex`
-options). They are written only when the
+something to sort, and something to run free-text search against (`productRepository`'s
+`createRepository` call, its `searchable.text`/`regex` options). [`inventory`](./inventory.md)'s
+stock board does not join against it — it composes its own `stocklevels` read with a separate call
+to this module for titles, the same "the service is the door" rule everything else here follows.
+They are written only when the
 FALLBACK-locale translation row changes, never read back into an API response: a public read
 always goes through the resolver above.
 :::

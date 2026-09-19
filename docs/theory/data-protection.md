@@ -51,6 +51,10 @@ here.
 | Rectification          | 16      | `PUT /account`                                                                              | the subject only                      | —                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | Objection to profiling | 21      | `analyticsConsent: false` via `PUT /account`, or the `X-Analytics-Consent` header pre-login | the subject, or anonymous per-request | does not retroactively delete events already sent to the provider — that is the provider's own deletion tooling                                                                                                                                                                                                                                                                                                    |
 
+Every collection the export walks (audit logs, api keys, orders, delivery, feedback) pages through
+the shared `readAll(fetchPage, pageSize)` helper until a short page signals done — no row ceiling,
+so a subject with more rows than an old fixed cap no longer gets a silently truncated answer.
+
 ## Breach runbook (Art. 33 — 72 hours)
 
 ```mermaid

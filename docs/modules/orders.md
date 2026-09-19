@@ -72,13 +72,13 @@ that, never re-resolve against whoever is reading it now — see
 
 The status enum is the module's public vocabulary:
 
-| Status                  | What it means                                | Who moves it                                                       |
-| ----------------------- | -------------------------------------------- | ------------------------------------------------------------------ |
-| `pending`               | created, unpaid, units held                  | checkout or an admin                                               |
-| `paid`                  | money taken, units committed                 | [`payments`](./payments.md) on confirm                             |
-| `processing`            | fulfilment started                           | admin                                                              |
-| `shipped` · `delivered` | fulfilment                                   | [`delivery`](./delivery.md), reporting a recorded handover/arrival |
-| `cancelled`             | units released, refund issued if one was due | admin, or an expired hold                                          |
+| Status                  | What it means                                | Who moves it                                                                     |
+| ----------------------- | -------------------------------------------- | -------------------------------------------------------------------------------- |
+| `pending`               | created, unpaid, units held                  | checkout or an admin                                                             |
+| `paid`                  | money taken, units committed                 | [`payments`](./payments.md) on confirm                                           |
+| `processing`            | fulfilment started                           | admin                                                                            |
+| `shipped` · `delivered` | fulfilment                                   | [`delivery`](./delivery.md), reporting a recorded handover/arrival               |
+| `cancelled`             | units released, refund issued if one was due | admin, an expired hold, or the system when a held product is removed/deactivated |
 
 Any of these except `paid` (`system`-only, absolute) can also be reached by an admin override with
 a reason — see [Who writes the status](#who-writes-the-status) below.
@@ -180,6 +180,11 @@ name. Two modes, both requiring a `reason`, both writing an embedded override-hi
 
 `PUT /orders/:id` never accepts `shipped`/`delivered` from anyone, override holder included — the
 override's own two doors are the only way to reach those statuses outside the ordinary sequence.
+
+Either mode also commits the order's stock hold (`inventory.commitForOrder`) whenever it moves the
+order out of `pending` — the same commit a normal payment confirmation triggers. Without it, the
+reservation sweep would eventually release units an override already shipped, since the sweep only
+knows the order is still `pending` from its own point of view.
 
 ## The invoice pipeline
 

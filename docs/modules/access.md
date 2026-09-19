@@ -69,7 +69,9 @@ administrators. One fact, one home, on each side of that line.
 Every invariant here is a refusal, not a comment: the last administrator in a scope cannot be
 revoked, a granter cannot hand over a role they do not themselves hold, and self-service signup can
 only ever assign the one default role (`assignDefaultRole`) — never a caller-supplied name, which
-is what would turn signup into a privilege-escalation door.
+is what would turn signup into a privilege-escalation door. The same exemption covers an admin
+holding `users.any.create`: granting the default role there isn't escalation either, since every
+key on that role is `.self.` — power over the new account's own data, not the shop's.
 
 ## Related pages
 

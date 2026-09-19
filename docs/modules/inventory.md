@@ -137,6 +137,15 @@ flowchart LR
     class L ledger;
 ```
 
+## Reading the stock board
+
+The admin low-stock gauge and the stock board both read `stocklevels` directly — paged, sorted
+`{available: 1, _id: 1}` so the lowest-stock products come first with a stable tie-break — then
+call `productService.findManyByIds`/`countPublic` for the titles and visibility to show alongside
+each row. That is API composition, not a join: this module never asks `products` for a `$lookup`,
+and `products` never asks this module to look inside `stocklevels`. Each side stays the only door
+onto its own collection, at the cost of two calls instead of one aggregation.
+
 ## Related pages
 
 - [Reservations](./inventory-reservations.md) — the lifecycle and the sweep, in detail

@@ -112,6 +112,11 @@ themselves instead of needing a lock:
   different content, lands under a different name, and this cleanup can no longer touch it. Before
   that fix, both uploads' files shared the same key-derived name, so this branch could delete the
   newer upload's live file, not just the stale one's.
+- **Two documents sharing byte-identical images.** The content hash alone is not enough: two
+  different products uploading the exact same picture would land on the same filename, and one
+  document's delete or replace would silently remove the other's still-live file. `contentStem`
+  salts the hash with the owning document's id (`<ownerId>-<hash>`, or the quarantine key itself
+  before the document exists yet), so identical bytes still get distinct files per owner.
 - **The document being deleted mid-flight.** Same mechanism — no match, no orphaned write, files
   cleaned up.
 

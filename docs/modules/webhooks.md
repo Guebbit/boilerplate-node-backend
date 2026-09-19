@@ -117,6 +117,11 @@ flowchart LR
     BACK -.->|sweep, per minute<br/>publishes, does not claim| Q
 ```
 
+The queued message itself carries only `{ deliveryId }` — a Claim Check, not a copy of the
+delivery. The row is the payload's only source of truth once the consumer claims it, which is what
+keeps a replay's own `attempt` count (or any other field that changes after the message was
+published) from ever going stale inside the queue.
+
 **The owner hears about their own endpoint; operators hear a fleet-wide signal, never a per-endpoint one.**
 Once a subscription auto-disables, `services/attempt.ts#notifyOwnerOfAutoDisable` emails whoever
 created it — resolved fresh, at send time, from the id the subscription points at
