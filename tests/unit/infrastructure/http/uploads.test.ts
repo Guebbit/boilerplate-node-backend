@@ -13,7 +13,7 @@
  */
 
 import type { Request } from 'express';
-import { getFormFiles, toPosixPath, readUploadedImage } from '@infrastructure/http/uploads';
+import { getFormFiles, readUploadedImage } from '@infrastructure/http/uploads';
 
 /** A multer file stub — `path` is the only field these helpers touch. */
 const uploaded = (path: string) => ({ path }) as Express.Multer.File;
@@ -96,21 +96,6 @@ describe('getFormFiles', () => {
      */
     it('normalizes an empty array upload to undefined, exactly as a fields upload', () => {
         expect(getFormFiles(requestWith({ files: [] }))).toBeUndefined();
-    });
-});
-
-describe('toPosixPath', () => {
-    it('rewrites every separator, not just the first', () => {
-        expect(toPosixPath(String.raw`a\b\c\d.png`)).toBe('a/b/c/d.png');
-    });
-
-    it('leaves an already-posix path untouched', () => {
-        // Idempotence matters: the helper runs on values that may already have been through it.
-        expect(toPosixPath('/images/a.png')).toBe('/images/a.png');
-    });
-
-    it('leaves a path with no separators at all untouched', () => {
-        expect(toPosixPath('a.png')).toBe('a.png');
     });
 });
 

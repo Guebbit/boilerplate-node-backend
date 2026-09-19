@@ -12,8 +12,7 @@
 
 import path from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { deleteFile, moveFile } from '@infrastructure/adapters/filesystem';
-import { toPosixPath } from '@infrastructure/http/uploads';
+import { deleteFile, moveFile, toPosixPath } from '@infrastructure/adapters/filesystem';
 import type { ReencodableImageMime } from '@infrastructure/adapters/image';
 
 /**

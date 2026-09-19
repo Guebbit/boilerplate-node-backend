@@ -54,3 +54,14 @@ export const deleteFile = (filePath: string) =>
         // logs — spreading it would bypass that and leak container paths.
         logger.error({ message: 'Could not delete file.', error })
     );
+
+/**
+ * Rewrite a filesystem path as a URL path: every backslash becomes a forward slash.
+ *
+ * `path.posix.normalize()` won't do this — it leaves existing backslashes alone, since on POSIX
+ * one is a legal filename character. The literal replacement is safe here because upload
+ * filenames are random hex and can never contain a backslash of their own.
+ *
+ * @param value - a path in whatever separator style the platform produced
+ */
+export const toPosixPath = (value: string): string => value.replaceAll('\\', '/');

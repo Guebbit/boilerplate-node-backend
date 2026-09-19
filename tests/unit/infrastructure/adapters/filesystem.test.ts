@@ -116,3 +116,21 @@ describe('moveFile', () => {
         });
     });
 });
+
+describe('toPosixPath', () => {
+    it('rewrites every separator, not just the first', async () => {
+        const { toPosixPath } = await import('@infrastructure/adapters/filesystem');
+        expect(toPosixPath(String.raw`a\b\c\d.png`)).toBe('a/b/c/d.png');
+    });
+
+    it('leaves an already-posix path untouched', async () => {
+        // Idempotence matters: the helper runs on values that may already have been through it.
+        const { toPosixPath } = await import('@infrastructure/adapters/filesystem');
+        expect(toPosixPath('/images/a.png')).toBe('/images/a.png');
+    });
+
+    it('leaves a path with no separators at all untouched', async () => {
+        const { toPosixPath } = await import('@infrastructure/adapters/filesystem');
+        expect(toPosixPath('a.png')).toBe('a.png');
+    });
+});

@@ -10,17 +10,6 @@ import type { Request } from 'express';
 import { imageStore } from '@infrastructure/adapters/image-store';
 
 /**
- * Rewrite a filesystem path as a URL path: every backslash becomes a forward slash.
- *
- * `path.posix.normalize()` won't do this — it leaves existing backslashes alone, since on POSIX
- * one is a legal filename character. The literal replacement is safe here because upload
- * filenames are random hex and can never contain a backslash of their own.
- *
- * @param value - a path in whatever separator style the platform produced
- */
-export const toPosixPath = (value: string): string => value.replaceAll('\\', '/');
-
-/**
  * Extract uploaded file paths from a multer-processed request, from whichever of the three shapes
  * multer populates (`.single()` → `request.file`; `.array()`/`.fields()` → `request.files`), so
  * controllers don't have to care which middleware variant a route used.
