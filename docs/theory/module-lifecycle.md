@@ -178,7 +178,7 @@ the boundary: the question is easiest to answer now and hardest once the module 
 See [Strategic DDD](./strategic-ddd.md) for the four kinds of relationship worth naming in it.
 
 ::: tip A domain with no URL is a first-class module
-Omit `basePath` and `routes` entirely and you get a headless module — `audit-logs` is one. The
+Omit `basePath` and `routes` entirely and you get a headless module — `access` is one. The
 manifest type is a union with `never`s on both alternatives, so declaring a router with no mount
 point is a type error rather than a route that silently never registers.
 :::

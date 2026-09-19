@@ -117,7 +117,7 @@ sequenceDiagram
     C->>R: bearer token
     R->>U: findAuthenticatableById(claims.id)
     U-->>R: user (or none)
-    R->>S: rolesOf(user.id, DEPLOYMENT_TENANT_ID, fallback)
+    R->>S: rolesOf(user.id, DEPLOYMENT_TENANT_ID)
     S-->>R: { tenant, platform } role names
     R-->>C: AuthContext { tenantId: DEPLOYMENT_TENANT_ID, roles }
     C->>P: callerInScope(context, 'tenant' | 'platform')

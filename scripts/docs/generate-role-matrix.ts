@@ -89,7 +89,8 @@ const codes: Record<string, string> = {
     update: 'u',
     delete: 'd',
     checkout: 'x',
-    sweep: 's'
+    sweep: 's',
+    override: 'o'
 };
 
 /** The breadth segment of a key — always the one before its action. `orders.any.read` is `any`. */
@@ -144,7 +145,8 @@ const body = (): string =>
         effectiveTable(),
         '',
         'UPPERCASE — the `any`-breadth key, every row · lowercase — `self`, the caller’s own · ' +
-            '`r` read · `c` create · `u` update · `d` delete · `x` checkout · `s` sweep · — nothing',
+            '`r` read · `c` create · `u` update · `d` delete · `x` checkout · `s` sweep · ' +
+            '`o` override · — nothing',
         '',
         'Read down a column to see who touches one part of the shop; read across a row to see one',
         'person’s whole job. `operator` is the only row outside the shop entirely: it runs the',

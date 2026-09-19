@@ -101,7 +101,7 @@ Reads published products, the dictionary the shop is rendered in, and the delive
 | **`customer`**  | Someone buying things. Everything they may do to their own basket, wishlist, addresses and account follows from being signed in and needs no permission key at all — the keys they hold are only what they may read of the SHOP.                                                                                                             |
 | **`manager`**   | What is for sale, at what price, and what happens to an order after it arrives. Reads stock but does not move it; that is the warehouse's job, and its audit trail.                                                                                                                                                                          |
 | **`warehouse`** | Stock, and getting parcels out of the door. Records movements, and records one order's handover and arrival at a time; may not change what a thing costs or delete it from the catalogue.                                                                                                                                                    |
-| **`support`**   | Messages from people, and accounts that need help. May update an account and may not erase one — erasure is the admin's, and it expects a freshly proved session.                                                                                                                                                                            |
+| **`support`**   | Messages from people, and accounts that need help. May update an account and may not erase one — that is the admin's and the moderator's, and it expects a freshly proved session.                                                                                                                                                           |
 | **`editor`**    | Everything the shop SAYS and SHOWS, in every registered language: the catalogue record itself (price included), the dictionary a shopper reads the shop in — including registering a language the shop has not spoken before — and the words on a product's title and description. Touches no stock, no delivery rule, no order, no account. |
 | **`moderator`** | Accounts, and the two things people write about their orders: the message they send and the order itself. May ban an account, reverse a bad charge, and read why either happened.                                                                                                                                                            |
 | **`admin`**     | Unrestricted within this shop, and only within it. It says nothing about the platform: one role cannot reach both scopes, which is the point.                                                                                                                                                                                                |
@@ -114,20 +114,20 @@ Reads published products, the dictionary the shop is rendered in, and the delive
 The roles above after the evaluator has had them, the `guest` baseline folded in. This is
 what a route guard and a listing actually answer.
 
-| Role         | products | cart | orders       | payments | inventory | delivery | feedback | locales | users | account | audit-logs | webhooks | api-keys | observability |
-| ------------ | -------- | ---- | ------------ | -------- | --------- | -------- | -------- | ------- | ----- | ------- | ---------- | -------- | -------- | ------------- |
-| `guest`      | r        | —    | —            | —        | —         | R        | —        | r       | —     | —       | —          | —        | —        | —             |
-| `unverified` | r        | —    | r            | r        | —         | R        | —        | r       | —     | —       | —          | —        | —        | —             |
-| `customer`   | r        | x    | r            | r        | —         | R        | —        | r       | —     | —       | —          | —        | —        | —             |
-| `manager`    | RCUD     | x    | RCUD         | r        | R         | R        | R        | RCUD    | R     | —       | R          | RCUD     | —        | —             |
-| `warehouse`  | r        | x    | R            | —        | RC        | RU       | —        | r       | —     | —       | —          | —        | —        | —             |
-| `support`    | r        | x    | R            | R        | —         | R        | RUD      | r       | RU    | —       | R          | —        | —        | —             |
-| `editor`     | RCUD     | x    | —            | —        | —         | R        | —        | RCUD    | —     | —       | —          | —        | —        | —             |
-| `moderator`  | r        | x    | RCUD         | RCU      | —         | R        | —        | r       | RCUD  | —       | R          | —        | —        | —             |
-| `admin`      | RCUD     | x    | RCUDOVERRIDE | RCU      | RCS       | RU       | RUD      | RCUD    | RCUD  | D       | R          | RCUD     | RCD      | —             |
-| `operator`   | —        | —    | —            | —        | —         | —        | —        | —       | —     | —       | —          | —        | —        | R             |
+| Role         | products | cart | orders | payments | inventory | delivery | feedback | locales | users | account | audit-logs | webhooks | api-keys | observability |
+| ------------ | -------- | ---- | ------ | -------- | --------- | -------- | -------- | ------- | ----- | ------- | ---------- | -------- | -------- | ------------- |
+| `guest`      | r        | —    | —      | —        | —         | R        | —        | r       | —     | —       | —          | —        | —        | —             |
+| `unverified` | r        | —    | r      | r        | —         | R        | —        | r       | —     | —       | —          | —        | —        | —             |
+| `customer`   | r        | x    | r      | r        | —         | R        | —        | r       | —     | —       | —          | —        | —        | —             |
+| `manager`    | RCUD     | x    | RCUD   | r        | R         | R        | R        | RCUD    | R     | —       | R          | RCUD     | —        | —             |
+| `warehouse`  | r        | x    | R      | —        | RC        | RU       | —        | r       | —     | —       | —          | —        | —        | —             |
+| `support`    | r        | x    | R      | R        | —         | R        | RUD      | r       | RU    | —       | R          | —        | —        | —             |
+| `editor`     | RCUD     | x    | —      | —        | —         | R        | —        | RCUD    | —     | —       | —          | —        | —        | —             |
+| `moderator`  | r        | x    | RCUD   | RCU      | —         | R        | —        | r       | RCUD  | —       | R          | —        | —        | —             |
+| `admin`      | RCUD     | x    | RCUDO  | RCU      | RCS       | RU       | RUD      | RCUD    | RCUD  | D       | R          | RCUD     | RCD      | —             |
+| `operator`   | —        | —    | —      | —        | —         | —        | —        | —       | —     | —       | —          | —        | —        | R             |
 
-UPPERCASE — the `any`-breadth key, every row · lowercase — `self`, the caller’s own · `r` read · `c` create · `u` update · `d` delete · `x` checkout · `s` sweep · — nothing
+UPPERCASE — the `any`-breadth key, every row · lowercase — `self`, the caller’s own · `r` read · `c` create · `u` update · `d` delete · `x` checkout · `s` sweep · `o` override · — nothing
 
 Read down a column to see who touches one part of the shop; read across a row to see one
 person’s whole job. `operator` is the only row outside the shop entirely: it runs the

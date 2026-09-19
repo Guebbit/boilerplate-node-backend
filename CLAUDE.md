@@ -14,8 +14,8 @@ Contracts are edited at the leaves and generated everywhere else. The order is n
    (`src/types/asyncapi.generated.ts`, including `WORKER_CHANNELS`).
 4. **Hand the result to the paired frontend** — `npm run sync:frontend`.
 
-`npm run regenerate` runs all four in the only order that works, plus `docs:graph`, `docs:roles`
-and `docs:dependencies`. Prefer it over the individual scripts. The pre-commit hook runs it with
+`npm run regenerate` runs all four in the only order that works, plus `docs:graph`, `docs:roles`,
+`docs:dependencies` and `docs:rate-limits`. Prefer it over the individual scripts. The pre-commit hook runs it with
 `--no-sync`, so `npm run complete` only ever verifies — but a contract change is not finished until
 `sync:frontend` has actually run against the frontend checkout.
 

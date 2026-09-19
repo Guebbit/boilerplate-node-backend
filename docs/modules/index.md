@@ -127,7 +127,7 @@ nothing. Deleting either takes exactly one folder and one page with it.
 Mutual awareness without a cycle is the shape worth noticing. `products` is reached by four modules
 and reaches none — a deleted product still has to leave every cart and wishlist, and that half
 travels back as a **domain event** (`product.deleted`) rather than as an import. Same for
-`user.deleted`, and for `reservation.expired` from `inventory` to `orders`. The arrows above stay
+`user.deleted`, and for `inventory.reservation_expired` from `inventory` to `orders`. The arrows above stay
 one-way because the return path is the event bus; see [Events & Logging](../tools/events-and-logging.md).
 
 ::: warning Not every coupling is an arrow
@@ -135,9 +135,10 @@ This graph is derived from `import` statements, so it shows only the coupling th
 Three kinds in this repo are real and invisible here, and each is written down in the docblock at
 the top of the relevant `module.ts` because nothing mechanical can find them:
 
-- **A shared document.** `inventory` owns the only writes to `onHand` and `reserved`, which are
-  columns on the **product** document, declared by `products`. `account` and `users` likewise read
-  and write one User record between them.
+- **A shared fact, mirrored.** `inventory` owns `onHand` and `reserved` in its own `stocklevels`
+  collection, the only place they are written; `products` keeps a read-only mirror of both on its
+  own document so a catalogue read needs no join. `account` and `users` share the actual User
+  record between them instead — a genuine single document, not a mirrored pair.
 - **A name, not a symbol.** `observability` reads every domain's counters by string off the shared
   metrics registry, deliberately, so it can report on domains it may not import. Rename a counter
   and this compiles, lints and passes — and the dashboard goes flat.
@@ -166,8 +167,10 @@ solved problem where modelling effort would be waste.
 
 **supporting** — specific to this business, but not a differentiator.
 
-- [`delivery`](./delivery.md) — `/delivery`. Shipping rates as pure rules, and a fake courier
-  driven by hand.
+- [`addresses`](./addresses.md) — `/account`, shared with `account`. The address book, its own
+  module so `cart`'s checkout can reach it without importing `account`.
+- [`delivery`](./delivery.md) — `/delivery`. Shipping rates as pure rules, and the staff doors
+  that record a parcel's handover and arrival.
 - [`inventory`](./inventory.md) — `/inventory`. The only writer of stock in the application.
   Deeper: [Reservations](./inventory-reservations.md).
 - [`payments`](./payments.md) — `/payments`. An order's money, behind a provider port. Deeper:
@@ -176,18 +179,24 @@ solved problem where modelling effort would be waste.
 
 **generic** — a solved problem, kept plain.
 
-- [`account`](./account.md) — `/account`. Who is making this request, plus the address book.
-  Deeper: [Sessions](./account-sessions.md), [Two-factor auth](./account-two-factor.md),
+- [`access`](./access.md) — headless. The tenant/membership model every role check reads, owned
+  apart from `account`/`users` so neither has to.
+- [`account`](./account.md) — `/account`. Who is making this request. Deeper:
+  [Sessions](./account-sessions.md), [Two-factor auth](./account-two-factor.md),
   [OAuth](./account-oauth.md).
 - [`antibot`](./antibot.md) — `/antibot`. Rung 3 of the anti-automation ladder: the human-challenge
   port, and the endpoint that tells a frontend which provider is active.
-- [`audit-logs`](./audit-logs.md) — headless. Owns the trail and no URL of its own.
+- [`api-keys`](./api-keys.md) — `/api-keys`. Long-lived programmatic credentials, scoped to the
+  same permission model a session uses.
+- [`audit-logs`](./audit-logs.md) — `/audit`. Owns the trail; the read endpoint is its own, the
+  admin surface for it lives in `observability`.
 - [`feedback`](./feedback.md) — `/feedback`. Contact submissions and what an admin does with them.
 - [`locales`](./locales.md) — `/locales`. Language discovery and the API's own message dictionary.
 - [`observability`](./observability.md) — `/observability`. Health, metrics, the audit read and the
   SSE stream.
 - [`users`](./users.md) — `/users`. Admin-side user management; the self-service half is
   `account`.
+- [`webhooks`](./webhooks.md) — `/webhooks`. Outbound event delivery to a subscriber's own URL.
 
 Every route in the application, in one table, is [Endpoints](../api/endpoints.md). What each file
 inside a module folder is, is [Modules (files)](../reference/src-modules.md).
@@ -198,11 +207,11 @@ Most domains exist on both sides under the same name. **The interesting two do n
 does the frontend's third extra module — an asymmetry that is real architecture rather than drift,
 and that is written down nowhere else in either repository.
 
-| This repository | `boilerplate-vue-frontend` | Note                                                                                                                                                            |
-| --------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `audit-logs`    | `admin`                    | This module owns the trail and no URL; the endpoint that reads it belongs to `observability`, and the screen that renders it is the frontend's admin dashboard. |
-| `observability` | `admin` + `realtime`       | Its two surfaces are consumed by two different frontend modules: the health and metrics reads by `admin`, the SSE stream by `realtime`.                         |
-| everything else | the same name              | —                                                                                                                                                               |
+| This repository | `boilerplate-vue-frontend` | Note                                                                                                                                                                                                                                    |
+| --------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `audit-logs`    | `admin`                    | This module owns the trail and its own `GET /audit`; `observability` mounts a second, platform-scoped read (`GET /observability/audit`) over the same collection, and the screen that renders either is the frontend's admin dashboard. |
+| `observability` | `admin` + `realtime`       | Its two surfaces are consumed by two different frontend modules: the health and metrics reads by `admin`, the SSE stream by `realtime`.                                                                                                 |
+| everything else | the same name              | —                                                                                                                                                                                                                                       |
 
 And one frontend module answers to nothing here: `demo`, a client-side showcase of the shared UI
 kit, which pairs with the demo profile and the seeded dataset rather than with any single domain.

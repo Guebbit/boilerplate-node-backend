@@ -90,13 +90,13 @@ an external service) already caused: money landing at the payment processor, a w
 recording a parcel's handover. `system` means "this application did not decide it, it is reporting
 it" — the recording is what makes the move happen, not a person editing a field.
 
-| Move                     | Who asks                                     | What records the fact first                      |
-| ------------------------ | -------------------------------------------- | ------------------------------------------------ |
-| `pending` → `paid`       | `system`, via `payments`                     | the payment processor confirms the charge        |
-| `paid` → `processing`    | `admin`, via `orders.any.update`             | an operator decides to start fulfilment          |
-| `processing` → `shipped` | `system`, via `delivery`'s ship door         | a warehouse operator records the handover        |
-| `shipped` → `delivered`  | `system`, via `delivery`'s deliver door      | a warehouse operator records the arrival         |
-| any forward move         | `admin`, via `orders.any.override` (step-up) | an operator's own reason, recorded with the move |
+| Move                                          | Who asks                                     | What records the fact first                                                                         |
+| --------------------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `pending` → `paid`                            | `system`, via `payments`                     | the payment processor confirms the charge                                                           |
+| `paid` → `processing`                         | `admin`, via `orders.any.update`             | an operator decides to start fulfilment                                                             |
+| `processing` → `shipped`                      | `system`, via `delivery`'s ship door         | a warehouse operator records the handover                                                           |
+| `shipped` → `delivered`                       | `system`, via `delivery`'s deliver door      | a warehouse operator records the arrival                                                            |
+| forward to `processing`/`shipped`/`delivered` | `admin`, via `orders.any.override` (step-up) | an operator's own reason, recorded with the move — never lands on `paid`, which stays `system`-only |
 
 One reported move, end to end — the warehouse records a handover, `delivery` owns the parcel, and
 `orders` is the only thing that ever writes the status:
@@ -117,9 +117,11 @@ sequenceDiagram
     L-->>D: shipped email queued
 ```
 
-`delivery` never assigns `order.status` itself — `markShipped` is the only door, and it is the same
-door whether the move is ordinary or `forced` through an override (the override only widens which
-`from` statuses are accepted, never who ends up writing the field).
+`delivery` never assigns `order.status` itself — `markShipped`/`markDelivered` (`services/status.ts`)
+are the ordinary doors; a `forced` move through the same request instead goes through `forceMove`
+(`services/override.ts`), which widens which `from` statuses are accepted. A third door,
+`overrideStatus`, moves the status alone with no parcel record — see
+[Who writes the status](../modules/orders.md#who-writes-the-status) for all three.
 
 ### The actor is part of the table, not beside it
 
@@ -422,7 +424,9 @@ design decision, not a config edit.
 `orders/domain/tax.ts`'s `orderTaxBreakdown` answers three questions from the same pass over an
 order's frozen lines, not three separate ones:
 
-- **Per line** (`lines[]`) — goods only, what `netTotal`/`taxTotal` sum.
+- **Per line** (`lines[]`) — goods only, what `netTotal` sums. `taxTotal` does not stay goods-only:
+  it folds in shipping's own apportioned tax on top of the lines' — see `shippingNetAmount`/
+  `shippingTaxAmount` below for the goods/shipping split `netTotal` keeps but `taxTotal` doesn't.
 - **Shipping's own split** (`shippingNetAmount`/`shippingTaxAmount`) — delivery carries no VAT
   rate of its own; it is taxed as ancillary to what it delivers, apportioned pro-rata across the
   lines by their own gross value (`apportion`, the same "remainder to the largest weight" rule
@@ -447,8 +451,8 @@ flowchart LR
 
 Reconciliation is exact, in integer minor units, never approximated: summed `taxSummary.netAmount`
 is `netTotal + shippingNetAmount`, summed `taxAmount` is `taxTotal`, and summed `grossAmount` is
-the order's own `totalPrice` — `orders/tests/unit/tax.test.ts` asserts all three as properties, not
-as one hand-picked example.
+the order's own `totalPrice` — `orders/tests/unit/tax.test.ts` asserts both reconciliations with a
+fixed multi-rate, multi-line example each, not a single hand-picked total.
 
 The invoice needs a fourth shape `orderTaxBreakdown` also returns but the wire contract never
 sees: `shippingByRate`, shipping's slice of `taxSummary` broken back OUT per rate — "shipping,

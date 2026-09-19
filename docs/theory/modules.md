@@ -365,15 +365,15 @@ different reason — `scenarios/index.ts` reads a module's repository and factor
 domain with no demo data carries nothing about demo data at all, not even an absent field.
 
 `basePath` and `routes` are both optional, so a domain that owns data but no URL is an ordinary
-entry rather than a special case — `audit-logs` declares neither and `app/routes.ts` mounts only
+entry rather than a special case — `access` declares neither and `app/routes.ts` mounts only
 the modules that declare both:
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 50}}}%%
 flowchart LR
     IAM["AppModule"]
-    R["<b>routed</b><br/>basePath + routes<br/><i>12 modules</i>"]
-    H["<b>headless</b><br/>basePath?: never<br/>routes?: never<br/><i>audit-logs</i>"]
+    R["<b>routed</b><br/>basePath + routes<br/><i>every other module</i>"]
+    H["<b>headless</b><br/>basePath?: never<br/>routes?: never<br/><i>access</i>"]
     IAM --> R
     IAM --> H
     classDef t fill:#dbeafe,stroke:#2563eb,color:#111827;

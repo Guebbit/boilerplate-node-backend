@@ -6,7 +6,7 @@ to go back.
 Log in as `moderator@example.com` / `Demo-Moderator1!` — a real, narrower account, not the
 owner's.
 
-## Three keys, three jobs
+## Four keys, three jobs
 
 | Key                                                   | Buys                                                      |
 | ----------------------------------------------------- | --------------------------------------------------------- |

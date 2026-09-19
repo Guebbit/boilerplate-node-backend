@@ -84,7 +84,7 @@ Any of these except `paid` (`system`-only, absolute) can also be reached by an a
 a reason — see [Who writes the status](#who-writes-the-status) below.
 
 ::: warning Two modules reach back, and both do it through events
-[`inventory`](./inventory.md) cancels an order when its hold times out (`reservation.expired`), and
+[`inventory`](./inventory.md) cancels an order when its hold times out (`inventory.reservation_expired`), and
 this module announces `order.cancelled` so [`payments`](./payments.md) can refund. Neither is an
 import, which is what keeps a mutually-aware pair acyclic.
 :::
@@ -154,13 +154,13 @@ override all ASK for a move, never assign the field themselves. See
 
 ## Who writes the status
 
-| Move                     | Who asks                                                 | Through                                |
-| ------------------------ | -------------------------------------------------------- | -------------------------------------- |
-| `pending` → `paid`       | `system`                                                 | `payments`' settlement, on confirm     |
-| `paid` → `processing`    | `admin`                                                  | `PUT /orders/:id`, `orders.any.update` |
-| `processing` → `shipped` | `system`                                                 | `POST /delivery/order/{id}/ship`       |
-| `shipped` → `delivered`  | `system`                                                 | `POST /delivery/order/{id}/deliver`    |
-| any status → `cancelled` | `customer` (own order, `pending`/`paid` only) or `admin` | `POST /orders/{id}/cancel`             |
+| Move                                        | Who asks                                                                         | Through                                |
+| ------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------- |
+| `pending` → `paid`                          | `system`                                                                         | `payments`' settlement, on confirm     |
+| `paid` → `processing`                       | `admin`                                                                          | `PUT /orders/:id`, `orders.any.update` |
+| `processing` → `shipped`                    | `system`                                                                         | `POST /delivery/order/{id}/ship`       |
+| `shipped` → `delivered`                     | `system`                                                                         | `POST /delivery/order/{id}/deliver`    |
+| `pending`/`paid`/`processing` → `cancelled` | `customer` (own order, `pending`/`paid` only) or an operator (also `processing`) | `POST /orders/{id}/cancel`             |
 
 ### The admin override
 
@@ -243,4 +243,4 @@ module only freezes onto the order the rate `products` hands it at checkout.
 - [`inventory`](./inventory.md) — where the units actually move
 - [`payments`](./payments.md) — the money half of the same transition
 - [Tactical DDD](../theory/tactical-ddd.md) — why this is the aggregate candidate
-- [Events & Logging](../tools/events-and-logging.md) — `order.cancelled` and `reservation.expired`
+- [Events & Logging](../tools/events-and-logging.md) — `order.cancelled` and `inventory.reservation_expired`

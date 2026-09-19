@@ -61,9 +61,9 @@ second router's mount costs nothing beyond the first.
 :::
 
 `users` is reached only through the domain-event bus, for one subscription: a destroyed account
-takes its address book with it, the same `user.deleted` event `account`, `cart` and `wishlist` each
-answer on their own collection. Nothing here ever calls into `users`' service — the import in
-`module.yaml` is for the event's name constant alone.
+takes its address book with it, the same `user.deleted` event `cart`, `wishlist`, `payments` and
+`orders` each answer on their own collection. Nothing here ever calls into `users`' service — the
+import in `module.yaml` is for the event's name constant alone.
 
 ## The pipeline
 

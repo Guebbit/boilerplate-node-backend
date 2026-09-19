@@ -2,8 +2,8 @@
 
 ::: tip At a glance
 **Owns** — subscriptions, the delivery log, signing, retries and auto-disable for outbound webhook delivery.
-**Depends on** — [`orders`](./orders.md) and [`payments`](./payments.md), but only through the domain-event bus — no import either way.
-**Breaks if you change** — the six event names in `asyncapi.yaml`, or the queue payload shape in `shared/contracts/asyncapi.workers.yaml`.
+**Depends on** — [`orders`](./orders.md) and [`payments`](./payments.md) for their domain-event constants, `users` for the disable-notice recipient's email — no reach back the other way.
+**Breaks if you change** — the six event names in `asyncapi.yaml`, or the queue payload shape in `asyncapi.internal.yaml`.
 :::
 
 ## What a webhook is
@@ -83,8 +83,11 @@ flowchart LR
 `orders` and `payments` can tell this module that something happened; this module cannot ask them
 anything back. `webhooks/module.ts` subscribes to `order.created`, `order.status_changed` (filtered
 to `to: 'paid'`/`to: 'shipped'`), `order.cancelled`, `payment.succeeded` and `payment.failed` on the
-kernel's domain-event bus, and there the coupling ends — no import in either direction, the same
-shape [`delivery`](./delivery.md) uses for `order.status_changed`.
+kernel's domain-event bus — the same shape [`delivery`](./delivery.md) uses for
+`order.status_changed`. The only imports are the event name constants themselves
+(`ORDER_CREATED` and siblings from `orders`, `PAYMENT_SUCCEEDED`/`PAYMENT_FAILED` from `payments`)
+and `users` for the email a disable notice is sent to — never a call back into either module's
+business logic.
 
 **The public event catalogue is a contract, not an accident.** This module's own `asyncapi.yaml`
 fragment declares the six events this shop's clone is willing to promise, and both

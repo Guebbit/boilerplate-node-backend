@@ -50,10 +50,12 @@ because the guard itself is kernel code, and this module is the domain they ask 
 asking.
 
 What makes it a module rather than kernel code anyway: it is an identity-and-access domain with
-real collections and real write invariants, consumed by three sibling modules — the same shape
-[`addresses`](./addresses.md) used to justify leaving `account`. A routeless module is not a
-special case here; [`audit-logs`](./audit-logs.md) already reads its own collection with no import
-graph pointing at it for the write side.
+real collections and real write invariants, consumed by several sibling modules — several unrelated
+modules sharing one domain is reason enough for its own module, the same reasoning
+[`addresses`](./addresses.md) is split out of `account` for. A routeless module is not a special
+case here: `basePath`/`routes` are both optional on the manifest (see
+[Module lifecycle](../theory/module-lifecycle.md)), and `access` is this repo's one module that
+omits both.
 
 ::: tip Roles are data, permissions are code
 A role's PERMISSIONS live in `shared/authorization-roles.yaml` alone — the same file the PHP twin

@@ -100,8 +100,8 @@ An unresolvable payer is logged rather than refused.
 `unique: true` on `orderId` is the guard against a double charge: one payment per order is a
 database fact, not a check somebody has to remember.
 
-Delete this module and cancelling an order still releases its stock but returns no money — which is
-exactly the sentence `CANCELLABLE_ORDER_STATUSES` documents.
+Delete this module and cancelling an order still releases its stock but returns no money — the
+cancel lifecycle itself (`statusesLeadingTo`, `domain/lifecycle.ts`) has no idea this module exists.
 
 ## The pre-check, and the final write
 

@@ -4,7 +4,7 @@
 only one where a race can cost a customer money.
 
 ::: tip At a glance
-**Touches** — five modules, in a fixed order, and the order is the correctness.
+**Touches** — several sibling modules, in a fixed order, and the order is the correctness.
 **Costs** — one order, one reservation, one emptied cart, one email — the confirmation, or the
 bank-transfer instructions when that is the method chosen.
 **Breaks if you change** — the sequence below, or the conditional cart clear at the end.
@@ -13,7 +13,7 @@ bank-transfer instructions when that is the method chosen.
 ## Why this page exists
 
 [`cart`](./cart.md) declares more dependency edges than any other module, and every one of them is
-here. Reading the manifest tells you _that_ checkout is a customer of five contexts; this page is
+here. Reading the manifest tells you _that_ checkout is a customer of several contexts; this page is
 _why_, and in what order.
 
 ## The sequence

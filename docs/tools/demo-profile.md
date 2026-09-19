@@ -79,7 +79,7 @@ answers.
 
 Their ids and credentials live in `scenarios/accounts.ts` — outside `src/` entirely, like every
 other scenario file, even though `users` owns the record. Four of them, one per tenant role worth
-trying on its own: `owner` (who is also the platform operator — `root@root.it`), `user` (the
+trying on its own: `admin` (who is also the platform operator — `root@root.it`), `user` (the
 ordinary customer — `customer@example.com`), `editor` (`editor@example.com`) and `moderator`
 (`moderator@example.com`).
 

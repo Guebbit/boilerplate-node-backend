@@ -77,7 +77,7 @@ Shipping rates as pure domain rules (flat rates, free-above thresholds), priced 
 
 > The domain behind these routes: [`inventory`](../modules/inventory.md) · routes and middleware: `src/modules/inventory/routes.ts`
 
-The only writer of stock in the application. A product carries two counters — `onHand` (units that exist) and `reserved` (units an open order has claimed) — and what a customer may buy is the difference, published as the derived `available`. Both counters live on the product document so a catalogue read needs no join; neither is written anywhere but here.
+The only writer of stock in the application. A product's stock level carries two counters — `onHand` (units that exist) and `reserved` (units an open order has claimed) — and what a customer may buy is the difference, published as the derived `available`. Both counters live in this module's own `stocklevels` collection, the only place they are written; `products` keeps a read-only mirror of both on its own document so a catalogue read needs no join.
 
 Six transitions move them, each a conditional write paired with the ledger row that explains it, so the ledger cannot have gaps:
 

@@ -119,7 +119,8 @@ an already-serialized page in one batched query. See
 `productSchema`'s `title`/`description` (`src/modules/products/model.ts`) exist only so Mongo has
 something to sort — [`inventory`](./inventory.md)'s stock board joins against this column for its
 own `{ available: 1, 'product.title': 1, _id: 1 }` tie-break — and something to run free-text
-search against (`repository.ts:89`'s `searchable.text`/`regex`). They are written only when the
+search against (`productRepository`'s `createRepository` call, its `searchable.text`/`regex`
+options). They are written only when the
 FALLBACK-locale translation row changes, never read back into an API response: a public read
 always goes through the resolver above.
 :::

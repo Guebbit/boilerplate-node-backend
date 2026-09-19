@@ -81,8 +81,10 @@ flowchart LR
 ```
 
 Neither path can move an order backward, and neither can ever mark one **paid** by hand — money
-landing is still the one fact only the payment system reports. The order's own page shows every
-correction, in order, so a customer support question always has an answer.
+landing is still the one fact only the payment system reports. Every correction is written down
+with who, when and why on the order document itself, and read back through the audit trail — the
+customer-facing order response never carries it, so a customer support question is answered from
+the audit page, not the order page.
 
 ## The catalogue
 
@@ -161,9 +163,9 @@ rather than one shipping line they have to reconcile by hand.
 ## Customers
 
 The staff side can list, search and open a customer account — enough to answer "who is this" while
-looking at their orders. Editing an account or erasing one is not part of this job: that is
-[the support desk's](./support.md), and erasure is the owner's alone, gated on a freshly proved
-session.
+looking at their orders. Editing an account is [the support desk's](./support.md) job; erasing one
+needs `users.any.delete`, which support does not hold but the moderator does alongside `admin`,
+gated on a freshly proved session either way.
 → [`users`](../modules/users.md)
 
 ## Notifying other systems

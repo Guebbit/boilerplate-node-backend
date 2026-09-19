@@ -128,13 +128,13 @@ along with nothing but the record of the handover itself. Either way, the three 
 recording the handover all happen on their own: you do not separately create the parcel, or write
 the status field, or send the email.
 
-**There is no courier simulation any more.** Recording the arrival is a real action on a real
+**There is no courier simulation.** Recording the arrival is a real action on a real
 parcel, the same way recording the handover is — not a button standing in for a delivery company's
 own report. → [`delivery`](../modules/delivery.md)
 
 ::: tip When the ordinary sequence does not fit
 A parcel scanned against the wrong order, or a correction needed outside the normal pack → ship →
-deliver order, goes through a manager's forced correction instead — see
+deliver order, goes through an admin's forced correction instead — see
 [Correcting a mistake](./manager.md#correcting-a-mistake). It still creates the same record; it
 just carries a reason and skips the ordinary gate.
 :::

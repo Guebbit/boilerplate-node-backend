@@ -41,11 +41,10 @@ flowchart LR
 A shipment is _about_ an order. The dependency on [`users`](./users.md) is narrower than it looks:
 this module reads the account only to address the shipped email in the recipient's language.
 
-**The rates are pure functions in `domain/`, and that is what makes the cart's edge
-`published-language`.** [`cart`](./cart.md) prices a shipping method through `findShippingMethod`
-and `priceShipping` without ever touching this module's HTTP surface or learning that a shipment
-record exists. It receives vocabulary, not state — the strongest kind of edge on the map, and the
-reason the arrow is dashed.
+**The rates are pure functions in `domain/`, and that is what makes the cart's edge cheap to
+hold.** [`cart`](./cart.md) imports `findShippingMethod` and `priceShipping` directly — a real,
+solid import — but never touches this module's HTTP surface or learns that a shipment record
+exists: it receives vocabulary, not state, the narrowest an import can be.
 
 ::: tip What deleting this module actually costs
 The shipping selector, the parcel records and the costs go with it. Orders simply stop carrying a
