@@ -256,8 +256,14 @@ const armCacheWrite = (
 ): void => {
     const responseJson = response.json.bind(response);
     response.json = ((body: unknown) => {
-        // Save only successful responses, so errors do not become sticky in cache.
-        if (response.statusCode >= 200 && response.statusCode < 300) {
+        // Save only successful, FINISHED responses — errors must not become sticky in cache, and
+        // 202 is a status about the request, not the resource: caching it would keep answering
+        // "still working" long after the work finished, to every caller polling for the result.
+        if (
+            response.statusCode >= 200 &&
+            response.statusCode < 300 &&
+            response.statusCode !== 202
+        ) {
             const payload = serializeCachedResponse(cacheKey, {
                 status: response.statusCode,
                 body,

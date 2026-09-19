@@ -19,6 +19,7 @@ import ejs from 'ejs';
 import { logger } from '@infrastructure/adapters/logger';
 import { renderHtmlToPdf } from '@infrastructure/adapters/pdf';
 import { publishToQueue, isQueueEnabled } from '@infrastructure/adapters/queue';
+import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
 import { getDefaultLocale } from '@infrastructure/i18n';
 import { WORKER_CHANNELS } from '@types';
 import type { OrderInvoicePdfJobPayload } from '@types';
@@ -88,11 +89,19 @@ const generateAndStoreInvoicePdf = (orderId: string): Promise<void> =>
         };
         const locale = order.items[0]?.locale ?? getDefaultLocale();
 
-        return mkdir(invoiceStorageRoot(), { recursive: true })
-            .then(() => ejs.renderFile(INVOICE_TEMPLATE, invoiceDocument(locale, invoiceOrder)))
-            .then((html) => renderHtmlToPdf(html, { format: 'A4', path: invoicePdfPath(orderId) }))
-            .then(() => orderRepository.markInvoicePdfReady(orderId))
-            .then(() => undefined);
+        return (
+            mkdir(invoiceStorageRoot(), { recursive: true })
+                .then(() => ejs.renderFile(INVOICE_TEMPLATE, invoiceDocument(locale, invoiceOrder)))
+                .then((html) =>
+                    renderHtmlToPdf(html, { format: 'A4', path: invoicePdfPath(orderId) })
+                )
+                .then(() => orderRepository.markInvoicePdfReady(orderId))
+                // A poller's earlier `pending` answer may already be sitting in the `orders` tag's
+                // cache — this is what makes the very next read see `ready` rather than wait out the
+                // hour-long TTL `GET /orders/{id}` and `/invoice` are both cached under.
+                .then(() => invalidateCacheTagsLogged(['orders']))
+                .then(() => undefined)
+        );
     });
 
 /**

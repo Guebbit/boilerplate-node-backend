@@ -543,10 +543,11 @@ const applyTransferInstructions = (serialized: Record<string, unknown>) => {
 export const applyOrderTransform = applySerialization(orderSchema, {
     // `anonymizeAfter` is the reaper's own bookkeeping and `pendingEffects` the cancel sweep's,
     // neither part of the `Order` contract — same reasoning as `users`' `pendingImageKey`/
-    // `inactivityWarnedAt`. `transferReference` is NOT listed here: `omit` runs before `after`
-    // below, and `applyTransferInstructions` still needs to read it — it strips the raw field
-    // itself, once it no longer does.
-    omit: ['anonymizeAfter', 'pendingEffects'],
+    // `inactivityWarnedAt`. `statusOverrides` is staff-only history (who overrode the status, and
+    // why) — never the owning customer's to read off their own order. `transferReference` is NOT
+    // listed here: `omit` runs before `after` below, and `applyTransferInstructions` still needs
+    // to read it — it strips the raw field itself, once it no longer does.
+    omit: ['anonymizeAfter', 'pendingEffects', 'statusOverrides'],
     after: (serialized) => {
         applyOrderItems(serialized);
         applyOrderTotals(serialized);

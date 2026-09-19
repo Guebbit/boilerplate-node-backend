@@ -7,6 +7,7 @@
  * what a customer was charged.
  */
 
+import { OrderStatus } from '@types';
 import type { OrderDocument } from '../model';
 import type { UserDocument } from '@modules/users';
 import type { ProductDocument } from '@modules/products';
@@ -87,6 +88,16 @@ export const countOrders = (where: Record<string, unknown> = {}): Promise<number
 /** Persist a document a sibling's fixture already built and mutated in memory. */
 export const saveOrder = (document: OrderDocument): Promise<OrderDocument> =>
     orderRepository.save(document);
+
+/**
+ * Force an order straight to `status`, bypassing every lifecycle rule — the one door a test may
+ * use to reach a state the real API could never produce, to prove some OTHER caller handles it
+ * correctly (a payment attempt against an order that is no longer `pending`, for one). Never a
+ * production door: `orderService` publishes no unconditional status writer any more — nothing
+ * outside this module's own conditional moves may set a status with no rule behind it.
+ */
+export const forceOrderStatus = (orderId: string, status: string): Promise<OrderDocument | null> =>
+    orderRepository.updateStatusIfIn(orderId, Object.values(OrderStatus), status);
 
 /**
  * Detach an account with an explicit retention deadline — `orderService.detachUserId` always

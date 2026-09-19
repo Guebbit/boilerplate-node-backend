@@ -6,9 +6,10 @@
  */
 
 import { getDefaultLocale, t } from '@infrastructure/i18n';
+import { logger } from '@infrastructure/adapters/logger';
 import { OrderStatus } from '@types';
 import type { SearchOrdersRequest, CartItem, UpdateOrderByIdRequest } from '@types';
-import type { OrderDocument, OrderPendingEffect } from '../model';
+import type { OrderDocument } from '../model';
 import {
     generateReject,
     generateSuccess,
@@ -24,12 +25,13 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { ordersAnalyticsEvents } from '../analytics';
 import { ordersAuditActions } from '../audit';
-import { ORDER_CREATED, ORDER_STATUS_CHANGED } from '../events';
+import { ORDER_STATUS_CHANGED } from '../events';
 import { orderRepository } from '../repository';
-import { canTransition, statusesReachableFrom } from '../domain';
+import { canTransition, statusesLeadingTo, statusesReachableFrom } from '../domain';
 import { resolveCurrentImages } from './current';
 import { freezeOrderLines } from './snapshot';
 import { placeOrder } from './place';
+import { enqueueInvoicePdfJob } from '../transport/invoice-pdf';
 import { sendOrderPlacedEmail } from './notify';
 // `userId` is stored as an ObjectId, so writes have to coerce it. The rule (and its failure
 // mode on a malformed id) lives in the repository layer; this is the only import of it here.
@@ -82,6 +84,11 @@ export const getById = (
  * fact. The audit records the buyer's real role, whatever it is: no forced override, per
  * D1-Q10's "real role names everywhere" (`DDD_FIX.md` D3.4) — an admin placing their own order
  * is audited as `admin`, same as any other action they take.
+ *
+ * Audit and analytics ONLY — `ORDER_CREATED` itself is `placeOrder`'s own job (`./place.ts`), the
+ * one function that actually writes a new order, so a future caller of THIS function forgetting
+ * to call it can no longer also mean the invoice-PDF pipeline or `webhooks` never hears about the
+ * order at all.
  */
 export const recordCreated = (order: OrderDocument, context: CallerContext): void => {
     emitAuditEvent(
@@ -97,10 +104,6 @@ export const recordCreated = (order: OrderDocument, context: CallerContext): voi
         event: ordersAnalyticsEvents.ORDER_CREATED,
         properties: { order_id: String(order._id) }
     });
-    // Fire-and-forget, like the audit/analytics emits above: `webhooks` reacts to this from its
-    // own `subscribe()` hook, and a slow or failing listener there must not delay the response
-    // this function's callers are already sending.
-    void emitDomainEvent(ORDER_CREATED, { orderId: String(order._id) });
 };
 
 /**
@@ -122,20 +125,6 @@ export const countOpenBankTransfers = (userId: string): Promise<number> =>
  */
 export const getByTransferReference = (reference: string): Promise<OrderDocument | null> =>
     orderRepository.findOne({ transferReference: reference });
-
-/**
- * Move an order between statuses, but only from one of the expected ones — atomically. See
- * `repository.ts`'s own docblock for why the condition rides in the filter: `delivery` and
- * `payments` are this function's two callers outside this module, moving an order to `delivered`
- * or `paid` without a preceding read either could race.
- */
-export const updateStatusIfIn = (
-    id: string,
-    from: readonly OrderStatus[],
-    to: OrderStatus,
-    scope?: Record<string, unknown>,
-    effects?: readonly OrderPendingEffect[]
-): Promise<OrderDocument | null> => orderRepository.updateStatusIfIn(id, from, to, scope, effects);
 
 /**
  * Create a new order from `{ productId, quantity }` items — looks up each product and stores a
@@ -247,7 +236,9 @@ export const update = async (
             }
         ]);
 
-    if (nextStatus !== undefined) order.status = nextStatus;
+    // `order.status` is deliberately NOT assigned here any more — see below, where the status
+    // half of this write goes through a conditional `findOneAndUpdate` instead of riding along
+    // on this document's blind `save()`.
     if (data.email !== undefined) order.email = data.email;
     if (data.userId !== undefined) order.userId = toObjectId(data.userId);
 
@@ -257,6 +248,7 @@ export const update = async (
      * contains. `inventory` owns the question.
      */
     const requestedItems = data.items;
+    const itemsRewritten = Boolean(requestedItems && requestedItems.length > 0);
     const updateItemsPromise =
         requestedItems && requestedItems.length > 0
             ? inventoryService.isStockBoundToOrder(String(order._id)).then((bound) => {
@@ -291,6 +283,12 @@ export const update = async (
                           resolvedItems.map(({ item }) => item.quantity)
                       ).then((lines) => {
                           order.items = lines;
+                          // The stored PDF (every order gets one — the number is assigned at
+                          // placement) now describes lines that no longer exist. `pending`, the
+                          // same starting value placement itself writes, is what lets the worker's
+                          // own `invoicePdfStatus: 'pending'` guard flip it back to `ready` once
+                          // the re-render lands — see `repository.ts`'s `markInvoicePdfReady`.
+                          order.invoicePdfStatus = 'pending';
                           return undefined;
                       });
                   });
@@ -299,16 +297,55 @@ export const update = async (
 
     return updateItemsPromise.then((earlyResult) => {
         if (earlyResult) return earlyResult;
-        return orderRepository.save(order).then(async (saved) => {
-            // Announced after the save: a status is only "changed" once it is on disk, and the
-            // listeners (the shipment, one day a notification) compensate for facts, not plans.
-            if (saved.status !== previousStatus)
-                await emitDomainEvent(ORDER_STATUS_CHANGED, {
-                    orderId: String(saved._id),
-                    from: previousStatus,
-                    to: saved.status
+        return orderRepository.save(order).then((saved) => {
+            if (itemsRewritten)
+                enqueueInvoicePdfJob(String(saved._id)).catch((error: unknown) => {
+                    logger.error({
+                        message: 'Invoice PDF re-render after a line edit failed to enqueue.',
+                        orderId: String(saved._id),
+                        error
+                    });
                 });
-            return generateSuccess(saved);
+
+            if (nextStatus === undefined || nextStatus === previousStatus)
+                return generateSuccess(saved);
+
+            /*
+             * A conditional write, not the blind `order.status = next; save()` this replaces: a
+             * customer cancel landing between the read at the top of this function and this write
+             * must not be silently overwritten by a stale `next` — `statusesLeadingTo` is the same
+             * "from" set `markSystemMove` (`./status.ts`) uses for a system report, applied here to
+             * an admin's request instead.
+             */
+            return orderRepository
+                .updateStatusIfIn(
+                    String(saved._id),
+                    statusesLeadingTo(nextStatus, 'admin'),
+                    nextStatus
+                )
+                .then((moved) => {
+                    if (!moved)
+                        return generateReject(409, [
+                            {
+                                code: 'ORDER_TRANSITION_NOT_ALLOWED',
+                                message: t('orders.transition.not-allowed'),
+                                details: {
+                                    from: previousStatus,
+                                    to: nextStatus,
+                                    allowed: statusesReachableFrom(previousStatus, 'admin')
+                                }
+                            }
+                        ]);
+
+                    // Announced after the write: a status is only "changed" once it is on disk,
+                    // and the listeners (the shipment, one day a notification) compensate for
+                    // facts, not plans.
+                    return emitDomainEvent(ORDER_STATUS_CHANGED, {
+                        orderId: String(moved._id),
+                        from: previousStatus,
+                        to: nextStatus
+                    }).then(() => generateSuccess(moved));
+                });
         });
     });
 };

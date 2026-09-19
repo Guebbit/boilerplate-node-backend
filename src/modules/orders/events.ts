@@ -21,26 +21,24 @@ declare module '@kernel/events' {
         'order.cancelled': { orderId: string; refund: boolean };
 
         /**
-         * An order's status moved, whoever moved it. Listeners filter on `to`; the event doesn't
-         * know who cares. `override` is `true` only for a status-only admin override
-         * (`services/override.ts`) — the one case where NO parcel and NO shipped email should
-         * follow a `shipped`/`delivered` move; a forced delivery-door override still creates both,
-         * so it emits with `override` absent, indistinguishable here from the ordinary system move
-         * it stands in for. Webhooks fire either way — a subscriber cares that the status moved,
-         * not by which door.
+         * An order's status moved, whoever moved it — a status-only admin override
+         * (`services/override.ts`) included, indistinguishable here from an ordinary system move.
+         * Listeners filter on `to`; the event doesn't know or care who moved it or through which
+         * door, only that it moved. Webhooks fire either way — a subscriber cares that the status
+         * changed, not by which door.
          */
         'order.status_changed': {
             orderId: string;
             from: OrderStatus;
             to: OrderStatus;
-            override?: true;
         };
 
         /**
-         * A new order was written — the admin create and the storefront checkout both funnel
-         * through `recordCreated`, so this fires exactly once per order regardless of which path
-         * made it. `webhooks` is the first listener that needs this fact as an event rather than
-         * as audit/analytics noise.
+         * A new order was written — emitted by `services/place.ts`'s `placeOrder`, the one
+         * function that writes a new order, so this fires exactly once per order regardless of
+         * which caller (the admin create, the storefront checkout) reached it. `webhooks` and the
+         * invoice-PDF pipeline are the listeners that need this fact as an event rather than as
+         * audit/analytics noise.
          */
         'order.created': { orderId: string };
     }

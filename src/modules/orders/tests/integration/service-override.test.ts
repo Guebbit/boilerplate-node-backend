@@ -26,7 +26,7 @@ const seedOrder = async (status: OrderStatus) => {
 };
 
 describe('overrideStatus', () => {
-    it('moves an order forward, records the history entry, and fires an override event', async () => {
+    it('moves an order forward, records the history entry, and fires the status-changed event', async () => {
         const order = await seedOrder(OrderStatus.paid);
         const events: unknown[] = [];
         onDomainEvent(ORDER_STATUS_CHANGED, (payload) => events.push(payload));
@@ -41,12 +41,14 @@ describe('overrideStatus', () => {
 
         expect(result.success).toBe(true);
         expect(result.data?.status).toBe(OrderStatus.processing);
+        // No `override` flag any more — no listener ever read it (`webhooks` filters on `to`
+        // alone), and its absence used to be the only thing distinguishing a status-only override
+        // from a forced delivery-door one, which the event never actually needed to tell apart.
         expect(events).toEqual([
             {
                 orderId: String(order._id),
                 from: OrderStatus.paid,
-                to: OrderStatus.processing,
-                override: true
+                to: OrderStatus.processing
             }
         ]);
 

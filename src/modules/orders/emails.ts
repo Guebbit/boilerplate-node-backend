@@ -289,9 +289,6 @@ export interface InvoiceVatBlock {
     };
 }
 
-/** A decimal rate (`0.22`) as the invoice prints it (`"22%"`) — formatted once, not per cell. */
-const percent = (rate: number): string => `${Math.round(rate * 100)}%`;
-
 /**
  * Builds the invoice's VAT table, recomputing the breakdown fresh from the order's frozen lines —
  * same reasoning `orderTotal` already applies to the grand total in this file: the controller may
@@ -315,11 +312,19 @@ const buildVatBlock = (
     // (constructing a Collator/PluralRules under the hood), not worth paying once per cell.
     // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat
     const money = new Intl.NumberFormat(locale, { style: 'currency', currency: invoiceCurrency() });
+    // A decimal rate (`0.055`) as the invoice prints it (`"5.5%"`) — `Math.round(rate * 100)`
+    // used to floor a fractional VAT rate to the nearest whole point, printing 5.5% as "6%" on a
+    // legal document.
+    // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat
+    const percentFormat = new Intl.NumberFormat(locale, {
+        style: 'percent',
+        maximumFractionDigits: 2
+    });
 
     const summaryRowOf = (row: TaxRateSummary, description: string): InvoiceTaxSummaryRow => ({
         description,
         netAmount: money.format(row.netAmount),
-        taxRateLabel: percent(row.rate),
+        taxRateLabel: percentFormat.format(row.rate),
         taxAmount: money.format(row.taxAmount),
         grossAmount: money.format(row.grossAmount)
     });
@@ -329,7 +334,7 @@ const buildVatBlock = (
         quantity: item.quantity,
         unitPrice: money.format(item.product.price),
         netAmount: money.format(breakdown.lines[index].netAmount),
-        taxRateLabel: percent(item.product.taxRate ?? 0),
+        taxRateLabel: percentFormat.format(item.product.taxRate ?? 0),
         taxAmount: money.format(breakdown.lines[index].taxAmount),
         grossAmount: money.format(
             breakdown.lines[index].netAmount + breakdown.lines[index].taxAmount
@@ -355,13 +360,18 @@ const buildVatBlock = (
                       rows: breakdown.shippingByRate.map((row) =>
                           summaryRowOf(
                               row,
-                              t('orders.invoice.vat.shipping-row', { rate: percent(row.rate) })
+                              t('orders.invoice.vat.shipping-row', {
+                                  rate: percentFormat.format(row.rate)
+                              })
                           )
                       )
                   },
         summaryTitle: t('orders.invoice.vat.summary-title'),
         summaryRows: breakdown.taxSummary.map((row) =>
-            summaryRowOf(row, t('orders.invoice.vat.summary-row', { rate: percent(row.rate) }))
+            summaryRowOf(
+                row,
+                t('orders.invoice.vat.summary-row', { rate: percentFormat.format(row.rate) })
+            )
         ),
         netTotalLabel: t('orders.invoice.vat.net-total'),
         netTotal: money.format(breakdown.netTotal),

@@ -29,6 +29,7 @@ import { orderRepository } from '../repository';
 import { ORDER_STATUS_CHANGED } from '../events';
 import { ordersAuditActions } from '../audit';
 import { canOverrideTo, statusesOverridableInto } from '../domain';
+import { inventoryService } from '@modules/inventory';
 
 /**
  * Write one override, whichever door asked for it — the conditional write, the history entry, the
@@ -73,12 +74,22 @@ const applyOverride = (
     return orderRepository.applyStatusOverride(orderId, allowedFrom, to, entry).then((updated) => {
         if (!updated) return null;
 
-        void emitDomainEvent(ORDER_STATUS_CHANGED, {
-            orderId,
-            from: observedFrom,
-            to,
-            ...(mode === 'status' ? { override: true as const } : {})
-        });
+        /*
+         * The override is the escape hatch for an order paid offline —
+         * `payments/services/settlement.ts` never ran for it, so nothing has claimed its
+         * reservation yet. `commitForOrder` is
+         * idempotent (`held → committed`, a no-op once already committed), so calling it
+         * unconditionally whenever the order started at `pending` is safe even against the race
+         * `observedFrom`'s own docblock describes: worst case this is a harmless replay of a
+         * commit settlement already made. An override starting anywhere past `pending` skips this
+         * — settlement already committed it on the way to `paid`.
+         */
+        const commit =
+            observedFrom === OrderStatus.pending
+                ? inventoryService.commitForOrder(orderId)
+                : Promise.resolve();
+
+        void emitDomainEvent(ORDER_STATUS_CHANGED, { orderId, from: observedFrom, to });
 
         emitAuditEvent(
             buildAuditEvent(context, {
@@ -90,7 +101,7 @@ const applyOverride = (
             })
         );
 
-        return updated;
+        return commit.then(() => updated);
     });
 };
 

@@ -19,6 +19,7 @@
 import { Types } from 'mongoose';
 import type { ProductSnapshot } from '@modules/products';
 import { inventoryService, type StockShortfall } from '@modules/inventory';
+import { emitDomainEvent } from '@kernel/events';
 import type { OrderDocument, OrderDocumentItem } from '../model';
 import { checkOrderLines } from '../domain/rules';
 import { buildReference } from '../domain/transfer-reference';
@@ -26,6 +27,7 @@ import { freezeOrderLines } from './snapshot';
 import { allocateInvoiceNumber } from './invoice-numbering';
 import { retractOrder } from './retract';
 import { orderRepository } from '../repository';
+import { ORDER_CREATED } from '../events';
 // `userId` is stored as an ObjectId, so writes have to coerce it — same rule `crud.ts`'s `create`
 // already followed before this function absorbed its write.
 import { toObjectId } from '@infrastructure/persistence/create-repository';
@@ -152,6 +154,14 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
         await retractOrder(order, false);
         return { ok: false, reason: 'insufficient-stock', shortfalls: outcome.shortfalls };
     }
+
+    // Emitted here rather than left to `recordCreated`: this is the one function that writes a
+    // new order, so a future caller of it cannot forget to announce one the way a caller of
+    // `recordCreated` could — `webhooks` and the invoice-PDF pipeline both need this fact
+    // regardless of which door placed the order. Fire-and-forget, like `recordCreated`'s other
+    // emits: a slow or failing listener must not delay the response this function's callers are
+    // already sending.
+    void emitDomainEvent(ORDER_CREATED, { orderId: String(order._id) });
 
     return { ok: true, order };
 };

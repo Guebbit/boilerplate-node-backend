@@ -328,3 +328,25 @@ describe('POST /orders/{id}/cancel', () => {
         expect(second).toSatisfyApiSpec();
     });
 });
+
+describe('POST /orders/{id}/status-override', () => {
+    // The bug this pins: the order carried its `statusOverrides` history straight through
+    // `additionalProperties: false`'s check with nothing to catch it, because no contract test
+    // ever sent a request through this route at all — the owner's admin's `actorUserId` and
+    // free-text `reason` leaked into every serialized order, this response included.
+    it('matches the contract and never leaks the override history onto the order it returns', async () => {
+        const { bearer, user } = await authenticateAs('admin');
+        const order = await seedOrderFor(user);
+        await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'paid');
+
+        const response = await api()
+            .post(`/orders/${String(order._id)}/status-override`)
+            .set('Authorization', bearer)
+            .send({ to: 'processing', reason: 'paid offline, forcing it forward' });
+
+        expect(response.status).toBe(200);
+        expect(response).toSatisfyApiSpec();
+        expect(response.body.data.status).toBe('processing');
+        expect(response.body.data.statusOverrides).toBeUndefined();
+    });
+});

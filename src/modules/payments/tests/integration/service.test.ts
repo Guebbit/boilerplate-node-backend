@@ -11,7 +11,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
-import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
+import { createOrder, forceOrderStatus, toOrderItem } from '@modules/orders/tests/factories';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
 import { orderService } from '@modules/orders';
@@ -128,7 +128,7 @@ describe('createIntent', () => {
 
     it('refuses a non-pending order with the stable code', async () => {
         const { user, order } = await orderFor();
-        await orderService.updateStatusIfIn(String(order._id), ['pending'], 'shipped');
+        await forceOrderStatus(String(order._id), 'shipped');
 
         const result = await createIntent(String(order._id), auth(user));
 
@@ -792,7 +792,7 @@ describe('recordOfflinePayment', () => {
 
     it('refuses an order that is not pending, the same code createIntent uses', async () => {
         const { order } = await orderFor();
-        await orderService.updateStatusIfIn(String(order._id), ['pending'], 'cancelled');
+        await forceOrderStatus(String(order._id), 'cancelled');
 
         const result = await recordOfflinePayment(
             String(order._id),
