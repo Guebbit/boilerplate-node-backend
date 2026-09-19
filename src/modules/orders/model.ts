@@ -22,6 +22,7 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
 import { bankTransferBeneficiary, bankTransferBic, bankTransferIbanFriendly } from './config';
 import { sumLineItems, orderTotal, type LineItem } from './domain/totals';
 import { orderTaxBreakdown, type TaxableLineItem } from './domain/tax';
+import { isPayable } from './domain/lifecycle';
 import { OrderStatus } from '@types';
 import type { Order } from '@types';
 
@@ -524,7 +525,10 @@ const applyTransferInstructions = (serialized: Record<string, unknown>) => {
 
     if (
         serialized.paymentMethod !== 'bank_transfer' ||
-        serialized.status !== OrderStatus.pending ||
+        // Still payable, not literally `pending`: the same question `isPayable` answers
+        // everywhere else a caller asks "can this order still be paid" — a status literal here
+        // would drift from the lifecycle table the moment a new pre-paid status ever exists.
+        !isPayable(serialized.status as OrderStatus) ||
         !reference
     )
         return;

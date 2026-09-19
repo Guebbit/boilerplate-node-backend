@@ -42,7 +42,9 @@ describe('orderTaxBreakdown — a fully-VAT order', () => {
         // The exact figures a known float-imprecise multiply must still land on — see money.ts.
         const breakdown = orderTaxBreakdown({ items: [line(19.9, 1, 0.22)] });
 
-        expect(breakdown?.lines).toEqual([{ taxAmount: 3.59, netAmount: 16.31 }]);
+        expect(breakdown?.lines).toEqual([
+            { taxAmount: 3.59, netAmount: 16.31, grossAmount: 19.9 }
+        ]);
     });
 
     it('taxes the LINE total (price × quantity), not the unit price alone', () => {
@@ -51,13 +53,13 @@ describe('orderTaxBreakdown — a fully-VAT order', () => {
         // not per unit), so this is a hand-checked value rather than "double the single-unit tax".
         const breakdown = orderTaxBreakdown({ items: [line(10, 2, 0.2)] });
 
-        expect(breakdown?.lines[0]).toEqual({ taxAmount: 3.33, netAmount: 16.67 });
+        expect(breakdown?.lines[0]).toEqual({ taxAmount: 3.33, netAmount: 16.67, grossAmount: 20 });
     });
 
     it('charges nothing at a zero rate', () => {
         const breakdown = orderTaxBreakdown({ items: [line(50, 1, 0)] });
 
-        expect(breakdown?.lines).toEqual([{ taxAmount: 0, netAmount: 50 }]);
+        expect(breakdown?.lines).toEqual([{ taxAmount: 0, netAmount: 50, grossAmount: 50 }]);
     });
 
     it('sums net and tax across every line for the order-level totals', () => {
@@ -109,7 +111,9 @@ describe('orderTaxBreakdown — shipping, apportioned pro-rata by line value', (
     it("never changes a line's own taxAmount/netAmount — shipping's tax is a total-only addition", () => {
         const withShipping = orderTaxBreakdown({ items: [line(19.9, 1, 0.22)], shippingCost: 5 });
 
-        expect(withShipping?.lines).toEqual([{ taxAmount: 3.59, netAmount: 16.31 }]);
+        expect(withShipping?.lines).toEqual([
+            { taxAmount: 3.59, netAmount: 16.31, grossAmount: 19.9 }
+        ]);
     });
 
     it("splits shipping's tax across lines by their own gross value, each at its own rate", () => {

@@ -185,8 +185,10 @@ export const create = async (
     recordCreated(order, context);
 
     // `recordCreated` is shared with `@modules/cart`'s checkout, which sends its own placed-order
-    // email, so mailing here too would double-send if this weren't split per caller.
-    sendOrderPlacedEmail(order, buyerLocale, email, email);
+    // email, so mailing here too would double-send if this weren't split per caller. `buyer` was
+    // already loaded above for the locale — reused here so the greeting uses their name, not a
+    // second copy of their own email address.
+    sendOrderPlacedEmail(order, buyerLocale, buyer?.username ?? email, email);
 
     return generateSuccess(order, 201, t('orders.creation-success'));
 };

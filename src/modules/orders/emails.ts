@@ -366,9 +366,7 @@ const buildVatBlock = (
         netAmount: money.format(breakdown.lines[index].netAmount),
         taxRateLabel: percentFormat.format(item.product.taxRate ?? 0),
         taxAmount: money.format(breakdown.lines[index].taxAmount),
-        grossAmount: money.format(
-            breakdown.lines[index].netAmount + breakdown.lines[index].taxAmount
-        )
+        grossAmount: money.format(breakdown.lines[index].grossAmount)
     }));
 
     return {

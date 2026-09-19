@@ -7,7 +7,6 @@
  */
 
 import { callerForSubject, SYSTEM_ACTOR } from '@kernel/permissions';
-import { holdsKey } from '@kernel/ability';
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import { environmentNumber } from '@infrastructure/runtime/environment';
@@ -66,10 +65,7 @@ export const cancelById = (
      * asking for anything broader would have missed them, silently treating them as a customer
      * and forcing a refund they had a reason not to make.
      */
-    const refund =
-        authContext && holdsKey(callerForSubject(authContext, 'Order'), 'orders.any.update')
-            ? (options.refund ?? true)
-            : true;
+    const refund = actorOf(authContext) === 'admin' ? (options.refund ?? true) : true;
 
     /*
      * The statuses a cancel may move from are read off the lifecycle table, not declared, and the

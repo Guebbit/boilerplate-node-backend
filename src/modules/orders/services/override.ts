@@ -57,9 +57,17 @@ const applyOverride = (
     context: CallerContext
 ): Promise<OrderDocument | null> => {
     // `caller.id` is optional on the type only because a stranger genuinely has none — this
-    // function is never reached without `orders.any.override`, which no stranger holds.
+    // function is never reached without `orders.any.override`, which no stranger holds. Rejected,
+    // not resolved to `null`: `null` here means "lost a race", which this is not, and
+    // `overrideStatus` would otherwise report a genuinely missing actor as a 409 conflict rather
+    // than the invariant violation it actually is.
     const actorUserId = context.caller.id;
-    if (!actorUserId) return Promise.resolve(null);
+    if (!actorUserId)
+        return Promise.reject(
+            new Error(
+                '[orders] applyOverride reached with no caller id — orders.any.override should be unreachable for a stranger'
+            )
+        );
 
     const allowedFrom = statusesOverridableInto(to);
     const entry: OrderStatusOverride = {
@@ -105,6 +113,16 @@ const applyOverride = (
     });
 };
 
+/** The one 409 both refusal points in {@link overrideStatus} answer with — a status that is not a legal override target. */
+const notAllowed = (from: OrderStatus, to: OrderStatus): ResponseReject =>
+    generateReject(409, [
+        {
+            code: 'ORDER_OVERRIDE_NOT_ALLOWED',
+            message: t('orders.override.not-allowed'),
+            details: { from, to }
+        }
+    ]);
+
 /**
  * `POST /orders/{id}/status-override` — an override holder moves an order forward with no parcel
  * and no shipped email, for the cases those consequences would be wrong (a manual correction, a
@@ -126,29 +144,13 @@ export const overrideStatus = (
     orderRepository.findByIdScoped(orderId).then((order) => {
         if (!order) return generateReject(404, [t('orders.not-found')]);
 
-        if (!canOverrideTo(order.status, to))
-            return generateReject(409, [
-                {
-                    code: 'ORDER_OVERRIDE_NOT_ALLOWED',
-                    message: t('orders.override.not-allowed'),
-                    details: { from: order.status, to }
-                }
-            ]);
+        if (!canOverrideTo(order.status, to)) return notAllowed(order.status, to);
 
         return applyOverride(orderId, order.status, to, 'status', reason, context).then(
-            (updated) => {
-                if (!updated)
-                    // Lost a race against another write since the read above — same shape as the
-                    // ordinary `update`'s 409, not a 404: the order still exists.
-                    return generateReject(409, [
-                        {
-                            code: 'ORDER_OVERRIDE_NOT_ALLOWED',
-                            message: t('orders.override.not-allowed'),
-                            details: { from: order.status, to }
-                        }
-                    ]);
-                return generateSuccess(updated);
-            }
+            (updated) =>
+                // Lost a race against another write since the read above — same shape as the
+                // ordinary `update`'s 409, not a 404: the order still exists.
+                updated ? generateSuccess(updated) : notAllowed(order.status, to)
         );
     });
 

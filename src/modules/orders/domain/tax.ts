@@ -26,10 +26,18 @@ export interface TaxableLineItem {
     product?: { price?: unknown; taxRate?: unknown } | null;
 }
 
-/** One line's VAT figures, as the decimal amounts the contract publishes. */
+/**
+ * One line's VAT figures. `taxAmount`/`netAmount` are the decimal amounts the contract
+ * publishes; `grossAmount` is `netAmount + taxAmount`, computed here from the same `Money` values
+ * before either rounds — never re-derived by a caller from the two ALREADY-ROUNDED decimals, the
+ * way a floating-point sum could drift from what `addMoney`'s minor-unit arithmetic guarantees.
+ * Not itself copied onto a serialized order item (`model.ts#applyOrderTax`) — a caller that needs
+ * it, like the invoice email, reads it straight off this breakdown.
+ */
 export interface LineTaxBreakdown {
     taxAmount: number;
     netAmount: number;
+    grossAmount: number;
 }
 
 /**
@@ -166,7 +174,11 @@ export const orderTaxBreakdown = ({
         foldIntoRate(byRate, rate, addMoney(net, shippingNet), addMoney(tax, shippingTax));
         foldIntoRate(shippingByRateMap, rate, shippingNet, shippingTax);
 
-        return { taxAmount: toDecimalAmount(tax), netAmount: toDecimalAmount(net) };
+        return {
+            taxAmount: toDecimalAmount(tax),
+            netAmount: toDecimalAmount(net),
+            grossAmount: toDecimalAmount(addMoney(net, tax))
+        };
     });
 
     const summaryRowsOf = (source: Map<number, { net: Money; tax: Money }>): TaxRateSummary[] =>

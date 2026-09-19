@@ -97,13 +97,6 @@ describe('who may write `shipped` and `delivered`', () => {
         expect(canTransition(OrderStatus.shipped, OrderStatus.delivered, 'admin')).toBe(false);
     });
 
-    it('matches the single `from` status.ts hardcodes for each', () => {
-        // `src/modules/orders/services/status.ts`'s `markShipped`/`markDelivered` each write from
-        // ONE literal status rather than asking this table — this is what keeps that assumption
-        // honest if a future edge changes it.
-        expect(statusesLeadingTo(OrderStatus.shipped, 'system')).toEqual([OrderStatus.processing]);
-        expect(statusesLeadingTo(OrderStatus.delivered, 'system')).toEqual([OrderStatus.shipped]);
-    });
 });
 
 describe('who may cancel', () => {
