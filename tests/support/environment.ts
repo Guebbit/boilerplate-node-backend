@@ -41,6 +41,29 @@ export const withEnvironment = async (
 };
 
 /**
+ * {@link withEnvironment} for several variables at once, returning what `body` resolves to — the
+ * shape a module reload needs: a limiter's budget is captured at import time, so the caller runs
+ * `jest.resetModules()` and a fresh `import()` inside `body`, and gets the new instance back.
+ * Restores every override whether `body` resolved or threw, unlike a plain "set, await, restore"
+ * sequence would.
+ *
+ * @param overrides - variable name → value, for the duration of `body`
+ * @param body - what to run with them set; its resolved value passes through
+ */
+export const withEnvironmentOverrides = async <T>(
+    overrides: Readonly<Record<string, string>>,
+    body: () => Promise<T>
+): Promise<T> => {
+    const previous = new Map(Object.keys(overrides).map((key) => [key, process.env[key]]));
+    for (const [key, value] of Object.entries(overrides)) process.env[key] = value;
+    try {
+        return await body();
+    } finally {
+        restore(previous);
+    }
+};
+
+/**
  * {@link withEnvironment}'s opposite: run a body with these variables UNSET, then put them back.
  *
  * For the case whose subject is a deployment that configured nothing — which `process.env` alone

@@ -10,13 +10,10 @@
  * `../integration/payment-velocity.test.ts`.
  */
 import { paymentsRateLimits } from '@modules/payments/rate-limits';
+import { budgetIn } from '@tests/rate-limit-budgets';
 
-/** One declared budget, by its `namespace` — throws loudly rather than reading `undefined`. */
-const budget = (namespace: string) => {
-    const found = paymentsRateLimits.find((each) => each.namespace === namespace);
-    if (!found) throw new Error(`No payments rate-limit budget named "${namespace}"`);
-    return found;
-};
+/** One of this module's own declared budgets, by its `namespace`. */
+const budget = (namespace: string) => budgetIn(paymentsRateLimits, namespace);
 
 describe('paymentConfirmAttemptLimiter and paymentConfirmDeclineLimiter', () => {
     it('bounds declines more tightly than attempts — a decline is the rarer, costlier outcome', () => {

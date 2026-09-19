@@ -11,13 +11,10 @@
  */
 import { DEFAULT_RATE_LIMIT_MAX } from '@infrastructure/http/middlewares/rate-limit';
 import { feedbackRateLimits } from '@modules/feedback/rate-limits';
+import { budgetIn } from '@tests/rate-limit-budgets';
 
-/** One declared budget, by its `namespace` — throws loudly rather than reading `undefined`. */
-const budget = (namespace: string) => {
-    const found = feedbackRateLimits.find((each) => each.namespace === namespace);
-    if (!found) throw new Error(`No feedback rate-limit budget named "${namespace}"`);
-    return found;
-};
+/** One of this module's own declared budgets, by its `namespace`. */
+const budget = (namespace: string) => budgetIn(feedbackRateLimits, namespace);
 
 describe('contactLimiters', () => {
     it('keeps every dimension a small fraction of the browsing budget', () => {

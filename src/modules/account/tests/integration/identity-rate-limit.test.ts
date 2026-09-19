@@ -1,8 +1,9 @@
-import express from 'express';
 import supertest from 'supertest';
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
+import { withEnvironmentOverrides } from '@tests/environment';
+import { appAnswering, statusOf } from '@tests/rate-limit-harness';
 
 /**
  * Anti-automation Rung 1 (see `docs/tools/security.md#identity--and-block-keyed-budgets--signup-password-reset-the-contact-form`):
@@ -14,56 +15,16 @@ import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
  * `src/modules/feedback/tests/integration/contact-identity-rate-limit.test.ts`.
  */
 
-/**
- * Sets the given env vars, runs `load`, restores them immediately after — every limiter's budget
- * is captured at import time, so a smaller value only takes effect on a fresh module instance.
- */
-const withOverrides = async <T>(
-    overrides: Record<string, string>,
-    load: () => Promise<T>
-): Promise<T> => {
-    const originals: Record<string, string | undefined> = {};
-    for (const [key, value] of Object.entries(overrides)) {
-        originals[key] = process.env[key];
-        process.env[key] = value;
-    }
-    jest.resetModules();
-
-    const picked = await load();
-
-    for (const [key, original] of Object.entries(originals)) {
-        if (original === undefined) delete process.env[key];
-        else process.env[key] = original;
-    }
-
-    return picked;
-};
-
-/** Reloads `@modules/account/rate-limits` with the given env vars set — see {@link withOverrides}. */
+/** Reloads `@modules/account/rate-limits` with the given env vars set — every limiter's budget is
+ * captured at import time, so a smaller value only takes effect on a fresh module instance. */
 const withAccountRateLimits = <T>(
     overrides: Record<string, string>,
     pick: (rateLimitsModule: typeof import('@modules/account/rate-limits')) => T
-): Promise<T> => withOverrides(overrides, () => import('@modules/account/rate-limits').then(pick));
-
-/** A trivial app that always answers `status`, past the given limiter chain. */
-const appAnswering = (status: number, ...limiters: express.RequestHandler[]) => {
-    const app = express();
-    // Trusts one hop so `X-Forwarded-For`, set explicitly below, becomes `request.ip` — the same
-    // mechanism `NODE_TRUST_PROXY_HOPS` configures in the real app. See
-    // docs/tools/security.md#trust-proxy-and-the-two-ways-to-get-it-wrong.
-    app.set('trust proxy', 1);
-    app.use(express.json());
-    app.post('/route', ...limiters, (_request, response) => {
-        response.status(status).json({});
+): Promise<T> =>
+    withEnvironmentOverrides(overrides, () => {
+        jest.resetModules();
+        return import('@modules/account/rate-limits').then(pick);
     });
-    return app;
-};
-
-/** The response status of a pending supertest request, without accessing it on the await itself. */
-const statusOf = async (pending: supertest.Test): Promise<number> => {
-    const response = await pending;
-    return response.status;
-};
 
 describe('signupLimiters', () => {
     afterEach(() => jest.resetModules());
@@ -78,7 +39,7 @@ describe('signupLimiters', () => {
             (module) => module.signupLimiters
         );
 
-        const app = appAnswering(201, ...signupLimiters);
+        const app = appAnswering(201, true, ...signupLimiters);
         const attempt = (email: string) => supertest(app).post('/route').send({ email });
 
         expect(await statusOf(attempt('sybil@example.com'))).toBe(201);
@@ -99,7 +60,7 @@ describe('signupLimiters', () => {
             (module) => module.signupLimiters
         );
 
-        const app = appAnswering(201, ...signupLimiters);
+        const app = appAnswering(201, true, ...signupLimiters);
         const attempt = (email: string) => supertest(app).post('/route').send({ email });
 
         expect(await statusOf(attempt('one@example.com'))).toBe(201);
@@ -124,7 +85,7 @@ describe('resetRequestLimiters', () => {
             (module) => module.resetRequestLimiters
         );
 
-        const app = appAnswering(200, ...resetRequestLimiters);
+        const app = appAnswering(200, true, ...resetRequestLimiters);
         const attempt = (email: string) => supertest(app).post('/route').send({ email });
 
         expect(await statusOf(attempt('victim@example.com'))).toBe(200);
@@ -146,7 +107,7 @@ describe('address-block keying', () => {
             (module) => module.signupLimiters
         );
 
-        const app = appAnswering(201, ...signupLimiters);
+        const app = appAnswering(201, true, ...signupLimiters);
         const attempt = (ip: string, email: string) =>
             supertest(app).post('/route').set('X-Forwarded-For', ip).send({ email });
 
@@ -169,7 +130,7 @@ describe('address-block keying', () => {
             (module) => module.signupLimiters
         );
 
-        const app = appAnswering(201, ...signupLimiters);
+        const app = appAnswering(201, true, ...signupLimiters);
         const attempt = (ip: string, email: string) =>
             supertest(app).post('/route').set('X-Forwarded-For', ip).send({ email });
 
@@ -192,7 +153,7 @@ describe('mfaChallengeLimiter', () => {
             (module) => module.mfaChallengeLimiter
         );
 
-        const app = appAnswering(200, mfaChallengeLimiter);
+        const app = appAnswering(200, true, mfaChallengeLimiter);
         const guess = () => supertest(app).post('/route').send({ challenge: 'same-challenge' });
 
         for (let attempt = 0; attempt < 5; attempt++) expect(await statusOf(guess())).toBe(200);
@@ -208,7 +169,7 @@ describe('mfaChallengeLimiter', () => {
             (module) => module.mfaChallengeLimiter
         );
 
-        const app = appAnswering(200, mfaChallengeLimiter);
+        const app = appAnswering(200, true, mfaChallengeLimiter);
         const guessFrom = (ip: string) =>
             supertest(app).post('/route').set('X-Forwarded-For', ip).send({});
 

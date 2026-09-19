@@ -13,6 +13,8 @@
  * See: docs/tools/property-testing.md, docs/tools/fuzz-testing.md
  */
 
+import { positiveInteger } from '../../scripts/testing/machine-budget';
+
 /**
  * One count knob, floored so a value cannot make the suite that reads it vacuous.
  *
@@ -26,8 +28,8 @@
  * @returns the resolved count, never below `minimum`
  */
 export const countKnob = (name: string, fallback: number, minimum: number): number => {
-    const parsed = Number(process.env[name]?.trim());
-    return Number.isInteger(parsed) && parsed > 0 ? Math.max(minimum, parsed) : fallback;
+    const parsed = positiveInteger(process.env[name]);
+    return parsed === undefined ? fallback : Math.max(minimum, parsed);
 };
 
 /**

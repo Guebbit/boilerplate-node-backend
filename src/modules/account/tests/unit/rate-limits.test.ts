@@ -11,13 +11,10 @@
  */
 import { DEFAULT_RATE_LIMIT_MAX } from '@infrastructure/http/middlewares/rate-limit';
 import { accountRateLimits } from '@modules/account/rate-limits';
+import { budgetIn } from '@tests/rate-limit-budgets';
 
-/** One declared budget, by its `namespace` — throws loudly rather than reading `undefined`. */
-const budget = (namespace: string) => {
-    const found = accountRateLimits.find((each) => each.namespace === namespace);
-    if (!found) throw new Error(`No account rate-limit budget named "${namespace}"`);
-    return found;
-};
+/** One of this module's own declared budgets, by its `namespace`. */
+const budget = (namespace: string) => budgetIn(accountRateLimits, namespace);
 
 describe('credentialLimiters', () => {
     it('keeps the identity budget a small fraction of the browsing budget', () => {
