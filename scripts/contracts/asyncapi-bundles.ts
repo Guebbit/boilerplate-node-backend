@@ -16,7 +16,7 @@
  * See: docs/api/contract-fragmentation.md#asyncapi-yaml-—-one-whole-document-per-section-merged
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { isMap, parseDocument, type Document } from 'yaml';
 import { REPO_ROOT, type ContractBundle } from './bundle-kinds';
@@ -31,26 +31,47 @@ import { REPO_ROOT, type ContractBundle } from './bundle-kinds';
  */
 type AsyncScope = 'shared' | 'backend';
 
+/** A section this file always has, independent of which modules exist. */
+type FixedSection = 'observability' | 'webhooks' | 'workers';
+
+/** A fixed section, or `<module>-internal` for a module owning a queue nothing else may reach. */
+type AsyncSectionName = FixedSection | `${string}-internal`;
+
+/** The suffix an internal-queue section's name carries — see {@link internalSections}. */
+const INTERNAL_SUFFIX = '-internal';
+
+/**
+ * Every module with its own `asyncapi.internal.yaml` — a queue that module owns, discovered
+ * rather than named by hand, so deleting a module (`webhooks`, `orders`, today) or a future one
+ * adding its own queue needs no change here. Sorted for a deterministic merge order.
+ */
+const internalSections = (): AsyncSectionName[] =>
+    readdirSync(path.join(REPO_ROOT, 'src', 'modules'), { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
+        .filter((name) =>
+            existsSync(path.join(REPO_ROOT, 'src', 'modules', name, 'asyncapi.internal.yaml'))
+        )
+        .toSorted()
+        .map((name): AsyncSectionName => `${name}${INTERNAL_SUFFIX}`);
+
 /** The order sections are merged in, and therefore the order they appear in the output. */
-export const ASYNC_SECTION_ORDER = [
+export const ASYNC_SECTION_ORDER: readonly AsyncSectionName[] = [
     'observability',
     'webhooks',
-    'webhooks-internal',
-    'orders-internal',
+    ...internalSections(),
     'workers'
-] as const;
-
-type AsyncSectionName = (typeof ASYNC_SECTION_ORDER)[number];
+];
 
 /**
  * Which sections an API client shares. Everything absent from here is backend-only.
  *
  * `webhooks` belongs here for the reason `observability` does: its channels ARE the public event
  * catalogue (`GET /webhooks/events` reads the module's own fragment, not this bundle), so a
- * consumer needs the generated payload types the same way the SSE dashboard does.
- * `webhooks-internal`, `orders-internal` and `workers` never join this set — a queue is internal
- * plumbing, not a promise to anyone outside this service, whether it happens to be owned by a
- * module or by no domain at all.
+ * consumer needs the generated payload types the same way the SSE dashboard does. Every
+ * `-internal` section and `workers` never join this set — a queue is internal plumbing, not a
+ * promise to anyone outside this service, whether it happens to be owned by a module or by no
+ * domain at all.
  */
 const SHARED_SECTIONS: ReadonlySet<AsyncSectionName> = new Set(['observability', 'webhooks']);
 
@@ -68,10 +89,14 @@ const sectionsInScope = (scope: AsyncScope): readonly AsyncSectionName[] =>
 const asyncSectionDocument = (section: AsyncSectionName): string => {
     if (section === 'workers')
         return path.join(REPO_ROOT, 'shared', 'contracts', 'asyncapi.workers.yaml');
-    if (section === 'webhooks-internal')
-        return path.join(REPO_ROOT, 'src', 'modules', 'webhooks', 'asyncapi.internal.yaml');
-    if (section === 'orders-internal')
-        return path.join(REPO_ROOT, 'src', 'modules', 'orders', 'asyncapi.internal.yaml');
+    if (section.endsWith(INTERNAL_SUFFIX))
+        return path.join(
+            REPO_ROOT,
+            'src',
+            'modules',
+            section.slice(0, -INTERNAL_SUFFIX.length),
+            'asyncapi.internal.yaml'
+        );
     return path.join(REPO_ROOT, 'src', 'modules', section, 'asyncapi.yaml');
 };
 

@@ -2,8 +2,8 @@
 # Sources: shared/contracts/asyncapi.root.yaml
 #          src/modules/observability/asyncapi.yaml
 #          src/modules/webhooks/asyncapi.yaml
-#          src/modules/webhooks/asyncapi.internal.yaml
 #          src/modules/orders/asyncapi.internal.yaml
+#          src/modules/webhooks/asyncapi.internal.yaml
 #          shared/contracts/asyncapi.workers.yaml
 asyncapi: 3.0.0
 id: 'urn:boilerplate-node-backend:asyncapi:contracts'
@@ -127,15 +127,6 @@ channels:
         messages:
             PaymentFailedEvent:
                 $ref: '#/components/messages/PaymentFailedEvent'
-    worker.webhook.deliver:
-        address: worker.webhook.deliver
-        description: >-
-            Outbound webhook delivery job queue — the `webhooks` module's subscriber enqueues one message per matching subscription, the webhook worker consumes it.
-        servers:
-            - $ref: '#/servers/rabbitmqLocal'
-        messages:
-            WebhookDeliverJobMessage:
-                $ref: '#/components/messages/WebhookDeliverJobMessage'
     worker.orders.invoice-generate:
         address: worker.orders.invoice-generate
         description: >-
@@ -145,6 +136,15 @@ channels:
         messages:
             OrderInvoicePdfJobMessage:
                 $ref: '#/components/messages/OrderInvoicePdfJobMessage'
+    worker.webhook.deliver:
+        address: worker.webhook.deliver
+        description: >-
+            Outbound webhook delivery job queue — the `webhooks` module's subscriber enqueues one message per matching subscription, the webhook worker consumes it.
+        servers:
+            - $ref: '#/servers/rabbitmqLocal'
+        messages:
+            WebhookDeliverJobMessage:
+                $ref: '#/components/messages/WebhookDeliverJobMessage'
     worker.email.send:
         address: worker.email.send
         description: Email job queue — producers enqueue email requests, the email worker consumes them.
@@ -238,24 +238,6 @@ operations:
             One-to-one with the `payment.failed` domain event. Retryable with another method, so this can fire more than once for the same order.
         messages:
             - $ref: '#/channels/payment.failed/messages/PaymentFailedEvent'
-    workerWebhookDeliverPublish:
-        action: receive
-        channel:
-            $ref: '#/channels/worker.webhook.deliver'
-        summary: Enqueue one subscription's delivery attempt for a domain event.
-        description: >-
-            One event fan out to N subscriptions is N messages, never one message N subscriptions read — a slow or dead endpoint must delay only its own deliveries, not the sibling subscriptions matching the same event.
-        messages:
-            - $ref: '#/channels/worker.webhook.deliver/messages/WebhookDeliverJobMessage'
-    workerWebhookDeliverConsume:
-        action: send
-        channel:
-            $ref: '#/channels/worker.webhook.deliver'
-        summary: Webhook worker signs, sends, and records the attempt.
-        description: >-
-            Signs the payload (Standard Webhooks format), resolves and validates the target through the SSRF guard, POSTs with a hard timeout, and records the outcome on the delivery row this job names. A failure schedules `nextAttemptAt` for the retry sweep rather than requeueing here — see `docs/reference/ops.md#scheduled-jobs`.
-        messages:
-            - $ref: '#/channels/worker.webhook.deliver/messages/WebhookDeliverJobMessage'
     ordersInvoicePdfPublish:
         action: receive
         channel:
@@ -274,6 +256,24 @@ operations:
             Resolves the order by `orderId`, renders the same EJS template `GET /orders/{id}/invoice` renders synchronously for orders that predate this queue, writes the PDF to private storage, and flips `invoicePdfStatus` to `ready`. A failed render is left to reject, so the broker redelivers it.
         messages:
             - $ref: '#/channels/worker.orders.invoice-generate/messages/OrderInvoicePdfJobMessage'
+    workerWebhookDeliverPublish:
+        action: receive
+        channel:
+            $ref: '#/channels/worker.webhook.deliver'
+        summary: Enqueue one subscription's delivery attempt for a domain event.
+        description: >-
+            One event fan out to N subscriptions is N messages, never one message N subscriptions read — a slow or dead endpoint must delay only its own deliveries, not the sibling subscriptions matching the same event.
+        messages:
+            - $ref: '#/channels/worker.webhook.deliver/messages/WebhookDeliverJobMessage'
+    workerWebhookDeliverConsume:
+        action: send
+        channel:
+            $ref: '#/channels/worker.webhook.deliver'
+        summary: Webhook worker signs, sends, and records the attempt.
+        description: >-
+            Signs the payload (Standard Webhooks format), resolves and validates the target through the SSRF guard, POSTs with a hard timeout, and records the outcome on the delivery row this job names. A failure schedules `nextAttemptAt` for the retry sweep rather than requeueing here — see `docs/reference/ops.md#scheduled-jobs`.
+        messages:
+            - $ref: '#/channels/worker.webhook.deliver/messages/WebhookDeliverJobMessage'
     workerEmailPublish:
         action: receive
         channel:
@@ -369,16 +369,16 @@ components:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
                 $ref: '#/components/schemas/PaymentFailedEnvelope'
-        WebhookDeliverJobMessage:
-            name: WebhookDeliverJobMessage
-            title: Webhook delivery job
-            payload:
-                $ref: '#/components/schemas/WebhookDeliverJobPayload'
         OrderInvoicePdfJobMessage:
             name: OrderInvoicePdfJobMessage
             title: Order invoice PDF generation job
             payload:
                 $ref: '#/components/schemas/OrderInvoicePdfJobPayload'
+        WebhookDeliverJobMessage:
+            name: WebhookDeliverJobMessage
+            title: Webhook delivery job
+            payload:
+                $ref: '#/components/schemas/WebhookDeliverJobPayload'
         EmailJobMessage:
             name: EmailJobMessage
             title: Email delivery job
@@ -602,16 +602,6 @@ components:
                 data:
                     $ref: '#/components/schemas/PaymentEventPayload'
             additionalProperties: false
-        WebhookDeliverJobPayload:
-            type: object
-            required:
-                - deliveryId
-            properties:
-                deliveryId:
-                    type: string
-                    description: >-
-                        The `webhookdeliveries` row this attempt updates in place — created `pending` before the job is published, so `GET /webhooks/deliveries` shows it immediately and a lost message still leaves a queryable trace. The Claim Check pattern (EIP): the row is the source of truth for everything else an attempt needs (`subscriptionId`, `eventId`, `eventType`, the payload, the current `attempt`), so the message carries only the key — nothing here can go stale on a replay, and no event payload sits twice in the broker.
-            additionalProperties: false
         OrderInvoicePdfJobPayload:
             type: object
             required:
@@ -621,6 +611,16 @@ components:
                     type: string
                     description: >-
                         The order to render. Deliberately the ONLY field: the worker resolves its own template path and output location from this id, never from anything the message carries — see this file's header for why.
+            additionalProperties: false
+        WebhookDeliverJobPayload:
+            type: object
+            required:
+                - deliveryId
+            properties:
+                deliveryId:
+                    type: string
+                    description: >-
+                        The `webhookdeliveries` row this attempt updates in place — created `pending` before the job is published, so `GET /webhooks/deliveries` shows it immediately and a lost message still leaves a queryable trace. The Claim Check pattern (EIP): the row is the source of truth for everything else an attempt needs (`subscriptionId`, `eventId`, `eventType`, the payload, the current `attempt`), so the message carries only the key — nothing here can go stale on a replay, and no event payload sits twice in the broker.
             additionalProperties: false
         EmailJobPayload:
             type: object
