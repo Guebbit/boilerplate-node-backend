@@ -15,16 +15,7 @@ import productsModule from '../../module';
 import { withoutEnvironmentInThisFile } from '@tests/environment';
 
 /** Every variable this gate reads, cleared before each case and put back after the file. */
-const TOUCHED = [
-    'NODE_ENV',
-    'NODE_URL',
-    'NODE_VAT_RATE_DEFAULT',
-    'NODE_VAT_RATE_REDUCED',
-    'NODE_SMTP_HOST',
-    'NODE_ANTIBOT_PROVIDER',
-    'NODE_ANTIBOT_EMAIL_POLICY',
-    'NODE_WEBHOOK_DEMO_SINK_URL'
-] as const;
+const TOUCHED = ['NODE_ENV', 'NODE_URL', 'NODE_VAT_RATE_DEFAULT', 'NODE_VAT_RATE_REDUCED'] as const;
 
 withoutEnvironmentInThisFile(TOUCHED);
 
