@@ -174,7 +174,7 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
          */
         onHand: {
             type: Number,
-            default: 100,
+            default: 0,
             min: 0
         },
         reserved: {

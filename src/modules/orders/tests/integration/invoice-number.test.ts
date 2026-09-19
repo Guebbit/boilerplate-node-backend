@@ -56,9 +56,10 @@ describe('GET /orders/{id}/invoice — the number-and-date block', () => {
     it('renders no number or date for an order with no invoice number', async () => {
         const { bearer, user } = await authenticateAs('admin');
         const product = await createProduct();
-        // `invoicePdfStatus: 'ready'` with nothing actually stored falls back to rendering
-        // inline (see `get-order-invoice.ts`) — what lets this exercise the download route
-        // through the mocked renderer above without a real queued worker ever having run.
+        // `invoicePdfStatus: 'ready'` with nothing actually stored self-heals: the controller
+        // queues a fresh render and answers 202 (see `get-order-invoice.ts`) — the mocked
+        // renderer above still runs synchronously in that chain (no broker in tests), which is
+        // what lets this exercise the render through HTTP without a real queued worker.
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             invoicePdfStatus: 'ready'
         });
@@ -67,7 +68,7 @@ describe('GET /orders/{id}/invoice — the number-and-date block', () => {
             .get(`/orders/${String(order._id)}/invoice`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(202);
         const html = renderHtmlToPdfMock.mock.calls[0][0] as string;
         expect(html).not.toContain('2026-000041');
     });
@@ -84,7 +85,7 @@ describe('GET /orders/{id}/invoice — the number-and-date block', () => {
             .get(`/orders/${String(order._id)}/invoice`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(202);
         const html = renderHtmlToPdfMock.mock.calls[0][0] as string;
         expect(html).toContain('2026-000041');
         // `createdAt` IS the date of supply — the fixture's own timestamp must show up too.

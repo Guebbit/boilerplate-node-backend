@@ -32,9 +32,10 @@ describe('GET /orders/{id}/invoice — pre-VAT vs. VAT orders', () => {
     it('renders no VAT table or shop identity for an order frozen before VAT existed', async () => {
         const { bearer, user } = await authenticateAs('admin');
         const product = await createProduct();
-        // `invoicePdfStatus: 'ready'` with nothing actually stored falls back to rendering
-        // inline (see `get-order-invoice.ts`) — what lets this exercise the download route
-        // through the mocked renderer above without a real queued worker ever having run.
+        // `invoicePdfStatus: 'ready'` with nothing actually stored self-heals: the controller
+        // queues a fresh render and answers 202 (see `get-order-invoice.ts`) — the mocked
+        // renderer above still runs synchronously in that chain (no broker in tests), which is
+        // what lets this exercise the render through HTTP without a real queued worker.
         const order = await createOrder(user, [toOrderItem(product, 2)], {
             invoicePdfStatus: 'ready'
         });
@@ -43,7 +44,7 @@ describe('GET /orders/{id}/invoice — pre-VAT vs. VAT orders', () => {
             .get(`/orders/${String(order._id)}/invoice`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(202);
         const html = renderHtmlToPdfMock.mock.calls[0][0] as string;
         expect(html).not.toContain('<table>');
     });
@@ -59,7 +60,7 @@ describe('GET /orders/{id}/invoice — pre-VAT vs. VAT orders', () => {
             .get(`/orders/${String(order._id)}/invoice`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(200);
+        expect(response.status).toBe(202);
         const html = renderHtmlToPdfMock.mock.calls[0][0] as string;
         expect(html).toContain('<table>');
         // 19.90 × 2 at 22%: gross 3980 cents, tax = round(3980 × 0.22/1.22) = 718 → 7.18.

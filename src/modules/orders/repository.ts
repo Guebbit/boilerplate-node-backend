@@ -345,6 +345,27 @@ const markInvoicePdfReady = (orderId: string): Promise<boolean> =>
         .then(({ modifiedCount }) => modifiedCount > 0);
 
 /**
+ * Flips `invoicePdfStatus` to `pending` for an order whose stored PDF needs (re-)rendering: one
+ * that predates this field entirely, or one `ready` with nothing on disk (a data anomaly).
+ * `transport/invoice-pdf.ts#enqueueInvoicePdfRetry` is the only caller — `GET
+ * /orders/{id}/invoice`'s self-healing path, replacing what used to be a synchronous render on
+ * the request. Conditional on NOT already `pending`, so a client polling mid-render cannot
+ * re-stamp the flag (and re-enqueue) while the first job is still in flight.
+ *
+ * @param orderId - the order to (re)queue a render for
+ * @returns whether this call was the one that flipped it
+ */
+const markInvoicePdfPending = (orderId: string): Promise<boolean> =>
+    orderModel
+        .updateOne(
+            { _id: toObjectId(orderId), invoicePdfStatus: { $ne: 'pending' } },
+            { $set: { invoicePdfStatus: 'pending' } },
+            { timestamps: false }
+        )
+        .exec()
+        .then(({ modifiedCount }) => modifiedCount > 0);
+
+/**
  * Atomically bumps the invoice sequence for `year` and returns the new value — one
  * `findOneAndUpdate` upsert with `$inc`, so two callers racing the same year still get distinct,
  * contiguous numbers. Mongo serializes concurrent writes to the same document; this is what makes
@@ -405,6 +426,7 @@ export const orderRepository: Omit<Repository<OrderDocument>, 'search'> & {
     scrubDueForAnonymization: (cutoff: Date) => Promise<number>;
     incrementInvoiceCounter: (year: number) => Promise<number>;
     markInvoicePdfReady: (orderId: string) => Promise<boolean>;
+    markInvoicePdfPending: (orderId: string) => Promise<boolean>;
 } = {
     ...base,
     aggregate,
@@ -420,5 +442,6 @@ export const orderRepository: Omit<Repository<OrderDocument>, 'search'> & {
     detachUserId,
     scrubDueForAnonymization,
     incrementInvoiceCounter,
-    markInvoicePdfReady
+    markInvoicePdfReady,
+    markInvoicePdfPending
 };

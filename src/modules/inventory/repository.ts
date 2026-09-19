@@ -62,10 +62,7 @@ const toReservationItems = (
  * condition, this file only applies it and keeps `available` in step.
  */
 export const stockLevelRepository: Repository<StockLevelDocument> & {
-    ensure: (
-        productId: string,
-        seed?: { onHand: number; reserved: number }
-    ) => Promise<StockLevelDocument>;
+    ensure: (productId: string) => Promise<StockLevelDocument>;
     findByProductId: (productId: string) => Promise<StockLevelDocument | null>;
     deleteByProductId: (productId: string) => Promise<void>;
     findManyByProductIds: (productIds: readonly string[]) => Promise<StockLevelDocument[]>;
@@ -87,34 +84,24 @@ export const stockLevelRepository: Repository<StockLevelDocument> & {
     }),
 
     /**
-     * The opening-stock write: create the row if the product has never had one, otherwise leave
-     * it — never overwrite an existing level. Racing twice (a redelivered `PRODUCT_CREATED`) is
-     * safe because `productId`'s unique index refuses the second insert.
+     * The opening-stock write: create the row at zero if the product has never had one, otherwise
+     * leave it — never overwrite an existing level. Racing twice (a redelivered `PRODUCT_CREATED`)
+     * is safe because `productId`'s unique index refuses the second insert. Zero, always: `receive`
+     * is this collection's only writer of real opening stock, so a product without a row yet
+     * genuinely has none, never a cached count worth adopting — see
+     * `docs/modules/inventory.md#why-products-still-carries-a-copy`.
      *
      * @param productId - the product
-     * @param seed - what to start a NEW row at; ignored if one already exists. The service layer
-     *   passes the product's own cached counters, so a product whose document predates this
-     *   collection (or a test fixture that wrote the cache directly) is adopted correctly on its
-     *   first transition, rather than resetting to zero under it.
      * @returns the row, new or already there
      */
-    ensure: (productId: string, seed?: { onHand: number; reserved: number }) => {
-        const onHand = seed?.onHand ?? 0;
-        const reserved = seed?.reserved ?? 0;
-        return stockLevelModel
+    ensure: (productId: string) =>
+        stockLevelModel
             .findOneAndUpdate(
                 { productId: toObjectId(productId) },
-                {
-                    $setOnInsert: {
-                        onHand,
-                        reserved,
-                        available: Math.max(0, onHand - reserved)
-                    }
-                },
+                { $setOnInsert: { onHand: 0, reserved: 0, available: 0 } },
                 { upsert: true, returnDocument: 'after' }
             )
-            .exec();
-    },
+            .exec(),
 
     /**
      * @param productId - the product

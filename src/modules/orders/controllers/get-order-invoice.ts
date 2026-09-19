@@ -1,29 +1,22 @@
 /**
  * @module
  * PDF invoice controller. `invoicePdfStatus === 'ready'` streams the stored PDF
- * `transport/invoice-pdf.ts`'s worker already wrote — faster, and the canonical source now.
- * `'pending'` answers 202: the client polls the order and retries once it reads `ready`. Absent
- * entirely (an order that predates the async pipeline) falls back to rendering it here, on the
- * request, through the same shared EJS template the worker renders outside one — exactly how
- * every order's invoice worked before that pipeline existed.
+ * `transport/invoice-pdf.ts`'s worker already wrote — the only render path there is. `'pending'`
+ * answers 202: the client polls the order and retries once it reads `ready`. Absent entirely (an
+ * order that predates the async pipeline), or `ready` with nothing on disk (a data anomaly), both
+ * self-heal the same way: `enqueueInvoicePdfRetry` queues a render and this also answers 202 —
+ * never a render on the request thread.
  */
 
-import path from 'node:path';
 import type { Request, Response } from 'express';
-import { getDefaultLocale, t } from '@infrastructure/i18n';
+import { t } from '@infrastructure/i18n';
 import { orderService } from '../services';
-import { invoiceDocument } from '../emails';
-import { readStoredInvoicePdf } from '../transport/invoice-pdf';
+import { readStoredInvoicePdf, enqueueInvoicePdfRetry } from '../transport/invoice-pdf';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
-import ejs from 'ejs';
-import { renderHtmlToPdf } from '@infrastructure/adapters/pdf';
 import { isValidObjectId } from '@infrastructure/http/request';
 import { catchAs } from '@infrastructure/http/controller';
 
-/**
- * Sends a stored PDF's bytes with the same headers the synchronous render answers with, so a
- * client cannot tell which path served it.
- */
+/** Sends a stored PDF's bytes. */
 const sendStoredInvoice = (response: Response, orderId: string, pdf: Buffer) =>
     response
         .status(200)
@@ -31,29 +24,9 @@ const sendStoredInvoice = (response: Response, orderId: string, pdf: Buffer) =>
         .setHeader('Content-Disposition', `attachment; filename="invoice-${orderId}.pdf"`)
         .send(pdf);
 
-/**
- * Renders the invoice on the request, the way every order did before the async pipeline existed —
- * the fallback for an order whose `invoicePdfStatus` is absent.
- *
- * The render locale is the DOWNLOADER's own language, unlike `transport/invoice-pdf.ts`'s worker,
- * which has no request to read one from and uses the order's own frozen locale instead — two
- * different documents by design: this path really does run inside a request.
- * WARNING: image/link resources will not render in the PDF — embed images as base64 instead.
- */
-const renderInvoiceInline = (
-    response: Response,
-    request: Request,
-    orderId: string,
-    order: Parameters<typeof invoiceDocument>[1]
-) =>
-    // ejs.renderFile: compiles the template file against the given locals into HTML.
-    ejs
-        .renderFile(
-            path.resolve('shared', 'templates', 'documents', 'orders.invoice.ejs'),
-            invoiceDocument(request.locale ?? getDefaultLocale(), order)
-        )
-        .then((html) => renderHtmlToPdf(html))
-        .then((pdf) => sendStoredInvoice(response, orderId, Buffer.from(pdf)));
+/** The 202 every not-yet-rendered case answers with — queued already, or just (re)queued here. */
+const answerPending = (response: Response) =>
+    successResponse(response, { invoicePdfStatus: 'pending' as const }, 202, t('orders.invoice-pending'));
 
 /**
  * GET /orders/:id/invoice — PDF invoice for the order; non-admin callers see only their own.
@@ -71,7 +44,7 @@ export const getOrderInvoice = (request: Request<{ id?: string }>, response: Res
         .then((order) => {
             if (!order) {
                 rejectResponse(response, 404, [t('orders.not-found')]);
-                return;
+                return undefined;
             }
 
             /*
@@ -87,25 +60,17 @@ export const getOrderInvoice = (request: Request<{ id?: string }>, response: Res
             const orderId = String((order as typeof order & { id?: string }).id ?? order._id);
 
             if (order.invoicePdfStatus === 'pending') {
-                successResponse(
-                    response,
-                    { invoicePdfStatus: 'pending' as const },
-                    202,
-                    t('orders.invoice-pending')
-                );
+                answerPending(response);
                 return undefined;
             }
 
             if (order.invoicePdfStatus !== 'ready')
-                return renderInvoiceInline(response, request, orderId, order);
+                return enqueueInvoicePdfRetry(orderId).then(() => answerPending(response));
 
             return readStoredInvoicePdf(orderId).then((pdf) =>
-                // `ready` with nothing on disk shouldn't happen, but rendering rather than 500ing
-                // keeps the customer's download working while whatever wrote the status wrong
-                // gets investigated.
                 pdf
                     ? sendStoredInvoice(response, orderId, pdf)
-                    : renderInvoiceInline(response, request, orderId, order)
+                    : enqueueInvoicePdfRetry(orderId).then(() => answerPending(response))
             );
         })
         .catch(catchAs(response, 'Invoice generation failed'));

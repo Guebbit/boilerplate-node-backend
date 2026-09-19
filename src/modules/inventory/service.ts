@@ -141,11 +141,7 @@ const applyTransition = async (
             return true;
         }
 
-        const product = await productService.findByIdRaw(productId);
-        await stockLevelRepository.ensure(productId, {
-            onHand: product?.onHand ?? 0,
-            reserved: product?.reserved ?? 0
-        });
+        await stockLevelRepository.ensure(productId);
     }
     const delta = counterDeltaFor(reason, quantity);
     const moved = await stockLevelRepository.applyDelta(

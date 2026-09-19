@@ -139,19 +139,22 @@ export interface OrderDocument
      * The RF creditor reference this order's `bank_transfer` checkout minted
      * (`src/modules/orders/domain/transfer-reference.ts`'s `buildReference`), from the SAME id this write
      * creates — never recomputed afterwards. Absent on a `card` order, and on a `bank_transfer`
-     * order that predates this field; `applyTransferInstructions` falls back to the raw id for the
-     * latter case, and `GET /payments/order-by-reference` accepts the raw id too, for the same
-     * reason. Not part of the `Order` contract — `applyOrderTransform` omits it from the wire, the
-     * same treatment as `anonymizeAfter`/`pendingEffects` below, and it is surfaced only through
+     * order that predates this field — `applyTransferInstructions` then shows no
+     * `transferInstructions` block at all rather than a fabricated reference, and
+     * `GET /payments/order-by-reference` simply cannot reach that order (its admin finds it by id
+     * through the normal order search instead). Not part of the `Order` contract —
+     * `applyOrderTransform` omits it from the wire, the same treatment as
+     * `anonymizeAfter`/`pendingEffects` below, and it is surfaced only through
      * `transferInstructions.reference`.
      */
     transferReference?: string;
     /**
      * `'pending'` from the moment this order is written (the schema default below), `'ready'`
      * once `orders/transport/invoice-pdf.ts`'s worker has stored the rendered PDF. Absent on an
-     * order that predates this field — no job was ever queued for it, and
-     * `GET /orders/{id}/invoice` falls back to rendering it on demand, exactly as every order did
-     * before this field existed.
+     * order that predates this field — no job was ever queued for it — and self-healed the same
+     * way a `ready` status with nothing on disk is: `GET /orders/{id}/invoice` queues a render
+     * (`transport/invoice-pdf.ts#enqueueInvoicePdfRetry`) and answers 202, never rendering on the
+     * request thread itself.
      */
     invoicePdfStatus?: 'pending' | 'ready';
     /**
@@ -504,21 +507,26 @@ const applyOrderTax = (serialized: Record<string, unknown>) => {
 };
 
 /**
- * `transferInstructions`, present only while a `bank_transfer` order is still `pending` — once
- * paid or cancelled there is nothing left to act on. Read live from whatever the deployment
- * currently has configured rather than frozen at checkout time: the beneficiary/IBAN/BIC are
- * deployment config, not order-specific data, so a later change should show up on every
- * still-pending order instead of staying locked to what was true when it was placed. `reference`
- * IS order-specific — the RF code `buildReference` minted at checkout, falling back to the raw id
- * (already renamed to `id` by the time `after` runs) for an order that predates that field.
+ * `transferInstructions`, present only while a `bank_transfer` order is still `pending` AND has a
+ * reference to show — once paid or cancelled there is nothing left to act on, and an order placed
+ * before `transferReference` existed has no reference to show at all, rather than a fabricated
+ * one. Read live from whatever the deployment currently has configured rather than frozen at
+ * checkout time: the beneficiary/IBAN/BIC are deployment config, not order-specific data, so a
+ * later change should show up on every still-pending order instead of staying locked to what was
+ * true when it was placed. `reference` IS order-specific — the RF code `buildReference` minted at
+ * checkout.
  */
 const applyTransferInstructions = (serialized: Record<string, unknown>) => {
     // Read before it is stripped, on every path below — never part of the wire, and `omit` above
     // runs before this callback, too early to strip a field this function still needs to read.
-    const reference = String(serialized.transferReference ?? serialized.id);
+    const reference = serialized.transferReference as string | undefined;
     delete serialized.transferReference;
 
-    if (serialized.paymentMethod !== 'bank_transfer' || serialized.status !== OrderStatus.pending)
+    if (
+        serialized.paymentMethod !== 'bank_transfer' ||
+        serialized.status !== OrderStatus.pending ||
+        !reference
+    )
         return;
 
     const beneficiary = bankTransferBeneficiary();

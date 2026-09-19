@@ -28,8 +28,8 @@ describe('productSchema — what a product must carry', () => {
             expect(pathOptions(productSchema, path).min).toBe(0);
     });
 
-    it('publishes a new product with stock and nothing reserved', () => {
-        expect(defaultOf(productSchema, 'onHand')).toBe(100);
+    it('publishes a new product with no stock and nothing reserved — 3.1 guarantees a real inventory row at creation', () => {
+        expect(defaultOf(productSchema, 'onHand')).toBe(0);
         expect(defaultOf(productSchema, 'reserved')).toBe(0);
         expect(defaultOf(productSchema, 'active')).toBe(true);
     });

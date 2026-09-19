@@ -42,8 +42,8 @@ const asSuccess = (result: unknown) => result as ResponseSuccess<OrderDocument>;
 /** Creates an order through the service, returning the persisted document. */
 const seedOrder = async () => {
     const user = await createUser({ email: 'buyer@example.com' });
-    const keyboard = await createProduct({ title: 'Keyboard', price: 25 });
-    const mouse = await createProduct({ title: 'Mouse', price: 10 });
+    const keyboard = await createProduct({ title: 'Keyboard', price: 25, onHand: 10 });
+    const mouse = await createProduct({ title: 'Mouse', price: 10, onHand: 10 });
 
     const result = await create(
         String(user._id),
@@ -72,7 +72,7 @@ const releaseHold = (order: OrderDocument) => inventoryService.releaseForOrder(S
 describe('create', () => {
     it('creates an order and answers 201', async () => {
         const user = await createUser();
-        const product = await createProduct({ title: 'Keyboard', price: 25 });
+        const product = await createProduct({ title: 'Keyboard', price: 25, onHand: 10 });
 
         const result = await create(
             String(user._id),
@@ -88,7 +88,7 @@ describe('create', () => {
 
     it('assigns each new order its own sequential invoice number', async () => {
         const user = await createUser();
-        const product = await createProduct({ title: 'Keyboard', price: 25 });
+        const product = await createProduct({ title: 'Keyboard', price: 25, onHand: 10 });
 
         const first = asSuccess(
             await create(
@@ -414,7 +414,7 @@ describe('update', () => {
      */
     it('refuses to rewrite the items while the shelf is still holding them', async () => {
         const { order } = await seedOrder();
-        const replacement = await createProduct({ title: 'Monitor', price: 200 });
+        const replacement = await createProduct({ title: 'Monitor', price: 200, onHand: 10 });
 
         const result = await update(order, {
             items: [{ productId: String(replacement._id), quantity: 3 }]
@@ -430,7 +430,7 @@ describe('update', () => {
     it('replaces the items with fresh snapshots when given', async () => {
         const { order } = await seedOrder();
         await releaseHold(order);
-        const replacement = await createProduct({ title: 'Monitor', price: 200 });
+        const replacement = await createProduct({ title: 'Monitor', price: 200, onHand: 10 });
 
         await update(order, { items: [{ productId: String(replacement._id), quantity: 3 }] });
 

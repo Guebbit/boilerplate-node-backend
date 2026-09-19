@@ -16,15 +16,9 @@ import {
 import { orderService, parseReference, type OrderDocument } from '@modules/orders';
 
 /**
- * Every raw ObjectId string `parseReference` returns is exactly 24 lowercase hex characters — a
- * shape a valid RF reference (fixed at 23, and always starting `RF`) can never take, so this is a
- * safe branch, not a heuristic.
- */
-const isRawObjectId = (value: string): boolean => /^[\da-f]{24}$/.test(value);
-
-/**
- * The order behind an RF reference (or, for an order that predates that field, a raw id) — the
- * admin's lookup before `recordOfflinePayment` settles it.
+ * The order behind an RF reference — the admin's lookup before `recordOfflinePayment` settles it.
+ * An order with no reference at all (placed before the field existed) is not reachable through
+ * this endpoint; the admin finds it by id through the normal order search instead.
  *
  * @param ref - what the admin pasted, exactly as `parseReference` will read it
  * @returns the order, or a 404 for a malformed or unmatched reference alike — a client that typed
@@ -36,12 +30,9 @@ export const getOrderByReference = (
     const parsed = parseReference(ref);
     if (!parsed) return Promise.resolve(generateReject(404, [t('payments.order-not-found')]));
 
-    // `getById` answers `undefined` for a miss, `getByTransferReference` `null` — both mean 404.
-    const found: Promise<OrderDocument | null | undefined> = isRawObjectId(parsed)
-        ? orderService.getById(parsed)
-        : orderService.getByTransferReference(parsed);
-
-    return found.then((order) =>
-        order ? generateSuccess(order) : generateReject(404, [t('payments.order-not-found')])
-    );
+    return orderService
+        .getByTransferReference(parsed)
+        .then((order) =>
+            order ? generateSuccess(order) : generateReject(404, [t('payments.order-not-found')])
+        );
 };

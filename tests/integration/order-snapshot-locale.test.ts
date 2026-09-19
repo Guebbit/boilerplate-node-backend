@@ -50,7 +50,11 @@ describe("orderService.create freezes the snapshot in the buyer's stored locale"
         // customer is mailed a receipt in a language they never chose, frozen beyond repair.
         await givenLocale('it');
         const user = await createUser({ locale: 'it' });
-        const product = await createProduct({ title: 'Dog Bed', description: 'A soft bed' });
+        const product = await createProduct({
+            title: 'Dog Bed',
+            description: 'A soft bed',
+            onHand: 10
+        });
         await givenTranslation(String(product._id), 'it', {
             title: 'Cuccia',
             description: 'Una cuccia morbida'
@@ -74,7 +78,7 @@ describe("orderService.create freezes the snapshot in the buyer's stored locale"
 
     it("falls back to the source text, still framed as the buyer's locale", async () => {
         const user = await createUser({ locale: 'it' });
-        const product = await createProduct({ title: 'Dog Bed' });
+        const product = await createProduct({ title: 'Dog Bed', onHand: 10 });
 
         const result = await orderService.create(
             String(user._id),
@@ -93,7 +97,7 @@ describe("cartService.orderConfirm freezes the snapshot in the buyer's stored lo
     it('embeds the Italian title and records the frozen locale, from `user.locale`', async () => {
         await givenLocale('it');
         const user = await createUser({ locale: 'it' });
-        const product = await createProduct({ title: 'Dog Bed' });
+        const product = await createProduct({ title: 'Dog Bed', onHand: 10 });
         await givenTranslation(String(product._id), 'it', { title: 'Cuccia' });
 
         await cartService.cartItemSetById(user.id, String(product._id), 1);

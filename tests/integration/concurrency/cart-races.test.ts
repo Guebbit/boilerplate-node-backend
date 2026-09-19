@@ -40,7 +40,7 @@ describe('R3 — concurrent writes of the SAME product', () => {
      */
     it('leaves one cart holding one line, never the same product twice', async () => {
         const { user, bearer } = await authenticateAs();
-        const product = await createProduct();
+        const product = await createProduct({ onHand: RACE_SIZE * 5 });
 
         const results = await raceN(RACE_SIZE, () =>
             api()
@@ -101,7 +101,7 @@ describe('R3 — concurrent quantity writes to the same line', () => {
         // not "which one won" — that is the database's business — but that the result is one of
         // the values actually sent, rather than a merge artefact or a second cart.
         const { user, bearer } = await authenticateAs();
-        const product = await createProduct();
+        const product = await createProduct({ onHand: RACE_SIZE * 5 });
 
         await api()
             .post('/cart')
@@ -129,7 +129,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
     it('produces exactly one order, not one per request', async () => {
         // The bug this closes charges the customer twice.
         const { user, bearer } = await authenticateAs();
-        const product = await createProduct();
+        const product = await createProduct({ onHand: RACE_SIZE * 5 });
 
         await api()
             .post('/cart')
@@ -146,7 +146,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
 
     it('answers one success and rejects the rest with 409', async () => {
         const { bearer } = await authenticateAs();
-        const product = await createProduct();
+        const product = await createProduct({ onHand: RACE_SIZE * 5 });
 
         await api()
             .post('/cart')
@@ -164,7 +164,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
 
     it('empties the cart exactly once', async () => {
         const { user, bearer } = await authenticateAs();
-        const product = await createProduct();
+        const product = await createProduct({ onHand: RACE_SIZE * 5 });
 
         await api()
             .post('/cart')
@@ -182,7 +182,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
         // so it retracts it. Without that compensation the invariant above would still read
         // "one cart emptied" while the collection quietly held N orders.
         const { user, bearer } = await authenticateAs();
-        const product = await createProduct({ price: 10 });
+        const product = await createProduct({ price: 10, onHand: RACE_SIZE * 5 });
 
         await api()
             .post('/cart')
@@ -203,7 +203,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
         // permanent hold per loser that no sweep can ever find, since it is keyed to an order
         // that no longer exists.
         const { bearer } = await authenticateAs();
-        const product = await createProduct({ price: 10 });
+        const product = await createProduct({ price: 10, onHand: RACE_SIZE * 5 });
 
         await api()
             .post('/cart')
@@ -233,7 +233,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
     it('still checks out normally when nothing is competing', async () => {
         // The conditional write must not make the ordinary, uncontended checkout fail.
         const { bearer } = await authenticateAs();
-        const product = await createProduct();
+        const product = await createProduct({ onHand: RACE_SIZE * 5 });
 
         await api()
             .post('/cart')
@@ -251,7 +251,7 @@ describe('account deletion racing a cart write', () => {
         // A cart is its own document keyed by `userId`, reachable only through the account, so a
         // cart that outlives its user is a row nothing can ever read or clean up.
         const { user, bearer } = await authenticateAs();
-        const product = await createProduct();
+        const product = await createProduct({ onHand: RACE_SIZE * 5 });
 
         await api()
             .post('/cart')

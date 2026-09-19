@@ -1,10 +1,10 @@
 /**
  * @module
  * Async invoice PDF pipeline: the storage it writes to, the queue consumer that fills it, and the
- * enqueue helper the module's `order.created` listener calls. Same split
- * `controllers/get-order-invoice.ts` keeps for orders that predate this feature: this file OWNS
- * generation and storage, the controller only reads what's already written, or falls back to
- * rendering the way every order did before this queue existed.
+ * two enqueue helpers — one the module's `order.created` listener calls, one
+ * `controllers/get-order-invoice.ts` calls to self-heal an order with no render in flight. This
+ * file OWNS generation and storage; the controller only ever reads what's already written, or
+ * asks this file to queue one — it never renders on the request thread itself.
  *
  * Mirrors `webhooks/transport/` — module-owned infrastructure code, not domain business logic —
  * and replaces the old domainless `worker.pdf.generate` queue. See `../asyncapi.internal.yaml`'s
@@ -62,9 +62,8 @@ export const readStoredInvoicePdf = (orderId: string): Promise<Buffer | undefine
  *
  * The render locale is the order's OWN frozen locale (`items[0].locale` — the language its
  * product titles were resolved into at checkout), not a viewer's request locale: there is no
- * request here. `GET /orders/{id}/invoice`'s synchronous fallback for pre-existing orders still
- * renders in the DOWNLOADER's language instead — a different document by design, not a bug, since
- * that path really does run inside a request with a locale to read.
+ * request here, or anywhere else in this pipeline — every render, for every order, goes through
+ * this one function now.
  *
  * @param orderId - the order to render
  */
@@ -139,3 +138,20 @@ export const enqueueInvoicePdfJob = (orderId: string): Promise<void> => {
         payload: { orderId }
     }).then((published) => (published ? undefined : generateAndStoreInvoicePdf(orderId)));
 };
+
+/**
+ * Self-heals a delivery gap instead of ever rendering on the request thread:
+ * `controllers/get-order-invoice.ts`'s ONLY path for an order whose `invoicePdfStatus` is absent
+ * (it predates this field — no job was ever queued for it) or `ready` with nothing on disk (a
+ * data anomaly). Stamps `pending` first (`repository.ts#markInvoicePdfPending`'s own guard makes
+ * this a no-op while a render is already in flight, so a client polling mid-render can't
+ * re-enqueue on every request), then queues exactly the same job a fresh order's `order.created`
+ * listener would.
+ *
+ * @param orderId - the order to (re)queue a render for
+ */
+export const enqueueInvoicePdfRetry = (orderId: string): Promise<void> =>
+    orderRepository.markInvoicePdfPending(orderId).then((flipped) =>
+        // Already `pending`: something else's render is in flight — nothing more to enqueue.
+        flipped ? enqueueInvoicePdfJob(orderId) : undefined
+    );

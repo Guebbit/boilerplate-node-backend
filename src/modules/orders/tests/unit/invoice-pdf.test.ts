@@ -36,10 +36,12 @@ jest.mock('@infrastructure/adapters/pdf', () => ({
 
 const findByIdRawMock = jest.fn();
 const markInvoicePdfReadyMock = jest.fn();
+const markInvoicePdfPendingMock = jest.fn();
 jest.mock('../../repository', () => ({
     orderRepository: {
         findByIdRaw: (id: string) => findByIdRawMock(id),
-        markInvoicePdfReady: (id: string) => markInvoicePdfReadyMock(id)
+        markInvoicePdfReady: (id: string) => markInvoicePdfReadyMock(id),
+        markInvoicePdfPending: (id: string) => markInvoicePdfPendingMock(id)
     }
 }));
 
@@ -229,6 +231,48 @@ describe('enqueueInvoicePdfJob', () => {
 
         expect(renderHtmlToPdfMock).toHaveBeenCalled();
         expect(markInvoicePdfReadyMock).toHaveBeenCalledWith('order-1');
+    });
+});
+
+describe('enqueueInvoicePdfRetry', () => {
+    let storageRoot: string;
+    const originalStoragePath = process.env.NODE_INVOICE_STORAGE_PATH;
+
+    beforeEach(async () => {
+        jest.clearAllMocks();
+        renderHtmlToPdfMock.mockResolvedValue(Buffer.from('pdf'));
+        markInvoicePdfReadyMock.mockResolvedValue(true);
+        findByIdRawMock.mockResolvedValue(orderFixture('en'));
+        storageRoot = await mkdtemp(path.join(tmpdir(), 'invoice-pdf-test-'));
+        process.env.NODE_INVOICE_STORAGE_PATH = storageRoot;
+    });
+
+    afterEach(async () => {
+        await rm(storageRoot, { recursive: true, force: true });
+        if (originalStoragePath === undefined) delete process.env.NODE_INVOICE_STORAGE_PATH;
+        else process.env.NODE_INVOICE_STORAGE_PATH = originalStoragePath;
+    });
+
+    it('flips to pending and enqueues — the self-heal path for an absent status or a missing file', async () => {
+        isQueueEnabledMock.mockReturnValue(false);
+        markInvoicePdfPendingMock.mockResolvedValue(true);
+        const { enqueueInvoicePdfRetry } = await import('../../transport/invoice-pdf');
+
+        await enqueueInvoicePdfRetry('order-1');
+
+        expect(markInvoicePdfPendingMock).toHaveBeenCalledWith('order-1');
+        expect(renderHtmlToPdfMock).toHaveBeenCalled();
+        expect(markInvoicePdfReadyMock).toHaveBeenCalledWith('order-1');
+    });
+
+    it('enqueues nothing when a render is already in flight — markInvoicePdfPending found it already pending', async () => {
+        markInvoicePdfPendingMock.mockResolvedValue(false);
+        const { enqueueInvoicePdfRetry } = await import('../../transport/invoice-pdf');
+
+        await enqueueInvoicePdfRetry('order-1');
+
+        expect(isQueueEnabledMock).not.toHaveBeenCalled();
+        expect(renderHtmlToPdfMock).not.toHaveBeenCalled();
     });
 });
 

@@ -64,17 +64,14 @@ describe('getOrderByReference', () => {
         expect(orderIdOf(result)).toBe(String(order._id));
     });
 
-    it('finds an order that predates this field by its raw id', async () => {
+    it('answers 404 for a raw order id — an order that predates this field is not reachable here', async () => {
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             paymentMethod: 'bank_transfer'
         });
 
-        const result = await getOrderByReference(String(order._id));
-
-        expect(result.success).toBe(true);
-        expect(orderIdOf(result)).toBe(String(order._id));
+        expect(asReject(await getOrderByReference(String(order._id))).status).toBe(404);
     });
 
     it('answers 404 for a one-character typo, rather than matching the wrong order', async () => {

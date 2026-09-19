@@ -90,14 +90,15 @@ paths:
             summary: Find the order behind an RF reference
             description: >-
                 The admin's own step before `POST /payments/order/{orderId}/offline`: paste the RF
-                creditor reference read off the bank's own website (or, for an order that predates
-                the field, its raw id) and get back the order it pays. Admin only — reading who
-                owes what by reference is no less than recording that the money arrived. A
-                malformed or unmatched reference both answer 404, indistinguishably: nothing here
-                confirms that an almost-right code was close. Requires a session that has re-proved
-                itself within the last few minutes — a valid-but-stale token answers 401 with
-                `errors[].code` `REAUTH_REQUIRED`, and the caller re-authenticates and retries the
-                same request.
+                creditor reference read off the bank's own website and get back the order it pays.
+                Admin only — reading who owes what by reference is no less than recording that the
+                money arrived. A malformed or unmatched reference both answer 404,
+                indistinguishably: nothing here confirms that an almost-right code was close. An
+                order placed before this field existed has no reference at all and is not
+                reachable here — find it by id through the normal order search instead. Requires a
+                session that has re-proved itself within the last few minutes — a valid-but-stale
+                token answers 401 with `errors[].code` `REAUTH_REQUIRED`, and the caller
+                re-authenticates and retries the same request.
             operationId: getOrderByReference
             security:
                 - bearerAuth: []
@@ -111,8 +112,7 @@ paths:
                       maxLength: 64
                   description: >-
                       The RF reference, spaces and case tolerated exactly as a customer might type
-                      it — e.g. `RF13 2EY8 H44V JAVZ KX80 JRL` — or a raw 24-character order id for
-                      an order that predates this field.
+                      it — e.g. `RF13 2EY8 H44V JAVZ KX80 JRL`.
             responses:
                 '200':
                     description: The order this reference pays

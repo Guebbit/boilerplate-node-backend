@@ -14,8 +14,7 @@
  * ISO 11649 support, and the arithmetic below has no edge case a library would need to absorb —
  * see `docs/modules/payments.md#libraries`.
  *
- * No persistence import on purpose, like every other `domain/` file in this repo: the ObjectId
- * fallback below is recognised by shape (24 hex characters), not by asking Mongoose.
+ * No persistence import on purpose, like every other `domain/` file in this repo.
  */
 
 /**
@@ -74,30 +73,20 @@ export const buildReference = (seed: string): string => {
 };
 
 /**
- * Whether a normalized string is shaped like a raw ObjectId — never true for a reference
- * `buildReference` minted, since its payload is fixed at {@link PAYLOAD_LENGTH} characters, not
- * 24. What lets `parseReference`'s two branches, and `getOrderByReference`'s two lookups, tell
- * their inputs apart without a second signal.
- */
-const looksLikeObjectId = (value: string): boolean => /^[\dA-F]{24}$/.test(value);
-
-/**
- * Reads back what an admin pastes off the bank's own website — an RF reference, or (the
- * pre-existing-order fallback) a raw order id, spaces and case tolerated either way.
+ * Reads back what an admin pastes off the bank's own website — an RF reference, spaces and case
+ * tolerated.
  *
  * @param input - the pasted text
- * @returns the normalized reference `getOrderByReference` looks up by, or a lowercase 24-character
- *   ObjectId string for the fallback; `null` when neither shape checks out
+ * @returns the normalized reference `getOrderByReference` looks up by, or `null` when it is not a
+ *   validly-checksummed RF reference
  */
 export const parseReference = (input: string): string | null => {
     const normalized = input.replaceAll(/\s+/g, '').toUpperCase();
 
     const structured = /^RF(\d{2})([\dA-Z]{1,21})$/.exec(normalized);
-    if (structured) {
-        const [, checkDigits, payload] = structured;
-        // eslint-disable-next-line unicorn/prefer-bigint-literals -- a literal needs ES2020; tsconfig targets ES6
-        return remainder97(payload, checkDigits) === BigInt(1) ? normalized : null;
-    }
+    if (!structured) return null;
 
-    return looksLikeObjectId(normalized) ? normalized.toLowerCase() : null;
+    const [, checkDigits, payload] = structured;
+    // eslint-disable-next-line unicorn/prefer-bigint-literals -- a literal needs ES2020; tsconfig targets ES6
+    return remainder97(payload, checkDigits) === BigInt(1) ? normalized : null;
 };

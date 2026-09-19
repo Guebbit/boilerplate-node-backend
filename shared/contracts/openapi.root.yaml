@@ -1134,8 +1134,8 @@ components:
                 # `pending` from the moment the order is created (the schema default — see
                 # `orders/model.ts`), `ready` once the invoice worker has written the stored PDF.
                 # Absent entirely on an order that predates the async pipeline: no job was ever
-                # queued for it, and `GET /orders/{id}/invoice` falls back to rendering it
-                # on demand, exactly as every order did before this field existed.
+                # queued for it. `GET /orders/{id}/invoice` self-heals this the same way it heals
+                # a `ready` status with nothing on disk — queues a render and answers `pending`.
                 invoicePdfStatus:
                     type: string
                     enum: [pending, ready]

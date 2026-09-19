@@ -76,6 +76,22 @@ describe('order serialization', () => {
     });
 });
 
+describe('transferInstructions', () => {
+    it('is absent for a pending bank_transfer order with no transferReference — no fabricated reference', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        // No `transferReference` — the shape a `bank_transfer` order placed before that field
+        // existed carries; `applyTransferInstructions` no longer falls back to the raw id for it.
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            paymentMethod: 'bank_transfer'
+        });
+
+        const json = order.toJSON() as Record<string, unknown>;
+
+        expect(json.transferInstructions).toBeUndefined();
+    });
+});
+
 describe('embedded product snapshot indexes', () => {
     it('does not let the embedded product schema smuggle its indexes into orders', () => {
         /*

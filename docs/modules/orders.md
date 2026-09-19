@@ -183,11 +183,13 @@ override's own two doors are the only way to reach those statuses outside the or
 
 ## The invoice pipeline
 
-`GET /orders/{id}/invoice` used to render the PDF synchronously, on the request. It still does for
-an order that predates this pipeline — no `invoicePdfStatus` at all — but every new order now
-generates its invoice asynchronously, off the module's own `worker.orders.invoice-generate` queue
+`GET /orders/{id}/invoice` never renders on the request thread — every order's invoice generates
+asynchronously, off the module's own `worker.orders.invoice-generate` queue
 (`transport/invoice-pdf.ts`, `asyncapi.internal.yaml`), the same "a module owns its own queue"
-shape `webhooks` set first.
+shape `webhooks` set first. An order that predates this pipeline — no `invoicePdfStatus` at
+all — or one `ready` with nothing on disk (a data anomaly) both self-heal the same way: the
+controller queues a render (`enqueueInvoicePdfRetry`) and answers 202, exactly like an order still
+waiting on its very first render.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 55}}}%%

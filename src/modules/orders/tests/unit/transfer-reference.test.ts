@@ -1,8 +1,8 @@
 /**
  * `orders/domain/transfer-reference.ts` — the RF reference `buildReference` mints and
  * `parseReference` reads back, and the guarantees that matter for matching money to the right
- * order: a round trip survives, a mistyped character is rejected rather than silently resolving,
- * and an order that predates this field is still reachable through its raw id.
+ * order: a round trip survives, and a mistyped character is rejected rather than silently
+ * resolving.
  */
 import { buildReference, parseReference } from '../../domain/transfer-reference';
 
@@ -51,18 +51,13 @@ describe('parseReference — the RF branch', () => {
     it('rejects a string that only looks structured, wrong length included', () => {
         expect(parseReference('RF00NOTAREALREFERENCE')).toBeNull();
     });
-});
 
-describe('parseReference — the raw ObjectId fallback', () => {
-    it('accepts a 24-character hex ObjectId, for an order that predates this field', () => {
-        expect(parseReference(ORDER_ID)).toBe(ORDER_ID);
+    it('rejects a raw ObjectId — an order that predates this field is not reachable by reference', () => {
+        expect(parseReference(ORDER_ID)).toBeNull();
+        expect(parseReference('507F 1F77 BCF8 6CD7 9943 9011')).toBeNull();
     });
 
-    it('normalizes an uppercase or spaced ObjectId to lowercase', () => {
-        expect(parseReference('507F 1F77 BCF8 6CD7 9943 9011')).toBe(ORDER_ID);
-    });
-
-    it('rejects a string that is neither a valid reference nor 24 hex characters', () => {
+    it('rejects a string that is not a reference at all', () => {
         expect(parseReference('not-a-reference')).toBeNull();
         expect(parseReference('')).toBeNull();
     });
