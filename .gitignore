@@ -80,5 +80,4 @@ src/types/asyncapi.generated.ts
 # deleted when it lands.
 /*.md
 !/README.md
-!/CHANGELOG.md
 !/CLAUDE.md

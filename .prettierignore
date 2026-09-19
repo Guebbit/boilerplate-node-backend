@@ -40,4 +40,3 @@ shared/authorization-conformance.yaml
 # already exempt from formatting above and must stay that way.
 /*.md
 !/README.md
-!/CHANGELOG.md

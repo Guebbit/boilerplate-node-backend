@@ -291,8 +291,7 @@ Conventional Commits, enforced by commitlint on the `commit-msg` hook
 - The subject says what the change **does for the system**, not which files moved —
   `fix(rate-limit): log every refusal, since nothing downstream will`, not `update middleware`.
 - One logical change per commit. If the subject needs an "and", it is two commits.
-- Breaking change: `!` after the scope plus a `BREAKING CHANGE:` footer — and a `CHANGELOG.md`
-  entry whenever a generated client cannot absorb it without being regenerated.
+- Breaking change: `!` after the scope plus a `BREAKING CHANGE:` footer.
 - MUST stage explicit pathspecs. Never `git add -A` or `git add .`: another session may have
   untracked work in this worktree, and it is not yours to commit.
 - MUST NOT run research subagents that implement concurrently in the same working tree. A subagent
