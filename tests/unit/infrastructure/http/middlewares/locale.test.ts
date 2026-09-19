@@ -147,9 +147,9 @@ describe('attachLocale', () => {
     });
 
     /**
-     * The two behaviour deltas from switching off the hand-rolled parser onto Express's own
-     * `acceptsLanguages` (`accepts`/`negotiator`). Both are deliberate, documented trade-offs, not
-     * regressions — see `TIER_AUDIT_STRUCTURE.md` C6 for the reasoning.
+     * The two behaviour deltas from `acceptsLanguages` (`accepts`/`negotiator`, Express's own
+     * negotiator) versus a hand-rolled parser. Both are deliberate trade-offs, not regressions —
+     * the cases below assert the chosen behaviour, not merely describe it.
      */
     describe('behaviour deltas from the hand-rolled parser', () => {
         it('drops a tag with an unparseable q-weight, rather than treating it as full weight', () => {

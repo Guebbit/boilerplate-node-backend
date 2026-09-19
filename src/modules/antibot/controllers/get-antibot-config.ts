@@ -1,6 +1,7 @@
 /**
  * @module
- * Controller for `GET /antibot/config` — this module's only route.
+ * Controller for `GET /antibot/config` — one of this module's two routes, alongside
+ * `GET /antibot/challenge` (`get-antibot-challenge.ts`).
  */
 
 import type { Request, Response } from 'express';
@@ -13,7 +14,8 @@ import type { AntibotConfig } from '@types';
 /**
  * This module's own route for {@link resolveHumanChallengeProvider}'s self-hosted providers to
  * hand their widget — matches `module.ts`'s `basePath` plus `routes.ts`'s `/challenge`. Named
- * here, in the module, rather than by the provider adapter itself (`TIER_AUDIT_STRUCTURE.md` B3).
+ * here, in the module, rather than by the provider adapter itself: an adapter must not know its
+ * own mount path.
  */
 const CHALLENGE_URL = '/antibot/challenge';
 

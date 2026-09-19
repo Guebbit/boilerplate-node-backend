@@ -259,9 +259,9 @@ describe('orderService.search', () => {
 });
 
 /*
- * SECURITY_HOLES_7_STORAGE_QUOTA decision 2: the order line no longer freezes an image, so
- * `current` is resolved LIVE from the catalogue product every read — the three branches that
- * matter are unchanged, replaced-since-purchase, and gone.
+ * The order line no longer freezes an image, so `current` is resolved LIVE from the catalogue
+ * product every read — the three branches that matter are unchanged, replaced-since-purchase,
+ * and gone.
  */
 describe('orderService.search — current (live) image', () => {
     it('resolves the live imageUrl for an unchanged product', async () => {

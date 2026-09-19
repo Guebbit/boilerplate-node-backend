@@ -1,7 +1,7 @@
 /**
- * `verified: boolean` becomes `role` + `verifiedAt: Date | null` — SECURITY_HOLES_1B. Enforcement
- * moves off a route guard (`requireVerified`) and onto the permission model (`cart.self.checkout`), so
- * the fact "may this account spend" has to live on the SAME field authorization already reads.
+ * `verified: boolean` becomes `role` + `verifiedAt: Date | null`. Enforcement moves off a route
+ * guard (`requireVerified`) and onto the permission model (`cart.self.checkout`), so the fact
+ * "may this account spend" has to live on the SAME field authorization already reads.
  *
  * Preserves today's behaviour exactly — nobody's access changes:
  *

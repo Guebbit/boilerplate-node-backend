@@ -1,9 +1,10 @@
 /**
  * @module
  * POST /inventory/reservations/sweep
- * The expiry tick, driven from outside since the app ships no scheduler — same arrangement as
- * `POST /delivery/advance`. Audited once per run rather than per order (the orders' own cancel
- * path covers those), so a customer asking why their order vanished has something on record.
+ * The expiry tick, driven from outside since the app ships no scheduler — a cron entry, the
+ * platform's scheduled job, or an operator. Audited once per run rather than per order (the
+ * orders' own cancel path covers those), so a customer asking why their order vanished has
+ * something on record.
  */
 
 import type { Request, Response } from 'express';

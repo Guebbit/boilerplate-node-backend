@@ -5,17 +5,17 @@
  * module's business lands here instead, and `src/app.ts` hands it to `registerModules` as the
  * {@link NonModuleChecks} argument `kernel/required-config.ts` asks for.
  *
- * Three groups:
+ * Groups:
  *
  * - `NODE_URL` / `NODE_CORS_ORIGIN` — this application's own, never a module's.
- * - The SMTP companions that used to be hard-coded inside the kernel (`TIER_AUDIT_STRUCTURE.md`
- *   A9) — the probe itself lives with the adapter (`adapters/mailer.ts#missingSmtpCompanions`),
- *   this file only wires it in. Antibot's equivalent checks moved onto `modules/antibot`'s own
- *   manifest once B3 settled where that module lives (`TIER_AUDIT_STRUCTURE.md` B3).
- * - Three provider-selector probes (`TIER_AUDIT_BUGS.md` §3): analytics, mail transport and the
- *   log personal-field mode all pick an implementation by name and used to throw on the FIRST
- *   request that needed it rather than at boot. `checkSelector` turns each resolver's own throw
- *   into the same shape every other check here produces.
+ * - The SMTP companions, since the kernel must not name the mail adapter directly — the probe
+ *   itself lives with the adapter (`adapters/mailer.ts#missingSmtpCompanions`), this file only
+ *   wires it in. Antibot's equivalent checks live on `modules/antibot`'s own manifest instead,
+ *   since antibot is a real module with a manifest of its own.
+ * - Three provider-selector probes: analytics, mail transport and the log personal-field mode
+ *   each pick an implementation by name; a wrong name must fail at boot, not on the first request
+ *   that needs it. `checkSelector` turns each resolver's own throw into the same shape every
+ *   other check here produces.
  * - NOT `NODE_PAYMENT_PROVIDER` or `NODE_ANTIBOT_PROVIDER` — both are real modules with their own
  *   manifests, so their selectors are probed by `payments/module.ts`'s and `antibot/module.ts`'s
  *   own `customCheck`.

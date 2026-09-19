@@ -198,12 +198,11 @@ module.exports = {
         // `registry.ts` is the low file on functions at 66.66.
         'src/kernel/**/*.ts': floor(70, 70, 66),
         /*
-         * The access module's writers, now `src/modules/access/` (Stage 6 of the DDD fix moved
-         * the folder; `seed.ts` folded into `service.ts` in the same change). Driven hard by
-         * integration and contract suites, because assigning a role means writing a document —
-         * the unit run imports them and calls nothing, which is what a `functions: 0` beside a
-         * healthy statement count always means here. Numbers carried over from the pre-move
-         * floor rather than re-measured; a ratchet, not a target — see CLAUDE.md.
+         * The access module's writers, `src/modules/access/repository.ts` and `service.ts`.
+         * Driven hard by integration and contract suites, because assigning a role means writing
+         * a document — the unit run imports them and calls nothing, which is what a
+         * `functions: 0` beside a healthy statement count always means here. A ratchet, not a
+         * target — see CLAUDE.md.
          */
         'src/modules/access/repository.ts': floor(45, 100, 0),
         'src/modules/access/service.ts': floor(45, 100, 0),

@@ -195,6 +195,30 @@ export const stopServer = () => {
 };
 
 /*
+ * Validate the module registry and attach every module's domain-event handlers before the first
+ * route exists. A cycle or a missing dependency stops the boot here, with the offending path named,
+ * rather than surfacing as a 500 on whichever request happens to cross the gap first.
+ */
+registerModules(enabledModules, APP_NON_MODULE_CHECKS);
+
+/*
+ * `locales` cannot collect every module's `translatables` entry itself — the same wall that keeps
+ * `kernel/translation.ts`'s translation port free of any `src/modules/*` import — so the app tier
+ * builds the lookup and hands it in, the one direction data may cross that boundary. Alongside
+ * `registerModules` above, not inside `startServer()`: a translation write must be validatable the
+ * moment this file is imported, the same as every other module-registry fact, not only once the
+ * process actually starts listening.
+ */
+setTranslatables(resolveTranslatables(enabledModules));
+
+/*
+ * Same reasoning, same shape, for `account`'s data export: it cannot import every sibling to
+ * collect a `POST /account/export` section, so the app tier resolves the list once here and hands
+ * it in.
+ */
+setPersonalDataSections(resolvePersonalDataSections(enabledModules));
+
+/*
  * The middleware stack, in the order a request travels it.
  *
  * Express applies middleware in registration order, so this sequence IS the behaviour, not a
@@ -210,30 +234,6 @@ export const stopServer = () => {
  *
  * Each install owns the ordering *within* its own group and documents it there.
  */
-/*
- * Validate the module registry and attach every module's domain-event handlers before the first
- * route exists. A cycle or a missing dependency stops the boot here, with the offending path named,
- * rather than surfacing as a 500 on whichever request happens to cross the gap first.
- */
-registerModules(enabledModules, APP_NON_MODULE_CHECKS);
-
-/*
- * `locales` cannot collect every module's `translatables` entry itself — the same wall that keeps
- * `@infrastructure/i18n`'s translation port free of any `src/modules/*` import — so the app tier
- * builds the lookup and hands it in, the one direction data may cross that boundary. Alongside
- * `registerModules` above, not inside `startServer()`: a translation write must be validatable the
- * moment this file is imported, the same as every other module-registry fact, not only once the
- * process actually starts listening.
- */
-setTranslatables(resolveTranslatables(enabledModules));
-
-/*
- * Same reasoning, same shape, for `account`'s data export: it cannot import every sibling to
- * collect a `POST /account/export` section, so the app tier resolves the list once here and hands
- * it in.
- */
-setPersonalDataSections(resolvePersonalDataSections(enabledModules));
-
 installSecurity(app);
 installRequestContext(app);
 installTelemetry(app);

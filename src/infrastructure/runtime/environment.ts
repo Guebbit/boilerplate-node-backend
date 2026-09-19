@@ -89,9 +89,9 @@ export const environmentFlag = (key: string, fallback: boolean): boolean => {
  * A closed-set choice from the environment — the shape a provider/mode selector reads: trimmed,
  * lower-cased, empty or unset falls back to `fallback`, anything else outside `allowed` throws.
  * One rule for every selector (`NODE_PAYMENT_PROVIDER`, `NODE_ANTIBOT_PROVIDER`,
- * `NODE_ANALYTICS_PROVIDER`, `NODE_MAIL_TRANSPORT`, `NODE_LOG_PERSONAL_FIELDS`) rather than five —
- * three used to read `process.env[key] ?? fallback` with no trim, so a trailing space or an empty
- * `X=` refused to boot instead of falling back the way the other two already did.
+ * `NODE_ANALYTICS_PROVIDER`, `NODE_MAIL_TRANSPORT`, `NODE_LOG_PERSONAL_FIELDS`) rather than five
+ * separate ones: a hand-rolled `process.env[key] ?? fallback` with no trim refuses to boot on a
+ * trailing space or an empty `X=` instead of falling back the way this shared version does.
  *
  * @param key - the variable's name, used only in the thrown message
  * @param allowed - the closed set of valid values, already lower-cased

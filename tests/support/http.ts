@@ -32,8 +32,8 @@ interface AuthenticatedTestUser {
  *
  * `customer` membership, `verifiedAt: new Date()` — this is the account most tests want: a
  * logged-in caller free to use the whole app, checkout and payment included. A test asserting
- * UNVERIFIED behaviour builds its own user with `createUser({ verifiedAt: new Date() }, 'unverified')`
- * (`account`'s own suites do exactly that) rather than fighting this default.
+ * UNVERIFIED behaviour builds its own user with `createUser({}, 'unverified')` (`account`'s own
+ * suites do exactly that) rather than fighting this default.
  */
 export const authenticateAs = async (
     role: 'admin' | 'user' = 'user'

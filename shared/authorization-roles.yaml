@@ -16,7 +16,7 @@
 # — except `admin`, the shop's one superuser account rather than a job. Reusing the others means
 # the permission model is exercised by the demo rather than only by its own tests.
 #
-# EVERY GRANT BELOW IS SPELLED OUT, `admin` INCLUDED. There is no wildcard of any kind any more —
+# EVERY GRANT BELOW IS SPELLED OUT, `admin` INCLUDED. There is no wildcard of any kind —
 # breadth is a segment on the key itself (`<family>.self.read` vs `<family>.any.read`), so a role
 # that reads widely says `any` and a role that reads only its own says `self`, and nothing has to
 # be inferred from which wildcard a role happens to hold. `admin` lists every declared tenant key

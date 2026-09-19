@@ -238,9 +238,10 @@ describe('createAccessToken', () => {
      * reload above exists to avoid.
      *
      * `tokens` is `select: false`, so `this.tokens` is `undefined` here rather than `[]`. The
-     * atomic `$pull` does not care: the revocation lands in the database either way. What used to
-     * break is what happens next — the in-memory resync ran `undefined.filter(...)` and threw,
-     * *after* the write had succeeded, so a logout that revoked every session reported a 500.
+     * atomic `$pull` does not care: the revocation lands in the database either way. The failure
+     * mode under test is what happens next — the in-memory resync runs `undefined.filter(...)`
+     * and throws *after* the write has already succeeded, so a logout that revokes every session
+     * must not report a 500 despite that.
      *
      * Both halves are asserted, because either one alone is satisfiable by the wrong code: a
      * revocation that resolves but does not revoke, or a revocation that revokes and then throws.

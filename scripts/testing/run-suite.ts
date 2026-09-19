@@ -61,7 +61,7 @@ type Suite =
 /**
  * The layers this runner knows, keyed by the name its npm script passes.
  *
- * `unit` and `cross-cutting` run in parallel; only their worker count comes from this file now.
+ * `unit` and `cross-cutting` run in parallel; only their worker count comes from this file.
  */
 const SUITES: Record<string, Suite> = {
     unit: {

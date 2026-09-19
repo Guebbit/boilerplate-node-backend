@@ -4,8 +4,8 @@
 # Sending an email is a verb, not a domain: the producer is whichever module needs one, and the
 # consumer is `infrastructure/adapters/email.worker.ts`. That doesn't stop making sense in an app
 # with no modules, so the contract for it sits beside the root rather than inside a domain that
-# happens to enqueue the most jobs. PDF generation is NOT here any more — it's orders' own invoice
-# pipeline now (`src/modules/orders/asyncapi.internal.yaml`), the same way webhook delivery is
+# happens to enqueue the most jobs. PDF generation is NOT here: it is orders' own invoice
+# pipeline (`src/modules/orders/asyncapi.internal.yaml`), the same way webhook delivery is
 # webhooks' own queue rather than a domainless one.
 #
 # Unlike the root, this IS a standalone AsyncAPI document — `info` exists only to make it one, so

@@ -77,7 +77,7 @@ describe('who may write `paid`', () => {
 
 describe('who may write `shipped` and `delivered`', () => {
     it('lets nothing but a recorded parcel fact reach either', () => {
-        // Neither is a request a human makes directly any more — `delivery`'s own doors record the
+        // Neither is a request a human makes directly — `delivery`'s own doors record the
         // handover/arrival first, then report it here. See
         // `src/modules/orders/services/status.ts`.
         for (const actor of EVERY_ACTOR) {
@@ -91,8 +91,8 @@ describe('who may write `shipped` and `delivered`', () => {
     });
 
     it('refuses an admin writing either by hand', () => {
-        // The generic `PUT /orders/:id` used to allow this; `src/modules/orders/services/status.ts`'s
-        // doors (reached only through `delivery`) are what may move an order here now.
+        // The generic `PUT /orders/:id` never allows this; only `src/modules/orders/services/status.ts`'s
+        // doors, reached exclusively through `delivery`, may move an order here.
         expect(canTransition(OrderStatus.processing, OrderStatus.shipped, 'admin')).toBe(false);
         expect(canTransition(OrderStatus.shipped, OrderStatus.delivered, 'admin')).toBe(false);
     });

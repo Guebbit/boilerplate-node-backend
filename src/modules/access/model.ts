@@ -5,10 +5,11 @@
  *
  * ITS OWN MODULE, ROUTELESS ON PURPOSE. Tenants and memberships are an identity-and-access domain
  * with real write invariants (see `./service.ts`), consumed by `account`, `api-keys` and `users`
- * plus `db` scripts and `scenarios` — the same shape `addresses` used to justify leaving
- * `account`. It answers to no route of its own: `permissions.ts`, `ability.ts` and
- * `access/query.ts` stay in the kernel, because the route guard is kernel code and they are what
- * it asks — this module is the domain those files ask about, not the asking itself.
+ * plus `db` scripts and `scenarios` — several unrelated modules sharing one domain is reason
+ * enough for its own module, the same reasoning `addresses` is split out of `account` for. It
+ * answers to no route of its own: `permissions.ts`, `ability.ts` and `access/query.ts` stay in
+ * the kernel, because the route guard is kernel code and they are what it asks — this module is
+ * the domain those files ask about, not the asking itself.
  *
  * ROLES ARE DATA, PERMISSIONS ARE CODE — but the DATA half lives in `shared/authorization-roles.yaml`
  * alone now, not in this database: a role's permissions are the same for every deployment, and a

@@ -1,11 +1,10 @@
 /**
  * Project-local rules.
  *
- * `controller-chain-must-catch` and `no-hardcoded-user-text` used to be tests under
- * `tests/cross-cutting/`, and both were the same mistake: a syntactic property of the source,
- * asserted by reading the source as TEXT. One grepped every controller for the string
- * `.catch(`; the other carried a hand-written tokenizer — 60 lines tracking quote state, escape
- * characters and paren depth — to find one argument of one call.
+ * `controller-chain-must-catch` and `no-hardcoded-user-text` check a syntactic property of the
+ * source at the AST, not by reading the source as TEXT: grepping every controller for the string
+ * `.catch(`, or hand-tokenizing quote state, escape characters and paren depth to find one
+ * argument of one call, is the same mistake a cross-cutting test would make.
  *
  * A lint rule gets the parsed AST for free, reports at the offending line instead of naming a
  * file, and shows up in the editor while the code is being written rather than in CI afterwards.

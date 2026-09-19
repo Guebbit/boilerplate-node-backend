@@ -187,9 +187,9 @@ describe('tokenRemoveAll', () => {
 });
 
 /*
- * `tokenRemoveExpired` moved to `userRepository.tokenRemoveExpired` — it resolved an HTTP status,
- * which belongs below the repository, not on the schema. Its tests moved too, into
- * `repository.test.ts` (the sweep itself) and `account/tests/unit/token-cleanup-job.test.ts` (what
- * a failed sweep means to a caller). The two methods above stay: both are `$push`/`$pull` against
- * `this`, keeping the loaded array in step with the write.
+ * `tokenRemoveExpired` lives on `userRepository`, not the schema — it resolves an HTTP status,
+ * which belongs below the repository. Its tests live in `repository.test.ts` (the sweep itself)
+ * and `account/tests/unit/token-cleanup-job.test.ts` (what a failed sweep means to a caller). The
+ * two methods above stay: both are `$push`/`$pull` against `this`, keeping the loaded array in
+ * step with the write.
  */

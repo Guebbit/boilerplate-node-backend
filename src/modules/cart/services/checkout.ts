@@ -304,7 +304,8 @@ export const orderConfirm = (
             /*
              * `order_created` fires here too, not just from the admin route's `create()` —
              * see docs/tools/observability-layer.md. The audit records the caller's real role,
-             * whatever it is — no forced override (`DDD_FIX.md` D3.4).
+             * whatever it is — no forced override: a purchase made by an admin is still an admin
+             * action, not a synthetic "user" role.
              */
             if (result.success && result.data) {
                 orderService.recordCreated(result.data, context);

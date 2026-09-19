@@ -108,8 +108,9 @@ export const canOverrideTo = (from: OrderStatus, to: OrderStatus): boolean => {
 
 /**
  * Every status a forced or status-only override starting from `to` could have legally come FROM —
- * the conditional write's own `from` set, the same shape {@link markSystemMove}'s single-status
- * version needs but computed dynamically here since an override's `from` is not fixed to one value.
+ * the conditional write's own `from` set, the same shape `services/status.ts`'s private
+ * `markSystemMove` needs for one fixed status, but computed dynamically here since an override's
+ * `from` is not fixed to one value.
  * @param to - the status being written
  * @returns every status strictly earlier than `to` in the overridable sequence
  */

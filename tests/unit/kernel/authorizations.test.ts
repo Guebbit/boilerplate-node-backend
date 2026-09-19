@@ -53,9 +53,8 @@ jest.mock('@infrastructure/observability/audit', () => ({
  * distinguishable in the fake exactly as they are in production.
  */
 /**
- * A key only `admin` holds — stands in for "the elevated permission" throughout this file, the
- * same role the deleted blanket guards used to reach through the scope wildcard, now reached by
- * naming one of the keys `admin` holds explicitly.
+ * A key only `admin` holds — stands in for "the elevated permission" throughout this file, named
+ * explicitly rather than through any scope-wide shortcut, since none exists.
  */
 const ADMIN_ONLY_KEY = 'apikeys.any.delete';
 

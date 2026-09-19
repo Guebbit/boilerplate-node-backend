@@ -41,8 +41,8 @@ export interface EphemeralMongo {
  * finds cached under `MONGOMS_DOWNLOAD_DIR`, which `docker/Dockerfile` bakes at build time).
  *
  * Pure env-var bookkeeping, not a call into the library itself — this is what stays safe to do
- * from `src/`. Must run in the same process that calls `startInProcess`, and before it: this is
- * what `bf615b00` fixed after the vars were set too late to matter.
+ * from `src/`. Must run in the same process that calls `startInProcess`, and before it, or the
+ * vars are set too late for the library to read them.
  */
 const usePreinstalledBinary = (): void => {
     const systemBinary = process.env.MONGOMS_SYSTEM_BINARY;

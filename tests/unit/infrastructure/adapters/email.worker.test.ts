@@ -15,7 +15,7 @@
  *
  * The side effect it exists for — SMTP — is mocked. What is under test is the decision, not the
  * delivery: which payloads are refused before any work starts, and which failures are allowed to
- * escape. PDF generation moved to `orders/transport/invoice-pdf.ts` and is tested there now.
+ * escape. PDF generation is tested in `orders/transport/invoice-pdf.ts` instead.
  */
 
 import { logger } from '@infrastructure/adapters/logger';

@@ -191,10 +191,9 @@ cases:
       resource: { tenantId: shop_1, userId: null }
       expect: deny
 
-    # The fix AUTHZ_STAFF_ORDER_VISIBILITY.md exists for: `orders.any.read` and `payments.any.read`
-    # carry no owner condition, so the support desk and the warehouse can read an order or a
-    # payment that is never their own — without the family's old `manage` wildcard, which would
-    # also have handed them delete.
+    # `orders.any.read` and `payments.any.read` carry no owner condition, so the support desk and
+    # the warehouse can read an order or a payment that is never their own — without the family's
+    # old `manage` wildcard, which would also have handed them delete.
     - name: a caller holding orders.any.read reads an order that is not their own
       caller: { id: usr_3, scope: tenant, tenantId: shop_1, permissions: [orders.any.read] }
       action: read
@@ -381,7 +380,7 @@ cases:
     # =============================================================================================
     # The editor. Everything the shop says and shows, in every registered language: the catalogue
     # record, the dictionary, and the words on a translatable entity — nothing about stock, an
-    # order, or a person. Spelled out in full because there is no `manage` wildcard any more —
+    # order, or a person. Spelled out in full because there is no `manage` wildcard —
     # this is exactly `shared/authorization-roles.yaml`'s `editor` grant.
     # =============================================================================================
 

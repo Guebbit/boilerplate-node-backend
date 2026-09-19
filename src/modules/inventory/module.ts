@@ -67,6 +67,6 @@ export default {
      */
     locales: path.join(__dirname, 'locales'),
     // Stock movements and holds are keyed by product and order, never by person — see the
-    // `subscribe` comment above on why a reservation is never even serialized to a client.
+    // `scenarios` comment above on why a reservation is never even serialized to a client.
     personalData: 'none'
 } satisfies AppModule;

@@ -1,9 +1,9 @@
 /**
  * @module
- * Controller for `GET /observability/health`. Assembles the readiness snapshot by hand, off
- * `infrastructure/observability`: dependency state, telemetry sinks, process resources, and every
- * lease-guarded job's last outcome. See the JSDoc on `getObservabilityHealth` below for what each
- * field means and why liveness lives elsewhere.
+ * Controller for `GET /observability/health`. Assembles the readiness snapshot by hand: dependency
+ * state, telemetry sinks, process resources, and every lease-guarded job's last outcome. See the
+ * JSDoc on `getObservabilityHealth` below for what each field means and why liveness lives
+ * elsewhere.
  *
  * See: docs/modules/observability.md
  */
@@ -57,8 +57,8 @@ export const getObservabilityHealth = (_request: Request, response: Response) =>
                 },
                 /*
                  * Which telemetry sinks this deployment is wired to. Booleans read off the
-                 * environment, never reachability — the previous name, `integrations`, read like a
-                 * health check and was the reason this block kept being mistaken for one.
+                 * environment, never reachability — `telemetry` rather than `integrations`, since
+                 * a name that reads like a health check invites this block to be mistaken for one.
                  */
                 telemetry: {
                     loki: Boolean(process.env.NODE_LOKI_HOST),
@@ -75,12 +75,11 @@ export const getObservabilityHealth = (_request: Request, response: Response) =>
                      * Which backend receives product events, and whether it can actually deliver
                      * them.
                      *
-                     * The name is a deployment choice between three, so `posthog: false` could
-                     * not distinguish "PostHog is unconfigured" from "this deployment uses
-                     * Umami". `configured` is the half that was missing: a provider selected
-                     * without its credentials warns once and then discards every event for the
-                     * life of the process, and this endpoint — whose job is "which part is
-                     * missing" — reported a name and looked healthy.
+                     * The name alone is not enough: with three possible providers, `posthog:
+                     * false` cannot distinguish "PostHog is unconfigured" from "this deployment
+                     * uses Umami". `configured` closes that gap: a provider selected without its
+                     * credentials warns once and then discards every event for the life of the
+                     * process, and this endpoint's whole job is saying which part is missing.
                      */
                     analytics: {
                         provider: analyticsProvider.name,

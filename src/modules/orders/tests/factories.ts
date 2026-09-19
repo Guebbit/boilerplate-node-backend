@@ -93,8 +93,8 @@ export const saveOrder = (document: OrderDocument): Promise<OrderDocument> =>
  * Force an order straight to `status`, bypassing every lifecycle rule — the one door a test may
  * use to reach a state the real API could never produce, to prove some OTHER caller handles it
  * correctly (a payment attempt against an order that is no longer `pending`, for one). Never a
- * production door: `orderService` publishes no unconditional status writer any more — nothing
- * outside this module's own conditional moves may set a status with no rule behind it.
+ * production door: `orderService` publishes no unconditional status writer — nothing outside
+ * this module's own conditional moves may set a status with no rule behind it.
  */
 export const forceOrderStatus = (orderId: string, status: string): Promise<OrderDocument | null> =>
     orderRepository.updateStatusIfIn(orderId, Object.values(OrderStatus), status);

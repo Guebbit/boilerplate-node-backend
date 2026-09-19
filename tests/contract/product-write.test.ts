@@ -3,7 +3,7 @@
  * and `GET /products/{id}/admin`. Cross-module by nature, sitting at the top level rather than
  * under `src/modules/products/tests/` for the same reason `translation-cascades.test.ts` does:
  * driving these routes needs a real `locales` collection row, which `products` may only reach
- * through the `@infrastructure/i18n` port.
+ * through the `kernel/translation.ts` port.
  */
 
 import { readFileSync } from 'node:fs';
@@ -118,7 +118,7 @@ describe('PATCH /products/{id}', () => {
     });
 
     // The write route stacks `products.any.update` AND `translations.any.update`. No preset role
-    // holds one without the other any more, so the "one key alone refuses" half of this cannot be
+    // holds one without the other, so the "one key alone refuses" half of this cannot be
     // exercised over HTTP today — `shared/authorization-conformance.yaml` asserts it at the
     // ability layer instead ("the dictionary keys do not update a price, even together").
     it('lets the editor change a price', async () => {

@@ -98,7 +98,7 @@ describe('account emails — the action links', () => {
     });
 
     it('joins correctly even when NODE_URL carries no trailing slash', () => {
-        // Concatenation made this depend on `NODE_URL`'s own trailing slash — missing one used to
+        // Concatenation would depend on `NODE_URL`'s own trailing slash — missing one would
         // produce `https://api.example.comaccount/verify/…`. `URL`-based joining resolves it
         // either way, same reasoning as `oauth/config.ts`'s `oauthRedirectUri`.
         const original = process.env.NODE_URL;

@@ -81,9 +81,9 @@ describe('every paged $sort is total', () => {
     it('actually finds the pipelines it claims to scan', () => {
         // A canary, as in the audit sweep: an empty result must mean "all total", never "the
         // regex stopped matching". `orders` is the one repository that pages through an
-        // aggregation pipeline today — `inventory`'s stock board used to be a second, before
-        // 1-D1 moved it off a cross-module `$lookup` and onto a plain `find().sort().skip()`,
-        // which this regex (deliberately syntactic — see the module docblock) does not match.
+        // aggregation pipeline today — `inventory`'s stock board pages through a plain
+        // `find().sort().skip()` instead, which this regex (deliberately syntactic — see the
+        // module docblock) does not match.
         expect(pagedSortStages().length).toBeGreaterThanOrEqual(1);
     });
 });

@@ -7,9 +7,10 @@
  * isn't one; importing any single operation's constant puts a domain's name in `infrastructure` and makes
  * that domain undeletable once the contract is split per module.
  *
- * So `infrastructure` declares the bounds and this test carries the guarantee the import used to: raise
- * `maximum` in `openapi.yaml`, regenerate, and every constant moves while `infrastructure` does not — which
- * fails here rather than silently answering 422 for a page size the contract calls legal.
+ * So `infrastructure` declares the bounds, and this test stands in for the guarantee an import would
+ * otherwise give for free: raise `maximum` in `openapi.yaml`, regenerate, and every constant moves
+ * while `infrastructure` does not — which fails here rather than silently answering 422 for a page
+ * size the contract calls legal.
  *
  * It sweeps the GENERATED module rather than a list, so a new endpoint is covered by existing.
  */

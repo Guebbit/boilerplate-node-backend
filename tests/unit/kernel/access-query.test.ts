@@ -2,9 +2,10 @@
  * @module
  * `accessibleFilter` — the rules, compiled into the filter a collection is actually read with.
  *
- * The unit that replaces the four hand-written fragments, so these assert the two properties that
- * used to be somebody's job to remember: an unrestricted role narrows nothing, and a caller with
- * no rule at all gets a filter that matches nothing rather than a filter that is missing.
+ * The unit that replaces the four hand-written fragments, so these assert the two properties a
+ * human would otherwise have to remember by hand: an unrestricted role narrows nothing, and a
+ * caller with no rule at all gets a filter that matches nothing rather than a filter that is
+ * missing.
  */
 
 import { accessibleFilter } from '@kernel/access/query';

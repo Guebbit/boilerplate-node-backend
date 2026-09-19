@@ -285,7 +285,7 @@ describe('publishToQueue()', () => {
             arguments: { 'x-max-priority': 1 }
         });
         expect(mockBindQueue).toHaveBeenCalledWith('emails', DEAD_LETTER_EXCHANGE, 'emails');
-        // `.dead` gets no binding at all — nothing dead-letters into it automatically any more.
+        // `.dead` gets no binding at all — nothing dead-letters into it automatically.
         expect(mockBindQueue).not.toHaveBeenCalledWith(
             deadLetterQueueOf('emails'),
             DEAD_LETTER_EXCHANGE,
@@ -332,10 +332,10 @@ describe('the channel is supervised, not only the connection', () => {
 
     /**
      * The bug this pins: a channel-only close (`PRECONDITION_FAILED`, an ack on an unknown tag)
-     * used to leave `currentChannel` cleared for good — amqplib's own recovery only reacts to the
-     * CONNECTION dropping, which never happens here, so nothing else was ever going to open a new
-     * one. Every consumer this process registered must come back on the replacement channel too,
-     * the same as a genuine reconnect already does.
+     * would otherwise leave `currentChannel` cleared for good — amqplib's own recovery only
+     * reacts to the CONNECTION dropping, which never happens here, so nothing else would ever
+     * open a new one. Every consumer this process registered must come back on the replacement
+     * channel too, the same as a genuine reconnect already does.
      */
     it('re-opens a channel and replays consumers when only the channel closes', async () => {
         jest.useFakeTimers();

@@ -690,9 +690,9 @@ describe('productService.findManyByIds', () => {
     });
 
     /**
-     * `toObjectId` throws on a malformed id (`BSONError`), and `.map()` used to run outside any
-     * promise chain — a synchronous throw out of a function every caller (`orders`'
-     * `resolveCurrentImages`) treats as `Promise`-returning, uncatchable by its own `.catch()`.
+     * `toObjectId` throws on a malformed id (`BSONError`), which the `.map()` call site must catch
+     * itself: every caller (`orders`' `resolveCurrentImages`) treats this function as
+     * `Promise`-returning, and a synchronous throw out of it is uncatchable by their own `.catch()`.
      */
     it('rejects rather than throws for a malformed id', async () => {
         // One call, captured — a second call's promise would go unhandled and crash the suite,

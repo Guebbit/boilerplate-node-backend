@@ -3,7 +3,7 @@
  * `productRepository` — CRUD and the aggregate reads (`facets`) against a real Mongo instance,
  * including their answers over an empty catalogue, where a `$group`/`$facet` pipeline returns no
  * row at all rather than a zeroed one. The stock aggregates (`sumReserved`, `countLowAvailability`,
- * the stock board) moved to `@modules/inventory`'s own `stockLevelRepository` — see its tests.
+ * the stock board) live in `@modules/inventory`'s own `stockLevelRepository` instead — see its tests.
  */
 
 import { asStub } from '@tests/stub';

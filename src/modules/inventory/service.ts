@@ -71,7 +71,8 @@ const SWEEP_BATCH_SIZE = 200;
 
 /**
  * Which condition guards a given transition — kept as a table so it stays in sync with
- * `counterDeltaFor`'s reason→deltas table, asserted by `tests/unit/transitions.test.ts`. `commit`
+ * `counterDeltaFor`'s reason→deltas table (`./domain`), a manual invariant with no test of its
+ * own; `tests/unit/transitions.test.ts` covers `counterDeltaFor` itself, not this function. `commit`
  * and `adjust` read `onHand`/`reserved` directly rather than `available`, matching the invariant
  * each protects: a sale must find both real, a correction must not cut below what's promised.
  *
@@ -135,7 +136,7 @@ const applyTransition = async (
          * Reporting `true` (moved, trivially) is what lets `releaseForOrder`/`commitForOrder`
          * keep going instead of logging an alarm for counters that no longer exist by design —
          * the sweep must still be able to expire the REST of an order's lines. `receive`/`adjust`
-         * never reach this branch in practice any more: both check the product exists first.
+         * never reach this branch in practice: both check the product exists first.
          */
         if (reason !== StockMovementReason.receive && reason !== StockMovementReason.adjust) {
             return true;
@@ -422,10 +423,10 @@ export const runReservationSweep = async (context?: CallerContext): Promise<numb
 
 /**
  * Guarantee a product has a level row, even at zero — `module.ts`'s `PRODUCT_CREATED` listener's
- * own job, called REGARDLESS of the opening quantity. `receive` alone used to be this module's
- * only reaction to a new product, and `receive` is never called for an opening count of zero, so
- * a product created with none never got a row at all: invisible to the stock board and the
- * low-stock gauge, both of which start from this collection.
+ * own job, called REGARDLESS of the opening quantity. `receive` is never called for an opening
+ * count of zero, so relying on it alone as this module's reaction to a new product would leave a
+ * zero-quantity product with no row at all: invisible to the stock board and the low-stock gauge,
+ * both of which start from this collection.
  *
  * @param productId - the product just created
  */
@@ -556,10 +557,10 @@ export const adjust = async (
  * rather than name. Paged and sorted inside mongod on `stocklevels` alone; the title each row
  * needs is asked of `productService` AFTER the page is settled, API composition rather than a
  * database join across module boundaries — see `repository.ts`'s `stockBoard` and 1-D1's writeup.
- * A row whose product `findManyByIds` cannot find any more falls back to the id itself rather
- * than dropping the row: `3.10`'s cleanup keeps a hard-deleted product's level row from
- * outliving it, so this should be unreachable in practice, and a row a buggy future change left
- * behind is still worth an admin seeing, not silently hiding a counter that still holds units.
+ * A row whose product `findManyByIds` cannot find falls back to the id itself rather than
+ * dropping the row: a hard-deleted product's level row cannot outlive it, so this should be
+ * unreachable in practice, and a row a buggy future change left behind is still worth an admin
+ * seeing, not silently hiding a counter that still holds units.
  *
  * @param filters - `lowOnly` to keep only scarce rows, plus the shared `page`/`pageSize`
  * @returns the page and its pagination meta

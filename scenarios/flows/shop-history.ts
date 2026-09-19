@@ -476,12 +476,12 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
     await shipOrder(owner, subjects['order.shipped']);
 
     /*
-     * SECURITY_HOLES_7_STORAGE_QUOTA (decision 2): an order line resolves its picture LIVE
-     * against the catalogue product it still names, never a frozen one — so the branch that
-     * matters here is what happened to the CATALOGUE ROW after these were bought, not the order.
-     * Three products, three fates, plus one order that buys all three at once so a single
-     * response shows every branch side by side. The catalogue edits run AFTER every checkout
-     * below, so none of these orders is placed against an already-deleted product.
+     * An order line resolves its picture LIVE against the catalogue product it still names,
+     * never a frozen one — so the branch that matters here is what happened to the CATALOGUE ROW
+     * after these were bought, not the order. Three products, three fates, plus one order that
+     * buys all three at once so a single response shows every branch side by side. The catalogue
+     * edits run AFTER every checkout below, so none of these orders is placed against an
+     * already-deleted product.
      */
     subjects['order.imageUnchanged'] = dated(
         await checkoutAndPay(customer, [{ productId: fillerProductId(121), quantity: 1 }])

@@ -1,8 +1,8 @@
 /**
  * @module
  * POST /delivery/order/:orderId/ship
- * Staff recording a parcel's handover to the carrier — the door that moves an order
- * `processing → shipped` now, replacing the generic admin status write.
+ * Staff recording a parcel's handover to the carrier — the one door that moves an order
+ * `processing → shipped`.
  */
 
 import type { Request, Response } from 'express';

@@ -97,10 +97,9 @@ describe('environmentDecimal', () => {
     });
 
     /*
-     * The defect this parser exists to close: `products/config.ts`'s boot-time VAT check used to
-     * validate a raw string with a bare `Number(raw)`, which accepts both of these (0.5 and 0.1
-     * respectively) — so a value that PASSED the boot check then silently read back as the
-     * fallback rate here, the moment an order actually needed it.
+     * The defect this parser exists to close: a bare `Number(raw)` accepts both of these (0.5 and
+     * 0.1 respectively) — so a value that PASSES `products/config.ts`'s boot-time VAT check would
+     * then silently read back as the fallback rate here, the moment an order actually needed it.
      */
     it.each(['.5', '1e-1', '+.1', 'Infinity', '0x10'])(
         'refuses %p rather than reading it the way a bare Number() would',

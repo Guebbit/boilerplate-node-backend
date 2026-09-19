@@ -4,8 +4,7 @@
  * when a module gets one of these instead of a single `service.ts`. Split by what the operations
  * DO: `subscriptions.ts` and `deliveries.ts` are the admin surface's two resources, `attempt.ts` is
  * the delivery core both `deliveries.ts`'s replay and the queued worker share, `sweep.ts` is the
- * retry sweep `ops/sweep-webhook-retries.ts` runs, `publish.ts` is the domain-event fan-out, and
- * `context.ts` is the one thing every one of them needs from a caller.
+ * retry sweep `ops/sweep-webhook-retries.ts` runs, and `publish.ts` is the domain-event fan-out.
  */
 
 import * as subscriptions from './subscriptions';

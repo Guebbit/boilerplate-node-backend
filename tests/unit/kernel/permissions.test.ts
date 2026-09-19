@@ -117,9 +117,9 @@ describe('the real shared authorization files', () => {
         expect(ANONYMOUS_ROLE.name).toBeTruthy();
     });
 
-    // There is no wildcard any more: `admin` is unrestricted only because it lists every tenant
-    // key by name. This is what stops a newly declared key from being silently forgotten off it —
-    // the one thing the old scope wildcard used to guarantee for free.
+    // There is no wildcard: `admin` is unrestricted only because it lists every tenant key by
+    // name. This is what stops a newly declared key from being silently forgotten off it, the
+    // same guarantee a scope wildcard would give for free.
     it('grants admin every declared tenant key by name', () => {
         const admin = PRESET_ROLES.find((role) => role.name === 'admin');
         expect(admin).toBeDefined();

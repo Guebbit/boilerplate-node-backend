@@ -43,7 +43,7 @@ describe('GET /users', () => {
 
     // `GET /users/:id` resolves `role` from the membership store; the list endpoint's own
     // serialization went through the document's `toJSON` transform instead, which has no role
-    // to offer any more — every item in a page answered with `role` silently missing.
+    // to offer — every item in a page answered with `role` silently missing.
     it('carries each item’s role, the same as GET /users/:id does', async () => {
         const { bearer, user } = await authenticateAs('admin');
         const response = await api().get('/users').set('Authorization', bearer);
@@ -58,7 +58,7 @@ describe('GET /users', () => {
 
 // The `?role=` filter itself is gone — `role` is a membership fact now, not a searchable document
 // column, and filtering by it needs a two-step resolve `createRepository`'s generic `exact` spec
-// can't express. Deliberately not rebuilt here; see DDD_FIX.md Phase 2.3's follow-up note.
+// can't express. Deliberately not rebuilt here: no caller of `GET /users` needs it today.
 
 describe('GET /users/{id}', () => {
     it('matches the contract and exposes no credentials', async () => {

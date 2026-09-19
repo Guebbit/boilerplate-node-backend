@@ -38,8 +38,8 @@ export const scopeOfKey = (key: string): AuthorizationScope =>
 /**
  * The action vocabulary a declared KEY may carry, as a runtime array so both the type below and
  * the Zod schema that validates the shared YAML are drawn from the one list. `manage` is
- * deliberately absent: there is no wildcard of any kind any more, so nothing declares it as ITS
- * action. `checkout` and `sweep` are the two additions beyond CASL's own CRUD set —
+ * deliberately absent: there is no wildcard of any kind, so nothing declares it as ITS action.
+ * `checkout` and `sweep` are the two additions beyond CASL's own CRUD set —
  * `cart.self.checkout`'s and `inventory.any.sweep`'s actions, and nowhere else. See each key's own
  * description in `shared/authorization-keys.yaml`.
  */
@@ -106,6 +106,7 @@ export interface PermissionKey {
     deniedCode?: string;
 }
 
+/** Runtime shape for one entry of `shared/authorization-keys.yaml`'s `keys` list. */
 const permissionKeySchema = z.object({
     key: z.string(),
     module: z.string(),
@@ -127,6 +128,7 @@ export interface PresetRole {
     permissions: readonly string[];
 }
 
+/** Runtime shape for one entry of `shared/authorization-roles.yaml`'s `roles` list. */
 const presetRoleSchema = z.object({
     name: z.string(),
     scope: z.enum(AUTHORIZATION_SCOPES),
@@ -136,8 +138,8 @@ const presetRoleSchema = z.object({
 }) satisfies z.ZodType<PresetRole>;
 
 /**
- * The full shape of `shared/authorization-keys.yaml`. `version` and `scopes` are validated for
- * shape (a malformed one should still fail loudly) even though only `wildcards`/`keys` are read
+ * The full shape of `shared/authorization-keys.yaml`. `version`, `actions` and `scopes` are
+ * validated for shape (a malformed one should still fail loudly) even though only `keys` is read
  * downstream today. Exported so a unit test can assert on malformed fixtures directly, rather than
  * reaching for the private `readShared`/filesystem path this module resolves at import.
  */
@@ -159,6 +161,7 @@ export const rolesDocumentSchema = z.object({
     })
 });
 
+/** The repo-root `shared/` directory every authorization YAML file lives under. */
 const SHARED = path.join(__dirname, '..', '..', 'shared');
 
 /**
@@ -183,8 +186,10 @@ const readShared = <T>(file: string, schema: z.ZodType<T>): T => {
     return result.data;
 };
 
+/** The parsed, validated `authorization-keys.yaml`. */
 const keysDocument = readShared('authorization-keys.yaml', keysDocumentSchema);
 
+/** The parsed, validated `authorization-roles.yaml`. */
 const rolesDocument = readShared('authorization-roles.yaml', rolesDocumentSchema);
 
 /** Every declared key, in the order the shared file lists them. */
@@ -205,6 +210,7 @@ export const PRESET_ROLES: readonly PresetRole[] = rolesDocument.roles;
 /** What an unauthenticated request resolves to — a value in the model, not a null to handle. */
 export const ANONYMOUS_ROLE = rolesDocument.anonymous;
 
+/** Every declared key, indexed by its own name for {@link findKey}'s O(1) lookup. */
 const byKey = new Map(PERMISSION_KEYS.map((entry) => [entry.key, entry]));
 
 /**
@@ -214,6 +220,7 @@ const byKey = new Map(PERMISSION_KEYS.map((entry) => [entry.key, entry]));
  */
 export type RoleLookup = Pick<PresetRole, 'name' | 'scope' | 'permissions'>;
 
+/** Every preset role plus `anonymous`, indexed by name for {@link findRole}'s O(1) lookup. */
 const byRoleName = new Map<string, RoleLookup>(
     [...PRESET_ROLES, ANONYMOUS_ROLE].map((role) => [role.name, role])
 );
@@ -430,7 +437,7 @@ const holdsEveryDeclaredKey = (
  *
  * Role names are data a deployment may rename or add to; "holds every key" is a property of the
  * permission model itself, which is why `requirePermission` and the domain actor ask this rather
- * than comparing a name. There is no single token for it any more: `admin` is unrestricted because
+ * than comparing a name. There is no single token for it: `admin` is unrestricted because
  * `authorization-roles.yaml` lists every tenant key by name, not because it holds a shortcut that
  * means the same thing — see `authorization-keys.yaml`'s closing note. Equivalent to reading
  * `caller.unrestricted`, kept for callers that only have a permission list without a full `Caller`.
@@ -466,7 +473,7 @@ export const SYSTEM_ACTOR: AuthContext = {
  *
  * Roles are data a deployment may rename or add to; the trail's vocabulary is closed and its
  * values outlive them. So the question asked of a role name is never "is it called admin" but
- * "does it hold the scope's wildcard", which stays true through any renaming.
+ * "does it hold every key its scope declares", which stays true through any renaming.
  *
  * @param name - a role name, or `null`/`undefined` for an account with none in that scope
  * @param scope - which world the question is about; the shop unless stated

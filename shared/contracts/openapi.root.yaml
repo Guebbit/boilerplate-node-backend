@@ -331,7 +331,7 @@ components:
         # purpose, and it is worth knowing why before someone "fixes" it.
         #
         # The real limits live in the backend, and only there:
-        #   - accepted mime types → src/infrastructure/adapters/storage.ts (image/png, jpg, jpeg, webp)
+        #   - accepted mime types → src/infrastructure/http/middlewares/upload.ts's `fileFilter` (image/png, jpg, jpeg, webp)
         #   - maximum size        → NODE_MAX_UPLOAD_BYTES, default 5 MB
         # enforced twice: `fileFilter` rejects on the client's declared Content-Type before the
         # bytes touch disk, then `identifyImageFile()` re-reads the actual magic bytes and answers
@@ -881,7 +881,7 @@ components:
         # The picture, resolved LIVE from the catalogue product `OrderItem.product.id` still
         # names — never frozen, so a hard-deleted or replaced image can never leak through order
         # history. `null` means the product no longer exists; that is what lets "buy again" tell
-        # a deleted product apart from one that simply never had a picture. See SECURITY_HOLES_7.
+        # a deleted product apart from one that simply never had a picture.
         OrderLineCurrent:
             type: object
             additionalProperties: false

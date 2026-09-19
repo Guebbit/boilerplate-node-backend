@@ -1,13 +1,11 @@
 /**
  * @module
  * Observability — public barrel; the only surface a sibling module may import (see
- * `docs/theory/strategic-ddd.md` §5 for the rule). Empty on purpose: everything this module owns
- * is wiring (`module.ts`, `routes.ts`, `controllers/`) — the dashboard reads other modules through
- * their own barrels (`audit-logs`) or the metrics registry by name, but nothing reads this module
- * back.
+ * `docs/theory/strategic-ddd.md` §5 for the rule). Publishes this module's readiness/telemetry
+ * services (`./services`) — nothing imports them from outside today, but the barrel is where a
+ * future caller would reach them, not a deep import into this module.
  *
  * See: docs/modules/observability.md
  */
 
-// eslint-disable-next-line unicorn/require-module-specifiers -- every module gets a barrel (docs/theory/strategic-ddd.md §5); this one has nothing to publish yet
-export {};
+export * from './services';

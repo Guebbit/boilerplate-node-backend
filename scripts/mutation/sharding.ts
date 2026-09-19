@@ -31,7 +31,7 @@ export interface Shard {
  */
 export const TARGET_LINES_PER_SHARD = 1300;
 
-/** How many nights a full pass over every shard takes — MUTATION_DEBT.md's D2-B. */
+/** How many nights a full pass over every shard takes, at the current mutate scope split into `TARGET_LINES_PER_SHARD`-line shards. */
 export const ROTATION_NIGHTS = 3;
 
 /**

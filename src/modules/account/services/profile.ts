@@ -163,7 +163,7 @@ export const passwordResetChange = (
     passwordChange(user, password, passwordConfirm, markVerified).then((result) => {
         if (result.success) {
             // Read fresh, after `markVerified` may have just promoted it — the document carries
-            // no role of its own to read synchronously any more. Same fire-and-forget shape as the
+            // no role of its own to read synchronously. Same fire-and-forget shape as the
             // mail below: the password change already succeeded, so a lookup hiccup here must not
             // turn a successful reset into an error — worst case, this one audit row is missing.
             void rolesOf(String(user._id), DEPLOYMENT_TENANT_ID)

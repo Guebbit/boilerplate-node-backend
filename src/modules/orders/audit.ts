@@ -18,7 +18,7 @@ export const ordersAuditActions = {
      * whom an apology. `actor_role` on the record carries who did it.
      */
     ORDER_CANCELLED: 'order.cancelled',
-    /* An admin skipped or corrected the normal lifecycle — Q8. `metadata` carries mode/from/to/reason. */
+    /* An admin skipped or corrected the normal lifecycle. `metadata` carries mode/from/to/reason. */
     ORDER_STATUS_OVERRIDDEN: 'order.status_overridden'
 } as const;
 

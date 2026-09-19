@@ -60,13 +60,13 @@ try {
 const baseline = readBaseline(profile);
 
 /*
- * A first baseline is only ever written on purpose. This used to happen on ANY invocation
- * (bare `test:mutation:check` included): a local `test:mutation:diff` run before a full run had
- * ever recorded one would silently create a partial, three-file baseline from whatever it happened
+ * A first baseline is only ever written on purpose. Writing on ANY invocation (bare
+ * `test:mutation:check` included) would let a local `test:mutation:diff` run before a full run
+ * had ever recorded one silently create a partial, three-file baseline from whatever it happened
  * to touch. `reports/*` — and the baseline it would have graded against — is gitignored, so CI
- * never saw it either way; locally it was a trap. Now nothing is written without `--update` or
- * `--merge`, and a plain check against a baseline that doesn't exist yet is a no-op, not a failure —
- * there being nothing to compare against yet is not this run's fault.
+ * would never see it either way; only a local run would fall into the trap. Nothing is written
+ * without `--update` or `--merge`, and a plain check against a baseline that doesn't exist yet is
+ * a no-op, not a failure — there being nothing to compare against yet is not this run's fault.
  */
 if (!baseline) {
     if (!update && !merge) {

@@ -17,7 +17,8 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
 
 /**
  * Every reason the contract declares, in the array shape Mongoose's `enum:` wants. Read off the
- * generated enum rather than retyped — the reasons once had three independent declarations.
+ * generated enum rather than retyped, so the schema's own `enum:` list can never drift from the
+ * contract's.
  */
 export const MOVEMENT_REASONS = Object.values(StockMovementReason);
 
@@ -112,10 +113,9 @@ export interface StockLevelDocument extends Document {
     /**
      * `onHand - reserved`, clamped at zero — stored and kept in step by `applyTransition` rather
      * than derived at read time, so the stock board's `maxAvailable` narrowing runs against an
-     * indexed column instead of scanning to derive it first. `products/repository.ts`'s old
-     * `availabilityPage` named exactly this fix as the one it deliberately wasn't doing; owning
-     * the collection is what makes it free. The board's own tie-break sort still runs over the
-     * narrowed set in memory — see `./repository`'s `stockBoard`.
+     * indexed column instead of scanning to derive it first: owning the collection is what makes
+     * that free. The board's own tie-break sort still runs over the narrowed set in memory — see
+     * `./repository`'s `stockBoard`.
      */
     available: number;
     createdAt?: Date;
@@ -127,8 +127,10 @@ export type StockLevelModel = Model<StockLevelDocument>;
 
 /**
  * Mongoose Schema for a product's stock level. One document per product — `productId`'s unique
- * index is what makes the opening-stock write (`PRODUCT_CREATED`'s listener) safe to run twice: a
- * retried event finds the row already there and its own guarded write simply matches nothing.
+ * index is what makes `ensureLevel`'s zero-row upsert (half of `PRODUCT_CREATED`'s listener) safe
+ * to run twice: a retried event's upsert finds the row already there and touches nothing further.
+ * The listener's OTHER half, `receive()` for a nonzero opening quantity, is not itself idempotent
+ * — a genuinely redelivered event would double it, same as any other `receive` call.
  */
 export const stockLevelSchema = new Schema<StockLevelDocument>(
     {

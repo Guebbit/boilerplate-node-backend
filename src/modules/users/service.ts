@@ -132,7 +132,7 @@ export const create = (
         .create({ verifiedAt: new Date(), ...data, password })
         .then((user) =>
             /*
-             * The membership is the ONLY grant now — there is no column beside it any more.
+             * The membership is the ONLY grant — there is no column beside it.
              * Awaited before the audit event: a rejected escalation must fail the whole create,
              * not just a column that already saved. `assignRole` is passed `context` so a
              * refused escalation is itself audited (the single most useful entry this
@@ -229,7 +229,7 @@ export const update = (
 
             if (data.email !== undefined) user.email = data.email;
             if (data.username !== undefined) user.username = data.username;
-            // `role` is not written here — there is no column any more, only the membership,
+            // `role` is not written here — there is no column, only the membership,
             // written below in `updateSavedUser` once the rest of the document has saved.
             if (data.active !== undefined) user.active = data.active;
             // The three travel as one unit, all produced by the same `readUploadedImage` call on
@@ -378,7 +378,7 @@ export const updateById = (
  * already soft-deleted). A hard delete first revokes EVERY membership the account holds —
  * `revokeAllOf`, not a single tenant-scoped `revokeRole`: an account can hold a platform seat
  * alongside its tenant one, and either row surviving the user it points at is an erasure gap.
- * This is also the one place a revoke's `assertNotLastAdministrator` can refuse the whole delete
+ * This is also the one place a revoke's `restoreIfNowUnadministered` can refuse the whole delete
  * with 409 BEFORE `user.deleted` fires, rather than leaving a shop with nobody who can administer
  * it — left to REJECT with `AccessInvariantError`, same as `create()`, rather than enveloped
  * here: `@infrastructure/http/errors`' `databaseErrorInterpreter` carries the same 409 mapping,

@@ -1,9 +1,9 @@
 /**
  * @module
  * `recordCreated`'s audit trail — no path may force `actor_role`/`actor_role_name` to a fixed
- * value. `DDD_FIX.md` D3.4: checkout used to force `actor_role: 'user'` "because a purchase is a
- * customer action"; under D1-Q10 (real role names everywhere) that override is gone, so an
- * `order_created` audit row always reflects the real caller, whoever placed the order.
+ * value, not even to make checkout's own purchases read as "a customer action": an
+ * `order_created` audit row always reflects the real caller's real role, whoever placed the
+ * order.
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';

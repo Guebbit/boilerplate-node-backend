@@ -2,7 +2,7 @@
  * @module
  * The `translatables` registry, as this module sees it: supplied once at boot, never assembled
  * here. `locales` cannot import `src/modules/*` to collect every module's manifest entry itself —
- * the same wall `@infrastructure/i18n`'s translation port is built around — so `src/app.ts` builds
+ * the same wall `kernel/translation.ts`'s translation port is built around — so `src/app.ts` builds
  * the lookup with `resolveTranslatables(enabledModules)` and hands it in, the one direction data
  * may cross this boundary.
  */

@@ -33,10 +33,10 @@ import { overrideStatus, forceMove } from './override';
 import { unavailableLines } from './availability';
 
 /*
- * Every operation is published by name as well as through the object below, exactly as the single
- * file did: `module.ts` wires `cancelById` and `detachUserId` into the events that trigger them,
- * `orders/index.ts` publishes `retractOrder` to `cart`, and the suites drive the operations
- * directly. A barrel that published less would make this split a breaking change.
+ * Every operation is published by name as well as through the object below: `module.ts` wires
+ * `cancelById` and `detachUserId` into the events that trigger them, `orders/index.ts` publishes
+ * `retractOrder` to `cart`, and the suites drive the operations directly. Publishing fewer names
+ * here would break each of those callers.
  */
 export {
     search,

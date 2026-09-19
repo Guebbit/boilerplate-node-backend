@@ -212,13 +212,13 @@ export const requestEmailVerificationFor = (
  * (`shared/authorization-roles.yaml`'s "no unverified manager" rule) made that decision already.
  *
  * Mutates `verifiedAt` on the document, unpersisted — the caller's own `save` covers it — but the
- * role promotion is a MEMBERSHIP write, which has no document field to ride along in any more, so
- * this is no longer purely synchronous. `profile.ts#passwordResetChange` is the one remaining
- * caller, passing this as `passwordChange`'s `beforeSave`, now awaited there, so a verification can
- * still land in the same request `userService.setPassword` handles — a spent reset token proves
- * the same mailbox a verify token does. `completeEmailVerification`/`completeEmailChange` below
- * used to call this too; both now call the equivalent `userService` operation directly, which does
- * its own mutating-and-persisting-and-promoting in one step.
+ * role promotion is a MEMBERSHIP write, with no document field to ride along on, so this cannot
+ * be purely synchronous. `profile.ts#passwordResetChange` is the one caller, passing this as
+ * `passwordChange`'s `beforeSave`, awaited there, so a verification can still land in the same
+ * request `userService.setPassword` handles — a spent reset token proves the same mailbox a
+ * verify token does. `completeEmailVerification`/`completeEmailChange` below do NOT call this:
+ * they call the equivalent `userService` operation directly, doing their own
+ * mutating-and-persisting-and-promoting in one step.
  *
  * @param user - the account whose address was just proven
  */

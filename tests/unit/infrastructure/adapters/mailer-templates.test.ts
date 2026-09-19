@@ -54,23 +54,6 @@ describe('email templates', () => {
 });
 
 /**
- * Every template, rendered for real, in every supported locale — through the builder that owns
- * its copy.
- *
- * A missing key is invisible until an email lands in someone's inbox: i18next returns the key
- * itself, which is a perfectly valid string, so nothing throws and nothing logs. Rendering each
- * template against each dictionary and asserting no dotted identifier survives is the only place
- * that shows up before delivery.
- *
- * Since templates stopped translating, the keys live in each module's `emails.ts` — so that is
- * what this drives. `CONTENT` maps every template to the builder that fills it, and the first
- * test below asserts the map covers the directory, which is what keeps a new template from
- * arriving with no locale coverage.
- *
- * Rendering goes through EJS directly rather than `nodemailer`, so no SMTP transport is involved —
- * this is about the copy, not the delivery.
- */
-/**
  * Every template, against the builder that fills it, all asked for the same language.
  *
  * No locale scope anywhere: the builders take the language as an argument and the render takes
@@ -125,6 +108,22 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
     })
 });
 
+/**
+ * Every template, rendered for real, in every supported locale — through the builder that owns
+ * its copy.
+ *
+ * A missing key is invisible until an email lands in someone's inbox: i18next returns the key
+ * itself, which is a perfectly valid string, so nothing throws and nothing logs. Rendering each
+ * template against each dictionary and asserting no dotted identifier survives is the only place
+ * that shows up before delivery.
+ *
+ * The translated keys live in each module's own `emails.ts` — so that is what `contentFor` above
+ * drives. The first test below asserts it covers the directory, which is what keeps a new
+ * template from arriving with no locale coverage.
+ *
+ * Rendering goes through EJS directly rather than `nodemailer`, so no SMTP transport is involved —
+ * this is about the copy, not the delivery.
+ */
 describe('email templates render in every supported locale', () => {
     const templates = readdirSync(emailTemplatesDirectory()).filter((file) =>
         file.endsWith('.ejs')

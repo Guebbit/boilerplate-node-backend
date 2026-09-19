@@ -1,8 +1,8 @@
 /**
  * @module
  * Shipping rates — `src/modules/delivery/domain/rates.ts`. Pure functions over a static table:
- * no mocks, no database. `service.test.ts` moved to `tests/integration/` because it needs a real
- * database to prove a shipment persists; the pricing rule itself does not, and belongs here.
+ * no mocks, no database. `service.test.ts` lives in `tests/integration/` instead, since it needs
+ * a real database to prove a shipment persists; the pricing rule itself does not, and belongs here.
  */
 
 import {

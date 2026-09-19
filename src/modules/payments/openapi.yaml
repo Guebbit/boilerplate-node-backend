@@ -51,7 +51,7 @@ paths:
                             description: The intent's id is confirmed here to complete the charge.
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # Not `pending` any more, or already paid (`PAYMENT_ORDER_NOT_PAYABLE`), or
+                # Not `pending`, or already paid (`PAYMENT_ORDER_NOT_PAYABLE`), or
                 # `Idempotency-Key` names a request still in flight.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }

@@ -78,8 +78,9 @@ export interface OrderTaxBreakdown {
      * this onto a serialized order): the order response only needs the order-level
      * {@link shippingNetAmount}/{@link shippingTaxAmount} sums, the invoice needs the per-rate
      * detail. Same rates as `taxSummary`, same sort order, but a rate with zero shipping apportioned
-     * to it (only possible when `shippingCost` is absent or zero) is left out rather than printed
-     * as an empty row.
+     * to it — `shippingCost` absent or zero, or every line at that rate priced at zero, so
+     * `apportion` has no positive weight to split onto — is left out rather than printed as an
+     * empty row.
      */
     shippingByRate: TaxRateSummary[];
 }
@@ -97,9 +98,9 @@ export interface OrderTaxInput {
 }
 
 /**
- * The VAT owed on a gross (VAT-inclusive) amount, extracted rather than added on top — VAT_1's
- * decision that `price` is gross. `gross × rate / (1 + rate)` is the standard extraction formula;
- * `scaleMoneyByRate` is where the result actually rounds, half-up, to the nearest minor unit.
+ * The VAT owed on a gross (VAT-inclusive) amount, extracted rather than added on top: `price` is
+ * always gross. `gross × rate / (1 + rate)` is the standard extraction formula; `scaleMoneyByRate`
+ * is where the result actually rounds, half-up, to the nearest minor unit.
  * @param gross - the gross amount that already includes this tax
  * @param rate - the decimal rate `gross` was taxed at
  * @returns the VAT portion of `gross`
@@ -198,9 +199,9 @@ export const orderTaxBreakdown = ({
         shippingNetAmount: toDecimalAmount(shippingNetTotal),
         shippingTaxAmount: toDecimalAmount(shippingTaxTotal),
         taxSummary: summaryRowsOf(byRate),
-        // A rate whose whole shipping share rounded down to zero (only possible with no shipping
-        // cost at all, since `apportion`'s weights are strictly positive for any priced line) is
-        // filtered out rather than printed as an empty row on the invoice.
+        // A rate whose whole shipping share rounded down to zero — no shipping cost at all, or
+        // every line at that rate priced at zero, so `apportion` has no positive weight to split
+        // onto — is filtered out rather than printed as an empty row on the invoice.
         shippingByRate: summaryRowsOf(shippingByRateMap).filter(
             (row) => row.netAmount > 0 || row.taxAmount > 0
         )

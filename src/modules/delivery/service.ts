@@ -244,11 +244,11 @@ export const recordDelivery = (
 
         /*
          * The order moves FIRST, the shipment is stamped second — a parcel record is evidence the
-         * order arrived, not the other way round. Reversed from how this used to read: stamping
-         * the shipment first and then asking `orders` to move meant a refused order move left a
-         * `delivered` parcel paired with an order stuck at `shipped`, which nothing — forced
-         * included, since a forced move here still demands the shipment be `shipped` — could ever
-         * move forward again. A failed order move now leaves BOTH sides exactly where they stood.
+         * order arrived, not the other way round. Stamping the shipment first and only then
+         * asking `orders` to move would let a refused order move leave a `delivered` parcel
+         * paired with an order stuck at `shipped`, which nothing — forced included, since a
+         * forced move here still demands the shipment be `shipped` — could ever move forward
+         * again. This order leaves BOTH sides exactly where they stood on a failed order move.
          */
         const moveOrder = forced
             ? orderService.forceMove(orderId, OrderStatus.delivered, reason!, context)

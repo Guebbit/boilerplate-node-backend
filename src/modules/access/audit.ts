@@ -9,7 +9,7 @@
 
 /** The audit action vocabulary this module owns. */
 export const accessAuditActions = {
-    /** A membership was given a role — by an admin (`users.update`/`create`), never self-service. */
+    /** A membership was given a role — by an admin (`users.any.update`/`users.any.create`), never self-service. */
     ROLE_ASSIGNED: 'access.role.assigned',
     /** A membership's role was taken away. */
     ROLE_REVOKED: 'access.role.revoked'

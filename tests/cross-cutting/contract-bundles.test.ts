@@ -103,11 +103,11 @@ describe('every contract bundle', () => {
 
 describe('MODULE_SECTIONS', () => {
     it('lists exactly the enabled modules that ship their own openapi.yaml', () => {
-        // Guards what `openapi-bundle.ts` used to assert on import: a module silently shipping
-        // with no contract entry, or a section outliving the module it named. Moved here — rather
-        // than back onto the bundler — because `enabledModules` pulls in every module's code,
-        // which imports the generated `@api/` client the bundler itself produces; a cross-cutting
-        // test runs after codegen, the bundler has to run before it.
+        // Guards what `openapi-bundle.ts` cannot check itself: a module silently shipping with no
+        // contract entry, or a section outliving the module it named. Lives here, not in the
+        // bundler, because `enabledModules` pulls in every module's code, which imports the
+        // generated `@api/` client the bundler itself produces; a cross-cutting test runs after
+        // codegen, the bundler has to run before it.
         const shouldBeListed = enabledModules
             .map(({ name }) => name)
             .filter((name) =>

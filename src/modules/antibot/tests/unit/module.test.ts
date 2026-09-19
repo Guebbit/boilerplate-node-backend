@@ -1,11 +1,10 @@
 /**
- * This module's own boot gate — moved here from `src/app/required-config.ts` once
- * `TIER_AUDIT_STRUCTURE.md` B3 settled that antibot's checks belong on its own manifest, not in
- * the app tier's interim home. Three groups, combined into one `customCheck`: the secrets a
- * selected provider needs, the email-policy rung's own selector, and `NODE_ANTIBOT_PROVIDER`
- * itself — `resolveHumanChallengeProvider` already throws a good message on an unknown name; this
- * is what makes that throw happen at boot instead of on the first guarded request
- * (`TIER_AUDIT_BUGS.md` §3).
+ * This module's own boot gate: antibot's checks belong on its own manifest, since the kernel and
+ * `src/app/required-config.ts` must never name a specific module's provider. Three groups,
+ * combined into one `customCheck`: the secrets a selected provider needs, the email-policy rung's
+ * own selector, and `NODE_ANTIBOT_PROVIDER` itself — `resolveHumanChallengeProvider` already
+ * throws a good message on an unknown name; this is what makes that throw happen at boot instead
+ * of on the first guarded request.
  *
  * Every case sets `NODE_ENV` away from `test` first: the gate short-circuits under the test
  * environment, so a suite that left it alone would assert nothing at all.

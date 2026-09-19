@@ -49,7 +49,7 @@ export const WEAK_PASSWORD = 'weak';
  * Insert a user into the test database and return the Mongoose document.
  *
  * @param role - grants a TENANT membership through `assignRole` once the document exists — the
- *   document holds no role of its own any more, only a membership does. Omit for a caller that
+ *   document holds no role of its own, only a membership does. Omit for a caller that
  *   genuinely wants no membership row at all (the "no role" case `keysInScope` floors to the
  *   anonymous baseline for).
  */

@@ -161,8 +161,9 @@ export const cartRepository: Repository<CartDocument> & {
     /**
      * Delete a user's cart outright — what a hard account deletion owes the carts.
      *
-     * While the cart lived inside the user document this came free; it does not any more, and an
-     * orphaned cart would outlive the account it belongs to with no way to reach it.
+     * The cart is its own collection, not embedded in the user document, so nothing deletes it for
+     * free on account deletion — an orphaned cart would outlive the account it belongs to with no
+     * way to reach it.
      */
     deleteByUserId: (userId: string) =>
         cartModel

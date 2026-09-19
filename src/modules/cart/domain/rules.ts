@@ -29,7 +29,7 @@ export interface CartLineCandidate {
     } | null;
 }
 
-/** One line the cart refused for having no sellable product behind it any more. */
+/** One line the cart refused for having no sellable product behind it. */
 export interface UnavailableCartLine {
     productId: string;
     /** Absent for a hard-deleted product — there is nothing left to read a title off. */

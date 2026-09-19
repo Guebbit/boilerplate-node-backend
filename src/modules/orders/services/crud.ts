@@ -1,8 +1,9 @@
 /**
  * @module
- * Reading and writing an order: search, fetch, create, amend, delete — plus the compensation a
- * refused create runs. Cancellation is not here; it is a sequence with consequences of its own
- * and lives in `./cancel`.
+ * Reading and writing an order: search, fetch, create, amend, delete. `create` composes around
+ * `placeOrder` (`./place`), which owns its own rollback on a refused write — see `./retract`.
+ * Cancellation is not here either; it is a sequence with consequences of its own and lives in
+ * `./cancel`.
  */
 
 import { getDefaultLocale, t } from '@infrastructure/i18n';
@@ -105,9 +106,8 @@ export const getById = (
 /**
  * Report that an order was created — from the admin route or a customer's checkout
  * (`@modules/cart`'s `orderConfirm`), split out since the two paths' writes share only this
- * fact. The audit records the buyer's real role, whatever it is: no forced override, per
- * D1-Q10's "real role names everywhere" (`DDD_FIX.md` D3.4) — an admin placing their own order
- * is audited as `admin`, same as any other action they take.
+ * fact. The audit records the buyer's real role, whatever it is: no forced override — an admin
+ * placing their own order is audited as `admin`, same as any other action they take.
  *
  * Audit and analytics ONLY — `ORDER_CREATED` itself is `placeOrder`'s own job (`./place.ts`), the
  * one function that actually writes a new order, so a future caller of THIS function forgetting
@@ -218,8 +218,9 @@ export const create = async (
 };
 
 /**
- * Update an existing order document (admin), only the fields provided. Writes pure-status moves
- * (`processing`, `shipped`, `delivered`); cancellation lives in `cancelById`.
+ * Update an existing order document (admin), only the fields provided. The only pure-status move
+ * reachable here is to `processing`; `shipped`/`delivered` are `delivery`'s own doors and
+ * cancellation lives in `cancelById` — `canTransition` refuses both below.
  */
 // `async` for the same reason the repositories are: `toObjectId(data.userId)` below throws on a
 // malformed id, and a function typed `Promise<T>` must reject rather than throw synchronously.
@@ -262,7 +263,7 @@ export const update = async (
             }
         ]);
 
-    // `order.status` is deliberately NOT assigned here any more — see below, where the status
+    // `order.status` is deliberately NOT assigned here — see below, where the status
     // half of this write goes through a conditional `findOneAndUpdate` instead of riding along
     // on this document's blind `save()`.
     if (data.email !== undefined) order.email = data.email;

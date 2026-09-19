@@ -29,7 +29,7 @@ import { retractOrder } from './retract';
 import { orderRepository } from '../repository';
 import { ORDER_CREATED } from '../events';
 // `userId` is stored as an ObjectId, so writes have to coerce it — same rule `crud.ts`'s `create`
-// already followed before this function absorbed its write.
+// follows for its own writes.
 import { toObjectId } from '@infrastructure/persistence/create-repository';
 
 /**
@@ -137,6 +137,8 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
                   shippingCost: input.shipping.method.priceFor(orderItems)
               }
             : {})
+        // The conditional spreads above widen to a plain index signature, which `create`'s typed
+        // input cannot narrow back on its own; every field it can carry is optional or spread in.
     } as Partial<OrderDocument>);
 
     /*

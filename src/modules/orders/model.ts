@@ -204,7 +204,7 @@ export type OrderModel = Model<OrderDocument>;
  * No `imageUrl`/`thumbnailUrl` either — the picture is not a term of the sale, and freezing a
  * url rather than the bytes never made it durable: the file it names can be replaced or
  * unlinked at any time. `./current` resolves it LIVE instead, from the catalogue id this schema
- * still carries. See SECURITY_HOLES_7_STORAGE_QUOTA (decision 2).
+ * still carries.
  *
  * `{ timestamps: true }`, matching `productSchema`: a subdocument stamps its own `createdAt`/
  * `updatedAt` on insert regardless of the parent's timestamps option, which is why
@@ -368,9 +368,9 @@ export const orderSchema = new Schema<OrderDocument>(
             default: undefined
         },
         /*
-         * The RF reference `cart`'s checkout mints for a `bank_transfer` order, from the same id
-         * this write creates. Absent on a `card` order and on an order that predates this field —
-         * no `required`, matching that.
+         * The RF reference `placeOrder` mints for a `bank_transfer` order, from the same id this
+         * write creates. Absent on a `card` order and on an order that predates this field — no
+         * `required`, matching that.
          */
         transferReference: {
             type: String

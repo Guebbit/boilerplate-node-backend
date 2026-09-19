@@ -380,7 +380,7 @@ export const updateById = (
 
 /**
  * `ProductTranslationsWrite` (this module's own flat write shape, `{ title, description? } | null`
- * per locale) wrapped for the `@infrastructure/i18n` port, which speaks the generic door's
+ * per locale) wrapped for the `kernel/translation.ts` port, which speaks the generic door's
  * `UpsertTranslationsRequest` — one locale's `{ fields, origin? }` rather than the flat shape this
  * module's own contract uses. `origin` is left to the port's own default (`human`): an editor's
  * write through `/products/{id}` is never a machine import.
@@ -426,14 +426,14 @@ const prefixTranslationErrors = (rejection: ResponseReject): ResponseReject => (
  * multilingual product write surface. Two validations run before anything is WRITTEN: the product
  * fields' shape (`zodProductCreateSchema`, which also refuses a missing/`null` fallback locale)
  * and the translations batch's locale/field-name legality (`planTranslations`, the
- * `@infrastructure/i18n` port, validates without writing). Nothing in this codebase runs a
+ * `kernel/translation.ts` port, validates without writing). Nothing in this codebase runs a
  * cross-collection transaction, so the achievable guarantee stops there: nothing is written until
  * both validations have already passed, not that the product write and the translations write
  * that follow are atomic with each other.
  *
  * `imageExtras` (`thumbnailUrl`/`pendingImageKey`) is server-derived, never part of the contract
  * body, so it never passes through `zodProductCreateSchema` — merged in only once validation has
- * already succeeded, same as the controller used to do by hand.
+ * already succeeded, the same order the controller keeps for its own merge.
  */
 export const writeCreate = async (
     data: Record<string, unknown>,

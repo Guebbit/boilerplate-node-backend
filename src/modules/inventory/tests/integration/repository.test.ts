@@ -53,7 +53,7 @@ describe('the two stock gauges count different populations', () => {
 
         // The all-reserved product is a candidate too: this is AVAILABILITY, not `onHand` — a
         // bare `$lte: onHand` would read it as healthy while the storefront shows sold out.
-        // Visibility is deliberately NOT filtered here any more — see the describe block's note.
+        // Visibility is deliberately NOT filtered here — see the describe block's note.
         await expect(stockLevelRepository.lowAvailabilityProductIds(5)).resolves.toEqual(
             expect.arrayContaining([
                 String(visible._id),

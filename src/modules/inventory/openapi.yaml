@@ -135,7 +135,7 @@ paths:
             description: |
                 Releases every hold whose window has closed and announces each one, so the orders behind them get cancelled.
 
-                A job behind an admin endpoint rather than an internal schedule. The application ships no scheduler, so the tick is driven from outside — a cron entry, the platform's scheduled job, or an operator — the same arrangement as `POST /delivery/advance`. Idempotent; running it twice releases nothing the first run already released.
+                A job behind an admin endpoint rather than an internal schedule. The application ships no scheduler, so the tick is driven from outside — a cron entry, the platform's scheduled job, or an operator. Idempotent; running it twice releases nothing the first run already released.
             operationId: sweepReservations
             security:
                 - bearerAuth: []

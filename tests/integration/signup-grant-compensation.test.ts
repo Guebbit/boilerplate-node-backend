@@ -2,8 +2,8 @@
  * @module
  * Signup and OAuth signup both write the `User` row BEFORE granting its starting membership —
  * `assignDefaultRole`/`assignRole` need a real id to attach a membership to, so the write must
- * come first. A failed grant used to leave that row behind with no membership at all, and the
- * email permanently unable to retry (the unique index, not a fresh signup). Cross-module (account
+ * come first. A failed grant would otherwise leave that row behind with no membership at all, and
+ * the email permanently unable to retry (the unique index, not a fresh signup). Cross-module (account
  * writes the compensating delete, access's `membershipModel` is what has to be forced to fail),
  * so this lives here rather than in either module's own `tests/`.
  */

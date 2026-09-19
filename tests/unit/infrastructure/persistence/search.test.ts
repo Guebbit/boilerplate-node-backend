@@ -1,7 +1,7 @@
 /**
  * `readAll` — the shared pager every `personalData.collect` export goes through instead of a
- * per-module page-size cap that silently truncated past it. See `search.ts`'s own docblock and
- * `CLEANUP_0917_1_ACCESS_USERS.md`'s D3 for why a short page is the loop's only stop condition.
+ * per-module page-size cap that silently truncated past it. See `search.ts`'s own docblock for
+ * why a short page is the loop's only stop condition.
  */
 import { readAll } from '@infrastructure/persistence/search';
 

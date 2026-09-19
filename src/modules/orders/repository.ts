@@ -348,8 +348,8 @@ const markInvoicePdfReady = (orderId: string): Promise<boolean> =>
  * Flips `invoicePdfStatus` to `pending` for an order whose stored PDF needs (re-)rendering: one
  * that predates this field entirely, or one `ready` with nothing on disk (a data anomaly).
  * `transport/invoice-pdf.ts#enqueueInvoicePdfRetry` is the only caller — `GET
- * /orders/{id}/invoice`'s self-healing path, replacing what used to be a synchronous render on
- * the request. Conditional on NOT already `pending`, so a client polling mid-render cannot
+ * /orders/{id}/invoice`'s self-healing path, which never renders on the request thread itself.
+ * Conditional on NOT already `pending`, so a client polling mid-render cannot
  * re-stamp the flag (and re-enqueue) while the first job is still in flight.
  *
  * @param orderId - the order to (re)queue a render for

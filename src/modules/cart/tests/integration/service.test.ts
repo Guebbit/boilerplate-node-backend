@@ -1011,8 +1011,8 @@ describe('cartDeleteByUserId', () => {
     });
 
     it('takes the cart with a hard-deleted account', async () => {
-        // While the cart lived inside the user document this came free. It does not any more, and
-        // a cart is reachable only through its owner — so one left behind is unreadable forever.
+        // The cart is its own collection, reachable only through its owner — so one left behind
+        // when the account is hard-deleted is unreadable forever unless this cleanup runs.
         const user = await createUser();
         const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 2);

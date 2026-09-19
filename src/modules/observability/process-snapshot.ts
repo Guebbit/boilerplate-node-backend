@@ -3,7 +3,7 @@
  * One reading of the process, in the units it reports. Three payloads (the SSE stream and two
  * REST endpoints) read from here rather than calling `process.memoryUsage()`/`process.uptime()`
  * themselves, since separate readings can disagree and drift with no bug behind it. Units are
- * bytes everywhere. `metrics-http.ts` is the one exception, reading `process.uptime()` itself
+ * bytes everywhere. `metrics-registry.ts` is the one exception, reading `process.uptime()` itself
  * since its prom-client `Gauge` must answer at scrape time.
  */
 

@@ -2,8 +2,8 @@
 /**
  * @module
  * Apply pending data changes, or (`--check`) report them without touching anything —
- * `npm run db:data`. Closes the one gap the rest of this repo's checks did not cover: a deploy
- * that skipped a required backfill used to pass every check silently. Now `--check` fails it.
+ * `npm run db:data`. Closes the one gap the rest of this repo's checks do not cover: a deploy
+ * that skips a required backfill passes every other check silently; `--check` is what fails it.
  *
  * A human runs this — never `db:bootstrap`. An index sync is safely re-appliable on every boot; a
  * data change is a `$unset` or a rename over real rows, and an irreversible write belongs in front

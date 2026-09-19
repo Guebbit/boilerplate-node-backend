@@ -86,10 +86,10 @@ export const stockLevelRepository: Repository<StockLevelDocument> & {
     /**
      * The opening-stock write: create the row at zero if the product has never had one, otherwise
      * leave it — never overwrite an existing level. Racing twice (a redelivered `PRODUCT_CREATED`)
-     * is safe because `productId`'s unique index refuses the second insert. Zero, always: `receive`
-     * is this collection's only writer of real opening stock, so a product without a row yet
-     * genuinely has none, never a cached count worth adopting — see
-     * `docs/modules/inventory.md#why-products-still-carries-a-copy`.
+     * is safe because `productId`'s unique index makes the upsert a no-op the second time. A
+     * product without a row yet genuinely has none, never a cached count worth adopting — see
+     * `docs/modules/inventory.md#why-products-still-carries-a-copy`. The listener's own real
+     * opening-quantity write (a separate `receive` call) is not covered by this guarantee.
      *
      * @param productId - the product
      * @returns the row, new or already there
@@ -114,7 +114,7 @@ export const stockLevelRepository: Repository<StockLevelDocument> & {
      * Erase a product's level row outright — the hard-delete cascade's own half. Never called for
      * a soft delete or its restore: those must find the counters exactly where they left them.
      * `stockmovements` is deliberately untouched — the ledger is history, and a deleted product's
-     * past receipts and sales stay true even once nothing reads its counters any more.
+     * past receipts and sales stay true regardless of whether anything still reads its counters.
      *
      * @param productId - the product just hard-deleted
      */

@@ -287,7 +287,7 @@ const findEntityLocale = (
 
 /**
  * A page's translated fields, one indexed `$in` query resolving every entity at once — the query
- * `@infrastructure/i18n`'s translation port resolves reads through, and the primitive a future
+ * `kernel/translation.ts`'s translation port resolves reads through, and the primitive a future
  * read-path decorator batches a whole page against.
  *
  * `localeCandidates` is `[exact, base, fallback]`, most specific first (see
@@ -410,7 +410,7 @@ const removeEntityLocale = async (
 
 /**
  * Delete every locale's row for one entity — a product's HARD delete taking its translations with
- * it, in the same operation. Backs the `@infrastructure/i18n` translation port's `removeAll`.
+ * it, in the same operation. Backs the `kernel/translation.ts` translation port's `removeAll`.
  *
  * @returns how many rows were removed
  */
@@ -422,7 +422,7 @@ const removeEntityTranslations = async (entityType: string, entityId: string): P
 /**
  * The Mongoose model registered for a `translatables` target's collection, found by name rather
  * than imported — `locales` cannot import `src/modules/products` any more than
- * `@infrastructure/i18n`'s translation port can. Undefined only if the registry names a collection
+ * `kernel/translation.ts`'s translation port can. Undefined only if the registry names a collection
  * no module has actually registered a model for, which `translatable-targets.test.ts` refuses.
  */
 const modelForCollection = (collection: string) =>

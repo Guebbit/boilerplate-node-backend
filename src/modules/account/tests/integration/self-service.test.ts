@@ -710,7 +710,7 @@ describe('requestAccountDeletion', () => {
         await accountService.requestAccountDeletion(user, testCallerContext);
 
         /*
-         * The token value is deliberately NOT returned any more — it goes straight into the mail
+         * The token value is deliberately NOT returned — it goes straight into the mail
          * this function publishes, so a caller cannot hold a live delete credential. What is
          * observable is that exactly one was stored.
          */

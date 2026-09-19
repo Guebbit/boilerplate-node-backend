@@ -139,7 +139,7 @@ export const recordOfflinePayment = (
 /**
  * Move an order one step along the lifecycle as an operator would.
  *
- * `PUT /orders/{id}` only — `shipped`/`delivered` are not requestable through it any more (see
+ * `PUT /orders/{id}` only — `shipped`/`delivered` are not requestable through it (see
  * {@link shipOrder}, {@link deliverOrder}), so `status` here is for the move that still is
  * (`processing`, an admin correction). One request, on purpose: `canTransition` refuses a jump,
  * and a shortcut that wrote a later status directly would skip that transition's own side
@@ -205,7 +205,7 @@ export const replaceProductImage = (
 
 /**
  * Hard-delete a product — the row is gone, not merely hidden. An order line that named it keeps
- * the id and resolves `current: null` from then on; see SECURITY_HOLES_7_STORAGE_QUOTA.
+ * the id and resolves `current: null` from then on.
  *
  * @param owner - a caller holding `products.any.delete`
  */

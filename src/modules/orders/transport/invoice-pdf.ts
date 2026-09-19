@@ -6,11 +6,10 @@
  * file OWNS generation and storage; the controller only ever reads what's already written, or
  * asks this file to queue one — it never renders on the request thread itself.
  *
- * Mirrors `webhooks/transport/` — module-owned infrastructure code, not domain business logic —
- * and replaces the old domainless `worker.pdf.generate` queue. See `../asyncapi.internal.yaml`'s
- * header for why the payload shrank to `orderId` alone: the old one carried a raw template path
- * and a raw output path chosen by the producer, a latent arbitrary-file-write/RCE waiting on
- * nothing more than a producer that never existed.
+ * Mirrors `webhooks/transport/` — module-owned infrastructure code, not domain business logic.
+ * See `../asyncapi.internal.yaml`'s header for why the payload carries `orderId` alone: the
+ * worker resolves its own template and output location, never anything the message says, which
+ * closes off the arbitrary-file-write/RCE a producer-chosen path would otherwise open.
  */
 
 import path from 'node:path';

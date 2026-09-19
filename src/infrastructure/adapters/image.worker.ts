@@ -30,6 +30,7 @@ const REENCODABLE_MIMES: ReadonlySet<string> = new Set<ReencodableImageMime>([
     'image/webp'
 ]);
 
+/** Narrows a declared mime to {@link ReencodableImageMime}, `undefined` included as "no". */
 const isReencodableMime = (mime: string | undefined): mime is ReencodableImageMime =>
     mime !== undefined && REENCODABLE_MIMES.has(mime);
 
@@ -49,10 +50,10 @@ export class UnsupportedImageFormatError extends Error {}
  * converge instead of collide, and a stale run's cleanup provably unable to delete a DIFFERENT
  * owner's live file.
  *
- * Content-addressing alone used to be the whole stem: two documents that happened to upload
- * byte-identical images landed on the SAME file, so cleaning up one document's stale run — a
- * writeback that matched nothing, because a newer upload had already superseded it — deleted the
- * file a completely unrelated document was still serving. `owner` closes that: it is the target
+ * Content-addressing alone is not enough: two documents that upload byte-identical images would
+ * land on the SAME file without `owner` salting it, so cleaning up one document's stale run — a
+ * writeback that matches nothing, because a newer upload has already superseded it — could delete
+ * a file a completely unrelated document is still serving. `owner` closes that: it is the target
  * document's id on the path that has one ({@link handleImageDigestJob}, {@link enqueueImageDigest}
  * — retries of that SAME document still converge on the same file, which is the idempotency this
  * was for), or the quarantine key itself on the one path with no document to salt by yet

@@ -5,7 +5,7 @@
  * are all filled by `./model` — so a seeded row records what the schema really does, not a
  * factory's guess. The password stays PLAINTEXT through the builder; `userSchema`'s pre-save hook
  * hashes it on the way into Mongo, and a hash written here would drift from that hook. No `role`
- * override: the document holds none any more, only a membership does — a fixture needing one
+ * override: the document holds none, only a membership does — a fixture needing one
  * calls `assignRole`/`assignDefaultRole` (`@modules/access`) separately, against the id this
  * builder returns.
  */
@@ -24,7 +24,8 @@ import type { Token, UserDocument } from './model';
  * string the builder wrote, rather than a hard-coded copy that drifts. Satisfies the real signup
  * policy (`CreateUserBody.shape.password`) so fixtures can exercise real signup flows — and, since
  * the breached-password check, is deliberately NOT one of the composition-valid strings in
- * `breached-passwords/list.txt` (`Password1!` used to be the fixture and is a listed entry).
+ * `breached-passwords/list.txt` (`Password1!` is a listed, composition-valid entry, and so unfit
+ * for this purpose).
  */
 export const PLAIN_PASSWORD = 'Fx7$qLwZ9m!';
 

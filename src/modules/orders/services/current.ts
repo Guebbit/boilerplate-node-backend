@@ -5,7 +5,7 @@
  * declares `imageUrl`/`thumbnailUrl`; see `../model`). One batched `$in` query per response,
  * however many orders or lines it holds, so a page of results costs one extra query rather than
  * one per line. `null` means the catalogue product (`product.id`) has been hard-deleted — the
- * frontend's placeholder, not a backend guess. See SECURITY_HOLES_7_STORAGE_QUOTA (decision 2).
+ * frontend's placeholder, not a backend guess.
  */
 
 import { productService } from '@modules/products';

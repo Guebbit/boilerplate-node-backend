@@ -1,7 +1,7 @@
 /**
  * @module
  * POST /delivery/order/:orderId/deliver
- * Staff recording a parcel's arrival — the door that moves an order `shipped → delivered` now.
+ * Staff recording a parcel's arrival — the one door that moves an order `shipped → delivered`.
  */
 
 import type { Request, Response } from 'express';

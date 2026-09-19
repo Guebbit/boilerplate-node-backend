@@ -361,12 +361,6 @@ describe('refund on cancel', () => {
     });
 });
 
-/**
- * Committing the order's held stock — the other thing a confirm does. Lives here, not in
- * `cart/tests/integration/stock.test.ts`, because reaching `@modules/payments/services` from that suite
- * is what `eslint-plugin-boundaries` forbids. Orders are placed via `orderService.create` rather
- * than fixtures, so there is a real hold for the commit to claim.
- */
 /** Counters straight from the catalogue row, which is where the truth lives. */
 const countersOf = async (productId: unknown) => {
     const stored = await productService.findByIdRaw(String(productId));
@@ -396,6 +390,12 @@ const payFor = async (orderId: string, user: { id: string }) => {
     );
 };
 
+/**
+ * Committing the order's held stock — the other thing a confirm does. Lives here, not in
+ * `cart/tests/integration/stock.test.ts`, because reaching `@modules/payments/services` from that suite
+ * is what `eslint-plugin-boundaries` forbids. Orders are placed via `orderService.create` rather
+ * than fixtures, so there is a real hold for the commit to claim.
+ */
 describe('the confirm commits the order’s held units', () => {
     it('drops both counters together when the money lands', async () => {
         const { user, product, order } = await placedOrder(10, 3);

@@ -103,8 +103,8 @@ export const isLiveRefreshSession = (token: Token): boolean =>
  * The full user record shape backing Mongoose documents. `createdAt`, `updatedAt`, `deletedAt`,
  * `twoFactorEnabledAt` and `verifiedAt` are omitted from the wire `User` contract and redeclared
  * as `Date` below — the contract carries ISO strings, the document carries real dates. `role` is
- * omitted outright: the document holds no role of its own any more — `@modules/access`'s
- * membership rows are the only place one is stored — so nothing here may read or write it.
+ * omitted outright: the document holds no role of its own — `@modules/access`'s membership rows
+ * are the only place one is stored — so nothing here may read or write it.
  * {@link toUser} takes the caller's current role as an explicit parameter instead.
  */
 export interface UserRecord extends Omit<
@@ -726,8 +726,8 @@ export const applyUserTransform = applySerialization(userSchema, {
  * than a wider `UserDocument` generic argument.
  *
  * @param role - the caller's CURRENT tenant role, read from the membership store by whoever calls
- *   this — never off the document, which holds no role of its own any more. `null` prints as
- *   absent, the same as every other optional field below.
+ *   this — never off the document, which holds no role of its own. `null` prints as absent, the
+ *   same as every other optional field below.
  */
 export const toUser = (document: UserDocument, role: string | null): User => ({
     id: document.id,

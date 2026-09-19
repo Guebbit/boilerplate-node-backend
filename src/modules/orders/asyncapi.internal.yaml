@@ -13,11 +13,9 @@
 # (`asyncapi-bundles.ts`'s `mergeInto` refuses any duplicate key on purpose). Validated as part of
 # the BUNDLED output instead (`npm run lint:asyncapi`), where `rabbitmqLocal` is already present.
 #
-# Replaces the old domainless `worker.pdf.generate` channel (`shared/contracts/asyncapi.workers.yaml`
-# used to carry it): that queue had no producer and its payload carried a raw template path and a
-# raw output path chosen by the producer — a latent arbitrary-file-write/RCE if anything were ever
-# wired to publish to it. This one carries an `orderId` only; the worker resolves its own template
-# and output location, never anything the message says.
+# This channel's payload carries an `orderId` only; the worker resolves its own template and
+# output location, never anything the message says — a producer-chosen template or output path
+# would be a latent arbitrary-file-write/RCE the moment anything published to it.
 channels:
     worker.orders.invoice-generate:
         address: worker.orders.invoice-generate

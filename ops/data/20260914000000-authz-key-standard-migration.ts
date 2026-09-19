@@ -1,5 +1,6 @@
 /**
- * The 51-key rename plus the 12 per-family `manage` deletions — AUTHZ_STAFF_ORDER_VISIBILITY.md.
+ * The 51-key rename plus the 12 per-family `manage` deletions, moving every permission key to
+ * the standard `<family>.<breadth>.<action>` grammar.
  * Every stored `roles` document (a shop's own edit, not only the presets) still spells its
  * `permissions` in the old shape and has to move to `<family>.<breadth>.<action>` in the same
  * change as the code, or a shop that edited its roles is silently left holding keys nothing
@@ -13,9 +14,8 @@
  *     declared AT THE TIME. Replaced by exactly those actions, spelled `any`, so a role's
  *     effective capability is unchanged. `inventory.manage` is the one exception: it expands to
  *     `inventory.any.read` and `inventory.any.create` only, never `inventory.any.sweep` — that
- *     action did not exist when `manage` was granted, and the sweep route is meant to stay
- *     reachable through nobody's concrete grant but the scope wildcard (`all.manage`), exactly as
- *     it was before this migration. See `AUTHZ_3_MANAGE_REMOVAL.md`'s "one open question".
+ *     action did not exist when `manage` was granted, and the sweep route stays reachable
+ *     through nobody's concrete grant but the scope wildcard (`all.manage`).
  *
  * `all.manage` / `platform.all.manage` — the SCOPE wildcards — are untouched: they are not
  * declared keys and never appear in the map below.

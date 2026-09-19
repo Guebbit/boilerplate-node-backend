@@ -54,7 +54,7 @@ describe('userSchema — what a user must carry', () => {
     it('creates a user as active, with verification unproven', () => {
         // `verifiedAt: null` matters: a default that backdates it makes the whole email
         // verification flow decorative, since every new account would already satisfy it. The
-        // role itself has no schema default any more — see `@modules/access`'s
+        // role itself has no schema default — see `@modules/access`'s
         // `assignDefaultRole`, the one place `unverified` (the same fail-safe direction) can be
         // granted, as a membership rather than a document field.
         expect(defaultOf(userSchema, 'active')).toBe(true);

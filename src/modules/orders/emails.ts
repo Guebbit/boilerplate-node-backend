@@ -51,8 +51,8 @@ export interface OrderLines {
  * decided up front. The total is `orderTotal`'s arithmetic, not a fresh sum — the email quotes
  * what the order stands for, shipping included.
  *
- * Sent immediately at order creation, same as always — never held for the invoice PDF to finish
- * generating. `linkUrl` points at the order's page regardless of whether the invoice is ready yet:
+ * Sent immediately at order creation, never held for the invoice PDF to finish generating.
+ * `linkUrl` points at the order's page regardless of whether the invoice is ready yet:
  * the download button there greys out on its own until `invoicePdfStatus` reads `ready`.
  */
 export const orderConfirmEmail = (
@@ -192,12 +192,12 @@ export const productUnavailableCancelledEmail = (
  * same reasoning as `orderTotal` below — and the two fields Art. 226 requires, `invoiceNumber`
  * and `createdAt`, printed together by {@link buildInvoiceMeta}.
  *
- * `id`, not `_id`. The order arrives from `orderRepository.findByIdScoped`, whose shape depends
- * on the caller's scope — an admin gets a hydrated document, an owner gets a transformed plain
- * object with `_id` already deleted. `id` is the half that resolves on both, and NEITHER has run
- * through `applyOrderTransform`'s derived fields: this controller renders the raw document
- * directly, without ever calling `.toJSON()` — which is also why `createdAt` below is a real
- * `Date`, not yet the ISO string an HTTP response would show.
+ * `id`, not `_id`. The only build site is `transport/invoice-pdf.ts`'s worker, off
+ * `orderRepository.findByIdRaw` — a hydrated Mongoose document, never run through
+ * `applyOrderTransform`'s derived fields or `.toJSON()`, which is also why `createdAt` below is a
+ * real `Date`, not yet the ISO string an HTTP response would show. `controllers/get-order-invoice.ts`
+ * never builds one itself: it only streams a PDF the worker already rendered, or queues the worker
+ * to render one.
  */
 export interface InvoiceOrder extends OrderLines {
     id?: unknown;
@@ -342,9 +342,9 @@ const buildVatBlock = (
     // (constructing a Collator/PluralRules under the hood), not worth paying once per cell.
     // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat
     const money = new Intl.NumberFormat(locale, { style: 'currency', currency: invoiceCurrency() });
-    // A decimal rate (`0.055`) as the invoice prints it (`"5.5%"`) — `Math.round(rate * 100)`
-    // used to floor a fractional VAT rate to the nearest whole point, printing 5.5% as "6%" on a
-    // legal document.
+    // A decimal rate (`0.055`) as the invoice prints it (`"5.5%"`) — a naive `Math.round(rate *
+    // 100)` would floor a fractional VAT rate to the nearest whole point, printing 5.5% as "6%"
+    // on a legal document.
     // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat
     const percentFormat = new Intl.NumberFormat(locale, {
         style: 'percent',

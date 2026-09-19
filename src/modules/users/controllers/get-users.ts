@@ -47,7 +47,7 @@ export const searchUsersKeyParameters = Object.keys(searchUsersQuerySchema.shape
  *
  * `toUser` needs each row's CURRENT role, read fresh from the membership store the same way
  * `GET /users/:id` does — batched into one `$in` query for the whole page rather than one lookup
- * per item, since `applyUserTransform`'s own document serialization has no role to offer any more.
+ * per item, since `applyUserTransform`'s own document serialization has no role to offer.
  * `userService.search()`'s items are already lean-and-transformed (`.id`, not `._id` — see
  * `createRepository`'s own `normalize`), so `.id` is read directly rather than re-derived.
  */

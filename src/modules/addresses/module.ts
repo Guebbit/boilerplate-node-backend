@@ -9,7 +9,7 @@
  *         return (`kernel/middlewares/authorizations.ts`) for why mounting two routers there
  *         costs one auth resolution, not two.
  *
- * See: docs/modules/account.md
+ * See: docs/modules/addresses.md
  */
 
 import path from 'node:path';
@@ -31,8 +31,8 @@ export default {
         }
     ],
     subscribe: () => {
-        // A destroyed account takes its address book with it — the same event `account`, `cart`
-        // and `wishlist` each listen for on their own collection.
+        // A destroyed account takes its address book with it — the same event `cart`, `wishlist`,
+        // `payments` and `orders` each listen for on their own collection.
         onDomainEvent(USER_DELETED, ({ userId }) => addressesDeleteByUserId(userId));
     },
     locales: path.join(__dirname, 'locales')

@@ -85,10 +85,10 @@ export const userRepository: Repository<UserDocument> & {
              * `active` filters the real column, not `deletedAt: { $exists: … }`: "show me
              * deactivated accounts" and "show me deleted accounts" are different questions.
              */
-            // No `role` filter here any more: the document carries no `role` column to match
-            // against — see `@modules/access`. Filtering a search by role needs a two-step
-            // resolve (membership rows holding that role, then the users among those ids) that
-            // this generic `exact` filter can't express; deliberately not rebuilt yet.
+            // No `role` filter here: the document carries no `role` column to match against —
+            // see `@modules/access`. Filtering a search by role needs a two-step resolve
+            // (membership rows holding that role, then the users among those ids) that this
+            // generic `exact` filter can't express; deliberately not rebuilt yet.
             booleans: { active: 'active' }
         }
     }),
@@ -316,10 +316,10 @@ export const userRepository: Repository<UserDocument> & {
      * `tokens` follows: `oauthAccounts` is `select: false`, so the document
      * `account/services/oauth.ts` already holds never carries the array to mutate in place.
      *
-     * The link vouches for NOTHING. It used to also set `verifiedAt` and promote `unverified`,
-     * on the provider's word — which is the pre-account-takeover this repo now refuses:
-     * `loginOrCreateFromOAuth` only ever reaches here for an account that already proved the
-     * address itself, so there is nothing left for a second write to promote.
+     * The link vouches for NOTHING: it never sets `verifiedAt` or promotes `unverified` on the
+     * provider's word alone — that would be exactly the account-takeover vector this repo
+     * refuses. `loginOrCreateFromOAuth` only ever reaches here for an account that already proved
+     * the address itself, so there is nothing left for a second write to promote.
      */
     linkOAuthAccount: (userId: string, account: OAuthAccount) =>
         userModel

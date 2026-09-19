@@ -290,9 +290,9 @@ export const revokeRole = (
     scope: AuthorizationScope,
     context?: CallerContext
 ): Promise<void> => {
-    // Set once a membership is found, read by BOTH branches below — the failure branch used to
-    // have no access to it at all, which is how `role` went missing from that one audit row and
-    // not the other three (see `auditRoleChange`'s own docblock).
+    // Set once a membership is found, read by BOTH branches below — the failure branch needs it
+    // too, so `role` is never missing from its audit row the way it is from the other three (see
+    // `auditRoleChange`'s own docblock).
     let revokedRole: string | undefined;
 
     const attempt = membershipIn(userId, tenantId, scope).then((membership) => {
@@ -428,7 +428,7 @@ export const revokeAllOf = (userId: string): Promise<void> =>
  * The two role names a person holds, and the shop they hold the first one in — `null` for a scope
  * where no membership row exists, which is the honest answer: this person holds no role there.
  *
- * No fallback any more: a role lives in exactly one place, the membership row. `permissions.ts`'s
+ * No fallback: a role lives in exactly one place, the membership row. `permissions.ts`'s
  * `keysInScope` already treats a `null` role as "no role", not as a guessed default — the anonymous
  * baseline in tenant scope (signing in may only ever widen what a stranger already sees), an empty
  * set in platform scope. See `docs/theory/authorization.md`.

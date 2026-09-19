@@ -3,11 +3,10 @@
  * The database-error interpreter — the single place a Mongo/Mongoose driver failure is mapped to
  * an HTTP status, so all twelve models answer a duplicate key or a bad ObjectId the same way.
  *
- * A "throw with a status from anywhere" facility (`ExtendedError`) used to live here too. It had
- * exactly one caller, whose constructor-side logging never ran — a middleware with the `Response`
- * already in hand answers `rejectResponse` directly instead. If a genuine need for one resurfaces,
- * the standard answer is `http-errors` (already in the tree transitively via Express), not a
- * bespoke class.
+ * No "throw with a status from anywhere" facility here: a middleware with the `Response` already
+ * in hand answers `rejectResponse` directly instead. If a genuine need for one arises, the
+ * standard answer is `http-errors` (already in the tree transitively via Express), not a bespoke
+ * class.
  */
 
 import { logger } from '@infrastructure/adapters/logger';

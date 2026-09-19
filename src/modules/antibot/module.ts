@@ -47,7 +47,7 @@ const invalidEmailPolicy = (): string[] => {
     return raw !== undefined && !isEmailPolicy(raw) ? ['NODE_ANTIBOT_EMAIL_POLICY'] : [];
 };
 
-/** This module's manifest entry: one public route, no persistence, no locales. */
+/** This module's manifest entry: two public routes, no persistence, no locales. */
 export default {
     name: 'antibot',
     basePath: '/antibot',
@@ -59,7 +59,7 @@ export default {
     // selected: the secrets a live provider needs, the email-policy rung's own selector, and
     // `NODE_ANTIBOT_PROVIDER` itself — `resolveHumanChallengeProvider` already throws a good
     // message on an unknown name; this is what makes that throw happen at boot instead of on the
-    // first guarded request (`TIER_AUDIT_BUGS.md` §3, `TIER_AUDIT_STRUCTURE.md` B3).
+    // first guarded request.
     customCheck: () => [
         ...missingAntibotProviderSecrets(),
         ...invalidEmailPolicy(),

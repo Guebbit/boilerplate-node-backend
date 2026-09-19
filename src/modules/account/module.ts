@@ -57,9 +57,9 @@ const resolve = (verify: (token: string) => Promise<TokenData>) => (token: strin
             userService.findAuthenticatableById(claims.id).then((user) => ({ user, claims }))
         )
         /*
-         * The stored memberships, which are what a role assignment actually IS. The user row's own
-         * `role` is the users module's published field and is not read here: two stores answering
-         * one question is how they drift, and this is the one that authorization is decided from.
+         * The stored memberships, which are what a role assignment actually IS. The user document
+         * carries no `role` field of its own — `@modules/access`'s membership rows are the only
+         * place one is stored — so this is the one and only place authorization is decided from.
          */
         .then(({ user, claims }) =>
             (user

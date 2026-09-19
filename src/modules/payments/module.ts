@@ -79,7 +79,7 @@ export default {
     // `ibantools` to validate, and `NODE_BANK_TRANSFER_IBAN` set with no `_BENEFICIARY` is a
     // cross-field rule. Plus `NODE_PAYMENT_PROVIDER` itself — `resolvePaymentProvider` already
     // throws a good message on an unknown name; this is what makes that throw happen at boot
-    // instead of on the first payment (`TIER_AUDIT_BUGS.md` §3).
+    // instead of on the first payment.
     customCheck: () => [
         ...validateBankTransferConfig(),
         ...checkSelector('NODE_PAYMENT_PROVIDER', resolvePaymentProvider)

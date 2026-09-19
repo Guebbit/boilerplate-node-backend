@@ -200,9 +200,9 @@ describe('the invariants', () => {
         const shop = await ensureTenant('shop', 'The Shop');
         await assignRole('shopper', String(shop._id), 'tenant', 'customer');
 
-        // Nobody administers this shop at all — the old check ran for every revoke regardless of
-        // which role was deleted, so a `customer` revoke here used to be refused and restored on
-        // the strength of an administrator count `customer` could never have contributed to.
+        // Nobody administers this shop at all — a check that ran for every revoke regardless of
+        // which role was deleted would refuse and restore a `customer` revoke here on the
+        // strength of an administrator count `customer` could never have contributed to.
         await expect(revokeRole('shopper', String(shop._id), 'tenant')).resolves.toBeUndefined();
         expect(await membershipIn('shopper', String(shop._id), 'tenant')).toBeNull();
     });
@@ -222,9 +222,8 @@ describe('the invariants', () => {
         const everyTenantKey = PERMISSION_KEYS.filter((key) => key.scope === 'tenant').map(
             (key) => key.key
         );
-        // `admin` is the only preset that holds every tenant key (Phase 2.2) — proving the
-        // invariant asks the YAML, not a hand-picked name, by checking that fact rather than
-        // assuming it.
+        // `admin` is the only preset that holds every tenant key — proving the invariant asks
+        // the YAML, not a hand-picked name, by checking that fact rather than assuming it.
         expect(permissionsOfRole('admin')).toEqual(expect.arrayContaining(everyTenantKey));
         await assignRole('person-1', String(shop._id), 'tenant', 'admin');
 

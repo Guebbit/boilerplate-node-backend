@@ -61,7 +61,7 @@ it('publishes a due pending row, without claiming it', async () => {
         payload: { deliveryId: String(due._id) }
     });
 
-    // Unclaimed: the sweep no longer sets `in-flight` — see `sweep.ts`'s own docblock for why a
+    // Unclaimed: the sweep never sets `in-flight` — see `sweep.ts`'s own docblock for why a
     // duplicate publish is safe without it.
     const stored = await webhookDeliveryRepository.findById(String(due._id));
     expect(stored?.status).toBe('pending');

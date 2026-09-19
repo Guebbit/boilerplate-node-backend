@@ -134,9 +134,9 @@ export default {
             'order.softDeleted',
             'order.paidOffline',
             'order.awaitingTransfer',
-            // The three branches `current` (SECURITY_HOLES_7_STORAGE_QUOTA) can resolve to, plus
-            // one order that buys all three products at once so a single response shows every
-            // branch side by side — see `shop-history.ts`.
+            // The three branches `./services/current.ts` can resolve a picture to, plus one order
+            // that buys all three products at once so a single response shows every branch side
+            // by side — see `shop-history.ts`.
             'order.imageUnchanged',
             'order.imageReplaced',
             'order.productDeleted',

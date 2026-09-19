@@ -2,8 +2,9 @@
  * @module
  * The payment provider port, its `fake` implementation, and the webhook signature discipline every
  * provider shares — `src/modules/payments/providers/`. No mocks, no database: `service.test.ts`
- * moved to `tests/integration/` because it persists a payment document, while provider selection,
- * the fake PSP's outcome logic and signature verification don't touch Mongo and belong here.
+ * lives in `tests/integration/` instead, because it persists a payment document, while provider
+ * selection, the fake PSP's outcome logic and signature verification don't touch Mongo and belong
+ * here.
  */
 
 import {

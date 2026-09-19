@@ -1,7 +1,7 @@
 /**
  * This module's own boot gate for `NODE_PAYMENT_PROVIDER` — `resolvePaymentProvider`
  * (`../../providers`) already throws a good message on an unknown name; this is what makes that
- * throw happen at boot instead of on the first payment (`TIER_AUDIT_BUGS.md` §3).
+ * throw happen at boot instead of on the first payment.
  *
  * `validateBankTransferConfig`'s own cases live in `config.test.ts`; this file is only the
  * provider-selector half of the manifest's combined `customCheck`.

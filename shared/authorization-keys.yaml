@@ -20,14 +20,14 @@
 # the caller's own rows (`cart.self.checkout`) or to the narrow, default reading a family gives a
 # customer (`products.self.read`); `any` everywhere else, including every key with no owner to
 # scope by at all. An omitted breadth reads as "someone forgot one" — a key you can grep for by
-# shape beats a key you have to know the default of. There is no wildcard of any kind any more,
-# per-family or scope-wide; see the note at the foot of this file.
+# shape beats a key you have to know the default of. There is no wildcard of any kind, per-family
+# or scope-wide; see the note at the foot of this file.
 
 version: 1
 
 # CASL's action vocabulary, plus the additions this model needs. `manage` is NOT in this list: it
-# was once the wildcard action, but there is no wildcard of any kind any more, per-family or
-# scope-wide — see the note at the foot of this file for why — so `manage` names nothing here.
+# is not a declared action, since there is no wildcard of any kind, per-family or scope-wide —
+# see the note at the foot of this file for why — so `manage` names nothing here.
 #
 # `write` is deliberately absent. It collapses create, update and delete into one key, and the
 # shop needs them apart: a support agent may update a user and may not delete one, a warehouse
@@ -483,10 +483,9 @@ keys:
 # for the wide read, and it meant breadth was something a wildcard implied rather than something a
 # role stated. It went first, and breadth has been written on the keys themselves ever since.
 #
-# `all.manage` — the SCOPE wildcard, `admin`'s alone — outlived it for a while, but the same
-# argument applies one level up: "a key no module declares grants nothing" is only true of the
-# wildcard as long as nothing reads it as a shortcut instead. `admin` now holds every declared
+# `all.manage` — the SCOPE wildcard, `admin`'s alone — is worth naming as the one remaining case:
+# the same argument applies one level up — "a key no module declares grants nothing" is only true
+# of the wildcard as long as nothing reads it as a shortcut instead. `admin` holds every declared
 # tenant key BY NAME, spelled out in `authorization-roles.yaml`, the same way every other role
-# does. A new key that should reach `admin` is now a line in that file, not an assumption the
-# wildcard was already covering it — the property this whole file exists for, applied to the one
-# role that used to be the exception.
+# does. A new key that should reach `admin` is a line in that file, not an assumption the wildcard
+# already covers it — the property this whole file exists for, applied to `admin` too.

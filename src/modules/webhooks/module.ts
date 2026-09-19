@@ -5,9 +5,10 @@
  * `payment.succeeded` and `payment.failed` via the domain-event bus — the reverse edge described in
  * `docs/modules/webhooks.md`, so `orders`/`payments` never import this module.
  *
- * Declares its own queue consumer below, rather than `app/workers.ts` naming `WEBHOOK_QUEUE`
- * directly — see `ModuleConsumer` (`@kernel/registry.ts`). Deleting this module is then enough to
- * stop the queue meaning anything, with nothing left to also delete in `app/`.
+ * Declares its own queue consumer below, rather than `app/workers.ts` naming
+ * `WORKER_CHANNELS.WEBHOOK_DELIVER` directly — see `ModuleConsumer` (`@kernel/registry.ts`).
+ * Deleting this module is then enough to stop the queue meaning anything, with nothing left to
+ * also delete in `app/`.
  *
  * See: docs/modules/webhooks.md
  */

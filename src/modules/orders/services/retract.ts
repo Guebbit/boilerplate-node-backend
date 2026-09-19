@@ -2,8 +2,8 @@
  * @module
  * Undoing an order that cannot stand — split out on its own so both `crud.ts` and `place.ts` can
  * call it without importing each other: `place.ts` uses it to roll back a write whose stock hold
- * failed, and `crud.ts`'s admin `create` no longer writes directly but still owes callers the same
- * compensation shape for anything it composes around `placeOrder`.
+ * failed. `crud.ts`'s admin `create` never writes an order directly, composing around `placeOrder`
+ * instead, so it needs no compensation of its own — `placeOrder` already owns it.
  */
 
 import { logger } from '@infrastructure/adapters/logger';

@@ -2,9 +2,9 @@
  * The one rule `.dependency-cruiser.cjs` cannot state: a cycle between two MODULES, not between
  * two files. That file's own `module-coupling-<name>` rules already refuse an undeclared FILE
  * import; they say nothing about two modules each legitimately importing the other through their
- * own published barrels, which is exactly the shape `account ↔ cart` used to take before the
- * address book moved out (`DATA_EXPORT_MODULE.md` steps 2–3) — every file-level rule passed, and
- * the cycle was only visible one folder up.
+ * own published barrels, which is exactly the shape `account ↔ cart` would take if the address
+ * book were still inside `account` instead of its own `addresses` module — every file-level rule
+ * would pass, and the cycle would only be visible one folder up.
  *
  * Its own cruise, not folded into the main config's `forbidden` list, for one reason:
  * `scope: 'folder'` rules cannot filter which PATH a cycle runs through, and cruising `src tests`

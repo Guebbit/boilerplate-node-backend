@@ -672,8 +672,8 @@ describe('userService.removeById', () => {
         // A second platform operator, so the platform row below is not itself the last one
         // administering the installation — this test is about the erasure gap, not that invariant.
         await assignRole('another-operator', null, 'platform', 'operator');
-        // A tenant seat AND a platform seat — the erasure gap a single tenant-scoped revoke left
-        // behind: the platform row used to survive the user it pointed at.
+        // A tenant seat AND a platform seat — the erasure gap a single tenant-scoped revoke leaves
+        // behind if the platform row is not swept too, surviving the user it points at.
         await assignRole(id, DEPLOYMENT_TENANT_ID, 'tenant', 'customer');
         await assignRole(id, null, 'platform', 'operator');
 

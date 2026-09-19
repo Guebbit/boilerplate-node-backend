@@ -342,8 +342,8 @@ const JOB_PRIORITY_VALUES: Record<JobPriority, number> = { normal: 0, high: 1 };
  * work queue (bound under the work queue's own name), so a message that sits out its TTL there
  * reappears on the work queue with RabbitMQ's own `x-death` array one entry longer — the free
  * attempt count `handleDelivery` reads. `<queue>.dead` gets no exchange binding at all: nothing
- * dead-letters into it automatically any more, since a permanent rejection and an exhausted retry
- * both need to skip the retry cycle entirely, which only an explicit publish can guarantee.
+ * dead-letters into it automatically: a permanent rejection and an exhausted retry both need to
+ * skip the retry cycle entirely, which only an explicit publish can guarantee.
  *
  * Idempotent, called on both publish and consume paths so producer and consumer may start in any
  * order — both must agree on `retryDelaySeconds` for the same queue, the same way they already
@@ -508,7 +508,7 @@ export interface ConsumeOptions<TPayload = unknown> {
      *
      * A payload crosses a process boundary, which is where its TypeScript type stops being a fact
      * and becomes a claim. Supplying this turns the claim back into a check; omitting it leaves
-     * the handler to defend itself, which is the older arrangement and still works.
+     * the handler to defend itself.
      */
     schema?: ZodType;
     /** Make queue survive broker restarts. Default: true. */

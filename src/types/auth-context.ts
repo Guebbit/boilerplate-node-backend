@@ -195,7 +195,7 @@ export interface CallerContext {
  * Exists so a tenant-only module's services can take `context.caller.tenantId` as a `string` and
  * state that requirement in their signature, instead of each one narrowing the union back at
  * runtime. `api-keys` and `webhooks` are entirely tenant-scoped — every key either declares
- * `scope: tenant` in `shared/authorization-keys.yaml` — and both previously carried their own
+ * `scope: tenant` in `shared/authorization-keys.yaml` — so both would otherwise need their own
  * identical `tenantOf()` helper to do exactly that.
  */
 export interface TenantCallerContext extends CallerContext {

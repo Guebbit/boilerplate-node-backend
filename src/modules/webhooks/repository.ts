@@ -1,7 +1,8 @@
 /**
  * @module
- * Repositories for both collections, plus the two queries the generic factory has no shape for:
- * the sweep's atomic claim, and finding every enabled subscription an event might match.
+ * Repositories for both collections, plus the queries the generic factory has no shape for: the
+ * queued/sweep and admin-replay atomic claims (`claimPending`, `claimForReplay`), and finding
+ * every enabled subscription an event might match.
  */
 
 import { randomUUID } from 'node:crypto';

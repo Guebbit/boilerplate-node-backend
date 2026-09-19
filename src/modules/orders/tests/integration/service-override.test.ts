@@ -41,9 +41,9 @@ describe('overrideStatus', () => {
 
         expect(result.success).toBe(true);
         expect(result.data?.status).toBe(OrderStatus.processing);
-        // No `override` flag any more — no listener ever read it (`webhooks` filters on `to`
-        // alone), and its absence used to be the only thing distinguishing a status-only override
-        // from a forced delivery-door one, which the event never actually needed to tell apart.
+        // No `override` flag — no listener reads it (`webhooks` filters on `to` alone); a
+        // status-only override and a forced delivery-door one are not distinguished in the event,
+        // which never needed to tell them apart.
         expect(events).toEqual([
             {
                 orderId: String(order._id),

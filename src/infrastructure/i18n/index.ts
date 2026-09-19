@@ -6,7 +6,7 @@
  * pure `localeCandidatesFor` chain), `./overrides` (admin overlay) and `./context` (per-request
  * `t`); all ~70 import sites say `@infrastructure/i18n`.
  *
- * Two things this directory used to own live elsewhere now: `Accept-Language` matching is
+ * Two things this directory deliberately does NOT own: `Accept-Language` matching is
  * `attachLocale`'s own `request.acceptsLanguages` call (`http/middlewares/locale.ts`), not a
  * hand-rolled parser; the translation PORT — a module's published vocabulary — is
  * `kernel/translation.ts`, the same inversion `kernel/authentication.ts` already uses.
