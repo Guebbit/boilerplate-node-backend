@@ -9,14 +9,22 @@
  * messages are technician-facing by convention and are not flagged.
  */
 
+import { AST_NODE_TYPES, ESLintUtils } from '@typescript-eslint/utils';
+import type { TSESTree } from '@typescript-eslint/utils';
+
+type Options = [];
+type MessageIds = 'literal';
+
 const CARRIERS = new Set(['rejectResponse', 'generateReject']);
 
 /** A string literal, or a template with no expressions — both are hardcoded copy. */
-const isLiteralText = (node: any): boolean =>
-    (node?.type === 'Literal' && typeof node.value === 'string') ||
-    (node?.type === 'TemplateLiteral' && node.expressions.length === 0);
+const isLiteralText = (
+    node: TSESTree.Node | null | undefined
+): node is TSESTree.StringLiteral | TSESTree.TemplateLiteral =>
+    (node?.type === AST_NODE_TYPES.Literal && typeof node.value === 'string') ||
+    (node?.type === AST_NODE_TYPES.TemplateLiteral && node.expressions.length === 0);
 
-export const noHardcodedUserText = {
+export const noHardcodedUserText = ESLintUtils.RuleCreator.withoutDocs<Options, MessageIds>({
     meta: {
         type: 'problem',
         docs: { description: 'User-facing error text must come from i18n, not a literal' },
@@ -27,14 +35,17 @@ export const noHardcodedUserText = {
                 'in the errors argument of {{callee}}().'
         }
     },
-    create(context: any) {
+    defaultOptions: [],
+    create(context) {
         return {
-            CallExpression(node: any) {
-                const callee = node.callee?.type === 'Identifier' ? node.callee.name : undefined;
+            CallExpression(node) {
+                const callee =
+                    node.callee.type === AST_NODE_TYPES.Identifier ? node.callee.name : undefined;
                 if (!callee || !CARRIERS.has(callee)) return;
 
                 const errors = node.arguments.find(
-                    (argument: any) => argument?.type === 'ArrayExpression'
+                    (argument): argument is TSESTree.ArrayExpression =>
+                        argument.type === AST_NODE_TYPES.ArrayExpression
                 );
                 if (!errors) return;
 
@@ -47,15 +58,16 @@ export const noHardcodedUserText = {
                         });
                         continue;
                     }
-                    if (element?.type !== 'ObjectExpression') continue;
+                    if (element?.type !== AST_NODE_TYPES.ObjectExpression) continue;
                     for (const property of element.properties) {
-                        const key = property?.key;
+                        if (property.type !== AST_NODE_TYPES.Property) continue;
+                        const { key, value } = property;
                         const isMessage =
-                            (key?.type === 'Identifier' && key.name === 'message') ||
-                            (key?.type === 'Literal' && key.value === 'message');
-                        if (isMessage && isLiteralText(property.value))
+                            (key.type === AST_NODE_TYPES.Identifier && key.name === 'message') ||
+                            (key.type === AST_NODE_TYPES.Literal && key.value === 'message');
+                        if (isMessage && isLiteralText(value))
                             context.report({
-                                node: property.value,
+                                node: value,
                                 messageId: 'literal',
                                 data: { callee }
                             });
@@ -64,4 +76,4 @@ export const noHardcodedUserText = {
             }
         };
     }
-};
+});

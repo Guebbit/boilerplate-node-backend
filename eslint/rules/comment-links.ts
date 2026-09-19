@@ -23,6 +23,7 @@
 
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { ESLintUtils } from '@typescript-eslint/utils';
 import {
     ROOT,
     allowed as allowedPathPrefix,
@@ -73,7 +74,10 @@ export const resolvesTsReference = (reference: string, filename: string): boolea
     );
 };
 
-export const commentLinks = {
+type Options = [];
+type MessageIds = 'stale';
+
+export const commentLinks = ESLintUtils.RuleCreator.withoutDocs<Options, MessageIds>({
     meta: {
         type: 'problem',
         docs: {
@@ -87,7 +91,8 @@ export const commentLinks = {
                 '`<angle-brackets>` if it names a placeholder rather than a real file.'
         }
     },
-    create(context: any) {
+    defaultOptions: [],
+    create(context) {
         return {
             Program() {
                 for (const comment of context.sourceCode.getAllComments()) {
@@ -105,4 +110,4 @@ export const commentLinks = {
             }
         };
     }
-};
+});

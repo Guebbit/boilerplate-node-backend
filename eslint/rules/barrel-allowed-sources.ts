@@ -16,6 +16,17 @@
  *   since the export itself carries no source.
  */
 
+import { AST_NODE_TYPES, ESLintUtils } from '@typescript-eslint/utils';
+import type { TSESTree } from '@typescript-eslint/utils';
+
+type Options = [];
+type MessageIds =
+    | 'notAllowed'
+    | 'modelAsValue'
+    | 'modelNamedValue'
+    | 'repositoryExport'
+    | 'wiringExport';
+
 /** A write handle on a collection this module does not own once published — no exception. */
 const isRepositorySource = (stem: string): boolean => stem === 'repository';
 
@@ -54,7 +65,7 @@ const isModelRuntimeValueName = (name: string): boolean =>
 const sourceStem = (specifier: string): string =>
     specifier.replace(/^\.\//, '').replace(/\/index$/, '');
 
-export const barrelAllowedSources = {
+export const barrelAllowedSources = ESLintUtils.RuleCreator.withoutDocs<Options, MessageIds>({
     meta: {
         type: 'problem',
         docs: {
@@ -85,7 +96,8 @@ export const barrelAllowedSources = {
                 'export form. See docs/theory/strategic-ddd.md §5.'
         }
     },
-    create(context: any) {
+    defaultOptions: [],
+    create(context) {
         /** local name → source stem, for `import { x } from './y'; export { x };`. */
         const importSourceOf = new Map<string, string>();
 
@@ -93,9 +105,13 @@ export const barrelAllowedSources = {
         // only, never from a sibling's, which the module name captured off the file path decides.
         const isProductsBarrel = MODULE_BARREL_PATH.exec(context.filename)?.[1] === 'products';
 
-        const declarationText = (node: any): string => context.sourceCode.getText(node);
+        const declarationText = (node: TSESTree.Node): string => context.sourceCode.getText(node);
 
-        const reportSource = (node: any, reportNode: any, stem: string): boolean => {
+        const reportSource = (
+            node: TSESTree.Node,
+            reportNode: TSESTree.Node,
+            stem: string
+        ): boolean => {
             if (isRepositorySource(stem)) {
                 context.report({
                     node: reportNode,
@@ -116,8 +132,12 @@ export const barrelAllowedSources = {
         };
 
         /** A named `./model` pick reports individually — `export type *` already covers structure. */
-        const reportModelNamedValuePicks = (node: any, specifiers: any[]): void => {
+        const reportModelNamedValuePicks = (
+            node: TSESTree.Node,
+            specifiers: readonly TSESTree.ExportSpecifier[]
+        ): void => {
             for (const specifier of specifiers) {
+                if (specifier.local.type !== AST_NODE_TYPES.Identifier) continue;
                 if (!isModelRuntimeValueName(specifier.local.name)) continue;
                 context.report({
                     node: specifier,
@@ -128,24 +148,18 @@ export const barrelAllowedSources = {
         };
 
         return {
-            Program(node: any) {
+            Program(node) {
                 for (const statement of node.body) {
-                    if (statement.type !== 'ImportDeclaration') continue;
-                    const source = statement.source?.value;
-                    if (typeof source !== 'string') continue;
-                    const stem = sourceStem(source);
-                    for (const specifier of statement.specifiers ?? []) {
-                        if (specifier.local?.type === 'Identifier')
-                            importSourceOf.set(specifier.local.name, stem);
-                    }
+                    if (statement.type !== AST_NODE_TYPES.ImportDeclaration) continue;
+                    const stem = sourceStem(statement.source.value);
+                    // `local` is always an `Identifier` on every import specifier form.
+                    for (const specifier of statement.specifiers)
+                        importSourceOf.set(specifier.local.name, stem);
                 }
             },
 
-            ExportAllDeclaration(node: any) {
-                const source = node.source?.value;
-                if (typeof source !== 'string') return;
-
-                const stem = sourceStem(source);
+            ExportAllDeclaration(node) {
+                const stem = sourceStem(node.source.value);
                 if (reportSource(node, node.source, stem)) return;
 
                 const isTypeOnly = node.exportKind === 'type';
@@ -172,16 +186,14 @@ export const barrelAllowedSources = {
                     });
             },
 
-            ExportNamedDeclaration(node: any) {
-                const source = node.source?.value;
-
-                if (typeof source === 'string') {
-                    const stem = sourceStem(source);
+            ExportNamedDeclaration(node) {
+                if (node.source) {
+                    const stem = sourceStem(node.source.value);
                     if (reportSource(node, node.source, stem)) return;
 
                     const isTypeOnly = node.exportKind === 'type';
                     if (stem === 'model') {
-                        if (!isTypeOnly) reportModelNamedValuePicks(node, node.specifiers ?? []);
+                        if (!isTypeOnly) reportModelNamedValuePicks(node, node.specifiers);
                         return;
                     }
 
@@ -196,8 +208,9 @@ export const barrelAllowedSources = {
                     return;
                 }
 
-                // No source: `export { x }` re-exporting something imported earlier in this file.
-                for (const specifier of node.specifiers ?? []) {
+                // No source: `export { x }` re-exporting something imported earlier in this
+                // file — `local` is always an `Identifier` on this form.
+                for (const specifier of node.specifiers) {
                     const stem = importSourceOf.get(specifier.local.name);
                     if (stem === undefined) continue;
                     if (reportSource(node, specifier, stem)) continue;
@@ -214,4 +227,4 @@ export const barrelAllowedSources = {
             }
         };
     }
-};
+});
