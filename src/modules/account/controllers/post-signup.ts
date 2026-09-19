@@ -9,9 +9,8 @@
 import type { Request, Response } from 'express';
 import { accountService } from '../services';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { readUploadedImage } from '@infrastructure/http/middlewares/upload';
+import { readUploadedImage } from '@infrastructure/http/uploads';
 import type { SignupRequest, SignupRequestMultipart, User } from '@types';
-import type { CastError } from 'mongoose';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { authSignupTotal } from '../metrics';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -124,7 +123,7 @@ export const postSignup = (
                 successResponse<User>(response, userService.toUser(data, SIGNUP_DEFAULT_ROLE), 201);
             });
         })
-        .catch((error: CastError | Error) => {
+        .catch((error: unknown) => {
             authSignupTotal.inc({ status: 'failure' });
             rejectDatabaseError(response, 'signup', error);
             return deleteUpload();

@@ -474,11 +474,4 @@ export const SYSTEM_ACTOR: AuthContext = {
 export const isUnrestrictedRole = (
     name: string | null | undefined,
     scope: AuthorizationScope = 'tenant'
-): boolean => {
-    if (!name) {
-        return false;
-    }
-
-    const held = new Set(permissionsOfRole(name));
-    return (declaredKeysOfScope.get(scope) ?? []).every((key) => held.has(key));
-};
+): boolean => (name ? holdsEveryDeclaredKey(scope, permissionsOfRole(name)) : false);

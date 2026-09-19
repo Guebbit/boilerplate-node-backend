@@ -8,9 +8,9 @@
  */
 
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { isBadObjectId } from '@infrastructure/persistence/mongo-errors';
 import { t } from '@infrastructure/i18n';
 import { callerContextOf } from '@infrastructure/http/request';
 import { refused } from '@infrastructure/http/controller';
@@ -29,8 +29,8 @@ export const deleteFeedback = (request: Request<{ id: string }>, response: Respo
             if (refused(response, result)) return;
             successResponse(response, undefined, 200, result.message);
         })
-        .catch((error: CastError) => {
-            if (error.kind === 'ObjectId')
+        .catch((error: unknown) => {
+            if (isBadObjectId(error))
                 return rejectResponse(response, 404, [t('generic.error-not-found')]);
             rejectDatabaseError(response, 'deleteFeedback', error);
         });

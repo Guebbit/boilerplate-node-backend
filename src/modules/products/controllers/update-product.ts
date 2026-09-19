@@ -13,7 +13,7 @@ import { productService } from '../service';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { readInput, callerContextOf } from '@infrastructure/http/request';
-import { readUploadedImage } from '@infrastructure/http/middlewares/upload';
+import { readUploadedImage } from '@infrastructure/http/uploads';
 import type { UpdateProductRequest, UpdateProductRequestMultipart, Product } from '@types';
 
 /**

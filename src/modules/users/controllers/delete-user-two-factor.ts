@@ -5,7 +5,6 @@
  */
 
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
@@ -30,7 +29,7 @@ export const deleteUserTwoFactor = (request: Request<{ id: string }>, response: 
             }
             successResponse(response, undefined, 200, t('users.two-factor-disabled'));
         })
-        .catch((error: CastError | Error) =>
+        .catch((error: unknown) =>
             rejectDatabaseError(response, 'deleteUserTwoFactor', error)
         );
 };

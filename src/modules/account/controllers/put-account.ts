@@ -7,11 +7,10 @@
  */
 
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { readUploadedImage } from '@infrastructure/http/middlewares/upload';
+import { readUploadedImage } from '@infrastructure/http/uploads';
 import type { UpdateAccountRequest, UpdateAccountRequestMultipart, User } from '@types';
 import { accountService } from '../services';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -80,7 +79,7 @@ export const putAccount = (
                 t('account.update.success')
             );
         })
-        .catch((error: CastError | Error) => {
+        .catch((error: unknown) => {
             rejectDatabaseError(response, 'putAccount', error);
             return deleteUpload();
         });

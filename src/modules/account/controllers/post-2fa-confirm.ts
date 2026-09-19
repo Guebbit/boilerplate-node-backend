@@ -5,7 +5,6 @@
  */
 
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
 import { ConfirmTwoFactorMethodBody, ConfirmTwoFactorMethodParams } from '@api/schemas.zod';
 import type { TwoFactorConfirmed, TwoFactorConfirmRequest } from '@types';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
@@ -61,7 +60,7 @@ export const post2faConfirm = (
                 t('account.two-factor.method-added')
             );
         })
-        .catch((error: CastError | Error) =>
+        .catch((error: unknown) =>
             rejectDatabaseError(response, 'post2faConfirm', error)
         );
 };

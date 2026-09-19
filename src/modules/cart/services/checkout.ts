@@ -6,7 +6,6 @@
  * See: docs/modules/cart-checkout.md
  */
 
-import type { CastError } from 'mongoose';
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { bankTransferMaxOpenPerAccount } from '@modules/orders';
 import {
@@ -300,7 +299,7 @@ export const orderConfirm = (
     paymentMethod?: string
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
     runCheckout(userId, addressId, shippingMethodId, paymentMethod)
-        .catch((error: CastError | Error) => rejectDatabaseEnvelope('cart', error))
+        .catch((error: unknown) => rejectDatabaseEnvelope('cart', error))
         .then((result) => {
             /*
              * `order_created` fires here too, not just from the admin route's `create()` —

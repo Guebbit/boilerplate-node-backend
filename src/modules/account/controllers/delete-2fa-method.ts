@@ -5,7 +5,6 @@
  */
 
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
 import { RemoveTwoFactorMethodBody, RemoveTwoFactorMethodParams } from '@api/schemas.zod';
 import type { TwoFactorCodeRequest } from '@types';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
@@ -53,7 +52,7 @@ export const delete2faMethod = (
                 t('account.two-factor.method-removed')
             );
         })
-        .catch((error: CastError | Error) =>
+        .catch((error: unknown) =>
             rejectDatabaseError(response, 'delete2faMethod', error)
         );
 };

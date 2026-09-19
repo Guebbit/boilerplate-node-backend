@@ -9,7 +9,7 @@
  */
 
 import { getActiveSpanContext } from '@infrastructure/observability/tracer';
-import { environmentFlag } from '@infrastructure/runtime/environment';
+import { environmentFlag, environmentChoice } from '@infrastructure/runtime/environment';
 import type { CallerContext } from '@types';
 import { umamiAnalyticsProvider } from './umami';
 import { posthogAnalyticsProvider } from './posthog';
@@ -133,13 +133,10 @@ let provider: AnalyticsProvider | undefined;
  */
 export const resolveAnalyticsProvider = (): AnalyticsProvider => {
     if (!provider) {
-        const name = process.env.NODE_ANALYTICS_PROVIDER ?? 'umami';
-        const found = PROVIDERS[name];
-        if (!found)
-            throw new Error(
-                `Unknown NODE_ANALYTICS_PROVIDER: "${name}". Allowed: ${Object.keys(PROVIDERS).join(', ')}.`
-            );
-        provider = found;
+        const name = environmentChoice('NODE_ANALYTICS_PROVIDER', Object.keys(PROVIDERS), 'umami');
+        // `environmentChoice` only ever returns `fallback` or a member of `allowed` — both are
+        // keys of PROVIDERS by construction, a guarantee the compiler cannot follow across the call.
+        provider = PROVIDERS[name]!;
     }
     return provider;
 };

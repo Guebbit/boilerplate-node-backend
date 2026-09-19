@@ -259,19 +259,22 @@ describe('rejectDatabaseError', () => {
          * the response body above to say only 'Unprocessable Entity'.
          */
         const response = makeResponseStub();
+        const error = makeBsonError();
 
-        rejectDatabaseError(response, 'getProducts', makeBsonError());
+        rejectDatabaseError(response, 'getProducts', error);
 
         expect(mockedLogger.error).toHaveBeenCalledWith('getProducts - Invalid identifier', {
-            status: 422
+            status: 422,
+            error
         });
     });
 
     it('keeps a 5xx driver message out of the response entirely', () => {
         // A 5xx detail describes internals: free reconnaissance in a body, useful in a log.
         const response = makeResponseStub();
+        const error = new Error('connection reset to shard-02');
 
-        rejectDatabaseError(response, 'getProducts', new Error('connection reset to shard-02'));
+        rejectDatabaseError(response, 'getProducts', error);
 
         expect(response.status).toHaveBeenCalledWith(500);
         expect(response.json).toHaveBeenCalledWith(
@@ -280,7 +283,7 @@ describe('rejectDatabaseError', () => {
         expect(JSON.stringify(response.json.mock.calls[0][0])).not.toContain('shard-02');
         expect(mockedLogger.error).toHaveBeenCalledWith(
             'getProducts - connection reset to shard-02',
-            { status: 500 }
+            { status: 500, error }
         );
     });
 
@@ -313,10 +316,12 @@ describe('rejectDatabaseEnvelope', () => {
     it('logs the operation and the interpreter detail, with the status as metadata', () => {
         // The half a `Response`-less caller would otherwise lose: this is the only record that the
         // failure happened at all, and the only place the driver's own words are kept.
-        rejectDatabaseEnvelope('login', makeBsonError());
+        const error = makeBsonError();
+        rejectDatabaseEnvelope('login', error);
 
         expect(mockedLogger.error).toHaveBeenCalledWith('login - Invalid identifier', {
-            status: 422
+            status: 422,
+            error
         });
     });
 

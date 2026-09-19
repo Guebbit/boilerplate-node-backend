@@ -13,7 +13,6 @@ import bcrypt from 'bcrypt';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { resetConfirmEmail, deleteConfirmEmail, emailChangeNoticeEmail } from '../emails';
 import { sendVerificationEmail, markVerified, EMAIL_CHANGE_TOKEN_TYPE } from './verification';
-import type { CastError } from 'mongoose';
 import { UpdateAccountBody } from '@api/schemas.zod';
 import { analyticsConsentSchema } from '@infrastructure/http/schemas';
 import {
@@ -114,7 +113,7 @@ export const passwordChange = (
                     .catch(() => undefined)
                     .then(() => generateSuccess<UserDocument>(savedUser))
             )
-            .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
+            .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
     });
 };
 
@@ -411,7 +410,7 @@ export const updateProfile = (
                       (emailOutcome) => writeProfile(user, parseResult.data, emailOutcome, context)
                   );
               })
-              .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error))
+              .catch((error: unknown) => rejectDatabaseEnvelope('auth', error))
         : Promise.resolve(generateReject(422, validationErrors(parseResult.error)));
 
     return outcome.then((result) => {
@@ -466,7 +465,7 @@ export const passwordChangeWithCurrent = (
                           return passwordChange(user, password, passwordConfirm);
                       });
                   })
-                  .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
+                  .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 
     return outcome.then((result) => {
         emitAuditEvent(

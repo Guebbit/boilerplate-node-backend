@@ -10,6 +10,11 @@
 // built out of those two concepts.
 import winston from 'winston';
 import { createHash } from 'node:crypto';
+// Relative, not the `@infrastructure` alias: this file sits on `global-setup.ts`'s own import
+// chain (via `scenarios/support/ephemeral-mongo.ts`), which is loaded outside jest's normal
+// module resolution — see that file's own comment. An alias resolves at `tsc`/`eslint` time but
+// fails at jest's globalSetup runtime.
+import { environmentChoice } from '../runtime/environment';
 
 /**
  * Field names that must never be logged in clear text.
@@ -72,6 +77,9 @@ export const PERSONAL_FIELDS = new Set(['email', 'ip', 'phone', 'street', 'zip',
  */
 type PersonalFieldMode = 'hash' | 'redact' | 'plain';
 
+/** {@link PersonalFieldMode}, as a list — `environmentChoice`'s own `allowed` set. */
+const PERSONAL_FIELD_MODES: readonly PersonalFieldMode[] = ['hash', 'redact', 'plain'];
+
 /**
  * Reads `NODE_LOG_PERSONAL_FIELDS`, falling back to `hash` when it is unset. An explicit but
  * unrecognised value throws rather than falling back the same way — silently keeping the safest
@@ -80,12 +88,8 @@ type PersonalFieldMode = 'hash' | 'redact' | 'plain';
  *
  * @throws {Error} when it is set to something none of the three modes recognise
  */
-export const resolvePersonalFieldMode = (): PersonalFieldMode => {
-    const raw = process.env.NODE_LOG_PERSONAL_FIELDS?.trim().toLowerCase();
-    if (!raw) return 'hash';
-    if (raw === 'redact' || raw === 'plain' || raw === 'hash') return raw;
-    throw new Error(`Unknown NODE_LOG_PERSONAL_FIELDS: "${raw}". Allowed: hash, redact, plain.`);
-};
+export const resolvePersonalFieldMode = (): PersonalFieldMode =>
+    environmentChoice('NODE_LOG_PERSONAL_FIELDS', PERSONAL_FIELD_MODES, 'hash');
 
 /**
  * Applies the resolved {@link PersonalFieldMode} to one personal-data value.

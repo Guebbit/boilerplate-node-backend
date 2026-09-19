@@ -84,3 +84,29 @@ export const environmentFlag = (key: string, fallback: boolean): boolean => {
     if (FALSY.has(raw)) return false;
     return fallback;
 };
+
+/**
+ * A closed-set choice from the environment — the shape a provider/mode selector reads: trimmed,
+ * lower-cased, empty or unset falls back to `fallback`, anything else outside `allowed` throws.
+ * One rule for every selector (`NODE_PAYMENT_PROVIDER`, `NODE_ANTIBOT_PROVIDER`,
+ * `NODE_ANALYTICS_PROVIDER`, `NODE_MAIL_TRANSPORT`, `NODE_LOG_PERSONAL_FIELDS`) rather than five —
+ * three used to read `process.env[key] ?? fallback` with no trim, so a trailing space or an empty
+ * `X=` refused to boot instead of falling back the way the other two already did.
+ *
+ * @param key - the variable's name, used only in the thrown message
+ * @param allowed - the closed set of valid values, already lower-cased
+ * @param fallback - the value a deployment gets when it did not usably set one; must itself be a
+ *   member of `allowed`
+ * @returns the trimmed, lower-cased value, or `fallback` when unset/empty
+ * @throws {Error} when set to something outside `allowed`
+ */
+export const environmentChoice = <T extends string>(
+    key: string,
+    allowed: readonly T[],
+    fallback: T
+): T => {
+    const raw = process.env[key]?.trim().toLowerCase();
+    if (!raw) return fallback;
+    if ((allowed as readonly string[]).includes(raw)) return raw as T;
+    throw new Error(`Unknown ${key}: "${raw}". Allowed: ${allowed.join(', ')}.`);
+};

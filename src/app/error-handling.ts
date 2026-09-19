@@ -36,10 +36,15 @@ export const handleUncaughtError = (
 
     const status = error instanceof MulterError ? 400 : 500;
 
+    // The raw `error`, not hand-picked `name`/`message` fields — same reasoning as the
+    // process-level handlers below: `redactFormat` (`adapters/logger.ts`) serializes an `Error`
+    // into `{name, message, stack}` before JSON output, so passing it whole is what keeps the
+    // stack in the log line outside production.
     logger.error(`${error.name}: ${error.message}`, {
         request_id: request.requestId,
         trace_id: getActiveSpanContext().traceId,
-        status
+        status,
+        error
     });
 
     if (error instanceof MulterError)

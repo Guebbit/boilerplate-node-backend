@@ -14,6 +14,7 @@ import {
     toObjectId,
     type Repository
 } from '@infrastructure/persistence/create-repository';
+import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 
 /** Payment CRUD, ownership scoping, and the intent/status writes the service depends on. */
 export const paymentRepository: Repository<PaymentDocument> & {
@@ -141,8 +142,8 @@ export const paymentRepository: Repository<PaymentDocument> & {
                 { upsert: true, returnDocument: 'after' }
             )
             .exec()
-            .catch((error: { code?: number }) => {
-                if (error.code === 11_000) return null;
+            .catch((error: unknown) => {
+                if (isDuplicateKey(error)) return null;
                 throw error;
             }),
 
@@ -168,8 +169,8 @@ export const paymentRepository: Repository<PaymentDocument> & {
                 { upsert: true, returnDocument: 'after' }
             )
             .exec()
-            .catch((error: { code?: number }) => {
-                if (error.code === 11_000) return null;
+            .catch((error: unknown) => {
+                if (isDuplicateKey(error)) return null;
                 throw error;
             }),
 
@@ -238,8 +239,8 @@ export const claimWebhookEvent = (eventId: string): Promise<boolean> =>
     paymentWebhookEventModel
         .create({ eventId })
         .then(() => true)
-        .catch((error: { code?: number }) => {
-            if (error.code === 11_000) return false;
+        .catch((error: unknown) => {
+            if (isDuplicateKey(error)) return false;
             throw error;
         });
 

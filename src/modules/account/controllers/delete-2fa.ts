@@ -4,7 +4,6 @@
  */
 
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
 import { DisableTwoFactorBody } from '@api/schemas.zod';
 import type { TwoFactorCodeRequest } from '@types';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
@@ -43,5 +42,5 @@ export const delete2fa = (
             authTwoFactorDisableTotal.inc({ method: 'all', status: 'success' });
             successResponse<undefined>(response, undefined, 200, t('account.two-factor.disabled'));
         })
-        .catch((error: CastError | Error) => rejectDatabaseError(response, 'delete2fa', error));
+        .catch((error: unknown) => rejectDatabaseError(response, 'delete2fa', error));
 };

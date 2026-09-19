@@ -51,7 +51,8 @@ import { installTelemetry } from '@app/telemetry';
 import { installStatic } from '@app/static-assets';
 import { installRoutes } from '@app/routes';
 import { installErrorHandling } from '@app/error-handling';
-import { installDemo, isDemoMode, restoreScenario } from '@app/demo';
+import { installDemo, restoreScenario } from '@app/demo';
+import { isDemoMode } from '@infrastructure/runtime/demo-profile';
 
 /**
  * Server start

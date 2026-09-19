@@ -5,7 +5,6 @@
  */
 
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
 import { RegenerateBackupCodesBody } from '@api/schemas.zod';
 import type { TwoFactorBackupCodesRegenerated, TwoFactorCodeRequest } from '@types';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
@@ -56,7 +55,7 @@ export const post2faBackupCodes = (
                 t('account.two-factor.backup-codes-regenerated')
             );
         })
-        .catch((error: CastError | Error) =>
+        .catch((error: unknown) =>
             rejectDatabaseError(response, 'post2faBackupCodes', error)
         );
 };

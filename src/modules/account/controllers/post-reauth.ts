@@ -5,7 +5,6 @@
  */
 
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import { ReauthBody } from '@api/schemas.zod';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
@@ -66,7 +65,7 @@ export const postReauth = (
                     successResponse(response, undefined, 200, t('account.reauth.success'));
                 });
         })
-        .catch((error: CastError | Error) => {
+        .catch((error: unknown) => {
             authReauthTotal.inc({ status: 'failure' });
             rejectDatabaseError(response, 'postReauth', error);
         });

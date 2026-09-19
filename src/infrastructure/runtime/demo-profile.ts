@@ -1,8 +1,8 @@
 /**
  * @module
  * Whether this process is running as the demo profile — read by the kernel's boot gate, the
- * mailer, `app.ts` and `scenarios/run-server.ts`, none of which are about the email sink
- * `adapters/demo-outbox.ts` keeps; that file imports {@link isDemoMode} from here.
+ * mailer, `app.ts`, two of `account`'s own providers and `scenarios/run-server.ts`. One import
+ * path only: `@infrastructure/runtime/demo-profile`, never re-exported from `app/demo.ts`.
  *
  * Gated on an in-process call, never on an env var: switching this on diverts mail, opens an
  * unauthenticated database wipe and skips the boot secrets gate, so no copied `.env` may be able

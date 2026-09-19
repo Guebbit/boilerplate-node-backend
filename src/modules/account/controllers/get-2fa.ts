@@ -4,7 +4,6 @@
  */
 
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { TwoFactorStatus } from '@types';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
@@ -35,5 +34,5 @@ export const get2fa = (request: Request, response: Response) => {
 
             successResponse<TwoFactorStatus>(response, data);
         })
-        .catch((error: CastError | Error) => rejectDatabaseError(response, 'get2fa', error));
+        .catch((error: unknown) => rejectDatabaseError(response, 'get2fa', error));
 };

@@ -19,8 +19,8 @@
  */
 
 import type { UpsertTranslationsRequest } from '@types';
-import type { ResponseReject } from '@infrastructure/http/response';
-import { getCurrentLocale, localeCandidatesFor } from '@infrastructure/i18n';
+import { generateReject, type ResponseReject } from '@infrastructure/http/response';
+import { t, getCurrentLocale, localeCandidatesFor } from '@infrastructure/i18n';
 
 /**
  * One entity's translated field values, keyed by field name — `{ title, description }` for a
@@ -187,14 +187,7 @@ export const planTranslations = (
     entityType: string,
     payload: UpsertTranslationsRequest
 ): Promise<TranslationWritePlan | ResponseReject> => {
-    if (!translationPort)
-        return Promise.resolve({
-            success: false,
-            status: 500,
-            message: 'no translation port registered',
-            data: undefined,
-            errors: [{ code: 'INTERNAL', message: 'no translation port registered' }]
-        });
+    if (!translationPort) return Promise.resolve(generateReject(500, [t('generic.error-internal')]));
     return translationPort.plan(entityType, payload);
 };
 

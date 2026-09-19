@@ -9,22 +9,22 @@
 
 import type { Response } from 'express';
 import type { ZodError, ZodType } from 'zod';
-import { rejectResponse, validationErrors, type ResponseErrorItem } from './response';
+import {
+    rejectResponse,
+    validationErrors,
+    type ResponseSuccess,
+    type ResponseReject
+} from './response';
 import { rejectDatabaseError } from './errors';
 
 /**
- * What a service hands back: either data with a status, or a status and the reasons.
- *
- * Structural, not the service's own union — `@infrastructure` cannot reach into a module, and
- * every service already produces this shape via `generateSuccess` / `generateReject`.
+ * What a service hands back: either data with a status, or a status and the reasons — the exact
+ * union `generateSuccess`/`generateReject` already produce, named here since a controller talks
+ * about "the service result" more often than the envelope's own two halves. `./response` is a
+ * sibling FILE, not a module — nothing stops importing it directly, unlike the reasoning that
+ * applies to `@infrastructure` reaching into `@modules`.
  */
-export interface ServiceResult<TData> {
-    success: boolean;
-    status: number;
-    message?: string;
-    data?: TData;
-    errors?: ResponseErrorItem[];
-}
+export type ServiceResult<TData> = ResponseSuccess<TData> | ResponseReject;
 
 /**
  * Send the refusal if the service refused, and say whether it did.
@@ -39,7 +39,7 @@ export interface ServiceResult<TData> {
 export const refused = <TData>(response: Response, result: ServiceResult<TData>): boolean => {
     if (result.success) return false;
 
-    rejectResponse(response, result.status, result.errors ?? []);
+    rejectResponse(response, result.status, result.errors);
     return true;
 };
 

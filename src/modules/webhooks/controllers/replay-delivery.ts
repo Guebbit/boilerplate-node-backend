@@ -5,9 +5,9 @@
  */
 
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { isBadObjectId } from '@infrastructure/persistence/mongo-errors';
 import { t } from '@infrastructure/i18n';
 import { tenantCallerContextOf, extractAndValidateId } from '@infrastructure/http/request';
 import { refused } from '@infrastructure/http/controller';
@@ -33,8 +33,8 @@ export const replayWebhookDelivery = (request: Request<{ id: string }>, response
                 result.data.toJSON() as WebhookDelivery
             );
         })
-        .catch((error: CastError) => {
-            if (error.kind === 'ObjectId')
+        .catch((error: unknown) => {
+            if (isBadObjectId(error))
                 return rejectResponse(response, 404, [t('generic.error-not-found')]);
             rejectDatabaseError(response, 'replayWebhookDelivery', error);
         });

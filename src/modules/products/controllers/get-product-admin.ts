@@ -11,11 +11,11 @@
  */
 
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import { productService } from '../service';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { isBadObjectId } from '@infrastructure/persistence/mongo-errors';
 import type { ProductAdmin } from '@types';
 
 /** GET /products/:id/admin — a product with every language it has a row for. */
@@ -29,10 +29,9 @@ export const getProductAdmin = (request: Request, response: Response) =>
             }
             successResponse<ProductAdmin>(response, product);
         })
-        .catch((error: CastError) => {
+        .catch((error: unknown) => {
             // A malformed id reaches Mongoose as a CastError rather than a miss — the same 404 a
             // well-formed unknown id gets, since this route offers no 422 to fall back on.
-            if (error.kind === 'ObjectId')
-                return rejectResponse(response, 404, [t('products.not-found')]);
+            if (isBadObjectId(error)) return rejectResponse(response, 404, [t('products.not-found')]);
             rejectDatabaseError(response, 'getProductAdmin', error);
         });

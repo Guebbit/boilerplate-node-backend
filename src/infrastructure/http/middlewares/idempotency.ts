@@ -170,12 +170,83 @@ const respondToCollision = (
 };
 
 /**
+ * Try to become the key's holder with one atomic insert; win it and the handler runs, with its
+ * eventual answer captured for the next caller to find; lose it because a live record already
+ * holds the key and {@link respondToCollision} decides which of the three outcomes this retry
+ * actually is.
+ *
+ * The E11000-then-vanished case is the one outcome neither of those is: the record that just
+ * caused our insert to collide is gone by the time this reads it back — TTL reclaimed it in the
+ * window between the failed insert and this read. The slot is genuinely open again, so this
+ * retries the CREATE once rather than falling through to a bare `next()` — a bare `next()` would
+ * run the handler uncaptured, and a second request racing this same window would see the same
+ * vanished record and do the same, doubling the very write this mechanism exists to prevent.
+ * `retriesLeft` bounds it to one attempt: past that, two concurrent retries have now genuinely
+ * raced each other into re-creating the record, so the second one's own E11000 finds a real row
+ * to collide with on its `findOne` — the ordinary path, not the vanished one.
+ *
+ * @param retriesLeft - how many more times the create may be retried after a vanished record
+ */
+const claimIdempotencyKey = (
+    raw: string,
+    caller: string,
+    fingerprint: string,
+    response: Response,
+    next: NextFunction,
+    retriesLeft: number
+): void => {
+    idempotencyRecordModel
+        .create({ key: raw, caller, fingerprint, state: 'in-flight' })
+        .then(() => {
+            armOutcomeCapture(response, raw, caller);
+            next();
+        })
+        .catch((error: unknown) => {
+            if (!isDuplicateKey(error)) {
+                next(error);
+                return;
+            }
+
+            return idempotencyRecordModel
+                .findOne({ key: raw, caller })
+                .lean()
+                .exec()
+                .then((existing) => {
+                    if (!existing) {
+                        if (retriesLeft > 0) {
+                            claimIdempotencyKey(
+                                raw,
+                                caller,
+                                fingerprint,
+                                response,
+                                next,
+                                retriesLeft - 1
+                            );
+                            return;
+                        }
+                        // Retried and still nothing to claim or find — give up rather than loop
+                        // forever; this one request runs uncaptured, same as before the retry.
+                        next();
+                        return;
+                    }
+
+                    respondToCollision(response, existing, fingerprint);
+                })
+                .catch((error: unknown) => {
+                    // The collision branch is the NORMAL path for a retried request — a failure
+                    // here (the lookup, or respondToCollision's own write) must still answer,
+                    // or the retry hangs until the client's own timeout instead of getting the
+                    // ordinary 500 a caller already knows how to handle.
+                    next(error);
+                });
+        });
+};
+
+/**
  * `Idempotency-Key` support for one route — see the module doc for when to reach for it.
  *
- * No key on the request: a no-op, straight to `next()`. A key present: try to become its holder
- * with one atomic insert; win it and the handler runs, with its eventual answer captured for the
- * next caller to find; lose it and {@link respondToCollision} decides which of the three
- * outcomes this retry actually is.
+ * No key on the request: a no-op, straight to `next()`. A key present: {@link claimIdempotencyKey}
+ * does the rest.
  */
 export const idempotencyKey: RequestHandler = (
     request: Request,
@@ -202,42 +273,5 @@ export const idempotencyKey: RequestHandler = (
         return;
     }
 
-    const caller = callerKeyOf(request);
-    const fingerprint = fingerprintOf(request);
-
-    idempotencyRecordModel
-        .create({ key: raw, caller, fingerprint, state: 'in-flight' })
-        .then(() => {
-            armOutcomeCapture(response, raw, caller);
-            next();
-        })
-        .catch((error: unknown) => {
-            if (!isDuplicateKey(error)) {
-                next(error);
-                return;
-            }
-
-            return idempotencyRecordModel
-                .findOne({ key: raw, caller })
-                .lean()
-                .exec()
-                .then((existing) => {
-                    // The record that just caused our E11000 is gone — TTL reclaimed it between
-                    // the failed insert and this read. Treat it as a first request rather than
-                    // surfacing a race the caller did nothing wrong to hit.
-                    if (!existing) {
-                        next();
-                        return;
-                    }
-
-                    respondToCollision(response, existing, fingerprint);
-                })
-                .catch((error: unknown) => {
-                    // The collision branch is the NORMAL path for a retried request — a failure
-                    // here (the lookup, or respondToCollision's own write) must still answer,
-                    // or the retry hangs until the client's own timeout instead of getting the
-                    // ordinary 500 a caller already knows how to handle.
-                    next(error);
-                });
-        });
+    claimIdempotencyKey(raw, callerKeyOf(request), fingerprintOf(request), response, next, 1);
 };

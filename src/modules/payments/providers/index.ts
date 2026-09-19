@@ -9,6 +9,7 @@
  * webhook. See `docs/modules/payments.md` for why that is not negotiable.
  */
 
+import { environmentChoice } from '@infrastructure/runtime/environment';
 import { fakePaymentProvider } from './fake';
 
 export {
@@ -133,11 +134,8 @@ const PROVIDERS: Record<string, PaymentProvider | undefined> = {
  *   to `fake` would turn a deployment's typo into an order marked paid that nobody was charged for
  */
 export const resolvePaymentProvider = (): PaymentProvider => {
-    const name = process.env.NODE_PAYMENT_PROVIDER ?? 'fake';
-    const provider = PROVIDERS[name];
-    if (!provider)
-        throw new Error(
-            `Unknown NODE_PAYMENT_PROVIDER: "${name}". Allowed: ${Object.keys(PROVIDERS).join(', ')}.`
-        );
-    return provider;
+    const name = environmentChoice('NODE_PAYMENT_PROVIDER', Object.keys(PROVIDERS), 'fake');
+    // `environmentChoice` only ever returns `fallback` or a member of `allowed` — both are keys
+    // of PROVIDERS by construction, a guarantee the compiler cannot follow across the call.
+    return PROVIDERS[name]!;
 };

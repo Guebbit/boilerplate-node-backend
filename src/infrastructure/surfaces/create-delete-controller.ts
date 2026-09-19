@@ -9,10 +9,10 @@
  */
 
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { isBadObjectId } from '@infrastructure/persistence/mongo-errors';
 import { extractAndValidateId, readInput, callerContextOf } from '@infrastructure/http/request';
 import { hardDeleteSchema } from '@infrastructure/http/schemas';
 import { refused, rejectValidation, type ServiceResult } from '@infrastructure/http/controller';
@@ -98,11 +98,10 @@ export const createDeleteController = ({
                     );
                     successResponse(response, undefined, 200, result.message);
                 })
-                .catch((error: CastError) => {
+                .catch((error: unknown) => {
                     // A malformed id reaches Mongoose as a CastError rather than a miss, and the
                     // honest answer is the same 404 a well-formed unknown id gets.
-                    if (error.kind === 'ObjectId')
-                        return rejectResponse(response, 404, [t(notFoundKey)]);
+                    if (isBadObjectId(error)) return rejectResponse(response, 404, [t(notFoundKey)]);
                     rejectDatabaseError(response, operation, error);
                 });
         }

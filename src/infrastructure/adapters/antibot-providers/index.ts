@@ -6,6 +6,7 @@
  * what each costs a deployment live in `docs/modules/antibot.md`.
  */
 
+import { environmentChoice } from '@infrastructure/runtime/environment';
 import { noneProvider } from './none';
 import { turnstileProvider } from './turnstile';
 import { altchaProvider } from './altcha';
@@ -79,13 +80,10 @@ const PROVIDERS: Record<string, HumanChallengeProvider | undefined> = {
  *   as it would for `NODE_ANTIBOT_EMAIL_POLICY`
  */
 export const resolveHumanChallengeProvider = (): HumanChallengeProvider => {
-    const name = process.env.NODE_ANTIBOT_PROVIDER ?? 'none';
-    const provider = PROVIDERS[name];
-    if (!provider)
-        throw new Error(
-            `Unknown NODE_ANTIBOT_PROVIDER: "${name}". Allowed: ${Object.keys(PROVIDERS).join(', ')}.`
-        );
-    return provider;
+    const name = environmentChoice('NODE_ANTIBOT_PROVIDER', Object.keys(PROVIDERS), 'none');
+    // `environmentChoice` only ever returns `fallback` or a member of `allowed` — both are keys
+    // of PROVIDERS by construction, a guarantee the compiler cannot follow across the call.
+    return PROVIDERS[name]!;
 };
 
 /** Whether this deployment has switched rung 3 on — i.e. picked anything but the no-op. */

@@ -175,4 +175,43 @@ describe('idempotencyKey', () => {
 
         expect(next).toHaveBeenCalledWith(lookupError);
     });
+
+    /**
+     * The vanished-record case: the row that caused the E11000 is gone by the time the lookup
+     * reads it back — TTL reclaimed it in the window between the failed insert and this read.
+     * The slot is genuinely open again, so this retries the create once rather than falling
+     * through to an uncaptured `next()`.
+     */
+    it('retries the create once when the colliding record has already vanished, and succeeds', async () => {
+        const next = jest.fn();
+        create.mockRejectedValueOnce({ code: 11_000 });
+        findOne.mockReturnValueOnce({ lean: () => ({ exec: () => Promise.resolve(null) }) });
+
+        idempotencyKey(makeRequest('key-1', { a: 1 }), makeResponseStub(), next);
+        await flush();
+        await flush();
+
+        // The retried create isn't rejected (the default mock from beforeEach), so this run
+        // claims the key on its second attempt rather than running uncaptured.
+        expect(create).toHaveBeenCalledTimes(2);
+        expect(next).toHaveBeenCalledWith();
+    });
+
+    it('gives up after one retry also finds nothing, running the handler uncaptured', async () => {
+        const next = jest.fn();
+        create.mockRejectedValueOnce({ code: 11_000 });
+        create.mockRejectedValueOnce({ code: 11_000 });
+        findOne.mockReturnValueOnce({ lean: () => ({ exec: () => Promise.resolve(null) }) });
+        findOne.mockReturnValueOnce({ lean: () => ({ exec: () => Promise.resolve(null) }) });
+
+        idempotencyKey(makeRequest('key-1', { a: 1 }), makeResponseStub(), next);
+        await flush();
+        await flush();
+        await flush();
+
+        // Retried exactly once, not indefinitely — the second vanished lookup gives up rather
+        // than looping, and the request still proceeds (uncaptured) instead of hanging.
+        expect(create).toHaveBeenCalledTimes(2);
+        expect(next).toHaveBeenCalledWith();
+    });
 });

@@ -27,20 +27,25 @@ export interface NonModuleChecks {
 /**
  * Turns a resolver that throws on an unrecognised selector into the shape every other check here
  * produces — call it once at boot; a throw means the variable names an implementation this build
- * does not have. The resolver's own thrown message (naming the variable and the allowed values) is
- * what a caller sees if this probe is ever bypassed and the resolver runs for real later.
+ * does not have. Reports the resolver's OWN thrown message, not the bare `key`: the message
+ * already names the variable and lists the allowed values, which "missing, too short, or still
+ * the placeholder" — the phrasing every other check's bare key gets folded into — would
+ * misdescribe. An unrecognised selector is none of those three; the value is present and valid
+ * shape, just not one this build knows.
  *
- * @param key - the variable name to report if `resolve` throws
+ * @param key - the variable name, used only for the fallback below
  * @param resolve - the resolver to probe
- * @returns `[key]` when `resolve` throws, `[]` when it does not
+ * @returns one message when `resolve` throws, `[]` when it does not
  */
 export const checkSelector = (key: string, resolve: () => unknown): string[] => {
     // eslint-disable-next-line no-restricted-syntax -- the resolver's throw IS the signal this probes for; there is no safe wrapper for "does this synchronous call throw"
     try {
         resolve();
         return [];
-    } catch {
-        return [key];
+    } catch (error) {
+        // A resolver here always throws a real Error (see e.g. `resolvePaymentProvider`) — the
+        // fallback is for a hypothetical one that does not, so this can never come back empty.
+        return [error instanceof Error && error.message ? error.message : `Unknown ${key}`];
     }
 };
 
@@ -103,20 +108,28 @@ export const assertRequiredConfig = (
         ...appModules.flatMap((appModule) => appModule.requiredConfig ?? []),
         ...(nonModuleChecks.required ?? [])
     ];
-    const offending = [
-        ...declared.filter((entry) => applies(entry) && fails(entry)).map(({ key }) => key),
+    const offending = declared
+        .filter((entry) => applies(entry) && fails(entry))
+        .map(({ key }) => key);
+    // A custom check (`checkSelector` among them) reports its own problem in its own words —
+    // never folded into `offending`'s bare-key list, since only a declared `requiredConfig` entry
+    // is actually "missing, too short, or still the placeholder".
+    const customCheckProblems = [
         ...(nonModuleChecks.customChecks ?? []).flatMap((check) => check()),
         ...appModules.flatMap((appModule) => appModule.customCheck?.() ?? [])
     ];
     const forbidden = forbiddenUnderProduction(appModules);
 
-    // Two different failure shapes ("absent" vs "present") get two clauses rather than one
-    // combined variable list, so the message still says which is wrong for which variable.
+    // Three different failure shapes get three clauses rather than one combined list, so the
+    // message still says which is wrong for which variable.
     const problems = [
         ...(offending.length > 0
             ? [
                   `missing, too short, or still set to their .env-example placeholder — ${offending.join(', ')}`
               ]
+            : []),
+        ...(customCheckProblems.length > 0
+            ? [`failing their own configuration check — ${customCheckProblems.join(', ')}`]
             : []),
         ...(forbidden.length > 0
             ? [`set, which must never happen here — ${forbidden.join(', ')}`]

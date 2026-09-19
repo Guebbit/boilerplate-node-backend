@@ -27,6 +27,7 @@ import {
     type Lean,
     type Repository
 } from '@infrastructure/persistence/create-repository';
+import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import type { CounterDelta } from './domain';
 
 /**
@@ -271,8 +272,8 @@ export const reservationRepository: Repository<ReservationDocument> & {
                 expiresAt
             })
             .then((reservation): ReservationDocument | null => reservation)
-            .catch((error: { code?: number }) => {
-                if (error.code === 11_000) return null;
+            .catch((error: unknown) => {
+                if (isDuplicateKey(error)) return null;
                 throw error;
             }),
 

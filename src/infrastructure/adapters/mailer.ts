@@ -28,7 +28,7 @@ import {
 } from '@opentelemetry/semantic-conventions/incubating';
 import type { EmailJobPayload } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
-import { environmentNumber } from '@infrastructure/runtime/environment';
+import { environmentNumber, environmentChoice } from '@infrastructure/runtime/environment';
 import { isDemoMode } from '@infrastructure/runtime/demo-profile';
 import { recordDemoEmail } from '@infrastructure/adapters/demo-outbox';
 import { withSpan } from '@infrastructure/observability/tracer';
@@ -81,8 +81,8 @@ export const templateFile = (templateName: string): string =>
  */
 export type MailTransport = 'smtp' | 'log' | 'outbox';
 
-/** {@link MailTransport}, as a set, so an unknown `NODE_MAIL_TRANSPORT` falls through to SMTP. */
-const MAIL_TRANSPORTS = new Set<string>(['smtp', 'log', 'outbox']);
+/** {@link MailTransport}, as a list — `environmentChoice`'s own `allowed` set. */
+const MAIL_TRANSPORTS: readonly MailTransport[] = ['smtp', 'log', 'outbox'];
 
 /**
  * Which transport this process uses, resolved per send.
@@ -102,13 +102,7 @@ export const resolveMailTransport = (): MailTransport => {
     if (isDemoMode()) return 'outbox';
     if (process.env.NODE_ENV === 'test') return 'log';
 
-    const named = process.env.NODE_MAIL_TRANSPORT?.trim();
-    if (!named) return 'smtp';
-    if (!MAIL_TRANSPORTS.has(named))
-        throw new Error(
-            `Unknown NODE_MAIL_TRANSPORT: "${named}". Allowed: ${[...MAIL_TRANSPORTS].join(', ')}.`
-        );
-    return named as MailTransport;
+    return environmentChoice('NODE_MAIL_TRANSPORT', MAIL_TRANSPORTS, 'smtp');
 };
 
 /**

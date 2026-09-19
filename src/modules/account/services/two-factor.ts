@@ -12,7 +12,6 @@
 
 import { randomBytes } from 'node:crypto';
 import { t } from '@infrastructure/i18n';
-import type { CastError } from 'mongoose';
 import {
     userService,
     TokenType,
@@ -276,7 +275,7 @@ export const twoFactorStatus = (
                 backupCodesRemaining: user.twoFactorBackupCodes.length
             });
         })
-        .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
+        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 
 /**
  * `POST /account/2fa/methods/{method}/setup` — starts, or restarts, one method's enrollment.
@@ -321,7 +320,7 @@ export const setupTwoFactorMethod = (
                 return saveMethods(user).then(() => generateSuccess(payload));
             });
         })
-        .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
+        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 };
 
 /** This flow's code and copy bound onto the shared builder, so both call sites stay one argument. */
@@ -363,7 +362,7 @@ export const confirmTwoFactorMethod = (
                     ResponseSuccess<TwoFactorConfirmed> | ResponseReject
                 >((matched) => (matched ? armMethod(user, entry) : rejectWrongCode(user)));
         })
-        .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
+        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 
     return audited(outcome, context, accountAuditActions.AUTH_2FA_ENROLLED, method);
 };
@@ -426,7 +425,7 @@ export const removeTwoFactorMethod = (
                 return saveMethods(user).then(() => generateSuccess(undefined));
             });
         })
-        .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
+        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 
     return audited(outcome, context, accountAuditActions.AUTH_2FA_DISABLED, method);
 };
@@ -459,7 +458,7 @@ export const disableTwoFactor = (
                 return saveMethods(user).then(() => generateSuccess(undefined));
             });
         })
-        .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
+        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 
     return audited(outcome, context, accountAuditActions.AUTH_2FA_DISABLED, 'all');
 };
@@ -500,7 +499,7 @@ export const regenerateBackupCodes = (
                 );
             });
         })
-        .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
+        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 
     return audited(outcome, context, accountAuditActions.AUTH_2FA_BACKUP_CODES_REGENERATED, 'all');
 };
@@ -537,7 +536,7 @@ export const sendLoginCode = (
                 .send(user, armed.entry, context)
                 .then((delivery) => saveMethods(user).then(() => generateSuccess(delivery)));
         })
-        .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
+        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 
     return audited(outcome, context, accountAuditActions.AUTH_2FA_CODE_SENT, method);
 };
@@ -580,7 +579,7 @@ export const verifyLoginChallenge = (
                 );
             });
         })
-        .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
+        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 
     // Failure only: a successful challenge is not itself a completed login — `postLoginTwoFactor`
     // fires `AUTH_LOGIN` once a session actually exists. Auditing success here too would claim a

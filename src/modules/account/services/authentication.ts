@@ -16,7 +16,6 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { checkEmailPolicy } from '@infrastructure/adapters/antibot';
 import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
 import { deleteRequestEmail, resetRequestEmail, setupRequestEmail } from '../emails';
-import type { CastError } from 'mongoose';
 import { LoginBody } from '@api/schemas.zod';
 import {
     generateSuccess,
@@ -483,7 +482,7 @@ export const signup = (
                                                   )
                                           );
                                   })
-                                  .catch((error: CastError | Error) =>
+                                  .catch((error: unknown) =>
                                       rejectDatabaseEnvelope('auth', error)
                                   )
                     )
@@ -558,7 +557,7 @@ export const login = (
                         return generateSuccess<UserDocument>(user);
                     });
             })
-            .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error))
+            .catch((error: unknown) => rejectDatabaseEnvelope('auth', error))
     );
 };
 
@@ -595,7 +594,7 @@ export const tokenRemoveAll = (
                     .then(() => generateSuccess<UserDocument>(user));
             }
         )
-        .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error))
+        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error))
         .then((result) => {
             emitAuditEvent(
                 buildAuditEvent(context, {
@@ -656,7 +655,7 @@ export const reauth = (
                 return generateSuccess<UserDocument>(user);
             });
         })
-        .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error));
+        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 
     return outcome.then((result) => {
         emitAuditEvent(

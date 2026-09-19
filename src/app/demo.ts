@@ -26,8 +26,6 @@ import { clearCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
 import { refreshLocaleOverrides } from '@infrastructure/i18n';
 
-export { isDemoMode } from '@infrastructure/runtime/demo-profile';
-
 /**
  * Thrown for anything `scenarios/index.ts`'s `SCENARIOS` registry does not carry — by
  * {@link restoreScenario} for an unknown name, and by {@link installDemo} for a `scenario` field
@@ -65,11 +63,11 @@ let demoApp: Express | undefined;
  * checking out twice makes two orders — so it happens once and every later restore replays the
  * rows it produced.
  *
- * Imported dynamically rather than at the top of this file: `app.ts` imports
- * `installDemo`/`isDemoMode` unconditionally, and a static import here would pull every module's
- * scenario factories into every process whether or not `enableDemoProfile()` is ever called — the
- * exact cost this file's split from `src/modules/*` exists to avoid. `DEFAULT_SCENARIO` is applied
- * here for the same reason: a static import of it would load the registry everywhere.
+ * Imported dynamically rather than at the top of this file: `app.ts` imports `installDemo`
+ * unconditionally, and a static import here would pull every module's scenario factories into
+ * every process whether or not `enableDemoProfile()` is ever called — the exact cost this file's
+ * split from `src/modules/*` exists to avoid. `DEFAULT_SCENARIO` is applied here for the same
+ * reason: a static import of it would load the registry everywhere.
  *
  * Empties the database itself, and only on the path that actually builds: `buildScenario` assumes
  * an empty one, so the emptying belongs to the build rather than to every caller — a replay's own

@@ -8,7 +8,6 @@
  * the exact cycle the checkout arrow exists to avoid.
  */
 
-import type { CastError } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import {
     generateSuccess,
@@ -108,7 +107,7 @@ export const reorderIntoCart = (
                     .then((view) => generateSuccess(view, 200, t('cart.reorder.success')));
             });
         })
-        .catch((error: CastError | Error) => rejectDatabaseEnvelope('cart', error))
+        .catch((error: unknown) => rejectDatabaseEnvelope('cart', error))
         .then((result) => {
             if (result.success) {
                 emitAuditEvent(

@@ -146,12 +146,23 @@ describe('checkSelector', () => {
         expect(checkSelector('FAKE_SELECTOR', () => 'ok')).toEqual([]);
     });
 
-    it('names the variable when the resolver throws', () => {
+    it("keeps the resolver's own message rather than the bare key", () => {
+        // The message already names the variable and its allowed values — folding it down to
+        // just the key would lose exactly the detail an operator needs to fix the deployment.
         expect(
             checkSelector('FAKE_SELECTOR', () => {
-                throw new Error('unknown value');
+                throw new Error('Unknown FAKE_SELECTOR: "bogus". Allowed: a, b.');
             })
-        ).toEqual(['FAKE_SELECTOR']);
+        ).toEqual(['Unknown FAKE_SELECTOR: "bogus". Allowed: a, b.']);
+    });
+
+    it('falls back to the key if a resolver ever threw something with no message', () => {
+        expect(
+            checkSelector('FAKE_SELECTOR', () => {
+                // eslint-disable-next-line @typescript-eslint/only-throw-error -- exercising the non-Error fallback on purpose
+                throw 'not an Error';
+            })
+        ).toEqual(['Unknown FAKE_SELECTOR']);
     });
 });
 

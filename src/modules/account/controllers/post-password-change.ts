@@ -5,7 +5,6 @@
  */
 
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
 import { z } from 'zod';
 import { t } from '@infrastructure/i18n';
 import { ChangePasswordBody } from '@api/schemas.zod';
@@ -92,7 +91,7 @@ export const postPasswordChange = (
                     successResponse(response, undefined, 200, t('account.password-change.success'));
                 });
         })
-        .catch((error: CastError | Error) => {
+        .catch((error: unknown) => {
             authPasswordChangeTotal.inc({ status: 'failure' });
             rejectDatabaseError(response, 'postPasswordChange', error);
         });

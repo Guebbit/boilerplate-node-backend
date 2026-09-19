@@ -5,7 +5,6 @@
  */
 
 import type { Request, Response } from 'express';
-import type { CastError } from 'mongoose';
 import { SetupTwoFactorMethodParams } from '@api/schemas.zod';
 import type { TwoFactorSetup } from '@types';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
@@ -40,5 +39,5 @@ export const post2faSetup = (request: Request<{ method: string }>, response: Res
             }
             successResponse<TwoFactorSetup>(response, data);
         })
-        .catch((error: CastError | Error) => rejectDatabaseError(response, 'post2faSetup', error));
+        .catch((error: unknown) => rejectDatabaseError(response, 'post2faSetup', error));
 };

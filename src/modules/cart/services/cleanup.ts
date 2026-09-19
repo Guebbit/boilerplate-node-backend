@@ -7,7 +7,6 @@
  * wires both to the domain events that fire on deletion.
  */
 
-import type { CastError } from 'mongoose';
 import {
     generateSuccess,
     type ResponseSuccess,
@@ -41,4 +40,4 @@ export const productRemoveFromCartsById = (
                 `Product ${id} removed from ${result.modifiedCount} cart(s)`
             )
         )
-        .catch((error: CastError | Error) => rejectDatabaseEnvelope('cart', error));
+        .catch((error: unknown) => rejectDatabaseEnvelope('cart', error));

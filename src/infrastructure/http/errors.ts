@@ -79,8 +79,10 @@ export const rejectDatabaseError = (response: Response, context: string, error: 
     const [status, detail] = databaseErrorInterpreter(error);
 
     // `context` and `detail` are developer-facing — logged with the request/trace id (which is
-    // what makes this findable) rather than returned, since the driver must not speak to the client.
-    logger.error(`${context} - ${detail}`, { status });
+    // what makes this findable) rather than returned, since the driver must not speak to the
+    // client. `error` under its own key, not folded into the message string, is what lets the
+    // logger's own serializer attach a stack trace — see `adapters/logger.ts`'s `serializeError`.
+    logger.error(`${context} - ${detail}`, { status, error });
 
     return rejectResponse(response, status);
 };
@@ -97,7 +99,7 @@ export const rejectDatabaseError = (response: Response, context: string, error: 
 export const rejectDatabaseEnvelope = (context: string, error: unknown) => {
     const [status, detail] = databaseErrorInterpreter(error);
 
-    logger.error(`${context} - ${detail}`, { status });
+    logger.error(`${context} - ${detail}`, { status, error });
 
     return generateReject(status);
 };
