@@ -185,4 +185,17 @@ async function seed() {
  * `stopServer` closes everything `bootInfrastructure` opened, the locale-refresh interval
  * included. Nothing to do when a gate returned before the app was ever imported.
  */
-void runScript(seed, () => application?.stopServer() ?? Promise.resolve());
+/*
+ * `process.exit()`, not the bare promise `runScript` usually resolves into: importing `../src/app`
+ * pulls in `@opentelemetry/instrumentation`'s ESM patching (`otel-sdk.ts`), which registers a
+ * `module.register()` loader hook backed by its own worker thread. That hook is process-lifetime
+ * by design — nothing this file or `stopServer()` calls can unregister it — so without a forced
+ * exit the event loop never drains and the process hangs forever after logging completion. Safe
+ * here specifically: by this point `stopServer()` has already awaited `shutdownAnalytics()` and
+ * `shutdownTracing()`, the two steps with async transport writes in flight, so nothing is
+ * truncated. Every other `runScript` caller (`db/`, `ops/`) never imports `src/app.ts` and so
+ * never hits this hook, which is why `run-script.ts` itself stays on `process.exitCode`.
+ */
+void runScript(seed, () => application?.stopServer() ?? Promise.resolve()).then(() =>
+    process.exit(process.exitCode ?? 0)
+);
