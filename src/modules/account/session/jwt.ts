@@ -161,7 +161,12 @@ export const createRefreshToken = (
                 } as TokenData,
                 getExpiryTime(remember)
             );
-            return user.tokenAdd(TokenType.REFRESH, getExpiryTimeMilliseconds(remember), token);
+            return userService.tokenAdd(
+                user,
+                TokenType.REFRESH,
+                getExpiryTimeMilliseconds(remember),
+                token
+            );
         });
 
 /**
@@ -213,7 +218,7 @@ export class TokenReuseError extends Error {
 const revokeAllRefreshTokens = (userId: string): Promise<void> =>
     userService
         .findByIdWithCredentials(userId)
-        .then((user) => (user ? user.tokenRemoveAll(TokenType.REFRESH) : undefined));
+        .then((user) => (user ? userService.tokenRemoveAll(user, TokenType.REFRESH) : undefined));
 
 /**
  * Sign and persist the winning half of a rotation: a new refresh token carrying the SAME absolute
@@ -238,8 +243,8 @@ const reissueRotated = (
         const claims = { id, auth_time: authTime, amr } as TokenData;
         const newRefreshToken = signRefreshToken(claims, Math.ceil(remainingMs / 1000));
 
-        return user
-            .tokenAdd(TokenType.REFRESH, remainingMs, newRefreshToken)
+        return userService
+            .tokenAdd(user, TokenType.REFRESH, remainingMs, newRefreshToken)
             .then((refreshToken) => recordRefreshTokenUse(refreshToken).then(() => refreshToken))
             .then((refreshToken) => ({
                 accessToken: signAccessToken(claims),

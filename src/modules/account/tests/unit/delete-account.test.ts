@@ -200,7 +200,7 @@ describe('DELETE /account/delete-confirm — deleteAccountConfirm', () => {
         expect(mockRejectResponse).toHaveBeenCalledWith(res, 422, expect.any(Array));
     });
 
-    it('returns 500 when service throws', async () => {
+    it('returns 500 for an unrecognized error', async () => {
         mockFindLiveToken.mockRejectedValue(new Error('db error'));
 
         const req = { body: { token: 'any-token' } };
@@ -208,6 +208,30 @@ describe('DELETE /account/delete-confirm — deleteAccountConfirm', () => {
 
         await deleteAccountConfirm(req as never, res);
 
-        expect(mockRejectResponse).toHaveBeenCalledWith(res, 500, []);
+        // Through `rejectDatabaseError` now, the same interpreter every other write path
+        // answers through — `errors` defaults to `[]` inside `rejectResponse` itself, never
+        // passed explicitly by the caller.
+        expect(mockRejectResponse).toHaveBeenCalledWith(res, 500);
+    });
+
+    it('answers 409 when the account is its shop\'s last administrator — AccessInvariantError, not a flat 500', async () => {
+        class AccessInvariantError extends Error {
+            constructor(message: string) {
+                super(message);
+                this.name = 'AccessInvariantError';
+            }
+        }
+        mockFindLiveToken.mockResolvedValue({ id: 'user-1' } as never);
+        mockSpendLiveToken.mockResolvedValue(true);
+        mockRemoveOwnAccount.mockRejectedValue(
+            new AccessInvariantError('[access] cannot revoke: the shop would have no administrator left')
+        );
+
+        const req = { body: { token: 'any-token' } };
+        const res = makeResponse();
+
+        await deleteAccountConfirm(req as never, res);
+
+        expect(mockRejectResponse).toHaveBeenCalledWith(res, 409);
     });
 });

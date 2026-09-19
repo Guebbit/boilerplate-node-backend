@@ -14,8 +14,6 @@ import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { readInput, callerContextOf } from '@infrastructure/http/request';
 import { readUploadedImage } from '@infrastructure/http/middlewares/upload';
-import { rolesOf } from '@modules/access';
-import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type {
     CreateUserRequest,
     CreateUserRequestMultipart,
@@ -130,12 +128,12 @@ export const writeUsers = (
                 callerContextOf(request)
             )
             .then((user) =>
-                // `toUser` picks only the `User` contract's own fields, so the hashed password
-                // and tokens on the document never reach `res.json`. The role is read fresh from
-                // the membership just written — never off the document, which holds none.
-                rolesOf(String(user._id), DEPLOYMENT_TENANT_ID).then((roles) => {
-                    successResponse<User>(response, userService.toUser(user, roles.tenant), 201);
-                })
+                // `toUserContract` picks only the `User` contract's own fields, so the hashed
+                // password and tokens on the document never reach `res.json`. The role is read
+                // fresh from the membership just written — never off the document, which holds none.
+                userService
+                    .toUserContract(user)
+                    .then((contract) => successResponse<User>(response, contract, 201))
             )
             .catch((error: unknown) =>
                 deleteUpload().then(() => {
@@ -161,8 +159,8 @@ export const writeUsers = (
                     rejectResponse(response, 500, [t('generic.error-internal')]);
                 });
             const saved = result.data;
-            return rolesOf(String(saved._id), DEPLOYMENT_TENANT_ID).then((roles) => {
-                successResponse<User>(response, userService.toUser(saved, roles.tenant));
+            return userService.toUserContract(saved).then((contract) => {
+                successResponse<User>(response, contract);
             });
         })
         .catch((error: unknown) =>

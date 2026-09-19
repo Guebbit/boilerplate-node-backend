@@ -541,15 +541,14 @@ describe('userService.updateById', () => {
         const id = user._id.toString();
 
         // `testCallerContext`'s anonymous granter cannot grant `admin` — the escalation must be
-        // refused BEFORE the deactivation half of this same request is allowed to land.
-        const result = await userService.updateById(
-            id,
-            { active: false, role: 'admin' },
-            testCallerContext
-        );
+        // refused BEFORE the deactivation half of this same request is allowed to land. Rejects
+        // rather than resolving to a 409 envelope: `AccessInvariantError` propagates the same way
+        // `create()`'s own escalation refusal does, for `@infrastructure/http/errors`'
+        // `databaseErrorInterpreter` to map at whichever `.catch()` sits above the caller.
+        await expect(
+            userService.updateById(id, { active: false, role: 'admin' }, testCallerContext)
+        ).rejects.toMatchObject({ name: 'AccessInvariantError' });
 
-        expect(result.success).toBe(false);
-        expect(result.status).toBe(409);
         const refreshed = await userRepository.findById(id);
         expect(refreshed!.active).toBe(true);
     });
@@ -735,15 +734,17 @@ describe('userService.remove', () => {
         expect(await userRepository.findById(id)).toBeNull();
     });
 
-    it("refuses to hard-delete a shop's last owner, with 409", async () => {
+    it("refuses to hard-delete a shop's last owner, with AccessInvariantError (409 once mapped)", async () => {
         // `createUser`'s `role` parameter grants the membership `administratorsOf` reads —
         // presets themselves need no seeding, they're read straight from the shared YAML.
         const user = await createUser({}, 'admin');
 
-        const result = await userService.remove(user, true);
-
-        expect(result.success).toBe(false);
-        expect((result as ResponseReject).status).toBe(409);
+        // Rejects rather than resolving to a 409 envelope — same as `create()`'s own escalation
+        // refusal; the caller's `.catch()` (`createDeleteController`, or `account`'s own generic
+        // one) is what maps `AccessInvariantError` to 409 via `databaseErrorInterpreter`.
+        await expect(userService.remove(user, true)).rejects.toMatchObject({
+            name: 'AccessInvariantError'
+        });
         // Refused BEFORE the write: the account and its cascades must survive a refused erasure.
         expect(await userRepository.findById(user.id)).not.toBeNull();
     });

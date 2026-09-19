@@ -107,8 +107,8 @@ export const sendVerificationEmail = (
     // ever requested), not a state worth mailing about.
     if (!address) return Promise.resolve();
 
-    return user
-        .tokenRemoveAll(type)
+    return userService
+        .tokenRemoveAll(user, type)
         .then(() => tokenAdd(user, type, EMAIL_VERIFY_TOKEN_TTL_MS))
         .then((token) => {
             /*
@@ -238,17 +238,22 @@ export const completeEmailVerification = (
     context: CallerContext
 ): Promise<UserDocument> => {
     return userService.markEmailVerified(user).then((saved) =>
-        rolesOf(saved.id, DEPLOYMENT_TENANT_ID).then((roles) => {
-            emitAuditEvent(
-                buildAuditEvent(context, {
-                    action: accountAuditActions.AUTH_EMAIL_VERIFY_COMPLETED,
-                    actor_user_id: saved.id,
-                    actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
-                    outcome: 'success'
-                })
-            );
-            return saved;
-        })
+        // The one promotion self-service verification may make on its own — before the role
+        // read just below, so the audit entry reflects the promotion that just happened, not the
+        // stale `unverified` it replaces.
+        promoteVerifiedCustomer(saved.id, DEPLOYMENT_TENANT_ID).then(() =>
+            rolesOf(saved.id, DEPLOYMENT_TENANT_ID).then((roles) => {
+                emitAuditEvent(
+                    buildAuditEvent(context, {
+                        action: accountAuditActions.AUTH_EMAIL_VERIFY_COMPLETED,
+                        actor_user_id: saved.id,
+                        actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
+                        outcome: 'success'
+                    })
+                );
+                return saved;
+            })
+        )
     );
 };
 
@@ -276,21 +281,26 @@ export const completeEmailChange = (
     if (!newEmail) return Promise.resolve(user);
 
     return userService.applyEmailChange(user, newEmail).then((saved) =>
-        saved
-            .tokenRemoveAll(TokenType.REFRESH)
-            .catch(() => undefined)
-            .then(() =>
-                rolesOf(saved.id, DEPLOYMENT_TENANT_ID).then((roles) => {
-                    emitAuditEvent(
-                        buildAuditEvent(context, {
-                            action: accountAuditActions.AUTH_EMAIL_CHANGE_COMPLETED,
-                            actor_user_id: saved.id,
-                            actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
-                            outcome: 'success'
-                        })
-                    );
-                    return saved;
-                })
-            )
+        // Same `unverified` → `customer` promotion as `completeEmailVerification`, since an email
+        // change can be the first proof an `unverified` signup ever completes — before the role
+        // read below, for the same reason.
+        promoteVerifiedCustomer(saved.id, DEPLOYMENT_TENANT_ID).then(() =>
+            userService
+                .tokenRemoveAll(saved, TokenType.REFRESH)
+                .catch(() => undefined)
+                .then(() =>
+                    rolesOf(saved.id, DEPLOYMENT_TENANT_ID).then((roles) => {
+                        emitAuditEvent(
+                            buildAuditEvent(context, {
+                                action: accountAuditActions.AUTH_EMAIL_CHANGE_COMPLETED,
+                                actor_user_id: saved.id,
+                                actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
+                                outcome: 'success'
+                            })
+                        );
+                        return saved;
+                    })
+                )
+        )
     );
 };

@@ -109,8 +109,8 @@ export const passwordChange = (
         return Promise.resolve(beforeSave?.(user))
             .then(() => userService.setPassword(user, password))
             .then((savedUser) =>
-                savedUser
-                    .tokenRemoveAll(TokenType.REFRESH)
+                userService
+                    .tokenRemoveAll(savedUser, TokenType.REFRESH)
                     .catch(() => undefined)
                     .then(() => generateSuccess<UserDocument>(savedUser))
             )

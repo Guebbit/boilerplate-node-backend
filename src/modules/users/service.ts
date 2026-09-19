@@ -23,8 +23,8 @@ import {
 import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { zodUserSchema, TokenType, hashToken, toUser } from './model';
-import type { UserDocument } from './model';
-import type { CreateUserRequest, SearchUsersRequest, UpdateUserByIdRequest } from '@types';
+import type { UserDocument, Token } from './model';
+import type { CreateUserRequest, SearchUsersRequest, UpdateUserByIdRequest, User } from '@types';
 import { userRepository } from './repository';
 import { enqueueIfImagePending } from '@infrastructure/adapters/image.worker';
 import { emitDomainEvent } from '@kernel/events';
@@ -36,13 +36,7 @@ import { usersAnalyticsEvents } from './analytics';
 import { usersAuditActions } from './audit';
 import { USER_DELETED, USER_SETUP_REQUESTED } from './events';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
-import {
-    assignRole,
-    assertCanGrant,
-    revokeAllOf,
-    promoteVerifiedCustomer,
-    AccessInvariantError
-} from '@modules/access';
+import { assignRole, assertCanGrant, revokeAllOf, rolesOf, VERIFIED_CUSTOMER_ROLE } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**
@@ -84,6 +78,16 @@ export const getById = (id?: string): Promise<UserDocument | undefined> => {
 };
 
 /**
+ * The contract `User` for an already-loaded document — resolves its CURRENT role fresh from the
+ * membership store (the document holds none of its own) and applies `toUser` in one call, so a
+ * controller does not chain the two itself. Single-document counterpart to `rolesOfMany` (see
+ * `GET /users`'s own list read) — `get-user-item.ts` and `write-users.ts`'s create/update are the
+ * three call sites this replaces.
+ */
+const toUserContract = (user: UserDocument): Promise<User> =>
+    rolesOf(String(user._id), DEPLOYMENT_TENANT_ID).then((roles) => toUser(user, roles.tenant));
+
+/**
  * Enqueue the digest job for a just-persisted user, when its write carried a pending upload.
  * `pendingImageKey` is only ever set while the queue looked ready at upload time — see
  * `quarantineUploadedImages`, and {@link enqueueIfImagePending} for what happens with it.
@@ -114,9 +118,9 @@ export const create = (
         data.password && data.password.trim().length > 0
             ? data.password
             : randomBytes(32).toString('hex');
-    // `customer`, matching the document field's old default, when an operator names none — an
-    // operator typing the address in is the vouching, same reasoning as `verifiedAt` above.
-    const role = data.role ?? 'customer';
+    // Matching the document field's old default, when an operator names none — an operator
+    // typing the address in is the vouching, same reasoning as `verifiedAt` above.
+    const role = data.role ?? VERIFIED_CUSTOMER_ROLE;
 
     return userRepository
         .create({ verifiedAt: new Date(), ...data, password })
@@ -177,20 +181,6 @@ export const create = (
                 );
             });
         });
-};
-
-/**
- * Turns an `AccessInvariantError` into the 409 envelope every function in this file that promises
- * "envelope, not throw" owes its caller. `@infrastructure/http/errors`' `databaseErrorInterpreter`
- * carries the SAME mapping for `create()`, which throws by contract instead — this is that other
- * half, for the functions here that do not.
- *
- * @throws Error re-thrown unchanged for anything that is not an `AccessInvariantError` — a
- *   database failure here is still the caller's to handle, not this function's to hide.
- */
-const rejectAccessInvariant = (error: Error): ResponseReject => {
-    if (error instanceof AccessInvariantError) return generateReject(409, [error.message]);
-    throw error;
 };
 
 /**
@@ -323,8 +313,7 @@ const updateSavedUser = (
                 .then(() => imageCleanup)
                 .then(() => enqueueIfPending(savedUser))
                 .then(generateSuccess);
-        })
-        .catch(rejectAccessInvariant);
+        });
 };
 
 /**
@@ -385,11 +374,13 @@ export const updateById = (
  * alongside its tenant one, and either row surviving the user it points at is an erasure gap.
  * This is also the one place a revoke's `assertNotLastAdministrator` can refuse the whole delete
  * with 409 BEFORE `user.deleted` fires, rather than leaving a shop with nobody who can administer
- * it — `rejectAccessInvariant` is what turns that refusal into the envelope this function
- * promises. Only past that does it emit `user.deleted`, awaited before the write, so cart cleanup
- * happens without this module knowing the cart exists — keeping the dependency arrow pointing
- * cart → users. Only the hard path touches either, since a soft delete is a restore waiting to
- * happen.
+ * it — left to REJECT with `AccessInvariantError`, same as `create()`, rather than enveloped
+ * here: `@infrastructure/http/errors`' `databaseErrorInterpreter` carries the same 409 mapping,
+ * and every caller of this function already sits behind it (`createDeleteController`'s own
+ * `.catch`, or `account`'s own generic one for the self-delete confirm flow). Only past that does
+ * it emit `user.deleted`, awaited before the write, so cart cleanup happens without this module
+ * knowing the cart exists — keeping the dependency arrow pointing cart → users. Only the hard
+ * path touches either, since a soft delete is a restore waiting to happen.
  */
 export const remove = (
     user: UserDocument,
@@ -400,8 +391,7 @@ export const remove = (
             .then(() => emitDomainEvent(USER_DELETED, { userId: user.id }))
             .then(() => userRepository.deleteOne(user))
             .then(() => imageStore.remove(user.imageUrl))
-            .then(() => generateSuccess(undefined, 200, t('users.hard-deleted')))
-            .catch(rejectAccessInvariant);
+            .then(() => generateSuccess(undefined, 200, t('users.hard-deleted')));
 
     // A FLIP, not an assignment: run against an already soft-deleted user this restores it,
     // which is what the `hardDelete: false` half of `hardDeleteSchema` means.
@@ -570,37 +560,51 @@ const setPassword = (user: UserDocument, password: string): Promise<UserDocument
 };
 
 /**
- * Prove an account's email: stamp `verifiedAt`, and promote a still-`unverified` role to
- * `customer` — the one promotion self-service verification may make on its own. Takes the
- * already-loaded holder of the spent token, not an id: `completeEmailVerification`'s caller
- * already found and spent it (see that file's own docblock on why finding and spending are two
- * calls), and a second fetch here would just be a redundant round trip.
+ * Append a token (reset, delete-confirmation, or the JWT layer's own refresh rotation) — the
+ * named door onto `UserMethods.tokenAdd`, so `account` (the one sibling allowed to hold a
+ * hydrated `UserDocument` at all, per the shared-kernel note above) writes through this module
+ * instead of calling the document's own instance method directly. `$push`s, never rebuilds the
+ * array — see the method's own doc for why that matters under a concurrent request.
+ */
+const tokenAdd = (
+    user: UserDocument,
+    type: Token['type'],
+    expirationMs: number,
+    token: string,
+    amr?: string[]
+): Promise<string> => user.tokenAdd(type, expirationMs, token, amr);
+
+/** Spend every token of one type at once — "log out everywhere" for that token type. Same reasoning as {@link tokenAdd}. */
+const tokenRemoveAll = (user: UserDocument, type: Token['type']): Promise<void> =>
+    user.tokenRemoveAll(type);
+
+/**
+ * Prove an account's email: stamp `verifiedAt` and save — document-only, per this file's own
+ * module docblock. The `unverified` → `customer` promotion that follows a self-service
+ * verification is `account`'s own flow's job (`completeEmailVerification`), not this operation's;
+ * see `markVerified` in `account/services/verification.ts` for the same split on the
+ * password-reset path. Takes the already-loaded holder of the spent token, not an id:
+ * `completeEmailVerification`'s caller already found and spent it (see that file's own docblock
+ * on why finding and spending are two calls), and a second fetch here would just be a redundant
+ * round trip.
  */
 const markEmailVerified = (user: UserDocument): Promise<UserDocument> => {
     user.verifiedAt = new Date();
-    return userRepository
-        .save(user)
-        .then((saved) =>
-            promoteVerifiedCustomer(String(saved._id), DEPLOYMENT_TENANT_ID).then(() => saved)
-        );
+    return userRepository.save(user);
 };
 
 /**
  * Swap a proven `pendingEmail` into `email`, and mark the account verified — the new address just
- * proved itself. Same `unverified` → `customer` promotion as {@link markEmailVerified}, since an
- * email change can be the first proof an `unverified` signup ever completes. Revoking the
- * account's refresh tokens afterward is the caller's job, not this operation's — `save` here
- * answers with the document a token-revoke call needs, nothing more.
+ * proved itself. Document-only, same split as {@link markEmailVerified}: the caller promotes a
+ * still-`unverified` role, since an email change can be the first proof an `unverified` signup
+ * ever completes. Revoking the account's refresh tokens afterward is also the caller's job, not
+ * this operation's — `save` here answers with the document a token-revoke call needs, nothing more.
  */
 const applyEmailChange = (user: UserDocument, newEmail: string): Promise<UserDocument> => {
     user.email = newEmail;
     user.pendingEmail = undefined;
     user.verifiedAt = new Date();
-    return userRepository
-        .save(user)
-        .then((saved) =>
-            promoteVerifiedCustomer(String(saved._id), DEPLOYMENT_TENANT_ID).then(() => saved)
-        );
+    return userRepository.save(user);
 };
 
 /**
@@ -626,13 +630,36 @@ const persistTwoFactorMethods = (user: UserDocument): Promise<UserDocument> => {
     return userRepository.save(user);
 };
 
+/** The fields signup's anti-automation decoy path may set — never `verifiedAt`, which is never persisted anyway. */
+type SignupDecoyFields = Pick<
+    UserDocument,
+    'email' | 'username' | 'imageUrl' | 'thumbnailUrl' | 'analyticsConsent' | 'termsAccepted'
+>;
+
 /**
  * Construct a document WITHOUT persisting it — signup's anti-automation deception path answers
  * with a document that looks real and was never written, so a policy-refused attempt gets nothing
  * to distinguish it from a genuine one.
  */
-const buildSignupDecoy = (data: Parameters<typeof userRepository.build>[0]) =>
-    userRepository.build(data);
+const buildSignupDecoy = (data: SignupDecoyFields) => userRepository.build(data);
+
+/**
+ * The fields a self-service signup may set — deliberately excludes `verifiedAt`/`active`/
+ * `oauthAccounts`, which {@link registerFromOAuth} alone may set: passing any of them here would
+ * let a self-service signup skip email verification the same way a provider-vouched one does.
+ */
+type SelfServiceSignupFields = Pick<
+    UserDocument,
+    | 'username'
+    | 'email'
+    | 'imageUrl'
+    | 'thumbnailUrl'
+    | 'pendingImageKey'
+    | 'password'
+    | 'analyticsConsent'
+    | 'termsAccepted'
+    | 'locale'
+>;
 
 /**
  * A self-service signup, from the request's own fields — `account`'s OWN orchestration
@@ -641,18 +668,25 @@ const buildSignupDecoy = (data: Parameters<typeof userRepository.build>[0]) =>
  * role of its own: the document holds none, and the caller grants `unverified` separately through
  * `assignDefaultRole` — never this function, which never sees a role name to misuse.
  */
-const registerSelfService = (data: Parameters<typeof userRepository.create>[0]) =>
-    userRepository.create(data);
+const registerSelfService = (data: SelfServiceSignupFields) => userRepository.create(data);
+
+/** The fields an OAuth-vouched signup may set — see {@link registerFromOAuth}. */
+type OAuthSignupFields = Pick<
+    UserDocument,
+    'email' | 'username' | 'imageUrl' | 'verifiedAt' | 'active' | 'locale' | 'oauthAccounts'
+>;
 
 /**
  * An account minted from a federated identity — the provider vouches for it, so its caller grants
  * `customer` directly (through `assignRole`, not `assignDefaultRole`) rather than `unverified`,
  * the same way an operator-created account does. Same "writes no role itself" split as
  * {@link registerSelfService} — `verifiedAt` is set at the call site, the membership grant happens
- * there too, never inside this function.
+ * there too, never inside this function. Kept as a separate function from
+ * {@link registerSelfService} rather than merged despite the identical one-line body: the two
+ * field sets below are what actually matters, and a caller passing the wrong one is exactly the
+ * mistake narrowing each exists to catch at compile time.
  */
-const registerFromOAuth = (data: Parameters<typeof userRepository.create>[0]) =>
-    userRepository.create(data);
+const registerFromOAuth = (data: OAuthSignupFields) => userRepository.create(data);
 
 /**
  * Undo a just-created signup row whose starting-role grant then failed — a hard delete, not
@@ -737,6 +771,8 @@ export const userService = {
     applyEmailChange,
     markInactivityWarned,
     persistTwoFactorMethods,
+    tokenAdd,
+    tokenRemoveAll,
     sessionRemove,
     tokenRemoveByValue,
     tokenRemoveExpired,
@@ -750,5 +786,6 @@ export const userService = {
     enqueueIfPending,
     // A controller may not reach `./model` directly (the persistence wall), so the shaping
     // helper it needs to build a response rides through the service instead.
-    toUser
+    toUser,
+    toUserContract
 };

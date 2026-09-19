@@ -48,12 +48,12 @@ export const tokenAdd = (
     expirationTime?: number
 ): Promise<string> => {
     const token = randomBytes(16).toString('hex');
-    // Delegates to the document method the JWT layer already uses, rather than duplicating
-    // "append a token" here. Both issue a `$push` — the array must be APPENDED TO, never rebuilt.
-    // Rebuilding it (`user.tokens = [...]`) writes the whole array back, erasing anything added
-    // by a concurrent request in between; `tokens` is exactly the field where two sessions and a
-    // reset link routinely collide like that.
-    return user.tokenAdd(type, expirationTime ?? 0, token);
+    // Delegates to `userService.tokenAdd`, the named door onto the document method the JWT layer
+    // already uses, rather than duplicating "append a token" here. Both issue a `$push` — the
+    // array must be APPENDED TO, never rebuilt. Rebuilding it (`user.tokens = [...]`) writes the
+    // whole array back, erasing anything added by a concurrent request in between; `tokens` is
+    // exactly the field where two sessions and a reset link routinely collide like that.
+    return userService.tokenAdd(user, type, expirationTime ?? 0, token);
 };
 
 /**
@@ -590,7 +590,9 @@ export const tokenRemoveAll = (
                 // rebuilds the array, writing it back whole and erasing anything added between
                 // this function's read and write. That race window is hard to assert in a test —
                 // `$pull` describes a change instead, closing it in the implementation.
-                return user.tokenRemoveAll(type).then(() => generateSuccess<UserDocument>(user));
+                return userService
+                    .tokenRemoveAll(user, type)
+                    .then(() => generateSuccess<UserDocument>(user));
             }
         )
         .catch((error: CastError | Error) => rejectDatabaseEnvelope('auth', error))

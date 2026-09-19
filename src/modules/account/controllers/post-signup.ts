@@ -18,6 +18,7 @@ import { callerContextOf } from '@infrastructure/http/request';
 import { issueSession } from '../session/session';
 import { sendVerificationEmail } from '../services';
 import { userService } from '@modules/users';
+import { SIGNUP_DEFAULT_ROLE } from '@modules/access';
 import { logAntibotRefusal } from '@infrastructure/http/middlewares/antibot-log';
 
 /**
@@ -84,10 +85,14 @@ export const postSignup = (
                 logAntibotRefusal('email-policy', request.method, request.path, 201);
                 authSignupTotal.inc({ status: 'refused' });
                 return deleteUpload().then(() => {
-                    // `'unverified'` hardcoded, not read off a membership that was never written
+                    // SIGNUP_DEFAULT_ROLE, not read off a membership that was never written
                     // (this document is never saved) — exactly what a genuine signup's response
                     // shows, which is the whole point of this branch being indistinguishable.
-                    successResponse<User>(response, userService.toUser(data, 'unverified'), 201);
+                    successResponse<User>(
+                        response,
+                        userService.toUser(data, SIGNUP_DEFAULT_ROLE),
+                        201
+                    );
                 });
             }
 
@@ -113,10 +118,10 @@ export const postSignup = (
              * address in use already leaks existence.
              */
             return issueSession(response, data.id).then(() => {
-                // `'unverified'`, not a lookup: self-service signup's `assignDefaultRole` can only
+                // SIGNUP_DEFAULT_ROLE, not a lookup: self-service signup's `assignDefaultRole` can only
                 // ever grant this one role, so it's what the membership just written holds, by
                 // construction — see `authentication.ts#signup`.
-                successResponse<User>(response, userService.toUser(data, 'unverified'), 201);
+                successResponse<User>(response, userService.toUser(data, SIGNUP_DEFAULT_ROLE), 201);
             });
         })
         .catch((error: CastError | Error) => {

@@ -15,7 +15,7 @@ import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/a
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
 import type { OAuthIdentity } from '../oauth/providers/port';
-import { assignRole } from '@modules/access';
+import { assignRole, VERIFIED_CUSTOMER_ROLE } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**
@@ -146,10 +146,10 @@ const signupFromOAuth = (
             // tries again, and the second attempt finds case 1.
         })
         .then((created) =>
-            // `customer`, not `assignDefaultRole`'s `unverified`: the provider already vouches for
-            // this address, the same reasoning `verifiedAt` above applies. A refused grant undoes
-            // the row — same compensation as the self-service signup path in `authentication.ts`.
-            assignRole(created.id, DEPLOYMENT_TENANT_ID, 'tenant', 'customer').then(
+            // Not `assignDefaultRole`'s `unverified`: the provider already vouches for this
+            // address, the same reasoning `verifiedAt` above applies. A refused grant undoes the
+            // row — same compensation as the self-service signup path in `authentication.ts`.
+            assignRole(created.id, DEPLOYMENT_TENANT_ID, 'tenant', VERIFIED_CUSTOMER_ROLE).then(
                 () => created,
                 (error: unknown) =>
                     userService.discardFailedSignup(created).then(() => {

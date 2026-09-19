@@ -10,6 +10,7 @@ import { ConfirmAccountDeleteBody } from '@api/schemas.zod';
 import { accountService } from '../services';
 import { destroyRefreshCookie, destroyLoggedCookie } from '../session/cookies';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { AccountDeleteConfirmRequest } from '@types';
 import { parseBody } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -66,5 +67,10 @@ export const deleteAccountConfirm = (
                 });
             });
         })
-        .catch(() => rejectResponse(response, 500, []));
+        .catch((error: unknown) => {
+            // Same interpreter every other write path answers through — an account that is its
+            // shop's last administrator refuses this with 409 (`AccessInvariantError`), not a
+            // flat 500 that would swallow that into an unhelpful "something went wrong".
+            rejectDatabaseError(response, 'deleteAccountConfirm', error);
+        });
 };

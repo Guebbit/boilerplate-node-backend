@@ -234,13 +234,15 @@ export const buildLoginChallenge = (
     // `hashToken`'s doc in `users/model.ts`.
     const challenge = randomBytes(16).toString('hex');
 
-    return user.tokenAdd(TokenType.MFA_CHALLENGE, ttlMs, challenge, [...amr]).then((token) => ({
-        mfaRequired: true,
-        challenge: token,
-        expiresAt: new Date(Date.now() + ttlMs).toISOString(),
-        methods: armed.map(({ handler }) => summarize(handler, user)),
-        ...(armed[0] && { defaultMethod: armed[0].handler.name })
-    }));
+    return userService
+        .tokenAdd(user, TokenType.MFA_CHALLENGE, ttlMs, challenge, [...amr])
+        .then((token) => ({
+            mfaRequired: true,
+            challenge: token,
+            expiresAt: new Date(Date.now() + ttlMs).toISOString(),
+            methods: armed.map(({ handler }) => summarize(handler, user)),
+            ...(armed[0] && { defaultMethod: armed[0].handler.name })
+        }));
 };
 
 /**

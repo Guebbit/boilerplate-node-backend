@@ -7,25 +7,20 @@
 
 import { userService } from '../service';
 import { createItemController } from '@infrastructure/surfaces/create-item-controller';
-import { rolesOf } from '@modules/access';
-import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**
  * GET /users/:id
  * Get a single user by path id (admin).
  *
- * `toUser` needs the caller's CURRENT role, read fresh from the membership store — the document
- * holds none of its own any more. One extra indexed lookup per read, same cost class as every
- * other authorization check this endpoint already sits behind.
+ * `toUserContract` reads the caller's CURRENT role fresh from the membership store — the
+ * document holds none of its own any more. One extra indexed lookup per read, same cost class as
+ * every other authorization check this endpoint already sits behind.
  */
 export const getUserItem = createItemController({
     entity: 'user',
     notFoundKey: 'users.not-found',
     fetch: (id) =>
-        userService.getById(id).then((user) => {
-            if (!user) return undefined;
-            return rolesOf(String(user._id), DEPLOYMENT_TENANT_ID).then((roles) =>
-                userService.toUser(user, roles.tenant)
-            );
-        })
+        userService
+            .getById(id)
+            .then((user) => (user ? userService.toUserContract(user) : undefined))
 });

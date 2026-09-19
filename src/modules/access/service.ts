@@ -11,19 +11,20 @@
  */
 
 import type { AuthorizationScope, CallerContext } from '@types';
-import { assertDeclared, findRole, PERMISSION_KEYS, PRESET_ROLES } from '@kernel/permissions';
+import { findRole, PERMISSION_KEYS, PRESET_ROLES } from '@kernel/permissions';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import type { AuditAction } from '@infrastructure/observability/audit';
 import { membershipRepository, tenantRepository } from './repository';
 import type { MembershipDocument, TenantDocument } from './model';
 import { accessAuditActions } from './audit';
 
 /** The one role self-service signup (or an OAuth signup a provider already vouches for) may ever
  * grant — never a caller-supplied name. See {@link assignDefaultRole}. */
-const SIGNUP_DEFAULT_ROLE = 'unverified';
+export const SIGNUP_DEFAULT_ROLE = 'unverified';
 
 /** What `unverified` promotes to once the address is proven. See {@link promoteVerifiedCustomer}. */
-const VERIFIED_CUSTOMER_ROLE = 'customer';
+export const VERIFIED_CUSTOMER_ROLE = 'customer';
 
 /**
  * The one tenant key {@link validateGrant} exempts `VERIFIED_CUSTOMER_ROLE` from needing, held by
@@ -64,24 +65,26 @@ export const membershipIn = (
 ): Promise<MembershipDocument | null> => membershipRepository.findOne(userId, tenantId, scope);
 
 /**
- * The synchronous half of {@link assignRole}: refuses the same three things, and returns the
+ * The synchronous half of {@link assignRole}: refuses the same two things, and returns the
  * lowered role name for the caller to act on. Split out so {@link assertCanGrant} can ask "would
  * this succeed" before committing other state, without a compensating rollback if the grant turns
  * out to be refused — see `users/service.ts`'s `updateSavedUser`.
  *
- * Refuses three things, and each refusal is an invariant of the model:
+ * Refuses two things, and each refusal is an invariant of the model:
  *
  *   - **a role nothing declares** — assigning a name no row and no preset defines produces a
- *     member who can do nothing and looks like a member who can;
- *   - **a key no module owns** — checked through the role's own keys, because a role editor that
- *     accepts a free-text key is a permission system with no vocabulary;
- *   - **granting what the granter does not hold** — otherwise every role editor is a
+ *     member who can do nothing and looks like a member who can. There is no role editor in this
+ *     codebase: a role's permissions come only from `shared/authorization-roles.yaml`'s presets,
+ *     never a caller-supplied list, so every key a resolved role can hold is already a declared
+ *     one by construction —`tests/cross-cutting/authorization-keys.test.ts` is what proves that
+ *     for every preset, once, rather than this function re-checking it on every grant;
+ *   - **granting what the granter does not hold** — otherwise every grant is a
  *     privilege-escalation endpoint, which is the single most common way these systems fail. One
  *     named exception: `CREATE_USER_KEY`'s own docblock.
  *
  * @param granter - the keys the person MAKING the grant holds, or `undefined` for a seeder, a
  *   migration or an operator on the console — the three callers with nobody to escalate from
- * @throws AccessInvariantError for any of the three reasons above
+ * @throws AccessInvariantError for either reason above
  */
 const validateGrant = (
     scope: AuthorizationScope,
@@ -97,10 +100,6 @@ const validateGrant = (
             `[access] "${roleName}" is not a role in this ${scope} scope. ` +
                 `Declare it in shared/authorization-roles.yaml first, or assign one that exists.`
         );
-    }
-
-    for (const key of permissions) {
-        assertDeclared(key);
     }
 
     const exempt =
@@ -142,6 +141,36 @@ export const assertCanGrant = (
 };
 
 /**
+ * One audit row for a role grant or revoke, success or failure — {@link assignRole}/
+ * {@link revokeRole} each had four near-identical `emitAuditEvent`/`buildAuditEvent` blocks
+ * before this, and it was exactly that duplication that let one of them (revoke's failure branch)
+ * quietly drop `role` from its metadata while the other three kept it.
+ *
+ * @param role - `undefined` when nothing was there to name (an assign's `roleName` is always
+ *   known; a revoke with no membership found, or whose role wasn't yet resolved when it failed,
+ *   has none) — omitted from `metadata` rather than sent as `undefined`
+ */
+const auditRoleChange = (
+    context: CallerContext,
+    action: AuditAction,
+    outcome: 'success' | 'failure',
+    userId: string,
+    role: string | undefined,
+    tenantId: string | null,
+    scope: AuthorizationScope
+): void => {
+    emitAuditEvent(
+        buildAuditEvent(context, {
+            action,
+            outcome,
+            target_type: 'user',
+            target_id: userId,
+            metadata: role === undefined ? { tenantId, scope } : { role, tenantId, scope }
+        })
+    );
+};
+
+/**
  * Give somebody a role in a place. See {@link validateGrant} for what this refuses.
  *
  * @param granter - the keys the person MAKING the grant holds, or `undefined` for a seeder, a
@@ -173,26 +202,26 @@ export const assignRole = (
 
     return attempt.then(
         (membership) => {
-            emitAuditEvent(
-                buildAuditEvent(context, {
-                    action: accessAuditActions.ROLE_ASSIGNED,
-                    outcome: 'success',
-                    target_type: 'user',
-                    target_id: userId,
-                    metadata: { role: roleName.toLowerCase(), tenantId, scope }
-                })
+            auditRoleChange(
+                context,
+                accessAuditActions.ROLE_ASSIGNED,
+                'success',
+                userId,
+                roleName.toLowerCase(),
+                tenantId,
+                scope
             );
             return membership;
         },
         (error: unknown) => {
-            emitAuditEvent(
-                buildAuditEvent(context, {
-                    action: accessAuditActions.ROLE_ASSIGNED,
-                    outcome: 'failure',
-                    target_type: 'user',
-                    target_id: userId,
-                    metadata: { role: roleName.toLowerCase(), tenantId, scope }
-                })
+            auditRoleChange(
+                context,
+                accessAuditActions.ROLE_ASSIGNED,
+                'failure',
+                userId,
+                roleName.toLowerCase(),
+                tenantId,
+                scope
             );
             throw error;
         }
@@ -261,10 +290,16 @@ export const revokeRole = (
     scope: AuthorizationScope,
     context?: CallerContext
 ): Promise<void> => {
+    // Set once a membership is found, read by BOTH branches below — the failure branch used to
+    // have no access to it at all, which is how `role` went missing from that one audit row and
+    // not the other three (see `auditRoleChange`'s own docblock).
+    let revokedRole: string | undefined;
+
     const attempt = membershipIn(userId, tenantId, scope).then((membership) => {
         if (!membership) {
             return undefined;
         }
+        revokedRole = membership.role;
 
         return membershipRepository
             .deleteById(membership._id)
@@ -288,26 +323,26 @@ export const revokeRole = (
             // `role` is `undefined` when there was nothing to revoke — no membership existed, so
             // there is nothing to record.
             if (role) {
-                emitAuditEvent(
-                    buildAuditEvent(context, {
-                        action: accessAuditActions.ROLE_REVOKED,
-                        outcome: 'success',
-                        target_type: 'user',
-                        target_id: userId,
-                        metadata: { role, tenantId, scope }
-                    })
+                auditRoleChange(
+                    context,
+                    accessAuditActions.ROLE_REVOKED,
+                    'success',
+                    userId,
+                    role,
+                    tenantId,
+                    scope
                 );
             }
         },
         (error: unknown) => {
-            emitAuditEvent(
-                buildAuditEvent(context, {
-                    action: accessAuditActions.ROLE_REVOKED,
-                    outcome: 'failure',
-                    target_type: 'user',
-                    target_id: userId,
-                    metadata: { tenantId, scope }
-                })
+            auditRoleChange(
+                context,
+                accessAuditActions.ROLE_REVOKED,
+                'failure',
+                userId,
+                revokedRole,
+                tenantId,
+                scope
             );
             throw error;
         }
