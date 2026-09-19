@@ -40,7 +40,7 @@ export const productRepository: Repository<ProductDocument> & {
     syncStockCache: (
         productId: string,
         counters: { onHand: number; reserved: number }
-    ) => Promise<boolean>;
+    ) => Promise<void>;
     writebackImage: ImageWriteback;
 } = {
     ...createRepository<ProductDocument>(productModel, {
@@ -132,13 +132,12 @@ export const productRepository: Repository<ProductDocument> & {
      *
      * @param productId - the product
      * @param counters - the values to write, verbatim
-     * @returns whether the product still exists to receive the sync
      */
     syncStockCache: (productId: string, counters: { onHand: number; reserved: number }) =>
         productModel
             .updateOne({ _id: toObjectId(productId) }, { $set: counters }, { timestamps: false })
             .exec()
-            .then(({ modifiedCount }) => modifiedCount > 0),
+            .then(() => undefined),
 
     /**
      * The image digest pipeline's writeback for the `products` collection — see `ImageTarget` in

@@ -1,6 +1,6 @@
 /**
  * @module
- * Shipment repository — standard CRUD via the repository factory, plus the lookups the courier
+ * Shipment repository — standard CRUD via the repository factory, plus the lookups the carrier
  * actually makes. The return type is written out because Mongoose's generics are too large for
  * TypeScript to serialize an inferred one at an export boundary (TS7056), the same reason
  * `Repository` exists. See: docs/modules/delivery.md
@@ -15,7 +15,7 @@ import {
     type Repository
 } from '@infrastructure/persistence/create-repository';
 
-/** The shared repository factory's CRUD surface plus the courier's own lookups. */
+/** The shared repository factory's CRUD surface plus the carrier's own lookups. */
 export const shipmentRepository: Repository<ShipmentDocument> & {
     findByOrderId: (orderId: string) => Promise<ShipmentDocument | null>;
     findByOrderIds: (orderIds: string[]) => Promise<ShipmentDocument[]>;
@@ -66,7 +66,7 @@ export const shipmentRepository: Repository<ShipmentDocument> & {
     /**
      * Move a parcel between statuses, but only from one of the expected ones — atomically, the
      * same primitive `orderRepository`/`paymentRepository` expose. The condition rides in the
-     * FILTER, not a preceding read: two courier ticks racing (a double click, a demo racing a
+     * FILTER, not a preceding read: two carrier ticks racing (a double click, a demo racing a
      * manual advance) would otherwise both load the same `shipped` parcel and both stamp
      * `deliveredAt`, the second write winning silently and the timestamp lying about when the
      * parcel arrived. mongod evaluates the filter atomically, so exactly one tick matches; the

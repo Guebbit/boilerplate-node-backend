@@ -267,17 +267,24 @@ productSchema.index({ createdAt: -1 }, { name: 'products_createdAt' });
 productSchema.index({ active: 1, deletedAt: 1 }, { name: 'products_active_deletedAt' });
 
 /**
- * Derives `available` — what a customer may buy — from the two stored counters, at the single
- * serialization point every product response passes through, so listing, detail, both write
- * paths and an order's embedded snapshots all agree.
+ * `available` — what a customer may buy — from the two stored counters. The one formula this
+ * file needs twice, at {@link applyProductAvailability} and {@link toProduct}.
  *
- * Clamped at zero: `reserved > onHand` should be unreachable via `@modules/inventory`'s
- * conditional transitions, but "should be unreachable" isn't a reason to serve a negative count.
+ * Deliberately duplicates `@modules/inventory`'s `availabilityOf` rather than importing it:
+ * `inventory/service.ts` already imports `productService`, so the reverse edge is a real cycle
+ * (confirmed with `depcruise src/modules --config .dependency-cruiser.modules.cjs`), the same
+ * constraint `cart/domain/rules.ts`'s own copy documents. Clamped at zero: `reserved > onHand`
+ * should be unreachable via `@modules/inventory`'s conditional transitions, but "should be
+ * unreachable" isn't a reason to serve a negative count.
  */
+const productAvailability = (onHand?: number, reserved?: number): number =>
+    Math.max(0, (onHand ?? 0) - (reserved ?? 0));
+
+/** Derives `available`, at the single serialization point every product response passes through — listing, detail, both write paths and an order's embedded snapshots all agree. */
 const applyProductAvailability = (serialized: Record<string, unknown>) => {
     const onHand = typeof serialized.onHand === 'number' ? serialized.onHand : 0;
     const reserved = typeof serialized.reserved === 'number' ? serialized.reserved : 0;
-    serialized.available = Math.max(0, onHand - reserved);
+    serialized.available = productAvailability(onHand, reserved);
 };
 
 /**
@@ -306,7 +313,7 @@ export const toProduct = (document: ProductDocument): Product => {
         id: document.id,
         title: document.title,
         price: document.price,
-        available: Math.max(0, onHand - reserved),
+        available: productAvailability(onHand, reserved),
         ...(document.taxClass === undefined ? {} : { taxClass: document.taxClass }),
         ...(document.onHand === undefined ? {} : { onHand: document.onHand }),
         ...(document.reserved === undefined ? {} : { reserved: document.reserved }),

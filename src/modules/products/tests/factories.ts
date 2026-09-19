@@ -23,7 +23,7 @@ export { makeProduct, type ProductOverrides } from '../factories';
  * actually sources from. Written through the raw collection, by name, never a model import —
  * the same collection-by-string reach `@modules/inventory`'s own `$lookup`s use in the other
  * direction, and the only way a `products`-owned file can touch `stocklevels` at all without
- * importing a sibling module.
+ * importing a sibling module — `available` below duplicates `availabilityOf` for the same reason.
  */
 const seedStockLevel = (product: ProductDocument): Promise<unknown> =>
     productModel.db.collection('stocklevels').updateOne(

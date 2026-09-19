@@ -3,7 +3,7 @@
  * The shipment schema's contract. `unique: true` on `orderId` is the same exactly-once device
  * the payment schema uses: one parcel per order, enforced by the database, so a retried dispatch
  * cannot produce a second shipment with a second tracking code for the same goods — two parcels
- * to the customer, one delivery to the courier.
+ * to the customer, one delivery to the carrier.
  */
 
 import { shipmentSchema } from '@modules/delivery/model';

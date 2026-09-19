@@ -52,6 +52,12 @@ const countersOf = async (productId: string) => {
     return { onHand: stored?.onHand, reserved: stored?.reserved };
 };
 
+/** `stocklevels` itself — this module's source of truth, `countersOf` above only reads the mirror `syncStockCache` writes into `products`. */
+const levelOf = async (productId: string) => {
+    const level = await stockLevelRepository.findByProductId(productId);
+    return { onHand: level?.onHand, reserved: level?.reserved };
+};
+
 /**
  * Run `body` with the reservation window closed, so every hold it opens is already stale.
  * Defined at module scope, not inside a describe, because leaving the TTL at zero for the whole
@@ -114,6 +120,9 @@ describe('reserveForOrder', () => {
 
         // Three, not six: the unique `orderId` is what makes the second call a no-op.
         expect(await countersOf(String(product._id))).toEqual({ onHand: 10, reserved: 3 });
+        // The cache agreeing with itself twice isn't proof `syncStockCache` mirrored the real
+        // write — `stocklevels` is the row every other assertion in this file takes on faith.
+        expect(await levelOf(String(product._id))).toEqual({ onHand: 10, reserved: 3 });
     });
 
     it('holds for the caller-given window instead of NODE_RESERVATION_TTL_MINUTES, when given one', async () => {

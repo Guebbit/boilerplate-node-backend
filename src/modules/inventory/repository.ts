@@ -65,7 +65,6 @@ export const stockLevelRepository: Repository<StockLevelDocument> & {
     ensure: (productId: string) => Promise<StockLevelDocument>;
     findByProductId: (productId: string) => Promise<StockLevelDocument | null>;
     deleteByProductId: (productId: string) => Promise<void>;
-    findManyByProductIds: (productIds: readonly string[]) => Promise<StockLevelDocument[]>;
     applyDelta: (
         productId: string,
         condition: QueryFilter<StockLevelDocument>,
@@ -123,13 +122,6 @@ export const stockLevelRepository: Repository<StockLevelDocument> & {
             .deleteOne({ productId: toObjectId(productId) })
             .exec()
             .then(() => undefined),
-
-    /**
-     * @param productIds - the products
-     * @returns whichever of them have a level row, in no particular order
-     */
-    findManyByProductIds: (productIds: readonly string[]) =>
-        stockLevelModel.find({ productId: { $in: productIds.map((id) => toObjectId(id)) } }).exec(),
 
     /**
      * Move one product's counters, or none of them — the module's one write primitive.

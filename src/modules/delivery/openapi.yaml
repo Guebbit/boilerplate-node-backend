@@ -129,7 +129,7 @@ components:
     schemas:
         # ── Delivery module ─────────────────────────────────────────────────────
         # Owned by src/modules/delivery. The methods are the checkout's selector; the shipment
-        # is the courier's record of one order's parcel.
+        # is the carrier's record of one order's parcel.
 
         ShippingMethod:
             type: object
@@ -201,11 +201,11 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 trackingCode:
                     type: string
-                    description: The courier's handle on the parcel. Absent for a method that carries no tracking (ShippingMethod.tracked is false).
+                    description: The carrier's handle on the parcel. Absent for a method that carries no tracking (ShippingMethod.tracked is false).
                 status:
                     type: string
                     enum: [shipped, delivered]
-                    description: The tail of the order's lifecycle, as the courier sees it.
+                    description: The tail of the order's lifecycle, as the carrier sees it.
                 deliveredAt:
                     type: string
                     format: date-time

@@ -11,7 +11,7 @@ import type { ShippingMethod } from '@types';
 /**
  * The methods this shop offers. Flat rates on purpose — a full zone matrix is a real-project
  * concern with no demo value; the weight range each method accepts is the one dimension worth
- * demonstrating, since it is what keeps a courier's own limits honest. `pickup` proves "cheapest
+ * demonstrating, since it is what keeps a carrier's own limits honest. `pickup` proves "cheapest
  * method" and "no method" stay distinct, and carries no weight ceiling — nothing about a counter
  * collection cares how heavy the box is. `tracked` decides whether
  * `POST /delivery/order/{orderId}/ship` requires a tracking code — `express` is the one method

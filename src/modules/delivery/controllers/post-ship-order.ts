@@ -15,7 +15,7 @@ import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /** Handles `POST /delivery/order/:orderId/ship`. */
 export const postShipOrder = (request: Request<{ orderId?: string }>, response: Response) => {
-    const body = parseBody(ShipOrderBody, request.body, response);
+    const body = parseBody(ShipOrderBody, request.body ?? {}, response);
     if (!body) return;
 
     return deliveryService

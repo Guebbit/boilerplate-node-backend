@@ -378,7 +378,7 @@ const isStockBoundToOrder = (orderId: string): Promise<boolean> =>
 /**
  * The expiry tick: every hold whose window has closed gives its units back.
  *
- * Driven from outside — the app ships no scheduler, same as the courier in `delivery`. Each hold
+ * Driven from outside — the app ships no scheduler, same as the carrier in `delivery`. Each hold
  * is released and announced: the release frees the units, the announcement lets `orders` cancel
  * the order behind it. `orders`' own cancel calls back into `releaseForOrder` and finds the hold
  * already released, so neither path can double-release.

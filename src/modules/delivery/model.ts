@@ -2,7 +2,7 @@
  * @module
  * Shipment model — one shipment per order, made a database fact by `unique` on `orderId`, the
  * same discipline as the payment's. Its two statuses mirror the tail of the order's lifecycle
- * rather than replacing it, since the tracking code and delivery timestamp are courier facts the
+ * rather than replacing it, since the tracking code and delivery timestamp are carrier facts the
  * order has no field for. See: docs/modules/delivery.md
  */
 

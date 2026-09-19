@@ -21,6 +21,7 @@ import type { CallerContext } from '@types';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { deliveryAuditActions } from './audit';
 import { orderService, canTransition, canOverrideTo } from '@modules/orders';
+import type { OrderDocument } from '@modules/orders';
 import { userService } from '@modules/users';
 import { holdsKey } from '@kernel/ability';
 import { findShippingMethod, methodsForWeight } from './domain';
@@ -97,6 +98,54 @@ const refuseUnearnedForce = (
 };
 
 /**
+ * The shipped-parcel notification: the carrier email, addressed in the buyer's own language when
+ * an account is still attached, and the operator-facing log line — {@link recordShipment}'s own
+ * notification step, named so the chain around it reads as steps rather than nested callbacks.
+ * `order.userId` is absent once a detach has erased the account — nothing to look up, the
+ * pre-existing "id points at nobody" case just below covers the rest.
+ */
+const notifyShipped = (
+    orderId: string,
+    order: OrderDocument,
+    shipment: ShipmentDocument
+): Promise<void> =>
+    (order.userId ? userService.getById(String(order.userId)).catch(() => null) : Promise.resolve(null)).then(
+        (user) => {
+            const mail = shipmentShippedEmail(
+                user?.locale ?? getDefaultLocale(),
+                user?.username ?? order.email,
+                shipment.trackingCode
+            );
+            void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
+            logger.info(`Order ${orderId} shipped as ${shipment.trackingCode ?? '(untracked)'}`);
+        }
+    );
+
+/** The shipped audit entry — {@link recordShipment}'s own audit step. */
+const auditShipped = (context: CallerContext, orderId: string): void => {
+    emitAuditEvent(
+        buildAuditEvent(context, {
+            action: deliveryAuditActions.ADMIN_ORDER_SHIPPED,
+            outcome: 'success',
+            target_type: 'order',
+            target_id: orderId
+        })
+    );
+};
+
+/** The delivered audit entry — {@link recordDelivery}'s own audit step. */
+const auditDelivered = (context: CallerContext, orderId: string): void => {
+    emitAuditEvent(
+        buildAuditEvent(context, {
+            action: deliveryAuditActions.ADMIN_ORDER_DELIVERED,
+            outcome: 'success',
+            target_type: 'order',
+            target_id: orderId
+        })
+    );
+};
+
+/**
  * Record a parcel's handover to the carrier — the shipping door. Writes the parcel FIRST, then
  * asks `orders` to move: an order that cannot legally reach `shipped` refuses before anything is
  * written, so a stray call never creates a parcel for an order that cannot ship. `forced` widens
@@ -152,36 +201,8 @@ export const recordShipment = (
                         { code: 'ORDER_NOT_PROCESSING', message: t('delivery.not-processing') }
                     ]);
 
-                // `order.userId` is absent once a detach has erased the account — nothing to
-                // look up, the pre-existing "id points at nobody" case just below covers the rest.
-                return (
-                    order.userId
-                        ? userService.getById(String(order.userId)).catch(() => null)
-                        : Promise.resolve(null)
-                ).then((user) => {
-                    const mail = shipmentShippedEmail(
-                        user?.locale ?? getDefaultLocale(),
-                        user?.username ?? order.email,
-                        shipment.trackingCode
-                    );
-                    void enqueueEmail(
-                        { to: order.email, subject: mail.subject },
-                        mail.template,
-                        mail.data
-                    );
-                    logger.info(
-                        `Order ${orderId} shipped as ${shipment.trackingCode ?? '(untracked)'}`
-                    );
-
-                    emitAuditEvent(
-                        buildAuditEvent(context, {
-                            action: deliveryAuditActions.ADMIN_ORDER_SHIPPED,
-                            outcome: 'success',
-                            target_type: 'order',
-                            target_id: orderId
-                        })
-                    );
-
+                return notifyShipped(orderId, order, shipment).then(() => {
+                    auditShipped(context, orderId);
                     return generateSuccess(toShipmentResponse(shipment));
                 });
             });
@@ -249,15 +270,7 @@ export const recordDelivery = (
                             }
                         ]);
 
-                    emitAuditEvent(
-                        buildAuditEvent(context, {
-                            action: deliveryAuditActions.ADMIN_ORDER_DELIVERED,
-                            outcome: 'success',
-                            target_type: 'order',
-                            target_id: orderId
-                        })
-                    );
-
+                    auditDelivered(context, orderId);
                     return generateSuccess(toShipmentResponse(shipment));
                 });
         });

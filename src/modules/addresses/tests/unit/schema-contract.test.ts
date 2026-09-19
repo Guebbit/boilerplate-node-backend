@@ -40,8 +40,8 @@ describe('addressBookSchema', () => {
 
 describe('addressBookSchema — an entry', () => {
     it('requires a deliverable address and leaves the label and phone optional', () => {
-        // The set a courier needs. `label` is the user's own word for it ("home", "work") and
-        // `phone` is the courier's fallback — neither is needed to deliver.
+        // The set a carrier needs. `label` is the user's own word for it ("home", "work") and
+        // `phone` is the carrier's fallback — neither is needed to deliver.
         expect(requiredPaths(subSchema(addressBookSchema, 'items'))).toEqual([
             'city',
             'country',
