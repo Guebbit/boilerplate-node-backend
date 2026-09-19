@@ -16,7 +16,6 @@ import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
 import { startEphemeralMongo } from '@scenarios/support/ephemeral-mongo';
-import { startInProcessMongod } from '@scenarios/support/ephemeral-mongod';
 
 const REPO_ROOT = path.join(__dirname, '../../..');
 
@@ -139,12 +138,7 @@ const startCluster = ({
     const dbPath = path.join(REPO_ROOT, '.tmp', 'cluster-mongo', randomUUID());
 
     return mkdir(dbPath, { recursive: true })
-        .then(() =>
-            Promise.all([
-                startEphemeralMongo({ dbPath, startInProcess: startInProcessMongod }),
-                freePort()
-            ])
-        )
+        .then(() => Promise.all([startEphemeralMongo({ dbPath }), freePort()]))
         .then(([mongo, port]) => {
             const child: ChildProcess = spawn('npx', ['tsx', 'src/cluster.ts'], {
                 cwd: REPO_ROOT,

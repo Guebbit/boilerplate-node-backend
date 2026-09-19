@@ -15,10 +15,10 @@
  * Actually starting one is NOT this module's job, on purpose — kept as a separate concern from the
  * resolver even though both now live under `scenarios/support/`, which may import
  * `mongodb-memory-server` freely: `not-to-dev-dep` (`.dependency-cruiser.cjs`) only bars `src/`,
- * and this folder is omitted from a production image regardless. Every caller supplies that half
- * as `startInProcess`; `./ephemeral-mongod.ts` is the one shared implementation, for
- * `scenarios/run-server.ts`, `tests/support/global-setup.ts` and `tests/cluster/support/cluster.ts`
- * alike.
+ * and this folder is omitted from a production image regardless. `./ephemeral-mongod.ts` is the
+ * one shared implementation, defaulted below as `startInProcess` so every real caller —
+ * `scenarios/run-server.ts`, `tests/support/global-setup.ts`, `tests/cluster/support/cluster.ts` —
+ * gets it for free; only the unit test overrides it, with a fake.
  */
 
 import { existsSync } from 'node:fs';
@@ -26,6 +26,7 @@ import { existsSync } from 'node:fs';
 // global-setup.ts`, which jest loads outside its normal module resolution — `moduleNameMapper`
 // does not apply there, so the alias would resolve at `tsc`/`eslint` time and fail at runtime.
 import { logger } from '../../src/infrastructure/adapters/logger';
+import { startInProcessMongod } from './ephemeral-mongod';
 
 /** A running Mongo, and the way to stop it. */
 export interface EphemeralMongo {
@@ -62,11 +63,13 @@ const usePreinstalledBinary = (): void => {
  * @param options.dbPath - where the in-process server keeps its data; ignored on the external
  * path. The caller owns this directory's lifecycle — see `tests/support/global-setup.ts`.
  * @param options.startInProcess - actually starts a `mongod`; never called on the external path.
+ * Defaults to the real `mongodb-memory-server` — a unit test is the one caller worth overriding
+ * this for, with a fake.
  * @returns the uri to connect with, and how to stop whatever this started
  */
 export const startEphemeralMongo = (options: {
     dbPath?: string;
-    startInProcess: (databasePath: string | undefined) => Promise<EphemeralMongo>;
+    startInProcess?: (databasePath: string | undefined) => Promise<EphemeralMongo>;
 }): Promise<EphemeralMongo> => {
     const external = process.env.NODE_TEST_MONGO_URI?.trim();
     if (external) {
@@ -76,5 +79,5 @@ export const startEphemeralMongo = (options: {
 
     usePreinstalledBinary();
     logger.info('[mongo] ephemeral — starting an in-process mongod');
-    return options.startInProcess(options.dbPath);
+    return (options.startInProcess ?? startInProcessMongod)(options.dbPath);
 };
