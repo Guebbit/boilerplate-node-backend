@@ -58,6 +58,8 @@ const transportOptions = async (
         body: '',
         lines: [],
         total: '',
+        linkLabel: '',
+        linkUrl: '',
         footer: ''
     }).catch(() => {});
 
