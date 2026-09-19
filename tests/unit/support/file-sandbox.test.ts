@@ -25,7 +25,8 @@ const OWNED_VARIABLES = [
     FILE_SANDBOX_ROOT_VARIABLE,
     'NODE_PUBLIC_PATH',
     'NODE_QUARANTINE_PATH',
-    'NODE_UPLOAD_STAGING_PATH'
+    'NODE_UPLOAD_STAGING_PATH',
+    'NODE_INVOICE_STORAGE_PATH'
 ] as const;
 
 /** A test file path as jest would report it, inside the repository. */
@@ -75,6 +76,7 @@ describe('applyFileSandbox', () => {
         expect(process.env.NODE_PUBLIC_PATH).toBe(path.join(directory, 'public'));
         expect(process.env.NODE_QUARANTINE_PATH).toBe(path.join(directory, 'quarantine'));
         expect(process.env.NODE_UPLOAD_STAGING_PATH).toBe(path.join(directory, 'uploads'));
+        expect(process.env.NODE_INVOICE_STORAGE_PATH).toBe(path.join(directory, 'invoices'));
     });
 
     it('refuses to run without a sandbox root, rather than fall back to real directories', () => {
@@ -89,12 +91,13 @@ describe('applyFileSandbox', () => {
 });
 
 describe('emptyFileSandbox', () => {
-    it('deletes every file the test file wrote, in all three directories', async () => {
+    it('deletes every file the test file wrote, in all four directories', async () => {
         applyFileSandbox(TEST_PATH);
         const written = [
             path.join(process.env.NODE_PUBLIC_PATH ?? '', 'images', 'thumbs', 'v1', 'a.webp'),
             path.join(process.env.NODE_QUARANTINE_PATH ?? '', 'a.png'),
-            path.join(process.env.NODE_UPLOAD_STAGING_PATH ?? '', 'a.png')
+            path.join(process.env.NODE_UPLOAD_STAGING_PATH ?? '', 'a.png'),
+            path.join(process.env.NODE_INVOICE_STORAGE_PATH ?? '', 'a.pdf')
         ];
         await Promise.all(written.map((file) => touch(file)));
 
