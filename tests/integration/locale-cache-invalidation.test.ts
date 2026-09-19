@@ -31,6 +31,20 @@ jest.mock('@infrastructure/adapters/cache', () => {
     const responses = new Map<string, string>();
     const tagged = new Map<string, Set<string>>();
 
+    const invalidateCacheTags = (tags: string[]) => {
+        let deleted = 0;
+        for (const tag of tags) {
+            for (const key of tagged.get(tag) ?? []) {
+                responses.delete(key);
+                deleted += 1;
+            }
+            tagged.delete(tag);
+        }
+        // The real adapter reports whether the cache was reached, so the middleware can count
+        // a write whose stale response survived it. This fake always reaches.
+        return Promise.resolve({ deleted, reachable: true });
+    };
+
     return {
         ...actual,
         getCacheValue: (key: string) => Promise.resolve(responses.get(key)),
@@ -46,19 +60,12 @@ jest.mock('@infrastructure/adapters/cache', () => {
             }
             return Promise.resolve();
         },
-        invalidateCacheTags: (tags: string[]) => {
-            let deleted = 0;
-            for (const tag of tags) {
-                for (const key of tagged.get(tag) ?? []) {
-                    responses.delete(key);
-                    deleted += 1;
-                }
-                tagged.delete(tag);
-            }
-            // The real adapter reports whether the cache was reached, so the middleware can count
-            // a write whose stale response survived it. This fake always reaches.
-            return Promise.resolve({ deleted, reachable: true });
-        }
+        invalidateCacheTags,
+        // The real `invalidateCacheTagsLogged` calls `invalidateCacheTags` through its own
+        // module-local binding, which `jest.requireActual` captures before this factory ever
+        // runs — so overriding the export above does not reach it. Redeclared here against the
+        // same double, or every write "succeeds" against the real (unreachable) Redis instead.
+        invalidateCacheTagsLogged: (tags: string[]) => invalidateCacheTags(tags).then(() => undefined)
     };
 });
 
