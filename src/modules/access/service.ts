@@ -25,6 +25,15 @@ const SIGNUP_DEFAULT_ROLE = 'unverified';
 /** What `unverified` promotes to once the address is proven. See {@link promoteVerifiedCustomer}. */
 const VERIFIED_CUSTOMER_ROLE = 'customer';
 
+/**
+ * The one tenant key {@link validateGrant} exempts `VERIFIED_CUSTOMER_ROLE` from needing, held by
+ * a granter creating accounts outright. A caller who may create accounts at all must be able to
+ * hand out the role every account starts with, even short of `customer`'s own keys
+ * (`orders.self.read`, `payments.self.read`) — those are power over the GRANTEE's own data, never
+ * over the granter's shop, so they were never the escalation the check exists to catch.
+ */
+const CREATE_USER_KEY = 'users.any.create';
+
 /** Raised when a write would leave the model in a state the next request cannot recover from. */
 export class AccessInvariantError extends Error {
     constructor(message: string) {
@@ -55,7 +64,10 @@ export const membershipIn = (
 ): Promise<MembershipDocument | null> => membershipRepository.findOne(userId, tenantId, scope);
 
 /**
- * Give somebody a role in a place.
+ * The synchronous half of {@link assignRole}: refuses the same three things, and returns the
+ * lowered role name for the caller to act on. Split out so {@link assertCanGrant} can ask "would
+ * this succeed" before committing other state, without a compensating rollback if the grant turns
+ * out to be refused — see `users/service.ts`'s `updateSavedUser`.
  *
  * Refuses three things, and each refusal is an invariant of the model:
  *
@@ -64,7 +76,73 @@ export const membershipIn = (
  *   - **a key no module owns** — checked through the role's own keys, because a role editor that
  *     accepts a free-text key is a permission system with no vocabulary;
  *   - **granting what the granter does not hold** — otherwise every role editor is a
- *     privilege-escalation endpoint, which is the single most common way these systems fail.
+ *     privilege-escalation endpoint, which is the single most common way these systems fail. One
+ *     named exception: `CREATE_USER_KEY`'s own docblock.
+ *
+ * @param granter - the keys the person MAKING the grant holds, or `undefined` for a seeder, a
+ *   migration or an operator on the console — the three callers with nobody to escalate from
+ * @throws AccessInvariantError for any of the three reasons above
+ */
+const validateGrant = (
+    scope: AuthorizationScope,
+    roleName: string,
+    granter?: readonly string[]
+): string => {
+    const lowered = roleName.toLowerCase();
+    const role = findRole(lowered);
+    const permissions = role?.scope === scope ? role.permissions : undefined;
+
+    if (!permissions) {
+        throw new AccessInvariantError(
+            `[access] "${roleName}" is not a role in this ${scope} scope. ` +
+                `Declare it in shared/authorization-roles.yaml first, or assign one that exists.`
+        );
+    }
+
+    for (const key of permissions) {
+        assertDeclared(key);
+    }
+
+    const exempt =
+        scope === 'tenant' &&
+        lowered === VERIFIED_CUSTOMER_ROLE &&
+        Boolean(granter?.includes(CREATE_USER_KEY));
+
+    if (granter && !exempt) {
+        const held = new Set(granter);
+        const escalated = permissions.filter((key) => !held.has(key));
+
+        if (escalated.length > 0) {
+            throw new AccessInvariantError(
+                `[access] cannot grant "${roleName}": it holds ${escalated.join(', ')}, ` +
+                    `which the granter does not. A role editor that allows this is a ` +
+                    `privilege-escalation endpoint.`
+            );
+        }
+    }
+
+    return lowered;
+};
+
+/**
+ * Would {@link assignRole} succeed, without writing anything — for a caller that needs to know
+ * BEFORE it commits other state, since a refused grant discovered afterwards means either a
+ * rollback or a half-applied update. See `users/service.ts`'s `updateSavedUser`, which validates
+ * a role change before saving the rest of the document.
+ *
+ * @param granter - same meaning as {@link assignRole}'s own parameter
+ * @throws AccessInvariantError for the same three reasons `assignRole` refuses
+ */
+export const assertCanGrant = (
+    scope: AuthorizationScope,
+    roleName: string,
+    granter?: readonly string[]
+): void => {
+    validateGrant(scope, roleName, granter);
+};
+
+/**
+ * Give somebody a role in a place. See {@link validateGrant} for what this refuses.
  *
  * @param granter - the keys the person MAKING the grant holds, or `undefined` for a seeder, a
  *   migration or an operator on the console — the three callers with nobody to escalate from
@@ -87,37 +165,9 @@ export const assignRole = (
     granter?: readonly string[],
     context?: CallerContext
 ): Promise<MembershipDocument> => {
-    const attempt = Promise.resolve().then(() => {
-        const lowered = roleName.toLowerCase();
-        const role = findRole(lowered);
-        const permissions = role?.scope === scope ? role.permissions : undefined;
-
-        if (!permissions) {
-            throw new AccessInvariantError(
-                `[access] "${roleName}" is not a role in this ${scope} scope. ` +
-                    `Declare it in shared/authorization-roles.yaml first, or assign one that exists.`
-            );
-        }
-
-        for (const key of permissions) {
-            assertDeclared(key);
-        }
-
-        if (granter) {
-            const held = new Set(granter);
-            const escalated = permissions.filter((key) => !held.has(key));
-
-            if (escalated.length > 0) {
-                throw new AccessInvariantError(
-                    `[access] cannot grant "${roleName}": it holds ${escalated.join(', ')}, ` +
-                        `which the granter does not. A role editor that allows this is a ` +
-                        `privilege-escalation endpoint.`
-                );
-            }
-        }
-
-        return membershipRepository.upsertRole(userId, tenantId, scope, lowered);
-    });
+    const attempt = Promise.resolve()
+        .then(() => validateGrant(scope, roleName, granter))
+        .then((lowered) => membershipRepository.upsertRole(userId, tenantId, scope, lowered));
 
     if (!context) return attempt;
 
@@ -218,7 +268,16 @@ export const revokeRole = (
 
         return membershipRepository
             .deleteById(membership._id)
-            .then(() => restoreIfNowUnadministered(tenantId, scope, membership))
+            .then(() => {
+                // Only a role that could have BEEN one of the administrators matters here — a
+                // place with, say, zero `admin` memberships was never administered by them in the
+                // first place, so revoking a `customer` there must not be refused on their behalf.
+                if (!administratorRoleNames(scope).includes(membership.role)) {
+                    return undefined;
+                }
+
+                return restoreIfNowUnadministered(tenantId, scope, membership);
+            })
             .then(() => membership.role);
     });
 
@@ -282,23 +341,33 @@ const restoreIfNowUnadministered = (
     });
 
 /**
+ * The role names that WOULD count as administering a scope — "unrestricted" is no longer one
+ * token to match, there is no wildcard, so a role counts when its declared `permissions` array is
+ * a SUPERSET of every key this scope currently declares. Computed against
+ * `shared/authorization-roles.yaml`, in memory — the preset list is small and fixed for the
+ * process's lifetime, so no query is worth it here. {@link administratorsOf} turns this into who
+ * actually holds one; {@link revokeRole} uses it to know whether a revoked role could ever have
+ * been the thing keeping a place administered at all.
+ */
+const administratorRoleNames = (scope: AuthorizationScope): string[] => {
+    const required = PERMISSION_KEYS.filter((key) => key.scope === scope).map((key) => key.key);
+    return PRESET_ROLES.filter(
+        (role) => role.scope === scope && required.every((key) => role.permissions.includes(key))
+    ).map((role) => role.name);
+};
+
+/**
  * Everyone holding an unrestricted role in a place, by user id.
  *
- * "Unrestricted" is no longer one token to match — there is no wildcard — so a role counts when
- * its declared `permissions` array is a SUPERSET of every key this scope currently declares.
- * The candidate names are computed against `shared/authorization-roles.yaml` (in memory — the
- * preset list is small and fixed for the process lifetime, so no query is worth it there); which
- * userIds actually HOLD one of those names is still the one thing the database answers, since
- * assignment is the data half of this model.
+ * The candidate names come from {@link administratorRoleNames}; which userIds actually HOLD one
+ * of those names is still the one thing the database answers, since assignment is the data half
+ * of this model.
  */
 export const administratorsOf = (
     tenantId: string | null,
     scope: AuthorizationScope
 ): Promise<string[]> => {
-    const required = PERMISSION_KEYS.filter((key) => key.scope === scope).map((key) => key.key);
-    const names = PRESET_ROLES.filter(
-        (role) => role.scope === scope && required.every((key) => role.permissions.includes(key))
-    ).map((role) => role.name);
+    const names = administratorRoleNames(scope);
 
     return names.length === 0
         ? Promise.resolve([])
@@ -306,6 +375,19 @@ export const administratorsOf = (
               .findByRoles(tenantId, scope, names)
               .then((memberships) => memberships.map((one) => one.userId));
 };
+
+/**
+ * Take away every role a person holds, in every place — the hard-delete cascade's own half: once
+ * the account itself is gone, no membership row may keep pointing at its dead id, a tenant seat OR
+ * a platform one. Walks {@link membershipsOf} rather than assuming the single tenant row most
+ * callers care about, since a platform operator can hold both at once.
+ */
+export const revokeAllOf = (userId: string): Promise<void> =>
+    membershipsOf(userId).then((memberships) =>
+        Promise.all(memberships.map((one) => revokeRole(userId, one.tenantId, one.scope))).then(
+            () => undefined
+        )
+    );
 
 /**
  * The two role names a person holds, and the shop they hold the first one in — `null` for a scope
@@ -326,6 +408,26 @@ export const rolesOf = (
             null,
         platform: memberships.find((one) => one.scope === 'platform')?.role ?? null
     }));
+
+/**
+ * The tenant role for each of a set of people, in one query — the list-page sibling of
+ * {@link rolesOf}: a `GET /users` page needs every row's role, and one query per row would be a
+ * query per page item. A user id absent from the returned map holds no role here, the same
+ * meaning `rolesOf`'s `null` carries for one person.
+ */
+export const rolesOfMany = (
+    userIds: readonly string[],
+    tenantId: string | null,
+    scope: AuthorizationScope = 'tenant'
+): Promise<Map<string, string>> =>
+    userIds.length === 0
+        ? Promise.resolve(new Map<string, string>())
+        : membershipRepository
+              .findByUserIds(userIds, tenantId, scope)
+              .then(
+                  (memberships) =>
+                      new Map<string, string>(memberships.map((one) => [one.userId, one.role]))
+              );
 
 /**
  * The one shop this boilerplate ships.

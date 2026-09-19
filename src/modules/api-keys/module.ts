@@ -14,7 +14,7 @@
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { registerCredentialResolver, type ResolvedCredential } from '@kernel/authentication';
-import { permissionsOfRole, ANONYMOUS_ROLE } from '@kernel/permissions';
+import { permissionsOfRole, ANONYMOUS_ROLE, isUnrestricted } from '@kernel/permissions';
 import { holdsKey } from '@kernel/ability';
 import { rolesOf } from '@modules/access';
 import { userService } from '@modules/users';
@@ -49,20 +49,25 @@ const currentCallerOf = (apiKey: ApiKeyDocument): Promise<Caller | undefined> =>
     userService.findAuthenticatableById(apiKey.createdByUserId).then((user) => {
         if (!user) return undefined;
 
-        return rolesOf(apiKey.createdByUserId, apiKey.tenant).then((roles) => ({
-            id: apiKey.createdByUserId,
-            tenantId: apiKey.tenant,
-            scope: 'tenant' as const,
+        return rolesOf(apiKey.createdByUserId, apiKey.tenant).then((roles) => {
             // `roles.tenant` may be `null` — no membership row exists — so this floors to the
             // anonymous baseline alone, never throws. Same null-safety `keysInScope` gives every
             // other caller; restated here because that helper is private to `kernel/permissions.ts`.
-            permissions: [
+            const permissions = [
                 ...new Set([
                     ...(roles.tenant ? permissionsOfRole(roles.tenant) : []),
                     ...ANONYMOUS_ROLE.permissions
                 ])
-            ]
-        }));
+            ];
+
+            return {
+                id: apiKey.createdByUserId,
+                tenantId: apiKey.tenant,
+                scope: 'tenant' as const,
+                permissions,
+                unrestricted: isUnrestricted({ scope: 'tenant', permissions })
+            };
+        });
     });
 
 /**
@@ -83,14 +88,17 @@ const fromBearerToken = (token: string): Promise<ResolvedCredential | undefined>
             // path never awaits it.
             void apiKeyRepository.touchLastUsed(String(apiKey._id));
 
+            const permissions = currentCaller
+                ? apiKey.permissions.filter((key) => holdsKey(currentCaller, key))
+                : [];
+
             return {
                 caller: {
                     id: apiKey.createdByUserId,
                     tenantId: apiKey.tenant,
                     scope: 'tenant' as const,
-                    permissions: currentCaller
-                        ? apiKey.permissions.filter((key) => holdsKey(currentCaller, key))
-                        : []
+                    permissions,
+                    unrestricted: isUnrestricted({ scope: 'tenant', permissions })
                 },
                 credentialId: displayIdOf(apiKey.publicPrefix)
             };

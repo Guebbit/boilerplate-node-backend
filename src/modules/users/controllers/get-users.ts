@@ -11,6 +11,10 @@ import { SearchUsersBody } from '@api/schemas.zod';
 import { userService } from '../service';
 import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
 import { createSearchController } from '@infrastructure/surfaces/create-search-controller';
+import { rolesOfMany } from '@modules/access';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import type { User } from '@types';
+import type { PaginatedMeta } from '@infrastructure/persistence/search';
 
 /** A boolean as a query string spells it. */
 const queryBoolean = z.preprocess(
@@ -40,9 +44,24 @@ export const searchUsersKeyParameters = Object.keys(searchUsersQuerySchema.shape
 /**
  * GET /users
  * List/search users via query parameters (admin only).
+ *
+ * `toUser` needs each row's CURRENT role, read fresh from the membership store the same way
+ * `GET /users/:id` does — batched into one `$in` query for the whole page rather than one lookup
+ * per item, since `applyUserTransform`'s own document serialization has no role to offer any more.
+ * `userService.search()`'s items are already lean-and-transformed (`.id`, not `._id` — see
+ * `createRepository`'s own `normalize`), so `.id` is read directly rather than re-derived.
  */
 export const getUsers = createSearchController({
     entity: 'users',
     schema: searchUsersQuerySchema,
-    runSearch: (parsed) => userService.search(parsed)
+    runSearch: (parsed): Promise<{ items: User[]; meta: PaginatedMeta }> =>
+        userService.search(parsed).then(({ items, meta }) =>
+            rolesOfMany(
+                items.map((user) => user.id),
+                DEPLOYMENT_TENANT_ID
+            ).then((roles) => ({
+                items: items.map((user) => userService.toUser(user, roles.get(user.id) ?? null)),
+                meta
+            }))
+        )
 });

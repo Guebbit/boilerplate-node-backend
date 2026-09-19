@@ -194,22 +194,20 @@ export const extractRequestContext = (
 /**
  * Resolve actor role from the caller context.
  *
- * `admin`/`user`/`anonymous` used to collapse into three cases here, the first decided by
- * "holds the scope wildcard" — a fact `infrastructure` could ask of the caller's own permission
- * list. There is no wildcard any more: "unrestricted" now means "holds every key this scope
- * declares", which needs the full declared-key set, and that set is `kernel`-owned. Infrastructure
- * may not reach the kernel (`kernel/permissions.ts` is exactly where that fact would come from),
- * so this can only tell an authenticated caller from an anonymous one. A call site that already
- * knows it is auditing an unrestricted actor's action — `account`'s login/profile/verification
- * flows, which import `kernel/permissions.ts`'s `isUnrestrictedRole` freely — passes `actor_role`
- * explicitly and never reaches this default.
+ * `unrestricted` is computed once, in `kernel/permissions.ts`'s `callerInScope`, and carried on
+ * `context.caller` — infrastructure reads it off the caller rather than re-deriving "holds every
+ * key this scope declares" itself, which would need the full declared-key set that only the
+ * kernel owns. A call site that wants a role NAME rather than this coarse three-way split still
+ * passes `actor_role_name` alongside, and one auditing an action for a caller it already knows is
+ * unrestricted may still pass `actor_role` explicitly to skip this default.
  * @param context - the caller context built once in the controller
  * @returns the actor's role
  */
 const resolveActorRole = (context: CallerContext): AuditEvent['actor_role'] => {
     // No caller id at all: an unauthenticated request. Still audited — failed logins and
     // blocked access attempts are exactly the events worth keeping.
-    return context.caller.id ? 'user' : 'anonymous';
+    if (!context.caller.id) return 'anonymous';
+    return context.caller.unrestricted ? 'admin' : 'user';
 };
 
 /**

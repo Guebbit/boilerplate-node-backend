@@ -677,7 +677,8 @@ describe('callerContextOf', () => {
             id: null,
             tenantId: null,
             scope: 'platform',
-            permissions: []
+            permissions: [],
+            unrestricted: false
         });
         expect(context.ip).toBe('9.9.9.9');
         expect(context.userAgent).toBeUndefined();

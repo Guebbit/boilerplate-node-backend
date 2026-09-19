@@ -1,4 +1,5 @@
 import {
+    buildAuditEvent,
     emitAuditEvent,
     extractRequestContext,
     registerAuditSink,
@@ -7,7 +8,7 @@ import {
     type AuditEntry
 } from '@infrastructure/observability/audit';
 import { auditLogger } from '@infrastructure/adapters/logger';
-import { strangerCaller } from '../../../support/callers';
+import { callerContextAs, strangerCaller, testCallerContext } from '../../../support/callers';
 
 // Spy on auditLogger.log so we don't write to disk during tests.
 jest.spyOn(auditLogger, 'log').mockImplementation(() => auditLogger);
@@ -190,5 +191,37 @@ describe('extractRequestContext', () => {
         expect(ctx.user_agent).toBeUndefined();
         expect(ctx.request_id).toBeUndefined();
         expect(ctx.trace_id).toBeUndefined();
+    });
+});
+
+describe('buildAuditEvent — default actor_role', () => {
+    it('reports anonymous for a caller with no id', () => {
+        const event = buildAuditEvent(testCallerContext, {
+            action: 'auth.login',
+            outcome: 'failure'
+        });
+
+        expect(event.actor_role).toBe('anonymous');
+    });
+
+    it('reports user for an authenticated caller that holds only some keys', () => {
+        const event = buildAuditEvent(callerContextAs('customer', 'customer-1'), {
+            action: 'auth.login',
+            outcome: 'success'
+        });
+
+        expect(event.actor_role).toBe('user');
+    });
+
+    // The fix this guards: before `unrestricted` was carried on `Caller`, `resolveActorRole`
+    // could only tell an authenticated caller from an anonymous one — an admin action whose call
+    // site passed no explicit `actor_role` was logged as `user` alongside everybody else's.
+    it('reports admin for a caller holding every key its scope declares', () => {
+        const event = buildAuditEvent(callerContextAs('admin', 'admin-1'), {
+            action: 'admin.user.erased',
+            outcome: 'success'
+        });
+
+        expect(event.actor_role).toBe('admin');
     });
 });

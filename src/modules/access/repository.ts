@@ -82,5 +82,13 @@ export const membershipRepository = {
         scope: AuthorizationScope,
         roleNames: readonly string[]
     ): Promise<MembershipDocument[]> =>
-        membershipModel.find({ tenantId, scope, role: { $in: roleNames } }).exec()
+        membershipModel.find({ tenantId, scope, role: { $in: roleNames } }).exec(),
+
+    /** Every membership row for a set of people, in one place — the batched sibling of `findOne`. */
+    findByUserIds: (
+        userIds: readonly string[],
+        tenantId: string | null,
+        scope: AuthorizationScope
+    ): Promise<MembershipDocument[]> =>
+        membershipModel.find({ userId: { $in: userIds }, tenantId, scope }).exec()
 };

@@ -105,6 +105,13 @@ export interface TenantCaller {
     id?: string | null;
     /** The permission keys the caller's role in that scope holds. */
     permissions: readonly string[];
+    /**
+     * Holds every key this scope declares — `kernel/permissions.ts`'s `isUnrestricted`, computed
+     * once where the caller is built rather than re-derived (and re-imported past the kernel
+     * boundary) at every call site that needs "is this an admin" for something other than a
+     * permission check, e.g. the audit trail's `actor_role`.
+     */
+    unrestricted: boolean;
 }
 
 /** A caller acting over the installation itself, which has no shop to be scoped to. */
@@ -116,6 +123,8 @@ export interface PlatformCaller {
     id?: string | null;
     /** The permission keys the caller's role in that scope holds. */
     permissions: readonly string[];
+    /** Same as {@link TenantCaller.unrestricted}, for the platform scope. */
+    unrestricted: boolean;
 }
 
 /**

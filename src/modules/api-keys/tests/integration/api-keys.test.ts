@@ -36,7 +36,8 @@ const contextFor = (userId: string, permissions: readonly string[]): TenantCalle
         id: userId,
         tenantId: TEST_TENANT_ID,
         scope: 'tenant',
-        permissions
+        permissions,
+        unrestricted: false
     },
     analyticsConsent: false
 });

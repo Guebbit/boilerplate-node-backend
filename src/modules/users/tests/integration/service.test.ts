@@ -16,7 +16,7 @@ import { userRepository } from '../../repository';
 import { usersAuditActions } from '@modules/users/audit';
 import * as auditPort from '@infrastructure/observability/audit';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
-import { rolesOf } from '@modules/access';
+import { assignRole, membershipsOf, rolesOf } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
 import type { UserDocument } from '../../model';
@@ -321,6 +321,41 @@ describe('userService.create', () => {
         expect(roles.tenant).toBe('admin');
     });
 
+    it('lets a moderator create a user in the default role, despite lacking its own self keys', async () => {
+        // `moderator` holds none of `customer`'s keys — `users.any.create` is the one thing that
+        // makes handing out the account's OWN starting role not an escalation.
+        const user = await userService.create(
+            {
+                email: 'moderator-made@example.com',
+                username: 'moderatormade',
+                password: PLAIN_PASSWORD
+            },
+            callerContextAs('moderator')
+        );
+
+        const roles = await rolesOf(String(user._id), DEPLOYMENT_TENANT_ID);
+        expect(roles.tenant).toBe('customer');
+    });
+
+    it('deletes the orphan row when the requested role is an escalation the caller cannot grant', async () => {
+        // `moderator` can create accounts but cannot grant `admin` — before the fix this wrote
+        // the user row, THEN refused the grant, leaving a document with no membership at all and
+        // the email permanently unusable for a retry.
+        await expect(
+            userService.create(
+                {
+                    email: 'never-created@example.com',
+                    username: 'nevercreated',
+                    password: PLAIN_PASSWORD,
+                    role: 'admin'
+                },
+                callerContextAs('moderator')
+            )
+        ).rejects.toThrow();
+
+        expect(await userRepository.findOne({ email: 'never-created@example.com' })).toBeNull();
+    });
+
     describe('with no password', () => {
         afterEach(() => {
             resetDomainEvents();
@@ -501,6 +536,24 @@ describe('userService.updateById', () => {
         expect(refreshed!.active).toBe(false);
     });
 
+    it('rejects an escalated role grant and leaves active untouched, rather than committing it first', async () => {
+        const user = await createUser({ active: true });
+        const id = user._id.toString();
+
+        // `testCallerContext`'s anonymous granter cannot grant `admin` — the escalation must be
+        // refused BEFORE the deactivation half of this same request is allowed to land.
+        const result = await userService.updateById(
+            id,
+            { active: false, role: 'admin' },
+            testCallerContext
+        );
+
+        expect(result.success).toBe(false);
+        expect(result.status).toBe(409);
+        const refreshed = await userRepository.findById(id);
+        expect(refreshed!.active).toBe(true);
+    });
+
     it('records a ban, not a plain update, when active flips from true to false', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser({ active: true });
@@ -612,6 +665,22 @@ describe('userService.removeById', () => {
         await userService.removeById(id, true);
 
         expect(await userRepository.findById(id)).toBeNull();
+    });
+
+    it('erases a platform membership too, not only the tenant one', async () => {
+        const user = await createUser();
+        const id = user._id.toString();
+        // A second platform operator, so the platform row below is not itself the last one
+        // administering the installation — this test is about the erasure gap, not that invariant.
+        await assignRole('another-operator', null, 'platform', 'operator');
+        // A tenant seat AND a platform seat — the erasure gap a single tenant-scoped revoke left
+        // behind: the platform row used to survive the user it pointed at.
+        await assignRole(id, DEPLOYMENT_TENANT_ID, 'tenant', 'customer');
+        await assignRole(id, null, 'platform', 'operator');
+
+        await userService.removeById(id, true);
+
+        expect(await membershipsOf(id)).toEqual([]);
     });
 
     it('returns a 404 rejection when the user does not exist', async () => {

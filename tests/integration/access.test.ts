@@ -15,6 +15,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import {
     AccessInvariantError,
     administratorsOf,
+    assertCanGrant,
     assignRole,
     assignDefaultRole,
     bootstrapAccessModel,
@@ -22,8 +23,10 @@ import {
     ensureTenant,
     membershipIn,
     membershipsOf,
+    revokeAllOf,
     revokeRole,
-    rolesOf
+    rolesOf,
+    rolesOfMany
 } from '@modules/access';
 import { membershipModel } from '@modules/access/model';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
@@ -205,6 +208,17 @@ describe('the invariants', () => {
 
         expect(outcomes.filter((outcome) => outcome.status === 'fulfilled').length).toBeLessThan(2);
         expect(await administratorsOf(String(shop._id), 'tenant')).not.toEqual([]);
+    });
+
+    it('revokes a role that never administered the place, even with zero admins in it', async () => {
+        const shop = await ensureTenant('shop', 'The Shop');
+        await assignRole('shopper', String(shop._id), 'tenant', 'customer');
+
+        // Nobody administers this shop at all — the old check ran for every revoke regardless of
+        // which role was deleted, so a `customer` revoke here used to be refused and restored on
+        // the strength of an administrator count `customer` could never have contributed to.
+        await expect(revokeRole('shopper', String(shop._id), 'tenant')).resolves.toBeUndefined();
+        expect(await membershipIn('shopper', String(shop._id), 'tenant')).toBeNull();
     });
 
     it('allows removing an administrator once another one exists', async () => {
@@ -409,5 +423,92 @@ describe('auditing a role change', () => {
         await assignRole('target-user', String(shop._id), 'tenant', 'manager');
 
         expect(auditSpy).not.toHaveBeenCalled();
+    });
+});
+
+describe('revokeAllOf', () => {
+    it('clears every membership a person holds, tenant and platform alike', async () => {
+        const shop = await ensureTenant('shop', 'The Shop');
+        // A second administrator in EACH scope, so neither revoke below is a last-admin case.
+        await assignRole('another-admin', String(shop._id), 'tenant', 'admin');
+        await assignRole('another-operator', null, 'platform', 'operator');
+        await assignRole('person-1', String(shop._id), 'tenant', 'admin');
+        await assignRole('person-1', null, 'platform', 'operator');
+
+        await revokeAllOf('person-1');
+
+        expect(await membershipsOf('person-1')).toEqual([]);
+    });
+
+    it('refuses, and keeps every row, when one membership is the shop’s last administrator', async () => {
+        const shop = await ensureTenant('shop', 'The Shop');
+        await assignRole('only-owner', String(shop._id), 'tenant', 'admin');
+        await assignRole('only-owner', null, 'platform', 'operator');
+
+        await expect(revokeAllOf('only-owner')).rejects.toThrow(AccessInvariantError);
+        expect(await administratorsOf(String(shop._id), 'tenant')).toEqual(['only-owner']);
+    });
+});
+
+describe('assertCanGrant', () => {
+    it('resolves without writing anything, for a grant that would succeed', () => {
+        const granter = permissionsOfRole('admin');
+
+        expect(() => assertCanGrant('tenant', 'manager', granter)).not.toThrow();
+    });
+
+    it('throws the same refusal assignRole would, synchronously rather than as a rejection', () => {
+        expect(() => assertCanGrant('tenant', 'admin', ['feedback.any.read'])).toThrow(
+            /privilege-escalation/
+        );
+    });
+});
+
+describe('granting the default grantable role', () => {
+    it('lets a caller holding users.any.create grant customer despite lacking its own keys', async () => {
+        const shop = await ensureTenant('shop', 'The Shop');
+        // `moderator` holds none of `customer`'s keys (`orders.self.read`, `payments.self.read`,
+        // `products.self.read`, `locales.self.read`, `delivery.any.read`) — only `users.any.create`
+        // is what makes this grant not an escalation.
+        const moderatorKeys = permissionsOfRole('moderator');
+
+        await expect(
+            assignRole('new-user', String(shop._id), 'tenant', 'customer', moderatorKeys)
+        ).resolves.toBeDefined();
+    });
+
+    it('still refuses the same grant without users.any.create', async () => {
+        const shop = await ensureTenant('shop', 'The Shop');
+
+        await expect(
+            assignRole('new-user', String(shop._id), 'tenant', 'customer', ['orders.any.read'])
+        ).rejects.toThrow(/privilege-escalation/);
+    });
+
+    it('does not extend the exemption to any other role', async () => {
+        const shop = await ensureTenant('shop', 'The Shop');
+        const moderatorKeys = permissionsOfRole('moderator');
+
+        await expect(
+            assignRole('new-user', String(shop._id), 'tenant', 'unverified', moderatorKeys)
+        ).rejects.toThrow(/privilege-escalation/);
+    });
+});
+
+describe('rolesOfMany', () => {
+    it('batch-resolves the tenant role for a set of people in one query', async () => {
+        const shop = await ensureTenant('shop', 'The Shop');
+        await assignRole('person-1', String(shop._id), 'tenant', 'manager');
+        await assignRole('person-2', String(shop._id), 'tenant', 'customer');
+
+        const roles = await rolesOfMany(['person-1', 'person-2', 'nobody'], String(shop._id));
+
+        expect(roles.get('person-1')).toBe('manager');
+        expect(roles.get('person-2')).toBe('customer');
+        expect(roles.has('nobody')).toBe(false);
+    });
+
+    it('answers an empty map for an empty page, with no query at all', async () => {
+        expect(await rolesOfMany([], DEPLOYMENT_TENANT_ID)).toEqual(new Map());
     });
 });

@@ -147,8 +147,15 @@ const signupFromOAuth = (
         })
         .then((created) =>
             // `customer`, not `assignDefaultRole`'s `unverified`: the provider already vouches for
-            // this address, the same reasoning `verifiedAt` above applies.
-            assignRole(created.id, DEPLOYMENT_TENANT_ID, 'tenant', 'customer').then(() => created)
+            // this address, the same reasoning `verifiedAt` above applies. A refused grant undoes
+            // the row — same compensation as the self-service signup path in `authentication.ts`.
+            assignRole(created.id, DEPLOYMENT_TENANT_ID, 'tenant', 'customer').then(
+                () => created,
+                (error: unknown) =>
+                    userService.discardFailedSignup(created).then(() => {
+                        throw error;
+                    })
+            )
         )
         .then((created) => {
             emitAuditEvent(

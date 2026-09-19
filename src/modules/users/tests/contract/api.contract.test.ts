@@ -40,6 +40,20 @@ describe('GET /users', () => {
         expect(response).toSatisfyApiSpec();
         assertNoCredentials(response.body);
     });
+
+    // `GET /users/:id` resolves `role` from the membership store; the list endpoint's own
+    // serialization went through the document's `toJSON` transform instead, which has no role
+    // to offer any more — every item in a page answered with `role` silently missing.
+    it('carries each item’s role, the same as GET /users/:id does', async () => {
+        const { bearer, user } = await authenticateAs('admin');
+        const response = await api().get('/users').set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        const {
+            data: { items }
+        } = response.body as { data: { items: { id: string; role?: string }[] } };
+        expect(items.find((item) => item.id === String(user._id))?.role).toBe('admin');
+    });
 });
 
 // The `?role=` filter itself is gone — `role` is a membership fact now, not a searchable document

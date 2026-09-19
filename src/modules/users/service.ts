@@ -38,7 +38,8 @@ import { USER_DELETED, USER_SETUP_REQUESTED } from './events';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import {
     assignRole,
-    revokeRole,
+    assertCanGrant,
+    revokeAllOf,
     promoteVerifiedCustomer,
     AccessInvariantError
 } from '@modules/access';
@@ -123,7 +124,11 @@ export const create = (
             /*
              * The membership is the ONLY grant now — there is no column beside it any more.
              * Awaited before the audit event: a rejected escalation must fail the whole create,
-             * not just a column that already saved.
+             * not just a column that already saved. `assignRole` is passed `context` so a
+             * refused escalation is itself audited (the single most useful entry this
+             * vocabulary can produce) — which is also why the fix for the orphan row below is a
+             * compensating delete rather than validating ahead of the write: doing that would
+             * skip `assignRole` (and its audit) entirely on a caller who was always going to fail.
              */
             assignRole(
                 String(user._id),
@@ -132,7 +137,13 @@ export const create = (
                 role,
                 context.caller.permissions,
                 context
-            ).then(() => user)
+            ).then(
+                () => user,
+                (error: unknown) =>
+                    userRepository.deleteOne(user).then(() => {
+                        throw error;
+                    })
+            )
         )
         .then((user) => {
             emitAuditEvent(
@@ -264,52 +275,56 @@ const updateSavedUser = (
     context: CallerContext,
     oldImageUrl?: string
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
-    return userRepository.save(user).then((savedUser) => {
-        // Only after the save: the old avatar is unreachable the moment the field is overwritten.
-        const imageCleanup: Promise<void> = oldImageUrl
-            ? imageStore.remove(oldImageUrl).then(() => undefined)
-            : Promise.resolve();
+    // Validated BEFORE anything is written: a refused role change must not leave the rest of the
+    // update — a deactivation included — committed underneath a request that, as a whole, failed.
+    // `assertCanGrant` runs the same checks `assignRole` below does; asking first costs one more
+    // in-memory pass, never a round trip, since the escalation rule needs no database read.
+    const grantChecked =
+        data.role === undefined
+            ? Promise.resolve()
+            : Promise.resolve().then(() =>
+                  assertCanGrant('tenant', data.role!, context.caller.permissions)
+              );
 
-        /*
-         * Deactivation ends every live session. Defense in depth on top of
-         * `findAuthenticatableById`, which already blocks a
-         * deactivated account's next request — this also makes `GET /account/sessions` honest
-         * and drops credentials with no live account behind them. Chained after the save, not
-         * blocking it: a revoke failure here must not turn a successful deactivation into a
-         * reported failure — 1.2 is the backstop either way.
-         */
-        const revoke =
-            data.active === false
-                ? savedUser.tokenRemoveAll(TokenType.REFRESH).catch(() => undefined)
+    return grantChecked
+        .then(() => userRepository.save(user))
+        .then((savedUser) => {
+            // Only after the save: the old avatar is unreachable the moment the field is overwritten.
+            const imageCleanup: Promise<void> = oldImageUrl
+                ? imageStore.remove(oldImageUrl).then(() => undefined)
                 : Promise.resolve();
 
-        /*
-         * NOT swallowed, unlike the revoke above: a role that did not reach the membership is a
-         * permission change that silently did not happen, and the caller has to hear about it —
-         * `rejectAccessInvariant` below is that, turned into the envelope this function promises
-         * rather than a throw. `assignRole` is also where the invariants live — an undeclared
-         * role, a privilege escalation, or a key no module owns, is refused here rather than
-         * discovered by the member who cannot work.
-         */
-        const membership =
-            data.role === undefined
-                ? Promise.resolve()
-                : assignRole(
-                      String(savedUser._id),
-                      DEPLOYMENT_TENANT_ID,
-                      'tenant',
-                      data.role,
-                      context.caller.permissions,
-                      context
-                  ).then(() => undefined);
+            // Deactivation ends every live session. Defense in depth on top of
+            // `findAuthenticatableById`, which already blocks a deactivated account's next
+            // request — this also makes `GET /account/sessions` honest and drops credentials with
+            // no live account behind them. Swallowed on failure: a revoke that doesn't reach every
+            // token must not turn an otherwise-successful deactivation into a reported failure.
+            const revoke =
+                data.active === false
+                    ? savedUser.tokenRemoveAll(TokenType.REFRESH).catch(() => undefined)
+                    : Promise.resolve();
 
-        return revoke
-            .then(() => membership)
-            .then(() => imageCleanup)
-            .then(() => enqueueIfPending(savedUser))
-            .then(generateSuccess)
-            .catch(rejectAccessInvariant);
-    });
+            // Already validated above, so this should only ever resolve — `assignRole` is kept as
+            // the one place that WRITES the membership, rather than duplicating its upsert here.
+            const membership =
+                data.role === undefined
+                    ? Promise.resolve()
+                    : assignRole(
+                          String(savedUser._id),
+                          DEPLOYMENT_TENANT_ID,
+                          'tenant',
+                          data.role,
+                          context.caller.permissions,
+                          context
+                      ).then(() => undefined);
+
+            return revoke
+                .then(() => membership)
+                .then(() => imageCleanup)
+                .then(() => enqueueIfPending(savedUser))
+                .then(generateSuccess);
+        })
+        .catch(rejectAccessInvariant);
 };
 
 /**
@@ -365,21 +380,23 @@ export const updateById = (
 
 /**
  * Remove a user document (soft or hard delete). Soft delete toggles `deletedAt` (restores if
- * already soft-deleted). A hard delete first revokes the account's tenant membership — the
- * authorization store's own half of the cascade, and the one place `revokeRole`'s
- * `assertNotLastAdministrator` can refuse the whole delete with 409 BEFORE `user.deleted` fires,
- * rather than leaving a shop with nobody who can administer it — `rejectAccessInvariant` is what
- * turns that refusal into the envelope this function promises. Only past that does it emit
- * `user.deleted`, awaited before the write, so cart cleanup happens without this module knowing
- * the cart exists — keeping the dependency arrow pointing cart → users. Only the hard path
- * touches either, since a soft delete is a restore waiting to happen.
+ * already soft-deleted). A hard delete first revokes EVERY membership the account holds —
+ * `revokeAllOf`, not a single tenant-scoped `revokeRole`: an account can hold a platform seat
+ * alongside its tenant one, and either row surviving the user it points at is an erasure gap.
+ * This is also the one place a revoke's `assertNotLastAdministrator` can refuse the whole delete
+ * with 409 BEFORE `user.deleted` fires, rather than leaving a shop with nobody who can administer
+ * it — `rejectAccessInvariant` is what turns that refusal into the envelope this function
+ * promises. Only past that does it emit `user.deleted`, awaited before the write, so cart cleanup
+ * happens without this module knowing the cart exists — keeping the dependency arrow pointing
+ * cart → users. Only the hard path touches either, since a soft delete is a restore waiting to
+ * happen.
  */
 export const remove = (
     user: UserDocument,
     hardDelete = false
 ): Promise<ResponseSuccess<UserDocument> | ResponseSuccess<undefined> | ResponseReject> => {
     if (hardDelete)
-        return revokeRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant')
+        return revokeAllOf(user.id)
             .then(() => emitDomainEvent(USER_DELETED, { userId: user.id }))
             .then(() => userRepository.deleteOne(user))
             .then(() => imageStore.remove(user.imageUrl))
@@ -637,6 +654,16 @@ const registerSelfService = (data: Parameters<typeof userRepository.create>[0]) 
 const registerFromOAuth = (data: Parameters<typeof userRepository.create>[0]) =>
     userRepository.create(data);
 
+/**
+ * Undo a just-created signup row whose starting-role grant then failed — a hard delete, not
+ * `remove()`: that emits `USER_DELETED` and revokes a membership through `access`, both wrong for
+ * a row that never finished becoming an account. Left behind, it would keep the email permanently
+ * unusable for a retry. Not `remove()`, so not the barrel: this is a compensating step for
+ * `account`'s own signup orchestration, not a general-purpose delete.
+ */
+const discardFailedSignup = (user: UserDocument): Promise<void> =>
+    userRepository.deleteOne(user).then(() => undefined);
+
 /** Whether an account already exists for this email — signup's duplicate-email pre-check. */
 const emailTaken = (email: string): Promise<boolean> =>
     userRepository.findOne({ email }).then((user) => user !== null);
@@ -689,6 +716,7 @@ export const userService = {
     registerSelfService,
     registerFromOAuth,
     buildSignupDecoy,
+    discardFailedSignup,
     update,
     updateById,
     remove,

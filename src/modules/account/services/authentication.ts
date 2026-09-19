@@ -458,11 +458,22 @@ export const signup = (
                                               // The membership, not a caller-supplied name —
                                               // `assignDefaultRole` never accepts one, which is
                                               // what makes self-service signup structurally
-                                              // unable to grant anything but `unverified`.
+                                              // unable to grant anything but `unverified`. A
+                                              // refused grant undoes the row rather than leaving
+                                              // an account nobody can sign into and the email
+                                              // permanently unable to retry.
                                               assignDefaultRole(
                                                   String(createdUser._id),
                                                   DEPLOYMENT_TENANT_ID
-                                              ).then(() => createdUser)
+                                              ).then(
+                                                  () => createdUser,
+                                                  (error: unknown) =>
+                                                      userService
+                                                          .discardFailedSignup(createdUser)
+                                                          .then(() => {
+                                                              throw error;
+                                                          })
+                                              )
                                           )
                                           .then((createdUser) =>
                                               userService

@@ -27,7 +27,8 @@ import {
     ANONYMOUS_ROLE,
     PERMISSION_KEYS,
     PRESET_ROLES,
-    permissionsOfRole
+    permissionsOfRole,
+    isUnrestricted
 } from '@kernel/permissions';
 import { heldKeys } from '@kernel/ability';
 import type { AuthorizationScope, Caller } from '@types';
@@ -74,9 +75,11 @@ const callerFor = (name: string, scope: AuthorizationScope): Caller => {
             ? [...new Set([...permissionsOfRole(name), ...ANONYMOUS_ROLE.permissions])]
             : permissionsOfRole(name);
 
+    const unrestricted = isUnrestricted({ scope, permissions });
+
     return scope === 'platform'
-        ? { id, tenantId: null, scope, permissions }
-        : { id, tenantId: 'generated', scope, permissions };
+        ? { id, tenantId: null, scope, permissions, unrestricted }
+        : { id, tenantId: 'generated', scope, permissions, unrestricted };
 };
 
 /** One-letter action codes, so a ten-column table still fits a page. */

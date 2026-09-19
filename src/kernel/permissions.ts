@@ -270,7 +270,8 @@ export const anonymousCaller = (): Caller => {
         id: null,
         tenantId: DEPLOYMENT_TENANT_ID,
         scope: 'tenant',
-        permissions: ANONYMOUS_ROLE.permissions
+        permissions: ANONYMOUS_ROLE.permissions,
+        unrestricted: holdsEveryDeclaredKey('tenant', ANONYMOUS_ROLE.permissions)
     };
 };
 
@@ -355,21 +356,25 @@ export function callerInScope(context: AuthContext, scope: 'platform'): Platform
 export function callerInScope(context: AuthContext, scope: AuthorizationScope): Caller;
 export function callerInScope(context: AuthContext, scope: AuthorizationScope): Caller {
     if (scope === 'platform') {
+        const permissions = keysInScope(context.roles.platform, scope);
         return {
             id: context.id,
             // Platform scope is tenant-less by definition; carrying a tenantId here would let a
             // platform rule be narrowed by a shop it does not belong to.
             tenantId: null,
             scope,
-            permissions: keysInScope(context.roles.platform, scope)
+            permissions,
+            unrestricted: holdsEveryDeclaredKey(scope, permissions)
         };
     }
 
+    const permissions = keysInScope(context.roles.tenant, scope);
     return {
         id: context.id,
         tenantId: context.tenantId,
         scope,
-        permissions: keysInScope(context.roles.tenant, scope)
+        permissions,
+        unrestricted: holdsEveryDeclaredKey(scope, permissions)
     };
 }
 
@@ -400,6 +405,20 @@ const declaredKeysOfScope = new Map<AuthorizationScope, readonly string[]>(
 );
 
 /**
+ * Holds every key a scope declares — the property "unrestricted" actually tests, independent of
+ * any particular `Caller` shape. `callerInScope` calls this directly (a `Caller` isn't built yet
+ * at that point — this is what its own `unrestricted` field is filled from); {@link isUnrestricted}
+ * is the same question asked of one already built.
+ */
+const holdsEveryDeclaredKey = (
+    scope: AuthorizationScope,
+    permissions: readonly string[]
+): boolean => {
+    const held = new Set(permissions);
+    return (declaredKeysOfScope.get(scope) ?? []).every((key) => held.has(key));
+};
+
+/**
  * Does this caller hold EVERY declared key in their own scope — unrestricted, within that scope
  * only.
  *
@@ -407,12 +426,11 @@ const declaredKeysOfScope = new Map<AuthorizationScope, readonly string[]>(
  * permission model itself, which is why `requirePermission` and the domain actor ask this rather
  * than comparing a name. There is no single token for it any more: `admin` is unrestricted because
  * `authorization-roles.yaml` lists every tenant key by name, not because it holds a shortcut that
- * means the same thing — see `authorization-keys.yaml`'s closing note.
+ * means the same thing — see `authorization-keys.yaml`'s closing note. Equivalent to reading
+ * `caller.unrestricted`, kept for callers that only have a permission list without a full `Caller`.
  */
-export const isUnrestricted = (caller: Caller): boolean => {
-    const held = new Set(caller.permissions);
-    return (declaredKeysOfScope.get(caller.scope) ?? []).every((key) => held.has(key));
-};
+export const isUnrestricted = (caller: Pick<Caller, 'scope' | 'permissions'>): boolean =>
+    holdsEveryDeclaredKey(caller.scope, caller.permissions);
 
 /**
  * The application acting on nobody's behalf — a sweep, a job, a domain event with no request

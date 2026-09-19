@@ -276,7 +276,13 @@ export const readInput = <TId extends string = never>(
  * makes every scope-gated check fail alike — it is the branch of the union that needs no tenant id,
  * and this file (infrastructure) may not import the kernel's constant for the one shop's `_id`.
  */
-const STRANGER: Caller = { id: null, tenantId: null, scope: 'platform', permissions: [] };
+const STRANGER: Caller = {
+    id: null,
+    tenantId: null,
+    scope: 'platform',
+    permissions: [],
+    unrestricted: false
+};
 
 /**
  * Build the `CallerContext` for the current request. Call once per controller, at the top, and
