@@ -5,10 +5,13 @@
  *
  * Checked forms:
  * - `export * from './x'` / `export type * from './x'` — against the two allowlists below.
- * - `export { x } from './y'` — same allowlists, plus a named pick from `factories` or (products
- *   only) `tax`, published deliberately per-module — see each barrel's own comment. A named pick
- *   from `./model` is checked by NAME instead: a pure helper is fine, the schema, its transform
- *   or the model object are not — see `isModelRuntimeValueName`.
+ * - `export { x } from './y'` — same allowlists, plus a named pick from `tax`, PRODUCTS' barrel
+ *   only (its own VAT lookup) — see `products/index.ts`'s own comment. `factories` is never
+ *   allowed from any barrel — CLAUDE.md's own rule — and `factoriesImportPattern`
+ *   (`no-restricted-imports` in `eslint.config.ts`) already refuses that import categorically, so
+ *   this rule does not need its own allowance for it, dead or otherwise. A named pick from
+ *   `./model` is checked by NAME instead: a pure helper is fine, the schema, its transform or the
+ *   model object are not — see `isModelRuntimeValueName`.
  * - `import { x } from './y'; export { x };` — resolved through this file's own import map,
  *   since the export itself carries no source.
  */
@@ -29,10 +32,11 @@ const VALUE_SOURCES = new Set(['services', 'service', 'domain', 'events', 'email
 const TYPE_SOURCES = new Set([...VALUE_SOURCES, 'model']);
 
 /**
- * Extra sources a barrel may NAME-PICK from — never `export *`, since that publishes everything
- * a file has: `factories` (a fixture for a sibling's own tests) and `tax` (products' VAT lookup).
+ * This rule only ever lints a module's `index.ts` (see its registration in `eslint.config.ts`),
+ * at whatever absolute path this checkout lives at — `(?:^|[/\\])` so the leading separator is
+ * optional, since a test's own `filename` is a bare relative path with none before `src`.
  */
-const NAMED_EXTRA_SOURCES = new Set(['factories', 'tax']);
+const MODULE_BARREL_PATH = /(?:^|[/\\])src[/\\]modules[/\\]([^/\\]+)[/\\]index\.ts$/;
 
 /**
  * A mongoose schema, its `toJSON` transform, or the model object itself — the three shapes a
@@ -60,8 +64,8 @@ export const barrelAllowedSources = {
         messages: {
             notAllowed:
                 '{{declaration}} is not one of the files a barrel may publish — services, domain, ' +
-                'events and emails as values, model as `export type *` only, plus a named pick ' +
-                'from factories or (products only) tax. See docs/theory/strategic-ddd.md §5.',
+                'events and emails as values, model as `export type *` only, plus (products only) ' +
+                'a named pick from tax. See docs/theory/strategic-ddd.md §5.',
             modelAsValue:
                 "The model is published as types only — `export type * from './model'`, never " +
                 "`export * from './model'`, which would also publish the mongoose schema and " +
@@ -84,6 +88,10 @@ export const barrelAllowedSources = {
     create(context: any) {
         /** local name → source stem, for `import { x } from './y'; export { x };`. */
         const importSourceOf = new Map<string, string>();
+
+        // `tax` is products' own VAT lookup — a named pick from it is allowed from THIS barrel
+        // only, never from a sibling's, which the module name captured off the file path decides.
+        const isProductsBarrel = MODULE_BARREL_PATH.exec(context.filename)?.[1] === 'products';
 
         const declarationText = (node: any): string => context.sourceCode.getText(node);
 
@@ -177,7 +185,8 @@ export const barrelAllowedSources = {
                         return;
                     }
 
-                    if (VALUE_SOURCES.has(stem) || NAMED_EXTRA_SOURCES.has(stem)) return;
+                    if (VALUE_SOURCES.has(stem)) return;
+                    if (stem === 'tax' && isProductsBarrel) return;
 
                     context.report({
                         node: node.source,

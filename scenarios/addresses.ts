@@ -7,7 +7,7 @@
  */
 
 import { Types } from 'mongoose';
-import { SEED_OWNER_ID, SEED_USER_ID } from '@scenarios/accounts';
+import { SEED_ADMIN_ID, SEED_USER_ID } from '@scenarios/accounts';
 import { type SeedOutcome, insertIfAbsentForOwner } from '@scenarios/seed';
 import { makeAddressBook } from '@modules/addresses/factories';
 import { addressBookRepository } from '@modules/addresses/repository';
@@ -21,7 +21,7 @@ import { addressBookRepository } from '@modules/addresses/repository';
  */
 export const addressBookFixtures = [
     makeAddressBook({
-        userId: SEED_OWNER_ID,
+        userId: SEED_ADMIN_ID,
         items: [
             /*
              * A shipped order restates (never references) a copy of this entry as its

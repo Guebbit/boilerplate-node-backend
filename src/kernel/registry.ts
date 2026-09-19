@@ -293,10 +293,9 @@ export interface AppModule {
      * What this module holds about one person, for `POST /account/export` — see
      * {@link PersonalDataSection}. REQUIRED, not optional: a new module cannot compile without
      * answering. `'none'` is the explicit, reviewed answer for a module with nothing personal to
-     * export (infrastructure, or a collection with no user-linked field);
-     * `tests/cross-cutting/personal-data-sections.test.ts` refuses `'none'` from a module whose
-     * models carry an obvious one (`userId`, `createdByUserId`, an email the subject owns) — the
-     * "you said nothing, but you hold something" case a type alone cannot catch.
+     * export (infrastructure, or a collection with no user-linked field) — a module's own
+     * `personalData: 'none'` comment says why, at the point a reviewer can check it against the
+     * model right beside it.
      */
     personalData: readonly PersonalDataSection[] | 'none';
 }

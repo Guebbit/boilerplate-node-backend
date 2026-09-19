@@ -322,7 +322,7 @@ cases:
 
     # =============================================================================================
     # `read` is not a subset of anything else, and there is no key for an action a family never
-    # declared — not even for the caller who holds the scope wildcard.
+    # declared — not even for a caller holding every OTHER key that family has.
     # =============================================================================================
 
     - name: read does not imply update

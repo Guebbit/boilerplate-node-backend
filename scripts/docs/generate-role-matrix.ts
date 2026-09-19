@@ -8,10 +8,10 @@
  * `shared/authorization-roles.yaml`'s own `title` and `description` — that file documents itself,
  * and a generated copy of its key lists said less than the descriptions it ignored.
  *
- * What it answers cannot be written by hand, which is why this survives: `admin` alone holds over
- * forty keys, spelled out by name, and every tenant caller is floored at the anonymous baseline
- * (see `keysInScope` in `kernel/permissions.ts`). That is many cells nobody can derive reliably by
- * eye.
+ * What it answers cannot be written by hand, which is why this survives: `admin` alone holds most
+ * of the declared tenant keys, spelled out by name, and every tenant caller is floored at the
+ * anonymous baseline (see `keysInScope` in `kernel/permissions.ts`). That is many cells nobody can
+ * derive reliably by eye.
  *
  * Asked through `heldKeys` rather than by re-expanding the keys here: a second expander is a
  * second answer to "what may this role do", and the one in the docs would be the one nobody runs.

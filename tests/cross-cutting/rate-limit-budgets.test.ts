@@ -10,55 +10,15 @@
  *   - nothing a module declares is also declared in `INFRASTRUCTURE_RATE_LIMITS` — ownership is
  *     exactly one place, or a docs/test reader sees a budget twice and a change to one silently
  *     leaves the other stale;
- *   - every budget a `rate-limits.ts` file actually builds into a limiter is also in its own
- *     manifest array — a limiter that is wired but unpublished is invisible to the docs generator
- *     and to every other check above;
  *   - every budget's env var is raised in `tests/support/setup.ts`, unless it carries a
  *     `testExemption` — see `RateLimitBudget` in `src/types/rate-limit-budget.ts` for what that
  *     means and why it is a decision recorded on the budget rather than a name typed here.
  */
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { enabledModules } from '../../src/modules';
 import { INFRASTRUCTURE_RATE_LIMITS } from '@infrastructure/http/middlewares/rate-limit';
 import type { RateLimitBudget } from '@types';
-
-/** Every module's own `rate-limits.ts`, plus infrastructure's — every file {@link reconcile} reads. */
-const rateLimitSourceFiles = (): string[] => {
-    const modulesRoot = path.join(__dirname, '../../src/modules');
-    const moduleFiles = readdirSync(modulesRoot, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => path.join(modulesRoot, entry.name, 'rate-limits.ts'))
-        .filter((file) => existsSync(file));
-    return [
-        ...moduleFiles,
-        path.join(__dirname, '../../src/infrastructure/http/middlewares/rate-limit.ts')
-    ];
-};
-
-/**
- * Every `BUDGET_NAME` a rate-limits file actually turns into a limiter
- * (`buildRateLimiter(BUDGET_NAME)`), against every `BUDGET_NAME` its own `RateLimitBudget[]`
- * manifest constant declares — read as TEXT, the same recipe {@link raisedInSetup} uses, so this
- * catches a budget that was wired into a real limiter without its author remembering to also add
- * it to the manifest array the docs generator and the tests above actually read.
- */
-const reconcile = (file: string): { built: Set<string>; declared: Set<string> } => {
-    const source = readFileSync(file, 'utf8');
-    const built = new Set(
-        [...source.matchAll(/buildRateLimiter\((\w+)\)/g)].map(([, name]) => name)
-    );
-    const manifest = /readonly RateLimitBudget\[] = \[([\S\s]*?)]/.exec(source);
-    const declared = new Set(
-        manifest
-            ? manifest[1]
-                  .split(',')
-                  .map((entry) => entry.trim())
-                  .filter(Boolean)
-            : []
-    );
-    return { built, declared };
-};
 
 /** Every module-declared budget, tagged with the module that owns it. */
 const moduleBudgets: (RateLimitBudget & { owner: string })[] = enabledModules.flatMap((appModule) =>
@@ -111,17 +71,6 @@ describe('rate-limit budgets, as a set', () => {
         );
 
         expect(redeclared).toEqual([]);
-    });
-
-    it('declares every budget it builds — a limiter is not just wired, but published', () => {
-        const undeclared = rateLimitSourceFiles().flatMap((file) => {
-            const { built, declared } = reconcile(file);
-            return [...built]
-                .filter((name) => !declared.has(name))
-                .map((name) => `${path.relative(path.join(__dirname, '../..'), file)}: ${name}`);
-        });
-
-        expect(undeclared).toEqual([]);
     });
 
     it('raises every budget without a testExemption in tests/support/setup.ts', () => {

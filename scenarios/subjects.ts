@@ -15,9 +15,9 @@
  */
 
 import {
-    SEED_OWNER_ID,
-    SEED_OWNER_EMAIL,
-    SEED_OWNER_PASSWORD,
+    SEED_ADMIN_ID,
+    SEED_ADMIN_EMAIL,
+    SEED_ADMIN_PASSWORD,
     SEED_USER_ID,
     SEED_USER_EMAIL,
     SEED_USER_PASSWORD
@@ -67,7 +67,7 @@ export const SHOP_SUBJECTS: Readonly<Record<string, string>> = {
  * fixed against the paired frontend's own `.env` copy.
  */
 export const SUBJECTS = {
-    admin: { id: SEED_OWNER_ID, email: SEED_OWNER_EMAIL, password: SEED_OWNER_PASSWORD },
+    admin: { id: SEED_ADMIN_ID, email: SEED_ADMIN_EMAIL, password: SEED_ADMIN_PASSWORD },
     user: { id: SEED_USER_ID, email: SEED_USER_EMAIL, password: SEED_USER_PASSWORD },
     product: {
         id: SEED_PRODUCT_IDS.dogFoodStandard,

@@ -6,9 +6,9 @@
  */
 import { zodUserSchema } from '@modules/users';
 import {
-    SEED_OWNER_EMAIL,
+    SEED_ADMIN_EMAIL,
     SEED_USER_EMAIL,
-    SEED_OWNER_PASSWORD,
+    SEED_ADMIN_PASSWORD,
     SEED_USER_PASSWORD,
     seedCredentials
 } from '@scenarios/accounts';
@@ -52,7 +52,7 @@ afterEach(() => {
 
 describe('the demo identities', () => {
     it('gives each account its own login address', () => {
-        expect(SEED_OWNER_EMAIL).not.toBe(SEED_USER_EMAIL);
+        expect(SEED_ADMIN_EMAIL).not.toBe(SEED_USER_EMAIL);
     });
 });
 
@@ -63,23 +63,23 @@ describe('the seeded passwords', () => {
      * boots without the accounts the frontend's e2e suite logs in as.
      */
     it('satisfies the policy every password-setting endpoint enforces', () => {
-        expect(satisfiesPolicy(SEED_OWNER_PASSWORD)).toBe(true);
+        expect(satisfiesPolicy(SEED_ADMIN_PASSWORD)).toBe(true);
         expect(satisfiesPolicy(SEED_USER_PASSWORD)).toBe(true);
     });
 
     it('falls back to a usable value when neither env var is set', async () => {
         const seeds = await reloadWith(undefined, undefined);
 
-        expect(seeds.SEED_OWNER_PASSWORD).not.toBe('');
+        expect(seeds.SEED_ADMIN_PASSWORD).not.toBe('');
         expect(seeds.SEED_USER_PASSWORD).not.toBe('');
-        expect(satisfiesPolicy(seeds.SEED_OWNER_PASSWORD)).toBe(true);
+        expect(satisfiesPolicy(seeds.SEED_ADMIN_PASSWORD)).toBe(true);
         expect(satisfiesPolicy(seeds.SEED_USER_PASSWORD)).toBe(true);
     });
 
     it('takes each password from its own env var when one is set', async () => {
         const seeds = await reloadWith('Env-Admin1!', 'Env-User1!');
 
-        expect(seeds.SEED_OWNER_PASSWORD).toBe('Env-Admin1!');
+        expect(seeds.SEED_ADMIN_PASSWORD).toBe('Env-Admin1!');
         expect(seeds.SEED_USER_PASSWORD).toBe('Env-User1!');
     });
 
@@ -87,7 +87,7 @@ describe('the seeded passwords', () => {
         const fallbacks = await reloadWith(undefined, undefined);
         const seeds = await reloadWith('Env-Admin1!', undefined);
 
-        expect(seeds.SEED_OWNER_PASSWORD).toBe('Env-Admin1!');
+        expect(seeds.SEED_ADMIN_PASSWORD).toBe('Env-Admin1!');
         expect(seeds.SEED_USER_PASSWORD).toBe(fallbacks.SEED_USER_PASSWORD);
     });
 });
@@ -101,8 +101,8 @@ describe('seedCredentials', () => {
      */
     it('publishes exactly what each account was seeded with', () => {
         expect(seedCredentials.admin).toEqual({
-            email: SEED_OWNER_EMAIL,
-            password: SEED_OWNER_PASSWORD
+            email: SEED_ADMIN_EMAIL,
+            password: SEED_ADMIN_PASSWORD
         });
         expect(seedCredentials.user).toEqual({
             email: SEED_USER_EMAIL,

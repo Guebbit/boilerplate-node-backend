@@ -196,7 +196,7 @@ module.exports = {
          */
         'src/modules/*/domain/!(index).ts': floor(100, 69, 100),
         // `registry.ts` is the low file on functions at 66.66.
-        'src/kernel/**/!(seed|store).ts': floor(70, 70, 66),
+        'src/kernel/**/*.ts': floor(70, 70, 66),
         /*
          * The access module's writers, now `src/modules/access/` (Stage 6 of the DDD fix moved
          * the folder; `seed.ts` folded into `service.ts` in the same change). Driven hard by

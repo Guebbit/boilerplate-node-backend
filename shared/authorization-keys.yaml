@@ -25,23 +25,25 @@
 
 version: 1
 
-# CASL's action vocabulary, plus the one addition this model needs. `manage` is NOT in this list:
-# it is still the WILDCARD action (`all.manage`, `platform.all.manage`, spelled directly in
-# `wildcards:` below), but no individual key declares it as ITS action any more — see the note at
-# the foot of this file for why.
+# CASL's action vocabulary, plus the additions this model needs. `manage` is NOT in this list: it
+# was once the wildcard action, but there is no wildcard of any kind any more, per-family or
+# scope-wide — see the note at the foot of this file for why — so `manage` names nothing here.
 #
 # `write` is deliberately absent. It collapses create, update and delete into one key, and the
 # shop needs them apart: a support agent may update a user and may not delete one, a warehouse
 # operator may adjust stock and may not delete a product.
 #
-# `checkout` and `sweep` are the two additions beyond CASL's own CRUD vocabulary, and both follow
-# the same rule: a verb is added only when CRUD cannot say the thing, never when CRUD is merely
-# inconvenient, and the reason is recorded on the key itself.
+# `checkout`, `sweep` and `override` are the three additions beyond CASL's own CRUD vocabulary,
+# and all three follow the same rule: a verb is added only when CRUD cannot say the thing, never
+# when CRUD is merely inconvenient, and the reason is recorded on the key itself.
 #   - `checkout` is `cart.self.checkout`'s action, and nowhere else. CRUD has no verb for "spend
 #     the basket": `create` on `Cart` collided with `orders.any.create` (raising an order on
 #     someone else's behalf) and `update` said nothing about what changed.
 #   - `sweep` is `inventory.any.sweep`'s action, and nowhere else. A sweep clears expired
 #     reservation holds on a schedule: no noun it creates, no row whose update names the action.
+#   - `override` is `orders.any.override`'s action, and nowhere else. It skips the normal
+#     lifecycle gate to force a delivery move or correct a status by hand, with a recorded
+#     reason — `update` would hide that this write deliberately bypasses the ordinary rule.
 actions:
     - read
     - create

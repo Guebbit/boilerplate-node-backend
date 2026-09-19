@@ -15,9 +15,9 @@
  */
 
 import {
-    SEED_OWNER_EMAIL,
-    SEED_OWNER_ID,
-    SEED_OWNER_PASSWORD,
+    SEED_ADMIN_EMAIL,
+    SEED_ADMIN_ID,
+    SEED_ADMIN_PASSWORD,
     SEED_USER_EMAIL,
     SEED_USER_ID,
     SEED_USER_PASSWORD,
@@ -69,10 +69,10 @@ export const SEED_CUSTOMER_IDS = {
  */
 export const namedUsers = [
     makeUser({
-        id: SEED_OWNER_ID,
+        id: SEED_ADMIN_ID,
         username: 'root',
-        email: SEED_OWNER_EMAIL,
-        password: SEED_OWNER_PASSWORD,
+        email: SEED_ADMIN_EMAIL,
+        password: SEED_ADMIN_PASSWORD,
         /*
          * Verified, not the schema's absent-until-proven default — a seed account exists to be
          * logged into, not to demonstrate the "verify your email" nag banner to everyone who boots

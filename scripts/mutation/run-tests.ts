@@ -34,8 +34,14 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..');
  */
 const STRYKER_WORKER_PEAK_MB = 2900;
 
-/** Headroom left unclaimed for the OS, the docker stack and an editor. */
-const OS_RESERVE_MB = 4096;
+/**
+ * Headroom left unclaimed for the OS, the docker stack and an editor — double
+ * `scripts/testing/machine-budget.ts`'s own `OS_RESERVE_MB` (2048), deliberately: that number
+ * reserves for a single jest process's neighbours, while a mutation run's own orchestrator (the
+ * Stryker process itself, on top of every worker `resolveConcurrency` below sizes) is a real,
+ * additional consumer of the same machine that plain test running never has to account for.
+ */
+const STRYKER_OS_RESERVE_MB = 4096;
 
 /** Where jest's in-memory Mongo data directories live. Outside the sandbox, deliberately. */
 const TEST_TMP_BASE = path.join(REPO_ROOT, '.tmp');
@@ -74,7 +80,9 @@ const resolveConcurrency = (): number => {
     if (configured) return configured;
 
     const cpuCap = os.cpus().length - 1;
-    const ramCap = Math.floor((availableMemoryMb() - OS_RESERVE_MB) / STRYKER_WORKER_PEAK_MB);
+    const ramCap = Math.floor(
+        (availableMemoryMb() - STRYKER_OS_RESERVE_MB) / STRYKER_WORKER_PEAK_MB
+    );
     // At least one, or a single-core, low-memory machine would compute zero and run nothing.
     return Math.max(1, Math.min(cpuCap, ramCap));
 };

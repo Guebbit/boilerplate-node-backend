@@ -14,8 +14,8 @@
  */
 
 import {
-    SEED_OWNER_EMAIL,
-    SEED_OWNER_PASSWORD,
+    SEED_ADMIN_EMAIL,
+    SEED_ADMIN_PASSWORD,
     SEED_USER_EMAIL,
     SEED_USER_PASSWORD
 } from '@scenarios/accounts';
@@ -368,7 +368,7 @@ const requireBankTransfer = (owner: Caller): Promise<void> =>
  * @throws {ScenarioFlowError} on any call that should have succeeded and did not
  */
 export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> => {
-    const owner = await signIn(baseUrl, SEED_OWNER_EMAIL, SEED_OWNER_PASSWORD);
+    const owner = await signIn(baseUrl, SEED_ADMIN_EMAIL, SEED_ADMIN_PASSWORD);
     const customer = await signIn(baseUrl, SEED_USER_EMAIL, SEED_USER_PASSWORD);
 
     await requireBankTransfer(owner);

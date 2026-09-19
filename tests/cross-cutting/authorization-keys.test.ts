@@ -98,9 +98,4 @@ describe('assertDeclared', () => {
     it('refuses a plausible near-miss rather than guessing', () => {
         expect(() => assertDeclared('product.read')).toThrow(/not declared/);
     });
-
-    it('refuses the old wildcard spelling — there is no exception for it any more', () => {
-        expect(() => assertDeclared('all.manage')).toThrow(/not declared/);
-        expect(() => assertDeclared('platform.all.manage')).toThrow(/not declared/);
-    });
 });

@@ -52,7 +52,7 @@ import {
 import { registerModules } from '@kernel/registry';
 import { enabledModules } from '../src/modules';
 import { userService, type UserDocument } from '@modules/users';
-import { inactivityWarningEmail } from '@modules/account/emails';
+import { inactivityWarningEmail } from '@modules/account';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { withLease } from '@infrastructure/persistence/lease';
 import { runScript } from '../db/run-script';

@@ -31,7 +31,7 @@ import {
 import { membershipModel } from '@modules/access/model';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import {
-    SEED_OWNER_ID,
+    SEED_ADMIN_ID,
     SEED_USER_ID,
     SEED_EDITOR_ID,
     SEED_MODERATOR_ID,
@@ -255,7 +255,7 @@ describe('bootstrapAccessModel', () => {
         const tenant = await bootstrapAccessModel('Shop');
 
         expect(tenant.slug).toBe(DEPLOYMENT_TENANT_SLUG);
-        expect(await membershipsOf(SEED_OWNER_ID)).toEqual([]);
+        expect(await membershipsOf(SEED_ADMIN_ID)).toEqual([]);
     });
 
     it('is idempotent, and keeps the id a first insert set', async () => {
@@ -271,7 +271,7 @@ describe('the seeded model', () => {
     it('places the demo accounts, and gives root both jobs', async () => {
         await seedAccessModel();
 
-        const rootMemberships = await membershipsOf(SEED_OWNER_ID);
+        const rootMemberships = await membershipsOf(SEED_ADMIN_ID);
 
         // Two memberships for one person, because running a shop and operating the installation
         // are two jobs. Which one a request acts as is settled by the key it asks about — this is
@@ -302,15 +302,15 @@ describe('the seeded model', () => {
         await seedAccessModel();
         await seedAccessModel();
 
-        expect(await membershipsOf(SEED_OWNER_ID)).toHaveLength(2);
+        expect(await membershipsOf(SEED_ADMIN_ID)).toHaveLength(2);
     });
 
     it('is the ONLY place a role is stored — the user document carries none', async () => {
         await seedUsers();
         await seedAccessModel();
 
-        const membership = await membershipIn(SEED_OWNER_ID, DEPLOYMENT_TENANT_ID, 'tenant');
-        const published = await userRepository.findById(SEED_OWNER_ID);
+        const membership = await membershipIn(SEED_ADMIN_ID, DEPLOYMENT_TENANT_ID, 'tenant');
+        const published = await userRepository.findById(SEED_ADMIN_ID);
 
         /*
          * One store, one answer — the redundancy this phase closed. A role field on the user

@@ -5,7 +5,7 @@
  * hole in the storefront's wishlist page, a product the scoping rules then refuse to return.
  */
 
-import { SEED_OWNER_ID, SEED_USER_ID } from '@scenarios/accounts';
+import { SEED_ADMIN_ID, SEED_USER_ID } from '@scenarios/accounts';
 import { SEED_PRODUCT_IDS } from './subjects';
 import { makeWishlist } from '@modules/wishlist/factories';
 import { type SeedOutcome, insertIfAbsentForOwner } from '@scenarios/seed';
@@ -19,7 +19,7 @@ import { wishlistRepository } from '@modules/wishlist/repository';
 export const wishlistFixtures = [
     /* root — one saved product, enough for the owner account to show a non-empty page. */
     makeWishlist({
-        userId: SEED_OWNER_ID,
+        userId: SEED_ADMIN_ID,
         productIds: [SEED_PRODUCT_IDS.scratchPostOutOfStock]
     }),
     /*

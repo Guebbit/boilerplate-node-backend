@@ -37,7 +37,7 @@ import { userModel } from '@modules/users/model';
 import { auditLogModel } from '@modules/audit-logs/model';
 import { addressBookModel } from '@modules/addresses/model';
 import { reservationModel } from '@modules/inventory/model';
-import { SEED_OWNER_ID, SEED_USER_ID } from '@scenarios/accounts';
+import { SEED_ADMIN_ID, SEED_USER_ID } from '@scenarios/accounts';
 import { enabledModules } from '../../../src/modules';
 import {
     CreateProductResponse,
@@ -143,7 +143,7 @@ describe('each subject names a row that really has the property', () => {
     it('order.ownerPending is pending, the admin account owns it, and it holds real stock', async () => {
         const order = await orderModel.findById(subjects['order.ownerPending']).exec();
         expect(order?.status).toBe('pending');
-        expect(order?.userId?.toString()).toBe(SEED_OWNER_ID);
+        expect(order?.userId?.toString()).toBe(SEED_ADMIN_ID);
 
         const hold = await reservationModel
             .findOne({ orderId: subjects['order.ownerPending'] })
