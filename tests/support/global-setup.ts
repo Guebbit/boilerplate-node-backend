@@ -4,6 +4,7 @@ import path from 'node:path';
 // uses: `globalSetup` is loaded outside jest's normal module resolution, where `moduleNameMapper`
 // does not apply — an alias resolves at `tsc`/`eslint` time but fails at jest's own runtime.
 import { startEphemeralMongo, type EphemeralMongo } from '../../scenarios/support/ephemeral-mongo';
+import { startInProcessMongod } from '../../scenarios/support/ephemeral-mongod';
 import { FILE_SANDBOX_ROOT_VARIABLE } from './file-sandbox';
 
 /**
@@ -132,7 +133,7 @@ const globalSetup = async () => {
     const dbPath = path.join(root, 'server');
     await mkdir(dbPath, { recursive: true });
 
-    const server = await startEphemeralMongo({ dbPath });
+    const server = await startEphemeralMongo({ dbPath, startInProcess: startInProcessMongod });
     process.env.NODE_TEST_MONGO_URI = server.uri;
     (globalThis as TestGlobals).__testMongoServer = server;
 };

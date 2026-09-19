@@ -22,6 +22,7 @@
  */
 import { enableDemoProfile } from '@infrastructure/runtime/demo-profile';
 import { startEphemeralMongo } from './support/ephemeral-mongo';
+import { startInProcessMongod } from './support/ephemeral-mongod';
 import { DEMO_BANK_TRANSFER, SCRIPTED_RATE_LIMITS } from './rate-limits';
 
 const REQUIRED_DEFAULTS: Record<string, string> = {
@@ -80,7 +81,7 @@ const waitUntilListening = (port: string): Promise<void> => {
     return poll();
 };
 
-startEphemeralMongo({})
+startEphemeralMongo({ startInProcess: startInProcessMongod })
     .then((mongo) => {
         // The consumers of this profile end it with a signal — the paired frontend's shard runner
         // and `start-server-and-test` both send SIGTERM. Without this, the process dies and an
