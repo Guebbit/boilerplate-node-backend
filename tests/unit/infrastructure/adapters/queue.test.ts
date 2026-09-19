@@ -1,11 +1,12 @@
 import type { ZodType } from 'zod';
-import { EmailJobPayloadSchema } from '@types';
+import { EmailJobPayloadSchema, WORKER_CHANNELS } from '@types';
 import {
     isQueueEnabled,
     publishToQueue,
     consumeFromQueue,
     startQueue,
     stopQueue,
+    parkedCounts,
     DEAD_LETTER_EXCHANGE,
     deadLetterQueueOf
 } from '@infrastructure/adapters/queue';
@@ -60,6 +61,22 @@ const channelMock = () => ({
 const mockCreateConfirmChannel = jest.fn().mockImplementation(() => Promise.resolve(channelMock()));
 const mockModelClose = jest.fn().mockImplementation(() => Promise.resolve());
 
+/**
+ * `parkedCounts()`'s own dedicated channel — a PLAIN one (`model.createChannel()`), deliberately
+ * separate from {@link channelMock} above: it exists precisely so a broker error checking one
+ * queue's dead-letter depth cannot be mistaken, in a test, for one on the shared publish channel.
+ */
+const mockPlainAssertQueue = jest
+    .fn()
+    .mockResolvedValue({ queue: 'test.dead', messageCount: 0, consumerCount: 0 });
+const mockPlainChannelClose = jest.fn().mockResolvedValue(undefined);
+const mockCreateChannel = jest.fn().mockImplementation(() =>
+    Promise.resolve({
+        assertQueue: mockPlainAssertQueue,
+        close: mockPlainChannelClose
+    })
+);
+
 /** Handlers `queue.ts` registered on the recovering connection's own events (`connect`/`disconnect`). */
 let modelListeners: Record<string, ((...args: never[]) => void)[]> = {};
 const mockModelOn = jest.fn((event: string, handler: (...args: never[]) => void): void => {
@@ -71,6 +88,7 @@ const emitModelEvent = (event: string, ...args: never[]) => {
 };
 const recoveringModelMock = {
     createConfirmChannel: mockCreateConfirmChannel,
+    createChannel: mockCreateChannel,
     on: mockModelOn,
     close: mockModelClose
 };
@@ -739,6 +757,73 @@ describe('a reconnect gets its consumers back', () => {
  * answers, retrying forever underneath — so `startQueue` must never await it, or a broker that is
  * merely still starting would stop the app booting at all.
  */
+describe('parkedCounts()', () => {
+    afterEach(disableRabbitMQ);
+
+    it('resolves empty when the queue is disabled', async () => {
+        disableRabbitMQ();
+        await expect(parkedCounts()).resolves.toEqual([]);
+    });
+
+    it('resolves empty before the connection has settled', async () => {
+        enableRabbitMQ();
+        await stopQueue();
+        await expect(parkedCounts()).resolves.toEqual([]);
+    });
+
+    it('checks every worker queue on its own dedicated, non-confirm channel', async () => {
+        await ensureConnected();
+        // `ensureConnected` itself opens the shared confirm channel as part of ordinary setup —
+        // captured here so the assertion below is about what `parkedCounts` itself opens, not
+        // about the connection's own boot.
+        const confirmChannelCallsBeforeCheck = mockCreateConfirmChannel.mock.calls.length;
+        mockPlainAssertQueue.mockResolvedValue({
+            queue: 'test.dead',
+            messageCount: 3,
+            consumerCount: 0
+        });
+
+        const result = await parkedCounts();
+
+        expect(mockCreateChannel).toHaveBeenCalledTimes(1);
+        // Never the shared publish channel — a broker error checking one queue must not risk it.
+        expect(mockCreateConfirmChannel.mock.calls.length).toBe(confirmChannelCallsBeforeCheck);
+        expect(mockPlainAssertQueue).toHaveBeenCalledTimes(Object.keys(WORKER_CHANNELS).length);
+        for (const queue of Object.values(WORKER_CHANNELS))
+            expect(mockPlainAssertQueue).toHaveBeenCalledWith(deadLetterQueueOf(queue), {
+                durable: true
+            });
+        expect(result).toHaveLength(Object.keys(WORKER_CHANNELS).length);
+        expect(result.every(({ parked }) => parked === 3)).toBe(true);
+        expect(mockPlainChannelClose).toHaveBeenCalledTimes(1);
+    });
+
+    /**
+     * The whole reason for a dedicated channel: one queue's broker error closes only the check
+     * that opened it, never the shared publish channel `publishToQueue` depends on.
+     */
+    it('drops a queue that failed rather than failing every queue', async () => {
+        await ensureConnected();
+        mockPlainAssertQueue
+            .mockResolvedValueOnce({ queue: 'a.dead', messageCount: 1, consumerCount: 0 })
+            .mockRejectedValueOnce(new Error('NOT_FOUND'))
+            .mockResolvedValueOnce({ queue: 'c.dead', messageCount: 2, consumerCount: 0 })
+            .mockResolvedValueOnce({ queue: 'd.dead', messageCount: 0, consumerCount: 0 });
+
+        const result = await parkedCounts();
+
+        expect(result.length).toBeLessThan(Object.keys(WORKER_CHANNELS).length);
+        expect(result.every(({ parked }) => parked !== undefined)).toBe(true);
+    });
+
+    it('resolves empty rather than throwing when the channel itself cannot open', async () => {
+        await ensureConnected();
+        mockCreateChannel.mockRejectedValueOnce(new Error('channel open failed'));
+
+        await expect(parkedCounts()).resolves.toEqual([]);
+    });
+});
+
 describe('startQueue() never waits for the broker', () => {
     afterEach(disableRabbitMQ);
 

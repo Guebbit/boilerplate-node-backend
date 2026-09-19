@@ -298,6 +298,52 @@ export const deadLetterQueueOf = (queue: string): string => `${queue}.dead`;
 export const retryQueueOf = (queue: string): string => `${queue}.retry`;
 
 /**
+ * Every worker queue's current dead-letter depth, read live off the broker — for
+ * `GET /observability/health`'s `queues` field, the one part of that endpoint that DOES do I/O
+ * (see `modules/observability/dependency-health.ts`'s header for why the rest never does): a
+ * queue's parked count exists nowhere else in this process, unlike every other dependency's
+ * state, which is already tracked in memory.
+ *
+ * A dedicated, short-lived channel, never {@link getChannel}'s shared one: `assertQueue` on a
+ * queue this process has never published to or consumed from creates it, harmlessly, with the
+ * same `durable: true` {@link assertJobQueue} already declares its dead-letter queues with — but
+ * any OTHER broker error on this call closes whatever channel it ran on, and the shared channel
+ * every publisher depends on is not something a health check may risk.
+ *
+ * `Promise.allSettled`, not `Promise.all`: one queue's failure closing the channel must not zero
+ * out the queues already checked before it — a partial answer is still useful, an empty one looks
+ * like "nothing is parked anywhere," which would be a false negative.
+ *
+ * @returns one entry per queue this call reached before anything went wrong — empty when
+ *   disabled, not yet connected, or unreachable
+ */
+export const parkedCounts = (): Promise<{ name: string; parked: number }[]> => {
+    if (!isQueueEnabled() || !recoveringConnection) return Promise.resolve([]);
+    const connection = recoveringConnection;
+
+    return connection
+        .createChannel()
+        .then((ch) =>
+            Promise.allSettled(
+                Object.values(WORKER_CHANNELS).map((queue) =>
+                    ch
+                        .assertQueue(deadLetterQueueOf(queue), { durable: true })
+                        .then((ok) => ({ name: queue, parked: ok.messageCount }))
+                )
+            )
+                .then((results) =>
+                    results.flatMap((result) =>
+                        result.status === 'fulfilled' ? [result.value] : []
+                    )
+                )
+                .finally(() => {
+                    ch.close().catch(() => undefined);
+                })
+        )
+        .catch(() => []);
+};
+
+/**
  * Deployment-wide default: deliveries a job gets before it is parked in
  * {@link deadLetterQueueOf}. A consumer that needs a different number declares it on its own
  * `ConsumeOptions`, next to its handler — not a second environment variable.

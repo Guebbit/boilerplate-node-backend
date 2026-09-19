@@ -315,6 +315,20 @@ components:
                 lastSuccessAt: { type: string, format: date-time, nullable: true }
                 lastError: { type: string, nullable: true }
 
+        ObservabilityHealthQueue:
+            type: object
+            additionalProperties: false
+            required: [name, parked]
+            description: >-
+                One worker queue's current dead-letter depth, read live off the broker
+                (`src/infrastructure/adapters/queue.ts#parkedCounts`) — the CURRENT count, unlike
+                `queue_jobs_dead_lettered_total`'s Prometheus counter, which only ever grows.
+                Absent entirely, not zero-filled, when the queue is disabled or unreachable: the
+                broker is what would answer, and there is nothing to read a count off.
+            properties:
+                name: { type: string, description: The queue this dead-letter count belongs to. }
+                parked: { type: integer, minimum: 0 }
+
         ObservabilityHealth:
             type: object
             additionalProperties: false
@@ -354,6 +368,13 @@ components:
                         Every lease-guarded job that has attempted to run at least once. See
                         `ObservabilityHealthJob`.
                     items: { $ref: '#/components/schemas/ObservabilityHealthJob' }
+                queues:
+                    type: array
+                    description: >-
+                        Every worker queue's current dead-letter depth. Empty when the queue is
+                        disabled or unreachable, never zero-filled — see
+                        `ObservabilityHealthQueue`.
+                    items: { $ref: '#/components/schemas/ObservabilityHealthQueue' }
                 timestamp: { type: string, format: date-time }
 
         ObservabilityMetricsLatency:

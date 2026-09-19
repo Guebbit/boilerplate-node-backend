@@ -16,6 +16,7 @@ import { catchAs } from '@infrastructure/http/controller';
 import { resolveAnalyticsProvider } from '@infrastructure/observability/analytics';
 import { dependencyHealth, overallStatus } from '../dependency-health';
 import { jobHealth } from '../job-health';
+import { queueHealth } from '../parked-jobs';
 import { processSnapshot } from '../process-snapshot';
 
 /**
@@ -33,8 +34,8 @@ import { processSnapshot } from '../process-snapshot';
  * flags rather than probes, which is what the separate name says out loud.
  */
 export const getObservabilityHealth = (_request: Request, response: Response) =>
-    jobHealth()
-        .then((jobs) => {
+    Promise.all([jobHealth(), queueHealth()])
+        .then(([jobs, queues]) => {
             const snapshot = processSnapshot();
             const dependencies = dependencyHealth();
             const analyticsProvider = resolveAnalyticsProvider();
@@ -99,6 +100,8 @@ export const getObservabilityHealth = (_request: Request, response: Response) =>
                 },
                 // Every lease-guarded job that has ever attempted to run — see `job-health.ts`.
                 jobs,
+                // Every worker queue's current dead-letter depth — see `parked-jobs.ts`.
+                queues,
                 timestamp: new Date().toISOString()
             });
         })

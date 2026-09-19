@@ -103,6 +103,19 @@ describe('GET /observability/health', () => {
         expect(typeof analytics.configured).toBe('boolean');
     });
 
+    it("answers `queues` as an array, empty in this test environment's disabled RabbitMQ", async () => {
+        // Never zero-filled by queue name (`ObservabilityHealthQueue`'s own contract): with no
+        // broker configured here, `parkedCounts()` reaches none, so this proves the field's shape
+        // — a seeded, non-empty case belongs to `queue.test.ts`, where the broker is mocked.
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api().get('/observability/health').set('Authorization', bearer);
+
+        expect(response).toSatisfyApiSpec();
+        expect(Array.isArray(response.body.data.queues)).toBe(true);
+        expect(response.body.data.queues).toEqual([]);
+    });
+
     it("reports a seeded lease's real outcome in `jobs`, not just an empty array", async () => {
         /*
          * Every other case in this file hits an empty `leases` collection, which proves the shape
