@@ -31,12 +31,16 @@ WORKDIR /app
 # includes `lint`, and the `local/comment-links` ESLint rule shells out to `git ls-files`.
 # `docker/Dockerfile.dockerignore` is what keeps `.git` itself in the build
 # context for it to query — the root `.dockerignore` excludes it, for every other image.
+#
+# `busybox` is for the compose `cron` service, which runs `busybox crond` against this image.
+# Alpine ships it in the base image; Debian slim does not.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
     ca-certificates \
     fonts-freefont-ttf \
     libcurl4 \
     git \
+    busybox \
     && rm -rf /var/lib/apt/lists/*
 
 # Where puppeteer-core looks for the browser. `src/infrastructure/adapters/pdf.ts`'s own fallback

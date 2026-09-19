@@ -171,10 +171,13 @@ services:
     # `sweep:*`) is already part of that image and already correct: `db/run-script.ts` opens a
     # connection, closes it on both paths, and sets a non-zero exit code on failure.
     #
-    # `crond` is busybox's cron daemon, already in `node:*-alpine` — no extra package. `-f` keeps it
-    # in the foreground (what a container needs); `-d 8` is debug-level logging to stderr instead
-    # of syslog, which nothing in this image runs. `docker/crontab` is bind-mounted to
-    # `/etc/crontabs/root`, crond's default per-user crontab path on Alpine.
+    # `crond` is busybox's cron daemon (the `busybox` apt package in `docker/Dockerfile`).
+    # Debian's build has no `-d`, so the flags differ from the production service:
+    #   -f                  foreground, what a container needs
+    #   -l 8 -L /dev/stderr log every run to the container's stderr — the default is syslog,
+    #                       which nothing in this image runs
+    #   -c /etc/crontabs    Alpine's crontab dir; Debian's default is /var/spool/cron/crontabs
+    # `docker/crontab` is bind-mounted to `/etc/crontabs/root`, the per-user crontab it reads.
     #
     # `replicas: 1` is the other half of the mutual-exclusion story. The Mongo lease
     # (`src/infrastructure/persistence/lease.ts`) makes a second holder harmless even if this were
@@ -198,7 +201,7 @@ services:
             - .:/app:Z
             - /app/node_modules
             - ./docker/crontab:/etc/crontabs/root:ro,Z
-        command: ['crond', '-f', '-d', '8']
+        command: ['busybox', 'crond', '-f', '-l', '8', '-L', '/dev/stderr', '-c', '/etc/crontabs']
         depends_on:
             database:
                 condition: service_healthy
