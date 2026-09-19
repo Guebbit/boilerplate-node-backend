@@ -96,7 +96,6 @@ describe('who may write `shipped` and `delivered`', () => {
         expect(canTransition(OrderStatus.processing, OrderStatus.shipped, 'admin')).toBe(false);
         expect(canTransition(OrderStatus.shipped, OrderStatus.delivered, 'admin')).toBe(false);
     });
-
 });
 
 describe('who may cancel', () => {

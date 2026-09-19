@@ -55,7 +55,5 @@ export const post2faBackupCodes = (
                 t('account.two-factor.backup-codes-regenerated')
             );
         })
-        .catch((error: unknown) =>
-            rejectDatabaseError(response, 'post2faBackupCodes', error)
-        );
+        .catch((error: unknown) => rejectDatabaseError(response, 'post2faBackupCodes', error));
 };

@@ -161,7 +161,10 @@ const recordFailure = (
             return webhookSubscriptionRepository
                 .recordOutcome(subscriptionId, false)
                 .then((updated) => {
-                    if (updated && shouldAutoDisable(updated.consecutiveFailures, updated.failingSince))
+                    if (
+                        updated &&
+                        shouldAutoDisable(updated.consecutiveFailures, updated.failingSince)
+                    )
                         return webhookSubscriptionRepository
                             .disable(subscriptionId)
                             .then((disabled) => {

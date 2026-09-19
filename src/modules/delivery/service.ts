@@ -109,17 +109,18 @@ const notifyShipped = (
     order: OrderDocument,
     shipment: ShipmentDocument
 ): Promise<void> =>
-    (order.userId ? userService.getById(String(order.userId)).catch(() => null) : Promise.resolve(null)).then(
-        (user) => {
-            const mail = shipmentShippedEmail(
-                user?.locale ?? getDefaultLocale(),
-                user?.username ?? order.email,
-                shipment.trackingCode
-            );
-            void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
-            logger.info(`Order ${orderId} shipped as ${shipment.trackingCode ?? '(untracked)'}`);
-        }
-    );
+    (order.userId
+        ? userService.getById(String(order.userId)).catch(() => null)
+        : Promise.resolve(null)
+    ).then((user) => {
+        const mail = shipmentShippedEmail(
+            user?.locale ?? getDefaultLocale(),
+            user?.username ?? order.email,
+            shipment.trackingCode
+        );
+        void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
+        logger.info(`Order ${orderId} shipped as ${shipment.trackingCode ?? '(untracked)'}`);
+    });
 
 /** The shipped audit entry — {@link recordShipment}'s own audit step. */
 const auditShipped = (context: CallerContext, orderId: string): void => {

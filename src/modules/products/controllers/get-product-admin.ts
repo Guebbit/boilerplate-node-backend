@@ -32,6 +32,7 @@ export const getProductAdmin = (request: Request, response: Response) =>
         .catch((error: unknown) => {
             // A malformed id reaches Mongoose as a CastError rather than a miss — the same 404 a
             // well-formed unknown id gets, since this route offers no 422 to fall back on.
-            if (isBadObjectId(error)) return rejectResponse(response, 404, [t('products.not-found')]);
+            if (isBadObjectId(error))
+                return rejectResponse(response, 404, [t('products.not-found')]);
             rejectDatabaseError(response, 'getProductAdmin', error);
         });

@@ -29,7 +29,5 @@ export const deleteUserTwoFactor = (request: Request<{ id: string }>, response: 
             }
             successResponse(response, undefined, 200, t('users.two-factor-disabled'));
         })
-        .catch((error: unknown) =>
-            rejectDatabaseError(response, 'deleteUserTwoFactor', error)
-        );
+        .catch((error: unknown) => rejectDatabaseError(response, 'deleteUserTwoFactor', error));
 };

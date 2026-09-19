@@ -44,16 +44,16 @@ derived from the URL grows the registry for the life of the process.
 
 Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`:
 
-| Alert                  | Condition                                           | Severity |
-| ---------------------- | --------------------------------------------------- | -------- |
-| `ApiDown`              | scrape target unreachable > 1 min                   | critical |
-| `HighErrorRate`        | error rate > 5 % over 5 min                         | warning  |
-| `HighP95Latency`       | p95 latency > 2 s over 5 min                        | warning  |
-| `HighInFlightRequests` | > 100 concurrent requests for 2 min                 | warning  |
-| `HighHeapUsage`        | heap > 90 % for 5 min                               | warning  |
-| `QueueJobsParked`      | any job parked in `<queue>.dead` in the last 15 min | warning  |
+| Alert                                | Condition                                                                 | Severity |
+| ------------------------------------ | ------------------------------------------------------------------------- | -------- |
+| `ApiDown`                            | scrape target unreachable > 1 min                                         | critical |
+| `HighErrorRate`                      | error rate > 5 % over 5 min                                               | warning  |
+| `HighP95Latency`                     | p95 latency > 2 s over 5 min                                              | warning  |
+| `HighInFlightRequests`               | > 100 concurrent requests for 2 min                                       | warning  |
+| `HighHeapUsage`                      | heap > 90 % for 5 min                                                     | warning  |
+| `QueueJobsParked`                    | any job parked in `<queue>.dead` in the last 15 min                       | warning  |
 | `WebhookDeliveriesFailingEverywhere` | zero successful webhook deliveries in 30 min while attempts keep arriving | critical |
-| `WebhookRetriesStalled` | webhook deliveries stay overdue for 15 min straight | warning  |
+| `WebhookRetriesStalled`              | webhook deliveries stay overdue for 15 min straight                       | warning  |
 
 ## Alertmanager
 

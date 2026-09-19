@@ -127,7 +127,9 @@ const postSignedPayload = (
 
 /** Whichever `.name` a rejection carries, read without requiring `instanceof Error` — see below. */
 const errorName = (error: unknown): string | undefined =>
-    typeof error === 'object' && error !== null && typeof (error as { name?: unknown }).name === 'string'
+    typeof error === 'object' &&
+    error !== null &&
+    typeof (error as { name?: unknown }).name === 'string'
         ? (error as { name: string }).name
         : undefined;
 

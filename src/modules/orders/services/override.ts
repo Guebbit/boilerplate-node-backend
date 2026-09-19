@@ -146,11 +146,10 @@ export const overrideStatus = (
 
         if (!canOverrideTo(order.status, to)) return notAllowed(order.status, to);
 
-        return applyOverride(orderId, order.status, to, 'status', reason, context).then(
-            (updated) =>
-                // Lost a race against another write since the read above — same shape as the
-                // ordinary `update`'s 409, not a 404: the order still exists.
-                updated ? generateSuccess(updated) : notAllowed(order.status, to)
+        return applyOverride(orderId, order.status, to, 'status', reason, context).then((updated) =>
+            // Lost a race against another write since the read above — same shape as the
+            // ordinary `update`'s 409, not a 404: the order still exists.
+            updated ? generateSuccess(updated) : notAllowed(order.status, to)
         );
     });
 

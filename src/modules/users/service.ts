@@ -36,7 +36,13 @@ import { usersAnalyticsEvents } from './analytics';
 import { usersAuditActions } from './audit';
 import { USER_DELETED, USER_SETUP_REQUESTED } from './events';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
-import { assignRole, assertCanGrant, revokeAllOf, rolesOf, VERIFIED_CUSTOMER_ROLE } from '@modules/access';
+import {
+    assignRole,
+    assertCanGrant,
+    revokeAllOf,
+    rolesOf,
+    VERIFIED_CUSTOMER_ROLE
+} from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**

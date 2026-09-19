@@ -187,7 +187,8 @@ export const planTranslations = (
     entityType: string,
     payload: UpsertTranslationsRequest
 ): Promise<TranslationWritePlan | ResponseReject> => {
-    if (!translationPort) return Promise.resolve(generateReject(500, [t('generic.error-internal')]));
+    if (!translationPort)
+        return Promise.resolve(generateReject(500, [t('generic.error-internal')]));
     return translationPort.plan(entityType, payload);
 };
 

@@ -60,7 +60,5 @@ export const post2faConfirm = (
                 t('account.two-factor.method-added')
             );
         })
-        .catch((error: unknown) =>
-            rejectDatabaseError(response, 'post2faConfirm', error)
-        );
+        .catch((error: unknown) => rejectDatabaseError(response, 'post2faConfirm', error));
 };

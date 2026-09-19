@@ -27,7 +27,11 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { logger } from '@infrastructure/adapters/logger';
 import { checkEmailPolicy } from '@infrastructure/adapters/antibot';
 import { contactRequestEmail } from './emails';
-import { readAll, MAX_CONFIGURED_PAGE_SIZE, type PaginatedMeta } from '@infrastructure/persistence/search';
+import {
+    readAll,
+    MAX_CONFIGURED_PAGE_SIZE,
+    type PaginatedMeta
+} from '@infrastructure/persistence/search';
 import type { Lean } from '@infrastructure/persistence/create-repository';
 import type { CallerContext } from '@types';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';

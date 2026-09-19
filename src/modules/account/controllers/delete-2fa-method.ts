@@ -52,7 +52,5 @@ export const delete2faMethod = (
                 t('account.two-factor.method-removed')
             );
         })
-        .catch((error: unknown) =>
-            rejectDatabaseError(response, 'delete2faMethod', error)
-        );
+        .catch((error: unknown) => rejectDatabaseError(response, 'delete2faMethod', error));
 };

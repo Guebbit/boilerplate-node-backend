@@ -214,7 +214,7 @@ describe('DELETE /account/delete-confirm — deleteAccountConfirm', () => {
         expect(mockRejectResponse).toHaveBeenCalledWith(res, 500);
     });
 
-    it('answers 409 when the account is its shop\'s last administrator — AccessInvariantError, not a flat 500', async () => {
+    it("answers 409 when the account is its shop's last administrator — AccessInvariantError, not a flat 500", async () => {
         class AccessInvariantError extends Error {
             constructor(message: string) {
                 super(message);
@@ -224,7 +224,9 @@ describe('DELETE /account/delete-confirm — deleteAccountConfirm', () => {
         mockFindLiveToken.mockResolvedValue({ id: 'user-1' } as never);
         mockSpendLiveToken.mockResolvedValue(true);
         mockRemoveOwnAccount.mockRejectedValue(
-            new AccessInvariantError('[access] cannot revoke: the shop would have no administrator left')
+            new AccessInvariantError(
+                '[access] cannot revoke: the shop would have no administrator left'
+            )
         );
 
         const req = { body: { token: 'any-token' } };

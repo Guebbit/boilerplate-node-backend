@@ -26,7 +26,12 @@ const sendStoredInvoice = (response: Response, orderId: string, pdf: Buffer) =>
 
 /** The 202 every not-yet-rendered case answers with — queued already, or just (re)queued here. */
 const answerPending = (response: Response) =>
-    successResponse(response, { invoicePdfStatus: 'pending' as const }, 202, t('orders.invoice-pending'));
+    successResponse(
+        response,
+        { invoicePdfStatus: 'pending' as const },
+        202,
+        t('orders.invoice-pending')
+    );
 
 /**
  * GET /orders/:id/invoice — PDF invoice for the order; non-admin callers see only their own.

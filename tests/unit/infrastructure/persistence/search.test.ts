@@ -17,11 +17,7 @@ describe('readAll', () => {
     });
 
     it('keeps paging while a page comes back full, and stops on the first short one', async () => {
-        const pages = [
-            [1, 2],
-            [3, 4],
-            [5]
-        ];
+        const pages = [[1, 2], [3, 4], [5]];
         const fetchPage = jest.fn((page: number) => Promise.resolve(pages[page - 1]));
 
         const items = await readAll(fetchPage, 2);
@@ -41,10 +37,7 @@ describe('readAll', () => {
     });
 
     it('treats an exact multiple of pageSize as needing one more, empty, page to confirm the end', async () => {
-        const pages = [
-            [1, 2],
-            []
-        ];
+        const pages = [[1, 2], []];
         const fetchPage = jest.fn((page: number) => Promise.resolve(pages[page - 1]));
 
         const items = await readAll(fetchPage, 2);

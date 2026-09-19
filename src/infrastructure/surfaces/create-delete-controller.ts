@@ -101,7 +101,8 @@ export const createDeleteController = ({
                 .catch((error: unknown) => {
                     // A malformed id reaches Mongoose as a CastError rather than a miss, and the
                     // honest answer is the same 404 a well-formed unknown id gets.
-                    if (isBadObjectId(error)) return rejectResponse(response, 404, [t(notFoundKey)]);
+                    if (isBadObjectId(error))
+                        return rejectResponse(response, 404, [t(notFoundKey)]);
                     rejectDatabaseError(response, operation, error);
                 });
         }

@@ -482,9 +482,7 @@ export const signup = (
                                                   )
                                           );
                                   })
-                                  .catch((error: unknown) =>
-                                      rejectDatabaseEnvelope('auth', error)
-                                  )
+                                  .catch((error: unknown) => rejectDatabaseEnvelope('auth', error))
                     )
           )
         : Promise.resolve(generateReject(422, validationErrors(parseResult.error)));

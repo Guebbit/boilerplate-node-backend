@@ -36,7 +36,11 @@ import { sendOrderPlacedEmail } from './notify';
 // `userId` is stored as an ObjectId, so writes have to coerce it. The rule (and its failure
 // mode on a malformed id) lives in the repository layer; this is the only import of it here.
 import { toObjectId } from '@infrastructure/persistence/create-repository';
-import { readAll, MAX_CONFIGURED_PAGE_SIZE, type PaginatedMeta } from '@infrastructure/persistence/search';
+import {
+    readAll,
+    MAX_CONFIGURED_PAGE_SIZE,
+    type PaginatedMeta
+} from '@infrastructure/persistence/search';
 import { ownerScope } from './scope';
 
 /**
