@@ -37,11 +37,13 @@ jest.mock('@infrastructure/adapters/pdf', () => ({
 const findByIdRawMock = jest.fn();
 const markInvoicePdfReadyMock = jest.fn();
 const markInvoicePdfPendingMock = jest.fn();
+const existingIdsMock = jest.fn();
 jest.mock('../../repository', () => ({
     orderRepository: {
         findByIdRaw: (id: string) => findByIdRawMock(id),
         markInvoicePdfReady: (id: string) => markInvoicePdfReadyMock(id),
-        markInvoicePdfPending: (id: string) => markInvoicePdfPendingMock(id)
+        markInvoicePdfPending: (id: string) => markInvoicePdfPendingMock(id),
+        existingIds: (ids: readonly string[]) => existingIdsMock(ids)
     }
 }));
 
@@ -319,6 +321,100 @@ describe('readStoredInvoicePdf', () => {
         const { readStoredInvoicePdf } = await import('../../transport/invoice-pdf');
 
         await expect(readStoredInvoicePdf('never-generated')).resolves.toBeUndefined();
+    });
+});
+
+describe('deleteStoredInvoicePdf', () => {
+    let storageRoot: string;
+    const originalStoragePath = process.env.NODE_INVOICE_STORAGE_PATH;
+
+    beforeEach(async () => {
+        jest.clearAllMocks();
+        storageRoot = await mkdtemp(path.join(tmpdir(), 'invoice-pdf-test-'));
+        process.env.NODE_INVOICE_STORAGE_PATH = storageRoot;
+    });
+
+    afterEach(async () => {
+        await rm(storageRoot, { recursive: true, force: true });
+        if (originalStoragePath === undefined) delete process.env.NODE_INVOICE_STORAGE_PATH;
+        else process.env.NODE_INVOICE_STORAGE_PATH = originalStoragePath;
+    });
+
+    it('deletes the stored file and reports it deleted', async () => {
+        const { writeFile } = await import('node:fs/promises');
+        await writeFile(path.join(storageRoot, 'order-1.pdf'), Buffer.from('bytes'));
+        const { deleteStoredInvoicePdf, readStoredInvoicePdf } =
+            await import('../../transport/invoice-pdf');
+
+        await expect(deleteStoredInvoicePdf('order-1')).resolves.toBe(true);
+        await expect(readStoredInvoicePdf('order-1')).resolves.toBeUndefined();
+    });
+
+    // `remove()`'s hard-delete calls this unconditionally — an order can be cancelled, or its
+    // render can still be in flight, before it ever has a file to remove.
+    it('answers false, without throwing, when nothing was stored', async () => {
+        const { deleteStoredInvoicePdf } = await import('../../transport/invoice-pdf');
+
+        await expect(deleteStoredInvoicePdf('never-generated')).resolves.toBe(false);
+    });
+});
+
+describe('reapOrphanedInvoices', () => {
+    let storageRoot: string;
+    const originalStoragePath = process.env.NODE_INVOICE_STORAGE_PATH;
+
+    /** 24-hex ids shaped like real `_id`s — the only filename shape this reaper ever risks against the database. */
+    const ORDER_A = '507f1f77bcf86cd799439011';
+    const ORDER_B = '507f1f77bcf86cd799439012';
+
+    beforeEach(async () => {
+        jest.clearAllMocks();
+        storageRoot = await mkdtemp(path.join(tmpdir(), 'invoice-pdf-test-'));
+        process.env.NODE_INVOICE_STORAGE_PATH = storageRoot;
+    });
+
+    afterEach(async () => {
+        await rm(storageRoot, { recursive: true, force: true });
+        if (originalStoragePath === undefined) delete process.env.NODE_INVOICE_STORAGE_PATH;
+        else process.env.NODE_INVOICE_STORAGE_PATH = originalStoragePath;
+    });
+
+    it('deletes a file whose order no longer exists, and leaves one whose order does', async () => {
+        const { writeFile } = await import('node:fs/promises');
+        await writeFile(path.join(storageRoot, `${ORDER_A}.pdf`), Buffer.from('bytes'));
+        await writeFile(path.join(storageRoot, `${ORDER_B}.pdf`), Buffer.from('bytes'));
+        existingIdsMock.mockResolvedValue(new Set([ORDER_B]));
+        const { reapOrphanedInvoices, readStoredInvoicePdf } =
+            await import('../../transport/invoice-pdf');
+
+        await expect(reapOrphanedInvoices()).resolves.toBe(1);
+
+        expect(existingIdsMock).toHaveBeenCalledWith(expect.arrayContaining([ORDER_A, ORDER_B]));
+        await expect(readStoredInvoicePdf(ORDER_A)).resolves.toBeUndefined();
+        await expect(readStoredInvoicePdf(ORDER_B)).resolves.toEqual(Buffer.from('bytes'));
+    });
+
+    it('leaves a filename that is not a bare 24-hex id alone, and never risks it against the database', async () => {
+        const { writeFile } = await import('node:fs/promises');
+        await writeFile(path.join(storageRoot, 'not-an-order-id.pdf'), Buffer.from('bytes'));
+        const { reapOrphanedInvoices, readStoredInvoicePdf } =
+            await import('../../transport/invoice-pdf');
+
+        await expect(reapOrphanedInvoices()).resolves.toBe(0);
+
+        expect(existingIdsMock).not.toHaveBeenCalled();
+        await expect(readStoredInvoicePdf('not-an-order-id')).resolves.toEqual(
+            Buffer.from('bytes')
+        );
+    });
+
+    it('answers 0 without touching the database when the storage directory does not exist yet', async () => {
+        await rm(storageRoot, { recursive: true, force: true });
+        const { reapOrphanedInvoices } = await import('../../transport/invoice-pdf');
+
+        await expect(reapOrphanedInvoices()).resolves.toBe(0);
+
+        expect(existingIdsMock).not.toHaveBeenCalled();
     });
 });
 

@@ -31,6 +31,7 @@ import { cancelById, retryPendingEffects } from './cancel';
 import { markPaid, markShipped, markDelivered } from './status';
 import { overrideStatus, forceMove } from './override';
 import { unavailableLines } from './availability';
+import { reapOrphanedInvoices } from '../transport/invoice-pdf';
 
 /*
  * Every operation is published by name as well as through the object below: `module.ts` wires
@@ -62,6 +63,7 @@ export { callerScope, actorOf, ownerScope, withActions } from './scope';
 export { unavailableLines, cancelPendingOrdersHolding, type UnavailableLine } from './availability';
 export { freezeOrderLines } from './snapshot';
 export { allocateInvoiceNumber } from './invoice-numbering';
+export { reapOrphanedInvoices } from '../transport/invoice-pdf';
 // Config getters, re-exported here (not directly from `../index.ts`) because a module's public
 // barrel may only publish services/domain/events/emails/model — see `local/barrel-allowed-sources`.
 export {
@@ -97,6 +99,7 @@ export const orderService = {
     forceMove,
     detachUserId,
     anonymizeDueOrders,
+    reapOrphanedInvoices,
     cancelById,
     retryPendingEffects,
     unavailableLines,

@@ -13,7 +13,7 @@
  */
 
 import path from 'node:path';
-import { mkdir, readFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, unlink } from 'node:fs/promises';
 import ejs from 'ejs';
 import { logger } from '@infrastructure/adapters/logger';
 import { renderHtmlToPdf } from '@infrastructure/adapters/pdf';
@@ -54,6 +54,67 @@ const invoicePdfPath = (orderId: string): string =>
  */
 export const readStoredInvoicePdf = (orderId: string): Promise<Buffer | undefined> =>
     readFile(invoicePdfPath(orderId)).catch(() => undefined);
+
+/** A Mongo ObjectId's own shape — what every `<orderId>.pdf` this pipeline writes is named after. */
+const ORDER_ID_PATTERN = /^[\da-f]{24}$/;
+
+/**
+ * Deletes an order's stored invoice PDF, if one exists — `remove()`'s hard-delete cleanup, and
+ * {@link reapOrphanedInvoices}'s per-file action once a name has no order left to name it.
+ *
+ * Never rejects, matching `imageStore.remove()`: an order can be hard-deleted before its invoice
+ * ever rendered (cancelled, or the render still in flight), and "nothing was there to delete" is
+ * not a failure either caller needs to handle differently from "it was there, and now it's gone".
+ *
+ * @param orderId - the order whose stored PDF to remove
+ * @returns whether a file was actually deleted
+ */
+export const deleteStoredInvoicePdf = (orderId: string): Promise<boolean> =>
+    unlink(invoicePdfPath(orderId)).then(
+        () => true,
+        (error: unknown) => {
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
+                logger.warn({ message: 'Could not delete stored invoice PDF.', orderId, error });
+            return false;
+        }
+    );
+
+/**
+ * Deletes every stored invoice PDF with no order left to name it — `ops/reap-invoices.ts`'s whole
+ * job. An orphan is not a normal outcome of this pipeline: `remove()`'s hard-delete path cleans up
+ * its own file the moment the order goes. It happens anyway wherever a row is removed OUTSIDE that
+ * path — a scenario reset's `emptyDatabase()` (dev/test only, but the reason this exists at all),
+ * a manual `deleteMany`, a crash between a hard delete's two steps.
+ *
+ * A filename that is not `<24-hex id>.pdf` (the only shape this pipeline ever writes) is left
+ * alone rather than risking `existingIds`' `toObjectId` throwing on it — someone else's file, not
+ * this reaper's to judge.
+ *
+ * @returns how many files were deleted
+ */
+export const reapOrphanedInvoices = (): Promise<number> => {
+    const root = invoiceStorageRoot();
+
+    return readdir(root)
+        .catch((error: unknown) => {
+            if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+            throw error;
+        })
+        .then((entries) => {
+            const candidates = entries
+                .filter((name) => name.endsWith('.pdf') && ORDER_ID_PATTERN.test(name.slice(0, -4)))
+                .map((name) => name.slice(0, -4));
+
+            if (candidates.length === 0) return 0;
+
+            return orderRepository.existingIds(candidates).then((existing) => {
+                const orphaned = candidates.filter((id) => !existing.has(id));
+                return Promise.all(orphaned.map((id) => deleteStoredInvoicePdf(id))).then(
+                    (results) => results.filter(Boolean).length
+                );
+            });
+        });
+};
 
 /**
  * Renders and durably stores one order's invoice PDF, then marks it `ready` — the step both the

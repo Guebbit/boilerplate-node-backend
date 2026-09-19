@@ -32,7 +32,7 @@ import { canTransition, statusesLeadingTo, statusesReachableFrom } from '../doma
 import { resolveCurrentImages } from './current';
 import { freezeOrderLines } from './snapshot';
 import { placeOrder } from './place';
-import { enqueueInvoicePdfJob } from '../transport/invoice-pdf';
+import { enqueueInvoicePdfJob, deleteStoredInvoicePdf } from '../transport/invoice-pdf';
 import { sendOrderPlacedEmail } from './notify';
 // `userId` is stored as an ObjectId, so writes have to coerce it. The rule (and its failure
 // mode on a malformed id) lives in the repository layer; this is the only import of it here.
@@ -428,6 +428,9 @@ export const remove = (
                 // sequence with nothing left to do about it.
                 .releaseForOrder(String(order._id))
                 .then(() => orderRepository.deleteOne(order))
+                // Best-effort, after the row is gone: a stored invoice PDF outlives the document
+                // it was rendered for otherwise — nothing else in this pipeline ever deletes one.
+                .then(() => deleteStoredInvoicePdf(String(order._id)))
                 .then(() => generateSuccess(undefined, 200, t('orders.hard-deleted')))
         );
 
