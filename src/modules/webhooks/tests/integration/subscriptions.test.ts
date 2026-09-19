@@ -63,8 +63,8 @@ describe('create — the subscription cap boundary', () => {
     });
 });
 
-describe('create — captures the owner email', () => {
-    it("stores the creating caller's email, off the wire, for the auto-disable notice", async () => {
+describe('create — captures the owner id', () => {
+    it("stores the creating caller's id, off the wire, for the auto-disable notice", async () => {
         const user = await createUser({ email: 'creator@example.com' });
         const asUser = { caller: callerAs('manager', String(user._id)), analyticsConsent: false };
 
@@ -74,18 +74,20 @@ describe('create — captures the owner email', () => {
         if (!result.success || !result.data) throw new Error('unreachable — asserted above');
         // Never on the wire — `applyWebhookSubscriptionTransform` omits it (see `../../model.ts`).
         expect(
-            (result.data.subscription.toJSON() as { ownerEmail?: string }).ownerEmail
+            (result.data.subscription.toJSON() as { ownerUserId?: string }).ownerUserId
         ).toBeUndefined();
 
         const stored = await webhookSubscriptionRepository.findById(
             String(result.data.subscription._id)
         );
-        expect(stored?.ownerEmail).toBe('creator@example.com');
+        expect(stored?.ownerUserId).toBe(String(user._id));
     });
 
-    it('creates the subscription even when the caller id cannot be resolved to a user', async () => {
+    it('stores whatever id the caller carries, unresolved — no lookup happens at creation', async () => {
         // `callerAs('manager')`'s default id ('test-user') is not a real ObjectId — the shape a
-        // stub/anonymous caller would have, never a real authenticated one in production.
+        // stub/anonymous caller would have, never a real authenticated one in production. Under the
+        // pointer design this is harmless either way: creation never resolves it, only
+        // `services/attempt.ts`'s auto-disable notice does, lazily, at send time.
         const asStubCaller = { caller: callerAs('manager'), analyticsConsent: false };
 
         const result = await create(
@@ -98,6 +100,6 @@ describe('create — captures the owner email', () => {
         const stored = await webhookSubscriptionRepository.findById(
             String(result.data.subscription._id)
         );
-        expect(stored?.ownerEmail).toBeUndefined();
+        expect(stored?.ownerUserId).toBe('test-user');
     });
 });

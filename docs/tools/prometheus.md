@@ -29,6 +29,9 @@ Grafana reads Prometheus for all metric charts and dashboards.
 | `cache_invalidation_failures_total`          | writes whose stale cached response survived            |
 | `cache_requests_total`                       | `setCache` lookups by outcome — hit/miss/stale/refresh |
 | `queue_jobs_dead_lettered_total`             | jobs parked in a `<queue>.dead`, by queue name         |
+| `webhook_delivery_attempts_total`            | outbound webhook delivery attempts, by outcome         |
+| `webhook_subscriptions_auto_disabled_total`  | subscriptions auto-disabled for sustained failure      |
+| `webhook_deliveries_overdue`                 | pending deliveries more than 10 min past due           |
 | `auth_login_total`, `cart_checkout_total`, … | business counters                                      |
 | `process_*` and `nodejs_*`                   | default `prom-client` runtime metrics                  |
 
@@ -49,6 +52,8 @@ Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`:
 | `HighInFlightRequests` | > 100 concurrent requests for 2 min                 | warning  |
 | `HighHeapUsage`        | heap > 90 % for 5 min                               | warning  |
 | `QueueJobsParked`      | any job parked in `<queue>.dead` in the last 15 min | warning  |
+| `WebhookDeliveriesFailingEverywhere` | zero successful webhook deliveries in 30 min while attempts keep arriving | critical |
+| `WebhookRetriesStalled` | webhook deliveries stay overdue for 15 min straight | warning  |
 
 ## Alertmanager
 

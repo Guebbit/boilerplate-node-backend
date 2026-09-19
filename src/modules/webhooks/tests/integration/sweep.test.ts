@@ -55,12 +55,11 @@ it('publishes a due pending row, without claiming it', async () => {
     await sweepDueWebhookDeliveries();
 
     expect(publishToQueueMock).toHaveBeenCalledTimes(1);
-    expect(publishToQueueMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-            queue: WORKER_CHANNELS.WEBHOOK_DELIVER,
-            payload: expect.objectContaining({ deliveryId: String(due._id), attempt: 1 })
-        })
-    );
+    // Claim Check (EIP): the message carries only the row's id — see `../../asyncapi.internal.yaml`.
+    expect(publishToQueueMock).toHaveBeenCalledWith({
+        queue: WORKER_CHANNELS.WEBHOOK_DELIVER,
+        payload: { deliveryId: String(due._id) }
+    });
 
     // Unclaimed: the sweep no longer sets `in-flight` — see `sweep.ts`'s own docblock for why a
     // duplicate publish is safe without it.

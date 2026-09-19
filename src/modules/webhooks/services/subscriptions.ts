@@ -18,7 +18,6 @@ import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/a
 import type { TenantCallerContext } from '@types';
 import type { PaginatedResult } from '@infrastructure/persistence/create-repository';
 import type { CreateWebhookSubscriptionRequest, UpdateWebhookSubscriptionRequest } from '@types';
-import { userService } from '@modules/users';
 import type { WebhookSubscriptionDocument } from '../model';
 import { webhookSubscriptionRepository } from '../repository';
 import { mintRingSecret, removeRingSecret } from '../secrets';
@@ -122,28 +121,22 @@ export const create = (
         if (count >= getWebhookSubscriptionCap())
             return generateReject(422, [t('webhooks.subscription-cap-reached')]);
 
-        // Best-effort, and never fatal to the create: an id `getById` can't resolve to a document
-        // (a deleted-mid-request account) or can't even cast (never a real caller id in
-        // production, only a test fixture standing in for one) still creates the subscription —
-        // it just has nobody to notify later, the same as one that predates this field entirely.
-        return userService
-            .getById(context.caller.id ?? undefined)
-            .catch(() => undefined)
-            .then((owner) => {
-                const { entry, plaintext } = mintRingSecret();
-                return webhookSubscriptionRepository
-                    .create({
-                        tenant,
-                        url: body.url,
-                        description: body.description,
-                        eventTypes: body.eventTypes,
-                        ownerEmail: owner?.email,
-                        secrets: [entry]
-                    } as Partial<WebhookSubscriptionDocument>)
-                    .then((subscription) =>
-                        finalizeCreate(subscription, plaintext, tenant, context)
-                    );
-            });
+        const { entry, plaintext } = mintRingSecret();
+        // A pointer, not a copy: whoever's email the auto-disable notice reaches is resolved fresh
+        // at send time (`services/attempt.ts#notifyOwnerOfAutoDisable`), off this id — never stored
+        // here. `context.caller.id` absent (a stranger, never reachable through this tenant-scoped
+        // route in practice) leaves nobody to notify later, same as a subscription that predates
+        // this field entirely.
+        return webhookSubscriptionRepository
+            .create({
+                tenant,
+                url: body.url,
+                description: body.description,
+                eventTypes: body.eventTypes,
+                ownerUserId: context.caller.id ?? undefined,
+                secrets: [entry]
+            } as Partial<WebhookSubscriptionDocument>)
+            .then((subscription) => finalizeCreate(subscription, plaintext, tenant, context));
     });
 };
 

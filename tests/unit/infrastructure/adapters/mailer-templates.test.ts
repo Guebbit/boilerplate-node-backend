@@ -31,7 +31,7 @@ import {
     productUnavailableCancelledEmail
 } from '@modules/orders/emails';
 import { shipmentShippedEmail } from '@modules/delivery/emails';
-import { subscriptionDisabledEmail } from '@modules/webhooks/emails';
+import { subscriptionDisabledEmail } from '@modules/webhooks';
 
 describe('email templates', () => {
     it('resolves to a directory that exists', () => {

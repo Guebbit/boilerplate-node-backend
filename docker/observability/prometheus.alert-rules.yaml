@@ -86,3 +86,33 @@ groups:
             annotations:
                 summary: 'A queue is parking jobs in its dead-letter queue'
                 description: 'queue_jobs_dead_lettered_total increased in the last 15 minutes for queue {{ $labels.queue }} — inspect and replay via the RabbitMQ management UI.'
+
+          # Fleet-wide webhook delivery failure: a failed delivery never parks (it reschedules on
+          # its own row, and the sweep republishes it), so `QueueJobsParked` above never fires for
+          # this queue — this is the signal that actually surfaces it. Zero successes while
+          # attempts keep landing is our-side (egress, DNS, signing), never one subscriber's
+          # endpoint — that stays quiet by design, see `docs/modules/webhooks.md`.
+          - alert: WebhookDeliveriesFailingEverywhere
+            expr: |
+                increase(webhook_delivery_attempts_total{outcome="success"}[30m]) == 0
+                and
+                increase(webhook_delivery_attempts_total{outcome="failure"}[30m]) > 10
+            for: 0m
+            labels:
+                severity: critical
+            annotations:
+                summary: 'Every webhook delivery attempt is failing'
+                description: 'No successful webhook delivery in 30 minutes while attempts keep arriving — a platform-side outage (egress, DNS, signing), not one endpoint.'
+
+          # The retry sweep (`ops/sweep-webhook-retries.ts`, every minute) is what moves a
+          # `pending` row back onto the queue once its `nextAttemptAt` arrives. A nonzero, growing
+          # `webhook_deliveries_overdue` (`metrics.ts`) for 15 minutes straight means the cron
+          # itself stopped running, not that deliveries are merely retrying on schedule.
+          - alert: WebhookRetriesStalled
+            expr: webhook_deliveries_overdue > 0
+            for: 15m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'Webhook retries are not being swept'
+                description: 'webhook_deliveries_overdue has stayed above zero for 15 minutes — the retry sweep cron may not be running.'

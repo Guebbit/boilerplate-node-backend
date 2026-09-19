@@ -72,7 +72,8 @@ interface RawResponse {
  *  - `hostname` stays the ORIGINAL host (not the pinned IP): TLS SNI and certificate hostname
  *    verification must check against the name the operator configured, only the IP the socket
  *    connects to is pinned. Irrelevant to a plain `http:` request, but harmless to still pass.
- *  - `signal`: the hard total timeout — `request.destroy()` fires on abort, surfaced below as the
+ *  - `signal`: the hard total timeout, created once in {@link deliverWebhook} and shared with the
+ *    DNS resolution before this — `request.destroy()` fires on abort, surfaced below as the
  *    request's `error` event with `err.name === 'AbortError'`.
  *  - No redirect handling: this call answers with whatever status the endpoint sent, 3xx included,
  *    and `deliverWebhook` below treats 3xx as a failure rather than a location to chase.
@@ -85,14 +86,15 @@ interface RawResponse {
  * @param url - the parsed subscription URL, for the scheme/path/query/port `lookup` cannot supply
  * @param headers - the three `webhook-*` headers from `signWebhookPayload`
  * @param body - the exact signed bytes
- * @param timeoutMs - hard total budget for connect + request + response headers
+ * @param signal - {@link deliverWebhook}'s one total-attempt-budget abort, already spent on
+ *   resolution by the time it reaches this call
  */
 const postSignedPayload = (
     target: SafeOutboundTarget,
     url: URL,
     headers: WebhookSignatureHeaders,
     body: string,
-    timeoutMs: number
+    signal: AbortSignal
 ): Promise<RawResponse> =>
     new Promise((resolve, reject) => {
         const isPlainHttp = url.protocol === 'http:';
@@ -109,7 +111,7 @@ const postSignedPayload = (
                     'content-length': Buffer.byteLength(body),
                     ...headers
                 },
-                signal: AbortSignal.timeout(timeoutMs)
+                signal
             },
             (incomingResponse: IncomingMessage) => {
                 // Only the status is used — draining rather than reading keeps the socket from
@@ -123,6 +125,12 @@ const postSignedPayload = (
         outgoingRequest.end(body);
     });
 
+/** Whichever `.name` a rejection carries, read without requiring `instanceof Error` — see below. */
+const errorName = (error: unknown): string | undefined =>
+    typeof error === 'object' && error !== null && typeof (error as { name?: unknown }).name === 'string'
+        ? (error as { name: string }).name
+        : undefined;
+
 /**
  * Turn whatever failed this attempt into the one line a delivery log reads.
  *
@@ -130,7 +138,13 @@ const postSignedPayload = (
  */
 const describeDeliveryError = (error: unknown): string => {
     if (error instanceof SsrfRefusedError) return `Refused (${error.reason}): ${error.message}`;
-    if (error instanceof Error && error.name === 'AbortError') return 'Delivery timed out';
+    // 'AbortError' is the POST phase (`postSignedPayload`'s `signal` option, Node's own naming);
+    // 'TimeoutError' is the DNS phase (`ssrf-guard.ts`'s `rejectOnAbort`, `signal.reason` itself,
+    // a `DOMException` — `AbortSignal.timeout`'s own name for its reason). Read via `errorName`,
+    // not `error instanceof Error`: under Jest's VM sandboxing that `DOMException` fails
+    // `instanceof` this file's own `Error` (a cross-realm mismatch) despite genuinely being one.
+    const name = errorName(error);
+    if (name === 'AbortError' || name === 'TimeoutError') return 'Delivery timed out';
     if (error instanceof Error) return error.message;
     return 'Unknown delivery error';
 };
@@ -145,8 +159,11 @@ const describeDeliveryError = (error: unknown): string => {
 export const deliverWebhook = (attempt: WebhookDeliveryAttempt): Promise<WebhookDeliveryResult> => {
     const startedAt = Date.now();
     const timeoutMs = attempt.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    // One signal for the whole attempt, DNS resolution included — see `ssrf-guard.ts`'s own
+    // `signal` parameter docblock for why the resolver needs it too.
+    const signal = AbortSignal.timeout(timeoutMs);
 
-    return resolveSafeOutboundTarget(attempt.url, attempt.allowedInsecureHost)
+    return resolveSafeOutboundTarget(attempt.url, attempt.allowedInsecureHost, signal)
         .then((target) => {
             const body = JSON.stringify(attempt.payload);
             const { headers } = signWebhookPayload({
@@ -154,7 +171,7 @@ export const deliverWebhook = (attempt: WebhookDeliveryAttempt): Promise<Webhook
                 body,
                 secrets: attempt.secrets
             });
-            return postSignedPayload(target, new URL(attempt.url), headers, body, timeoutMs);
+            return postSignedPayload(target, new URL(attempt.url), headers, body, signal);
         })
         .then((response): WebhookDeliveryResult => {
             const durationMs = Date.now() - startedAt;

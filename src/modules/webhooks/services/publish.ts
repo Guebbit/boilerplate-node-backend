@@ -48,22 +48,13 @@ const createDeliveryRow = (
         nextAttemptAt: new Date()
     });
 
-/** Enqueue the fast-path delivery attempt for a just-created row. */
-const enqueueAttempt = (
-    subscription: WebhookSubscriptionDocument,
-    event: PublicEvent,
-    eventId: string,
-    delivery: WebhookDeliveryDocument
-): Promise<void> => {
-    const payload: WebhookDeliverJobPayload = {
-        deliveryId: String(delivery._id),
-        subscriptionId: String(subscription._id),
-        eventId,
-        eventType: event.eventType,
-        occurredAt: delivery.createdAt.toISOString(),
-        data: event.data,
-        attempt: 1
-    };
+/**
+ * Enqueue the fast-path delivery attempt for a just-created row — Claim Check (EIP): the message
+ * carries only the row's id, since the row itself (already written, `pending`) is the source of
+ * truth for everything an attempt needs. See `../asyncapi.internal.yaml`'s own schema docblock.
+ */
+const enqueueAttempt = (delivery: WebhookDeliveryDocument): Promise<void> => {
+    const payload: WebhookDeliverJobPayload = { deliveryId: String(delivery._id) };
 
     return publishToQueue<WebhookDeliverJobPayload>({
         queue: WORKER_CHANNELS.WEBHOOK_DELIVER,
@@ -78,7 +69,7 @@ const deliverToOne = (
     eventId: string
 ): Promise<void> =>
     createDeliveryRow(subscription, event, eventId)
-        .then((delivery) => enqueueAttempt(subscription, event, eventId, delivery))
+        .then((delivery) => enqueueAttempt(delivery))
         .catch((error: unknown) => {
             // One subscription's write failing must not stop the others matching the same event —
             // caught per subscription, same reasoning as `emitDomainEvent`'s own per-handler catch.

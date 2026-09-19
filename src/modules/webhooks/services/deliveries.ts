@@ -69,8 +69,12 @@ const rejectInProgress = (): ResponseReject =>
  * success or exhaustion. A caller-side bump on top of that would double-count the one real HTTP
  * attempt this makes.
  *
- * Claims the row first (`repository.ts#claimForReplay`), the same lease a queued attempt takes —
- * without it, replaying a delivery a live worker is mid-attempt on would double-send.
+ * Looks up the subscription BEFORE claiming (`repository.ts#claimForReplay`): a 404 must never
+ * claim the row first — a claim that then answers 404 leaves the row `in-flight` under a 60s
+ * lease with nobody left to finish it, until the sweep's stranded-lease read finally reclaims it
+ * as `exhausted`. Once the subscription is confirmed to exist, claiming takes the same lease a
+ * queued attempt would — without it, replaying a delivery a live worker is mid-attempt on would
+ * double-send.
  *
  * @returns a 404 outside this tenant's log, or when the subscription itself no longer exists; a
  *   409 when a live worker (or another replay) already holds the row's lease
@@ -83,14 +87,14 @@ export const replay = (
         if (delivery?.tenant !== context.caller.tenantId)
             return generateReject(404, [t('generic.error-not-found')]);
 
-        return webhookDeliveryRepository.claimForReplay(id).then((claimed) => {
-            if (!claimed) return rejectInProgress();
+        return webhookSubscriptionRepository
+            .findById(String(delivery.subscriptionId))
+            .then((subscription) => {
+                if (!subscription)
+                    return generateReject(404, [t('webhooks.subscription-not-found')]);
 
-            return webhookSubscriptionRepository
-                .findById(String(claimed.subscriptionId))
-                .then((subscription) => {
-                    if (!subscription)
-                        return generateReject(404, [t('webhooks.subscription-not-found')]);
+                return webhookDeliveryRepository.claimForReplay(id).then((claimed) => {
+                    if (!claimed) return rejectInProgress();
 
                     return attemptDelivery(claimed, subscription).then((updated) => {
                         if (!updated) return rejectInProgress();
@@ -106,5 +110,5 @@ export const replay = (
                         return generateSuccess(updated);
                     });
                 });
-        });
+            });
     });

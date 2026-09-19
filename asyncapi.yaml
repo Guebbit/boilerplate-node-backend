@@ -606,39 +606,11 @@ components:
             type: object
             required:
                 - deliveryId
-                - subscriptionId
-                - eventId
-                - eventType
-                - occurredAt
-                - data
-                - attempt
             properties:
                 deliveryId:
                     type: string
                     description: >-
-                        The `webhookdeliveries` row this attempt updates in place — created `pending` before the job is published, so `GET /webhooks/deliveries` shows it immediately and a lost message still leaves a queryable trace.
-                subscriptionId:
-                    type: string
-                    description: The `webhooksubscriptions` row to deliver to.
-                eventId:
-                    type: string
-                    description: >-
-                        Stable id for the domain event that triggered this delivery — sent verbatim as the Standard Webhooks `webhook-id` header, so a consumer can dedupe across retries and across the subscriptions one event fans out to.
-                eventType:
-                    type: string
-                    description: 'The public event name, e.g. order.paid — see asyncapi.public.yaml.'
-                occurredAt:
-                    type: string
-                    format: date-time
-                    description: When the domain event fired, not when this attempt runs.
-                data:
-                    type: object
-                    additionalProperties: true
-                    description: The event's public payload, exactly as sent in the delivery body.
-                attempt:
-                    type: integer
-                    minimum: 1
-                    description: Which attempt this is — 1 on the first try, incremented on retry.
+                        The `webhookdeliveries` row this attempt updates in place — created `pending` before the job is published, so `GET /webhooks/deliveries` shows it immediately and a lost message still leaves a queryable trace. The Claim Check pattern (EIP): the row is the source of truth for everything else an attempt needs (`subscriptionId`, `eventId`, `eventType`, the payload, the current `attempt`), so the message carries only the key — nothing here can go stale on a replay, and no event payload sits twice in the broker.
             additionalProperties: false
         OrderInvoicePdfJobPayload:
             type: object

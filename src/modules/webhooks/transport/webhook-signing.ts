@@ -1,8 +1,10 @@
 /**
  * @module
- * Standard Webhooks (https://www.standardwebhooks.com) signing and verification, hand-rolled over
- * `node:crypto` rather than the `standardwebhooks` npm package — the format is the interoperable
- * part, worth being exact about; the thirty-odd lines of HMAC around it are not worth a dependency.
+ * Standard Webhooks (https://www.standardwebhooks.com) signing, hand-rolled over `node:crypto`
+ * rather than the `standardwebhooks` npm package — the format is the interoperable part, worth
+ * being exact about; the dozen-odd lines of HMAC around it are not worth a dependency. Signing
+ * only: this codebase sends webhooks, never receives one to verify — a verifier exists only in
+ * `tests/verify-signature.fixture.ts`, for asserting the two sides of the spec agree.
  *
  * Wire format:       `webhook-id`, `webhook-timestamp` (unix seconds), `webhook-signature`.
  * Signed content:     exactly `${id}.${timestamp}.${body}`, over the RAW body bytes — this file
@@ -22,10 +24,7 @@
  * — byte-for-byte, not just self-consistency.
  */
 
-import { createHmac, timingSafeEqual } from 'node:crypto';
-
-/** Replay-protection default: a delivery outside this many seconds of "now" is refused. */
-const DEFAULT_TOLERANCE_SECONDS = 300;
+import { createHmac } from 'node:crypto';
 
 /** The `whsec_` prefix a secret may carry, stripped before base64-decoding. Not required here. */
 const SECRET_PREFIX = 'whsec_';
@@ -53,22 +52,6 @@ export interface SignWebhookPayloadInput {
     body: string | Buffer;
     /** Active secrets, plaintext. Every one signs; sign with more than one only during a rotation. */
     secrets: string[];
-}
-
-/** What {@link verifyWebhookSignature} needs to decide whether a delivery is genuine. */
-export interface VerifyWebhookSignatureInput {
-    /** The `webhook-id` header value, verbatim. */
-    id: string;
-    /** The `webhook-timestamp` header value — a `Date`, or unix seconds as sent on the wire. */
-    timestamp: Date | number;
-    /** The body exactly as received, never a re-serialized object. */
-    body: string | Buffer;
-    /** The raw `webhook-signature` header value — one or more space-separated `v1,<base64>` entries. */
-    signatureHeader: string | undefined;
-    /** Every secret currently accepted for this endpoint — a ring, so a rotation verifies both. */
-    secrets: string[];
-    /** Replay window in seconds. Default: {@link DEFAULT_TOLERANCE_SECONDS} (5 minutes). */
-    toleranceSeconds?: number;
 }
 
 /** A `Date` or unix-seconds value, resolved to unix seconds. `undefined` means "now". */
@@ -146,55 +129,4 @@ export const signWebhookPayload = (
             'webhook-signature': signatures
         }
     };
-};
-
-/**
- * One `v1,<base64>` entry from a `webhook-signature` header, compared against one candidate
- * signature in constant time.
- *
- * `timingSafeEqual` THROWS on unequal-length buffers rather than answering false — a forged or
- * truncated header is exactly the case that must not throw past this function, so length is
- * checked first and a mismatch reads as "no match" rather than an escaping exception.
- *
- * @param provided - one space-separated entry from the header, e.g. `v1,abcd...`
- * @param expected - the `v1,<base64>` this candidate secret computes
- */
-const signatureEntryMatches = (provided: string, expected: string): boolean => {
-    if (!provided.startsWith('v1,')) return false;
-
-    const providedBytes = Buffer.from(provided.slice('v1,'.length), 'base64');
-    const expectedBytes = Buffer.from(expected.slice('v1,'.length), 'base64');
-    if (providedBytes.length !== expectedBytes.length) return false;
-
-    // https://nodejs.org/api/crypto.html#cryptotimingsafeequala-b — constant-time comparison,
-    // never `===`, so a signature check can't leak how many leading bytes matched via timing.
-    return timingSafeEqual(providedBytes, expectedBytes);
-};
-
-/**
- * Verify a delivery: every candidate secret against every signature entry in the header, plus the
- * replay-protection timestamp window.
- *
- * Accepts when ANY secret's computed signature matches ANY entry in the header — the ring means a
- * delivery signed under either the old or the new secret during a rotation must verify.
- *
- * @returns `true` only when the timestamp is within tolerance AND at least one signature matches
- */
-export const verifyWebhookSignature = (input: VerifyWebhookSignatureInput): boolean => {
-    if (!input.signatureHeader) return false;
-
-    const timestampSeconds = toUnixSeconds(input.timestamp);
-    const toleranceSeconds = input.toleranceSeconds ?? DEFAULT_TOLERANCE_SECONDS;
-    if (Math.abs(Math.floor(Date.now() / 1000) - timestampSeconds) > toleranceSeconds) return false;
-
-    const providedEntries = input.signatureHeader.split(' ');
-    return input.secrets.some((secret) => {
-        const expected = computeV1Signature(
-            input.id,
-            timestampSeconds,
-            input.body,
-            decodeSecret(secret)
-        );
-        return providedEntries.some((entry) => signatureEntryMatches(entry, expected));
-    });
 };

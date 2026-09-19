@@ -194,13 +194,15 @@ const isAddressUnsafe = (address: string): boolean => {
  * avoid.
  * https://nodejs.org/api/dns.html#dnspromisesresolve4hostname-options
  *
+ * @param signal - aborts the lookup once the caller's total budget runs out; see
+ *   {@link resolveSafeOutboundTarget}'s own `signal` parameter
  * @throws {SsrfRefusedError} `dns-resolution-failed` when neither record type resolves
  */
-const resolveAllAddresses = (hostname: string): Promise<string[]> => {
+const resolveAllAddresses = (hostname: string, signal?: AbortSignal): Promise<string[]> => {
     const literalFamily = net.isIP(hostname);
     if (literalFamily !== 0) return Promise.resolve([hostname]);
 
-    return Promise.allSettled([resolve4(hostname), resolve6(hostname)]).then((results) => {
+    const lookup = Promise.allSettled([resolve4(hostname), resolve6(hostname)]).then((results) => {
         const addresses = results.flatMap((result) =>
             result.status === 'fulfilled' ? result.value : []
         );
@@ -211,7 +213,47 @@ const resolveAllAddresses = (hostname: string): Promise<string[]> => {
             );
         return addresses;
     });
+
+    return signal ? Promise.race([lookup, rejectOnAbort<string[]>(signal)]) : lookup;
 };
+
+/**
+ * `AbortSignal.reason` is typed `any` (the DOM lib's own doing) — in practice always the
+ * `DOMException` `AbortSignal.timeout` mints, but never guaranteed for a signal built some other
+ * way, so this is what lets {@link rejectOnAbort} reject with a real `Error` either way.
+ *
+ * Duck-typed on `.name`/`.message` rather than `reason instanceof Error`: under Jest's VM
+ * sandboxing, the `DOMException` `AbortSignal.timeout` mints is NOT an instance of the test
+ * file's own `Error` (a cross-realm mismatch) despite genuinely being one — `error.name` survives
+ * the boundary; `instanceof` does not.
+ */
+const abortReason = (signal: AbortSignal): Error => {
+    const reason: unknown = signal.reason;
+    return typeof reason === 'object' &&
+        reason !== null &&
+        'name' in reason &&
+        'message' in reason &&
+        typeof reason.name === 'string' &&
+        typeof reason.message === 'string'
+        ? (reason as Error)
+        : new Error(String(reason));
+};
+
+/**
+ * Races a promise against a signal instead of passing it in directly: `node:dns/promises`'
+ * `resolve4`/`resolve6` take no `signal` option, so this is what makes a slow resolver honour the
+ * caller's total budget instead of running to its own OS-level DNS timeout regardless.
+ *
+ * @param signal - rejects with {@link abortReason} once it fires; already-aborted rejects immediately
+ */
+const rejectOnAbort = <T>(signal: AbortSignal): Promise<T> =>
+    new Promise((_resolve, reject) => {
+        if (signal.aborted) {
+            reject(abortReason(signal));
+            return;
+        }
+        signal.addEventListener('abort', () => reject(abortReason(signal)), { once: true });
+    });
 
 /**
  * A `lookup` override that ignores whatever hostname it is called with and always answers with the
@@ -255,16 +297,19 @@ const buildPinnedLookup = (address: string): LookupFunction => {
  *   host) to exempt from the `https:` and private/unsafe-address checks, and ONLY those two —
  *   parsing, credentials and DNS resolution still run in full. For a caller's own
  *   development/test-only exemption; absent for every other caller and every other call.
+ * @param signal - the caller's total-attempt-budget abort, so a slow resolver can't add its own
+ *   time on top of whatever the caller times the rest of the attempt at — see the module docblock.
  * @throws {SsrfRefusedError} see {@link SsrfRefusalReason} for every reason this can refuse
  */
 export const resolveSafeOutboundTarget = (
     rawUrl: string,
-    exemptHostname?: string
+    exemptHostname?: string,
+    signal?: AbortSignal
 ): Promise<SafeOutboundTarget> =>
     Promise.resolve()
         .then(() => stripBrackets(parseOutboundUrl(rawUrl, exemptHostname).hostname))
         .then((hostname) =>
-            resolveAllAddresses(hostname).then((addresses) => {
+            resolveAllAddresses(hostname, signal).then((addresses) => {
                 const isExempt = hostname === exemptHostname;
                 // Wrapped rather than passed by reference: `Array.prototype.find` calls its
                 // callback with (element, index, array), and a direct reference would silently

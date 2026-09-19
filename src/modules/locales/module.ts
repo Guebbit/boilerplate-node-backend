@@ -84,8 +84,9 @@ export default {
      * a 409 on a key collision was reaching admins in English regardless of what they asked for.
      */
     locales: path.join(__dirname, 'locales'),
-    // `translatedBy` is staff attribution on a `translations.any.update` action (a plain name
-    // string, not a stored reference), not an end-customer's own data — nothing here is ever
+    // `translatedBy` is staff attribution on a `translations.any.update` action — the caller's own
+    // user id, a pointer rather than a copy of anything (`services/translations.ts` sets it from
+    // `context?.caller.id`). Not an end-customer's own data either way — nothing here is ever
     // reachable by a `POST /account/export` subject.
     personalData: 'none'
 } satisfies AppModule;

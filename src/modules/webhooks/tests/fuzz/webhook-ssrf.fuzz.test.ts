@@ -198,6 +198,27 @@ describe('resolveSafeOutboundTarget — the pinned lookup it hands back', () => 
     });
 });
 
+describe('deliverWebhook — the total timeout covers DNS resolution too', () => {
+    it('times out while still resolving, instead of granting the POST its own separate budget', async () => {
+        // Never settles — a resolver that is slow enough to eat the whole attempt budget by itself.
+        dns.resolve4.mockImplementation(() => new Promise(() => undefined));
+        dns.resolve6.mockImplementation(() => new Promise(() => undefined));
+
+        const result = await deliverWebhook({
+            url: 'https://slow-dns.example.test/hook',
+            secrets: ['whsec_test-secret'],
+            eventId: 'evt_slow_dns_1',
+            payload: { a: 1 },
+            timeoutMs: 50
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toMatch(/timed out/i);
+        // The POST is never reached: resolution alone already spent the one shared budget.
+        expect(httpsRequest).not.toHaveBeenCalled();
+    });
+});
+
 describe('deliverWebhook — a redirect is a failed delivery, never followed', () => {
     it('does not chase a 3xx Location header to a second request', async () => {
         mockDns(['203.0.113.9']);

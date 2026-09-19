@@ -57,6 +57,31 @@ export const nextAttemptAt = (failedAttempt: number, now: Date = new Date()): Da
  */
 export const WEBHOOK_MAX_CONSECUTIVE_FAILURES = 5;
 
-/** Whether a subscription's failure streak has crossed the auto-disable line. */
-export const shouldAutoDisable = (consecutiveFailures: number): boolean =>
-    consecutiveFailures >= WEBHOOK_MAX_CONSECUTIVE_FAILURES;
+/**
+ * The floor on how long a streak must run before it can auto-disable — 3 days, matching Stripe's
+ * own webhook endpoint threshold (Svix uses 5). Time-based on purpose: the retry ladder alone
+ * gives up after ~12.5h (`WEBHOOK_RETRY_DELAYS_MS`), so a platform-side outage of that length
+ * (egress blocked, DNS broken) would otherwise exhaust every chain in flight and auto-disable
+ * every busy subscriber at once, as if each of THEIR endpoints were at fault.
+ */
+export const WEBHOOK_MIN_FAILING_MS = 3 * 24 * 3_600_000;
+
+/**
+ * Whether a subscription's failure streak has crossed the auto-disable line. Both conditions
+ * gate: at least {@link WEBHOOK_MAX_CONSECUTIVE_FAILURES} exhausted chains in a row, AND at least
+ * {@link WEBHOOK_MIN_FAILING_MS} since the streak's first failure (`failingSince` —
+ * `repository.ts#recordOutcome` stamps it on the first failure after a success, clears it on the
+ * next success). An endpoint that fails fast still waits out the time floor; one that fails
+ * slowly still needs the chain count — neither condition alone is the standard, both together are.
+ *
+ * @param failingSince - `undefined` for a subscription with no failure streak open right now
+ * @param now - injectable for tests; defaults to the real clock
+ */
+export const shouldAutoDisable = (
+    consecutiveFailures: number,
+    failingSince: Date | undefined,
+    now: Date = new Date()
+): boolean =>
+    consecutiveFailures >= WEBHOOK_MAX_CONSECUTIVE_FAILURES &&
+    failingSince !== undefined &&
+    now.getTime() - failingSince.getTime() >= WEBHOOK_MIN_FAILING_MS;

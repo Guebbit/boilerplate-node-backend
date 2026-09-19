@@ -283,7 +283,7 @@ components:
 
         WebhookDeliveryStatus:
             type: string
-            enum: [pending, in-flight, succeeded, failed, exhausted]
+            enum: [pending, in-flight, succeeded, exhausted]
 
         WebhookDelivery:
             type: object

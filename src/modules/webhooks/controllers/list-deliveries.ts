@@ -18,7 +18,7 @@ import { webhooksService } from '../services';
  */
 const listWebhookDeliveriesQuerySchema = paginationSchema.extend({
     subscriptionId: z.string().optional(),
-    status: z.enum(['pending', 'in-flight', 'succeeded', 'failed', 'exhausted']).optional()
+    status: z.enum(['pending', 'in-flight', 'succeeded', 'exhausted']).optional()
 });
 
 /**

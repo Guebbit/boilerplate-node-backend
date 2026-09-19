@@ -20,10 +20,14 @@ import {
 import { processDeliveryJob } from '@modules/webhooks/services';
 import { replay as replayDelivery } from '@modules/webhooks/services/deliveries';
 import { mintRingSecret, activeRingSecrets } from '@modules/webhooks/secrets';
-import { verifyWebhookSignature } from '@modules/webhooks/transport/webhook-signing';
-import { WEBHOOK_MAX_ATTEMPTS, WEBHOOK_MAX_CONSECUTIVE_FAILURES } from '@modules/webhooks/domain';
-import type { WebhookDeliverJobPayload } from '@types';
+import { verifyWebhookSignatureForTest } from '../verify-signature.fixture';
+import {
+    WEBHOOK_MAX_ATTEMPTS,
+    WEBHOOK_MAX_CONSECUTIVE_FAILURES,
+    WEBHOOK_MIN_FAILING_MS
+} from '@modules/webhooks/domain';
 import type { WebhookSubscriptionDocument } from '@modules/webhooks/model';
+import { createUser } from '@modules/users/tests/factories';
 import { callerAs, TEST_TENANT_ID } from '@tests/callers';
 import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
@@ -89,7 +93,7 @@ const context = { caller: callerAs('manager'), analyticsConsent: false };
 const createSubscription = (
     url: string,
     eventTypes: string[] = ['*'],
-    ownerEmail?: string
+    ownerUserId?: string
 ): Promise<WebhookSubscriptionDocument> => {
     const { entry } = mintRingSecret();
 
@@ -99,16 +103,29 @@ const createSubscription = (
         eventTypes,
         enabled: true,
         consecutiveFailures: 0,
-        ownerEmail,
+        ownerUserId,
         secrets: [entry]
     });
 };
 
-/** A `pending`, attempt-1 delivery row plus the job payload `processDeliveryJob` expects for it. */
+/**
+ * A `pending`, attempt-1 delivery row, plus the wire-shape fields a body/signature assertion
+ * needs — NOT the job payload `processDeliveryJob` takes: that is Claim Check (`{ deliveryId }`
+ * only, per `../../asyncapi.internal.yaml`), built fresh at each call site from `.deliveryId`.
+ */
+interface PendingDeliveryFixture {
+    deliveryId: string;
+    eventId: string;
+    eventType: string;
+    occurredAt: string;
+    data: Record<string, unknown>;
+}
+
+/** A `pending`, attempt-1 delivery row. */
 const createPendingDelivery = (
     subscription: WebhookSubscriptionDocument,
     eventType = 'order.paid'
-): Promise<WebhookDeliverJobPayload> =>
+): Promise<PendingDeliveryFixture> =>
     webhookDeliveryRepository
         .create({
             tenant: TEST_TENANT_ID,
@@ -122,12 +139,10 @@ const createPendingDelivery = (
         })
         .then((delivery) => ({
             deliveryId: String(delivery._id),
-            subscriptionId: String(subscription._id),
             eventId: delivery.eventId,
             eventType: delivery.eventType,
             occurredAt: delivery.createdAt.toISOString(),
-            data: delivery.payload,
-            attempt: delivery.attempt
+            data: delivery.payload
         }));
 
 /** Point an already-created subscription at a new url — simulating an endpoint moving/recovering. */
@@ -138,14 +153,30 @@ const repointSubscription = async (subscriptionId: string, url: string): Promise
     await webhookSubscriptionRepository.save(subscription);
 };
 
-/** Drive one delivery chain through `processDeliveryJob` until it leaves `pending` — success or exhausted. */
-const runChainToCompletion = async (job: WebhookDeliverJobPayload): Promise<void> => {
-    for (let round = 0; round < WEBHOOK_MAX_ATTEMPTS; round++) {
-        await processDeliveryJob(job);
+/**
+ * Auto-disable is time-based, like Stripe/Svix — a genuinely dead endpoint failing for real over
+ * milliseconds (every chain in this suite exhausts in well under a second) never crosses
+ * `WEBHOOK_MIN_FAILING_MS` on its own. Backdating `failingSince` is what a real 3-day-old streak
+ * looks like by the time its 5th chain exhausts, without a real 3-day test.
+ */
+const backdateFailingStreak = async (subscriptionId: string): Promise<void> => {
+    const subscription = await webhookSubscriptionRepository.findById(subscriptionId);
+    if (!subscription) throw new Error(`test fixture missing: subscription ${subscriptionId}`);
+    subscription.failingSince = new Date(Date.now() - (WEBHOOK_MIN_FAILING_MS + 60_000));
+    await webhookSubscriptionRepository.save(subscription);
+};
 
-        const delivery = await webhookDeliveryRepository.findById(job.deliveryId);
+/**
+ * Drive one delivery chain through `processDeliveryJob` until it leaves `pending` — success or
+ * exhausted. Re-sends the same `{ deliveryId }` message every round: `claimPending` reads the
+ * row's CURRENT `attempt` itself, so nothing here needs to track it across retries.
+ */
+const runChainToCompletion = async (deliveryId: string): Promise<void> => {
+    for (let round = 0; round < WEBHOOK_MAX_ATTEMPTS; round++) {
+        await processDeliveryJob({ deliveryId });
+
+        const delivery = await webhookDeliveryRepository.findById(deliveryId);
         if (delivery?.status !== 'pending') return;
-        job = { ...job, attempt: delivery.attempt };
     }
 };
 
@@ -161,7 +192,7 @@ describe('a successful delivery', () => {
         const subscription = await createSubscription(`${server.url}/hook`);
         const job = await createPendingDelivery(subscription);
 
-        const acked = await processDeliveryJob(job);
+        const acked = await processDeliveryJob({ deliveryId: job.deliveryId });
         expect(acked).toBe(true);
 
         const [received] = server.requests();
@@ -169,7 +200,7 @@ describe('a successful delivery', () => {
         expect(received.headers['webhook-id']).toBe(job.eventId);
         expect(received.headers['webhook-timestamp']).toBeDefined();
         expect(
-            verifyWebhookSignature({
+            verifyWebhookSignatureForTest({
                 id: job.eventId,
                 timestamp: Number(received.headers['webhook-timestamp']),
                 body: received.body,
@@ -212,7 +243,7 @@ describe('a 500 response', () => {
         const subscription = await createSubscription(`${server.url}/hook`);
         const job = await createPendingDelivery(subscription);
 
-        await processDeliveryJob(job);
+        await processDeliveryJob({ deliveryId: job.deliveryId });
 
         const delivery = await webhookDeliveryRepository.findById(job.deliveryId);
         expect(delivery?.status).toBe('pending');
@@ -233,7 +264,7 @@ describe('a 500 response', () => {
         const subscription = await createSubscription(`${server.url}/hook`);
         const job = await createPendingDelivery(subscription);
 
-        await runChainToCompletion(job);
+        await runChainToCompletion(job.deliveryId);
 
         const delivery = await webhookDeliveryRepository.findById(job.deliveryId);
         expect(delivery?.status).toBe('exhausted');
@@ -255,14 +286,33 @@ describe('sustained failure', () => {
     });
     afterEach(() => server.close());
 
-    it('auto-disables the subscription once enough chains in a row exhaust', async () => {
+    it('does NOT auto-disable on chain count alone — a platform-side outage must not look like the endpoint is at fault', async () => {
         const subscription = await createSubscription(`${server.url}/hook`);
 
         for (let chain = 0; chain < WEBHOOK_MAX_CONSECUTIVE_FAILURES; chain++) {
-            const job = await createPendingDelivery(subscription, `order.paid.${chain}`);
-
-            await runChainToCompletion(job);
+            const job = await createPendingDelivery(subscription, `order.paid.fast.${chain}`);
+            await runChainToCompletion(job.deliveryId);
         }
+
+        const reloadedSubscription = await webhookSubscriptionRepository.findById(
+            String(subscription._id)
+        );
+        expect(reloadedSubscription?.consecutiveFailures).toBe(WEBHOOK_MAX_CONSECUTIVE_FAILURES);
+        expect(reloadedSubscription?.enabled).toBe(true);
+        expect(reloadedSubscription?.disabledAt).toBeUndefined();
+    });
+
+    it('auto-disables once enough chains in a row exhaust AND the streak has run past the time floor', async () => {
+        const subscription = await createSubscription(`${server.url}/hook`);
+
+        for (let chain = 0; chain < WEBHOOK_MAX_CONSECUTIVE_FAILURES - 1; chain++) {
+            const job = await createPendingDelivery(subscription, `order.paid.${chain}`);
+            await runChainToCompletion(job.deliveryId);
+        }
+        await backdateFailingStreak(String(subscription._id));
+
+        const finalJob = await createPendingDelivery(subscription, 'order.paid.final');
+        await runChainToCompletion(finalJob.deliveryId);
 
         const reloadedSubscription = await webhookSubscriptionRepository.findById(
             String(subscription._id)
@@ -274,16 +324,20 @@ describe('sustained failure', () => {
 
     it('notifies the subscription owner once auto-disabled', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
+        const owner = await createUser({ email: 'owner@example.com' });
         const subscription = await createSubscription(
             `${server.url}/hook`,
             ['*'],
-            'owner@example.com'
+            String(owner._id)
         );
 
-        for (let chain = 0; chain < WEBHOOK_MAX_CONSECUTIVE_FAILURES; chain++) {
+        for (let chain = 0; chain < WEBHOOK_MAX_CONSECUTIVE_FAILURES - 1; chain++) {
             const job = await createPendingDelivery(subscription, `order.paid.notice.${chain}`);
-            await runChainToCompletion(job);
+            await runChainToCompletion(job.deliveryId);
         }
+        await backdateFailingStreak(String(subscription._id));
+        const finalJob = await createPendingDelivery(subscription, 'order.paid.notice.final');
+        await runChainToCompletion(finalJob.deliveryId);
 
         expect(enqueueEmailMock).toHaveBeenCalledTimes(1);
         expect(enqueueEmailMock).toHaveBeenCalledWith(
@@ -302,16 +356,19 @@ describe('sustained failure', () => {
         );
     });
 
-    it('sends no notice for a subscription that predates ownerEmail, but still audits it', async () => {
+    it('sends no notice for a subscription that predates ownerUserId, but still audits it', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
-        // No `ownerEmail` — `createSubscription`'s third argument defaults to `undefined`, the
+        // No `ownerUserId` — `createSubscription`'s third argument defaults to `undefined`, the
         // same shape a subscription created before this field existed carries.
         const subscription = await createSubscription(`${server.url}/hook`);
 
-        for (let chain = 0; chain < WEBHOOK_MAX_CONSECUTIVE_FAILURES; chain++) {
+        for (let chain = 0; chain < WEBHOOK_MAX_CONSECUTIVE_FAILURES - 1; chain++) {
             const job = await createPendingDelivery(subscription, `order.paid.nonotice.${chain}`);
-            await runChainToCompletion(job);
+            await runChainToCompletion(job.deliveryId);
         }
+        await backdateFailingStreak(String(subscription._id));
+        const finalJob = await createPendingDelivery(subscription, 'order.paid.nonotice.final');
+        await runChainToCompletion(finalJob.deliveryId);
 
         expect(enqueueEmailMock).not.toHaveBeenCalled();
         // The email is the courtesy; the audit trail is the record — one missing must not cost
@@ -324,25 +381,26 @@ describe('sustained failure', () => {
         );
     });
 
-    it('a chain that succeeds resets the streak, so it never auto-disables on unrelated blips', async () => {
+    it('a chain that succeeds resets the streak (and failingSince), so it never auto-disables on unrelated blips', async () => {
         const subscription = await createSubscription(`${server.url}/hook`);
 
         // One exhausted chain …
         const failing = await createPendingDelivery(subscription, 'order.paid.fail');
-        await runChainToCompletion(failing);
+        await runChainToCompletion(failing.deliveryId);
 
         // … then the endpoint recovers, and a later delivery succeeds.
         await server.close();
         server = await startHttpsTestServer((response) => response.writeHead(200).end('ok'));
         await repointSubscription(String(subscription._id), `${server.url}/hook`);
         const succeeding = await createPendingDelivery(subscription, 'order.paid.recovered');
-        await processDeliveryJob(succeeding);
+        await processDeliveryJob({ deliveryId: succeeding.deliveryId });
 
         const reloadedSubscription = await webhookSubscriptionRepository.findById(
             String(subscription._id)
         );
         expect(reloadedSubscription?.consecutiveFailures).toBe(0);
         expect(reloadedSubscription?.enabled).toBe(true);
+        expect(reloadedSubscription?.failingSince).toBeUndefined();
     });
 });
 
@@ -351,7 +409,7 @@ describe('replay', () => {
         const deadServer = await startHttpsTestServer((response) => response.writeHead(500).end());
         const subscription = await createSubscription(`${deadServer.url}/hook`);
         const job = await createPendingDelivery(subscription);
-        await runChainToCompletion(job);
+        await runChainToCompletion(job.deliveryId);
         await deadServer.close();
 
         const exhausted = await webhookDeliveryRepository.findById(job.deliveryId);
@@ -388,16 +446,16 @@ describe('replay', () => {
         // same starting attempt (2) — one continues through the normal queue path, the other is
         // replayed instead, so their outcomes can be compared directly.
         const queuedJob = await createPendingDelivery(subscription, 'order.paid.queued');
-        await processDeliveryJob(queuedJob);
+        await processDeliveryJob({ deliveryId: queuedJob.deliveryId });
         const replayedJob = await createPendingDelivery(subscription, 'order.paid.replayed');
-        await processDeliveryJob(replayedJob);
+        await processDeliveryJob({ deliveryId: replayedJob.deliveryId });
 
         const beforeReplay = await webhookDeliveryRepository.findById(replayedJob.deliveryId);
         if (!beforeReplay) throw new Error('unreachable — asserted above');
         expect(beforeReplay.attempt).toBe(2);
 
         // The non-replayed sibling: one more real queued failure at the same starting attempt.
-        await processDeliveryJob({ ...queuedJob, attempt: beforeReplay.attempt });
+        await processDeliveryJob({ deliveryId: queuedJob.deliveryId });
         const queuedAfter = await webhookDeliveryRepository.findById(queuedJob.deliveryId);
 
         const result = await replayDelivery(replayedJob.deliveryId, context);
@@ -429,7 +487,7 @@ describe('the delivery lease', () => {
         stranded.leaseExpiresAt = new Date(Date.now() - 1000);
         await webhookDeliveryRepository.save(stranded);
 
-        const acked = await processDeliveryJob(job);
+        const acked = await processDeliveryJob({ deliveryId: job.deliveryId });
         await server.close();
 
         expect(acked).toBe(true);
@@ -448,6 +506,25 @@ describe('the delivery lease', () => {
 
         const winners = [first, second].filter((claimed) => claimed !== null);
         expect(winners).toHaveLength(1);
+    });
+
+    it('replaying after the subscription is deleted answers 404 WITHOUT claiming the row first', async () => {
+        const subscription = await createSubscription('https://example.invalid/hook');
+        const job = await createPendingDelivery(subscription);
+        await webhookSubscriptionRepository.deleteOne(subscription);
+
+        const result = await replayDelivery(job.deliveryId, context);
+
+        expect(result.success).toBe(false);
+        if (result.success) throw new Error('unreachable — asserted above');
+        expect(result.status).toBe(404);
+
+        // The claim never happened: still `pending`, no lease taken — a claim-then-404 would have
+        // left it `in-flight` under a lease nobody is left to finish, stranded until the sweep's
+        // stranded-lease read reclaims it as `exhausted` 60s later.
+        const untouched = await webhookDeliveryRepository.findById(job.deliveryId);
+        expect(untouched?.status).toBe('pending');
+        expect(untouched?.leaseToken).toBeUndefined();
     });
 
     it("refuses a replay while a live worker's lease already holds the row", async () => {
@@ -472,7 +549,7 @@ describe('the delivery lease', () => {
         const job = await createPendingDelivery(subscription);
 
         const claimed = await webhookDeliveryRepository.claimPending(job.deliveryId);
-        if (!claimed) throw new Error('unreachable — asserted above');
+        if (!claimed?.leaseToken) throw new Error('unreachable — asserted above');
         const staleToken = claimed.leaseToken;
 
         // Something else re-claims the row before this (simulated) slow attempt writes its

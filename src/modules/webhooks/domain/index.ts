@@ -8,6 +8,7 @@ export {
     WEBHOOK_RETRY_DELAYS_MS,
     WEBHOOK_MAX_ATTEMPTS,
     WEBHOOK_MAX_CONSECUTIVE_FAILURES,
+    WEBHOOK_MIN_FAILING_MS,
     nextRetryDelayMs,
     nextAttemptAt,
     shouldAutoDisable

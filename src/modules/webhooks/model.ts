@@ -35,12 +35,21 @@ export interface WebhookSubscriptionDocument extends Document {
     consecutiveFailures: number;
     disabledAt?: Date;
     /**
-     * The email of whoever created this subscription, captured at creation time — who
-     * `services/attempt.ts`'s auto-disable notice reaches. Absent on a subscription that predates
-     * this field, or one created by a caller `users/service.ts#getById` could not resolve; either
-     * way, no notice is sent, silently — the audit entry auto-disable already writes is not lost.
+     * When the CURRENT failure streak began — the first failure after a success (or after
+     * creation), cleared on the next success. `domain#shouldAutoDisable`'s time floor reads this;
+     * `repository.ts#recordOutcome` is the only writer. Absent whenever the streak is empty:
+     * `consecutiveFailures` is 0.
      */
-    ownerEmail?: string;
+    failingSince?: Date;
+    /**
+     * The id of whoever created this subscription — a pointer, not a copy of their email: GDPR
+     * data minimisation (Art. 5(1)(c)/(d)), and the same shape Stripe uses for a failing webhook
+     * endpoint's account notice. `services/attempt.ts`'s auto-disable notice resolves the current
+     * email from this id at send time. Absent on a subscription that predates this field, or one
+     * created by a stranger; either way, no notice is sent, silently — the audit entry auto-disable
+     * already writes is not lost.
+     */
+    ownerUserId?: string;
     secrets: WebhookSecretRingEntry[];
     createdAt: Date;
     updatedAt: Date;
@@ -71,7 +80,7 @@ export const webhookSubscriptionSchema = new Schema<
         description: {
             type: String
         },
-        ownerEmail: {
+        ownerUserId: {
             type: String
         },
         eventTypes: {
@@ -91,6 +100,9 @@ export const webhookSubscriptionSchema = new Schema<
             type: Number,
             required: true,
             default: 0
+        },
+        failingSince: {
+            type: Date
         },
         disabledAt: {
             type: Date
@@ -131,7 +143,7 @@ webhookSubscriptionSchema.index({ enabled: 1, eventTypes: 1 });
  * could derive anything from it.
  */
 export const applyWebhookSubscriptionTransform = applySerialization(webhookSubscriptionSchema, {
-    omit: ['tenant', 'ownerEmail'],
+    omit: ['tenant', 'ownerUserId', 'failingSince'],
     after: (serialized) => {
         const secrets = serialized.secrets as WebhookSecretRingEntry[] | undefined;
         serialized.secretIds = (secrets ?? []).map((entry) => entry.id);
@@ -151,12 +163,13 @@ export const webhookSubscriptionModel = model<
  * `in-flight` is a LEASED claim — `repository.ts`'s `claimPending`/`claimForReplay` make it, with
  * `leaseToken`/`leaseExpiresAt` stamped in the same write, before a worker or a replay actually
  * calls the endpoint. It exists so the sweep (which only publishes, never claims) and a worker
- * racing the same due row cannot both deliver it — never a state a caller sets directly. `failed`
- * is unused today (a failed attempt with retries left goes back to `pending` with a later
- * `nextAttemptAt`; only `exhausted` is terminal) and kept for a future per-attempt row without a
- * contract change.
+ * racing the same due row cannot both deliver it — never a state a caller sets directly. A failed
+ * attempt with retries left goes back to `pending` with a later `nextAttemptAt`; only `exhausted`
+ * is terminal. No `failed` state: Stripe, GitHub and Svix all keep per-attempt history instead, so
+ * even under that design a failure belongs on an attempt, not on the delivery row — a future
+ * per-attempt log would carry its own outcome enum rather than reviving this one.
  */
-export type WebhookDeliveryStatus = 'pending' | 'in-flight' | 'succeeded' | 'failed' | 'exhausted';
+export type WebhookDeliveryStatus = 'pending' | 'in-flight' | 'succeeded' | 'exhausted';
 
 /** One event's delivery to one subscription, updated in place across retries. */
 export interface WebhookDeliveryDocument extends Document {
@@ -228,7 +241,7 @@ export const webhookDeliverySchema = new Schema<WebhookDeliveryDocument, Webhook
         },
         status: {
             type: String,
-            enum: ['pending', 'in-flight', 'succeeded', 'failed', 'exhausted'],
+            enum: ['pending', 'in-flight', 'succeeded', 'exhausted'],
             required: true,
             default: 'pending'
         },

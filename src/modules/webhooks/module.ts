@@ -66,7 +66,8 @@ export default {
     // `kernel/required-config.ts`'s `forbiddenUnderProduction` for the generic check, and
     // `config.ts`'s `getWebhookDemoAllowedHost` for the second, narrower gate this backs up.
     forbiddenInProduction: ['NODE_WEBHOOK_DEMO_SINK_URL'],
-    // `ownerEmail` on a subscription is whoever configured the shop's integration — an operator,
-    // not a `POST /account/export` subject. Nothing here is ever a customer's own data.
+    // `ownerUserId` on a subscription points at whoever configured the shop's integration — an
+    // operator, not a `POST /account/export` subject. A pointer, never a copy: nothing here
+    // duplicates personal data that `users` already owns, and no email is stored at all.
     personalData: 'none'
 } satisfies AppModule;

@@ -5,10 +5,8 @@
  * so a byte-for-byte match here is a claim about interoperability, not merely internal consistency.
  */
 
-import {
-    signWebhookPayload,
-    verifyWebhookSignature
-} from '@modules/webhooks/transport/webhook-signing';
+import { signWebhookPayload } from '@modules/webhooks/transport/webhook-signing';
+import { verifyWebhookSignatureForTest } from '../verify-signature.fixture';
 
 describe('signWebhookPayload — against the spec published test vector', () => {
     it('reproduces the reference implementation output exactly', () => {
@@ -60,7 +58,7 @@ describe('signWebhookPayload — against the spec published test vector', () => 
     });
 });
 
-describe('verifyWebhookSignature — round-tripping signWebhookPayload', () => {
+describe('verifyWebhookSignatureForTest — round-tripping signWebhookPayload', () => {
     const secret = 'whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw';
 
     it('accepts its own signature, over the exact bytes signed', () => {
@@ -70,7 +68,7 @@ describe('verifyWebhookSignature — round-tripping signWebhookPayload', () => {
         const { headers } = signWebhookPayload({ id, timestamp, body, secrets: [secret] });
 
         expect(
-            verifyWebhookSignature({
+            verifyWebhookSignatureForTest({
                 id,
                 timestamp,
                 body,
@@ -86,7 +84,7 @@ describe('verifyWebhookSignature — round-tripping signWebhookPayload', () => {
         const { headers } = signWebhookPayload({ id, timestamp, body: '', secrets: [secret] });
 
         expect(
-            verifyWebhookSignature({
+            verifyWebhookSignatureForTest({
                 id,
                 timestamp,
                 body: 'not the same bytes',
@@ -102,7 +100,7 @@ describe('verifyWebhookSignature — round-tripping signWebhookPayload', () => {
         const body = '{"a":1}';
 
         expect(
-            verifyWebhookSignature({
+            verifyWebhookSignatureForTest({
                 id,
                 timestamp,
                 body,
@@ -114,7 +112,7 @@ describe('verifyWebhookSignature — round-tripping signWebhookPayload', () => {
 
     it('rejects a missing signature header outright', () => {
         expect(
-            verifyWebhookSignature({
+            verifyWebhookSignatureForTest({
                 id: 'msg_1',
                 timestamp: Math.floor(Date.now() / 1000),
                 body: '{}',
@@ -134,7 +132,7 @@ describe('verifyWebhookSignature — round-tripping signWebhookPayload', () => {
         const future = signWebhookPayload({ id, timestamp: tooNew, body, secrets: [secret] });
 
         expect(
-            verifyWebhookSignature({
+            verifyWebhookSignatureForTest({
                 id,
                 timestamp: tooOld,
                 body,
@@ -144,7 +142,7 @@ describe('verifyWebhookSignature — round-tripping signWebhookPayload', () => {
             })
         ).toBe(false);
         expect(
-            verifyWebhookSignature({
+            verifyWebhookSignatureForTest({
                 id,
                 timestamp: tooNew,
                 body,
@@ -162,7 +160,7 @@ describe('verifyWebhookSignature — round-tripping signWebhookPayload', () => {
         const { headers } = signWebhookPayload({ id, timestamp, body, secrets: [secret] });
 
         expect(
-            verifyWebhookSignature({
+            verifyWebhookSignatureForTest({
                 id,
                 timestamp,
                 body,
@@ -195,7 +193,7 @@ describe('a secret ring rotation — two active secrets, one header', () => {
 
         // A consumer that has switched to the new secret still verifies …
         expect(
-            verifyWebhookSignature({
+            verifyWebhookSignatureForTest({
                 id,
                 timestamp,
                 body,
@@ -205,7 +203,7 @@ describe('a secret ring rotation — two active secrets, one header', () => {
         ).toBe(true);
         // … and one that has not yet switched still verifies too, during the overlap.
         expect(
-            verifyWebhookSignature({
+            verifyWebhookSignatureForTest({
                 id,
                 timestamp,
                 body,
@@ -223,7 +221,7 @@ describe('a secret ring rotation — two active secrets, one header', () => {
         const { headers } = signWebhookPayload({ id, timestamp, body, secrets: [newSecret] });
 
         expect(
-            verifyWebhookSignature({
+            verifyWebhookSignatureForTest({
                 id,
                 timestamp,
                 body,

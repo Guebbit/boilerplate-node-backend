@@ -17,6 +17,7 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { getDefaultLocale } from '@infrastructure/i18n';
 import { emitAuditEvent } from '@infrastructure/observability/audit';
 import type { AuditEvent } from '@infrastructure/observability/audit';
+import { userService } from '@modules/users';
 import { deliverWebhook } from '../transport/webhook-delivery';
 import type { WebhookDeliverJobPayload } from '@types';
 import { webhookSubscriptionRepository, webhookDeliveryRepository } from '../repository';
@@ -25,6 +26,7 @@ import { getWebhookDemoAllowedHost } from '../config';
 import { nextAttemptAt, shouldAutoDisable } from '../domain';
 import { subscriptionDisabledEmail } from '../emails';
 import { webhooksAuditActions } from '../audit';
+import { webhookDeliveryAttemptsTotal, webhookSubscriptionsAutoDisabledTotal } from '../metrics';
 import type { WebhookDeliveryDocument, WebhookSubscriptionDocument } from '../model';
 
 /**
@@ -36,8 +38,10 @@ import type { WebhookDeliveryDocument, WebhookSubscriptionDocument } from '../mo
  *
  * Deliberately NOT the operator-facing alert (`QueueJobsParked`) — that is Alertmanager's job, for
  * a different audience; this is the one person who configured THIS endpoint hearing about it. The
- * audit entry lands regardless of whether an email could be sent (no `ownerEmail` on a
- * subscription that predates the field); the email is the courtesy, the audit trail is the record.
+ * email address is resolved fresh from `ownerUserId` here, never stored on the subscription — see
+ * `../model.ts`'s own field docblock for why. The audit entry lands regardless of whether an email
+ * could be sent (no `ownerUserId` at all, or its user no longer resolves); the email is the
+ * courtesy, the audit trail is the record.
  */
 const notifyOwnerOfAutoDisable = (subscription: WebhookSubscriptionDocument | null): void => {
     if (!subscription) return;
@@ -54,13 +58,27 @@ const notifyOwnerOfAutoDisable = (subscription: WebhookSubscriptionDocument | nu
         target_id: String(subscription._id)
     } satisfies AuditEvent);
 
-    if (!subscription.ownerEmail) return;
-    const mail = subscriptionDisabledEmail(getDefaultLocale(), subscription.url);
-    void enqueueEmail(
-        { to: subscription.ownerEmail, subject: mail.subject },
-        mail.template,
-        mail.data
-    );
+    void userService.getById(subscription.ownerUserId).then((owner) => {
+        if (!owner) return;
+        const mail = subscriptionDisabledEmail(getDefaultLocale(), subscription.url);
+        void enqueueEmail({ to: owner.email, subject: mail.subject }, mail.template, mail.data);
+    });
+};
+
+/**
+ * `applyOutcome` requires a lease token; every caller here only ever holds an ALREADY-CLAIMED row
+ * (see the module docblock), where `claimPending`/`claimForReplay` always stamp one — the optional
+ * type on `WebhookDeliveryDocument.leaseToken` describes a row that was never claimed at all, not
+ * this one. Narrowing here, once, is what lets `applyOutcome` itself demand a real `string` rather
+ * than silently accepting `undefined` and matching a never-claimed row.
+ *
+ * @throws {Error} only were this ever called on an unclaimed row — a bug upstream, not a
+ *   reachable production state
+ */
+const requireLeaseToken = (delivery: WebhookDeliveryDocument): string => {
+    if (!delivery.leaseToken)
+        throw new Error(`Delivery ${String(delivery._id)} has no lease token to record against`);
+    return delivery.leaseToken;
 };
 
 /**
@@ -71,7 +89,7 @@ const finalizeUndeliverable = (
     delivery: WebhookDeliveryDocument,
     error: string
 ): Promise<WebhookDeliveryDocument | null> =>
-    webhookDeliveryRepository.applyOutcome(String(delivery._id), delivery.leaseToken, {
+    webhookDeliveryRepository.applyOutcome(String(delivery._id), requireLeaseToken(delivery), {
         status: 'exhausted',
         error
     });
@@ -81,9 +99,11 @@ const recordSuccess = (
     delivery: WebhookDeliveryDocument,
     responseCode: number | undefined,
     durationMs: number
-): Promise<WebhookDeliveryDocument | null> =>
-    webhookDeliveryRepository
-        .applyOutcome(String(delivery._id), delivery.leaseToken, {
+): Promise<WebhookDeliveryDocument | null> => {
+    webhookDeliveryAttemptsTotal.inc({ outcome: 'success' });
+
+    return webhookDeliveryRepository
+        .applyOutcome(String(delivery._id), requireLeaseToken(delivery), {
             status: 'succeeded',
             responseCode,
             durationMs,
@@ -96,6 +116,7 @@ const recordSuccess = (
                       .then(() => saved)
                 : null
         );
+};
 
 /**
  * Record a failed attempt: schedule the next retry if the backoff ladder has one left, otherwise
@@ -108,14 +129,17 @@ const recordFailure = (
     durationMs: number,
     error: string | undefined
 ): Promise<WebhookDeliveryDocument | null> => {
+    webhookDeliveryAttemptsTotal.inc({ outcome: 'failure' });
+
     const subscriptionId = String(delivery.subscriptionId);
     const retryAt = nextAttemptAt(delivery.attempt);
+    const leaseToken = requireLeaseToken(delivery);
 
     if (retryAt) {
         // Left as `pending` for the sweep (or a fast retry, if one ever exists) to pick up —
         // no subscription write here: only a whole EXHAUSTED chain counts as a failure, per
         // reading of "sustained failure" as a whole chain giving up, not a single failed attempt.
-        return webhookDeliveryRepository.applyOutcome(String(delivery._id), delivery.leaseToken, {
+        return webhookDeliveryRepository.applyOutcome(String(delivery._id), leaseToken, {
             status: 'pending',
             attempt: delivery.attempt + 1,
             responseCode,
@@ -126,7 +150,7 @@ const recordFailure = (
     }
 
     return webhookDeliveryRepository
-        .applyOutcome(String(delivery._id), delivery.leaseToken, {
+        .applyOutcome(String(delivery._id), leaseToken, {
             status: 'exhausted',
             responseCode,
             durationMs,
@@ -137,10 +161,11 @@ const recordFailure = (
             return webhookSubscriptionRepository
                 .recordOutcome(subscriptionId, false)
                 .then((updated) => {
-                    if (updated && shouldAutoDisable(updated.consecutiveFailures))
+                    if (updated && shouldAutoDisable(updated.consecutiveFailures, updated.failingSince))
                         return webhookSubscriptionRepository
                             .disable(subscriptionId)
                             .then((disabled) => {
+                                if (disabled) webhookSubscriptionsAutoDisabledTotal.inc();
                                 notifyOwnerOfAutoDisable(disabled);
                                 return saved;
                             });

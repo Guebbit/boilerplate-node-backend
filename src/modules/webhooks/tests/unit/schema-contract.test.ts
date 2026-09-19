@@ -114,13 +114,12 @@ describe('webhookDeliverySchema', () => {
     });
 
     it('restricts status to the documented delivery lifecycle', () => {
-        // Mirrors `WebhookDeliveryStatus` in `model.ts` — `failed` included though unused today
-        // (kept for a future per-attempt row without a contract change, per that type's own doc).
+        // Mirrors `WebhookDeliveryStatus` in `model.ts` — no `failed`; a failed attempt with
+        // retries left goes back to `pending`, only `exhausted` is terminal.
         expect(enumOf(webhookDeliverySchema, 'status')).toEqual([
             'pending',
             'in-flight',
             'succeeded',
-            'failed',
             'exhausted'
         ]);
     });

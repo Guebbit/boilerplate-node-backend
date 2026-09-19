@@ -34,9 +34,33 @@ const findEnabled = (): Promise<WebhookSubscriptionDocument[]> =>
     webhookSubscriptionModel.find({ enabled: true }).exec();
 
 /**
- * Record one delivery chain's final outcome against its subscription — `$set` to zero on success,
- * `$inc` on exhaustion. Atomic so two events finalizing for the same subscription in the same
- * instant cannot lose one another's count, the way a read-then-write would.
+ * Record a chain's failure: `$inc` the streak (atomic, so two events finalizing for the same
+ * subscription in the same instant cannot lose one another's count, the way a read-then-write
+ * would), plus a SEPARATE write that stamps `failingSince` only the first time — the filter's
+ * `failingSince: { $exists: false }` is what makes "first" atomic on its own, without needing an
+ * aggregation-pipeline update to combine both into one round trip. Order matters: this runs BEFORE
+ * the `$inc` below, so the value `recordOutcome` hands back already reflects it.
+ */
+const recordFailure = (subscriptionId: string): Promise<WebhookSubscriptionDocument | null> =>
+    webhookSubscriptionModel
+        .findOneAndUpdate(
+            { _id: toObjectId(subscriptionId), failingSince: { $exists: false } },
+            { $set: { failingSince: new Date() } }
+        )
+        .exec()
+        .then(() =>
+            webhookSubscriptionModel
+                .findOneAndUpdate(
+                    { _id: toObjectId(subscriptionId) },
+                    { $inc: { consecutiveFailures: 1 } },
+                    { returnDocument: 'after' }
+                )
+                .exec()
+        );
+
+/**
+ * Record one delivery chain's final outcome against its subscription. Atomic on success (`$set`
+ * resets the streak in one write); see {@link recordFailure} for why a failure takes two.
  *
  * @param subscriptionId - the subscription the finished delivery belonged to
  * @param succeeded - whether the chain ended in a success
@@ -46,13 +70,15 @@ const recordOutcome = (
     subscriptionId: string,
     succeeded: boolean
 ): Promise<WebhookSubscriptionDocument | null> =>
-    webhookSubscriptionModel
-        .findOneAndUpdate(
-            { _id: toObjectId(subscriptionId) },
-            succeeded ? { $set: { consecutiveFailures: 0 } } : { $inc: { consecutiveFailures: 1 } },
-            { returnDocument: 'after' }
-        )
-        .exec();
+    succeeded
+        ? webhookSubscriptionModel
+              .findOneAndUpdate(
+                  { _id: toObjectId(subscriptionId) },
+                  { $set: { consecutiveFailures: 0 }, $unset: { failingSince: '' } },
+                  { returnDocument: 'after' }
+              )
+              .exec()
+        : recordFailure(subscriptionId);
 
 /**
  * Turn an enabled, over-threshold subscription off. Conditional on `enabled: true` so a second
@@ -165,14 +191,16 @@ const claimForReplay = (id: string): Promise<WebhookDeliveryDocument | null> =>
  * the one place a delivery's status legitimately moves past `in-flight`.
  *
  * @param id - the delivery row to update
- * @param leaseToken - the token the claim that is writing this outcome was handed
+ * @param leaseToken - the token the claim that is writing this outcome was handed — a caller
+ *   narrows its own already-claimed row to a real `string` before calling this (`services/attempt.ts`'s
+ *   `requireLeaseToken`); this signature never accepts `undefined` as "match a never-claimed row"
  * @param patch - the fields this outcome decided
  * @returns the updated row, or `null` if `leaseToken` no longer matches — the write is dropped,
  *   never retried: whatever holds the row now is responsible for its outcome
  */
 const applyOutcome = (
     id: string,
-    leaseToken: string | undefined,
+    leaseToken: string,
     patch: Partial<
         Pick<
             WebhookDeliveryDocument,
@@ -212,22 +240,16 @@ const findDue = (limit: number): Promise<WebhookDeliveryDocument[]> =>
         .limit(limit)
         .exec();
 
-/** Every attempt row for one event, oldest first — what `POST /webhooks/deliveries/{id}/replay` reads to build the next attempt number. */
-const findByEventId = (eventId: string): Promise<WebhookDeliveryDocument[]> =>
-    webhookDeliveryModel.find({ eventId }).sort({ attempt: 1 }).exec();
-
 /** Explicit annotation for the same TS7056 reason as {@link webhookSubscriptionRepository}. */
 export const webhookDeliveryRepository: Repository<WebhookDeliveryDocument> & {
     claimPending: typeof claimPending;
     claimForReplay: typeof claimForReplay;
     applyOutcome: typeof applyOutcome;
     findDue: typeof findDue;
-    findByEventId: typeof findByEventId;
 } = {
     ...deliveryBase,
     claimPending,
     claimForReplay,
     applyOutcome,
-    findDue,
-    findByEventId
+    findDue
 };

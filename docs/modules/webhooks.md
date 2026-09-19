@@ -108,22 +108,41 @@ flowchart LR
     W --> HTTP["signed POST<br/>SSRF-checked, timed out"]
     HTTP -->|2xx| OK["status: succeeded"]
     HTTP -->|fail, attempts left| BACK["status: pending<br/>nextAttemptAt scheduled"]
-    HTTP -->|fail, exhausted| DIS{"consecutive<br/>exhausted chains<br/>over threshold?"}
+    HTTP -->|fail, exhausted| DIS{"5+ chains in a row,<br/>AND failing 3+ days?"}
     DIS -->|yes| OFF["subscription disabled<br/>+ owner emailed"]
     DIS -->|no| DONE["status: exhausted"]
     BACK -.->|sweep, per minute<br/>publishes, does not claim| Q
 ```
 
-**The owner hears about their own endpoint; operators hear about the queue.** Once a subscription
-auto-disables, `services/attempt.ts#notifyOwnerOfAutoDisable` emails whoever created it — the
-address captured on the subscription at `POST /webhooks/subscriptions` time
-(`WebhookSubscriptionDocument.ownerEmail`, resolved from the caller's own user record, never on the
-wire). Best-effort and fire-and-forget, the same as every other queued notification in this
-codebase; silently skipped for a subscription that predates the field, or whose creator's id never
-resolved to a user. This is deliberately a DIFFERENT channel from the operator-facing
-`QueueJobsParked` alert on parked deliveries (`docs/tools/prometheus.md`) — one person's endpoint
-failing is not the same signal as the queue itself being unhealthy, and the two audiences never
-share a line.
+**The owner hears about their own endpoint; operators hear a fleet-wide signal, never a per-endpoint one.**
+Once a subscription auto-disables, `services/attempt.ts#notifyOwnerOfAutoDisable` emails whoever
+created it — resolved fresh, at send time, from the id the subscription points at
+(`WebhookSubscriptionDocument.ownerUserId`, never a stored copy of the address; see the field's own
+docblock for the GDPR reasoning). Best-effort and fire-and-forget, the same as every other queued
+notification in this codebase; silently skipped for a subscription that predates the field, or
+whose owner no longer resolves to a user.
+
+This is deliberately a DIFFERENT channel from what operators hear. A failed delivery never parks —
+it reschedules on its own row, and the sweep republishes — so `QueueJobsParked` never fires for a
+webhook queue backing up; `metrics.ts` is what actually feeds the operator side, with two alerts
+(`docs/tools/prometheus.md`) tuned to stay quiet when one subscriber's endpoint is down among
+healthy ones:
+
+- **`WebhookDeliveriesFailingEverywhere`** — zero successes while attempts keep landing, over 30
+  minutes (`webhook_delivery_attempts_total`). A fleet-wide symptom: egress blocked, DNS broken,
+  our own signing key rotated wrong — never one customer's endpoint.
+- **`WebhookRetriesStalled`** — `webhook_deliveries_overdue > 0` for 15 minutes
+  (`webhook_deliveries_overdue`, pending rows more than 10 minutes past their `nextAttemptAt`). The
+  retry sweep itself has stopped running.
+
+**Auto-disable is time-based, like Stripe (3 days) and Svix (5), not chain-count-alone.** The retry
+ladder alone gives up after ~12.5h (`WEBHOOK_RETRY_DELAYS_MS`), so a platform-side outage of that
+length would otherwise exhaust every chain in flight and disable every busy subscriber at once, as
+if each of THEIR endpoints were at fault. `domain#shouldAutoDisable` requires BOTH at least
+`WEBHOOK_MAX_CONSECUTIVE_FAILURES` (5) exhausted chains in a row AND at least
+`WEBHOOK_MIN_FAILING_MS` (3 days) since the streak's first failure
+(`WebhookSubscriptionDocument.failingSince`, stamped on the first failure after a success and
+cleared on the next one) — `webhook_subscriptions_auto_disabled_total` counts how often it fires.
 
 **Delayed retry rides the cron container, not the broker.** `webhookdeliveries.nextAttemptAt`
 carries when a failed row is due again; `npm run sweep:webhook-retries` (`ops/sweep-webhook-retries.ts`)

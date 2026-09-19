@@ -6,6 +6,7 @@ import {
     WEBHOOK_RETRY_DELAYS_MS,
     WEBHOOK_MAX_ATTEMPTS,
     WEBHOOK_MAX_CONSECUTIVE_FAILURES,
+    WEBHOOK_MIN_FAILING_MS,
     nextRetryDelayMs,
     nextAttemptAt,
     shouldAutoDisable
@@ -61,13 +62,35 @@ describe('nextAttemptAt', () => {
 });
 
 describe('shouldAutoDisable', () => {
-    it('is false below the threshold', () => {
+    const now = new Date('2026-01-01T00:00:00.000Z');
+    const longAgo = new Date(now.getTime() - (WEBHOOK_MIN_FAILING_MS + 1));
+    const recently = new Date(now.getTime() - 1);
+
+    it('is false below the chain-count threshold, however long the streak has run', () => {
         for (let count = 0; count < WEBHOOK_MAX_CONSECUTIVE_FAILURES; count++)
-            expect(shouldAutoDisable(count)).toBe(false);
+            expect(shouldAutoDisable(count, longAgo, now)).toBe(false);
     });
 
-    it('is true at and past the threshold', () => {
-        expect(shouldAutoDisable(WEBHOOK_MAX_CONSECUTIVE_FAILURES)).toBe(true);
-        expect(shouldAutoDisable(WEBHOOK_MAX_CONSECUTIVE_FAILURES + 5)).toBe(true);
+    it('is false at and past the chain-count threshold when the streak has not run long enough', () => {
+        expect(shouldAutoDisable(WEBHOOK_MAX_CONSECUTIVE_FAILURES, recently, now)).toBe(false);
+        expect(shouldAutoDisable(WEBHOOK_MAX_CONSECUTIVE_FAILURES, now, now)).toBe(false);
+    });
+
+    it('is false with no failingSince at all — no streak open, whatever the count says', () => {
+        expect(shouldAutoDisable(WEBHOOK_MAX_CONSECUTIVE_FAILURES, undefined, now)).toBe(false);
+    });
+
+    it('is true only once BOTH the chain count and the time floor are crossed', () => {
+        expect(shouldAutoDisable(WEBHOOK_MAX_CONSECUTIVE_FAILURES, longAgo, now)).toBe(true);
+        expect(shouldAutoDisable(WEBHOOK_MAX_CONSECUTIVE_FAILURES + 5, longAgo, now)).toBe(true);
+    });
+
+    it('is true exactly at the time floor, not just past it', () => {
+        const atFloor = new Date(now.getTime() - WEBHOOK_MIN_FAILING_MS);
+        expect(shouldAutoDisable(WEBHOOK_MAX_CONSECUTIVE_FAILURES, atFloor, now)).toBe(true);
+    });
+
+    it('defaults to the real clock when none is given', () => {
+        expect(shouldAutoDisable(WEBHOOK_MAX_CONSECUTIVE_FAILURES, longAgo)).toBe(true);
     });
 });
