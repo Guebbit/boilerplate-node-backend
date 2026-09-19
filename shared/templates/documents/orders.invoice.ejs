@@ -17,81 +17,14 @@
     </ul>
 
     <% if (typeof vat !== 'undefined' && vat) { %>
-        <table>
-            <thead>
-                <tr>
-                    <th><%= vat.columns.description %></th>
-                    <th><%= vat.columns.quantity %></th>
-                    <th><%= vat.columns.unitPrice %></th>
-                    <th><%= vat.columns.net %></th>
-                    <th><%= vat.columns.rate %></th>
-                    <th><%= vat.columns.tax %></th>
-                    <th><%= vat.columns.gross %></th>
-                </tr>
-            </thead>
-            <tbody>
-                <% vat.rows.forEach(function(row) { %>
-                    <tr>
-                        <td><%= row.description %></td>
-                        <td><%= row.quantity %></td>
-                        <td><%= row.unitPrice %></td>
-                        <td><%= row.netAmount %></td>
-                        <td><%= row.taxRateLabel %></td>
-                        <td><%= row.taxAmount %></td>
-                        <td><%= row.grossAmount %></td>
-                    </tr>
-                <% }); %>
-            </tbody>
-        </table>
+        <%- include("./orders.invoice.vat-table.ejs", { columns: vat.columns, rows: vat.rows, showQuantity: true }); %>
         <% if (vat.shipping) { %>
             <h2><%= vat.shipping.title %></h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th><%= vat.columns.description %></th>
-                        <th><%= vat.columns.net %></th>
-                        <th><%= vat.columns.rate %></th>
-                        <th><%= vat.columns.tax %></th>
-                        <th><%= vat.columns.gross %></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <% vat.shipping.rows.forEach(function(row) { %>
-                        <tr>
-                            <td><%= row.description %></td>
-                            <td><%= row.netAmount %></td>
-                            <td><%= row.taxRateLabel %></td>
-                            <td><%= row.taxAmount %></td>
-                            <td><%= row.grossAmount %></td>
-                        </tr>
-                    <% }); %>
-                </tbody>
-            </table>
+            <%- include("./orders.invoice.vat-table.ejs", { columns: vat.columns, rows: vat.shipping.rows, showQuantity: false }); %>
         <% } %>
 
         <h2><%= vat.summaryTitle %></h2>
-        <table>
-            <thead>
-                <tr>
-                    <th><%= vat.columns.description %></th>
-                    <th><%= vat.columns.net %></th>
-                    <th><%= vat.columns.rate %></th>
-                    <th><%= vat.columns.tax %></th>
-                    <th><%= vat.columns.gross %></th>
-                </tr>
-            </thead>
-            <tbody>
-                <% vat.summaryRows.forEach(function(row) { %>
-                    <tr>
-                        <td><%= row.description %></td>
-                        <td><%= row.netAmount %></td>
-                        <td><%= row.taxRateLabel %></td>
-                        <td><%= row.taxAmount %></td>
-                        <td><%= row.grossAmount %></td>
-                    </tr>
-                <% }); %>
-            </tbody>
-        </table>
+        <%- include("./orders.invoice.vat-table.ejs", { columns: vat.columns, rows: vat.summaryRows, showQuantity: false }); %>
 
         <p><%= vat.netTotalLabel %>: <%= vat.netTotal %></p>
         <p><%= vat.taxTotalLabel %>: <%= vat.taxTotal %></p>
