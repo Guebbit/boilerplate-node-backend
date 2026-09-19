@@ -84,7 +84,7 @@ export interface ModuleConsumer {
     /** Queue name to consume from — one of `WORKER_CHANNELS` (`@types`, generated). */
     queue: string;
 
-    /** Handler called for each message. Return true to ack, false to nack. */
+    /** Handler called for each message. Return true to ack, false to PARK — a permanent business rejection, never retried. Throw instead for a transient failure, which nacks and retries. */
     handler(message: unknown): Promise<boolean>;
 
     /**

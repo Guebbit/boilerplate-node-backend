@@ -148,7 +148,7 @@ describe('quarantineUploadedImages — no broker ready', () => {
 
         await expect(run(request)).resolves.toBeUndefined();
 
-        expect(digestQuarantinedImage).toHaveBeenCalledWith('a.png');
+        expect(digestQuarantinedImage).toHaveBeenCalledWith('a.png', 'a.png');
         expect(request.storedImageUrls).toEqual(['/images/a.png']);
         expect(request.storedThumbnailUrls).toEqual(['/images/thumbs/v1/a.webp']);
         expect(request.quarantinedImageKeys).toBeUndefined();
@@ -172,7 +172,7 @@ describe('quarantineUploadedImages — no broker ready', () => {
 
             await run(request);
 
-            expect(digestQuarantinedImage).toHaveBeenCalledWith('a.png');
+            expect(digestQuarantinedImage).toHaveBeenCalledWith('a.png', 'a.png');
             expect(request.quarantinedImageKeys).toBeUndefined();
         }
     );

@@ -329,6 +329,37 @@ describe('the channel is supervised, not only the connection', () => {
             expect.arrayContaining(['error', 'close'])
         );
     });
+
+    /**
+     * The bug this pins: a channel-only close (`PRECONDITION_FAILED`, an ack on an unknown tag)
+     * used to leave `currentChannel` cleared for good — amqplib's own recovery only reacts to the
+     * CONNECTION dropping, which never happens here, so nothing else was ever going to open a new
+     * one. Every consumer this process registered must come back on the replacement channel too,
+     * the same as a genuine reconnect already does.
+     */
+    it('re-opens a channel and replays consumers when only the channel closes', async () => {
+        jest.useFakeTimers();
+        try {
+            await ensureConnected();
+            const handler = jest.fn().mockResolvedValue(true);
+            await consumeFromQueue({ queue: 'emails', handler });
+
+            const closeHandler = mockChannelOn.mock.calls.find(([event]) => event === 'close')?.[1];
+            expect(closeHandler).toBeDefined();
+
+            mockCreateConfirmChannel.mockClear();
+            mockConsume.mockClear();
+
+            // The connection itself never closed — only its channel did.
+            closeHandler();
+            await jest.advanceTimersByTimeAsync(1000);
+
+            expect(mockCreateConfirmChannel).toHaveBeenCalledTimes(1);
+            expect(mockConsume).toHaveBeenCalledWith('emails', expect.any(Function));
+        } finally {
+            jest.useRealTimers();
+        }
+    });
 });
 
 describe('consumeFromQueue()', () => {

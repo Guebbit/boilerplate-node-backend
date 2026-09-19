@@ -323,7 +323,11 @@ export const quarantineUploadedImages: RequestHandler = (request, _response, nex
             // nudge a reconnect either: `queue.ts`'s amqplib `recovery` option keeps retrying the
             // connection on its own, in the background, for as long as the process runs. The next
             // upload after it succeeds simply finds `queueState()` reading `ready` again.
-            return Promise.all(keys.map((key) => digestQuarantinedImage(key)))
+            // No document exists yet at this point in the request — `digestQuarantinedImage`'s
+            // `owner` salt is the quarantine key itself instead. That key is unique per upload and
+            // never retried, so this loses nothing (there is no duplicate run to converge) while
+            // still keeping this promoted file from ever sharing a name with an unrelated upload.
+            return Promise.all(keys.map((key) => digestQuarantinedImage(key, key)))
                 .then((digested) => {
                     request.storedImageUrls = digested.map((result) => result.imageUrl);
                     request.storedThumbnailUrls = digested.map((result) => result.thumbnailUrl);

@@ -19,9 +19,10 @@ export { EMAIL_QUEUE } from '@infrastructure/adapters/queue';
  * Process a single email job from the queue.
  *
  * `false` is a PERMANENT refusal — no recipient or template, so it's dead-lettered. Anything else
- * is left to reject, since an SMTP fault says nothing about the job and `consumeFromQueue`
- * requeues a rejection. `Partial<EmailJobPayload>`, not `unknown`: the broker delivers whatever was
- * published, so every field is a claim until checked below.
+ * is left to reject, since an SMTP fault says nothing about the job and `consumeFromQueue` retries
+ * a rejection via its TTL retry queue, not an immediate requeue. `Partial<EmailJobPayload>`, not
+ * `unknown`: the broker delivers whatever was published, so every field is a claim until checked
+ * below.
  */
 export const handleEmailJob = (job: Partial<EmailJobPayload>): Promise<boolean> => {
     // The optional chain does the narrowing on its own — past this point TypeScript knows both
@@ -40,7 +41,7 @@ export const handleEmailJob = (job: Partial<EmailJobPayload>): Promise<boolean> 
     return nodemailer(job.request, job.templateName, job.data ?? {})
         .then(() => true)
         .catch((error: unknown) => {
-            // Logged AND rethrown: the requeue is what saves the email, the log is what makes a
+            // Logged AND rethrown: the TTL retry is what saves the email, the log is what makes a
             // job that keeps failing visible instead of a queue that quietly refills.
             logger.error({ message: 'Email worker failed to send.', error });
             throw error;

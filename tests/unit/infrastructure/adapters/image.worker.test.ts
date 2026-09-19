@@ -16,8 +16,8 @@ import { logger } from '@infrastructure/adapters/logger';
 
 /** The same derivation `image.worker.ts#contentStem` uses — computed here, not hardcoded, so a
  *  change to the hash algorithm or its length moves this expectation with it. */
-const contentStemOf = (digested: Buffer): string =>
-    createHash('sha256').update(digested).digest('hex').slice(0, 24);
+const contentStemOf = (owner: string, digested: Buffer): string =>
+    `${owner}-${createHash('sha256').update(digested).digest('hex').slice(0, 24)}`;
 
 jest.mock('@infrastructure/adapters/image-store', () => ({
     imageStore: {
@@ -102,7 +102,7 @@ describe('digestQuarantinedImage', () => {
     it('reads, identifies, digests and thumbnails, promotes both, then clears the quarantine file', async () => {
         primeSuccessfulDigest();
 
-        await expect(digestQuarantinedImage('abc123.png')).resolves.toEqual({
+        await expect(digestQuarantinedImage('abc123.png', 'doc1')).resolves.toEqual({
             imageUrl: '/images/abc123.png',
             thumbnailUrl: '/images/thumbs/v1/abc123.webp'
         });
@@ -110,7 +110,7 @@ describe('digestQuarantinedImage', () => {
         expect(mockedReadQuarantined).toHaveBeenCalledWith('abc123.png');
         expect(mockedDigestImage).toHaveBeenCalledWith(Buffer.from('raw bytes'), 'image/png');
         expect(mockedThumbnailImage).toHaveBeenCalledWith(Buffer.from('raw bytes'));
-        const stem = contentStemOf(Buffer.from('digested'));
+        const stem = contentStemOf('doc1', Buffer.from('digested'));
         expect(mockedPromote).toHaveBeenCalledWith(stem, Buffer.from('digested'), 'image/png');
         expect(mockedPutDerivative).toHaveBeenCalledWith(stem, Buffer.from('thumbnail'));
         expect(mockedRemoveQuarantined).toHaveBeenCalledWith('abc123.png');
@@ -122,7 +122,7 @@ describe('digestQuarantinedImage', () => {
         mockedReadQuarantined.mockResolvedValue(Buffer.from('raw bytes'));
         mockedIdentifyImage.mockReturnValue(undefined);
 
-        await expect(digestQuarantinedImage('abc123.bin')).rejects.toThrow(
+        await expect(digestQuarantinedImage('abc123.bin', 'doc1')).rejects.toThrow(
             'does not match an accepted format'
         );
         expect(mockedDigestImage).not.toHaveBeenCalled();
@@ -217,6 +217,25 @@ describe('handleImageDigestJob', () => {
         await expect(handleImageDigestJob(job)).resolves.toBe(false);
 
         expect(mockedRemoveQuarantined).toHaveBeenCalledWith('abc123.png');
+        expect(writeback).not.toHaveBeenCalled();
+    });
+
+    /*
+     * A storage failure is presumed TRANSIENT — unlike a bad decode, retrying it can genuinely
+     * succeed (the disk fills, then frees up again). Rethrown, not resolved `false`, so
+     * `consumeFromQueue` nacks and retries the delivery, and the quarantine file the retry still
+     * needs to read is never removed.
+     */
+    it('rejects and keeps the quarantine file when a storage write fails', async () => {
+        mockedReadQuarantined.mockResolvedValue(Buffer.from('raw bytes'));
+        mockedIdentifyImage.mockReturnValue('image/png');
+        mockedDigestImage.mockResolvedValue(Buffer.from('digested'));
+        mockedThumbnailImage.mockResolvedValue(Buffer.from('thumbnail'));
+        mockedPromote.mockRejectedValue(new Error('disk full'));
+
+        await expect(handleImageDigestJob(job)).rejects.toThrow('disk full');
+
+        expect(mockedRemoveQuarantined).not.toHaveBeenCalled();
         expect(writeback).not.toHaveBeenCalled();
     });
 });

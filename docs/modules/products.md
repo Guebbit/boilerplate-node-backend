@@ -29,6 +29,9 @@ flowchart LR
     wishlist --> products
     products -. "product.deleted" .-> cart
     products -. "product.created" .-> inventory
+    products -. "product.deleted" .-> inventory
+    products -. "product.deactivated" .-> orders
+    products -. "product.deleted" .-> orders
     products -. "product.deleted" .-> wishlist
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;

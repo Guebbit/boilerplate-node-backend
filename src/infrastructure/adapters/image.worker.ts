@@ -34,14 +34,37 @@ const isReencodableMime = (mime: string | undefined): mime is ReencodableImageMi
     mime !== undefined && REENCODABLE_MIMES.has(mime);
 
 /**
- * The shared identity a digest run's promoted original AND its thumbnail are filed under —
- * derived from the RE-ENCODED original's own bytes, never the quarantine key. See
- * `image-store.ts#promote`'s docblock for why: it is what makes a duplicate run of the same input
- * converge instead of collide, and a stale run's cleanup provably unable to delete a newer run's
- * live file.
+ * The one PERMANENT failure {@link digestQuarantinedImage} can throw — bytes that will never
+ * decode as one of the three accepted formats decode the same way on every redelivery. Every
+ * OTHER rejection (a storage write failing, disk full, the writeback's own DB call) is presumed
+ * TRANSIENT and left as a plain throw, so {@link handleImageDigestJob} can tell the two apart and
+ * `consumeFromQueue` retries the second kind instead of discarding it.
  */
-const contentStem = (digested: Buffer): string =>
-    createHash('sha256').update(digested).digest('hex').slice(0, 24);
+export class UnsupportedImageFormatError extends Error {}
+
+/**
+ * The shared identity a digest run's promoted original AND its thumbnail are filed under —
+ * derived from the RE-ENCODED original's own bytes, SALTED by `owner`. See
+ * `image-store.ts#promote`'s docblock for why: it is what makes a duplicate run of the same input
+ * converge instead of collide, and a stale run's cleanup provably unable to delete a DIFFERENT
+ * owner's live file.
+ *
+ * Content-addressing alone used to be the whole stem: two documents that happened to upload
+ * byte-identical images landed on the SAME file, so cleaning up one document's stale run — a
+ * writeback that matched nothing, because a newer upload had already superseded it — deleted the
+ * file a completely unrelated document was still serving. `owner` closes that: it is the target
+ * document's id on the path that has one ({@link handleImageDigestJob}, {@link enqueueImageDigest}
+ * — retries of that SAME document still converge on the same file, which is the idempotency this
+ * was for), or the quarantine key itself on the one path with no document to salt by yet
+ * (`http/middlewares/upload.ts`'s synchronous, no-broker digest, ahead of the write that mints
+ * one) — that path never retries the same key twice, so nothing is lost by making every upload
+ * there unique instead.
+ *
+ * @param owner - what makes this run's file NOT shared with an unrelated one — see above
+ * @param digested - the re-encoded bytes the file is a hash of
+ */
+const contentStem = (owner: string, digested: Buffer): string =>
+    `${owner}-${createHash('sha256').update(digested).digest('hex').slice(0, 24)}`;
 
 /** The two urls a finished digest produces, ready to persist. */
 export interface DigestedImageUrls {
@@ -89,18 +112,24 @@ export const registerImageWritebackResolver = (
  * inline fallback, so both run exactly one pipeline rather than two that could drift apart.
  *
  * @param key - the quarantine key {@link imageStore.quarantine} returned
- * @throws When the bytes will never decode as one of the three accepted formats (the caller
- *   dead-letters/discards), or on any storage failure (the caller retries).
+ * @param owner - salts the promoted stem — see {@link contentStem}. Pass the target document's
+ *   id where one already exists; `key` itself where it does not yet (`upload.ts`'s pre-write
+ *   inline call)
+ * @throws {@link UnsupportedImageFormatError} when the bytes will never decode as one of the
+ *   three accepted formats (the caller dead-letters/discards); anything else (a storage failure)
+ *   as a plain `Error` (the caller retries).
  */
-export const digestQuarantinedImage = (key: string): Promise<DigestedImageUrls> =>
+export const digestQuarantinedImage = (key: string, owner: string): Promise<DigestedImageUrls> =>
     imageStore.readQuarantined(key).then((raw) => {
         const mime = identifyImage(raw);
         if (!isReencodableMime(mime))
-            throw new Error(`Quarantined image ${key} does not match an accepted format.`);
+            throw new UnsupportedImageFormatError(
+                `Quarantined image ${key} does not match an accepted format.`
+            );
 
         return Promise.all([digestImage(raw, mime), thumbnailImage(raw)])
             .then(([digested, thumbnail]) => {
-                const stem = contentStem(digested);
+                const stem = contentStem(owner, digested);
                 return Promise.all([
                     imageStore.promote(stem, digested, mime),
                     imageStore.putDerivative(stem, thumbnail)
@@ -159,9 +188,12 @@ const settleWriteback = (
 /**
  * Process a single image digest job from the queue.
  *
- * `false` for a malformed payload or an unregistered collection — both permanent, both
- * dead-lettered, same as a bad decode. Anything else thrown is left to reject, so
- * `consumeFromQueue` requeues it. `Partial<ImageDigestJobPayload>` because it came off a broker.
+ * `false` for a malformed payload, an unregistered collection, or an {@link
+ * UnsupportedImageFormatError} — all permanent, all dead-lettered (the quarantine file removed
+ * with the last of the three, since nothing will ever read it again). Any OTHER throw — a
+ * storage write failing, disk full — is rethrown as-is, so `consumeFromQueue` nacks and retries
+ * it, WITHOUT touching the quarantine file the retry still needs to read.
+ * `Partial<ImageDigestJobPayload>` because it came off a broker.
  */
 export const handleImageDigestJob = (job: Partial<ImageDigestJobPayload>): Promise<boolean> => {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the payload crossed a queue: its type is a claim, not a fact
@@ -180,17 +212,23 @@ export const handleImageDigestJob = (job: Partial<ImageDigestJobPayload>): Promi
         return Promise.resolve(false);
     }
 
-    return digestQuarantinedImage(key)
+    return digestQuarantinedImage(key, documentId)
         .then((urls) =>
             settleWriteback(writeback, documentId, key, urls, collection).then(() => true)
         )
         .catch((error: unknown) => {
-            // A bad decode is permanent — every redelivery decodes the same bytes the same way —
-            // so it is dead-lettered rather than retried. `digestQuarantinedImage` throwing for any
-            // OTHER reason (disk full, a storage write failing) looks identical from here; both
-            // still resolve `false` today. Revisit if that distinction ever needs its own path.
+            if (error instanceof UnsupportedImageFormatError) {
+                // Permanent — every redelivery decodes the same bytes the same way — so the
+                // quarantine file is removed along with dead-lettering the job.
+                logger.warn({ message: 'Image digest worker: unsupported format.', error, key });
+                return imageStore.removeQuarantined(key).then(() => false);
+            }
+
+            // Presumed TRANSIENT (disk full, a storage write failing, the writeback's own DB
+            // call) — rethrown so `consumeFromQueue` nacks and retries, and the quarantine file
+            // stays put for that retry to read.
             logger.error({ message: 'Image digest worker failed.', error, key });
-            return imageStore.removeQuarantined(key).then(() => false);
+            throw error;
         });
 };
 
@@ -215,7 +253,7 @@ export const enqueueImageDigest = (
     writeback: ImageWriteback
 ): Promise<DigestedImageUrls | undefined> => {
     const runInline = (): Promise<DigestedImageUrls> =>
-        digestQuarantinedImage(payload.key).then((urls) =>
+        digestQuarantinedImage(payload.key, payload.documentId).then((urls) =>
             settleWriteback(
                 writeback,
                 payload.documentId,

@@ -86,7 +86,7 @@ let currentChannel: ConfirmChannel | undefined;
  */
 let recoveringConnection: RecoveringChannelModel | undefined;
 
-/** Whether {@link ensureConnecting} has already dialed — sepatate from {@link recoveringConnection} so a burst of calls before the first connect settles shares the one attempt instead of each starting its own. */
+/** Whether {@link ensureConnecting} has already dialed — separate from {@link recoveringConnection} so a burst of calls before the first connect settles shares the one attempt instead of each starting its own. */
 let connectionStarted = false;
 
 /** Warn-once latch: log an outage once, then stay quiet until {@link reportUnavailable}'s caller sees it recover. */
@@ -107,6 +107,14 @@ const reportUnavailable = (error: unknown): void => {
 };
 
 /**
+ * How long {@link setupChannel} waits before re-opening a channel that closed while its
+ * connection stayed up — long enough that a broker mid-restart (the ordinary cause of a
+ * `PRECONDITION_FAILED`) has a moment to settle, short enough that a burst of unavailable-queue
+ * publishes during the gap stays brief.
+ */
+const CHANNEL_REOPEN_DELAY_MS = 1000;
+
+/**
  * amqplib's recovery `setup` — runs after every successful (re)connect, the first one included,
  * and is AWAITED before that connect counts as done. The one place a fresh channel is created and
  * every known consumer re-bound: a fresh channel starts with none of its own, whether this is
@@ -123,10 +131,20 @@ const setupChannel = async (model: ChannelModel): Promise<void> => {
     const ch = await model.createConfirmChannel();
     // A channel dies on its own for ordinary reasons (most of them named by `assertJobQueue`
     // below) WITHOUT the connection closing — recovery only reacts to a connection drop, so this
-    // has to be handled separately, same as it always was.
+    // has to be handled separately: re-open a fresh channel on the SAME connection after a short
+    // backoff. If the connection is ALSO down, `createConfirmChannel` below rejects harmlessly —
+    // amqplib's own recovery reaches `setupChannel` again once it reconnects, same as any other
+    // (re)connect; this is only for the channel-only close that recovery never sees at all.
     ch.on('error', reportUnavailable);
     ch.on('close', () => {
-        if (currentChannel === ch) currentChannel = undefined;
+        if (currentChannel !== ch) return;
+        currentChannel = undefined;
+        // `.unref()` — same reasoning as `RECOVERY_OPTIONS`'s own docblock: a timer nothing else
+        // is waiting on must not be the reason a test process (or a graceful shutdown) hangs.
+        const retry = setTimeout(() => {
+            void setupChannel(model).catch(reportUnavailable);
+        }, CHANNEL_REOPEN_DELAY_MS);
+        retry.unref();
     });
     currentChannel = ch;
     await replayConsumers(ch);
@@ -337,8 +355,8 @@ const JOB_PRIORITY_VALUES: Record<JobPriority, number> = { normal: 0, high: 1 };
  * @param ch - the channel to declare on
  * @param queue - the work queue
  * @param durable - whether the definitions survive a broker restart
- * @param retryDelaySeconds - this queue's retry delay — {@link defaultRetryDelaySeconds} unless a
- *   consumer declared its own
+ * @param retryDelaySeconds - this queue's retry delay, always {@link defaultRetryDelaySeconds} —
+ *   there is no per-consumer override, which is what keeps every caller trivially agreeing
  */
 const assertJobQueue = (
     ch: ConfirmChannel,
@@ -396,7 +414,11 @@ export interface PublishOptions<TPayload = unknown> {
 /**
  * How long {@link publishToQueue} waits for the broker's own confirmation before giving up and
  * falling back to the caller's inline path. Generous, since the alternative — a false "failed" on
- * a broker that is merely slow — is what caused the double-run bug this confirm design fixes.
+ * a broker that is merely slow — is exactly the shape of double-run this confirm design exists to
+ * narrow. It narrows the window, not closes it: a confirmation that lands AFTER this timeout
+ * still resolves the original publish (amqplib's callback fires whenever the broker actually
+ * answers), so a broker that takes longer than this to confirm still runs the job twice — once
+ * from the caller's inline fallback, once from the publish that eventually succeeded on its own.
  */
 const PUBLISH_CONFIRM_TIMEOUT_MS = 5000;
 
@@ -478,7 +500,7 @@ export const publishToQueue = <TPayload = unknown>(
 export interface ConsumeOptions<TPayload = unknown> {
     /** Queue name to consume from. */
     queue: string;
-    /** Handler called for each message. Return true to ack, false to nack. */
+    /** Handler called for each message. Return true to ack, false to PARK — a permanent business rejection, never retried. Throw instead for a transient failure, which nacks and retries. */
     handler: (message: TPayload, raw: ConsumeMessage) => Promise<boolean>;
     /**
      * The contract schema this queue's messages must satisfy, from
@@ -493,14 +515,6 @@ export interface ConsumeOptions<TPayload = unknown> {
     durable?: boolean;
     /** Number of unacknowledged messages allowed at once. Default: 1. */
     prefetch?: number;
-    /**
-     * Deliveries this queue's jobs get before one is parked in `<queue>.dead` — overrides
-     * {@link defaultMaxAttempts}. Declare this instead of a new environment variable when one
-     * consumer genuinely needs a different number than the deployment-wide default.
-     */
-    maxAttempts?: number;
-    /** This queue's retry delay, in seconds — overrides {@link defaultRetryDelaySeconds}. */
-    retryDelaySeconds?: number;
 }
 
 /**
@@ -537,6 +551,42 @@ const deathCountFor = (headers: MessagePropertyHeaders | undefined, retryQueue: 
     headers?.['x-death']?.find((entry) => entry.queue === retryQueue)?.count ?? 0;
 
 /**
+ * Ack a delivery, swallowing the throw amqplib raises for a channel that has already closed.
+ * `handleDelivery`'s promise-based ack decision can settle AFTER its channel closed (a
+ * broker-side close racing a slow handler), and an unguarded `ch.ack` on a dead channel throws
+ * SYNCHRONOUSLY from inside amqplib's own event plumbing — escaping every `.catch` in this file
+ * and reaching Node as an uncaught exception that kills the process. `currentChannel !== ch` is
+ * the same "superseded" signal `setupChannel`'s own close handler uses: there is nothing useful
+ * left to ack on a dead channel — the message is simply redelivered once RabbitMQ notices the
+ * consumer is gone, the ordinary unacked-message-on-a-closed-channel behaviour.
+ */
+const safeAck = (ch: ConfirmChannel, incoming: ConsumeMessage): void => {
+    if (currentChannel !== ch) return;
+    // eslint-disable-next-line no-restricted-syntax -- amqplib throws synchronously for a channel that already closed; this is the guard, not a swallowed rejection
+    try {
+        ch.ack(incoming);
+    } catch (error) {
+        reportUnavailable(error);
+    }
+};
+
+/** {@link safeAck}'s `nack` counterpart — same guard, same reasoning. */
+const safeNack = (
+    ch: ConfirmChannel,
+    incoming: ConsumeMessage,
+    allUpTo: boolean,
+    requeue: boolean
+): void => {
+    if (currentChannel !== ch) return;
+    // eslint-disable-next-line no-restricted-syntax -- amqplib throws synchronously for a channel that already closed; this is the guard, not a swallowed rejection
+    try {
+        ch.nack(incoming, allUpTo, requeue);
+    } catch (error) {
+        reportUnavailable(error);
+    }
+};
+
+/**
  * Move a message straight into `<queue>.dead`, bypassing the retry queue entirely — the shared
  * ending for every PERMANENT rejection (unparseable, contract failure, handler-refused) and for a
  * throw whose {@link deathCountFor} has reached the limit. None of these may reach the retry queue:
@@ -564,11 +614,11 @@ const parkInDead = (ch: ConfirmChannel, queue: string, incoming: ConsumeMessage)
                     queue,
                     error
                 });
-                ch.nack(incoming, false, true);
+                safeNack(ch, incoming, false, true);
                 return;
             }
             queueJobsDeadLetteredTotal.inc({ queue });
-            ch.ack(incoming);
+            safeAck(ch, incoming);
         }
     );
 };
@@ -585,8 +635,8 @@ const parkInDead = (ch: ConfirmChannel, queue: string, incoming: ConsumeMessage)
  * @param queue - queue name, for the parse-failure log line
  * @param handler - caller's per-message handler
  * @param incoming - the raw delivered message
- * @param maxAttempts - deliveries this queue's jobs get before {@link parkInDead} — see
- *   {@link ConsumeOptions.maxAttempts}
+ * @param maxAttempts - deliveries this queue's jobs get before {@link parkInDead} —
+ *   {@link defaultMaxAttempts}, the one deployment-wide number every consumer shares
  */
 const handleDelivery = <TPayload>(
     ch: ConfirmChannel,
@@ -631,7 +681,7 @@ const handleDelivery = <TPayload>(
     handler(parsed as TPayload, incoming)
         .then((ack) => {
             // `ack` removes the message from the queue permanently.
-            if (ack) ch.ack(incoming);
+            if (ack) safeAck(ch, incoming);
             // Handled but refused: permanent business rejection — parked, not retried.
             else parkInDead(ch, queue, incoming);
         })
@@ -642,7 +692,7 @@ const handleDelivery = <TPayload>(
             const retryQueue = retryQueueOf(queue);
             const attemptsSoFar = deathCountFor(incoming.properties.headers, retryQueue) + 1;
             if (attemptsSoFar < maxAttempts) {
-                ch.nack(incoming, false, false);
+                safeNack(ch, incoming, false, false);
                 return;
             }
 
@@ -667,8 +717,8 @@ const handleDelivery = <TPayload>(
  *  - handler resolves `false`    → parked — permanent business rejection, never retried
  *  - handler *throws*, attempts left → `nack` with no requeue — routes to the retry queue, which
  *    redelivers it once its TTL expires
- *  - handler *throws*, attempts exhausted → parked, logged, the job's identifying fields only —
- *    never the payload, which passes the logger's redaction but is still a leak in a log line
+ *  - handler *throws*, attempts exhausted → parked, logged (`queue`, `attempts`, `error` —
+ *    never the payload, which passes the logger's redaction but is still a leak in a log line)
  *  - unparseable / contract-invalid message → parked — will never become valid on a retry
  *
  * "Parked" is always {@link parkInDead}: a direct publish to `<queue>.dead`, bypassing the retry
@@ -678,19 +728,17 @@ const bindConsumer = <TPayload>(
     ch: ConfirmChannel,
     options: ConsumeOptions<TPayload>
 ): Promise<void> => {
-    const {
-        queue,
-        handler,
-        schema,
-        durable = true,
-        prefetch = 1,
-        maxAttempts = defaultMaxAttempts(),
-        retryDelaySeconds = defaultRetryDelaySeconds()
-    } = options;
+    const { queue, handler, schema, durable = true, prefetch = 1 } = options;
+    // Deployment-wide, not per-consumer: `publishToQueue` always asserts the retry queue with
+    // {@link defaultRetryDelaySeconds}, so a consumer declaring a different one would fail
+    // `assertQueue` outright the moment both sides had registered (a redeclaration must match
+    // byte-for-byte — see `assertJobQueue`'s own docblock). `ModuleConsumer` in
+    // `kernel/registry.ts` never had a way to pass one anyway, so nothing ever exercised this.
+    const maxAttempts = defaultMaxAttempts();
 
     return (
         // Same idempotent declaration as on the publish side — the consumer may boot first.
-        assertJobQueue(ch, queue, durable, retryDelaySeconds)
+        assertJobQueue(ch, queue, durable, defaultRetryDelaySeconds())
             // `prefetch` (AMQP basic.qos) caps unacked messages per consumer. With 1, the broker
             // hands over the next message only after the current one is acked, which gives fair
             // round-robin across replicas instead of one worker hoarding a batch.
@@ -720,9 +768,21 @@ const bindConsumer = <TPayload>(
  */
 const consumerBindings = new Map<string, (ch: ConfirmChannel) => Promise<void>>();
 
-/** Re-binds every known consumer onto a freshly opened channel — see {@link consumerBindings}. */
-const replayConsumers = (ch: ConfirmChannel): Promise<void> =>
-    Promise.all([...consumerBindings.values()].map((bind) => bind(ch))).then(() => undefined);
+/**
+ * Re-binds every known consumer onto a freshly opened channel — see {@link consumerBindings}.
+ *
+ * SERIALLY, not `Promise.all`: each binding's own `assertQueue` → `prefetch` (AMQP `basic.qos`) →
+ * `consume` runs on the one shared channel, and `basic.qos` applies to the NEXT `basic.consume`
+ * issued on that channel — not to the binding that called it. Two bindings running concurrently
+ * can interleave their calls in either order, so one consumer's `prefetch` can silently apply to
+ * ANOTHER consumer's `consume` instead of its own. A plain `for` loop, awaited one binding at a
+ * time, keeps each binding's three calls adjacent on the wire.
+ */
+const replayConsumers = async (ch: ConfirmChannel): Promise<void> => {
+    for (const bind of consumerBindings.values()) {
+        await bind(ch);
+    }
+};
 
 /**
  * Register a consumer on a queue. No-op when RabbitMQ is not configured.
