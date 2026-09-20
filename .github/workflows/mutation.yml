@@ -86,8 +86,10 @@ jobs:
         if: github.event_name != 'pull_request'
         runs-on: ubuntu-latest
         # See scripts/mutation/sharding.ts's `TARGET_LINES_PER_SHARD` comment — this number and
-        # that constant are coupled and nothing checks that they still agree.
-        timeout-minutes: 210
+        # that constant are coupled and nothing checks that they still agree. Raised from 210:
+        # a measured shard (shard-00, local, 2026-09-20) took 219m against the 7.1s/mutant estimate
+        # the old value assumed, and GitHub's hosted-runner ceiling (6h/360m) leaves room to spare.
+        timeout-minutes: 270
         permissions:
             contents: read
         strategy:
