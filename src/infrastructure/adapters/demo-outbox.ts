@@ -11,8 +11,8 @@
  * them are about an email sink.
  */
 
-import type { SendMailOptions } from 'nodemailer';
 import type { Data } from 'ejs';
+import type { EmailJobPayload } from '@types';
 
 /** One recorded send, shaped for the e2e suite's outbox reader. */
 export interface DemoOutboxEmail {
@@ -26,6 +26,12 @@ export interface DemoOutboxEmail {
     token?: string;
     /** Every primitive template variable, for specs that assert on rendered content. */
     lines: string[];
+    /**
+     * Filenames of any attachments this send carried — never the bytes. `nodemailer()` discards
+     * the spooled files immediately after recording, same as a real send, so this is the only
+     * trace of them a demo-mode spec can read back.
+     */
+    attachments?: string[];
 }
 
 /** Every send recorded this process. Module-level, not persisted: a restart clears it. */
@@ -33,7 +39,7 @@ const outbox: DemoOutboxEmail[] = [];
 
 /** Records a send the mailer skipped. Newest first, matching an inbox's reading order. */
 export const recordDemoEmail = (
-    request: SendMailOptions,
+    request: EmailJobPayload['request'],
     templateName: string,
     data: Data
 ): void => {
@@ -43,13 +49,16 @@ export const recordDemoEmail = (
     const linkUrl = typeof variables.linkUrl === 'string' ? variables.linkUrl : undefined;
     const linkToken = /\/([\da-f]{16,})$/.exec(linkUrl ?? '')?.[1];
     outbox.unshift({
-        to: typeof request.to === 'string' ? request.to : JSON.stringify(request.to ?? ''),
-        subject: typeof request.subject === 'string' ? request.subject : '',
+        to: request.to,
+        subject: request.subject ?? '',
         template: templateName,
         token: typeof variables.token === 'string' ? variables.token : linkToken,
         lines: Object.entries(variables)
             .filter(([, value]) => typeof value === 'string' || typeof value === 'number')
-            .map(([key, value]) => `${key}: ${String(value)}`)
+            .map(([key, value]) => `${key}: ${String(value)}`),
+        attachments: request.attachments?.length
+            ? request.attachments.map((attachment) => attachment.filename)
+            : undefined
     });
 };
 

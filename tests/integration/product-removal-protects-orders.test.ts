@@ -20,6 +20,23 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
 }));
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
+/*
+ * `sendOrderPlacedEmail` renders the invoice before it dispatches — fire-and-forget, deliberately,
+ * so a Chromium launch never stretches out checkout's own response. `renderInvoicePdf` is real
+ * here otherwise (no Chromium stub configured in this file), so it is mocked to answer "nothing to
+ * attach" instead: the enqueue itself, still exactly one microtask chain away from `orderConfirm`
+ * returning, is what `flush()` below waits out.
+ */
+const renderInvoicePdfMock = jest.fn().mockResolvedValue(undefined);
+jest.mock('../../src/modules/orders/services/invoice', () => ({
+    ...jest.requireActual('../../src/modules/orders/services/invoice'),
+    renderInvoicePdf: (orderId: string) => renderInvoicePdfMock(orderId)
+}));
+
+/** Waits out `sendOrderPlacedEmail`'s own fire-and-forget chain, so its `enqueueEmail` call has
+ * already landed before a case clears or asserts on the mock. */
+const flush = () => new Promise((resolve) => setImmediate(resolve));
+
 import productsModule from '@modules/products/module';
 import inventoryModule from '@modules/inventory/module';
 import ordersModule from '@modules/orders/module';
@@ -64,7 +81,9 @@ const placePendingOrder = async (product: Awaited<ReturnType<typeof createProduc
     const result = await orderConfirm(user.id, testCallerContext);
     if (!result.success) throw new Error('setup: checkout was refused');
     // The confirmation email already fired at placement — every assertion below cares only
-    // about what happens AFTER the product stops being sellable.
+    // about what happens AFTER the product stops being sellable. `flush()` first, so that
+    // fire-and-forget dispatch has actually landed on the mock before this clears it.
+    await flush();
     mockEnqueueEmail.mockClear();
     return { user, orderId: String(result.data!._id) };
 };

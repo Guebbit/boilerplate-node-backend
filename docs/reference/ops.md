@@ -82,9 +82,10 @@ periodically", via `db/run-script.ts`.
 | `npm run reap:payments`          | 02:15 nightly  | No     | Deletes abandoned (never-settled) payment attempts past their retention window.                         |
 | `npm run sweep:order-effects`    | 02:20 nightly  | No     | Re-announces `ORDER_CANCELLED` for a refund the event bus's one delivery attempt did not carry through. |
 | `npm run reap:invoices`          | 02:25 nightly  | No     | Sweeps the invoice cache: an orphaned file with no order left to name it, and any file past its TTL.    |
+| `npm run reap:mail-spool`        | 02:30 nightly  | No     | Deletes a spooled email attachment older than its retention window — a mail job died mid-flight.        |
 | `npm run sweep:webhook-retries`  | every minute   | No     | Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.   |
 
-`docker/crontab` and the six nightly jobs above are staggered five minutes apart so they do not all
+`docker/crontab` and the seven nightly jobs above are staggered five minutes apart so they do not all
 land on the connection pool at once — each job's own header in `ops/` has the full reasoning.
 `sweep:webhook-retries` is the one job on a different schedule entirely: it runs every minute,
 because the sweep interval IS the retry granularity — see

@@ -9,13 +9,14 @@ Both are optional: they only activate when the relevant env vars / browser binar
 
 ## Where the code lives
 
-| Concern        | File                                                                     |
-| -------------- | ------------------------------------------------------------------------ |
-| SMTP transport | `src/infrastructure/adapters/mailer.ts`                                  |
-| Email triggers | `src/modules/account/controllers/post-reset-request.ts` (password reset) |
-| Email copy     | `src/modules/<name>/emails.ts`                                           |
-| HTML templates | `shared/templates/**/*.ejs`                                              |
-| PDF rendering  | `src/modules/orders/controllers/get-order-invoice.ts`                    |
+| Concern          | File                                                                                                                                     |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| SMTP transport   | `src/infrastructure/adapters/mailer.ts`                                                                                                  |
+| Attachment spool | `src/infrastructure/adapters/mail-spool.ts` — the Claim Check store an attachment's bytes go through; the queue carries only a key       |
+| Email triggers   | `src/modules/account/controllers/post-reset-request.ts` (password reset)                                                                 |
+| Email copy       | `src/modules/<name>/emails.ts`                                                                                                           |
+| HTML templates   | `shared/templates/**/*.ejs`                                                                                                              |
+| PDF rendering    | `src/modules/orders/services/invoice.ts` — `GET /orders/{id}/invoice` and the placed-order emails both render through `renderInvoicePdf` |
 
 ## Email pipeline
 
@@ -98,11 +99,13 @@ flowchart LR
     PDF --> Response[HTTP response]
 ```
 
-`puppeteer-core` does **not** download Chromium. You must either install a system browser and point Puppeteer at it, or swap to the full `puppeteer` package. Without an executable the invoice endpoint will error out at request time, not at boot — by design, so the rest of the API keeps running.
+`puppeteer-core` does **not** download Chromium. You must either install a system browser and point Puppeteer at it, or swap to the full `puppeteer` package. Without an executable, two things happen, neither at boot: `GET /orders/{id}/invoice` answers `500`, and `sendOrderPlacedEmail` logs the failure and sends the order-confirmation mail anyway — with no invoice attached. The second one is silent unless something is watching the logs; see [Hosting](./hosting.md) and `docker/Dockerfile.production`'s own `INSTALL_CHROMIUM` note.
+
+The invoice is never a durable file — `services/invoice.ts`'s `renderInvoicePdf` renders on demand and caches the result for a short TTL (`NODE_INVOICE_CACHE_TTL_MINUTES`), never as the system of record. The copy an email carries travels through the mail spool (`mail-spool.ts`): the render is spooled to disk, the queue message carries the key, never the bytes, and `nodemailer()` resolves the key back to a path and discards the file once the send has settled — the Claim Check pattern, the same shape `worker.image.digest`'s quarantine store already uses for an upload too large for a message.
 
 ## Works with
 
-- **[RabbitMQ](./rabbitmq.md)** — email jobs are normally not sent synchronously. The controller calls `enqueueEmail()`, which publishes to the RabbitMQ `emails` queue and returns immediately. The `email.worker.ts` consumer picks up the job and calls Nodemailer in the background — so the HTTP response doesn't wait for SMTP. Falls back to direct Nodemailer if RabbitMQ is not configured. → [How it's used — emails](./rabbitmq.md#how-it-s-used)
+- **[RabbitMQ](./rabbitmq.md)** — email jobs are normally not sent synchronously. The controller calls `enqueueEmail()`, which publishes to the RabbitMQ `emails` queue and returns immediately. The `email.worker.ts` consumer picks up the job and calls Nodemailer in the background — so the HTTP response doesn't wait for SMTP. An attachment rides along as a `{ filename, key }` pair, never bytes: the message stays small and JSON-serializable, and the consumer resolves the key against the mail spool. Falls back to direct Nodemailer if RabbitMQ is not configured. → [How it's used — emails](./rabbitmq.md#how-it-s-used)
 
 ## External references
 

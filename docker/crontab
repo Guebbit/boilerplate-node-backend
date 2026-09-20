@@ -37,3 +37,4 @@
 *  * * * * cd /app && npm run sweep:webhook-retries  >> /proc/1/fd/1 2>> /proc/1/fd/2
 # WARNING: owned by the orders module — delete it when removing the module (docs/modules/orders.md)
 25 2 * * * cd /app && npm run reap:invoices          >> /proc/1/fd/1 2>> /proc/1/fd/2
+30 2 * * * cd /app && npm run reap:mail-spool         >> /proc/1/fd/1 2>> /proc/1/fd/2

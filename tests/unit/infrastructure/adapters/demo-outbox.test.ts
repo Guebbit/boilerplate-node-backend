@@ -39,13 +39,26 @@ it('prefers a bare token variable over the link', () => {
     expect(readDemoOutbox()[0].token).toBe('bare-token');
 });
 
-it('serializes a structured recipient rather than losing it', () => {
-    recordDemoEmail({ to: { name: 'G', address: 'g@p.it' }, subject: 'S' }, 't', {});
-    expect(readDemoOutbox()[0].to).toContain('g@p.it');
-});
-
 it('clears to an empty inbox — the per-spec reset the demo router performs', () => {
     recordDemoEmail({ to: 'a@b.it', subject: 'S' }, 't', {});
     clearDemoOutbox();
     expect(readDemoOutbox()).toEqual([]);
+});
+
+it('records an attachment by filename only, never its bytes', () => {
+    recordDemoEmail(
+        {
+            to: 'a@b.it',
+            subject: 'S',
+            attachments: [{ filename: 'invoice-2026-000041.pdf', key: 'abc123.pdf' }]
+        },
+        't',
+        {}
+    );
+    expect(readDemoOutbox()[0].attachments).toEqual(['invoice-2026-000041.pdf']);
+});
+
+it('omits attachments entirely for a send that carried none', () => {
+    recordDemoEmail({ to: 'a@b.it', subject: 'S' }, 't', {});
+    expect(readDemoOutbox()[0].attachments).toBeUndefined();
 });

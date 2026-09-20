@@ -79,14 +79,16 @@ FROM docker.io/library/node:25-alpine AS runtime
 
 # Chromium is OFF by default and it is a ~200 MB difference.
 #
-# Only `infrastructure/adapters/pdf.ts` needs it — the order-invoice endpoint renders HTML to PDF
-# through puppeteer-core. Every other endpoint runs fine without it, and a deployment that never
-# asks for an invoice should not carry a browser. Turn it on when it is needed:
+# Only `infrastructure/adapters/pdf.ts` needs it — invoice rendering, through puppeteer-core.
+# Every other endpoint runs fine without it, and a deployment that never asks for an invoice
+# should not carry a browser. Turn it on when it is needed:
 #
 #   docker build -f docker/Dockerfile.production --build-arg INSTALL_CHROMIUM=true .
 #
-# The endpoint answers 500 rather than crashing the process when Chromium is absent, so the wrong
-# choice here is recoverable and visible rather than silent.
+# Two consequences, one visible and one not. `GET /orders/{id}/invoice` answers 500 rather than
+# crashing the process — recoverable and visible. The order-confirmation email does NOT: a failed
+# render there is logged and the mail still sends, just with no invoice attached, silently, for
+# every order this deployment ever places. A shop that invoices customers by mail needs Chromium.
 ARG INSTALL_CHROMIUM=false
 
 WORKDIR /app
