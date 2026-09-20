@@ -25,6 +25,30 @@ servers:
     - url: https://api.example.com
       description: Production
 
+# ---------- Responses the APPLICATION answers, on operations that never declare them. ----------
+#
+# Three middlewares sit in front of every route and can refuse before it runs: the global rate
+# limiter (`app.use(rateLimiter)`), and the body parser's size and syntax checks. None of them is
+# any one endpoint's business, so none of them was ever written into a module fragment — which
+# left ~80 operations able to answer a status their own contract denied.
+#
+# Declared ONCE here and merged into every matching operation by `scripts/contracts/openapi-bundle.ts`,
+# rather than hand-copied into each fragment. A hand-copied list is a published claim with no guard
+# behind it: it goes stale silently, and the next app-level response repeats the whole exercise.
+#
+# `appliesTo` — `all` for what any request can trigger, `requestBody` for what only a request
+# carrying a body can.
+x-app-level-responses:
+    '400':
+        response: BadRequest
+        appliesTo: requestBody
+    '413':
+        response: PayloadTooLarge
+        appliesTo: requestBody
+    '429':
+        response: TooManyRequests
+        appliesTo: all
+
 tags:
     - name: Auth
     - name: Antibot
@@ -239,6 +263,16 @@ components:
                 application/json:
                     schema:
                         $ref: '#/components/schemas/ValidationErrorResponse'
+        PayloadTooLarge:
+            description: >-
+                The request body is larger than this deployment accepts
+                (`NODE_JSON_BODY_LIMIT`, 100kb by default; multipart uploads are bounded separately
+                by `NODE_MAX_UPLOAD_BYTES`). Refused by the body parser before any route runs,
+                which is why it is declared for every body-accepting operation rather than by hand.
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
         TooManyRequests:
             description: The caller has spent a rate-limit budget and must wait. The wait is in the standard `RateLimit`/`Retry-After` headers, and — where the endpoint has a budget of its own to report, like a resend cooldown — in the error `details` too.
             content:
