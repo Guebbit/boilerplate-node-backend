@@ -7,14 +7,16 @@
  */
 
 import { Router } from 'express';
-import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
+import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
 import { getAudit } from './controllers/get-audit';
 
 /** Express router for the tenant-facing audit trail. */
 export const router = Router();
 
 // The router's only route, guarded the same way `users/routes.ts` guards its whole surface.
-router.use(getAuth, isAuth, requirePermission('audit.any.read'));
+// `isAuthOrCredential`: a compliance or SIEM integration pulling the trail is a machine, and
+// `audit.any.read` is a tenant key like any other. The controller reads no `authContext`.
+router.use(getAuth, isAuthOrCredential, requirePermission('audit.any.read'));
 
 // GET /audit
 router.get('/', getAudit);

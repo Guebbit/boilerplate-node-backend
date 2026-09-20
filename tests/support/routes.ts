@@ -389,6 +389,28 @@ export const effectiveRouteTable = (router: Router): (RouteRow & { applies: stri
     walk(router).rows;
 
 /**
+ * The two guards that answer "is this caller authenticated at all".
+ *
+ * A route mounts exactly ONE: `isAuth` where the subject is the caller themselves, and
+ * `isAuthOrCredential` where an `sk_...` api key may reach it too. Which one a route takes is a
+ * per-route decision (`kernel/middlewares/authorizations.ts` states the test); that one of them is
+ * present, and sits before `requirePermission`, is what an authorization assertion is asking about.
+ *
+ * Shared rather than spelled per module so widening the set stays one edit — and so a module test
+ * cannot accidentally assert the narrower question and pass while the route admits nobody.
+ */
+const IDENTITY_GUARDS = new Set(['isAuth', 'isAuthOrCredential']);
+
+/**
+ * Where the identity guard sits in a guard chain.
+ *
+ * @param guards - the chain, as {@link guardsOn} returns it
+ * @returns its index, or `-1` when the route mounts neither
+ */
+export const identityGuardIndex = (guards: readonly string[]): number =>
+    guards.findIndex((guard) => IDENTITY_GUARDS.has(guard));
+
+/**
  * Every guard in force on one endpoint — router-level and per-route, in that order.
  *
  * The spelling an authorization assertion wants: "is `requirePermission` on this route" is a question about

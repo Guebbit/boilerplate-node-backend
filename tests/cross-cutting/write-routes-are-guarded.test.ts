@@ -19,7 +19,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import type { Router } from 'express';
-import { effectiveRouteTable, guardsOn } from '@tests/routes';
+import { effectiveRouteTable, guardsOn, identityGuardIndex } from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
@@ -85,7 +85,7 @@ const ROUTED_MODULES: Record<string, Router> = {
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /**
- * One write route's exception from the default (`isAuth` then `requirePermission`).
+ * One write route's exception from the default (an identity guard, then `requirePermission`).
  *
  * `requiresAuth: false` is reserved for a route that genuinely needs no session — either there is
  * none to have yet (login, signup), or a token IN the request is itself the credential (an emailed
@@ -290,19 +290,19 @@ describe('every write route is guarded by default', () => {
             const exception = WRITE_EXCEPTIONS[`${moduleName} ${signature}`];
             const guards = guardsOn(router, signature);
 
+            const identityIndex = identityGuardIndex(guards);
+
             if (exception === undefined) {
                 // The default: authenticated, then holding the route's key, in that order.
-                expect(guards).toContain('isAuth');
+                expect(identityIndex).toBeGreaterThanOrEqual(0);
                 expect(guards).toContain('requirePermissionGuard');
-                expect(guards.indexOf('isAuth')).toBeLessThan(
-                    guards.indexOf('requirePermissionGuard')
-                );
+                expect(identityIndex).toBeLessThan(guards.indexOf('requirePermissionGuard'));
                 return;
             }
 
             expect(guards).not.toContain('requirePermissionGuard');
-            if (exception.requiresAuth) expect(guards).toContain('isAuth');
-            else expect(guards).not.toContain('isAuth');
+            if (exception.requiresAuth) expect(identityIndex).toBeGreaterThanOrEqual(0);
+            else expect(identityIndex).toBe(-1);
         });
     }
 });

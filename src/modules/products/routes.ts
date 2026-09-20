@@ -6,7 +6,7 @@
  */
 
 import { Router } from 'express';
-import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
+import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
 import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { upload } from '@infrastructure/http/middlewares/upload';
 import { getProducts, searchProductsKeyParameters } from './controllers/get-products';
@@ -21,6 +21,12 @@ import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 
 /** Express router for product catalogue endpoints (public read, admin write). */
 export const router = Router();
+
+/*
+ * Write routes mount `isAuthOrCredential`, not `isAuth`: an `sk_...` api key may reach them.
+ * Catalogue writes are `products.any.*`/`translations.any.*` keys; the public reads above
+ * mount no identity guard at all. A PIM or supplier feed is the machine case.
+ */
 
 // Apply getAuth to all routes so admins get extra visibility
 router.use(getAuth);
@@ -41,7 +47,7 @@ router.get('/', cacheProductsSearch, getProducts);
 router.post(
     '/',
     uploadLimiter,
-    isAuth,
+    isAuthOrCredential,
     requirePermission('products.any.create'),
     requirePermission('translations.any.update'),
     invalidateCache(['products']),
@@ -52,7 +58,7 @@ router.post(
 // DELETE /products — admin only, id in body
 router.delete(
     '/',
-    isAuth,
+    isAuthOrCredential,
     requirePermission('products.any.delete'),
     invalidateCache(['products']),
     deleteProducts
@@ -73,7 +79,7 @@ router.get('/:id', setCache(3600, { tags: ['products'], keyParameters: [] }), ge
 router.patch(
     '/:id',
     uploadLimiter,
-    isAuth,
+    isAuthOrCredential,
     requirePermission('products.any.update'),
     requirePermission('translations.any.update'),
     invalidateCache(['products']),
@@ -85,7 +91,7 @@ router.patch(
 // is actively editing, the same reasoning `GET /locales/:locale/entries` already applies.
 router.get(
     '/:id/admin',
-    isAuth,
+    isAuthOrCredential,
     requirePermission('products.any.update'),
     requirePermission('translations.any.read'),
     getProductAdmin
@@ -94,7 +100,7 @@ router.get(
 // DELETE /products/:id — admin only (soft delete unless ?hardDelete=true)
 router.delete(
     '/:id',
-    isAuth,
+    isAuthOrCredential,
     requirePermission('products.any.delete'),
     invalidateCache(['products']),
     deleteProducts
@@ -103,7 +109,7 @@ router.delete(
 // DELETE /products/:id/hard — the same operation, with the flag spelled in the path
 router.delete(
     '/:id/hard',
-    isAuth,
+    isAuthOrCredential,
     requirePermission('products.any.delete'),
     invalidateCache(['products']),
     routeFlag('hardDelete'),

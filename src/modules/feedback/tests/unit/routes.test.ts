@@ -1,14 +1,20 @@
 /**
  * @module
  * The feedback route table. `routes.ts` mounts ONE public route (the visitor contact form), then
- * `router.use(getAuth, isAuth)` and a `requirePermission('feedback.*')` per route — everything
+ * `router.use(getAuth, isAuthOrCredential)` and a `requirePermission('feedback.*')` per route — everything
  * below the mount is keyed, purely by position, and
  * nothing looks wrong either way if that's gotten wrong. Assertions here are positional for that
  * reason (see `effectiveRouteTable` in `tests/support/routes.ts`); per-route middleware alone
  * would pass whatever happened.
  */
 
-import { routeTable, routeSignatures, guardsOn, optionsOf } from '@tests/routes';
+import {
+    routeTable,
+    routeSignatures,
+    guardsOn,
+    optionsOf,
+    identityGuardIndex
+} from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
@@ -41,7 +47,7 @@ describe('feedback routes — the positional guard', () => {
 
         // The whole reason the module exists for a visitor. A guard reaching this route is an
         // outage of the contact form, not a hardening.
-        expect(guards).not.toContain('isAuth');
+        expect(identityGuardIndex(guards)).toBe(-1);
         expect(guards).not.toContain('requirePermissionGuard');
     });
 
@@ -51,7 +57,7 @@ describe('feedback routes — the positional guard', () => {
             const guards = guardsOn(router, signature);
 
             expect(guards).toContain('getAuth');
-            expect(guards).toContain('isAuth');
+            expect(identityGuardIndex(guards)).toBeGreaterThanOrEqual(0);
             expect(guards).toContain('requirePermissionGuard');
         }
     );

@@ -155,23 +155,78 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
 };
 
 /**
- * Reject with 401 unless `getAuth` already resolved a caller onto the request.
+ * The 401 both identity guards answer with. Audited before rejecting: a failed auth attempt is
+ * exactly what the trail exists to record.
+ */
+const refuseUnauthenticated = (request: Request, response: Response): void => {
+    auditRefusal(request, {
+        action: coreAuditActions.SECURITY_UNAUTHORIZED,
+        actor_user_id: 'anonymous',
+        actor_role: 'anonymous'
+    });
+    rejectResponse(response, 401);
+};
+
+/**
+ * Reject with 401 unless `getAuth` resolved a human SESSION onto the request.
+ *
+ * Session only, deliberately. An `sk_...` credential resolves to `request.caller` and no
+ * `authContext`, so it is refused here — which is the right answer for every route whose subject
+ * is the caller themselves. A machine credential has no cart, no sessions and no second factor,
+ * and the controllers behind these routes say so in their types: they read
+ * `request.authContext!.id`, an assertion that is sound precisely BECAUSE this guard admits
+ * nothing else.
+ *
+ * A route whose subject is the tenant's data rather than the caller mounts
+ * {@link isAuthOrCredential} instead.
+ *
+ * See: docs/tools/security.md#machine-to-machine-credentials
  *
  * @param request - must already carry `authContext`, set upstream by `getAuth`
- * @param response - answered 401 when no caller was resolved
- * @param next - called only once a caller is confirmed present
+ * @param response - answered 401 when no session was resolved
+ * @param next - called only once a session is confirmed present
  */
 export const isAuth = (request: Request, response: Response, next: NextFunction) => {
     const token = getTokenBearer(request);
 
-    // Audited before rejecting: a failed auth attempt is exactly what the trail exists to record.
     if (!request.authContext || !token) {
-        auditRefusal(request, {
-            action: coreAuditActions.SECURITY_UNAUTHORIZED,
-            actor_user_id: 'anonymous',
-            actor_role: 'anonymous'
-        });
-        rejectResponse(response, 401);
+        refuseUnauthenticated(request, response);
+        return;
+    }
+
+    next();
+};
+
+/**
+ * {@link isAuth} for a route an API KEY may also reach: rejects with 401 unless `getAuth`
+ * resolved EITHER a human session or an `sk_...` credential.
+ *
+ * Why this is a second guard and not a widening of `isAuth`: `request.caller` alone means no
+ * `authContext`, and ~100 reads across the modules assume one is there — many written
+ * `request.authContext!.id`, sound only while `isAuth` guarantees it. Admitting credentials
+ * through `isAuth` would turn every one of those into a `TypeError` and a 500, on exactly the
+ * routes where a machine credential makes least sense. Splitting the guard instead means a
+ * forgotten mount answers 401, which is the direction an auth mistake should fail in.
+ *
+ * Mount this ONLY where both hold, and they are checkable rather than a matter of taste:
+ *
+ * - every guard on the route is a tenant-scoped `<family>.any.<action>` key, and
+ * - no controller it reaches reads `request.authContext`.
+ *
+ * `tests/cross-cutting/api-key-authentication.test.ts` asserts the second half, so a controller
+ * that starts reading `authContext` behind this guard fails the suite rather than production.
+ *
+ * NOT for a step-up route. `requireFreshAuth` reads `authContext` and a credential can never
+ * answer a re-authentication challenge, so pairing them gives a partner integration a 401 it can
+ * never clear. No route mounts both today, and that is the rule, not a coincidence.
+ *
+ * @param request - must already carry `authContext` or `caller`, set upstream by `getAuth`
+ * @param response - answered 401 when neither was resolved
+ * @param next - called once either is confirmed present
+ */
+export const isAuthOrCredential = (request: Request, response: Response, next: NextFunction) => {
+    if (!request.authContext && !request.caller) {
+        refuseUnauthenticated(request, response);
         return;
     }
 

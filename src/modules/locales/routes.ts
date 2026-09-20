@@ -3,13 +3,14 @@
  * Express router for locale discovery and translation administration. The four GET reads are
  * public — an unauthenticated client is exactly who needs a dictionary — with only the manifest
  * taking `getAuth`, to include inactive languages for admins. Every write is admin-gated per mount
- * (`getAuth, isAuth, requirePermission(...)` spelled on each route, not a shared `router.use`) and invalidates
+ * (`getAuth, isAuthOrCredential, requirePermission(...)` spelled on each route, not a shared
+ * `router.use`) and invalidates
  * the shared Redis cache. Route order matters: `/tenants` and `/:locale/messages` must be declared
  * before `/:locale`, or Express's first-match wins the wildcard instead.
  */
 
 import { Router } from 'express';
-import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
+import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
 import { invalidateCache, setCache } from '@infrastructure/http/middlewares/cache';
 import { getLocales, getLocaleDictionary } from './controllers/get-locales';
 import { getLocaleMessages } from './controllers/get-locale-messages';
@@ -29,6 +30,12 @@ import { upsertEntityTranslations } from './controllers/upsert-entity-translatio
 
 /** Express router mounted at `/locales` — see the module header for the ordering and guard rules. */
 export const router = Router();
+
+/*
+ * Write routes mount `isAuthOrCredential`, not `isAuth`: an `sk_...` api key may reach them.
+ * Dictionary writes are `locales.any.*`/`translations.any.*` keys. A translation-management
+ * system pushing strings is the machine case; the public reads above are untouched.
+ */
 
 /**
  * The three public reads, all `browserRevalidate`: Redis still holds them for the hour, but the
@@ -64,7 +71,7 @@ router.get('/:locale', publicLocaleCache, getLocaleDictionary);
 router.post(
     '/',
     getAuth,
-    isAuth,
+    isAuthOrCredential,
     requirePermission('locales.any.create'),
     invalidateCache(['locales']),
     createLocale
@@ -72,7 +79,7 @@ router.post(
 router.put(
     '/:locale',
     getAuth,
-    isAuth,
+    isAuthOrCredential,
     requirePermission('locales.any.update'),
     invalidateCache(['locales']),
     updateLocale
@@ -80,7 +87,7 @@ router.put(
 router.delete(
     '/:locale',
     getAuth,
-    isAuth,
+    isAuthOrCredential,
     requirePermission('locales.any.delete'),
     invalidateCache(['locales']),
     deleteLocale
@@ -93,14 +100,14 @@ router.delete(
 router.get(
     '/:locale/entries',
     getAuth,
-    isAuth,
+    isAuthOrCredential,
     requirePermission('locales.any.update'),
     getLocaleEntries
 );
 router.post(
     '/:locale/entries',
     getAuth,
-    isAuth,
+    isAuthOrCredential,
     requirePermission('locales.any.create'),
     invalidateCache(['locales']),
     createLocaleEntry
@@ -109,7 +116,7 @@ router.post(
 router.put(
     '/:locale/entries',
     getAuth,
-    isAuth,
+    isAuthOrCredential,
     requirePermission('locales.any.update'),
     invalidateCache(['locales']),
     replaceLocaleEntries
@@ -117,7 +124,7 @@ router.put(
 router.patch(
     '/:locale/entries',
     getAuth,
-    isAuth,
+    isAuthOrCredential,
     requirePermission('locales.any.update'),
     invalidateCache(['locales']),
     mergeLocaleEntries
@@ -126,7 +133,7 @@ router.patch(
 router.put(
     '/:locale/entries/:entryId',
     getAuth,
-    isAuth,
+    isAuthOrCredential,
     requirePermission('locales.any.update'),
     invalidateCache(['locales']),
     updateLocaleEntry
@@ -134,7 +141,7 @@ router.put(
 router.delete(
     '/:locale/entries/:entryId',
     getAuth,
-    isAuth,
+    isAuthOrCredential,
     requirePermission('locales.any.delete'),
     invalidateCache(['locales']),
     deleteLocaleEntry
@@ -150,14 +157,14 @@ router.delete(
 router.get(
     '/translations/:entityType/:id',
     getAuth,
-    isAuth,
+    isAuthOrCredential,
     requirePermission('translations.any.read'),
     getEntityTranslations
 );
 router.patch(
     '/translations/:entityType/:id',
     getAuth,
-    isAuth,
+    isAuthOrCredential,
     requirePermission('translations.any.update'),
     upsertEntityTranslations
 );

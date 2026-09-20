@@ -7,7 +7,13 @@
  * guard by line number instead of by route.
  */
 
-import { routeTable, routeSignatures, guardsOn, optionsOf } from '@tests/routes';
+import {
+    routeTable,
+    routeSignatures,
+    guardsOn,
+    optionsOf,
+    identityGuardIndex
+} from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
@@ -64,26 +70,28 @@ describe('locale routes — authorization', () => {
 
         // The documented decision. A guard here makes the copy unavailable to the clients that
         // most need it — see this file's header, and the router's own.
-        expect(guards).not.toContain('isAuth');
+        expect(identityGuardIndex(guards)).toBe(-1);
         expect(guards).not.toContain('requirePermissionGuard');
     });
 
     it('reads the caller on the manifest, without demanding one', () => {
         // `GET /` is the one public read that takes `getAuth`: an admin's manifest also lists the
         // inactive languages a visitor is not offered. Dropping it silently narrows the admin
-        // view; adding `isAuth` beside it would break the anonymous case.
+        // view; adding an identity guard beside it would break the anonymous case.
         expect(guardsOn(router, 'GET /')).toContain('getAuth');
-        expect(guardsOn(router, 'GET /')).not.toContain('isAuth');
+        expect(identityGuardIndex(guardsOn(router, 'GET /'))).toBe(-1);
     });
 
     it.each(ADMIN)('%s names all three guards itself', (signature) => {
         const guards = guardsOn(router, signature);
 
         expect(guards).toContain('getAuth');
-        expect(guards).toContain('isAuth');
+        const identity = identityGuardIndex(guards);
+
+        expect(identity).toBeGreaterThanOrEqual(0);
         expect(guards).toContain('requirePermissionGuard');
-        expect(guards.indexOf('getAuth')).toBeLessThan(guards.indexOf('isAuth'));
-        expect(guards.indexOf('isAuth')).toBeLessThan(guards.indexOf('requirePermissionGuard'));
+        expect(guards.indexOf('getAuth')).toBeLessThan(identity);
+        expect(identity).toBeLessThan(guards.indexOf('requirePermissionGuard'));
     });
 
     it('has no route that is neither a documented public read nor fully guarded', () => {

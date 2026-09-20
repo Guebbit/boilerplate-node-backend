@@ -83,6 +83,41 @@ permission list; re-derive from the authoritative source on every check).
 refuses one outright, distinctly from a missing permission, since this repo's deployment model is a
 silo (one organisation per stack) and every real use case is shop-level.
 
+**Which routes a credential may reach, and how that is kept honest.** Two identity guards, and a
+route mounts exactly one:
+
+| Guard                | Admits                              | For                                                                                                                                                                      |
+| -------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `isAuth`             | a human session only                | routes whose subject is the CALLER — cart, wishlist, addresses, `account/*`, and `orders`, whose customer views narrow their reads through `callerScope(authContext)`    |
+| `isAuthOrCredential` | a session OR an `sk_...` credential | routes whose subject is the TENANT'S DATA — `users`, `inventory`, `audit-logs`, `webhooks`, `feedback`'s operator half, and the write halves of `products` and `locales` |
+
+This is a split rather than one widened guard because a credential resolves to `request.caller`
+with NO `authContext`, and roughly a hundred reads across the modules assume one is present — many
+written `request.authContext!.id`, an assertion sound only while `isAuth` admits nothing else.
+Widening `isAuth` would turn each of those into a `TypeError` and a 500 on exactly the routes where
+a machine credential makes least sense. With the split, a route whose author forgets to think about
+credentials gets `isAuth` and answers 401 — the direction an auth mistake should fail in.
+
+Mount `isAuthOrCredential` only where both hold, and both are checkable rather than a matter of
+taste: every guard on the route is a tenant-scoped `<family>.any.<action>` key, and no controller
+it reaches reads `request.authContext`.
+`tests/cross-cutting/api-key-authentication.test.ts` asserts the second half per module, plus that
+no module mounts both guards, so a controller that starts reading `authContext` behind the
+credential guard fails the suite rather than production.
+
+Two exclusions are decisions, not consequences, and each says so at its mount:
+
+- **`api-keys` itself.** It reads no `authContext` and would qualify mechanically. A credential
+  that can mint credentials is one that never has to be rotated, so minting stays a human act.
+- **`orders`.** Its `orders.any.*` routes would qualify, but the same router carries the
+  customer's own `/:id`, `/:id/cancel` and `/:id/invoice`. Opening it up means splitting the
+  router first.
+
+Never pair `isAuthOrCredential` with `requireFreshAuth`: step-up reads `authContext`, and a
+credential can never answer a re-authentication challenge, so the pairing hands a partner
+integration a 401 it can never clear. No route mounts both, and that is the rule rather than a
+coincidence.
+
 **Lifecycle.** The plaintext is shown exactly once, in `POST /api-keys`'s response. Revoke
 (`DELETE /api-keys/{id}`) is a soft state change — `revokedAt`, not a delete — so a revoked key's
 audit history stays readable; revoking twice is a no-op, not a 404. An optional `expiresAt` refuses

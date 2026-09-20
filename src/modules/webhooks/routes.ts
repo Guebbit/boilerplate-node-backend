@@ -7,7 +7,7 @@
  */
 
 import { Router } from 'express';
-import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
+import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
 import { listWebhookSubscriptions } from './controllers/list-subscriptions';
 import { createWebhookSubscription } from './controllers/create-subscription';
 import { updateWebhookSubscription } from './controllers/update-subscription';
@@ -19,7 +19,10 @@ import { listWebhookEvents } from './controllers/list-events';
 /** Express router for the webhooks admin surface. */
 export const router = Router();
 
-router.use(getAuth, isAuth);
+// `isAuthOrCredential`, not `isAuth`: an `sk_...` api key may reach this module.
+// Subscription management for machine consumers. Refusing the machines is what this
+// module exists to serve.
+router.use(getAuth, isAuthOrCredential);
 
 router.get('/subscriptions', requirePermission('webhooks.any.read'), listWebhookSubscriptions);
 router.post('/subscriptions', requirePermission('webhooks.any.create'), createWebhookSubscription);

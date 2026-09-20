@@ -9,7 +9,7 @@
  */
 
 import { Router } from 'express';
-import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
+import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
 import { postFeedbackContact } from './controllers/post-feedback-contact';
 import { getFeedback, searchFeedbackKeyParameters } from './controllers/get-feedback';
 import { putFeedbackStatus } from './controllers/put-feedback-status';
@@ -48,7 +48,9 @@ router.post(
  * the one public route sits alone at the top. `tests/cross-cutting/authenticated-controllers.test.ts`
  * catches a misplaced route that also reads the caller.
  */
-router.use(getAuth, isAuth);
+// `isAuthOrCredential`: everything below is the operator's view, gated by `feedback.any.*`
+// keys and reading no `authContext`. The public submission route above is unaffected.
+router.use(getAuth, isAuthOrCredential);
 
 /**
  * The DTO form of `GET /` — a GET body has no defined semantics and `setCache` keys only on

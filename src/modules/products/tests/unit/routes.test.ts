@@ -6,7 +6,13 @@
  * factories are replaced with mocks.
  */
 
-import { routeTable, routerMiddleware, routeSignatures, optionsOf } from '@tests/routes';
+import {
+    routeTable,
+    routerMiddleware,
+    routeSignatures,
+    optionsOf,
+    identityGuardIndex
+} from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
@@ -78,9 +84,9 @@ describe('product routes — authorization', () => {
 
         expect(row).toBeDefined();
         // Both, and in this order: `requirePermission` alone would read the role off an absent auth context.
-        expect(row!.chain).toContain('isAuth');
+        expect(identityGuardIndex(row!.chain)).toBeGreaterThanOrEqual(0);
         expect(row!.chain).toContain('requirePermissionGuard');
-        expect(row!.chain.indexOf('isAuth')).toBeLessThan(
+        expect(identityGuardIndex(row!.chain)).toBeLessThan(
             row!.chain.indexOf('requirePermissionGuard')
         );
     });
@@ -108,7 +114,7 @@ describe('product routes — authorization', () => {
             );
 
             // The catalogue is a storefront: a guard added here is an outage, not a hardening.
-            expect(row!.chain).not.toContain('isAuth');
+            expect(identityGuardIndex(row!.chain)).toBe(-1);
             expect(row!.chain).not.toContain('requirePermissionGuard');
         }
     );

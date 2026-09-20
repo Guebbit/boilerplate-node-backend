@@ -22,7 +22,16 @@ import { invoiceLimiter } from './rate-limits';
 /** Express router for order management (authenticated; non-admin users see only their own orders). */
 export const router = Router();
 
-// All order routes require authentication
+/*
+ * All order routes require authentication — a SESSION, not an api key.
+ *
+ * `isAuth` rather than `isAuthOrCredential` because this router is mixed: the `orders.any.*`
+ * routes are tenant-scoped and would qualify, but `/:id`, `/:id/cancel` and `/:id/invoice` are
+ * the customer's own view and narrow their reads through `orderService.callerScope(authContext)`.
+ * A credential reaching those resolves to no `authContext` and would silently widen the scope
+ * from "my orders" to whatever the fallback is — exactly the bug the split guard exists to make
+ * impossible. Opening this module up means splitting the router first.
+ */
 router.use(getAuth, isAuth);
 
 /** Shared cache middleware for both search entry points, keyed on the query parameters that change the answer. */

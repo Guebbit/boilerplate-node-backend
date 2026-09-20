@@ -1,13 +1,13 @@
 /**
  * @module
  * Inventory route table tests. Every route here is staff's, guarded by one
- * `router.use(getAuth, isAuth, requireUnrestricted)` at the top — the customer-facing half of this module is
+ * `router.use(getAuth, isAuthOrCredential, requireUnrestricted)` at the top — the customer-facing half of this module is
  * deliberately not a route at all, since a shopper learns about stock from `available` on the
  * product page. A route mounted above the guard, or the guard losing `requirePermission`, would publish
  * the counters and the ledger to anyone.
  */
 
-import { routeSignatures, guardsOn } from '@tests/routes';
+import { routeSignatures, guardsOn, identityGuardIndex } from '@tests/routes';
 import { router } from '@modules/inventory/routes';
 
 describe('inventory routes', () => {
@@ -31,9 +31,11 @@ describe('inventory routes', () => {
         const guards = guardsOn(router, signature);
 
         expect(guards).toContain('getAuth');
-        expect(guards).toContain('isAuth');
+        const identity = identityGuardIndex(guards);
+
+        expect(identity).toBeGreaterThanOrEqual(0);
         expect(guards).toContain('requirePermissionGuard');
-        expect(guards.indexOf('isAuth')).toBeLessThan(guards.indexOf('requirePermissionGuard'));
+        expect(identity).toBeLessThan(guards.indexOf('requirePermissionGuard'));
     });
 
     it('has no public endpoint at all', () => {

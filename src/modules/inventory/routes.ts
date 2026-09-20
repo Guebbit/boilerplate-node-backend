@@ -9,7 +9,7 @@
  */
 
 import { Router } from 'express';
-import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
+import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
 import { getInventoryLevels } from './controllers/get-inventory-levels';
 import { getStockMovements } from './controllers/get-stock-movements';
 import { postReceipt } from './controllers/post-receipt';
@@ -23,7 +23,10 @@ export const router = Router();
  * Exposing the counters or ledger publicly would tell competitors what sells and tell customers
  * how close they are to missing out — a dark pattern when true, a lie when not.
  */
-router.use(getAuth, isAuth);
+// `isAuthOrCredential`, not `isAuth`: an `sk_...` api key may reach this module.
+// Stock levels, receipts and adjustments: the surface a warehouse system talks to, and
+// the clearest machine-to-machine case in the app.
+router.use(getAuth, isAuthOrCredential);
 
 // GET /inventory/levels — the stock board, scarcest first
 router.get('/levels', requirePermission('inventory.any.read'), getInventoryLevels);

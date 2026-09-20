@@ -1,11 +1,17 @@
 /**
  * @module
  * The user-administration route table. Every route is admin-only by one line —
- * `router.use(getAuth, isAuth, requireUnrestricted)` — so a route added later inherits the guard, but losing
+ * `router.use(getAuth, isAuthOrCredential, requireUnrestricted)` — so a route added later inherits the guard, but losing
  * `requirePermission` there makes the entire directory readable by any logged-in customer. The guard is
  * asserted per endpoint rather than once, so a route mounted above that `use` still fails here.
  */
-import { routeTable, routeSignatures, guardsOn, optionsOf } from '@tests/routes';
+import {
+    routeTable,
+    routeSignatures,
+    guardsOn,
+    optionsOf,
+    identityGuardIndex
+} from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
@@ -53,13 +59,17 @@ describe('user routes — authorization', () => {
     it.each(ALL)('%s is reachable only by an authenticated admin', (signature) => {
         const guards = guardsOn(router, signature);
 
-        // All three, in order. `getAuth` populates the context, `isAuth` demands one, `requirePermission`
-        // reads the role off it — `requirePermission` before `isAuth` would read a role from nothing.
+        // All three, in order. `getAuth` populates the context, the identity guard demands one,
+        // `requirePermission` reads the role off it — `requirePermission` first would read a role
+        // from nothing. This module's identity guard is `isAuthOrCredential`: the directory is a
+        // tenant surface an api key may sync against.
+        const identity = identityGuardIndex(guards);
+
         expect(guards).toContain('getAuth');
-        expect(guards).toContain('isAuth');
+        expect(identity).toBeGreaterThanOrEqual(0);
         expect(guards).toContain('requirePermissionGuard');
-        expect(guards.indexOf('getAuth')).toBeLessThan(guards.indexOf('isAuth'));
-        expect(guards.indexOf('isAuth')).toBeLessThan(guards.indexOf('requirePermissionGuard'));
+        expect(guards.indexOf('getAuth')).toBeLessThan(identity);
+        expect(identity).toBeLessThan(guards.indexOf('requirePermissionGuard'));
     });
 
     it('has no public endpoint at all', () => {

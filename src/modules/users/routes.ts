@@ -7,7 +7,7 @@
  */
 
 import { Router } from 'express';
-import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
+import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
 import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { upload } from '@infrastructure/http/middlewares/upload';
 import { getUsers, searchUsersKeyParameters } from './controllers/get-users';
@@ -24,7 +24,10 @@ export const router = Router();
 // Every route below needs a caller, but not the SAME key — `manager` reads and `support` reads
 // and updates, and a router-wide gate on one key made the other unreachable no matter what the
 // role file granted. Each mount below states the one key its own action needs.
-router.use(getAuth, isAuth);
+// `isAuthOrCredential`, not `isAuth`: an `sk_...` api key may reach this module.
+// Every route here is a `users.any.*` key over the tenant's directory — a partner
+// integration syncing accounts is the documented use case. No controller reads `authContext`.
+router.use(getAuth, isAuthOrCredential);
 
 /** Cache reader keyed on the same query parameters `getUsers`'s schema accepts. */
 const cacheUsersSearch = searchCache('users', searchUsersKeyParameters);
