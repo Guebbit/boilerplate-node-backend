@@ -13,17 +13,7 @@ import { spawn } from 'node:child_process';
 import { rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { availableMemoryMb, positiveInteger } from '../testing/machine-budget';
-
-/**
- * Machine settings live in `.env`: concurrency and heap are properties of the box, not the
- * project, while `stryker.json` is committed. CI has no `.env` and passes flags instead.
- */
-try {
-    process.loadEnvFile();
-} catch {
-    /* no .env in this checkout — CI is the normal case */
-}
+import { availableMemoryMb, environmentKnob } from '../testing/machine-budget';
 
 /** The repo root — the working directory every spawned jest inherits. */
 export const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -69,7 +59,7 @@ const OOM_WINDOW_MS = 10 * 60 * 1000;
  *   memory (`MemAvailable`, not total) divided by one worker's peak RSS
  */
 export const resolveConcurrency = (): number => {
-    const configured = positiveInteger(process.env.STRYKER_CONCURRENCY);
+    const configured = environmentKnob('STRYKER_CONCURRENCY');
     if (configured) return configured;
 
     const cpuCap = os.cpus().length - 1;
@@ -101,7 +91,7 @@ export const runStryker = ({
     label?: string;
 }): Promise<StrykerOutcome> => {
     const concurrency = resolveConcurrency();
-    const heapMb = positiveInteger(process.env.STRYKER_WORKER_HEAP_MB);
+    const heapMb = environmentKnob('STRYKER_WORKER_HEAP_MB');
     const passedConcurrency = args.some((argument) => argument.startsWith('--concurrency'));
 
     /*
@@ -109,6 +99,11 @@ export const runStryker = ({
      * that one announces itself. It IS the cure for the other failure — V8's default is a flat
      * ~4.2 GB here rather than a share of the machine, and a worker wanting more dies in the first
      * minute. See docs/tools/mutation-testing.md#worker-heap-cap.
+     *
+     * `...process.env`, never `.env` merged in first: `.env`'s real `NODE_RATE_LIMIT_REDIS_ENABLED`/
+     * `NODE_REDIS_URL` would otherwise reach every spawned jest before `tests/support/setup.ts` can
+     * override them, and every rate-limit suite fails open against a Redis that is not reachable
+     * from here — see `environmentKnob`'s own reasoning in `machine-budget.ts`.
      */
     const childEnvironment = {
         ...process.env,
