@@ -80,7 +80,7 @@ export default tseslint.config(
          * one parser error per generated file the moment a mutation run is in flight — or forever,
          * if a crashed run left the directory behind — because the copies sit outside the
          * `tsconfig` project `parserOptions.project` resolves against. `jest.config.js` ignores
-         * the same path for the same reason; see the note in `stryker.config.json`.
+         * the same path for the same reason; see the note in `stryker.json`.
          */
         '.stryker-tmp/**',
         // Per-run in-memory Mongo data directories — see tests/support/global-setup.ts

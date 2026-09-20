@@ -6,9 +6,10 @@ The layer that answers: **are the units actually wired together?** A service, it
 A module's `service.ts` and `repository.ts` read near-zero on `test:unit:coverage`, and that is not
 a gap — it is this suite doing the covering, and that run does not execute it.
 
-It is also why those files score 0% in `mutation-baseline.json`: `stryker.config.json` mutates them
-but excludes these specs from the tests it runs, so the mutants survive by construction rather than
-by weakness. Neither number is a pass rate — every test in every suite must pass regardless. See
+`stryker.json` runs these specs too, so a service or repository's mutation score reflects what this
+suite actually kills — a real number, not the `NoCoverage` artefact it used to be when the mutation
+ruler excluded `tests/integration/` entirely. Neither the coverage nor the mutation number is a pass
+rate — every test in every suite must pass regardless. See
 [Tests → Three numbers](../reference/tests.md#three-numbers-and-they-are-not-the-same-question).
 :::
 
@@ -61,10 +62,12 @@ Routes that need a persisted user/product/order are exercised through HTTP too, 
 Not everything in this tier drives HTTP. A module's own repository or service test that needs to
 prove real Mongoose behaviour — schema validation, defaults, an index — calls `setupTestDb()` and
 talks to the model directly, no `supertest`, no app boot. It sits in this tier rather than in
-[Unit Testing](./unit-testing.md) for exactly the reason `app-health.test.ts` sits here: Stryker
-reruns `tests/unit` once per mutant, and a database connection is the most expensive thing a unit
-spec could pay for on every one of them. `stryker.config.json`'s `testPathIgnorePatterns` excludes
-`src/modules/*/tests/integration/` for that reason.
+[Unit Testing](./unit-testing.md) for exactly the reason `app-health.test.ts` sits here: a spec that
+can reach a database does not belong under `tests/unit`, full stop —
+`unit-layer-stays-database-free` in `.dependency-cruiser.cjs` enforces that boundary regardless of
+what any test runner happens to execute. See
+[Mutation Testing → why a naming rule](./mutation-testing.md#one-ruler) for the
+mutation-specific cost this boundary also happens to avoid.
 
 ## File map
 

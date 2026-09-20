@@ -27,7 +27,7 @@ know _which domain_, the third line is the one.
 | `test:fuzz`                                | Do the rules hold for inputs nobody thought of?                   | ~32s      | ✅                   |
 | `test:unit:report` + `test:report`         | Which module owns the failure, and where did the time go?         | +1s       | ✅ (prints in CI)    |
 | `test:prism`                               | Does the spec's own example server answer?                        | ~5s       | ❌ `complete:manual` |
-| `test:mutation`                            | Do the tests **notice** when the source is wrong?                 | minutes   | ❌ nightly           |
+| `mutation`                                 | Do the tests **notice** when the source is wrong?                 | minutes   | ❌ every PR (diff)   |
 | `bench`, `bench:orders`, `bench:inventory` | How fast is one endpoint?                                         | 30s each  | ❌ by hand           |
 | `bench:k6`, `bench:k6:checkout`            | Does it hold up under ramping load, with a verdict?               | ~70s each | ❌ by hand           |
 | `complete`                                 | All of the gate, in CI's order                                    | ~90s      | —                    |

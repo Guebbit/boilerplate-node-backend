@@ -1,5 +1,6 @@
 /*
- * Jest config used only by Stryker (`npm run test:mutation`): `jest.config.js` with ts-jest
+ * Jest config used only by Stryker (`npm run mutation`, `npm run mutation:full`): `jest.config.js`
+ * with ts-jest
  * swapped for swc and the worker pool collapsed to one. ts-jest type-checks, and its
  * LanguageService cache grows with every mutant until the worker is OOM-killed; swc only
  * transpiles, so it retains nothing, and `npm run ts-check` already checks the types once.

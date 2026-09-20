@@ -16,46 +16,19 @@
  * a timeout or a survivor depends on machine load, and a gate that fails randomly gets switched
  * off. Deliberately small — a real regression moves a file by far more.
  *
- * The frontend has its own copy, same shape and one scope: no `MUTATION_PROFILES`, because it runs
- * no deep pass. Nothing compares the two — `diff` them by hand when you change this one.
+ * One ruler, one report, one baseline — `stryker.json` is the only config, so there is nothing here
+ * to select between. The frontend has its own copy, same shape, for the same reason.
  *
  * See: docs/tools/mutation-testing.md#the-per-file-ratchet
  */
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-/**
- * One measured scope: where its Stryker report lands, and where its committed ratchet lives.
- *
- * Two scopes exist because two rulers exist, and a score is only comparable to one taken the same
- * way. `unit` is `stryker.config.json` — the unit suites, fast, the nightly's default. `deep` is
- * `stryker.deep.json`, which also runs `tests/integration/` and so is the only ruler that can see
- * the service and repository layers at all. Comparing one against the other's baseline reads every
- * integration-covered file as a mass improvement and then defends the wrong number forever.
- */
-export interface MutationProfile {
-    /** Where that config's `jsonReporter` writes. */
-    report: string;
-    /** Where its per-file ratchet is committed. */
-    baseline: string;
-}
+/** Where `stryker.json`'s `jsonReporter` writes. */
+export const REPORT_PATH = 'reports/mutation/mutation.json';
 
-export const MUTATION_PROFILES = {
-    unit: {
-        report: 'reports/mutation/mutation.json',
-        baseline: 'mutation-baseline.json'
-    },
-    deep: {
-        report: 'reports/mutation-deep/mutation.json',
-        baseline: 'mutation-baseline-deep.json'
-    }
-} as const satisfies Record<string, MutationProfile>;
-
-export type MutationProfileName = keyof typeof MUTATION_PROFILES;
-
-/** The scope named on the command line, defaulting to the fast one. */
-export const profileFromArguments = (argv: readonly string[]): MutationProfileName =>
-    argv.includes('--deep') ? 'deep' : 'unit';
+/** Where the per-file ratchet is committed. */
+export const BASELINE_PATH = 'mutation-baseline.json';
 
 /**
  * How far a file may fall below its baseline before it counts as a regression.
@@ -116,15 +89,12 @@ export const scoresFromReport = (report: MutationReport): Record<string, number>
     return scores;
 };
 
-export const readReport = (
-    profile: MutationProfile,
-    root = process.cwd()
-): Record<string, number> => {
-    const reportPath = path.join(root, profile.report);
+export const readReport = (root = process.cwd()): Record<string, number> => {
+    const reportPath = path.join(root, REPORT_PATH);
     if (!existsSync(reportPath))
         throw new Error(
-            `No mutation report at ${reportPath}. Run \`npm run test:mutation\` first — ` +
-                `the \`json\` reporter in stryker.config.json is what writes it.`
+            `No mutation report at ${reportPath}. Run \`npm run mutation\` or \`npm run ` +
+                `mutation:full\` first — the \`json\` reporter in stryker.json is what writes it.`
         );
 
     return scoresFromReport(JSON.parse(readFileSync(reportPath, 'utf8')) as MutationReport);
@@ -133,8 +103,8 @@ export const readReport = (
 /**
  * Every Stryker JSON report under a directory tree, merged into one score map.
  *
- * A rotation night's shards each upload their own `mutation.json` under a distinct artifact
- * directory, so the merge job that grades the night sees a TREE of reports rather than the single
+ * A sharded sweep's shards each upload their own `mutation.json` under a distinct artifact
+ * directory, so the merge job that grades the sweep sees a TREE of reports rather than the single
  * fixed path `readReport` expects — this walks it and folds every report it finds together. Shards
  * partition the mutate scope, so file keys never collide between reports.
  */
@@ -152,21 +122,14 @@ export const readReportsUnder = (directory: string): Record<string, number> => {
     return scores;
 };
 
-export const readBaseline = (
-    profile: MutationProfile,
-    root = process.cwd()
-): MutationBaseline | undefined => {
-    const baselinePath = path.join(root, profile.baseline);
+export const readBaseline = (root = process.cwd()): MutationBaseline | undefined => {
+    const baselinePath = path.join(root, BASELINE_PATH);
     if (!existsSync(baselinePath)) return undefined;
     return JSON.parse(readFileSync(baselinePath, 'utf8')) as MutationBaseline;
 };
 
-export const writeBaseline = (
-    baseline: MutationBaseline,
-    profile: MutationProfile,
-    root = process.cwd()
-): void => {
-    writeFileSync(path.join(root, profile.baseline), `${JSON.stringify(baseline, undefined, 4)}\n`);
+export const writeBaseline = (baseline: MutationBaseline, root = process.cwd()): void => {
+    writeFileSync(path.join(root, BASELINE_PATH), `${JSON.stringify(baseline, undefined, 4)}\n`);
 };
 
 /**
@@ -198,9 +161,9 @@ export const compareToBaseline = (
 };
 
 /**
- * Compare a MERGED, rotation-partial run against a baseline — same verdicts as `compareToBaseline`
+ * Compare a MERGED, sharded-sweep-partial run against a baseline — same verdicts as `compareToBaseline`
  * except `removed`. A file the baseline knows that this round's `current` doesn't is not reported
- * at all: on a rotation night that means "not measured tonight", not "left the mutate scope", and
+ * at all: mid-sweep that means "not measured yet", not "left the mutate scope", and
  * only a run covering the WHOLE scope (`compareToBaseline`, behind `--update`) can tell those apart.
  */
 export const compareMerged = (
@@ -228,8 +191,8 @@ export const compareMerged = (
  * The baseline to commit after a MERGE, as opposed to a full `--update`.
  *
  * `nextBaseline` rebuilds `files` from `current`'s keys alone, which is correct after a full run
- * (a file missing from `current` really did leave the mutate scope) and wrong after a rotation
- * night (two thirds of the scope are simply "not tonight"). This keeps every existing entry and
+ * (a file missing from `current` really did leave the mutate scope) and wrong mid-sweep
+ * (most of the scope is simply "not yet"). This keeps every existing entry and
  * only touches the files `current` actually measured, under the same never-lower-a-score rule.
  */
 export const mergeIntoBaseline = (
@@ -302,6 +265,6 @@ export const formatRegressions = (comparisons: FileComparison[]): string => {
         `  reports/mutation/index.html for the surviving mutants in these files.\n\n` +
         `  Tolerance is ${SCORE_TOLERANCE} point, which absorbs the timeout/survivor race only.\n` +
         `  If the drop is intentional (code deleted, scope changed), re-record it deliberately\n` +
-        `  with \`npm run test:mutation:baseline\` in the same commit, and say why.`
+        `  with \`npm run mutation:check -- --update\` in the same commit, and say why.`
     );
 };

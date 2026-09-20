@@ -79,8 +79,8 @@ is the one telling the truth.
 
 So the honest framing of this repository's tooling:
 
-- **`npm run test:mutation` is the primary judgement of test quality.** Its per-file scores in
-  `mutation-baseline.json` are what "is this actually tested" means here.
+- **`npm run mutation` / `npm run mutation:full` are the primary judgement of test quality.** Their
+  per-file scores in `mutation-baseline.json` are what "is this actually tested" means here.
 - **`npm run test:unit:coverage` is a fast proxy, and nothing more.** It runs in seconds where a
   mutation run takes far longer, so it is the smoke alarm rather than the inspection. Its floors are
   a ratchet — "do not get worse" — never a target. See `jest.config.js`, which says so at length.
@@ -89,9 +89,9 @@ So the honest framing of this repository's tooling:
 
 `test:unit:coverage` runs `tests/unit`, `tests/cross-cutting` and each module's own `tests/unit` —
 and deliberately not the integration or contract suites. A module spec that calls `setupTestDb()`
-belongs in that module's `tests/integration/`, not its `tests/unit/`, because Stryker re-executes
-the unit suite once per mutant — so a spec that starts a database pays that startup thousands of
-times over.
+belongs in that module's `tests/integration/`, not its `tests/unit/`: `unit-layer-stays-database-free`
+in `.dependency-cruiser.cjs` refuses a spec under `tests/unit` that can reach a database at all,
+regardless of what any test runner executes.
 
 Moving them was right. What was missed is that the code they cover stopped being _counted_ by the
 unit coverage job while the floors stayed put, so that job failed on 89 thresholds until
@@ -101,17 +101,17 @@ then, downward, and `jest.config.js` records what that does and does not buy.
 `orders/services/crud.ts` reporting **37% statements on the unit run** therefore means: not 63% failing,
 not 63% untested — 63% covered by a suite this particular run does not execute.
 
-::: warning The same blind spot applies to Stryker today
-`stryker.config.json` mutates `src/modules/*/**/*.ts`, services and repositories included, while its
-`testPathIgnorePatterns` excludes `tests/integration/`, `tests/contract/` and the co-located
-equivalents. So it mutates code whose killing tests it never runs, and those mutants survive by
-construction rather than by weakness. That is why 153 of 254 files in `mutation-baseline.json` score
-0%, and why files such as `audit-logs/repository.ts` read 100% coverage and 0% mutation score at the
-same time — a combination only possible when no eligible spec was run against them.
+::: warning A wider blind spot used to apply to Stryker, and no longer does
+Until 2026-09-20, `stryker.config.json` mutated `src/modules/*/**/*.ts`, services and repositories <!-- doc-paths:ignore -->
+included, while its `testPathIgnorePatterns` excluded `tests/integration/`, `tests/contract/` and
+the co-located equivalents. It mutated code whose killing tests it never ran, and 153 of 254 files
+in that ruler's baseline scored 0% for exactly that reason — a file could read 100% coverage and 0%
+mutation score at once, a combination only possible when no eligible spec ran against it.
 
-Read the mutation baseline as a ratchet against its own recorded history, not as an absolute grade,
-until that suite selection is revisited. `mutation.yml` is nightly and `continue-on-error`, so it
-gates nothing today either.
+`stryker.json` is the only config now, and it always runs `tests/integration/` too — see
+[one ruler](../tools/mutation-testing.md#one-ruler). A 0% in `mutation-baseline.json` is a real
+finding again, once the baseline is reseeded under the merged ruler. Read the ratchet against its
+own recorded history, not as an absolute grade, either way.
 :::
 
 ### A combined coverage run was tried, and abandoned
@@ -123,11 +123,11 @@ after roughly eight minutes. Making it work needs an enlarged heap or per-suite 
 reports — real machinery, for the weaker of the two instruments, duplicating a question mutation
 testing already answers better.
 
-| Command                      | Runs                     | Answers                                      |
-| ---------------------------- | ------------------------ | -------------------------------------------- |
-| `npm run test`               | every suite, no coverage | does everything pass — **the one that must** |
-| `npm run test:mutation`      | unit suite, mutated      | **would the tests notice a change**          |
-| `npm run test:unit:coverage` | unit + cross-cutting     | did the unit layer lose reach (fast proxy)   |
+| Command                      | Runs                        | Answers                                      |
+| ---------------------------- | --------------------------- | -------------------------------------------- |
+| `npm run test`               | every suite, no coverage    | does everything pass — **the one that must** |
+| `npm run mutation:full`      | unit + integration, mutated | **would the tests notice a change**          |
+| `npm run test:unit:coverage` | unit + cross-cutting        | did the unit layer lose reach (fast proxy)   |
 
 See [Mutation Testing](../tools/mutation-testing.md) for the run itself, its baseline ratchet and
 what the `high`/`low`/`break` thresholds mean.
@@ -387,12 +387,12 @@ They write reports to `reports/audit/` and never touch source.
 A module's own suites live inside it. Same runner, same conventions; `npm run test:unit`,
 `npm run test:integration` and `npm run test:contract` each pick up both locations.
 
-| Pattern                                     | What it is                                                                                                                                                                                                                                                                                                     | Read next                                                                                   |
-| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `src/modules/*/tests/unit/*.test.ts`        | The module's unit suites, one file per subject rather than per source file. A name carrying `property` before the test extension is generated-input rather than example-based. No database — see `unit-layer-stays-database-free` in `.dependency-cruiser.cjs`.                                                | [Unit Testing](../tools/unit-testing.md) · [Property Testing](../tools/property-testing.md) |
-| `src/modules/*/tests/integration/*.test.ts` | Specs of the same module that DO need a real database — calling `setupTestDb()` and exercising the repository or service directly, no HTTP. Excluded from `stryker.config.json`'s mutation run: Stryker reruns `tests/unit` once per mutant, and a database connection paid that cost thousands of times over. | [Integration Testing](../tools/integration-testing.md)                                      |
-| `src/modules/*/tests/contract/*.test.ts`    | The module's endpoints driven over HTTP and checked against its slice of `openapi.yaml`. One per module that has routes.                                                                                                                                                                                       | [Contract Testing (Response)](../tools/contract-testing.md)                                 |
-| `src/modules/*/tests/factories.ts`          | Test-only factories too specific to belong in the module's published factory.                                                                                                                                                                                                                                  | [Unit Testing](../tools/unit-testing.md)                                                    |
+| Pattern                                     | What it is                                                                                                                                                                                                                                                      | Read next                                                                                   |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `src/modules/*/tests/unit/*.test.ts`        | The module's unit suites, one file per subject rather than per source file. A name carrying `property` before the test extension is generated-input rather than example-based. No database — see `unit-layer-stays-database-free` in `.dependency-cruiser.cjs`. | [Unit Testing](../tools/unit-testing.md) · [Property Testing](../tools/property-testing.md) |
+| `src/modules/*/tests/integration/*.test.ts` | Specs of the same module that DO need a real database — calling `setupTestDb()` and exercising the repository or service directly, no HTTP. `stryker.json`'s mutation run includes this tier — it is what covers the service and repository layers at all.      | [Integration Testing](../tools/integration-testing.md)                                      |
+| `src/modules/*/tests/contract/*.test.ts`    | The module's endpoints driven over HTTP and checked against its slice of `openapi.yaml`. One per module that has routes.                                                                                                                                        | [Contract Testing (Response)](../tools/contract-testing.md)                                 |
+| `src/modules/*/tests/factories.ts`          | Test-only factories too specific to belong in the module's published factory.                                                                                                                                                                                   | [Unit Testing](../tools/unit-testing.md)                                                    |
 
 ## Load testing
 

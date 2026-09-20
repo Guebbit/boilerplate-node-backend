@@ -131,7 +131,7 @@ npm run complete    # build + all tests + lint + format check — ~90s
 
 Exactly what the pre-commit hook runs; `npm run complete:fix` is the same gate with lint and
 formatting fixed rather than reported. Outside it, by hand: `npm run complete:manual`
-(`test:prism`), `npm run test:mutation`, `npm run test:fuzz`, and `npm run bench`.
+(`test:prism`), `npm run mutation`, `npm run test:fuzz`, and `npm run bench`.
 
 Per-suite numbers, so a doubling reads as a regression rather than as a mood:
 [Test timings](./docs/tools/testing-and-docs.md#test-timings).

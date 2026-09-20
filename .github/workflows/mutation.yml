@@ -1,29 +1,35 @@
 name: Mutation
 
-# Deliberately breaks the source in small ways and checks the unit suite notices. Measures how
-# good the TESTS are, not how good the code is. Nightly, not a merge gate.
+# Deliberately breaks the source in small ways and checks the suite notices. Measures how good the
+# TESTS are, not how good the code is. Weekly, not a merge gate — except the diff job, which is.
 #
 # Mutation testing lives in its own workflow, deliberately.
 #
-# It is NOT part of `ci.yml`, and that is structural rather than a convention: a run re-executes
-# the unit suite once per mutant, so putting it anywhere near the `ci` aggregate job would
-# eventually make someone wait minutes for a PR — and the first time it did, it would be turned
-# off. Kept separate, it cannot become a PR gate by accident.
+# It is NOT part of `ci.yml`, and that is structural rather than a convention: a full sweep re-runs
+# the suite once per mutant, so putting it anywhere near the `ci` aggregate job would eventually
+# make someone wait hours for a PR — and the first time it did, it would be turned off. Kept
+# separate, the full sweep cannot become a PR gate by accident. The one exception is the diff job
+# below, scoped to the files a branch touched, which is a different bargain and gates on purpose.
 #
 # What it answers: "do the tests actually work?" A mutant that survives is a bug the suite cannot
 # see. Unlike line coverage, that cannot be satisfied by executing code without asserting on it.
 #
-# Runs nightly, and on demand from the Actions tab before a refactor.
-# Scope and thresholds live in stryker.config.json. Only the unit suite takes part — see the
-# note in that file for why integration and contract are excluded.
+# One ruler, one scope, always sharded — see docs/tools/mutation-testing.md#one-ruler. The full
+# scope runs weekly, and on demand from the Actions tab before a refactor.
 
 on:
     schedule:
-        # 03:00 UTC — half an hour before the frontend's, so the two do not compete for runners.
-        - cron: '0 3 * * *'
+        # 03:00 UTC on Sundays — half an hour before the frontend's, so the two do not compete for
+        # runners.
+        - cron: '0 3 * * 0'
     workflow_dispatch:
+        inputs:
+            force:
+                description: 'Discard the incremental cache and re-test every mutant'
+                type: boolean
+                default: false
     # The `mutation-diff` job below, and only that job — every other job here guards on
-    # `github.event_name != 'pull_request'`. A full run must never become a PR gate; see the
+    # `github.event_name != 'pull_request'`. The full sweep must never become a PR gate; see the
     # header. The diff job is scoped to the files a branch touched, which is a different bargain.
     pull_request:
 
@@ -35,82 +41,11 @@ env:
     NODE_VERSION: 22
 
 jobs:
-    mutation:
-        # Nightly only. `pull_request` is in the trigger list for `mutation-diff` alone.
-        if: github.event_name != 'pull_request'
-        runs-on: ubuntu-latest
-        # Generous: the run scales with the number of mutants, and the point of a nightly is
-        # that it is allowed to be slow. It should never be trimmed by narrowing `mutate`.
-        timeout-minutes: 90
-        permissions:
-            contents: read
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
-
-            - name: Setup Node
-              uses: actions/setup-node@v4
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
-                  cache: npm
-                  cache-dependency-path: package-lock.json
-
-            - name: Install dependencies
-              run: npm ci
-
-            - name: Run mutation tests
-              # `continue-on-error` so the per-file check below always gets to run and report.
-              # The global `break` threshold is a backstop for a total collapse; the ratchet is
-              # the gate that says WHICH file got worse, and a run that trips the first would
-              # otherwise never reach it. Both results are folded back in at the end.
-              id: mutation
-              continue-on-error: true
-              # `--concurrency` is passed HERE rather than taken from stryker.config.json, and the
-              # difference matters. Each Stryker worker is a separate process running a full test
-              # runner (and, in the backend, its own in-memory mongod), so the safe number is a
-              # property of the MACHINE, not of the project. The committed config is tuned for a
-              # developer workstation; a standard GitHub-hosted runner is 4 vCPU / 16 GB, where
-              # that number would thrash or run out of memory.
-              # `--force` discards the committed `reports/stryker-incremental.json` and re-tests every
-              # mutant. That is the nightly's entire job: the incremental file is a cache, and a
-              # refactor that moves code between files or a badly resolved merge can leave it
-              # describing a codebase that no longer exists. Fast incremental runs are for humans
-              # on demand; this one is the measurement everything else is allowed to trust.
-              run: npm run test:mutation -- --concurrency 3 --force
-
-            - name: Check the per-file baseline
-              # The real gate. Stryker's thresholds are global — a strong file carries a weak one
-              # — so this compares every file against `mutation-baseline.json` and fails naming
-              # the ones that dropped. See scripts/mutation/baseline.ts for why it is a ratchet.
-              id: baseline
-              continue-on-error: true
-              run: npm run test:mutation:check
-
-            - name: Upload mutation report
-              # Uploaded even on failure: a run that trips the break threshold is exactly the
-              # run whose report someone needs to read.
-              if: always()
-              uses: actions/upload-artifact@v4
-              with:
-                  name: mutation-report
-                  path: reports/mutation/
-                  retention-days: 30
-                  if-no-files-found: warn
-
-            - name: Fail if either gate tripped
-              # Folded back in here rather than left on the steps above, so the report artifact is
-              # always uploaded first — a failing run is exactly the one whose report is wanted.
-              if: steps.mutation.outcome == 'failure' || steps.baseline.outcome == 'failure'
-              run: |
-                  echo "mutation run: ${{ steps.mutation.outcome }}"
-                  echo "per-file baseline: ${{ steps.baseline.outcome }}"
-                  exit 1
-
-    mutation-deep-matrix:
-        # Plans tonight's `mutation-deep` matrix — see scripts/mutation/shard-plan.ts and its own
+    mutation-matrix:
+        # Plans the weekly matrix — see scripts/mutation/shard-plan.ts and its own
         # scripts/mutation/sharding.ts. Deliberately its own job rather than an inline `run` block:
-        # its output feeds `mutation-deep`'s `strategy.matrix` below, which can only read a
-        # previous job's output, not compute its own.
+        # its output feeds `mutation`'s `strategy.matrix` below, which can only read a previous
+        # job's output, not compute its own.
         if: github.event_name != 'pull_request'
         runs-on: ubuntu-latest
         timeout-minutes: 5
@@ -118,7 +53,6 @@ jobs:
             contents: read
         outputs:
             shards: ${{ steps.plan.outputs.shards }}
-            force: ${{ steps.plan.outputs.force }}
         steps:
             - name: Checkout
               uses: actions/checkout@v4
@@ -133,35 +67,22 @@ jobs:
             - name: Install dependencies
               run: npm ci
 
-            - name: Plan tonight's shards
+            - name: Plan this week's shards
               id: plan
-              # `--full` on manual dispatch too, so "run it now" from the Actions tab always means
-              # the whole scope rather than whatever the epoch-day rotation happens to land on.
-              run: npx tsx scripts/mutation/shard-plan.ts ${{ github.event_name == 'workflow_dispatch' && '--full' || '' }} >> "$GITHUB_OUTPUT"
+              run: npx tsx scripts/mutation/shard-plan.ts >> "$GITHUB_OUTPUT"
 
-    mutation-deep:
-        # The other ruler. `stryker.deep.json` also runs `tests/integration/`, which is the only
-        # way the service and repository layers are measured at all — under the default scope they
-        # report `NoCoverage`, which scores 0% and says nothing about the tests.
+    mutation:
+        # The whole scope, sharded by line count rather than by module name — a hand-copied module
+        # list is exactly how `src/infrastructure`, `src/kernel`, `webhooks`, `api-keys` and
+        # `antibot` went unmeasured for a month despite sitting right in the old `stryker.deep.json`'s
+        # own `mutate` list. `mutation-matrix` walks that scope itself every week instead.
         #
-        # Sharded by LINE COUNT, not by module name (MUTATION_DEBT.md D5/D2-C) — a hand-copied
-        # module list is exactly how `src/infrastructure`, `src/kernel`, `webhooks`, `api-keys` and
-        # `antibot` went unmeasured for a month despite sitting right in `stryker.deep.json`'s own
-        # `mutate` list. `mutation-deep-matrix` walks that scope itself every night instead.
-        #
-        # Only a THIRD of the shards run on an ordinary night (D2-B): the full scope is ~86
-        # runner-hours (docs/tools/mutation-testing.md), which does not fit one night at any
-        # per-shard timeout GitHub allows. Every shard gets a number within three nights instead,
-        # and `mutation-deep-merge` below folds each night's partial coverage into the baseline
-        # without erasing what the other two-thirds already recorded. Sunday runs every shard with
-        # `--force`, which is D2-A's weekly refresh of the incremental cache.
-        #
-        # `maxTestRunnerReuse: 1` in `stryker.deep.json` is load-bearing here, not a tuning knob.
-        # Every test file that reaches mongoose re-evaluates `bson`, which allocates a 17 MiB buffer
-        # at module scope, and Stryker never exits the worker — so the copies accumulate. Measured
-        # on one file: 23 OOM restarts at reuse 5, none at 1, and the run was HALF the time because
-        # a restart costs less than the crash-and-retry it replaces.
-        needs: mutation-deep-matrix
+        # `maxTestRunnerReuse: 1` in `stryker.json` is load-bearing here, not a tuning knob. Every
+        # test file that reaches mongoose re-evaluates `bson`, which allocates a 17 MiB buffer at
+        # module scope, and Stryker never exits the worker — so the copies accumulate. Measured on
+        # one file: 23 OOM restarts at reuse 5, none at 1, and the run was HALF the time because a
+        # restart costs less than the crash-and-retry it replaces.
+        needs: mutation-matrix
         if: github.event_name != 'pull_request'
         runs-on: ubuntu-latest
         # See scripts/mutation/sharding.ts's `TARGET_LINES_PER_SHARD` comment — this number and
@@ -173,7 +94,7 @@ jobs:
             # One slow shard must not hide the results of the other dozen.
             fail-fast: false
             matrix:
-                include: ${{ fromJson(needs.mutation-deep-matrix.outputs.shards) }}
+                include: ${{ fromJson(needs.mutation-matrix.outputs.shards) }}
         steps:
             - name: Checkout
               uses: actions/checkout@v4
@@ -189,42 +110,37 @@ jobs:
               run: npm ci
 
             - name: Restore this shard's incremental cache
-              # D2-A. `reports/*` is gitignored (see .gitignore), so nothing commits this file —
-              # without a cache, every night pays the full re-mutation cost `--force` exists to
-              # impose deliberately on the ONE night it should. The unique `key` per run guarantees
-              # a save at the end; `restore-keys` falls back to the shard's most recent cache.
-              # `--force` on the forced-full night still discards whatever this restores (Stryker's
-              # own behaviour), so restoring on that night is harmless, not wasted.
+              # `reports/*` is gitignored (see .gitignore), so nothing commits this file — without a
+              # cache, every week pays the full re-mutation cost. The unique `key` per run
+              # guarantees a save at the end; `restore-keys` falls back to the shard's most recent
+              # cache. `workflow_dispatch`'s `force` input still discards whatever this restores
+              # (Stryker's own behaviour), so restoring on that run is harmless, not wasted.
               uses: actions/cache@v4
               with:
-                  path: reports/stryker-incremental-deep.json
-                  key: mutation-deep-incremental-${{ matrix.name }}-${{ github.run_id }}
+                  path: reports/stryker-incremental.json
+                  key: mutation-incremental-${{ matrix.name }}-${{ github.run_id }}
                   restore-keys: |
-                      mutation-deep-incremental-${{ matrix.name }}-
+                      mutation-incremental-${{ matrix.name }}-
 
-            - name: Run the deep mutation scope for ${{ matrix.name }}
+            - name: Run the mutate scope for ${{ matrix.name }}
               # `--concurrency 2`, not the config's 4: a GitHub runner is 4 vCPU / 16 GB, and each
               # worker here carries its own in-memory mongod.
-              run: npx stryker run stryker.deep.json --mutate '${{ matrix.mutate }}' --concurrency 2 ${{ needs.mutation-deep-matrix.outputs.force == 'true' && '--force' || '' }}
+              run: npx stryker run stryker.json --mutate '${{ matrix.mutate }}' --concurrency 2 ${{ inputs.force && '--force' || '' }}
 
             - name: Upload the shard's report
               if: always()
               uses: actions/upload-artifact@v4
               with:
-                  name: mutation-deep-${{ matrix.name }}
-                  path: reports/mutation-deep/
+                  name: mutation-${{ matrix.name }}
+                  path: reports/mutation/
                   retention-days: 14
 
-    mutation-deep-merge:
-        # D3. `mutation-deep` only runs Stryker and uploads a report — nothing before this ever
-        # graded a shard or wrote `mutation-baseline-deep.json`, which is why `mutation-diff` below
-        # had nothing to compare against and why the docs' claim that the deep nightly merely
-        # "reports" was never true: it did not even do that.
-        #
-        # Runs even when a shard failed (`always()`): a shard that hit the ceiling still produced a
-        # partial report for every mutant it finished, and that is real data worth folding in
-        # rather than discarding because a sibling shard timed out.
-        needs: [mutation-deep-matrix, mutation-deep]
+    mutation-merge:
+        # Folds every shard's report into `mutation-baseline.json`. Runs even when a shard failed
+        # (`always()`): a shard that hit the ceiling still produced a partial report for every
+        # mutant it finished, and that is real data worth folding in rather than discarding because
+        # a sibling shard timed out.
+        needs: [mutation-matrix, mutation]
         if: always() && github.event_name != 'pull_request'
         runs-on: ubuntu-latest
         timeout-minutes: 15
@@ -247,15 +163,14 @@ jobs:
             - name: Download every shard's report
               uses: actions/download-artifact@v4
               with:
-                  pattern: mutation-deep-*
-                  path: mutation-deep-reports
+                  pattern: mutation-shard-*
+                  path: mutation-reports
 
-            - name: Fold tonight's shards into the baseline
-              # `--merge`, not `--update`: on a rotation night `current` covers only a third of the
-              # scope, and `--update`'s `missingFromReport` guard exists precisely to refuse
-              # recording a partial report as if it were the whole baseline. See
+            - name: Fold this week's shards into the baseline
+              # `--merge`, not `--update`: `--update`'s `missingFromReport` guard exists precisely to
+              # refuse recording a partial report as if it were the whole baseline. See
               # scripts/mutation/baseline.ts's `mergeIntoBaseline`.
-              run: npm run test:mutation:deep:merge -- --merge-dir=mutation-deep-reports
+              run: npm run mutation:check -- --merge --merge-dir=mutation-reports
 
             - name: Commit the updated baseline
               # A regression here still exits non-zero (surfaced by `mutation-notify` below); the
@@ -264,18 +179,18 @@ jobs:
               run: |
                   git config user.name 'github-actions[bot]'
                   git config user.email 'github-actions[bot]@users.noreply.github.com'
-                  if git diff --quiet -- mutation-baseline-deep.json; then
-                    echo "no change to mutation-baseline-deep.json"
+                  if git diff --quiet -- mutation-baseline.json; then
+                    echo "no change to mutation-baseline.json"
                     exit 0
                   fi
-                  git add mutation-baseline-deep.json
-                  git commit -m "chore(mutation): fold tonight's deep rotation into the baseline"
+                  git add mutation-baseline.json
+                  git commit -m "chore(mutation): fold this week's sweep into the baseline"
                   git push
 
     mutation-diff:
-        # The PR-scoped run: the same deep ruler, narrowed to the files this branch changed.
+        # The PR-scoped run: the same ruler, narrowed to the files this branch changed.
         #
-        # It fails only on the per-file RATCHET — a file scoring below what `mutation-baseline-deep.json`
+        # It fails only on the per-file RATCHET — a file scoring below what `mutation-baseline.json`
         # already records for it. Not on `thresholds.break`, which is a percentage over whatever
         # happens to be in the diff: one survivor is 50% of two mutants and 10% of ten, and the
         # size of a diff is not a fact about the code.
@@ -286,7 +201,7 @@ jobs:
         #
         # No `continue-on-error` here: `check-baseline.ts` exits 0 when the baseline doesn't cover
         # a file yet (nothing to compare against is not this PR's fault), so the step only fails on
-        # a real, measured regression once `mutation-deep-merge` has had a chance to record one.
+        # a real, measured regression once `mutation-merge` has had a chance to record one.
         if: github.event_name == 'pull_request'
         runs-on: ubuntu-latest
         timeout-minutes: 60
@@ -310,33 +225,33 @@ jobs:
               run: npm ci
 
             - name: Mutate the files this branch changed
-              run: npm run test:mutation:diff -- --base=origin/${{ github.base_ref }}
+              run: npm run mutation -- --base=origin/${{ github.base_ref }}
 
             - name: Upload the diff report
               if: always()
               uses: actions/upload-artifact@v4
               with:
                   name: mutation-diff
-                  path: reports/mutation-deep/
+                  path: reports/mutation/
                   retention-days: 14
 
     mutation-notify:
-        # D7. 24 failures and 12 cancellations went unnoticed over 35 nights before this existed —
-        # "check the Actions tab deliberately" was the alternative, tried for a month, and it
-        # produced exactly that silence. One issue, updated in place, surfaces where the repo is
-        # already read instead of adding a channel nobody watches.
-        needs: [mutation, mutation-deep-matrix, mutation-deep, mutation-deep-merge]
+        # 24 failures and 12 cancellations went unnoticed over 35 nights under the old rotation,
+        # before this existed — "check the Actions tab deliberately" was the alternative, tried for
+        # a month, and it produced exactly that silence. One issue, updated in place, surfaces where
+        # the repo is already read instead of adding a channel nobody watches.
+        needs: [mutation-matrix, mutation, mutation-merge]
         if: always() && github.event_name != 'pull_request' && contains(needs.*.result, 'failure')
         runs-on: ubuntu-latest
         timeout-minutes: 5
         permissions:
             issues: write
         steps:
-            - name: Open or update the nightly-failure issue
+            - name: Open or update the weekly-failure issue
               uses: actions/github-script@v7
               with:
                   script: |
-                      const title = 'Nightly mutation run failed';
+                      const title = 'Weekly mutation sweep failed';
                       const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
                       const body = [
                           `The mutation workflow failed on ${new Date().toISOString().slice(0, 10)}.`,
@@ -348,7 +263,7 @@ jobs:
                           owner: context.repo.owner,
                           repo: context.repo.repo,
                           state: 'open',
-                          labels: 'mutation-nightly'
+                          labels: 'mutation-sweep'
                       });
                       const existing = openIssues.find((issue) => issue.title === title);
 
@@ -365,6 +280,6 @@ jobs:
                               repo: context.repo.repo,
                               title,
                               body,
-                              labels: ['mutation-nightly']
+                              labels: ['mutation-sweep']
                           });
                       }

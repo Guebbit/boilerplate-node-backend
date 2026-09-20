@@ -33,9 +33,9 @@ export interface TestGlobals {
  * that does not arise once each run owns its own root.
  *
  * A SIGKILLed instance still leaves its directory behind. It lands in the repo's gitignored
- * `.tmp/`, where `npm run test:mutation` clears the lot before it starts and `rm -rf .tmp` is the
- * whole recovery procedure — rather than in a shared `/tmp` where it competes with the rest of
- * the machine.
+ * `.tmp/`, where every mutation entry point (`scripts/mutation/stryker-run.ts`) clears the lot
+ * before it starts and `rm -rf .tmp` is the whole recovery procedure — rather than in a shared
+ * `/tmp` where it competes with the rest of the machine.
  */
 export const TEST_TMP_ROOT =
     process.env.NODE_TEST_TMP_BASE?.trim() || path.join(__dirname, '..', '..', '.tmp');

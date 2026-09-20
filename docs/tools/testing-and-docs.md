@@ -45,7 +45,7 @@ flowchart TB
 | Property                  | Does the rule hold for _every_ input, not just the ones someone thought of?                         | fast-check                         | `npm run test:unit` (same suite)     | [Property Testing](./property-testing.md)                   |
 | Concurrency               | Does it still hold when N requests arrive at once?                                                  | supertest + `Promise.allSettled`   | `npm run test:integration` (same)    | [Concurrency Testing](./concurrency-testing.md)             |
 | Fuzzing                   | Does any spec-valid request produce a 5xx or an undocumented response — on ANY endpoint?            | spec walk + fast-check             | `npm run test:fuzz`                  | [Spec-Driven Fuzzing](./fuzz-testing.md)                    |
-| Mutation                  | Do the tests notice when the source is wrong?                                                       | Stryker + jest-runner              | `npm run test:mutation`              | [Mutation Testing](./mutation-testing.md)                   |
+| Mutation                  | Do the tests notice when the source is wrong?                                                       | Stryker + jest-runner              | `npm run mutation`                   | [Mutation Testing](./mutation-testing.md)                   |
 | Audit                     | Does the code do what the **docs** promise, and do the tests check the spec or just the code?       | prompts in `tests/audit/` + an LLM | by hand, never in CI                 | [AI Auditing](./ai-auditing.md)                             |
 
 Each layer answers a question no other layer answers — a layer that duplicates another's question is cost without coverage:
@@ -161,15 +161,15 @@ Timings are not re-measured here — this machine was under concurrent load — 
 lighter and `test:integration` getting heavier is the structural fact worth recording; the absolute
 seconds still want a clean re-measurement on the reference machine.
 
-| Command                      | Time     | What it runs                                                               |
-| ---------------------------- | -------- | -------------------------------------------------------------------------- |
-| `npm run test:unit`          | **~23s** | 84 suites, 1235 tests                                                      |
-| `npm run test:cross-cutting` | ~3s      | 34 suites, 286 tests — the sweeps                                          |
-| `npm run test:integration`   | ~14s     | 48 suites, 703 tests, `--runInBand`                                        |
-| `npm run test:contract`      | ~49s     | 15 suites, 334 tests, `--runInBand`                                        |
-| `npm run test:fuzz`          | ~34s     | 1 suite, 93 tests, `--runInBand`                                           |
-| `npm test`                   | **~90s** | all five, in that order                                                    |
-| `npm run test:mutation`      | hours    | 6042 mutants; nightly in CI, see [Mutation Testing](./mutation-testing.md) |
+| Command                      | Time     | What it runs                                                                         |
+| ---------------------------- | -------- | ------------------------------------------------------------------------------------ |
+| `npm run test:unit`          | **~23s** | 84 suites, 1235 tests                                                                |
+| `npm run test:cross-cutting` | ~3s      | 34 suites, 286 tests — the sweeps                                                    |
+| `npm run test:integration`   | ~14s     | 48 suites, 703 tests, `--runInBand`                                                  |
+| `npm run test:contract`      | ~49s     | 15 suites, 334 tests, `--runInBand`                                                  |
+| `npm run test:fuzz`          | ~34s     | 1 suite, 93 tests, `--runInBand`                                                     |
+| `npm test`                   | **~90s** | all five, in that order                                                              |
+| `npm run mutation:full`      | hours    | whole scope, sharded and weekly in CI, see [Mutation Testing](./mutation-testing.md) |
 
 The whole suite under the mutation run's swc transform is **~10s** for the same 1527 tests that take
 ~26s under ts-jest — the difference is type-checking, which `npm run ts-check` does once for the

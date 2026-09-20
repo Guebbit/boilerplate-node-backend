@@ -29,8 +29,8 @@ scripts/
 The demo profile and the data it serves live in `scenarios/`, outside `scripts/` entirely —
 see [Data](./data.md) and [Demo profile](../tools/demo-profile.md).
 
-The folder's word is not repeated in the filename: `scripts/mutation/run-tests.ts`, not
-`run-tests.ts`. Deliberately NOT aligned with the `npm run` namespaces — those group by
+The folder's word is not repeated in the filename: `scripts/mutation/run-diff.ts`, not a
+mutation-prefixed name. Deliberately NOT aligned with the `npm run` namespaces — those group by
 _when you run a thing_ (`check:*` is the list `npm run complete` reads), these group by _what it is
 about_, and forcing the two together would cost the gate its readability.
 
@@ -109,12 +109,17 @@ Outside `scripts/` entirely, alongside the records it builds from — see
 
 ## Mutation testing — `scripts/mutation/`
 
-| File                                 | What it is                                                                                                                                                                                                             | Read next                                        |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| `scripts/mutation/run-tests.ts`      | Runs Stryker — `npm run test:mutation`. A wrapper rather than a bare invocation, for the three jobs a JSON config cannot do.                                                                                           | [Mutation Testing](../tools/mutation-testing.md) |
-| `scripts/mutation/baseline.ts`       | The per-file mutation ratchet: the recorded score for each file, and the comparison that fails when one drops. Also the two scopes — standard and `--deep` — since a score only compares to one measured the same way. | [Mutation Testing](../tools/mutation-testing.md) |
-| `scripts/mutation/check-baseline.ts` | Its CLI — `npm run test:mutation:check` to compare, `npm run test:mutation:baseline` to record a new floor.                                                                                                            | [Mutation Testing](../tools/mutation-testing.md) |
-| `scripts/mutation/run-diff.ts`       | The same Stryker run narrowed to the files a branch changed, then the ordinary ratchet — `npm run test:mutation:diff`.                                                                                                 | [Mutation Testing](../tools/mutation-testing.md) |
+| File                                 | What it is                                                                                                                                                       | Read next                                        |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `scripts/mutation/stryker-run.ts`    | One Stryker invocation, sized for this machine — concurrency, the per-worker heap cap, the scratch sweep, the OOM-loop abort. Shared by both entry points below. | [Mutation Testing](../tools/mutation-testing.md) |
+| `scripts/mutation/run-diff.ts`       | Mutation testing scoped to the files a branch changed, then the ordinary ratchet — `npm run mutation`.                                                           | [Mutation Testing](../tools/mutation-testing.md) |
+| `scripts/mutation/run-shards.ts`     | The whole scope, one shard at a time, resumable across evenings, folding into the baseline once every shard has a report — `npm run mutation:full`.              | [Mutation Testing](../tools/mutation-testing.md) |
+| `scripts/mutation/local-policy.ts`   | Which shards a local sweep runs next, given what previous evenings already recorded — the pure half of `run-shards.ts`.                                          | [Mutation Testing](../tools/mutation-testing.md) |
+| `scripts/mutation/mutate-scope.ts`   | The real mutate scope, read off the tree rather than hand-copied — every `.ts` file `stryker.json` declares mutable, with its line count.                        | [Mutation Testing](../tools/mutation-testing.md) |
+| `scripts/mutation/sharding.ts`       | Bin-packing by line count — the weekly CI matrix and a local sweep both size their shards from this.                                                             | [Mutation Testing](../tools/mutation-testing.md) |
+| `scripts/mutation/shard-plan.ts`     | CLI wrapper: walks the real `mutate` scope, prints the weekly matrix as a GitHub Actions job output.                                                             | [Mutation Testing](../tools/mutation-testing.md) |
+| `scripts/mutation/baseline.ts`       | The per-file mutation ratchet: the recorded score for each file, and the comparison that fails when one drops.                                                   | [Mutation Testing](../tools/mutation-testing.md) |
+| `scripts/mutation/check-baseline.ts` | Its CLI — `npm run mutation:check` to compare, `-- --update` to record a new floor, `-- --merge --merge-dir=<dir>` to fold a sharded sweep in.                   | [Mutation Testing](../tools/mutation-testing.md) |
 
 ## Testing — `scripts/testing/`
 

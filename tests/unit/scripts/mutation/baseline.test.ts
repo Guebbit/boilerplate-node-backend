@@ -212,13 +212,13 @@ describe('formatRegressions', () => {
         );
 
         expect(message).toContain('reports/mutation/index.html');
-        expect(message).toContain('test:mutation:baseline');
+        expect(message).toContain('mutation:check');
     });
 });
 
-describe('compareMerged — grading a rotation-partial run', () => {
+describe('compareMerged — grading a sharded-sweep-partial run', () => {
     it('does not report a file the baseline knows but this round did not measure', () => {
-        // The whole point of `merge` over `--update`: two thirds of the scope are "not tonight",
+        // The whole point of `merge` over `--update`: most of the scope is "not yet",
         // not "gone", and only compareToBaseline (behind a FULL run) may call something removed.
         const comparisons = compareMerged(scores([FILE, 90]), baselineOf([FILE, 90], [OTHER, 40]));
 
@@ -237,7 +237,7 @@ describe('compareMerged — grading a rotation-partial run', () => {
     });
 });
 
-describe('mergeIntoBaseline — the ratchet across a rotation', () => {
+describe('mergeIntoBaseline — the ratchet across a sharded sweep', () => {
     it('leaves a file outside this round untouched', () => {
         expect(
             mergeIntoBaseline(scores([FILE, 95]), baselineOf([FILE, 90], [OTHER, 40])).files
@@ -261,7 +261,7 @@ describe('mergeIntoBaseline — the ratchet across a rotation', () => {
     });
 });
 
-describe('readReportsUnder — folding a rotation night’s shard artifacts', () => {
+describe('readReportsUnder — folding a sharded sweep’s shard artifacts', () => {
     let dir: string;
 
     beforeEach(() => {
@@ -273,8 +273,8 @@ describe('readReportsUnder — folding a rotation night’s shard artifacts', ()
     });
 
     it('merges every mutation.json found anywhere under the directory', () => {
-        const shardA = path.join(dir, 'mutation-deep-shard-00', 'mutation-deep');
-        const shardB = path.join(dir, 'mutation-deep-shard-01', 'mutation-deep');
+        const shardA = path.join(dir, 'shard-00', 'mutation');
+        const shardB = path.join(dir, 'shard-01', 'mutation');
         mkdirSync(shardA, { recursive: true });
         mkdirSync(shardB, { recursive: true });
         writeFileSync(

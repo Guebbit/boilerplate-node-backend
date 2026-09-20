@@ -9,11 +9,9 @@
         "config": {
             "testPathIgnorePatterns": [
                 "/node_modules/",
-                "<rootDir>/tests/integration/",
                 "<rootDir>/tests/contract/",
                 "<rootDir>/tests/fuzz/",
                 "<rootDir>/src/modules/[^/]+/tests/contract/",
-                "<rootDir>/src/modules/[^/]+/tests/integration/",
                 "<rootDir>/tests/cross-cutting/contract-bundles.test.ts",
                 "<rootDir>/tests/cross-cutting/outbox-names.test.ts"
             ]
@@ -28,6 +26,7 @@
     },
     "coverageAnalysis": "perTest",
     "incremental": true,
+    "incrementalFile": "reports/stryker-incremental.json",
     "dryRunTimeoutMinutes": 20,
     "mutate": [
         "src/infrastructure/**/*.ts",
@@ -49,9 +48,9 @@
     "thresholds": {
         "high": 80,
         "low": 60,
-        "break": 60
+        "break": null
     },
     "timeoutMS": 30000,
     "concurrency": 4,
-    "maxTestRunnerReuse": 5
+    "maxTestRunnerReuse": 1
 }

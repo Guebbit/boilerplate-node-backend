@@ -1,16 +1,11 @@
 /**
- * `scripts/mutation/sharding.ts` — the nightly `mutation-deep` matrix, built by line count.
+ * `scripts/mutation/sharding.ts` — the weekly full-sweep matrix, built by line count.
  *
  * Driven against synthetic file lists, never a real directory walk: that half
  * (`scripts/mutation/shard-plan.ts`) is a thin, untested CLI wrapper, same split as
  * `check-baseline.ts` over `baseline.ts` in this same directory.
  */
-import {
-    TARGET_LINES_PER_SHARD,
-    packIntoShards,
-    rotationPlan,
-    type Shard
-} from '../../../../scripts/mutation/sharding';
+import { TARGET_LINES_PER_SHARD, packIntoShards } from '../../../../scripts/mutation/sharding';
 
 /** A `{file, lines}` list from `[name, lines]` pairs, named so the fixtures stay readable. */
 const files = (...entries: [string, number][]) => entries.map(([file, lines]) => ({ file, lines }));
@@ -27,6 +22,16 @@ describe('packIntoShards', () => {
         expect(shards.reduce((sum, shard) => sum + shard.lines, 0)).toBe(
             input.reduce((sum, { lines }) => sum + lines, 0)
         );
+    });
+
+    it('takes an explicit target over the CI-derived default', () => {
+        const input = Array.from({ length: 10 }, (_, index) => ({
+            file: `file-${index}.ts`,
+            lines: 500
+        }));
+
+        // 5000 lines at 2500 per shard is 2 shards, where the 1300 default would give 4.
+        expect(packIntoShards(input, 2500)).toHaveLength(2);
     });
 
     it('sizes the shard count from the target, not from the file count', () => {
@@ -65,44 +70,5 @@ describe('packIntoShards', () => {
         const input = files(['a.ts', 300], ['b.ts', 700]);
 
         expect(packIntoShards(input)).toEqual(packIntoShards(input));
-    });
-});
-
-describe('rotationPlan', () => {
-    const threeShards: Shard[] = [
-        { name: 'shard-00', mutate: 'a.ts', lines: 100 },
-        { name: 'shard-01', mutate: 'b.ts', lines: 100 },
-        { name: 'shard-02', mutate: 'c.ts', lines: 100 }
-    ];
-
-    it('runs every shard on the full pass', () => {
-        expect(rotationPlan(threeShards, { full: true, epochDay: 0 }).shards).toEqual(threeShards);
-    });
-
-    it('flags the full pass in its result', () => {
-        expect(rotationPlan(threeShards, { full: true, epochDay: 0 }).full).toBe(true);
-    });
-
-    it('runs a different subset on consecutive days', () => {
-        const day0 = rotationPlan(threeShards, { full: false, epochDay: 0 }).shards;
-        const day1 = rotationPlan(threeShards, { full: false, epochDay: 1 }).shards;
-
-        expect(day0).not.toEqual(day1);
-    });
-
-    it('covers every shard exactly once across one full rotation', () => {
-        const seen = new Set<string>();
-        for (let day = 0; day < 3; day++)
-            for (const shard of rotationPlan(threeShards, { full: false, epochDay: day }).shards)
-                seen.add(shard.name);
-
-        expect(seen).toEqual(new Set(threeShards.map((shard) => shard.name)));
-    });
-
-    it('is stable for the same epoch day', () => {
-        const first = rotationPlan(threeShards, { full: false, epochDay: 5 });
-        const second = rotationPlan(threeShards, { full: false, epochDay: 5 });
-
-        expect(first).toEqual(second);
     });
 });

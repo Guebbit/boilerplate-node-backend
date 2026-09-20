@@ -1,20 +1,20 @@
 #!/usr/bin/env tsx
 /**
- * Mutation testing scoped to the files a branch changed — `npm run test:mutation:diff`.
+ * Mutation testing scoped to the files a branch changed — `npm run mutation`.
  *
  * ── WHAT IT IS ───────────────────────────────────────────────────────────────────────────────
- * The nightly measures everything and answers tomorrow. This measures only the files in the diff
- * and answers in minutes, which is the difference between a number in a report and a number a
- * reviewer can act on.
+ * The weekly full sweep measures everything and answers within the week. This measures only the
+ * files in the diff and answers in minutes, which is the difference between a number in a report
+ * and a number a reviewer can act on.
  *
- * It is the same Stryker run as `test:mutation:deep`, with `--mutate` narrowed to the changed
- * files, followed by the ordinary per-file ratchet (`scripts/mutation/check-baseline.ts --deep`). Nothing
- * about the scoring is special-cased.
+ * It is the same Stryker run as `mutation:full`, with `--mutate` narrowed to the changed files,
+ * followed by the ordinary per-file ratchet (`scripts/mutation/check-baseline.ts`). Nothing about
+ * the scoring is special-cased.
  *
  * ── WHY WHOLE FILES, NOT CHANGED LINES ───────────────────────────────────────────────────────
  * Stryker can mutate a line range (`--mutate '<path>.ts:10-40'`), and Google's published practice
  * mutates diffs that way. This mutates the whole file on purpose: whole-file scores are what
- * `mutation-baseline-deep.json` records, so they compare directly, whereas a line-range score is
+ * `mutation-baseline.json` records, so they compare directly, whereas a line-range score is
  * comparable to nothing. The consequence is deliberate — touch a file and you own its debt not
  * getting worse.
  *
@@ -31,19 +31,17 @@
  * ── NEVER RECORDS ────────────────────────────────────────────────────────────────────────────
  * `--update` is not forwarded. A partial report recorded as the baseline would erase every file the
  * run did not measure; `scripts/mutation/check-baseline.ts` refuses that explicitly, and this never asks.
- * The nightly owns the baseline.
+ * The weekly full sweep owns the baseline.
  *
  * Usage:
- *   npm run test:mutation:diff                 # against origin/main
- *   npm run test:mutation:diff -- --base=HEAD~3
+ *   npm run mutation                 # against origin/main
+ *   npm run mutation -- --base=HEAD~3
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-
-/** The repo root — every spawn below runs from here, not from the caller's cwd. */
-const REPO_ROOT = path.join(__dirname, '..', '..');
+import { REPO_ROOT, runStryker } from './stryker-run';
 
 /** What a changed file must look like to be worth mutating: production TypeScript, not a spec. */
 const MUTABLE = /^src\/.+\.ts$/;
@@ -89,25 +87,28 @@ if (files.length === 0) {
 console.log(`[mutation-diff] ${files.length} changed file(s) against ${base}:`);
 for (const file of files) console.log(`  ${file}`);
 
-const stryker = spawnSync(
-    'npx',
-    ['stryker', 'run', 'stryker.deep.json', '--mutate', files.join(','), '--force'],
-    { cwd: REPO_ROOT, stdio: 'inherit' }
-);
+/**
+ * Grade the run that just finished against the per-file ratchet.
+ *
+ * Stryker's own non-zero exit is ignored on purpose — it is `thresholds.break` firing on the
+ * diff's average, the number this script exists NOT to judge by. The ratchet is the verdict.
+ *
+ * @returns the ratchet's exit code
+ */
+const grade = (): number => {
+    const check = spawnSync('npx', ['tsx', 'scripts/mutation/check-baseline.ts'], {
+        cwd: REPO_ROOT,
+        stdio: 'inherit'
+    });
+    return check.status ?? 2;
+};
 
 /*
- * A non-zero exit here is Stryker's own `thresholds.break` firing on the diff's average, which is
- * the number this script exists NOT to judge by. The ratchet below is the verdict; a crash is not.
+ * Through `runStryker`, not a bare `npx stryker`: this run needs the same per-worker heap cap and
+ * concurrency as every other entry point. Calling Stryker directly is how it silently ran without
+ * them — docs/tools/mutation-testing.md#worker-heap-cap.
  */
-if (stryker.error) {
-    console.error(`[mutation-diff] stryker failed to start: ${stryker.error.message}`);
-    process.exit(2);
-}
-
-/** Grade the run that just finished: `--deep` compares against the integration-inclusive floor. */
-const check = spawnSync('npx', ['tsx', 'scripts/mutation/check-baseline.ts', '--deep'], {
-    cwd: REPO_ROOT,
-    stdio: 'inherit'
-});
-
-process.exit(check.status ?? 2);
+void runStryker({
+    label: `diff (${files.length} files)`,
+    args: ['stryker.json', '--mutate', files.join(','), '--force']
+}).then(({ abortedForOom }) => process.exit(abortedForOom ? 1 : grade()));

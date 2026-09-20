@@ -148,7 +148,7 @@ all of it is easier to read once you have one.
 | `src/modules/*/openapi/*`                                            | The contract, one module at a time. Authored — see [Contract Ownership & Fragmentation](../api/contract-fragmentation.md). |
 | `src/modules/account/*`                                              | It is the biggest and least typical module (21 routes, JWT, cookies, sessions, tokens). Read `products` first.             |
 | `src/cluster.ts`                                                     | You are changing process management. See [Clustering & Shutdown](./clustering.md).                                         |
-| `eslint.config.ts`, `stryker.config.json`, `jest.config.js`          | You are changing the gate itself.                                                                                          |
+| `eslint.config.ts`, `stryker.json`, `jest.config.js`                 | You are changing the gate itself.                                                                                          |
 
 ---
 
