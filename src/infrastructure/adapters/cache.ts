@@ -109,7 +109,7 @@ const cacheConnection = manageConnection<RedisClientType>({
  * What this adapter's connection is doing, for `GET /observability/health`.
  *
  * Reads memoised state rather than pinging, so health reports what the next lookup will actually
- * do — see the header of `modules/observability/dependency-health.ts` for why a health
+ * do — see the header of `modules/observability/services/dependency-health.ts` for why a health
  * endpoint does no I/O.
  */
 export const cacheState = (): DependencyStatus => cacheConnection.state();

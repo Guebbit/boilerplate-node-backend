@@ -216,7 +216,7 @@ const getChannel = (): ConfirmChannel | undefined => {
 
 /**
  * What this adapter's connection is doing, for `GET /observability/health`. No I/O — see the
- * header of `modules/observability/dependency-health.ts` for why a health endpoint never
+ * header of `modules/observability/services/dependency-health.ts` for why a health endpoint never
  * dials the broker; `ready`/`unavailable` cover every "not disabled" state, `connecting` included,
  * since amqplib's recovery makes no distinction visible from out here.
  */
@@ -300,7 +300,7 @@ export const retryQueueOf = (queue: string): string => `${queue}.retry`;
 /**
  * Every worker queue's current dead-letter depth, read live off the broker — for
  * `GET /observability/health`'s `queues` field, the one part of that endpoint that DOES do I/O
- * (see `modules/observability/dependency-health.ts`'s header for why the rest never does): a
+ * (see `modules/observability/services/dependency-health.ts`'s header for why the rest never does): a
  * queue's parked count exists nowhere else in this process, unlike every other dependency's
  * state, which is already tracked in memory.
  *

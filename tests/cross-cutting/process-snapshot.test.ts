@@ -34,7 +34,7 @@ const SOURCE_ROOT = path.join(REPO_ROOT, 'src');
  * when some payload was composed.
  */
 const ALLOWED_READERS: Record<string, string> = {
-    'modules/observability/process-snapshot.ts':
+    'modules/observability/services/process-snapshot.ts':
         'the shared reader itself — this is where both calls are supposed to live',
     'infrastructure/observability/metrics-registry.ts':
         'a prom-client Gauge whose collect() runs at scrape time, so it must read at the instant ' +

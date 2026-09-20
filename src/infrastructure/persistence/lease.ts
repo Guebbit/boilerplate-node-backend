@@ -31,7 +31,7 @@ import { extractErrorMessage } from '@guebbit/js-toolkit';
  * `_id` IS the job name rather than a generated id: a job only ever wants ONE lease document, and
  * the atomic upsert `withLease` relies on needs to address it without a lookup first.
  * `lastSuccessAt`/`lastError` are read by `GET /observability/health` — see
- * `src/modules/observability/job-health.ts` — so a job that silently stopped running is
+ * `src/modules/observability/services/job-health.ts` — so a job that silently stopped running is
  * visible on the probe an operator already looks at.
  */
 export interface LeaseDocument extends Document<string> {

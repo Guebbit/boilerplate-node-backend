@@ -12,7 +12,7 @@ import type { Request, Response } from 'express';
 import { routeSignatures, guardsOn, routeTable } from '@tests/routes';
 import { asStub } from '@tests/stub';
 
-jest.mock('@modules/observability/stream', () => ({
+jest.mock('@modules/observability/services/stream', () => ({
     __esModule: true,
     streamObservabilityMetrics: jest.fn()
 }));
@@ -44,7 +44,7 @@ jest.mock('@infrastructure/adapters/logger', () => ({
 }));
 
 import { router } from '@modules/observability/routes';
-import { streamObservabilityMetrics } from '@modules/observability/stream';
+import { streamObservabilityMetrics } from '@modules/observability/services/stream';
 import { stillHoldsKeyViaCookie } from '@kernel/middlewares/authorizations';
 import {
     getPrometheusMetrics,

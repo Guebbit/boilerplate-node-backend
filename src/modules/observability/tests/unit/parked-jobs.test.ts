@@ -11,7 +11,7 @@ jest.mock('@infrastructure/adapters/queue', () => ({
     parkedCounts: () => parkedCountsMock()
 }));
 
-import { queueHealth } from '../../parked-jobs';
+import { queueHealth } from '../../services/parked-jobs';
 
 describe('queueHealth', () => {
     it('reports every queue parkedCounts answers with, unchanged', async () => {

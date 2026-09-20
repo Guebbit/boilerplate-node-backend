@@ -14,10 +14,10 @@ import os from 'node:os';
 import { successResponse } from '@infrastructure/http/response';
 import { catchAs } from '@infrastructure/http/controller';
 import { resolveAnalyticsProvider } from '@infrastructure/observability/analytics';
-import { dependencyHealth, overallStatus } from '../dependency-health';
-import { jobHealth } from '../job-health';
-import { queueHealth } from '../parked-jobs';
-import { processSnapshot } from '../process-snapshot';
+import { dependencyHealth, overallStatus } from '../services/dependency-health';
+import { jobHealth } from '../services/job-health';
+import { queueHealth } from '../services/parked-jobs';
+import { processSnapshot } from '../services/process-snapshot';
 
 /**
  * GET /observability/health

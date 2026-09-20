@@ -10,7 +10,11 @@
 import { connection } from '@infrastructure/runtime/database';
 import { cacheState } from '@infrastructure/adapters/cache';
 import { queueState } from '@infrastructure/adapters/queue';
-import { dependencyHealth, overallStatus, type DependencyHealth } from '../../dependency-health';
+import {
+    dependencyHealth,
+    overallStatus,
+    type DependencyHealth
+} from '../../services/dependency-health';
 
 jest.mock('@infrastructure/adapters/cache', () => ({ cacheState: jest.fn() }));
 jest.mock('@infrastructure/adapters/queue', () => ({ queueState: jest.fn() }));

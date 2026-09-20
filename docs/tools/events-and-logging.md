@@ -38,15 +38,15 @@ them belongs on a code path whose correctness depends on the write succeeding.
 
 ## The signals at a glance
 
-| Signal                | Entry point                                                      | Where it goes                                            | Who reads it               | Detailed page                                                       |
-| --------------------- | ---------------------------------------------------------------- | -------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------- |
-| **Application log**   | `logger` — `@infrastructure/adapters/logger`                     | stdout → Promtail → Loki                                 | you, debugging             | [Winston & Audit Logs](./winston.md)                                |
-| **Audit trail**       | `emitAuditEvent` — `@infrastructure/observability/audit`         | `auditLogger` → stdout → Loki, **and** Mongo `auditlogs` | admins, compliance         | [Winston & Audit Logs](./winston.md#audit-events)                   |
-| **Product analytics** | `emitAnalyticsEvent` — `@infrastructure/observability/analytics` | Umami (default), PostHog, or none                        | product, marketing         | [Product Analytics](./analytics.md)                                 |
-| **Metrics**           | counters in `metrics-http.ts` / each module's `metrics.ts`       | Prometheus registry → `GET /observability/metrics`       | ops, alerting              | [Prometheus](./prometheus.md)                                       |
-| **Traces**            | `withSpan` — `@infrastructure/observability/tracer`              | OTel Collector → Tempo                                   | you, debugging across hops | [OpenTelemetry](./opentelemetry.md) · [Tempo](./tempo.md)           |
-| **Live metrics feed** | `streamObservabilityMetrics` — `@modules/observability/stream`   | SSE frames on `GET /observability/events`                | the admin dashboard        | [Frontend Observability](./frontend-observability.md)               |
-| **Queue jobs**        | `enqueueEmail`, `publishToQueue` — `@infrastructure/adapters/*`  | RabbitMQ → `src/infrastructure/adapters/*.worker.ts`     | the workers themselves     | [RabbitMQ](./rabbitmq.md) · [Email & PDF](./email-and-rendering.md) |
+| Signal                | Entry point                                                             | Where it goes                                            | Who reads it               | Detailed page                                                       |
+| --------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------- |
+| **Application log**   | `logger` — `@infrastructure/adapters/logger`                            | stdout → Promtail → Loki                                 | you, debugging             | [Winston & Audit Logs](./winston.md)                                |
+| **Audit trail**       | `emitAuditEvent` — `@infrastructure/observability/audit`                | `auditLogger` → stdout → Loki, **and** Mongo `auditlogs` | admins, compliance         | [Winston & Audit Logs](./winston.md#audit-events)                   |
+| **Product analytics** | `emitAnalyticsEvent` — `@infrastructure/observability/analytics`        | Umami (default), PostHog, or none                        | product, marketing         | [Product Analytics](./analytics.md)                                 |
+| **Metrics**           | counters in `metrics-http.ts` / each module's `metrics.ts`              | Prometheus registry → `GET /observability/metrics`       | ops, alerting              | [Prometheus](./prometheus.md)                                       |
+| **Traces**            | `withSpan` — `@infrastructure/observability/tracer`                     | OTel Collector → Tempo                                   | you, debugging across hops | [OpenTelemetry](./opentelemetry.md) · [Tempo](./tempo.md)           |
+| **Live metrics feed** | `streamObservabilityMetrics` — `@modules/observability/services/stream` | SSE frames on `GET /observability/events`                | the admin dashboard        | [Frontend Observability](./frontend-observability.md)               |
+| **Queue jobs**        | `enqueueEmail`, `publishToQueue` — `@infrastructure/adapters/*`         | RabbitMQ → `src/infrastructure/adapters/*.worker.ts`     | the workers themselves     | [RabbitMQ](./rabbitmq.md) · [Email & PDF](./email-and-rendering.md) |
 
 Only the last two cross a process boundary. The rest are one-way recordings that never come back.
 

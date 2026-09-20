@@ -15,7 +15,7 @@ jest.mock('@infrastructure/persistence/lease', () => ({
     listLeaseSummaries: () => listLeaseSummariesMock()
 }));
 
-import { jobHealth } from '../../job-health';
+import { jobHealth } from '../../services/job-health';
 
 describe('jobHealth', () => {
     it('reports a completed job as an ISO-8601 string, not a Date', async () => {

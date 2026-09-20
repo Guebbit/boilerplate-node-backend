@@ -15,7 +15,7 @@ import { catchAs } from '@infrastructure/http/controller';
 import { httpInflightRequests } from '@infrastructure/observability/metrics-http';
 import { metricsRegistry } from '@infrastructure/observability/metrics-registry';
 import { getHttpRequestCounters, getLatencyPercentiles, sumMetricValues } from '../http-readback';
-import { processSnapshot } from '../process-snapshot';
+import { processSnapshot } from '../services/process-snapshot';
 
 /** One sample of a prom-client counter. */
 interface MetricSample {

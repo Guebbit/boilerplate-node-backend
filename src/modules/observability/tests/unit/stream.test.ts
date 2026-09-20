@@ -27,7 +27,7 @@ jest.mock('../../http-readback', () => ({
     getHttpRequestCounters: () => getHttpRequestCounters()
 }));
 
-import { buildObservabilityPayload, streamObservabilityMetrics } from '../../stream';
+import { buildObservabilityPayload, streamObservabilityMetrics } from '../../services/stream';
 
 /** The intervals the module schedules, as documented in its own constants. */
 const UPDATE_INTERVAL_MS = 5000;
@@ -160,7 +160,7 @@ describe('the SSE metrics stream', () => {
         it('floors uptime to whole seconds, like every other payload that publishes it', async () => {
             /*
              * Floor rather than round, and that is the whole point of the shared reader in
-             * `modules/observability/process-snapshot.ts`. A dashboard shows this frame
+             * `modules/observability/services/process-snapshot.ts`. A dashboard shows this frame
              * beside `GET /observability/health`; while this one rounded and that one floored, the
              * two reported uptimes a second apart with nothing wrong in either.
              */

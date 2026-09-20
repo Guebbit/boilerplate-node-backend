@@ -24,7 +24,7 @@ import {
     getPrometheusMetrics,
     metricsRegistry
 } from '@infrastructure/observability/metrics-registry';
-import { streamObservabilityMetrics } from './stream';
+import { streamObservabilityMetrics } from './services/stream';
 import { logger } from '@infrastructure/adapters/logger';
 
 /** Express router for observability endpoints mounted at /observability. */
