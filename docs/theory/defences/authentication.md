@@ -44,9 +44,34 @@ revoked. That single asymmetry is what closes most of the JWT rows below.
 
 | Attack                      | How it works                                                        | This boilerplate                                                                                                                                                                                                                            |
 | --------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| User / account enumeration  | different messages, status codes or timing on login, signup, reset  | One answer shape for "no such email" and "wrong password", and the reset endpoint answers the same whether or not the address exists.                                                                                                       |
+| User / account enumeration  | different messages, status codes or timing on login, signup, reset  | Closed on login and reset, DELIBERATELY OPEN on signup — see below.                                                                                                                                                                         |
 | Timing attack on comparison | a non-constant-time compare leaks a secret byte by byte             | A login miss compares against a dummy bcrypt hash computed once at import, so an unknown email costs the same as a wrong password — `account/services/authentication.ts#DUMMY_PASSWORD_HASH`                                                |
 | Credential leakage          | passwords or tokens in URLs, logs, error pages, analytics, referrer | Password hashes, live tokens and (configurably) personal fields are redacted or hashed before a log line is written — `infrastructure/adapters/logger.ts#SENSITIVE_FIELDS`. See [Information disclosure](disclosure.md#logs-and-telemetry). |
+
+### Signup answers whether the address is taken, and that is a decision
+
+Login answers one shape for "no such email" and "wrong password", and the reset endpoint answers
+the same 200 whether or not the address exists. `POST /account/signup` does NOT: a registered
+address gets `409`, a fresh one `201`. That is a one-request enumeration oracle and it is
+deliberate.
+
+Why it stays:
+
+- Telling someone they already have an account is the only way they find out at the moment they
+  need to know. The alternative — a uniform "check your email" screen — makes the common case
+  (a person who forgot they registered) strictly worse to serve a threat model the rate limiter
+  already addresses.
+- It is what Shopify, Stripe and GitHub all do at signup.
+- Closing it here changes little while login stays uniform: an attacker with a list of addresses
+  gains a bounded, rate-limited oracle, not an account.
+
+What it costs, stated plainly: an address can be tested for membership. If a deployment's threat
+model makes membership itself sensitive — a medical or legal product, say — fold signup into the
+same non-committal 200 the reset endpoint uses and deliver the outcome by email instead. That is
+a product decision, not a code defect, and nothing here assumes it stays this way.
+
+Recorded because a pentest raises it every time. `openapi.yaml`'s own comment on the signup route
+documents the `409` as the intended response.
 
 ## Taking the session
 
