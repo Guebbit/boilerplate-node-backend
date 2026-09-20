@@ -72,7 +72,6 @@
         },
         "items-held": "This order's items cannot be changed while its stock is held or already sold.",
         "insufficient-stock": "Some items on this order are no longer available in the quantity requested — see `details.lines`.",
-        "product-unavailable": "One or more products on this order are no longer available — see `details.lines`.",
-        "invoice-pending": "The invoice is still being generated — try again shortly."
+        "product-unavailable": "One or more products on this order are no longer available — see `details.lines`."
     }
 }

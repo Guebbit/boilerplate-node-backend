@@ -6,9 +6,6 @@
  * either because no test crossed HTTP. Both role branches of `getById` are asserted below for
  * that reason.
  */
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs, authenticateAsRole } from '@tests/http';
@@ -16,51 +13,22 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { orderRepository } from '../../repository';
-import { enqueueInvoicePdfJob } from '../../transport/invoice-pdf';
 
-/*
- * No real Chromium in the test environment — same stub `invoice-pdf.test.ts` uses. Writes to
- * `options.path` when given, the way Puppeteer's own `page.pdf({path})` would: `seedOrderFor`
- * below drives the REAL render-and-store pipeline (queue disabled in tests, so it runs inline),
- * and a download test needs an actual file on disk to read back, not just a status flag.
- */
+// No real Chromium in the test environment — same stub `invoice.test.ts` uses. The invoice route
+// renders synchronously now, so a fixed buffer is all any case here needs.
 jest.mock('@infrastructure/adapters/pdf', () => ({
-    renderHtmlToPdf: (_html: string, options?: { path?: string }) =>
-        options?.path
-            ? import('node:fs/promises').then(({ writeFile }) =>
-                  writeFile(options.path!, Buffer.from('pdf')).then(() => Buffer.from('pdf'))
-              )
-            : Promise.resolve(Buffer.from('pdf'))
+    renderHtmlToPdf: () => Promise.resolve(Buffer.from('pdf'))
 }));
 
 setupTestDb();
 
-let storageRoot: string;
-const originalStoragePath = process.env.NODE_INVOICE_STORAGE_PATH;
-
-beforeAll(async () => {
-    storageRoot = await mkdtemp(path.join(tmpdir(), 'orders-invoice-contract-test-'));
-    process.env.NODE_INVOICE_STORAGE_PATH = storageRoot;
-});
-
-afterAll(async () => {
-    await rm(storageRoot, { recursive: true, force: true });
-    if (originalStoragePath === undefined) delete process.env.NODE_INVOICE_STORAGE_PATH;
-    else process.env.NODE_INVOICE_STORAGE_PATH = originalStoragePath;
-});
-
 /**
- * An order with a REAL stored invoice PDF — drives the actual render-and-store pipeline
- * (`enqueueInvoicePdfJob`, the same call `order.created` makes) rather than hand-setting
- * `invoicePdfStatus`, so a download test has a real file to read back. Scope/permission tests
- * below have nothing to do with the async pipeline itself — that pipeline has its own coverage in
- * `orders/tests/unit/invoice-pdf.test.ts`.
+ * An order with real lines to invoice. Scope/permission tests below have nothing to do with the
+ * render itself — that has its own coverage in `orders/tests/unit/invoice.test.ts`.
  */
 const seedOrderFor = async (user: Parameters<typeof createOrder>[0]) => {
     const product = await createProduct();
-    const order = await createOrder(user, [toOrderItem(product, 2)]);
-    await enqueueInvoicePdfJob(String(order._id));
-    return order;
+    return createOrder(user, [toOrderItem(product, 2)]);
 };
 
 describe('GET /orders — the filters it now publishes', () => {
@@ -261,13 +229,9 @@ describe('GET /orders/{id}', () => {
         expect(response.headers['content-type']).toBe('application/pdf');
     });
 
-    /*
-     * The schema default (`invoicePdfStatus: 'pending'` from the moment an order is written) is
-     * what every OTHER order in this file overrides away with `invoicePdfStatus: 'ready'` — this
-     * is the one test that leaves it alone, to prove the 202 side of the contract actually answers
-     * what `openapi.yaml` promises.
-     */
-    it('answers 202 while the invoice worker has not finished yet', async () => {
+    // No separate ready/pending state to wait on any more — a brand-new order's invoice answers
+    // 200 on the very first request, same as any other.
+    it('answers 200 on the first request — nothing to wait on', async () => {
         const { user: owner, bearer } = await authenticateAs('user');
         const product = await createProduct();
         const order = await createOrder(owner, [toOrderItem(product, 1)]);
@@ -276,9 +240,8 @@ describe('GET /orders/{id}', () => {
             .get(`/orders/${String(order._id)}/invoice`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(202);
-        expect(response.body.data).toEqual({ invoicePdfStatus: 'pending' });
-        expect(response).toSatisfyApiSpec();
+        expect(response.status).toBe(200);
+        expect(response.headers['content-type']).toBe('application/pdf');
     });
 });
 

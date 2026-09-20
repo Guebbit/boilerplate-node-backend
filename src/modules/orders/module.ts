@@ -11,9 +11,8 @@
  * `services/cancel.ts`) for a buyer's stored locale — the confirmation and expiry emails this
  * module sends, never a live account's authorization state.
  *
- * Declares its own queue consumer below, the same `ModuleConsumer` shape `webhooks` set the
- * precedent for (`@kernel/registry.ts`) — invoice PDF generation, triggered by this module's own
- * `order.created` listener. See `transport/invoice-pdf.ts` and `docs/modules/orders.md#the-invoice-pipeline`.
+ * No queue consumer of its own: the invoice is rendered on demand, on whichever request thread
+ * asks for it — see `services/invoice.ts`.
  */
 
 import path from 'node:path';
@@ -23,7 +22,6 @@ import { onDomainEvent } from '@kernel/events';
 import { RESERVATION_EXPIRED } from '@modules/inventory';
 import { USER_DELETED } from '@modules/users';
 import { PRODUCT_DELETED, PRODUCT_DEACTIVATED } from '@modules/products';
-import { WORKER_CHANNELS, OrderInvoicePdfJobPayloadSchema } from '@types';
 import { readAll, MAX_CONFIGURED_PAGE_SIZE } from '@infrastructure/persistence/search';
 import { router } from './routes';
 import {
@@ -33,9 +31,11 @@ import {
     search,
     ownerScope
 } from './services';
-import { enqueueInvoicePdfJob, handleInvoicePdfJob } from './transport/invoice-pdf';
-// Also installs this module's other event declarations (ORDER_CANCELLED, ORDER_STATUS_CHANGED).
-import { ORDER_CREATED } from './events';
+import { ordersRateLimits } from './rate-limits';
+// Side-effect only: registers this module's event declarations (ORDER_CANCELLED, ORDER_CREATED,
+// ORDER_STATUS_CHANGED) into the kernel's `DomainEventMap`. Nothing here listens to its own
+// `order.created` any more — `webhooks` is the only outside listener left.
+import './events';
 
 /** This module's manifest entry: routes, the shop-identity config gate, event subscriptions, and locales. */
 export default {
@@ -84,12 +84,6 @@ export default {
         onDomainEvent(RESERVATION_EXPIRED, ({ orderId }) => cancelById(orderId, SYSTEM_ACTOR));
         // Detach, never delete: the order survives the account.
         onDomainEvent(USER_DELETED, ({ userId }) => detachUserId(userId));
-        // Fires exactly once per order regardless of which creation path made it — see
-        // `events.ts`'s own docblock on `order.created`. Returned, not `void`-wrapped:
-        // `emitDomainEvent` already catches and logs per handler, and a publish failure here
-        // leaves the order `pending` with nothing yet able to retry it (no dead-letter/parking
-        // exists for any queue in this codebase today) — the same as every other queue's state.
-        onDomainEvent(ORDER_CREATED, ({ orderId }) => enqueueInvoicePdfJob(orderId));
         // Only the HARD half of a product's removal — a soft delete (or its restore) leaves a
         // pending order's line exactly as it was, the same reasoning `inventory`'s own listener
         // follows for the level row. Deactivation is unconditional: `product.deactivated` never
@@ -102,20 +96,8 @@ export default {
         );
     },
     locales: path.join(__dirname, 'locales'),
-    /*
-     * `handler: handleInvoicePdfJob` directly, no separate guard in front of it: `schema` below
-     * already refuses a job missing `orderId` before `consumeFromQueue` ever calls the handler,
-     * same reasoning as webhooks' own consumer. `prefetch: 2` — CPU-bound (Puppeteer), like the
-     * old domainless PDF queue this replaces, so kept low.
-     */
-    consumers: [
-        {
-            queue: WORKER_CHANNELS.ORDERS_INVOICE_GENERATE,
-            handler: handleInvoicePdfJob,
-            schema: OrderInvoicePdfJobPayloadSchema,
-            prefetch: 2
-        }
-    ],
+    // See `./rate-limits.ts` — every invoice render spawns a Chromium launch.
+    rateLimits: ordersRateLimits,
     /**
      * The order states the storefront and the admin both have a screen for.
      *

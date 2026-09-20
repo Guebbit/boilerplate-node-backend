@@ -15,6 +15,9 @@ jest.mock('@infrastructure/http/middlewares/cache', () =>
 jest.mock('@infrastructure/http/middlewares/route-flag', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').routeFlagMock()
 );
+jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
+    jest.requireActual<typeof import('@tests/routes')>('@tests/routes').securityMock()
+);
 
 import { router } from '@modules/orders/routes';
 
@@ -113,11 +116,19 @@ describe('order routes — caching', () => {
         expect(optionsOf(chainOf('GET /'), 'setCache').keyParameters).not.toHaveLength(0);
     });
 
-    it.each(['GET /:id', 'GET /:id/invoice'])('%s is cached under the orders tag', (signature) => {
-        const entry = chainOf(signature).find((each) => each.startsWith('setCache'));
+    it('GET /:id is cached under the orders tag', () => {
+        const entry = chainOf('GET /:id').find((each) => each.startsWith('setCache'));
 
         expect(entry).toContain('setCache(3600');
-        expect(optionsOf(chainOf(signature), 'setCache')).toMatchObject({ tags: ['orders'] });
+        expect(optionsOf(chainOf('GET /:id'), 'setCache')).toMatchObject({ tags: ['orders'] });
+    });
+
+    // Not cached — every hit renders fresh, and there is no separate ready/pending status left to
+    // invalidate a cache entry over.
+    it('GET /:id/invoice carries no setCache', () => {
+        expect(chainOf('GET /:id/invoice').some((entry) => entry.startsWith('setCache'))).toBe(
+            false
+        );
     });
 
     it('invalidates products too wherever stock moves, and only there', () => {
@@ -141,5 +152,19 @@ describe('order routes — caching', () => {
         expect(chainOf('DELETE /:id/hard')).toContain('routeFlag(hardDelete)');
         expect(chainOf('DELETE /:id')).not.toContain('routeFlag(hardDelete)');
         expect(chainOf('DELETE /')).not.toContain('routeFlag(hardDelete)');
+    });
+});
+
+describe('order routes — invoice rate limiting', () => {
+    it('budgets the invoice render, and only it', () => {
+        // Every hit spawns a Chromium launch — see `rate-limits.ts`'s own docs for why this
+        // route alone needs a budget the rest of the router does not.
+        const unexpected = routeSignatures(router).filter(
+            (signature) =>
+                signature !== 'GET /:id/invoice' && chainOf(signature).includes('orders-invoice')
+        );
+
+        expect(chainOf('GET /:id/invoice')).toContain('orders-invoice');
+        expect(unexpected).toEqual([]);
     });
 });

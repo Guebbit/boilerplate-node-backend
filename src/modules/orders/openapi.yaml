@@ -388,14 +388,6 @@ paths:
                             schema:
                                 type: string
                                 format: binary
-                '202':
-                    description: >-
-                        The invoice is still being generated (`Order.invoicePdfStatus` is
-                        `pending`) — a client polls the order and retries once it reads `ready`.
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/OrderInvoicePendingEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -431,29 +423,6 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
                     $ref: '#/components/schemas/OrdersResponse'
-
-        OrderInvoicePendingEnvelope:
-            type: object
-            additionalProperties: false
-            required: [success, status, message, data]
-            properties:
-                success:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
-                status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
-                message:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
-                data:
-                    $ref: '#/components/schemas/OrderInvoicePending'
-
-        OrderInvoicePending:
-            type: object
-            additionalProperties: false
-            required: [invoicePdfStatus]
-            properties:
-                invoicePdfStatus:
-                    type: string
-                    enum: [pending]
 
         CancelOrderRequest:
             type: object

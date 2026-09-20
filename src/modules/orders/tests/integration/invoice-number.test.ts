@@ -56,19 +56,13 @@ describe('GET /orders/{id}/invoice — the number-and-date block', () => {
     it('renders no number or date for an order with no invoice number', async () => {
         const { bearer, user } = await authenticateAs('admin');
         const product = await createProduct();
-        // `invoicePdfStatus: 'ready'` with nothing actually stored self-heals: the controller
-        // queues a fresh render and answers 202 (see `get-order-invoice.ts`) — the mocked
-        // renderer above still runs synchronously in that chain (no broker in tests), which is
-        // what lets this exercise the render through HTTP without a real queued worker.
-        const order = await createOrder(user, [toOrderItem(product, 1)], {
-            invoicePdfStatus: 'ready'
-        });
+        const order = await createOrder(user, [toOrderItem(product, 1)]);
 
         const response = await api()
             .get(`/orders/${String(order._id)}/invoice`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(202);
+        expect(response.status).toBe(200);
         const html = renderHtmlToPdfMock.mock.calls[0][0] as string;
         expect(html).not.toContain('2026-000041');
     });
@@ -77,15 +71,14 @@ describe('GET /orders/{id}/invoice — the number-and-date block', () => {
         const { bearer, user } = await authenticateAs('admin');
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)], {
-            invoiceNumber: '2026-000041',
-            invoicePdfStatus: 'ready'
+            invoiceNumber: '2026-000041'
         });
 
         const response = await api()
             .get(`/orders/${String(order._id)}/invoice`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(202);
+        expect(response.status).toBe(200);
         const html = renderHtmlToPdfMock.mock.calls[0][0] as string;
         expect(html).toContain('2026-000041');
         // `createdAt` IS the date of supply — the fixture's own timestamp must show up too.

@@ -120,7 +120,6 @@ export const makeOrder = ({
     notes,
     deletedAt,
     invoiceNumber,
-    invoicePdfStatus,
     transferReference
 }: OrderOverrides = {}): OrderFixture => ({
     ...identityOf({ id, createdAt, updatedAt }),
@@ -153,11 +152,6 @@ export const makeOrder = ({
         notes,
         deletedAt: toDate(deletedAt),
         invoiceNumber,
-        // Passed through, never defaulted here: same reasoning as `status` above — the model's
-        // own `default: 'pending'` already covers "not stated". Stating it explicitly is how a
-        // fixture reaches the `'ready'` or (via an explicit unset after creation, since the
-        // schema default fires on `undefined`) predates-the-feature cases.
-        invoicePdfStatus,
         transferReference
     })
 });

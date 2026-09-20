@@ -36,9 +36,8 @@ declare module '@kernel/events' {
         /**
          * A new order was written — emitted by `services/place.ts`'s `placeOrder`, the one
          * function that writes a new order, so this fires exactly once per order regardless of
-         * which caller (the admin create, the storefront checkout) reached it. `webhooks` and the
-         * invoice-PDF pipeline are the listeners that need this fact as an event rather than as
-         * audit/analytics noise.
+         * which caller (the admin create, the storefront checkout) reached it. `webhooks` is the
+         * listener that needs this fact as an event rather than as audit/analytics noise.
          */
         'order.created': { orderId: string };
     }

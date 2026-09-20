@@ -192,12 +192,10 @@ export const productUnavailableCancelledEmail = (
  * same reasoning as `orderTotal` below — and the two fields Art. 226 requires, `invoiceNumber`
  * and `createdAt`, printed together by {@link buildInvoiceMeta}.
  *
- * `id`, not `_id`. The only build site is `transport/invoice-pdf.ts`'s worker, off
+ * `id`, not `_id`. The only build site is `services/invoice.ts`'s `renderInvoicePdf`, off
  * `orderRepository.findByIdRaw` — a hydrated Mongoose document, never run through
  * `applyOrderTransform`'s derived fields or `.toJSON()`, which is also why `createdAt` below is a
- * real `Date`, not yet the ISO string an HTTP response would show. `controllers/get-order-invoice.ts`
- * never builds one itself: it only streams a PDF the worker already rendered, or queues the worker
- * to render one.
+ * real `Date`, not yet the ISO string an HTTP response would show.
  */
 export interface InvoiceOrder extends OrderLines {
     id?: unknown;

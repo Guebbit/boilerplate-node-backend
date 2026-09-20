@@ -1,37 +1,18 @@
 /**
  * @module
- * PDF invoice controller. `invoicePdfStatus === 'ready'` streams the stored PDF
- * `transport/invoice-pdf.ts`'s worker already wrote — the only render path there is. `'pending'`
- * answers 202: the client polls the order and retries once it reads `ready`. Absent entirely (an
- * order that predates the async pipeline), or `ready` with nothing on disk (a data anomaly), both
- * self-heal the same way: `enqueueInvoicePdfRetry` queues a render and this also answers 202 —
- * never a render on the request thread.
+ * PDF invoice controller. Renders synchronously on the request thread — `orderService.
+ * renderInvoicePdf` — and streams the bytes back: `200` every time an order exists and the caller
+ * may see it, `404` otherwise, `500` on a render failure (an `INSTALL_CHROMIUM=false` deployment,
+ * for one). No `202`, no polling: the invoice is a view of the order, not a durable artefact with
+ * a status of its own.
  */
 
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { orderService } from '../services';
-import { readStoredInvoicePdf, enqueueInvoicePdfRetry } from '../transport/invoice-pdf';
-import { rejectResponse, successResponse } from '@infrastructure/http/response';
+import { rejectResponse } from '@infrastructure/http/response';
 import { isValidObjectId } from '@infrastructure/http/request';
 import { catchAs } from '@infrastructure/http/controller';
-
-/** Sends a stored PDF's bytes. */
-const sendStoredInvoice = (response: Response, orderId: string, pdf: Buffer) =>
-    response
-        .status(200)
-        .setHeader('Content-Type', 'application/pdf')
-        .setHeader('Content-Disposition', `attachment; filename="invoice-${orderId}.pdf"`)
-        .send(pdf);
-
-/** The 202 every not-yet-rendered case answers with — queued already, or just (re)queued here. */
-const answerPending = (response: Response) =>
-    successResponse(
-        response,
-        { invoicePdfStatus: 'pending' as const },
-        202,
-        t('orders.invoice-pending')
-    );
 
 /**
  * GET /orders/:id/invoice — PDF invoice for the order; non-admin callers see only their own.
@@ -55,28 +36,34 @@ export const getOrderInvoice = (request: Request<{ id?: string }>, response: Res
             /*
              * `id`, not `_id`. `getById` is polymorphic by scope (see `findByIdScoped`): an admin
              * gets a hydrated document, an owner gets a transformed plain object whose `_id` the
-             * serializer deleted. `id` is the half that resolves on both — reading `_id` here put
-             * the literal string `undefined` in the filename and in the document's own title for
-             * every non-admin. The cast widens `order`'s own type rather than naming the stored
-             * one: the STORED shape omits `id` by house convention, and the wire `id` arrives from
-             * the virtual on one branch and the transform on the other — so what is being added
-             * here is knowledge about the wire, which is this layer's business.
+             * serializer deleted. `id` is the half that resolves on both.
              */
             const orderId = String((order as typeof order & { id?: string }).id ?? order._id);
 
-            if (order.invoicePdfStatus === 'pending') {
-                answerPending(response);
-                return undefined;
-            }
+            return orderService.renderInvoicePdf(orderId).then((pdf) => {
+                // Hard-deleted between the read above and the render — vanishingly unlikely, but
+                // the render's own `findByIdRaw` is a second, independent lookup that can miss.
+                if (!pdf) {
+                    rejectResponse(response, 404, [t('orders.not-found')]);
+                    return undefined;
+                }
 
-            if (order.invoicePdfStatus !== 'ready')
-                return enqueueInvoicePdfRetry(orderId).then(() => answerPending(response));
-
-            return readStoredInvoicePdf(orderId).then((pdf) =>
-                pdf
-                    ? sendStoredInvoice(response, orderId, pdf)
-                    : enqueueInvoicePdfRetry(orderId).then(() => answerPending(response))
-            );
+                return (
+                    response
+                        .status(200)
+                        .setHeader('Content-Type', 'application/pdf')
+                        // `inline`, not `attachment`: the frontend holds the blob either way and
+                        // decides what to do with it — download, or a same-tab preview.
+                        .setHeader(
+                            'Content-Disposition',
+                            `inline; filename="invoice-${order.invoiceNumber ?? orderId}.pdf"`
+                        )
+                        // Personal and financial data — never a shared/CDN cache, and never the
+                        // browser's own disk cache either.
+                        .setHeader('Cache-Control', 'private, no-store')
+                        .send(pdf)
+                );
+            });
         })
         .catch(catchAs(response, 'Invoice generation failed'));
 };

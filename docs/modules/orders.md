@@ -188,56 +188,27 @@ order out of `pending` — the same commit a normal payment confirmation trigger
 reservation sweep would eventually release units an override already shipped, since the sweep only
 knows the order is still `pending` from its own point of view.
 
-## The invoice pipeline
+## The invoice
 
-`GET /orders/{id}/invoice` never renders on the request thread — every order's invoice generates
-asynchronously, off the module's own `worker.orders.invoice-generate` queue
-(`transport/invoice-pdf.ts`, `asyncapi.internal.yaml`), the same "a module owns its own queue"
-shape `webhooks` set first. An order that predates this pipeline — no `invoicePdfStatus` at
-all — or one `ready` with nothing on disk (a data anomaly) both self-heal the same way: the
-controller queues a render (`enqueueInvoicePdfRetry`) and answers 202, exactly like an order still
-waiting on its very first render.
+The invoice is a VIEW of the order, rendered when someone asks for it — never a durable artefact
+with a status of its own. `GET /orders/{id}/invoice` renders synchronously, on the request thread
+(`services/invoice.ts`'s `renderInvoicePdf`), and streams the bytes straight back: `200` every
+time the order exists and the caller may see it, `404` otherwise. No queue, no `pending`/`ready`
+status, no polling.
 
-```mermaid
-%%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 55}}}%%
-flowchart LR
-    C["order.created<br/><i>fires once, either creation path</i>"] --> E["enqueueInvoicePdfJob"]
-    E -->|"broker up"| Q[("worker.orders.<br/>invoice-generate")]
-    E -->|"no broker, or publish failed"| R["render inline"]
-    Q --> W["the worker"]
-    W --> R
-    R --> S["write the PDF · storage<br/>NODE_INVOICE_STORAGE_PATH"]
-    S --> D["invoicePdfStatus: ready"]
+The confirmation email sends immediately, linking to the order's page — it is never held for the
+render, and there is nothing left to wait on there either.
 
-    classDef event fill:#fef3c7,stroke:#d97706,color:#111827;
-    classDef queue fill:#dbeafe,stroke:#2563eb,color:#111827;
-    classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
-    class C event;
-    class Q queue;
-    class D done;
-```
-
-A new order is written `pending` (the schema default), never absent — only an order from before
-this field existed reads as absent. `GET /orders/{id}/invoice` branches on that field: `ready`
-streams the stored file, `pending` answers `202` so a client can grey out the download button and
-poll, and absent falls back to the pre-existing synchronous render. The confirmation email is
-never held for the PDF to finish — it sends immediately, as it always has, linking to the order's
-page; the download button there is what waits.
-
-The job payload carries an order id and nothing else — never a template path or an output path.
-The queue it replaces (`worker.pdf.generate`, domainless, in the shared workers contract) shipped a
-producer-chosen template path and output path with no producer ever wired to publish to it: a
-latent arbitrary-file-write, closed by removing the surface rather than guarding it. See
-[RabbitMQ](../tools/rabbitmq.md#invoice-pdf-generation-async-module-owned).
+See [RabbitMQ](../tools/rabbitmq.md#invoice-pdf-rendering-not-a-queue).
 
 ## Configuration
 
-| Variable                    | Default            | Meaning                                                                                                                                                                                             |
-| --------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_SHOP_COUNTRY`         | —                  | The shop's own jurisdiction — the only one VAT is ever charged at, no destination lookup. Required at boot; the manifest's `requiredConfig` refuses to start without it                             |
-| `NODE_SHOP_VAT_NUMBER`      | —                  | The shop's VAT id, printed on the invoice. Optional — a deployment below the registration threshold prints no VAT number rather than a fake one                                                     |
-| `NODE_SHOP_LEGAL_NAME`      | —                  | The shop's legal name, printed on the invoice — distinct from any storefront brand name                                                                                                             |
-| `NODE_INVOICE_STORAGE_PATH` | `storage/invoices` | Where the invoice worker writes each order's stored PDF. Outside `NODE_PUBLIC_PATH` on purpose — an invoice is personal and financial data, reachable only through the authenticated download route |
+| Variable                    | Default            | Meaning                                                                                                                                                                                                                |
+| --------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_SHOP_COUNTRY`         | —                  | The shop's own jurisdiction — the only one VAT is ever charged at, no destination lookup. Required at boot; the manifest's `requiredConfig` refuses to start without it                                                |
+| `NODE_SHOP_VAT_NUMBER`      | —                  | The shop's VAT id, printed on the invoice. Optional — a deployment below the registration threshold prints no VAT number rather than a fake one                                                                        |
+| `NODE_SHOP_LEGAL_NAME`      | —                  | The shop's legal name, printed on the invoice — distinct from any storefront brand name                                                                                                                                |
+| `NODE_INVOICE_STORAGE_PATH` | `storage/invoices` | Reserved for a disk cache in front of the render — nothing writes here yet. Outside `NODE_PUBLIC_PATH` on purpose — an invoice is personal and financial data, reachable only through the authenticated download route |
 
 The first three are read fresh per call (`config.ts`), so a correction needs no restart; an empty
 string reads as unset, never as a blank invoice row. The VAT RATES charged against an order line

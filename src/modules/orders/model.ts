@@ -150,15 +150,6 @@ export interface OrderDocument
      */
     transferReference?: string;
     /**
-     * `'pending'` from the moment this order is written (the schema default below), `'ready'`
-     * once `orders/transport/invoice-pdf.ts`'s worker has stored the rendered PDF. Absent on an
-     * order that predates this field — no job was ever queued for it — and self-healed the same
-     * way a `ready` status with nothing on disk is: `GET /orders/{id}/invoice` queues a render
-     * (`transport/invoice-pdf.ts#enqueueInvoicePdfRetry`) and answers 202, never rendering on the
-     * request thread itself.
-     */
-    invoicePdfStatus?: 'pending' | 'ready';
-    /**
      * The admin-override history — `services/override.ts`'s only writer, never emptied. Absent
      * (not `[]`) on an order no override has ever touched, the same "owes nothing" vs. "was never
      * asked" distinction `pendingEffects` already uses. Each entry is one override, forced or
@@ -374,19 +365,6 @@ export const orderSchema = new Schema<OrderDocument>(
          */
         transferReference: {
             type: String
-        },
-        /*
-         * Defaulted, unlike every other field in this schema that tracks a feature's rollout —
-         * `invoiceNumber`/`transferReference` above are deliberately never backfilled onto a row
-         * that predates them. This one IS applied to every new document (Mongoose only applies a
-         * schema default on insert, never retroactively), which is exactly what gives the
-         * "pending on write, absent on anything older" distinction `OrderDocument`'s docblock
-         * describes for free, with no code at either order-creation call site.
-         */
-        invoicePdfStatus: {
-            type: String,
-            enum: ['pending', 'ready'],
-            default: 'pending'
         },
         /*
          * `default: undefined`, same reasoning as `pendingEffects` above: an order no override has

@@ -32,19 +32,13 @@ describe('GET /orders/{id}/invoice — pre-VAT vs. VAT orders', () => {
     it('renders no VAT table or shop identity for an order frozen before VAT existed', async () => {
         const { bearer, user } = await authenticateAs('admin');
         const product = await createProduct();
-        // `invoicePdfStatus: 'ready'` with nothing actually stored self-heals: the controller
-        // queues a fresh render and answers 202 (see `get-order-invoice.ts`) — the mocked
-        // renderer above still runs synchronously in that chain (no broker in tests), which is
-        // what lets this exercise the render through HTTP without a real queued worker.
-        const order = await createOrder(user, [toOrderItem(product, 2)], {
-            invoicePdfStatus: 'ready'
-        });
+        const order = await createOrder(user, [toOrderItem(product, 2)]);
 
         const response = await api()
             .get(`/orders/${String(order._id)}/invoice`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(202);
+        expect(response.status).toBe(200);
         const html = renderHtmlToPdfMock.mock.calls[0][0] as string;
         expect(html).not.toContain('<table>');
     });
@@ -52,15 +46,13 @@ describe('GET /orders/{id}/invoice — pre-VAT vs. VAT orders', () => {
     it('renders the VAT table and totals for an order with a frozen rate on every line', async () => {
         const { bearer, user } = await authenticateAs('admin');
         const product = await createProduct();
-        const order = await createOrder(user, [taxedLine(String(product._id), 19.9, 0.22)], {
-            invoicePdfStatus: 'ready'
-        });
+        const order = await createOrder(user, [taxedLine(String(product._id), 19.9, 0.22)]);
 
         const response = await api()
             .get(`/orders/${String(order._id)}/invoice`)
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(202);
+        expect(response.status).toBe(200);
         const html = renderHtmlToPdfMock.mock.calls[0][0] as string;
         expect(html).toContain('<table>');
         // 19.90 × 2 at 22%: gross 3980 cents, tax = round(3980 × 0.22/1.22) = 718 → 7.18.

@@ -2,7 +2,6 @@
 # Sources: shared/contracts/asyncapi.root.yaml
 #          src/modules/observability/asyncapi.yaml
 #          src/modules/webhooks/asyncapi.yaml
-#          src/modules/orders/asyncapi.internal.yaml
 #          src/modules/webhooks/asyncapi.internal.yaml
 #          shared/contracts/asyncapi.workers.yaml
 asyncapi: 3.0.0
@@ -127,15 +126,6 @@ channels:
         messages:
             PaymentFailedEvent:
                 $ref: '#/components/messages/PaymentFailedEvent'
-    worker.orders.invoice-generate:
-        address: worker.orders.invoice-generate
-        description: >-
-            Invoice PDF generation job queue — the `orders` module enqueues one message per order created, the invoice worker consumes it and writes the stored PDF.
-        servers:
-            - $ref: '#/servers/rabbitmqLocal'
-        messages:
-            OrderInvoicePdfJobMessage:
-                $ref: '#/components/messages/OrderInvoicePdfJobMessage'
     worker.webhook.deliver:
         address: worker.webhook.deliver
         description: >-
@@ -238,24 +228,6 @@ operations:
             One-to-one with the `payment.failed` domain event. Retryable with another method, so this can fire more than once for the same order.
         messages:
             - $ref: '#/channels/payment.failed/messages/PaymentFailedEvent'
-    ordersInvoicePdfPublish:
-        action: receive
-        channel:
-            $ref: '#/channels/worker.orders.invoice-generate'
-        summary: Enqueue invoice PDF generation for a just-created order.
-        description: >-
-            Published from the module's own `order.created` listener — see `orders/events.ts`: fires exactly once per order, regardless of which of the two creation paths made it.
-        messages:
-            - $ref: '#/channels/worker.orders.invoice-generate/messages/OrderInvoicePdfJobMessage'
-    ordersInvoicePdfConsume:
-        action: send
-        channel:
-            $ref: '#/channels/worker.orders.invoice-generate'
-        summary: Invoice worker renders and stores the PDF, then marks the order ready.
-        description: >-
-            Resolves the order by `orderId`, renders the same EJS template `GET /orders/{id}/invoice` renders synchronously for orders that predate this queue, writes the PDF to private storage, and flips `invoicePdfStatus` to `ready`. A failed render is left to reject, so the broker redelivers it.
-        messages:
-            - $ref: '#/channels/worker.orders.invoice-generate/messages/OrderInvoicePdfJobMessage'
     workerWebhookDeliverPublish:
         action: receive
         channel:
@@ -369,11 +341,6 @@ components:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
                 $ref: '#/components/schemas/PaymentFailedEnvelope'
-        OrderInvoicePdfJobMessage:
-            name: OrderInvoicePdfJobMessage
-            title: Order invoice PDF generation job
-            payload:
-                $ref: '#/components/schemas/OrderInvoicePdfJobPayload'
         WebhookDeliverJobMessage:
             name: WebhookDeliverJobMessage
             title: Webhook delivery job
@@ -601,16 +568,6 @@ components:
                     format: date-time
                 data:
                     $ref: '#/components/schemas/PaymentEventPayload'
-            additionalProperties: false
-        OrderInvoicePdfJobPayload:
-            type: object
-            required:
-                - orderId
-            properties:
-                orderId:
-                    type: string
-                    description: >-
-                        The order to render. Deliberately the ONLY field: the worker resolves its own template path and output location from this id, never from anything the message carries — see this file's header for why.
             additionalProperties: false
         WebhookDeliverJobPayload:
             type: object

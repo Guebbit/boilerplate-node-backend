@@ -7,7 +7,6 @@
  */
 
 import { getDefaultLocale, t } from '@infrastructure/i18n';
-import { logger } from '@infrastructure/adapters/logger';
 import { OrderStatus } from '@types';
 import type { SearchOrdersRequest, CartItem, UpdateOrderByIdRequest } from '@types';
 import type { OrderDocument } from '../model';
@@ -32,7 +31,7 @@ import { canTransition, statusesLeadingTo, statusesReachableFrom } from '../doma
 import { resolveCurrentImages } from './current';
 import { freezeOrderLines } from './snapshot';
 import { placeOrder } from './place';
-import { enqueueInvoicePdfJob, deleteStoredInvoicePdf } from '../transport/invoice-pdf';
+import { deleteCachedInvoice } from './invoice';
 import { sendOrderPlacedEmail } from './notify';
 // `userId` is stored as an ObjectId, so writes have to coerce it. The rule (and its failure
 // mode on a malformed id) lives in the repository layer; this is the only import of it here.
@@ -111,8 +110,7 @@ export const getById = (
  *
  * Audit and analytics ONLY — `ORDER_CREATED` itself is `placeOrder`'s own job (`./place.ts`), the
  * one function that actually writes a new order, so a future caller of THIS function forgetting
- * to call it can no longer also mean the invoice-PDF pipeline or `webhooks` never hears about the
- * order at all.
+ * to call it can no longer also mean `webhooks` never hears about the order at all.
  */
 export const recordCreated = (order: OrderDocument, context: CallerContext): void => {
     emitAuditEvent(
@@ -275,7 +273,6 @@ export const update = async (
      * contains. `inventory` owns the question.
      */
     const requestedItems = data.items;
-    const itemsRewritten = Boolean(requestedItems && requestedItems.length > 0);
     const updateItemsPromise =
         requestedItems && requestedItems.length > 0
             ? inventoryService.isStockBoundToOrder(String(order._id)).then((bound) => {
@@ -310,12 +307,6 @@ export const update = async (
                           resolvedItems.map(({ item }) => item.quantity)
                       ).then((lines) => {
                           order.items = lines;
-                          // The stored PDF (every order gets one — the number is assigned at
-                          // placement) now describes lines that no longer exist. `pending`, the
-                          // same starting value placement itself writes, is what lets the worker's
-                          // own `invoicePdfStatus: 'pending'` guard flip it back to `ready` once
-                          // the re-render lands — see `repository.ts`'s `markInvoicePdfReady`.
-                          order.invoicePdfStatus = 'pending';
                           return undefined;
                       });
                   });
@@ -325,15 +316,6 @@ export const update = async (
     return updateItemsPromise.then((earlyResult) => {
         if (earlyResult) return earlyResult;
         return orderRepository.save(order).then((saved) => {
-            if (itemsRewritten)
-                enqueueInvoicePdfJob(String(saved._id)).catch((error: unknown) => {
-                    logger.error({
-                        message: 'Invoice PDF re-render after a line edit failed to enqueue.',
-                        orderId: String(saved._id),
-                        error
-                    });
-                });
-
             if (nextStatus === undefined || nextStatus === previousStatus)
                 return generateSuccess(saved);
 
@@ -428,9 +410,9 @@ export const remove = (
                 // sequence with nothing left to do about it.
                 .releaseForOrder(String(order._id))
                 .then(() => orderRepository.deleteOne(order))
-                // Best-effort, after the row is gone: a stored invoice PDF outlives the document
-                // it was rendered for otherwise — nothing else in this pipeline ever deletes one.
-                .then(() => deleteStoredInvoicePdf(String(order._id)))
+                // Best-effort, after the row is gone: a cached invoice outlives the document it
+                // was rendered for otherwise — nothing else deletes one.
+                .then(() => deleteCachedInvoice(String(order._id)))
                 .then(() => generateSuccess(undefined, 200, t('orders.hard-deleted')))
         );
 

@@ -62,10 +62,8 @@ Most worker queues are shared rather than owned by a module because the email an
 are substrate — `src/app/workers.ts` over `src/infrastructure/adapters/queue.ts` — enqueued by
 whichever domain needs one. It is the async twin of filing `GET /` under `system` in the REST
 contract. A queue a single module owns outright gets its own PRIVATE section instead:
-`webhooks`' `worker.webhook.deliver` (`src/modules/webhooks/asyncapi.internal.yaml`) and `orders`'
-`worker.orders.invoice-generate` (`src/modules/orders/asyncapi.internal.yaml`) are the two today —
-the PDF worker moved out of the shared substrate once invoice generation became one module's own
-job. Each declares no `servers` of its own (its one channel binds to
+`webhooks`' `worker.webhook.deliver` (`src/modules/webhooks/asyncapi.internal.yaml`) is the one
+example today. It declares no `servers` of its own (its one channel binds to
 `shared/contracts/asyncapi.workers.yaml`'s `rabbitmqLocal`, so a second declaration here would
 collide when the two sections merge) and is left out of `lint:asyncapi:modules`'s glob for the
 same reason: it is valid only once bundled.
@@ -193,7 +191,6 @@ Everything else is module-owned, declared in that module's own private `asyncapi
 (see [Contract Fragmentation](./contract-fragmentation.md)):
 
 - **`worker.webhook.deliver`** — outbound webhook delivery, consumed by `webhooks`' own worker
-- **`worker.orders.invoice-generate`** — invoice PDF generation, consumed by `orders`' own worker
 
 Every queue's NAME is its channel name: `src/infrastructure/adapters/queue.ts` exports `EMAIL_QUEUE`
 and `IMAGE_QUEUE` as aliases of `WORKER_CHANNELS.EMAIL_SEND`/`WORKER_CHANNELS.IMAGE_DIGEST`, and a

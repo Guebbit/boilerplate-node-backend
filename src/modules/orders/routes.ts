@@ -17,6 +17,7 @@ import { postOrderStatusOverride } from './controllers/post-order-status-overrid
 import { invalidateCache, searchCache, setCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
+import { invoiceLimiter } from './rate-limits';
 
 /** Express router for order management (authenticated; non-admin users see only their own orders). */
 export const router = Router();
@@ -66,12 +67,10 @@ router.post(
     postOrderStatusOverride
 );
 
-// GET /orders/:id/invoice — must come before /:id
-router.get(
-    '/:id/invoice',
-    setCache(3600, { tags: ['orders'], keyParameters: [] }),
-    getOrderInvoice
-);
+// GET /orders/:id/invoice — must come before /:id. Not cached: every hit renders fresh, and
+// caching PDF bytes as a JSON-cache value would only ever hold the first byte range express
+// actually flushed. `invoiceLimiter` guards the Chromium launch every render spawns.
+router.get('/:id/invoice', invoiceLimiter, getOrderInvoice);
 
 // GET /orders/:id
 router.get('/:id', setCache(3600, { tags: ['orders'], keyParameters: [] }), getOrderItem);

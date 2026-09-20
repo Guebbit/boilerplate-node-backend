@@ -1,6 +1,6 @@
 # RabbitMQ
 
-[RabbitMQ](https://www.rabbitmq.com/) is used as a message broker to offload heavy or unreliable work (emails, PDF generation, webhooks, etc.) from the request/response cycle into background queues.
+[RabbitMQ](https://www.rabbitmq.com/) is used as a message broker to offload heavy or unreliable work (emails, webhook delivery, etc.) from the request/response cycle into background queues.
 
 ## Why a queue?
 
@@ -12,16 +12,15 @@
 
 ## Where the code lives
 
-| Concern                     | File                                                                                                |
-| --------------------------- | --------------------------------------------------------------------------------------------------- |
-| Connection & helpers        | `src/infrastructure/adapters/queue.ts`                                                              |
-| Queue-aware dispatch        | `src/infrastructure/adapters/mailer.ts` → `enqueueEmail()`                                          |
-| Email worker (domainless)   | `src/infrastructure/adapters/email.worker.ts`                                                       |
-| Invoice PDF worker (module) | `src/modules/orders/transport/invoice-pdf.ts`                                                       |
-| Webhook delivery (module)   | `src/modules/webhooks/services/attempt.ts`                                                          |
-| Worker registration         | `src/app/workers.ts` (domainless queues) + `kernel/registry.ts`'s `resolveConsumers` (module-owned) |
-| Startup hook                | `src/app.ts` → `startQueue` + `registerWorkers`                                                     |
-| Shutdown hook               | `src/app.ts` → `stopQueue`                                                                          |
+| Concern                   | File                                                                                                |
+| ------------------------- | --------------------------------------------------------------------------------------------------- |
+| Connection & helpers      | `src/infrastructure/adapters/queue.ts`                                                              |
+| Queue-aware dispatch      | `src/infrastructure/adapters/mailer.ts` → `enqueueEmail()`                                          |
+| Email worker (domainless) | `src/infrastructure/adapters/email.worker.ts`                                                       |
+| Webhook delivery (module) | `src/modules/webhooks/services/attempt.ts`                                                          |
+| Worker registration       | `src/app/workers.ts` (domainless queues) + `kernel/registry.ts`'s `resolveConsumers` (module-owned) |
+| Startup hook              | `src/app.ts` → `startQueue` + `registerWorkers`                                                     |
+| Shutdown hook             | `src/app.ts` → `stopQueue`                                                                          |
 
 ## Architecture
 
@@ -31,7 +30,6 @@ flowchart LR
     API[Express handler] -->|publish| RMQ[(RabbitMQ)]
     RMQ -->|consume| Worker[Consumer process]
     Worker --> SMTP[Send email]
-    Worker --> PDF[Generate invoice PDF]
     Worker --> Hook[Deliver webhook]
 
     classDef app fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -41,7 +39,7 @@ flowchart LR
     class API app;
     class RMQ queue;
     class Worker worker;
-    class SMTP,PDF,Hook outbound;
+    class SMTP,Hook outbound;
 ```
 
 ## How it's used
@@ -60,21 +58,12 @@ Controllers using it:
 - `write-orders.ts` — order confirmation email
 - `post-feedback-contact.ts` — contact form notification
 
-### Invoice PDF generation (async, module-owned)
+### Invoice PDF rendering — NOT a queue
 
-`orders`' own `worker.orders.invoice-generate` queue (`src/modules/orders/transport/invoice-pdf.ts`,
-`asyncapi.internal.yaml`) is enqueued from the module's own `order.created` listener — fires exactly
-once per order, whichever of the two creation paths made it. The worker resolves the order by id,
-renders the same EJS template `GET /orders/:id/invoice` renders synchronously, writes the PDF to
-private storage (`NODE_INVOICE_STORAGE_PATH`, never under `NODE_PUBLIC_PATH`), and flips
-`Order.invoicePdfStatus` from `pending` to `ready`.
-
-`GET /orders/:id/invoice` reads that status: `ready` streams the stored file, `pending` answers
-`202` so the client can poll and grey out the download button, and an order that PREDATES this
-field entirely (no queue was ever enqueued for it) falls back to the old synchronous render — the
-behaviour every order had before this queue existed. No broker configured, or the queue publish
-fails: the same fallback runs inline instead, right after the order is written, so a dev/demo
-deployment with RabbitMQ off still gets every invoice generated.
+`GET /orders/:id/invoice` renders the PDF synchronously, on the request thread —
+`src/modules/orders/services/invoice.ts`'s `renderInvoicePdf` — and streams the bytes back. There
+is no queue, no worker and no stored status: the invoice is a view of the order, rendered when
+someone asks for it, never a durable artefact this broker moves around.
 
 ## Job lifecycle
 
@@ -136,10 +125,10 @@ await publishToQueue({
 
 Never a string literal. `EMAIL_QUEUE` and `IMAGE_QUEUE` are aliases of `WORKER_CHANNELS.EMAIL_SEND`
 and `WORKER_CHANNELS.IMAGE_DIGEST`; a module-owned queue reads its own entry off `WORKER_CHANNELS`
-directly (`webhooks`' `WORKER_CHANNELS.WEBHOOK_DELIVER`, `orders`' own
-`WORKER_CHANNELS.ORDERS_INVOICE_GENERATE`) — all generated out of `asyncapi.yaml`, so the name a
-producer publishes to, the name the consumer drains and the name the contract declares are one
-string. A typo in a literal is not an error anywhere; it is a message on a queue nobody reads.
+directly (`webhooks`' `WORKER_CHANNELS.WEBHOOK_DELIVER`) — all generated out of `asyncapi.yaml`, so
+the name a producer publishes to, the name the consumer drains and the name the contract declares
+are one string. A typo in a literal is not an error anywhere; it is a message on a queue nobody
+reads.
 
 `publishToQueue`'s `true`/`false` answers the BROKER's own confirmation, not `sendToQueue`'s return
 value — the channel it publishes on is a confirm channel
@@ -320,7 +309,7 @@ Production keeps the library default, `Infinity`.
 
 ## Works with
 
-- **[Email & PDF Rendering](./email-and-rendering.md)** — the primary use case for this queue. Controllers publish email jobs instead of calling Nodemailer directly; the `email.worker.ts` consumer sends the email independently. `orders`' own invoice PDF pipeline follows the same publish/consume shape, module-owned. → [How it's used](./rabbitmq.md#how-it-s-used)
+- **[Email & PDF Rendering](./email-and-rendering.md)** — the primary use case for this queue. Controllers publish email jobs instead of calling Nodemailer directly; the `email.worker.ts` consumer sends the email independently. Invoice PDF rendering is NOT queued — see [Invoice PDF rendering](#invoice-pdf-rendering-not-a-queue). → [How it's used](./rabbitmq.md#how-it-s-used)
 
 ## External references
 
