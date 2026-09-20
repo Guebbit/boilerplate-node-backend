@@ -84,10 +84,12 @@ export const checkHibpRange = (
             return match ? { breached: true, count: match.count } : { breached: false };
         })
         .catch((error: unknown) => {
+            // Stryker disable all
             logger.warn({
                 message: 'HIBP breach lookup failed; accepting the password (fail open).',
                 error
             });
+            // Stryker restore all
             return { breached: false };
         });
 };

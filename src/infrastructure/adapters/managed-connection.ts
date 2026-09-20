@@ -149,15 +149,19 @@ export const manageConnection = <THandle>({
         if (warningLogged) return;
 
         if (unavailableLevel === 'error') {
+            // Stryker disable all
             logger.error({
                 message: unavailableMessage,
                 error
             });
+            // Stryker restore all
         } else {
+            // Stryker disable all
             logger.warn({
                 message: unavailableMessage,
                 error
             });
+            // Stryker restore all
         }
         warningLogged = true;
     };

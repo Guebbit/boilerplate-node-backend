@@ -81,6 +81,7 @@ export const rejectDatabaseError = (response: Response, context: string, error: 
     // what makes this findable) rather than returned, since the driver must not speak to the
     // client. `error` under its own key, not folded into the message string, is what lets the
     // logger's own serializer attach a stack trace — see `adapters/logger.ts`'s `serializeError`.
+    // Stryker disable next-line all
     logger.error(`${context} - ${detail}`, { status, error });
 
     return rejectResponse(response, status);
@@ -98,6 +99,7 @@ export const rejectDatabaseError = (response: Response, context: string, error: 
 export const rejectDatabaseEnvelope = (context: string, error: unknown) => {
     const [status, detail] = databaseErrorInterpreter(error);
 
+    // Stryker disable next-line all
     logger.error(`${context} - ${detail}`, { status, error });
 
     return generateReject(status);

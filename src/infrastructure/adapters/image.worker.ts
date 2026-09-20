@@ -174,12 +174,14 @@ const settleWriteback = (
         if (!matched) {
             // Stale job or deleted document: nobody will ever read these urls, so they are
             // unlinked rather than left as orphans nothing can find again.
+            // Stryker disable all
             logger.info({
                 message: 'Image digest writeback matched no document; cleaning up promoted files.',
                 collection,
                 documentId,
                 key
             });
+            // Stryker restore all
             return imageStore.remove(urls.imageUrl).then(() => undefined);
         }
 
@@ -199,6 +201,7 @@ const settleWriteback = (
 export const handleImageDigestJob = (job: Partial<ImageDigestJobPayload>): Promise<boolean> => {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the payload crossed a queue: its type is a claim, not a fact
     if (!job?.collection || !job.documentId || !job.key) {
+        // Stryker disable next-line all
         logger.warn({ message: 'Invalid image digest job payload, discarding.', job });
         return Promise.resolve(false);
     }
@@ -206,10 +209,12 @@ export const handleImageDigestJob = (job: Partial<ImageDigestJobPayload>): Promi
     const { collection, documentId, key } = job;
     const writeback = resolveWriteback?.(collection);
     if (!writeback) {
+        // Stryker disable all
         logger.warn({
             message: 'Image digest job names an unregistered collection, discarding.',
             collection
         });
+        // Stryker restore all
         return Promise.resolve(false);
     }
 
@@ -221,6 +226,7 @@ export const handleImageDigestJob = (job: Partial<ImageDigestJobPayload>): Promi
             if (error instanceof UnsupportedImageFormatError) {
                 // Permanent — every redelivery decodes the same bytes the same way — so the
                 // quarantine file is removed along with dead-lettering the job.
+                // Stryker disable next-line all
                 logger.warn({ message: 'Image digest worker: unsupported format.', error, key });
                 return imageStore.removeQuarantined(key).then(() => false);
             }
@@ -228,6 +234,7 @@ export const handleImageDigestJob = (job: Partial<ImageDigestJobPayload>): Promi
             // Presumed TRANSIENT (disk full, a storage write failing, the writeback's own DB
             // call) — rethrown so `consumeFromQueue` nacks and retries, and the quarantine file
             // stays put for that retry to read.
+            // Stryker disable next-line all
             logger.error({ message: 'Image digest worker failed.', error, key });
             throw error;
         });
@@ -271,6 +278,7 @@ export const enqueueImageDigest = (
         payload
     }).then((published) => {
         if (published) {
+            // Stryker disable next-line all
             logger.debug({ message: 'Image digest job enqueued.', collection: payload.collection });
             return undefined;
         }

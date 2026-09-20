@@ -42,6 +42,7 @@ export const handleEmailJob = (job: Partial<EmailJobPayload>): Promise<boolean> 
     // fields are there, which is why no type predicate is needed to say so.
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the payload crossed a queue: its type is a claim, not a fact
     if (!job?.request?.to || !job.templateName) {
+        // Stryker disable next-line all
         logger.warn({ message: 'Invalid email job payload, discarding.', job });
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- same as above: a broker can deliver a null job
         return discardJobAttachments(job?.request?.attachments).then(() => false);
@@ -60,6 +61,7 @@ export const handleEmailJob = (job: Partial<EmailJobPayload>): Promise<boolean> 
                 // Logged AND rethrown, attachment untouched: the TTL retry is what saves the email —
                 // and the next attempt still needs a file to resolve — the log is what makes a job
                 // that keeps failing visible instead of a queue that quietly refills.
+                // Stryker disable next-line all
                 logger.error({ message: 'Email worker failed to send.', error });
                 throw error;
             })

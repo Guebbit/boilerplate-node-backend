@@ -54,6 +54,7 @@ export const deleteFile = (filePath: string) =>
         // The Error stays nested under `error`, never spread into its own fields: `redactFormat`
         // routes it to `serializeError`, the one place deciding stacks stay out of production
         // logs — spreading it would bypass that and leak container paths.
+        // Stryker disable next-line all
         logger.error({ message: 'Could not delete file.', error })
     );
 
@@ -90,10 +91,12 @@ export const reapDirectory = (root: string, cutoffMs: number, label: string): Pr
     readdir(root)
         .catch((error: unknown) => {
             if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+                // Stryker disable all
                 logger.info({
                     message: `${label} directory does not exist; nothing to reap.`,
                     root
                 });
+                // Stryker restore all
                 return [];
             }
             throw error;

@@ -208,11 +208,14 @@ export const retryPendingEffects = async (): Promise<number> => {
 
     // A full batch means more is waiting. Said out loud, so a truncated run is not read as done.
     if (due.length === SWEEP_BATCH_SIZE)
+        // Stryker disable all
         logger.warn(
             `Order effect sweep: hit the ${SWEEP_BATCH_SIZE}-order batch cap — run it again to continue`
         );
+    // Stryker restore all
 
     if (due.length > 0)
+        // Stryker disable next-line all
         logger.info(`Order effect sweep: ${settled} of ${due.length} owed refunds settled`);
 
     return settled;

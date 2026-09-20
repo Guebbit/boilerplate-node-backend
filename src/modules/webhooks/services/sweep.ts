@@ -45,6 +45,7 @@ const enqueue = (due: WebhookDeliveryDocument): Promise<void> => {
  */
 export const sweepDueWebhookDeliveries = (): Promise<void> =>
     webhookDeliveryRepository.findDue(SWEEP_BATCH_LIMIT).then((due) => {
+        // Stryker disable next-line all
         logger.info({ message: 'webhooks: sweeping due retries', count: due.length });
         return Promise.all(due.map((delivery) => enqueue(delivery))).then(() => undefined);
     });

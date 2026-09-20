@@ -25,10 +25,12 @@ import { getRotationGraceMilliseconds } from '../session/config';
  * window has long since passed, from every user document.
  */
 export const runTokenCleanup = (): Promise<void> => {
+    // Stryker disable next-line all
     logger.info('Token cleanup: starting expired-token removal');
     return userService
         .tokenRemoveExpired(getRotationGraceMilliseconds())
         .then((removed) => {
+            // Stryker disable next-line all
             logger.info(`Token cleanup: completed, ${removed} document(s) pruned`);
         })
         .catch((error: unknown) => {
@@ -38,10 +40,12 @@ export const runTokenCleanup = (): Promise<void> => {
              * (`adapters/logger.ts`) serializes an `Error` into `{name, message, stack}` before
              * JSON output, so passing it whole is what keeps the name and stack in the log line.
              */
+            // Stryker disable all
             logger.error({
                 message: 'Token cleanup: failed',
                 error
             });
+            // Stryker restore all
         });
 };
 
@@ -72,9 +76,11 @@ export const adminTokenCleanup = (
              * throws, and what a failed sweep means to a client is this layer's call. A Mongoose
              * model has no business choosing an HTTP status.
              */
+            // Stryker disable all
             logger.error({
                 message: 'Admin token cleanup failed',
                 error
             });
+            // Stryker restore all
             return generateReject(500, []);
         });

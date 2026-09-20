@@ -73,11 +73,13 @@ const deliverToOne = (
         .catch((error: unknown) => {
             // One subscription's write failing must not stop the others matching the same event —
             // caught per subscription, same reasoning as `emitDomainEvent`'s own per-handler catch.
+            // Stryker disable all
             logger.error({
                 message: 'webhooks: failed to fan out to a subscription',
                 subscriptionId: String(subscription._id),
                 error
             });
+            // Stryker restore all
         });
 
 /**

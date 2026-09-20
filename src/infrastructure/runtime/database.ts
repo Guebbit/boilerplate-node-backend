@@ -75,9 +75,11 @@ export const start = () => {
                 // Exponential backoff (2^attempt), clamped at 30s so late attempts stay responsive
                 // once the database finally comes up.
                 const delayMs = Math.min(BASE_DELAY_MS * 2 ** attempt, 30_000);
+                // Stryker disable all
                 logger.warn(
                     `DB not ready, retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`
                 );
+                // Stryker restore all
                 return wait(delayMs).then(() => attemptConnect(attempt + 1));
             }
         );
@@ -96,10 +98,12 @@ export const stopDatabase = () =>
     mongoose.disconnect().then(
         () => undefined,
         (error: unknown) => {
+            // Stryker disable all
             logger.warn({
                 message: 'MongoDB disconnect failed.',
                 error
             });
+            // Stryker restore all
         }
     );
 

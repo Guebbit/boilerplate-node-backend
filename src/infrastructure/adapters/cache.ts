@@ -150,11 +150,13 @@ export const getCacheValue = (key: string): Promise<string | undefined> =>
             return redisClient.get(prefix(`key:${key}`)).then((raw) => raw ?? undefined);
         })
         .catch((error: unknown) => {
+            // Stryker disable all
             logger.warn({
                 message: 'Redis cache read failed.',
                 key,
                 error
             });
+            // Stryker restore all
             return undefined;
         });
 
@@ -207,11 +209,13 @@ export const setCacheValue = (
             );
         })
         .catch((error: unknown) => {
+            // Stryker disable all
             logger.warn({
                 message: 'Redis cache write failed.',
                 key,
                 error
             });
+            // Stryker restore all
         });
 };
 
@@ -240,11 +244,13 @@ export const claimCacheRefresh = (key: string, seconds: number): Promise<boolean
                 .then((result) => result === 'OK');
         })
         .catch((error: unknown) => {
+            // Stryker disable all
             logger.warn({
                 message: 'Redis refresh claim failed.',
                 key,
                 error
             });
+            // Stryker restore all
             return false;
         });
 
@@ -293,11 +299,13 @@ export const invalidateCacheTags = (tags: string[]): Promise<ClearCacheResult> =
             }));
         })
         .catch((error: unknown) => {
+            // Stryker disable all
             logger.warn({
                 message: 'Redis cache invalidation failed.',
                 tags: cacheTags,
                 error
             });
+            // Stryker restore all
             return { deleted: 0, reachable: false };
         });
 };
@@ -321,10 +329,12 @@ export const invalidateCacheTagsLogged = (tags: string[]): Promise<void> =>
          * plus a counter — reachable from an alert, not just grep — is the only move left.
          */
         for (const tag of tags) cacheInvalidationFailuresTotal.inc({ tag });
+        // Stryker disable all
         logger.error({
             message: 'Cache invalidation could not reach Redis; stale responses survive.',
             tags
         });
+        // Stryker restore all
     });
 
 /**
@@ -407,9 +417,11 @@ export const clearCache = (): Promise<ClearCacheResult> =>
             // Reached when SCAN or DEL fails mid-drain — the socket died partway through, say.
             // Whatever `deleted` had reached is discarded: the cache is in an unknown state,
             // which is the same verdict as never having connected.
+            // Stryker disable all
             logger.warn({
                 message: 'Redis cache clear failed.',
                 error
             });
+            // Stryker restore all
             return { deleted: 0, reachable: false };
         });

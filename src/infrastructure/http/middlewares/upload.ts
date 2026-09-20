@@ -249,6 +249,7 @@ export const validateUploadedImages: RequestHandler = (request, response, next) 
 
             // Logged, because a mismatch between the declared type and the bytes is not a typo —
             // it is either a broken client or someone probing what this endpoint will store.
+            // Stryker disable all
             logger.warn({
                 message: 'Upload rejected: content does not match the declared image format.',
                 files: rejected,
@@ -256,6 +257,7 @@ export const validateUploadedImages: RequestHandler = (request, response, next) 
                 identified,
                 request_id: request.requestId
             });
+            // Stryker restore all
 
             return Promise.all(rejected.map((path) => deleteFile(path))).then(() => {
                 rejectResponse(response, 422, [t('generic.error-invalid-data')]);

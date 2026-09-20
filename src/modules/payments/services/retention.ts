@@ -20,11 +20,13 @@ import type { PaymentDocument } from '../model';
 export const detachUserId = (userId: string): Promise<void> =>
     paymentRepository.detachUserId(userId).then((detached) => {
         if (detached > 0)
+            // Stryker disable all
             logger.info({
                 message: 'Detached payments from an erased account.',
                 userId,
                 detached
             });
+        // Stryker restore all
     });
 
 /**
@@ -57,7 +59,10 @@ export const reapAbandonedPayments = (): Promise<number> => {
     const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
 
     return paymentRepository.deleteAbandonedBefore(cutoff).then((deleted) => {
-        if (deleted > 0) logger.info({ message: 'Deleted abandoned payment attempts.', deleted });
+        if (deleted > 0) {
+            // Stryker disable next-line all
+            logger.info({ message: 'Deleted abandoned payment attempts.', deleted });
+        }
         return deleted;
     });
 };

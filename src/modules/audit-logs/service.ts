@@ -33,11 +33,13 @@ const record = (entry: AuditEntry): void => {
     void auditLogRepository.create(entry as Partial<AuditLogDocument>).catch((error: unknown) => {
         // Before the log line, so the count is right even if the logger is what is broken.
         auditSinkFailuresTotal.inc();
+        // Stryker disable all
         logger.warn({
             message: 'audit entry not persisted',
             action: entry.action,
             error
         });
+        // Stryker restore all
     });
 };
 

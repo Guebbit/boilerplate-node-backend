@@ -38,10 +38,12 @@ export const isDemoMode = (): boolean => {
     const isProduction = process.env.NODE_ENV === 'production';
 
     if (demoProfileEnabled && isProduction)
+        // Stryker disable all
         logger.error({
             message:
                 'enableDemoProfile() was called in a production environment. Refusing to mount the demo profile.'
         });
+    // Stryker restore all
 
     return demoProfileEnabled && !isProduction;
 };

@@ -240,10 +240,12 @@ export const nodemailer = (
                 ({ filename, key }) => {
                     const target = resolveSpooled(key);
                     if (target) return [{ filename, path: target }];
+                    // Stryker disable all
                     logger.warn({
                         message: 'Email attachment named an unresolvable spool key, skipping it.',
                         key
                     });
+                    // Stryker restore all
                     return [];
                 }
             );
@@ -281,6 +283,7 @@ export const nodemailer = (
                     .then((info: { messageId: string }) => {
                         // `messageId` is the SMTP server's identifier — the handle you need to trace
                         // a specific email through mail-server logs or a provider dashboard.
+                        // Stryker disable next-line all
                         logger.info('Message sent: %s', info.messageId);
                         return info;
                     })
@@ -377,10 +380,12 @@ export const enqueueEmail = (
             return sendInline(request, templateName, data);
         }
         // `debug` level: enqueueing is routine, and the worker logs the actual delivery.
+        // Stryker disable all
         logger.debug({
             message: 'Email job enqueued.',
             to: request.to,
             template: templateName
         });
+        // Stryker restore all
     });
 };

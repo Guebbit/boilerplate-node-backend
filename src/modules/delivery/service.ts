@@ -119,6 +119,7 @@ const notifyShipped = (
             shipment.trackingCode
         );
         void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
+        // Stryker disable next-line all
         logger.info(`Order ${orderId} shipped as ${shipment.trackingCode ?? '(untracked)'}`);
     });
 

@@ -74,6 +74,7 @@ export const discardSpooled = (key: string): Promise<void> => {
         () => undefined,
         (error: unknown) => {
             if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
+                // Stryker disable next-line all
                 logger.warn({ message: 'Could not discard spooled attachment.', key, error });
         }
     );

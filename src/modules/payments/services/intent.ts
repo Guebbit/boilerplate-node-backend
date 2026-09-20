@@ -39,9 +39,11 @@ export const resolvePayerId = (orderUserId: string | undefined): Promise<string 
         .getById(orderUserId)
         .then((user) => {
             if (user) return user.id;
+            // Stryker disable all
             logger.warn(
                 `Payment intent for a user that no longer resolves (${orderUserId}) — recording the order's id unverified`
             );
+            // Stryker restore all
             return orderUserId;
         })
         .catch(() => orderUserId);

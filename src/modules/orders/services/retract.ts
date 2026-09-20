@@ -29,11 +29,13 @@ export const retractOrder = (order: OrderDocument, releaseHold: boolean): Promis
     // The raw `error`, not a flattened message — `redactFormat` (`adapters/logger.ts`) serializes
     // an `Error` into `{name, message, stack}` before JSON output.
     const report = (message: string) => (error: unknown) => {
+        // Stryker disable all
         logger.error({
             message,
             orderId,
             error
         });
+        // Stryker restore all
     };
 
     return (

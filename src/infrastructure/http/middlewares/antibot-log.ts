@@ -25,12 +25,14 @@ export const logAntibotRefusal = (
     path: string,
     status: number
 ): void => {
+    // Stryker disable all
     logger.warn(`Antibot refused ${method} ${path}`, {
         rung,
         method,
         route: path,
         status_code: status
     });
+    // Stryker restore all
 };
 
 /**

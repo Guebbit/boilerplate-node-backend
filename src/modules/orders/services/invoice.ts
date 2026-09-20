@@ -147,6 +147,7 @@ export const deleteCachedInvoice = (orderId: string): Promise<boolean> =>
         () => true,
         (error: unknown) => {
             if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
+                // Stryker disable next-line all
                 logger.warn({ message: 'Could not delete cached invoice PDF.', orderId, error });
             return false;
         }
@@ -198,6 +199,7 @@ const deleteCacheFile = (root: string, name: string): Promise<boolean> =>
         () => true,
         (error: unknown) => {
             if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
+                // Stryker disable next-line all
                 logger.warn({ message: 'Could not delete cached invoice file.', name, error });
             return false;
         }

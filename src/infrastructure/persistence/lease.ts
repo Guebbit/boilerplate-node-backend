@@ -199,10 +199,12 @@ const releaseLease = (
             // of freeing early, exactly as if the process had crashed here. Logged, not thrown —
             // throwing would replace the job's own outcome (success or its real error) with this
             // one.
+            // Stryker disable all
             logger.warn('releaseLease - could not release, lease will expire naturally', {
                 name,
                 error: releaseError
             });
+            // Stryker restore all
         });
 
 /**

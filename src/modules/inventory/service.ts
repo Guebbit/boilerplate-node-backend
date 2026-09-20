@@ -166,10 +166,12 @@ const applyTransition = async (
             .catch((error: unknown) => {
                 // Never fails the transition that already committed — see the docblock above.
                 // The next transition on this product corrects the cache regardless.
+                // Stryker disable all
                 logger.error({
                     message: `Inventory: could not sync the catalogue's stock cache for product ${productId}`,
                     error
                 });
+                // Stryker restore all
             });
 
     return true;
@@ -290,9 +292,11 @@ export const commitForOrder = async (orderId: string): Promise<boolean> => {
                 { reference: orderId }
             );
             if (!committed)
+                // Stryker disable all
                 logger.error(
                     `Inventory: could not commit ${quantity} of product ${String(productId)} for order ${orderId} — the hold was claimed but the counters refused`
                 );
+            // Stryker restore all
         }
 
         return true;
@@ -304,9 +308,11 @@ export const commitForOrder = async (orderId: string): Promise<boolean> => {
     if (existing?.status === 'committed') return false;
 
     const reservationStatus = existing?.status ?? 'none';
+    // Stryker disable all
     logger.error(
         `Inventory: commitForOrder found no hold for order ${orderId} (reservation: ${reservationStatus}) — the order is paid but no units were set aside for it`
     );
+    // Stryker restore all
     emitAuditEvent(
         buildAuditEvent(
             // No CallerContext exists on this path — the caller is a payment settlement, which may
@@ -353,9 +359,11 @@ export const releaseForOrder = async (
             reference: orderId
         });
         if (!released)
+            // Stryker disable all
             logger.error(
                 `Inventory: could not release ${quantity} of product ${String(productId)} for order ${orderId} — the hold was claimed but the counters refused`
             );
+        // Stryker restore all
     }
 
     return true;
@@ -402,10 +410,13 @@ export const runReservationSweep = async (context?: CallerContext): Promise<numb
 
     // A full batch means more is waiting. Said out loud, so a truncated run is not read as done.
     if (stale.length === SWEEP_BATCH_SIZE)
+        // Stryker disable all
         logger.warn(
             `Reservation sweep: hit the ${SWEEP_BATCH_SIZE}-hold batch cap — run it again to continue`
         );
+    // Stryker restore all
 
+    // Stryker disable next-line all
     logger.info(`Reservation sweep: ${expired} of ${stale.length} stale holds expired`);
 
     if (context)

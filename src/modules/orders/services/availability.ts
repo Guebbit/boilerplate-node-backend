@@ -97,6 +97,7 @@ export const cancelPendingOrdersHolding = (productId: string): Promise<void> =>
                         });
                     })
                     .catch((error: unknown) => {
+                        // Stryker disable all
                         logger.error({
                             message:
                                 'Failed to cancel a pending order for a product that stopped being sellable.',
@@ -104,6 +105,7 @@ export const cancelPendingOrdersHolding = (productId: string): Promise<void> =>
                             productId,
                             error
                         });
+                        // Stryker restore all
                     })
             )
         ).then(() => undefined)

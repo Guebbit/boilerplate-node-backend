@@ -77,12 +77,14 @@ export const applyLocaleOverrides = (
     }
 
     if (skipped.length > 0)
+        // Stryker disable all
         logger.warn(
             'applyLocaleOverrides - overrides stored for languages this API cannot answer',
             {
                 detail: `no dictionary file is deployed for ${skipped.join(', ')}; rows ignored`
             }
         );
+    // Stryker restore all
 };
 
 /**
@@ -98,12 +100,14 @@ export const refreshLocaleOverrides = (): Promise<void> => {
     return overrideProvider()
         .then((overrides) => applyLocaleOverrides(overrides))
         .catch((error: unknown) => {
+            // Stryker disable all
             logger.warn(
                 'refreshLocaleOverrides - locale overrides unavailable, keeping the last set',
                 {
                     error
                 }
             );
+            // Stryker restore all
         });
 };
 

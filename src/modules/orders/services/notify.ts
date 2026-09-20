@@ -41,11 +41,13 @@ const invoiceAttachment = (
             ]);
         })
         .catch((error: unknown) => {
+            // Stryker disable all
             logger.error({
                 message: 'Invoice render failed; sending the placed-order email without it.',
                 orderId,
                 error
             });
+            // Stryker restore all
             return [];
         });
 

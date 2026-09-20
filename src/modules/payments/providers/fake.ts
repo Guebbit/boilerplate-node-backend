@@ -88,9 +88,11 @@ export const fakePaymentProvider: PaymentProvider = {
     // double-click case prepares the same reference twice instead of opening a second intent.
     prepare: (charge, metadata) => {
         const providerRef = `fake_pi_${metadata.paymentId}`;
+        // Stryker disable all
         logger.info(
             `[fake-psp] prepare ${charge.amount} ${charge.currency} for order ${metadata.orderId} → ${providerRef}`
         );
+        // Stryker restore all
         return Promise.resolve({
             providerRef,
             // Signed rather than random, for the same reason the reference is derived: re-preparing
@@ -105,20 +107,24 @@ export const fakePaymentProvider: PaymentProvider = {
     confirm: (providerRef, paymentMethodRef) => {
         const { settlesTo, ...state } = outcomeFor(paymentMethodRef);
         outcomes.set(providerRef, settlesTo);
+        // Stryker disable all
         logger.info(
             `[fake-psp] confirm ${providerRef} with ****${state.cardLast4} → ${state.status}`
         );
+        // Stryker restore all
         return Promise.resolve(state);
     },
 
     retrieve: (providerRef) => {
         const state = outcomes.get(providerRef) ?? { status: 'processing' as const };
+        // Stryker disable next-line all
         logger.info(`[fake-psp] retrieve ${providerRef} → ${state.status}`);
         return Promise.resolve(state);
     },
 
     refund: (providerRef, charge) => {
         outcomes.delete(providerRef);
+        // Stryker disable next-line all
         logger.info(`[fake-psp] refund ${charge.amount} ${charge.currency} on ${providerRef}`);
         return Promise.resolve();
     },

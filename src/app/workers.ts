@@ -38,6 +38,7 @@ export const registerWorkers = (): Promise<void> => {
 
     if (!isQueueEnabled()) return Promise.resolve();
 
+    // Stryker disable next-line all
     logger.info('Registering queue workers...');
     return Promise.all([
         // `prefetch: 5` — sending an email is I/O-bound, not CPU-bound, so several in flight per
@@ -60,6 +61,7 @@ export const registerWorkers = (): Promise<void> => {
         // future module adds tomorrow, with no edit needed here either time.
         ...resolveConsumers(enabledModules).map((consumer) => consumeFromQueue(consumer))
     ]).then(() => {
+        // Stryker disable next-line all
         logger.info('Queue workers registered.');
     });
 };

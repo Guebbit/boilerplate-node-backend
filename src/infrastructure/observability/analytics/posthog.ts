@@ -58,10 +58,12 @@ export const posthogAnalyticsProvider: AnalyticsProvider = {
         if (!isPostHogConfigured()) {
             if (!warnedAboutConfiguration) {
                 warnedAboutConfiguration = true;
+                // Stryker disable all
                 logger.warn({
                     message:
                         'Analytics provider is `posthog` but NODE_POSTHOG_API_KEY / NODE_POSTHOG_HOST are unset — events are being discarded. Set both, or set NODE_ANALYTICS_PROVIDER=none.'
                 });
+                // Stryker restore all
             }
             return;
         }

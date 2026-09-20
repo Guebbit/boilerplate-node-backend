@@ -26,10 +26,12 @@ export const isMetricsScraper = (request: Request, response: Response, next: Nex
     const expected = process.env.NODE_METRICS_TOKEN;
 
     if (!expected) {
+        // Stryker disable all
         logger.warn({
             message:
                 'NODE_METRICS_TOKEN is not set — /observability/metrics is refusing every request.'
         });
+        // Stryker restore all
         rejectResponse(response, 503, []);
         return;
     }

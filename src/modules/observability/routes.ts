@@ -62,6 +62,7 @@ router.get('/metrics', isMetricsScraper, (_request, response) => {
             response.send(metrics);
         })
         .catch((error: unknown) => {
+            // Stryker disable next-line all
             logger.error('Failed to collect Prometheus metrics', { error });
             response.status(500).send('# metrics unavailable\n');
         });

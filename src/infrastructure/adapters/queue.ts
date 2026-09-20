@@ -102,6 +102,7 @@ let warningLogged = false;
  */
 const reportUnavailable = (error: unknown): void => {
     if (warningLogged) return;
+    // Stryker disable next-line all
     logger.error({ message: 'RabbitMQ unavailable, queue operations will be skipped.', error });
     warningLogged = true;
 };
@@ -190,6 +191,7 @@ const ensureConnecting = (): void => {
             // IS resolving for; a listener attached here cannot also catch the event that led to it.
             model.on('connect', () => {
                 if (!warningLogged) return;
+                // Stryker disable next-line all
                 logger.info({ message: 'RabbitMQ reachable again, queue operations resumed.' });
                 warningLogged = false;
             });
@@ -655,11 +657,13 @@ const parkInDead = (ch: ConfirmChannel, queue: string, incoming: ConsumeMessage)
         { persistent: true, headers: incoming.properties.headers },
         (error: unknown) => {
             if (error) {
+                // Stryker disable all
                 logger.error({
                     message: 'Failed to park a job in its dead-letter queue; redelivering instead.',
                     queue,
                     error
                 });
+                // Stryker restore all
                 safeNack(ch, incoming, false, true);
                 return;
             }
@@ -695,6 +699,7 @@ const handleDelivery = <TPayload>(
     const parsed = parseMessageBody(incoming);
     if (parsed === undefined) {
         // Malformed message — permanent: the bytes will never become valid JSON on a retry.
+        // Stryker disable next-line all
         logger.warn({ message: 'Queue message parse failed, parking.', queue });
         parkInDead(ch, queue, incoming);
         return;
@@ -707,11 +712,13 @@ const handleDelivery = <TPayload>(
      */
     const verdict = schema?.safeParse(parsed);
     if (verdict && !verdict.success) {
+        // Stryker disable all
         logger.warn({
             message: 'Queue message failed contract validation, parking.',
             queue,
             issues: verdict.error.issues.map(({ path, message }) => `${path.join('.')}: ${message}`)
         });
+        // Stryker restore all
         parkInDead(ch, queue, incoming);
         return;
     }
@@ -742,12 +749,14 @@ const handleDelivery = <TPayload>(
                 return;
             }
 
+            // Stryker disable all
             logger.error({
                 message: 'Job exhausted its retries; parking.',
                 queue,
                 attempts: attemptsSoFar,
                 error
             });
+            // Stryker restore all
             parkInDead(ch, queue, incoming);
         });
 };

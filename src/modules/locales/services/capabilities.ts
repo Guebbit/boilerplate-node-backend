@@ -143,9 +143,11 @@ export const readDynamicTier = (
     ])
         .then(([languages, entryCounts]) => ({ languages, entryCounts }))
         .catch((error: unknown) => {
+            // Stryker disable all
             logger.warn('listCapabilities - dynamic locale tier unavailable, serving static only', {
                 error
             });
+            // Stryker restore all
             return { languages: [], entryCounts: new Map() };
         });
 

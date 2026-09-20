@@ -159,8 +159,10 @@ export const startServer = () => {
                         // the demo profile's tokens are signed with a public, hard-coded secret,
                         // so binding every interface would let anyone on the LAN mint one.
                         const host = process.env.NODE_HOST?.trim();
+                        // Stryker disable next-line all
                         logger.info('------------- SERVER START -------------');
                         const onListening = () => {
+                            // Stryker disable next-line all
                             logger.info(`Server listening on port ${port}`);
                             activeServer = server;
                             resolve(server);
@@ -255,6 +257,7 @@ installErrorHandling(app);
 if (process.env.NODE_ENV !== 'test' && process.env.NODE_APP_NO_LISTEN !== '1') {
     registerSignalHandlers(stopServer);
     void startServer().catch((error: unknown) =>
+        // Stryker disable next-line all
         logger.error({ message: '------------- SERVER ERROR -------------', error })
     );
 }

@@ -73,6 +73,7 @@ if (cluster.isPrimary && CLUSTER_ENABLED) {
     const forkWorker = () => {
         if (isShuttingDown) return;
         const worker = cluster.fork();
+        // Stryker disable next-line all
         logger.info(`Forked worker ${worker.process.pid}.`);
     };
 
@@ -104,6 +105,7 @@ if (cluster.isPrimary && CLUSTER_ENABLED) {
         isShuttingDown = true;
         clearRespawnTimers();
 
+        // Stryker disable next-line all
         logger.info(`Primary received ${signal}; starting coordinated shutdown.`);
 
         for (const worker of getWorkers()) {
@@ -112,6 +114,7 @@ if (cluster.isPrimary && CLUSTER_ENABLED) {
         }
 
         const forceShutdownTimer = setTimeout(() => {
+            // Stryker disable next-line all
             logger.warn('Cluster shutdown timeout reached; forcing remaining workers.');
             for (const worker of getWorkers()) {
                 if (!worker) continue;
@@ -122,19 +125,23 @@ if (cluster.isPrimary && CLUSTER_ENABLED) {
         forceShutdownTimer.unref();
     };
 
+    // Stryker disable next-line all
     logger.info(`Primary pid=${process.pid} starting ${workerTarget} workers.`);
     for (let index = 0; index < workerTarget; index += 1) forkWorker();
 
     cluster.on('exit', (worker, code, signal) => {
+        // Stryker disable all
         logger.info(`Worker ${worker.process.pid} exited.`, {
             code,
             signal,
             exitedAfterDisconnect: worker.exitedAfterDisconnect
         });
+        // Stryker restore all
 
         if (isShuttingDown) {
             const aliveWorkers = getWorkers().filter(Boolean).length;
             if (aliveWorkers === 0) {
+                // Stryker disable next-line all
                 logger.info('All workers exited; primary shutting down.');
                 process.exitCode = 0;
             }
@@ -156,10 +163,12 @@ if (cluster.isPrimary && CLUSTER_ENABLED) {
             crashBackoffMaxMs
         );
 
+        // Stryker disable all
         logger.warn(`Worker crash detected. Respawning in ${respawnDelayMs}ms.`, {
             crashCountInWindow: recentCrashes.length,
             crashWindowMs
         });
+        // Stryker restore all
         scheduleRespawn(respawnDelayMs);
     });
 

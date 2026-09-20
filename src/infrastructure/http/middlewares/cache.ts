@@ -118,12 +118,14 @@ const serializeCachedResponse = (key: string, value: CachedResponse): string | u
 
     // Logged rather than silent: an endpoint that never caches is worth noticing, and the
     // usual cause is a response that grew past what its page size was supposed to bound.
+    // Stryker disable all
     logger.warn({
         message: 'Redis cache write skipped: response larger than the per-entry limit.',
         key,
         bytes: Buffer.byteLength(payload),
         maxCachedBytes
     });
+    // Stryker restore all
     return undefined;
 };
 

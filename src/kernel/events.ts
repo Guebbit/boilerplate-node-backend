@@ -82,6 +82,7 @@ export const emitDomainEvent = async <TEventName extends DomainEventName>(
             await (handler as DomainEventHandler<TEventName>)(payload);
         } catch (error) {
             settled = false;
+            // Stryker disable next-line all
             logger.error(`Domain event handler failed for "${name}"`, error);
         }
 

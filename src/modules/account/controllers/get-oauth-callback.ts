@@ -139,11 +139,13 @@ export const getOAuthCallback = (request: Request, response: Response) => {
             }
             // The provider/exchange detail is developer-facing only — same rule
             // `rejectDatabaseError` follows for a driver failure.
+            // Stryker disable all
             logger.error({
                 message: 'OAuth callback failed',
                 provider: providerName,
                 error
             });
+            // Stryker restore all
             failToFrontend('provider_error');
         });
 };

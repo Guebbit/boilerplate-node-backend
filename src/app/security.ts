@@ -123,10 +123,12 @@ export const installSecurity = (app: Express): void => {
      * limiter, and today that's silent either way.
      */
     if (trustProxyHops === 0 && process.env.NODE_ENV === 'production')
+        // Stryker disable all
         logger.warn({
             message:
                 'NODE_TRUST_PROXY_HOPS=0 in production. Correct only if this API is reached directly, with no reverse proxy in front of it — otherwise the rate limiter is bucketing every caller together.'
         });
+    // Stryker restore all
 
     /**
      * Secure headers

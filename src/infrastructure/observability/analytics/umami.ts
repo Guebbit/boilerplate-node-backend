@@ -85,10 +85,12 @@ export const umamiAnalyticsProvider: AnalyticsProvider = {
         if (!config) {
             if (!warnedAboutConfiguration) {
                 warnedAboutConfiguration = true;
+                // Stryker disable all
                 logger.warn({
                     message:
                         'Analytics provider is `umami` but NODE_UMAMI_INGEST_HOST (or NODE_UMAMI_HOST) / NODE_UMAMI_WEBSITE_ID are unset — events are being discarded. Set both, or set NODE_ANALYTICS_PROVIDER=none.'
                 });
+                // Stryker restore all
             }
             return;
         }
@@ -122,16 +124,19 @@ export const umamiAnalyticsProvider: AnalyticsProvider = {
                 // does not exist on that instance. Worth a log line, because every event after
                 // it will fail the same way.
                 if (!response.ok)
+                    // Stryker disable all
                     logger.warn({
                         message: 'Umami rejected an analytics event',
                         status: response.status,
                         event: event.event
                     });
+                // Stryker restore all
             })
             .catch((error: unknown) => {
                 // Analytics is not worth an unhandled rejection. Debug rather than warn: a
                 // developer running the API without the analytics container up would otherwise
                 // get one warning per request.
+                // Stryker disable next-line all
                 logger.debug({ message: 'Umami event delivery failed', error });
             });
     },

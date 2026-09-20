@@ -85,12 +85,14 @@ export const registerSignalHandlers = (stopFunction: () => Promise<void>) => {
     if (process.env.NODE_ENV === 'test') return;
 
     const onProcessSignal = (signal: NodeJS.Signals) => {
+        // Stryker disable next-line all
         logger.info(`Received ${signal}, starting graceful shutdown.`);
 
         // Deadline: if teardown hangs (a socket that never drains, a broker that never
         // answers) exit anyway with a failure code, so the orchestrator restarts us
         // instead of leaving a zombie container that answers no traffic.
         const forcedExitTimer = setTimeout(() => {
+            // Stryker disable next-line all
             logger.error('Graceful shutdown timeout reached. Forcing process exit.');
             process.exit(1);
         }, getShutdownTimeoutMs());
@@ -103,16 +105,19 @@ export const registerSignalHandlers = (stopFunction: () => Promise<void>) => {
         void Promise.resolve()
             .then(() => stopFunction())
             .then(() => {
+                // Stryker disable next-line all
                 logger.info('Graceful shutdown completed.');
                 // Explicit exit(0): lingering handles (OTel timers, driver sockets) could
                 // otherwise keep the event loop alive well past the actual shutdown.
                 process.exit(0);
             })
             .catch((error: unknown) => {
+                // Stryker disable all
                 logger.error({
                     message: 'Graceful shutdown failed.',
                     error
                 });
+                // Stryker restore all
                 // Non-zero code so the platform records an unclean stop.
                 process.exit(1);
             });

@@ -187,6 +187,7 @@ export const installDemo = (app: Express): void => {
                     response.status(400).json({ success: false, message: error.message });
                     return;
                 }
+                // Stryker disable next-line all
                 logger.error({ message: 'scenario restore failed', error });
                 response.status(500).json({ success: false });
             });
@@ -196,6 +197,7 @@ export const installDemo = (app: Express): void => {
         describeScenario()
             .then((description) => response.json(description))
             .catch((error: unknown) => {
+                // Stryker disable next-line all
                 logger.error({ message: 'scenario description failed', error });
                 response.status(500).json({ success: false });
             });

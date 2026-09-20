@@ -352,10 +352,12 @@ export const applyWebhookDelivery = (event: ProviderWebhookEvent): Promise<void>
         if (!claimed) return;
 
         if (!event.providerRef || !event.state) {
+            // Stryker disable all
             logger.info({
                 message: 'Payment webhook carried no state to apply.',
                 eventId: event.id
             });
+            // Stryker restore all
             return;
         }
 
@@ -388,14 +390,17 @@ export const applyWebhookSettlement = (
 ): Promise<void> =>
     paymentRepository.findByProviderRef(providerRef).then((payment) => {
         if (!payment) {
+            // Stryker disable all
             logger.warn({
                 message: 'Payment webhook named an intent this application does not know.',
                 providerRef
             });
+            // Stryker restore all
             return;
         }
 
         return settlePayment(payment, state).then(({ payment: settled, orderLost }) => {
+            // Stryker disable all
             logger.info({
                 message: 'Payment webhook applied.',
                 providerRef,
@@ -403,5 +408,6 @@ export const applyWebhookSettlement = (
                 status: settled.status,
                 orderLost
             });
+            // Stryker restore all
         });
     });

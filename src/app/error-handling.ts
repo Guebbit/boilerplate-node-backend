@@ -40,12 +40,14 @@ export const handleUncaughtError = (
     // process-level handlers below: `redactFormat` (`adapters/logger.ts`) serializes an `Error`
     // into `{name, message, stack}` before JSON output, so passing it whole is what keeps the
     // stack in the log line outside production.
+    // Stryker disable all
     logger.error(`${error.name}: ${error.message}`, {
         request_id: request.requestId,
         trace_id: getActiveSpanContext().traceId,
         status,
         error
     });
+    // Stryker restore all
 
     if (error instanceof MulterError)
         return rejectResponse(response, 400, [

@@ -24,6 +24,7 @@ export const detachUserId = (userId: string): Promise<void> => {
 
     return orderRepository.detachUserId(userId, anonymizeAfter).then((detached) => {
         if (detached > 0)
+            // Stryker disable next-line all
             logger.info({ message: 'Detached orders from an erased account.', userId, detached });
     });
 };
@@ -36,6 +37,9 @@ export const detachUserId = (userId: string): Promise<void> => {
  */
 export const anonymizeDueOrders = (): Promise<number> =>
     orderRepository.scrubDueForAnonymization(new Date()).then((scrubbed) => {
-        if (scrubbed > 0) logger.info({ message: 'Anonymized orders past retention.', scrubbed });
+        if (scrubbed > 0) {
+            // Stryker disable next-line all
+            logger.info({ message: 'Anonymized orders past retention.', scrubbed });
+        }
         return scrubbed;
     });

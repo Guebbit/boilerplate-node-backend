@@ -29,10 +29,12 @@ export const postPaymentWebhook = (request: Request, response: Response) => {
     // an absent one means that ordering changed and every signature would now fail to verify.
     const { rawBody, headers } = request;
     if (!rawBody) {
+        // Stryker disable all
         logger.error({
             message:
                 'Payment webhook reached its controller without a raw body — the parser ordering in installSecurity has been changed.'
         });
+        // Stryker restore all
         rejectResponse(response, 400, [t('payments.webhook-unverified')]);
         return;
     }
@@ -54,6 +56,7 @@ export const postPaymentWebhook = (request: Request, response: Response) => {
                 // timestamp outside tolerance', 'Signature does not match', 'Body is not valid
                 // JSON', or 'Event carries no id'. A fixed headline here would be right for one of
                 // those and a guess for the other four.
+                // Stryker disable next-line all
                 logger.warn({ message: `Payment webhook rejected: ${error.message}` });
                 rejectResponse(response, 400, [t('payments.webhook-unverified')]);
                 return;

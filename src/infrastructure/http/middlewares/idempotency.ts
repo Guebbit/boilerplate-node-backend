@@ -127,12 +127,14 @@ const armOutcomeCapture = (response: Response, key: string, caller: string): voi
                 // The response has already gone out — there is nothing left to roll back. Left
                 // 'in-flight', the record simply rides out its TTL and a retry sees 409 until
                 // then, exactly as if the process had crashed here.
+                // Stryker disable all
                 logger.warn({
                     message:
                         'Idempotency record could not be marked done; it will expire in-flight.',
                     key,
                     error
                 });
+                // Stryker restore all
             });
 
         return responseJson(body);

@@ -56,9 +56,11 @@ export const performRefund = (
                 return paymentRepository
                     .updateStatusIfIn(orderId, ['refunded'], 'refunded', { refundedByHand: true })
                     .then((updated) => {
+                        // Stryker disable all
                         logger.info(
                             `Payment for order ${orderId} marked refunded by hand (${payment.amount} ${payment.currency})`
                         );
+                        // Stryker restore all
                         if (context)
                             emitAuditEvent(
                                 buildAuditEvent(context, {
@@ -76,19 +78,23 @@ export const performRefund = (
                 // provider has been asked for an intent — so this is a corrupted row, not a
                 // reachable state. Loud, and the status still moves: leaving it `succeeded` would
                 // invite a second attempt at the same impossible refund.
+                // Stryker disable all
                 logger.error({
                     message:
                         'Refunded a payment carrying no provider reference — money was NOT returned.',
                     orderId
                 });
+                // Stryker restore all
                 return payment;
             }
             return resolvePaymentProvider()
                 .refund(payment.providerRef, { amount: payment.amount, currency: payment.currency })
                 .then(() => {
+                    // Stryker disable all
                     logger.info(
                         `Payment for order ${orderId} refunded (${payment.amount} ${payment.currency})`
                     );
+                    // Stryker restore all
                     if (context)
                         emitAuditEvent(
                             buildAuditEvent(context, {

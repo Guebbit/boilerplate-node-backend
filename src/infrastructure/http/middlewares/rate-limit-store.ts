@@ -118,6 +118,7 @@ const connectionFor = (url: string): ManagedConnection<RedisClientType> => {
                 : Promise.resolve();
         },
         onRecovered: () =>
+            // Stryker disable next-line all
             logger.info({ message: 'Rate-limit Redis is back — counters are shared again.' })
     });
 
@@ -186,11 +187,13 @@ const lazyRedisStore = (namespace: string, url: string): Store => {
             // into "the process is gone" — exactly the outage `send()` is written to fail open from.
             if (options)
                 void inner.init(options).catch((error: unknown) => {
+                    // Stryker disable all
                     logger.error({
                         message:
                             'Rate-limit Redis store failed to initialise — requests are passing unbudgeted until it recovers.',
                         error
                     });
+                    // Stryker restore all
                 });
         }
 
@@ -225,6 +228,7 @@ export const rateLimitStore = (namespace: string): Store => {
          * level someone is paged for, not in the noise.
          */
         if (environmentNumber('NODE_CLUSTER_WORKERS', 0) !== 1)
+            // Stryker disable all
             logger.error({
                 message:
                     'Rate limiting is counting per process: no Redis is configured and this app runs a worker per CPU. ' +
@@ -232,6 +236,7 @@ export const rateLimitStore = (namespace: string): Store => {
                     'Set NODE_REDIS_URL (or NODE_RATE_LIMIT_REDIS_URL), or run NODE_CLUSTER_WORKERS=1.',
                 namespace
             });
+        // Stryker restore all
 
         return new MemoryStore();
     }
