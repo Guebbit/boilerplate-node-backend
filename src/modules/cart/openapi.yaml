@@ -298,6 +298,13 @@ components:
                 quantity:
                     type: integer
                     minimum: 1
+                    maximum: 999
+                    description: >-
+                        Bounded at both ends. The ceiling is not a stock check — stock is verified
+                        at checkout, which refuses with `CART_INSUFFICIENT_STOCK` and is the real
+                        boundary. This stops a cart holding a quantity no order could ever be,
+                        whose only effect is a nonsense summary total and arithmetic far outside
+                        any range the money code is exercised over.
 
         UpdateCartItemByIdRequest:
             type: object
@@ -309,6 +316,13 @@ components:
                 quantity:
                     type: integer
                     minimum: 1
+                    maximum: 999
+                    description: >-
+                        Bounded at both ends. The ceiling is not a stock check — stock is verified
+                        at checkout, which refuses with `CART_INSUFFICIENT_STOCK` and is the real
+                        boundary. This stops a cart holding a quantity no order could ever be,
+                        whose only effect is a nonsense summary total and arithmetic far outside
+                        any range the money code is exercised over.
 
         RemoveCartItemRequest:
             type: object
