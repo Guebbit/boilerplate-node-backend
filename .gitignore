@@ -5,8 +5,6 @@ clients
 .idea
 dist
 *.log
-src/storage/invoices/*
-src/storage/files/*
 docs/.vitepress/cache
 
 # Uploaded images. `public/` is served by express.static (src/app.ts), so anything a user uploads
@@ -19,6 +17,15 @@ docs/.vitepress/cache
 public/images/*
 !public/images/seed/
 !public/images/system/
+
+# Real local storage the app writes to, never repository content: quarantine holds an upload
+# pending processing (src/infrastructure/adapters/image-store.ts), invoices/mail-spool cache
+# generated PDFs and queued mail (src/modules/orders/config.ts, src/infrastructure/adapters/
+# mail-spool.ts). Defaults live at the repo root — NODE_QUARANTINE_PATH/NODE_INVOICE_CACHE_PATH/
+# NODE_MAIL_SPOOL_PATH move them elsewhere in a real deployment.
+quarantine/*
+storage/invoices/*
+storage/mail-spool/*
 
 # test output
 coverage
