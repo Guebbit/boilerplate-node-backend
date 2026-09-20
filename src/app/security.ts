@@ -150,7 +150,15 @@ export const installSecurity = (app: Express): void => {
                     callback(null, true);
                     return;
                 }
-                callback(new Error(`CORS blocked for origin: ${origin}`));
+                /*
+                 * `false`, never an `Error`. Handing `cors` an error marks the REQUEST as failed:
+                 * it throws into the express error chain and a valid call answers a generic 500
+                 * before its route ever runs. `false` omits `Access-Control-Allow-Origin` and
+                 * continues, which is the whole mechanism — the browser's same-origin policy is
+                 * what refuses the response to the calling page, and a server-to-server caller
+                 * with no origin to enforce is unaffected either way.
+                 */
+                callback(null, false);
             },
             credentials: true,
             methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
