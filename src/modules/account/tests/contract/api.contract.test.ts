@@ -22,6 +22,10 @@ import itUsers from '@modules/users/locales/it.json';
 import itShared from '../../../../locales/it.json';
 import { WEAK_PASSWORD } from '@modules/users/tests/factories';
 import { getExpiryTime, RefreshTokenExpiryTime } from '@modules/account/session/config';
+import { createIntent } from '@modules/payments';
+import { asCustomer } from '@tests/callers';
+import type { ResponseSuccess } from '@infrastructure/http/response';
+import type { Payment } from '@types';
 
 setupTestDb();
 
@@ -358,6 +362,8 @@ describe('POST /account/export', () => {
         const { user, bearer } = await loginWithCookie();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 2)]);
+        const intent = await createIntent(String(order._id), asCustomer(user.id));
+        const payment = (intent as ResponseSuccess<Payment>).data!;
 
         const response = await api().post('/account/export').set('Authorization', bearer).send();
 
@@ -367,6 +373,7 @@ describe('POST /account/export', () => {
             data: {
                 profile: { email: string };
                 orders: { id: string }[];
+                payments: { id: string; orderId: string }[];
                 cart: unknown[];
                 wishlist: unknown[];
                 sessions: { id: string; type: string }[];
@@ -374,6 +381,13 @@ describe('POST /account/export', () => {
         };
         expect(data.profile.email).toBe(user.email);
         expect(data.orders.map((each) => each.id)).toContain(String(order._id));
+        // `paymentService.findOwnPayments` (payments/services/retention.ts) is the only path
+        // this hits — nothing else exercises its pagination read, so a broken page-walk (or the
+        // whole read swallowed) would only ever surface here.
+        expect(data.payments.map((each) => each.id)).toContain(payment.id);
+        expect(data.payments.find((each) => each.id === payment.id)?.orderId).toBe(
+            String(order._id)
+        );
         expect(data.sessions.some((session) => session.type === 'refresh')).toBe(true);
     });
 
