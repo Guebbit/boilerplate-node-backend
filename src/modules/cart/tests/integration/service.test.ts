@@ -534,8 +534,8 @@ describe('cartRemove', () => {
 describe('orderConfirm', () => {
     it('creates an order carrying the cart lines', async () => {
         const user = await createUser();
-        const keyboard = await createProduct({ title: 'Keyboard', price: 25, onHand: 10 });
-        const mouse = await createProduct({ title: 'Mouse', price: 10, onHand: 10 });
+        const keyboard = await createProduct({ title: 'Keyboard', price: 25 });
+        const mouse = await createProduct({ title: 'Mouse', price: 10 });
         await cartItemSetById(user.id, String(keyboard._id), 2);
         await cartItemSetById(user.id, String(mouse._id), 1);
 
@@ -550,7 +550,7 @@ describe('orderConfirm', () => {
 
     it('empties the cart once the order exists', async () => {
         const user = await createUser();
-        const product = await createProduct({ onHand: 10 });
+        const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
 
         await orderConfirm(user.id, testCallerContext);
@@ -597,7 +597,7 @@ describe('orderConfirm', () => {
     it('rejects with 404 when a line points at a deleted product', async () => {
         // An order embeds a snapshot, and there is nothing to snapshot.
         const user = await createUser();
-        const product = await createProduct({ onHand: 10 });
+        const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
         await product.deleteOne();
 
@@ -609,7 +609,7 @@ describe('orderConfirm', () => {
 
     it('freezes the chosen shipping method and its cost onto the order', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 25, onHand: 10 });
+        const product = await createProduct({ price: 25 });
         await cartItemSetById(user.id, String(product._id), 2);
 
         const result = await orderConfirm(user.id, testCallerContext, undefined, 'express');
@@ -622,7 +622,7 @@ describe('orderConfirm', () => {
 
     it('prices the free-above rule against the lines being bought', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 60, onHand: 10 });
+        const product = await createProduct({ price: 60 });
         await cartItemSetById(user.id, String(product._id), 2); // 120 ≥ standard's 100
 
         const result = await orderConfirm(user.id, testCallerContext, undefined, 'standard');
@@ -650,7 +650,7 @@ describe('orderConfirm', () => {
 
     it('an omitted method leaves both shipping fields absent', async () => {
         const user = await createUser();
-        const product = await createProduct({ onHand: 10 });
+        const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
 
         await orderConfirm(user.id, testCallerContext);
@@ -665,7 +665,7 @@ describe('orderConfirm', () => {
 
     it('a chosen method that costs nothing still freezes the method, unlike no method at all', async () => {
         const user = await createUser();
-        const product = await createProduct({ price: 500, onHand: 10 });
+        const product = await createProduct({ price: 500 });
         await cartItemSetById(user.id, String(product._id), 1);
 
         // `standard` (5, freeAbove: 100) — a 500 line total clears the threshold.
@@ -678,7 +678,7 @@ describe('orderConfirm', () => {
 
     it('refuses a shipping method for a cart made entirely of digital products', async () => {
         const user = await createUser();
-        const ebook = await createProduct({ requiresShipping: false, onHand: 10 });
+        const ebook = await createProduct({ requiresShipping: false });
         await cartItemSetById(user.id, String(ebook._id), 1);
 
         const result = await orderConfirm(user.id, testCallerContext, undefined, 'standard');
@@ -691,7 +691,7 @@ describe('orderConfirm', () => {
     it('refuses a shipping method the basket is too heavy for', async () => {
         const user = await createUser();
         // Express's ceiling is 5000g; two of these clear it.
-        const product = await createProduct({ weight: 3000, onHand: 10 });
+        const product = await createProduct({ weight: 3000 });
         await cartItemSetById(user.id, String(product._id), 2);
 
         const result = await orderConfirm(user.id, testCallerContext, undefined, 'express');
@@ -704,7 +704,7 @@ describe('orderConfirm', () => {
     it('accepts the same basket under a method with room for it', async () => {
         const user = await createUser();
         // Over express's 5000g ceiling, comfortably under standard's 30000g one.
-        const product = await createProduct({ weight: 3000, onHand: 10 });
+        const product = await createProduct({ weight: 3000 });
         await cartItemSetById(user.id, String(product._id), 2);
 
         const result = await orderConfirm(user.id, testCallerContext, undefined, 'standard');
@@ -714,7 +714,7 @@ describe('orderConfirm', () => {
 
     it('treats a product with no weight as weighing nothing, never refusing on that account', async () => {
         const user = await createUser();
-        const product = await createProduct({ onHand: 10 }); // no `weight` override
+        const product = await createProduct(); // no `weight` override
         await cartItemSetById(user.id, String(product._id), 1);
 
         const result = await orderConfirm(user.id, testCallerContext, undefined, 'express');
@@ -724,7 +724,7 @@ describe('orderConfirm', () => {
 
     it('checks out a digital-only cart with no method at all, same as any other', async () => {
         const user = await createUser();
-        const ebook = await createProduct({ requiresShipping: false, onHand: 10 });
+        const ebook = await createProduct({ requiresShipping: false });
         await cartItemSetById(user.id, String(ebook._id), 1);
 
         await orderConfirm(user.id, testCallerContext);
@@ -736,8 +736,8 @@ describe('orderConfirm', () => {
 
     it('still allows a shipping method when only SOME lines are digital', async () => {
         const user = await createUser();
-        const ebook = await createProduct({ requiresShipping: false, onHand: 10 });
-        const mug = await createProduct({ requiresShipping: true, price: 500, onHand: 10 });
+        const ebook = await createProduct({ requiresShipping: false });
+        const mug = await createProduct({ requiresShipping: true, price: 500 });
         await cartItemSetById(user.id, String(ebook._id), 1);
         await cartItemAddById(user.id, String(mug._id), 1);
 
@@ -750,7 +750,7 @@ describe('orderConfirm', () => {
     it('sends the customer a confirmation email listing the bought lines', async () => {
         mockEnqueueEmail.mockClear();
         const user = await createUser();
-        const keyboard = await createProduct({ title: 'Keyboard', price: 25, onHand: 10 });
+        const keyboard = await createProduct({ title: 'Keyboard', price: 25 });
         await cartItemSetById(user.id, String(keyboard._id), 2);
 
         const result = await orderConfirm(user.id, testCallerContext);
@@ -779,7 +779,7 @@ describe('orderConfirm', () => {
 
     it('names a vanished product CART_PRODUCT_UNAVAILABLE', async () => {
         const user = await createUser();
-        const product = await createProduct({ onHand: 10 });
+        const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
         await product.deleteOne();
 
@@ -800,7 +800,7 @@ const withBankTransferConfigured = (body: () => Promise<void>) =>
 describe('orderConfirm — paymentMethod', () => {
     it('defaults to card, with no payBy', async () => {
         const user = await createUser();
-        const product = await createProduct({ onHand: 10 });
+        const product = await createProduct();
         await cartItemSetById(user.id, String(product._id), 1);
 
         await orderConfirm(user.id, testCallerContext);
@@ -817,7 +817,7 @@ describe('orderConfirm — paymentMethod', () => {
             ['NODE_BANK_TRANSFER_BENEFICIARY', 'NODE_BANK_TRANSFER_IBAN'],
             async () => {
                 const user = await createUser();
-                const product = await createProduct({ onHand: 10 });
+                const product = await createProduct();
                 await cartItemSetById(user.id, String(product._id), 1);
 
                 const result = await orderConfirm(
@@ -840,7 +840,7 @@ describe('orderConfirm — paymentMethod', () => {
             withBankTransferConfigured(() =>
                 withEnvironment('NODE_BANK_TRANSFER_HOLD_HOURS', '48', async () => {
                     const user = await createUser();
-                    const product = await createProduct({ onHand: 10 });
+                    const product = await createProduct();
                     await cartItemSetById(user.id, String(product._id), 1);
 
                     const before = Date.now();
@@ -868,7 +868,7 @@ describe('orderConfirm — paymentMethod', () => {
     it('serves transferInstructions on the still-pending order, with its own RF reference', () =>
         withBankTransferConfigured(async () => {
             const user = await createUser();
-            const product = await createProduct({ onHand: 10 });
+            const product = await createProduct();
             await cartItemSetById(user.id, String(product._id), 1);
 
             await orderConfirm(user.id, testCallerContext, undefined, undefined, 'bank_transfer');
@@ -898,7 +898,7 @@ describe('orderConfirm — paymentMethod', () => {
         withBankTransferConfigured(async () => {
             mockEnqueueEmail.mockClear();
             const user = await createUser();
-            const product = await createProduct({ onHand: 10 });
+            const product = await createProduct();
             await cartItemSetById(user.id, String(product._id), 1);
 
             await orderConfirm(user.id, testCallerContext, undefined, undefined, 'bank_transfer');
@@ -913,7 +913,7 @@ describe('orderConfirm — paymentMethod', () => {
     it('refuses a third open transfer order past the cap', () =>
         withBankTransferConfigured(async () => {
             const user = await createUser();
-            const product = await createProduct({ onHand: 10 });
+            const product = await createProduct();
             // Two open transfer orders already on the books — the default cap.
             await createOrder(user, [toOrderItem(product)], {
                 status: 'pending',
@@ -942,7 +942,7 @@ describe('orderConfirm — paymentMethod', () => {
     it('does not count a paid transfer order against the cap', () =>
         withBankTransferConfigured(async () => {
             const user = await createUser();
-            const product = await createProduct({ onHand: 10 });
+            const product = await createProduct();
             await createOrder(user, [toOrderItem(product)], {
                 status: 'paid',
                 paymentMethod: 'bank_transfer'

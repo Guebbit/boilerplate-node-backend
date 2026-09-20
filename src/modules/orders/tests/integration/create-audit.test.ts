@@ -46,7 +46,7 @@ describe('create — the audit row records the real caller, never a forced label
     it('an order placed by a moderator is audited with that real role name', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const buyer = await createUser();
-        const product = await createProduct({ title: 'Keyboard', price: 25, onHand: 10 });
+        const product = await createProduct({ title: 'Keyboard', price: 25 });
 
         await create(
             String(buyer._id),
@@ -67,7 +67,7 @@ describe('create — the audit row records the real caller, never a forced label
     it("an order placed by an admin account is audited as 'admin', not silently as a customer", async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const buyer = await createUser();
-        const product = await createProduct({ title: 'Mouse', price: 10, onHand: 10 });
+        const product = await createProduct({ title: 'Mouse', price: 10 });
 
         await create(
             String(buyer._id),

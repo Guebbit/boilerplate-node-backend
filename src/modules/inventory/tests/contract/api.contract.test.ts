@@ -106,7 +106,7 @@ describe('GET /inventory/movements', () => {
 
     it('narrows the ledger to one kind of transition', async () => {
         const { bearer } = await authenticateAs('admin');
-        const product = await createProduct({ onHand: 10 });
+        const product = await createProduct();
         await api()
             .post('/inventory/receipts')
             .set('Authorization', bearer)
@@ -221,7 +221,7 @@ describe('POST /inventory/adjustments', () => {
 
     it('matches the error contract for a zero correction', async () => {
         const { bearer } = await authenticateAs('admin');
-        const product = await createProduct({ onHand: 10 });
+        const product = await createProduct();
 
         const response = await api()
             .post('/inventory/adjustments')

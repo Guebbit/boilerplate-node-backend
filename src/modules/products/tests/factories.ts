@@ -38,10 +38,18 @@ const seedStockLevel = (product: ProductDocument): Promise<unknown> =>
         { upsert: true }
     );
 
-/** Insert a product into the test database and return the Mongoose document. */
+/**
+ * Insert a product into the test database and return the Mongoose document.
+ *
+ * Defaults `onHand` to a sellable 10 — the schema's own default is 0, correct for a real write,
+ * but useless as a test fixture: almost every checkout-touching test needs stock to actually
+ * exist, and pinning it by hand at 89 call sites is how that number stopped meaning anything. A
+ * test about "no stock" pins `onHand: 0` explicitly, which reads better than the absence it used
+ * to rely on.
+ */
 export const createProduct = (overrides: ProductOverrides = {}): Promise<ProductDocument> =>
     productRepository
-        .create(makeProduct(overrides))
+        .create(makeProduct({ onHand: 10, ...overrides }))
         .then((product) => seedStockLevel(product).then(() => product));
 
 /**

@@ -103,7 +103,7 @@ describe('the one-default invariant', () => {
 
 /** One in-stock product straight into the user's cart — the checkout cases' shared setup. */
 const cartWith = async (userId: string) => {
-    const product = await createProduct({ onHand: 10 });
+    const product = await createProduct();
     await cartService.cartItemAddById(userId, String(product._id), 1);
     return product;
 };

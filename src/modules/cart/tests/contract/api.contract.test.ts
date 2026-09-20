@@ -24,7 +24,7 @@ const MISSING_ID = '65dc8a99604c307b702b5ccc';
 /** Logs a user in and puts one product in their cart, returning both. */
 const authenticateWithCart = async (quantity = 2) => {
     const { bearer } = await authenticateAs('user');
-    const product = await createProduct({ onHand: 10 });
+    const product = await createProduct();
     const response = await api()
         .post('/cart')
         .set('Authorization', bearer)
