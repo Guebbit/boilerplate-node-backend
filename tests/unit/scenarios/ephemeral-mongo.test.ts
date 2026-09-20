@@ -16,22 +16,35 @@ const startInProcess = jest.fn(
         Promise.resolve({ uri: 'mongodb://127.0.0.1:1/ephemeral', stop: () => Promise.resolve() })
 );
 
-const ENV_KEYS = [
-    'NODE_TEST_MONGO_URI',
-    'MONGOMS_SYSTEM_BINARY',
-    'MONGOMS_SYSTEM_BINARY_VERSION_CHECK',
-    'MONGOMS_MD5_CHECK'
-] as const;
+/** Externally configurable, restored to whatever this run's own environment set them to. */
+const RESTORED_ENV_KEYS = ['NODE_TEST_MONGO_URI', 'MONGOMS_SYSTEM_BINARY'] as const;
 
-/** Every relevant var, saved so each case restores exactly what it found. */
-const ORIGINAL = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
+/**
+ * `usePreinstalledBinary`'s own derived bookkeeping — never legitimately pre-existing config, so
+ * always cleared rather than "restored". `globalSetup` calls the same function to boot the REAL
+ * ephemeral Mongo every suite shares, and does it in the process these tests' own worker forked
+ * from — so when `MONGOMS_SYSTEM_BINARY` names a binary that genuinely exists on the machine,
+ * these two are ALREADY 'false' by the time this file's module scope runs, and capturing that as
+ * the "original" to restore would poison every case after the one that legitimately sets them.
+ */
+const CLEARED_ENV_KEYS = ['MONGOMS_SYSTEM_BINARY_VERSION_CHECK', 'MONGOMS_MD5_CHECK'] as const;
+
+/** Every externally configurable var, saved so each case restores exactly what it found. */
+const ORIGINAL = Object.fromEntries(RESTORED_ENV_KEYS.map((key) => [key, process.env[key]]));
+
+// A clean slate regardless of run order: a mutation run's `enableFindRelatedTests` can run any
+// one of these cases alone, with no earlier `afterEach` in this file to have cleared them first.
+beforeEach(() => {
+    for (const key of CLEARED_ENV_KEYS) delete process.env[key];
+});
 
 afterEach(() => {
     startInProcess.mockClear();
-    for (const key of ENV_KEYS) {
+    for (const key of RESTORED_ENV_KEYS) {
         if (ORIGINAL[key] === undefined) delete process.env[key];
         else process.env[key] = ORIGINAL[key];
     }
+    for (const key of CLEARED_ENV_KEYS) delete process.env[key];
 });
 
 describe('startEphemeralMongo', () => {
