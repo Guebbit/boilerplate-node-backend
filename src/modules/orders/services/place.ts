@@ -159,8 +159,8 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
 
     // Emitted here rather than left to `recordCreated`: this is the one function that writes a
     // new order, so a future caller of it cannot forget to announce one the way a caller of
-    // `recordCreated` could — `webhooks` and the invoice-PDF pipeline both need this fact
-    // regardless of which door placed the order. Fire-and-forget, like `recordCreated`'s other
+    // `recordCreated` could — `webhooks` needs this fact regardless of which door placed the
+    // order. Fire-and-forget, like `recordCreated`'s other
     // emits: a slow or failing listener must not delay the response this function's callers are
     // already sending.
     void emitDomainEvent(ORDER_CREATED, { orderId: String(order._id) });

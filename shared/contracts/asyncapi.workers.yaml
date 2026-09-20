@@ -139,9 +139,8 @@ components:
                                 Claim Check tickets, never bytes: each names a file the producer
                                 already wrote to the mail spool (`mail-spool.ts`). The consumer
                                 resolves `key` inside the spool root and sends nothing it cannot
-                                resolve — the same rule the deleted invoice-PDF queue was built on,
-                                closing off the arbitrary-file-read a producer-chosen path would
-                                otherwise open.
+                                resolve, closing off the arbitrary-file-read a producer-chosen path
+                                would otherwise open.
                             items:
                                 type: object
                                 required:

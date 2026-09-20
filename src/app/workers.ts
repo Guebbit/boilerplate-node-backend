@@ -3,8 +3,8 @@
  * Queue-consumer registration for this build. This file is `app`; the email/image handlers it
  * wires directly are `infrastructure`, because sending an email and digesting an upload make sense
  * in an application with no modules at all — naming those two queues is the assembly decision. A
- * module-owned queue (webhooks' `worker.webhook.deliver`, orders' own invoice-PDF queue) is not
- * named here at all: it is collected from every enabled module's own manifest instead, via
+ * module-owned queue (webhooks' `worker.webhook.deliver`) is not named here at all: it is
+ * collected from every enabled module's own manifest instead, via
  * `resolveConsumers` — see `ModuleConsumer` (`@kernel/registry.ts`) for why a module cannot call
  * `consumeFromQueue` itself.
  *

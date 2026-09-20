@@ -228,8 +228,8 @@ Two naming details worth knowing, because both were confusing before:
   a domain, and does not stop making sense in an app with no modules — so its consumer sits beside
   the adapter it is the other half of. Only `registerWorkers()` is app-tier, because naming which
   queues this build drains is an assembly fact. A domain-owned worker belongs to its module
-  instead: `webhooks`' delivery worker and `orders`' invoice-PDF worker both do, each declared on
-  its own module's manifest rather than `app/workers.ts`.
+  instead: `webhooks`' delivery worker does, declared on its own module's manifest rather than
+  `app/workers.ts`.
 
 ## What a module contains
 

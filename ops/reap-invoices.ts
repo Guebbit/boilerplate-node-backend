@@ -1,16 +1,9 @@
 #!/usr/bin/env tsx
 /**
  * @module
- * Sweeps the invoice CACHE — `npm run reap:invoices`. Two independent sweeps, run together since
- * both are cheap and both belong to the same directory:
- *
- * - Orphans: a cached file with no order left to name it. Not a normal outcome — `orderService.
- *   remove()`'s hard-delete path cleans up its own file the moment the order goes — it happens
- *   anyway wherever a row is removed OUTSIDE that path: a scenario reset's `emptyDatabase()`
- *   (dev/test only, but the reason this half exists at all), a manual `deleteMany`, a crash
- *   between a hard delete's two steps.
- * - Expiry: a cached file past `invoiceCacheTtlMinutes()`. The cache's whole job is to absorb one
- *   person's burst; anything older is personal and financial data sitting on disk for nobody.
+ * Sweeps the invoice CACHE — `npm run reap:invoices`. Runs `orderService`'s two independent
+ * sweeps together since both are cheap and both belong to the same directory: orphans
+ * ({@link orderService.reapOrphanedInvoices}) and expiry ({@link orderService.reapExpiredInvoices}).
  *
  * Meant to run as a periodic job (cron, a scheduled container task) rather than by hand.
  *
