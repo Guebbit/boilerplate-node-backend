@@ -52,6 +52,8 @@ const TS_REFERENCE = new RegExp(String.raw`(?:${TS_SEGMENT}/)*${TS_SEGMENT}\.tsx
  * wasteful asked thousands of times over.
  */
 let targetsCache: { targets: Set<string>; roots: Set<string> } | undefined;
+
+/** Reads {@link targetsCache}, populating it from `trackedTargets` on the first call. */
 const targets = (): { targets: Set<string>; roots: Set<string> } =>
     (targetsCache ??= trackedTargets(ROOT));
 
@@ -74,9 +76,11 @@ export const resolvesTsReference = (reference: string, filename: string): boolea
     );
 };
 
+/** `RuleCreator`'s two type parameters: this rule takes no options and reports one message. */
 type Options = [];
 type MessageIds = 'stale';
 
+/** Flags a `.ts`/`.tsx` reference inside a comment that does not resolve to a tracked file. */
 export const commentLinks = ESLintUtils.RuleCreator.withoutDocs<Options, MessageIds>({
     meta: {
         type: 'problem',

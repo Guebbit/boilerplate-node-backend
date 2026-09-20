@@ -19,6 +19,7 @@
 import { AST_NODE_TYPES, ESLintUtils } from '@typescript-eslint/utils';
 import type { TSESTree } from '@typescript-eslint/utils';
 
+/** `RuleCreator`'s two type parameters: this rule takes no options and reports five messages. */
 type Options = [];
 type MessageIds =
     | 'notAllowed'
@@ -65,6 +66,7 @@ const isModelRuntimeValueName = (name: string): boolean =>
 const sourceStem = (specifier: string): string =>
     specifier.replace(/^\.\//, '').replace(/\/index$/, '');
 
+/** Flags a module barrel `export` naming a file this module's `index.ts` may not publish. */
 export const barrelAllowedSources = ESLintUtils.RuleCreator.withoutDocs<Options, MessageIds>({
     meta: {
         type: 'problem',

@@ -11,6 +11,7 @@
 import { AST_NODE_TYPES, ESLintUtils } from '@typescript-eslint/utils';
 import type { TSESTree } from '@typescript-eslint/utils';
 
+/** `RuleCreator`'s two type parameters: this rule takes no options and reports one message. */
 type Options = [];
 type MessageIds = 'missing';
 
@@ -33,8 +34,10 @@ const chainMethods = (call: TSESTree.Node): string[] => {
     return names;
 };
 
+/** The three methods a promise handler callback can be passed to — used by {@link insidePromiseHandler}. */
 const HANDLER_METHODS = new Set(['then', 'catch', 'finally']);
 
+/** Is this node a function expression, of either syntax, that could be a `.then`/`.catch` callback? */
 const isPromiseCallbackFunction = (
     node: TSESTree.Node
 ): node is TSESTree.ArrowFunctionExpression | TSESTree.FunctionExpression =>
@@ -67,6 +70,7 @@ const insidePromiseHandler = (node: TSESTree.Node, parentOf: ParentOf): boolean 
     return false;
 };
 
+/** Is this node any of the three shapes a function declaration or expression can take? */
 const isEnclosingFunction = (
     node: TSESTree.Node
 ): node is
@@ -115,6 +119,7 @@ const insideExportedFunction = (node: TSESTree.Node, parentOf: ParentOf): boolea
     );
 };
 
+/** Flags a controller's promise chain that ends without a `.catch()`. */
 export const controllerChainMustCatch = ESLintUtils.RuleCreator.withoutDocs<Options, MessageIds>({
     meta: {
         type: 'problem',

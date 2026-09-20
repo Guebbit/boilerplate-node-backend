@@ -42,6 +42,7 @@ export interface RuleOptions {
     paths?: boolean;
 }
 
+/** `RuleCreator`'s two type parameters: one optional {@link RuleOptions} block, two messages. */
 type Options = [RuleOptions?];
 type MessageIds = 'binding' | 'path';
 
@@ -70,6 +71,7 @@ const specifierNames = (specifier: TSESTree.ImportClause): string[] => {
     return names;
 };
 
+/** Flags an import that reaches a collection's model or repository from outside its own door. */
 export const noPersistenceImports = ESLintUtils.RuleCreator.withoutDocs<Options, MessageIds>({
     meta: {
         type: 'problem',

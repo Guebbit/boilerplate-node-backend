@@ -12,9 +12,11 @@
 import { AST_NODE_TYPES, ESLintUtils } from '@typescript-eslint/utils';
 import type { TSESTree } from '@typescript-eslint/utils';
 
+/** `RuleCreator`'s two type parameters: this rule takes no options and reports one message. */
 type Options = [];
 type MessageIds = 'literal';
 
+/** The two functions whose `errors` argument carries user-facing copy. */
 const CARRIERS = new Set(['rejectResponse', 'generateReject']);
 
 /** A string literal, or a template with no expressions — both are hardcoded copy. */
@@ -24,6 +26,7 @@ const isLiteralText = (
     (node?.type === AST_NODE_TYPES.Literal && typeof node.value === 'string') ||
     (node?.type === AST_NODE_TYPES.TemplateLiteral && node.expressions.length === 0);
 
+/** Flags a hardcoded string where a `rejectResponse`/`generateReject` call needs a dictionary lookup. */
 export const noHardcodedUserText = ESLintUtils.RuleCreator.withoutDocs<Options, MessageIds>({
     meta: {
         type: 'problem',
