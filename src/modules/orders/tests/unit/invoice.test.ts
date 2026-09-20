@@ -179,6 +179,62 @@ describe('renderInvoicePdf — the order renders in its OWN frozen locale', () =
     });
 });
 
+/*
+ * 1.3: N concurrent misses for the SAME order must launch Chromium once, not once per caller.
+ * Run at TTL 0 rather than through the cache-miss branch below: `renderInvoicePdf` reaches
+ * `renderFreshOnce` SYNCHRONOUSLY on that path, with no `readCached` gap in between, which is
+ * what makes two back-to-back calls in one test deterministic rather than racing two real `stat`
+ * calls against each other.
+ */
+describe('renderInvoicePdf — single-flight', () => {
+    withCacheRoot();
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        findByIdRawMock.mockResolvedValue(orderFixture('en'));
+    });
+
+    it('collapses concurrent misses for the same order into a single render', async () => {
+        let resolveRender!: (bytes: Buffer) => void;
+        renderHtmlToPdfMock.mockReturnValueOnce(
+            new Promise((resolve) => {
+                resolveRender = resolve;
+            })
+        );
+        const { renderInvoicePdf } = await import('../../services/invoice');
+
+        const first = renderInvoicePdf('order-1');
+        const second = renderInvoicePdf('order-1');
+        resolveRender(Buffer.from('fresh-bytes'));
+
+        await expect(first).resolves.toEqual(Buffer.from('fresh-bytes'));
+        await expect(second).resolves.toEqual(Buffer.from('fresh-bytes'));
+        expect(findByIdRawMock).toHaveBeenCalledTimes(1);
+        expect(renderHtmlToPdfMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('renders separately for two different orders in the same burst', async () => {
+        renderHtmlToPdfMock.mockResolvedValue(Buffer.from('pdf'));
+        const { renderInvoicePdf } = await import('../../services/invoice');
+
+        await Promise.all([renderInvoicePdf('order-1'), renderInvoicePdf('order-2')]);
+
+        expect(findByIdRawMock).toHaveBeenCalledTimes(2);
+        expect(renderHtmlToPdfMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('starts a fresh render for the same order once the first one has settled', async () => {
+        renderHtmlToPdfMock.mockResolvedValue(Buffer.from('pdf'));
+        const { renderInvoicePdf } = await import('../../services/invoice');
+
+        await renderInvoicePdf('order-1');
+        await renderInvoicePdf('order-1');
+
+        expect(findByIdRawMock).toHaveBeenCalledTimes(2);
+        expect(renderHtmlToPdfMock).toHaveBeenCalledTimes(2);
+    });
+});
+
 describe('renderInvoicePdf — the TTL cache', () => {
     const cache = withCacheRoot();
 
@@ -230,6 +286,19 @@ describe('renderInvoicePdf — the TTL cache', () => {
         await expect(renderInvoicePdf('gone')).resolves.toBeUndefined();
 
         await expect(fileExists(cache.pathFor('gone'))).resolves.toBe(false);
+    });
+
+    // 1.2: a truncated read is only possible if the write is visible before it is complete.
+    // Landing under the final name via rename rather than a direct writeFile is what this pins —
+    // a leftover `.tmp` sitting beside the `.pdf` would mean the write path skipped the rename.
+    it('leaves no temp file behind once the write lands', async () => {
+        const { readdir } = await import('node:fs/promises');
+        const { renderInvoicePdf } = await import('../../services/invoice');
+
+        await renderInvoicePdf('order-1');
+
+        const entries = await readdir(cache.root());
+        expect(entries).toEqual(['order-1.pdf']);
     });
 });
 
@@ -299,6 +368,21 @@ describe('reapOrphanedInvoices', () => {
 
         expect(existingIdsMock).not.toHaveBeenCalled();
     });
+
+    // 1.2: a `.tmp` left by a crash between the write and the rename is invisible to both sweeps
+    // unless the reaper also collects it — pinned here for the orphan half, and again below for
+    // the expiry half.
+    it('deletes a stray temp file whose order no longer exists', async () => {
+        const strayTemp = path.join(cache.root(), `${ORDER_A}.${'a'.repeat(32)}.tmp`);
+        await writeFile(strayTemp, Buffer.from('partial-write'));
+        existingIdsMock.mockResolvedValue(new Set());
+        const { reapOrphanedInvoices } = await import('../../services/invoice');
+
+        await expect(reapOrphanedInvoices()).resolves.toBe(1);
+
+        expect(existingIdsMock).toHaveBeenCalledWith([ORDER_A]);
+        await expect(fileExists(strayTemp)).resolves.toBe(false);
+    });
 });
 
 describe('reapExpiredInvoices', () => {
@@ -334,6 +418,21 @@ describe('reapExpiredInvoices', () => {
         const { reapExpiredInvoices } = await import('../../services/invoice');
 
         await expect(reapExpiredInvoices()).resolves.toBe(0);
+    });
+
+    it('deletes a stray temp file past the TTL, and leaves one still fresh', async () => {
+        const staleTemp = path.join(cache.root(), `${ORDER_A}.${'a'.repeat(32)}.tmp`);
+        const freshTemp = path.join(cache.root(), `${ORDER_B}.${'b'.repeat(32)}.tmp`);
+        await writeFile(staleTemp, Buffer.from('partial-write'));
+        await writeFile(freshTemp, Buffer.from('partial-write'));
+        const past = new Date(Date.now() - 6 * 60 * 1000);
+        await utimes(staleTemp, past, past);
+        const { reapExpiredInvoices } = await import('../../services/invoice');
+
+        await expect(reapExpiredInvoices()).resolves.toBe(1);
+
+        await expect(fileExists(staleTemp)).resolves.toBe(false);
+        await expect(fileExists(freshTemp)).resolves.toBe(true);
     });
 });
 

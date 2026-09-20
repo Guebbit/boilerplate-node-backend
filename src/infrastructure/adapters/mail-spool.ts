@@ -84,6 +84,9 @@ export const discardSpooled = (key: string): Promise<void> => {
  * sweep. A file survives this long only when the job that spooled it never finished: see
  * `mailer.ts` and `email.worker.ts` for who is supposed to {@link discardSpooled} it first.
  *
+ * `retentionMs` must exceed a queued job's whole retry chain (`NODE_QUEUE_MAX_ATTEMPTS` x
+ * `NODE_QUEUE_RETRY_DELAY_SECONDS`), or this can delete an attachment a retry still needs.
+ *
  * @param retentionMs - how old a spooled file must be before it counts as abandoned
  * @returns how many files were deleted
  */

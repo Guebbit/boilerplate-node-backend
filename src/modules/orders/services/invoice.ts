@@ -5,10 +5,13 @@
  * thread, and so will `notify.ts`'s placed-order email once it starts attaching one. A TTL cache
  * sits in front of the render so a burst of requests for the same order pays for one Chromium
  * launch, not one per request — `invoiceCacheTtlMinutes()` decides whether it is even consulted.
+ * Single-flight collapses a CONCURRENT burst the same way; the TTL cache alone only bounds a
+ * sequential one — see {@link renderFreshOnce}.
  */
 
 import path from 'node:path';
-import { mkdir, readdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
+import { mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import ejs from 'ejs';
 import { logger } from '@infrastructure/adapters/logger';
 import { renderHtmlToPdf } from '@infrastructure/adapters/pdf';
@@ -36,15 +39,29 @@ const readCached = (orderId: string, ttlMinutes: number): Promise<Buffer | undef
         .catch(() => undefined);
 };
 
-/** Writes a fresh render to the cache — created on demand, mirroring `image-store.ts`'s own directories. */
-const writeCache = (orderId: string, bytes: Buffer): Promise<void> =>
-    mkdir(invoiceCachePath(), { recursive: true }).then(() =>
-        writeFile(invoicePdfPath(orderId), bytes)
+/**
+ * Writes a fresh render to the cache — created on demand, mirroring `image-store.ts`'s own
+ * directories. Written to a per-write temp name first, then renamed onto the deterministic final
+ * path: `invoicePdfPath` is the same path for every render of one order, so two concurrent misses
+ * writing it directly could interleave and leave {@link readCached} streaming a truncated PDF.
+ * `rename` is atomic within one filesystem, and the loser of the race simply overwrites with
+ * identical bytes. `reapExpiredInvoices` collects a temp file a crash left behind, the same as a
+ * finished one — see `TEMP_INVOICE_PATTERN`.
+ */
+const writeCache = (orderId: string, bytes: Buffer): Promise<void> => {
+    const temporaryPath = path.join(
+        invoiceCachePath(),
+        `${orderId}.${randomBytes(16).toString('hex')}.tmp`
     );
+
+    return mkdir(invoiceCachePath(), { recursive: true })
+        .then(() => writeFile(temporaryPath, bytes))
+        .then(() => rename(temporaryPath, invoicePdfPath(orderId)));
+};
 
 /**
  * Renders one order's invoice PDF from scratch — the DB read, the template, Chromium. Never reads
- * or writes the cache; {@link renderInvoicePdf} is the only caller.
+ * or writes the cache; {@link renderFreshOnce} is the only caller.
  */
 const renderFresh = (orderId: string): Promise<Buffer | undefined> =>
     orderRepository.findByIdRaw(orderId).then((order) => {
@@ -65,6 +82,28 @@ const renderFresh = (orderId: string): Promise<Buffer | undefined> =>
             .then((bytes) => Buffer.from(bytes));
     });
 
+/** One render per orderId at a time — see {@link renderFreshOnce}. */
+const inFlightRenders = new Map<string, Promise<Buffer | undefined>>();
+
+/**
+ * {@link renderFresh}, collapsed across concurrent callers: a miss registers its own promise
+ * before awaiting anything, and a concurrent miss for the SAME orderId joins it instead of
+ * launching a second Chromium — the TTL cache alone only bounds a SEQUENTIAL burst, since N
+ * concurrent requests all miss {@link readCached} before any of them has written the cache back.
+ * Removed from the map the moment it settles, success or failure, so the next real miss (past the
+ * TTL, or once this one is done) starts fresh. Per-process only, the same guarantee nginx's
+ * `proxy_cache_lock` and Varnish's request collapsing give per-node — a second replica rendering
+ * the same invoice once is not the problem this solves.
+ */
+const renderFreshOnce = (orderId: string): Promise<Buffer | undefined> => {
+    const inFlight = inFlightRenders.get(orderId);
+    if (inFlight) return inFlight;
+
+    const render = renderFresh(orderId).finally(() => inFlightRenders.delete(orderId));
+    inFlightRenders.set(orderId, render);
+    return render;
+};
+
 /**
  * Renders one order's invoice PDF — no status field, no queue, nothing to poll. A `0` TTL
  * (`invoiceCacheTtlMinutes()` — demo, test, or a deployment that opted out) means the render never
@@ -80,12 +119,12 @@ const renderFresh = (orderId: string): Promise<Buffer | undefined> =>
  */
 export const renderInvoicePdf = (orderId: string): Promise<Buffer | undefined> => {
     const ttlMinutes = invoiceCacheTtlMinutes();
-    if (ttlMinutes <= 0) return renderFresh(orderId);
+    if (ttlMinutes <= 0) return renderFreshOnce(orderId);
 
     return readCached(orderId, ttlMinutes).then(
         (cached) =>
             cached ??
-            renderFresh(orderId).then((bytes) =>
+            renderFreshOnce(orderId).then((bytes) =>
                 bytes ? writeCache(orderId, bytes).then(() => bytes) : bytes
             )
     );
@@ -114,10 +153,24 @@ export const deleteCachedInvoice = (orderId: string): Promise<boolean> =>
     );
 
 /** A Mongo ObjectId's own shape — what every `<orderId>.pdf` this cache ever writes is named after. */
-const ORDER_ID_PATTERN = /^[\da-f]{24}$/;
+const ORDER_ID_PATTERN = /^([\da-f]{24})\.pdf$/;
 
-/** Every cached filename this store could have written, alongside the cache root they live under. */
-const cachedInvoiceNames = (): Promise<{ root: string; names: string[] }> => {
+/**
+ * `<orderId>.<random hex>.tmp` — {@link writeCache}'s own temp name, left behind only when a
+ * process crashes between the write and the rename onto {@link invoicePdfPath}. Swept by both
+ * reapers below, the same as a finished `.pdf`, since neither the order it belongs to nor its age
+ * is knowable from the name alone otherwise.
+ */
+const TEMP_INVOICE_PATTERN = /^([\da-f]{24})\.[\da-f]{32}\.tmp$/;
+
+/** One cached file this store could have written — its bare filename and the orderId it names. */
+interface CachedInvoiceFile {
+    name: string;
+    orderId: string;
+}
+
+/** Every cached file this store could have written, alongside the cache root they live under. */
+const cachedInvoiceFiles = (): Promise<{ root: string; files: CachedInvoiceFile[] }> => {
     const root = invoiceCachePath();
 
     return readdir(root)
@@ -127,55 +180,72 @@ const cachedInvoiceNames = (): Promise<{ root: string; names: string[] }> => {
         })
         .then((entries) => ({
             root,
-            names: entries.filter(
-                (name) => name.endsWith('.pdf') && ORDER_ID_PATTERN.test(name.slice(0, -4))
-            )
+            files: entries.flatMap((name) => {
+                const orderId = (ORDER_ID_PATTERN.exec(name) ??
+                    TEMP_INVOICE_PATTERN.exec(name))?.[1];
+                return orderId ? [{ name, orderId }] : [];
+            })
         }));
 };
 
 /**
- * Deletes every cached invoice PDF with no order left to name it — `ops/reap-invoices.ts`'s one
- * sweep, {@link reapExpiredInvoices} being its other. An orphan is not a normal outcome: `remove()`'s
+ * Deletes one cached file outright, by its bare name — the reapers' own primitive.
+ * {@link deleteCachedInvoice} stays the public, orderId-keyed door for an on-demand delete; this
+ * one also reaches a stale `.tmp` a reaper found, which no orderId alone resolves a path for.
+ */
+const deleteCacheFile = (root: string, name: string): Promise<boolean> =>
+    unlink(path.join(root, name)).then(
+        () => true,
+        (error: unknown) => {
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
+                logger.warn({ message: 'Could not delete cached invoice file.', name, error });
+            return false;
+        }
+    );
+
+/**
+ * Deletes every cached file with no order left to name it — `ops/reap-invoices.ts`'s one sweep,
+ * {@link reapExpiredInvoices} being its other. An orphan is not a normal outcome: `remove()`'s
  * hard-delete path cleans up its own file the moment the order goes. It happens anyway wherever a
  * row is removed OUTSIDE that path — a scenario reset's `emptyDatabase()` (dev/test only, but the
  * reason this exists at all), a manual `deleteMany`, a crash between a hard delete's two steps.
  *
- * A filename that is not `<24-hex id>.pdf` is left alone rather than risking `existingIds`'s
- * `toObjectId` throwing on it — someone else's file, not this reaper's to judge.
+ * A filename matching neither {@link ORDER_ID_PATTERN} nor {@link TEMP_INVOICE_PATTERN} is left
+ * alone rather than risking `existingIds`'s `toObjectId` throwing on it — someone else's file, not
+ * this reaper's to judge.
  *
  * @returns how many files were deleted
  */
 export const reapOrphanedInvoices = (): Promise<number> =>
-    cachedInvoiceNames().then(({ names }) => {
-        const candidates = names.map((name) => name.slice(0, -4));
-        if (candidates.length === 0) return 0;
+    cachedInvoiceFiles().then(({ root, files }) => {
+        if (files.length === 0) return 0;
 
-        return orderRepository.existingIds(candidates).then((existing) => {
-            const orphaned = candidates.filter((id) => !existing.has(id));
-            return Promise.all(orphaned.map((id) => deleteCachedInvoice(id))).then(
+        const orderIds = [...new Set(files.map((file) => file.orderId))];
+        return orderRepository.existingIds(orderIds).then((existing) => {
+            const orphaned = files.filter((file) => !existing.has(file.orderId));
+            return Promise.all(orphaned.map((file) => deleteCacheFile(root, file.name))).then(
                 (results) => results.filter(Boolean).length
             );
         });
     });
 
 /**
- * Deletes every cached invoice past its TTL — `ops/reap-invoices.ts`'s other sweep, next to
+ * Deletes every cached file past its TTL — `ops/reap-invoices.ts`'s other sweep, next to
  * {@link reapOrphanedInvoices}. The cache's whole job is to absorb one person's burst; a file
  * older than `invoiceCacheTtlMinutes()` is personal and financial data sitting on disk for
- * nobody, whatever else is true about the order it belongs to.
+ * nobody, whatever else is true about the order it belongs to — and a stale `.tmp` a crash left
+ * behind is not even that, past the same age.
  *
  * @returns how many files were deleted
  */
 export const reapExpiredInvoices = (): Promise<number> => {
     const cutoffMs = invoiceCacheTtlMinutes() * 60 * 1000;
 
-    return cachedInvoiceNames().then(({ root, names }) =>
+    return cachedInvoiceFiles().then(({ root, files }) =>
         Promise.all(
-            names.map((name) =>
-                stat(path.join(root, name)).then((info) =>
-                    Date.now() - info.mtimeMs > cutoffMs
-                        ? deleteCachedInvoice(name.slice(0, -4))
-                        : false
+            files.map((file) =>
+                stat(path.join(root, file.name)).then((info) =>
+                    Date.now() - info.mtimeMs > cutoffMs ? deleteCacheFile(root, file.name) : false
                 )
             )
         ).then((results) => results.filter(Boolean).length)
