@@ -60,8 +60,9 @@ export const resolveSpooled = (key: string): string | undefined =>
 
 /**
  * Deletes a spooled attachment. Never rejects, matching `services/invoice.ts#deleteCachedInvoice`:
- * called from `nodemailer()`'s own `.finally`, success or failure, and a failed cleanup must not
- * become a second, different failure on top of whatever the send already was.
+ * called only once a caller knows a job is finished with it — `mailer.ts#sendInline` and
+ * `email.worker.ts#discardJobAttachments`, never `nodemailer()` itself — and a failed cleanup
+ * must not become a second, different failure on top of whatever the send already was.
  *
  * @param key - a value {@link spoolAttachment} returned
  */

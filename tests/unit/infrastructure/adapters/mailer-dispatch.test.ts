@@ -23,6 +23,9 @@
  */
 import type { EmailJobPayload } from '@types';
 import type { Data } from 'ejs';
+import { mkdtemp, rm, stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
 const sendMailMock = jest.fn().mockResolvedValue({ messageId: 'smtp-1' });
 jest.mock('nodemailer', () => ({
@@ -61,6 +64,14 @@ jest.mock('@infrastructure/adapters/logger', () => ({
 }));
 
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
+import { spoolAttachment } from '@infrastructure/adapters/mail-spool';
+
+/** Whether a path names a real file. */
+const fileExists = (target: string): Promise<boolean> =>
+    stat(target).then(
+        () => true,
+        () => false
+    );
 
 const REQUEST: EmailJobPayload['request'] = {
     to: 'ada@example.com',
@@ -85,9 +96,20 @@ const DATA: Data = {
     footer: 'Sent by the Ecommerce Demo team.'
 };
 
-beforeEach(() => {
+let spoolRoot: string;
+const originalSpoolPath = process.env.NODE_MAIL_SPOOL_PATH;
+
+beforeEach(async () => {
     jest.clearAllMocks();
     sendMailMock.mockResolvedValue({ messageId: 'smtp-1' });
+    spoolRoot = await mkdtemp(path.join(tmpdir(), 'mailer-dispatch-test-'));
+    process.env.NODE_MAIL_SPOOL_PATH = spoolRoot;
+});
+
+afterEach(async () => {
+    await rm(spoolRoot, { recursive: true, force: true });
+    if (originalSpoolPath === undefined) delete process.env.NODE_MAIL_SPOOL_PATH;
+    else process.env.NODE_MAIL_SPOOL_PATH = originalSpoolPath;
 });
 
 describe('enqueueEmail — path 1: no broker configured', () => {
@@ -242,5 +264,66 @@ describe('enqueueEmail — the paths are mutually exclusive', () => {
         const sentInline = sendMailMock.mock.calls.length;
 
         expect(enqueued + sentInline).toBe(1);
+    });
+});
+
+/*
+ * `sendInline` — every path above that actually sends now discards through it, since neither has
+ * a retry chain behind it: no broker, or a publish that already failed. `nodemailer()` itself
+ * never discards any more — see `mailer-attachments.test.ts` and `email.worker.test.ts` for the
+ * queued path, which has one.
+ */
+describe('enqueueEmail — the inline paths discard their own attachment', () => {
+    it('discards it once a no-broker send settles', async () => {
+        isQueueEnabledMock.mockReturnValue(false);
+        const key = await spoolAttachment(Buffer.from('x'), 'pdf');
+
+        await enqueueEmail(
+            { ...REQUEST, attachments: [{ filename: 'x.pdf', key }] },
+            TEMPLATE,
+            DATA
+        );
+
+        await expect(fileExists(path.join(spoolRoot, key))).resolves.toBe(false);
+    });
+
+    it('discards it once the publish-failed fallback settles', async () => {
+        isQueueEnabledMock.mockReturnValue(true);
+        publishToQueueMock.mockResolvedValue(false);
+        const key = await spoolAttachment(Buffer.from('x'), 'pdf');
+
+        await enqueueEmail(
+            { ...REQUEST, attachments: [{ filename: 'x.pdf', key }] },
+            TEMPLATE,
+            DATA
+        );
+
+        await expect(fileExists(path.join(spoolRoot, key))).resolves.toBe(false);
+    });
+
+    it('discards it even when the inline send itself rejects', async () => {
+        isQueueEnabledMock.mockReturnValue(false);
+        sendMailMock.mockRejectedValueOnce(new Error('smtp refused'));
+        const key = await spoolAttachment(Buffer.from('x'), 'pdf');
+
+        await expect(
+            enqueueEmail({ ...REQUEST, attachments: [{ filename: 'x.pdf', key }] }, TEMPLATE, DATA)
+        ).rejects.toThrow('smtp refused');
+
+        await expect(fileExists(path.join(spoolRoot, key))).resolves.toBe(false);
+    });
+
+    it('never touches it on the queued path, which has a retry chain ahead of it', async () => {
+        isQueueEnabledMock.mockReturnValue(true);
+        publishToQueueMock.mockResolvedValue(true);
+        const key = await spoolAttachment(Buffer.from('x'), 'pdf');
+
+        await enqueueEmail(
+            { ...REQUEST, attachments: [{ filename: 'x.pdf', key }] },
+            TEMPLATE,
+            DATA
+        );
+
+        await expect(fileExists(path.join(spoolRoot, key))).resolves.toBe(true);
     });
 });

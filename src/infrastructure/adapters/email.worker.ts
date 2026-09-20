@@ -10,10 +10,23 @@
 
 import type { EmailJobPayload } from '@types';
 import { nodemailer } from '@infrastructure/adapters/mailer';
+import { discardSpooled } from '@infrastructure/adapters/mail-spool';
 import { logger } from '@infrastructure/adapters/logger';
 
 /* Queue name for email jobs — owned by the adapter, re-exported for the worker registry. */
 export { EMAIL_QUEUE } from '@infrastructure/adapters/queue';
+
+/**
+ * Discards every attachment a job spooled. Called only on the two outcomes
+ * {@link handleEmailJob} treats as FINAL — a successful send, or a permanent refusal — never on a
+ * rethrow, which still has retry attempts ahead of it and needs its attachment intact for them.
+ *
+ * @param attachments - a job's own `request.attachments`, absent for a payload with none
+ */
+const discardJobAttachments = (
+    attachments: EmailJobPayload['request']['attachments'] = []
+): Promise<void> =>
+    Promise.all(attachments.map(({ key }) => discardSpooled(key))).then(() => undefined);
 
 /**
  * Process a single email job from the queue.
@@ -30,7 +43,8 @@ export const handleEmailJob = (job: Partial<EmailJobPayload>): Promise<boolean> 
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the payload crossed a queue: its type is a claim, not a fact
     if (!job?.request?.to || !job.templateName) {
         logger.warn({ message: 'Invalid email job payload, discarding.', job });
-        return Promise.resolve(false);
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- same as above: a broker can deliver a null job
+        return discardJobAttachments(job?.request?.attachments).then(() => false);
     }
 
     /*
@@ -38,12 +52,16 @@ export const handleEmailJob = (job: Partial<EmailJobPayload>): Promise<boolean> 
      * request ended, so there's no locale store to restore. The producer already resolved every
      * string before publishing — `job.data` is finished copy — so this only interpolates and sends.
      */
-    return nodemailer(job.request, job.templateName, job.data ?? {})
-        .then(() => true)
-        .catch((error: unknown) => {
-            // Logged AND rethrown: the TTL retry is what saves the email, the log is what makes a
-            // job that keeps failing visible instead of a queue that quietly refills.
-            logger.error({ message: 'Email worker failed to send.', error });
-            throw error;
-        });
+    return (
+        nodemailer(job.request, job.templateName, job.data ?? {})
+            // `!`: proven present by the guard above, which the compiler cannot follow into this closure.
+            .then(() => discardJobAttachments(job.request!.attachments).then(() => true))
+            .catch((error: unknown) => {
+                // Logged AND rethrown, attachment untouched: the TTL retry is what saves the email —
+                // and the next attempt still needs a file to resolve — the log is what makes a job
+                // that keeps failing visible instead of a queue that quietly refills.
+                logger.error({ message: 'Email worker failed to send.', error });
+                throw error;
+            })
+    );
 };

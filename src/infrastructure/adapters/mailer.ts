@@ -193,9 +193,10 @@ interface ResolvedAttachment {
  * message. Prefer `enqueueEmail` below on request paths, so a slow SMTP server can't stretch
  * out an HTTP response.
  *
- * Every spooled attachment is discarded once the send has settled — success or failure, and
- * whichever transport handled it — since a spooled file left behind past that point is not a
- * failure this function can retry into anything different.
+ * Never discards a spooled attachment itself: this may be one attempt of several behind a queued
+ * job's retry chain, and deleting the file here would leave every later attempt resolving a key
+ * that no longer exists — see `email.worker.ts#discardJobAttachments` and `enqueueEmail`'s inline
+ * path for the two callers who actually know a job is finished with its attachment.
  *
  * @param request - nodemailer envelope (to, subject, attachments, ...). `from` and `html`
  *                  are filled in here, but anything passed in overrides them.
@@ -289,9 +290,7 @@ export const nodemailer = (
         });
     };
 
-    return send().finally(() =>
-        Promise.all(attachments.map(({ key }) => discardSpooled(key))).then(() => undefined)
-    );
+    return send();
 };
 
 /**
@@ -313,6 +312,25 @@ export interface EmailContent {
     /** Everything the template interpolates, already translated. */
     data: Record<string, unknown>;
 }
+
+/**
+ * Sends via `nodemailer()`, then discards every spooled attachment once the send settles —
+ * success or failure. Safe here, unlike inside `nodemailer()` itself: this is `enqueueEmail`'s
+ * inline path, with no retry chain behind it either way, so there is no later attempt that would
+ * find the attachment already gone.
+ */
+const sendInline = (
+    request: EmailJobPayload['request'],
+    templateName: string,
+    data: Data
+): Promise<void> =>
+    nodemailer(request, templateName, data)
+        .then(() => undefined)
+        .finally(() =>
+            Promise.all((request.attachments ?? []).map(({ key }) => discardSpooled(key))).then(
+                () => undefined
+            )
+        );
 
 /**
  * Queue-aware email dispatch — the function controllers should call. When RabbitMQ is reachable
@@ -340,9 +358,8 @@ export const enqueueEmail = (
     data: Data,
     priority: JobPriority = 'normal'
 ): Promise<void> => {
-    // No broker configured → send inline. `.then(() => undefined)` discards SentMessageInfo so both
-    // branches share the same `Promise<void>` return type.
-    if (!isQueueEnabled()) return nodemailer(request, templateName, data).then(() => undefined);
+    // No broker configured → send inline.
+    if (!isQueueEnabled()) return sendInline(request, templateName, data);
 
     // The type argument is the point: this literal is checked against the very type the worker
     // declares, so producer and consumer cannot drift apart silently. It is the GENERATED contract
@@ -357,7 +374,7 @@ export const enqueueEmail = (
     }).then((published) => {
         if (!published) {
             // Fallback: queue publish failed, send directly.
-            return nodemailer(request, templateName, data).then(() => undefined);
+            return sendInline(request, templateName, data);
         }
         // `debug` level: enqueueing is routine, and the worker logs the actual delivery.
         logger.debug({

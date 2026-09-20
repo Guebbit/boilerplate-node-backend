@@ -22,6 +22,11 @@ import { logger } from '@infrastructure/adapters/logger';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({ nodemailer: jest.fn() }));
 
+const discardSpooledMock = jest.fn().mockResolvedValue(undefined);
+jest.mock('@infrastructure/adapters/mail-spool', () => ({
+    discardSpooled: (key: string) => discardSpooledMock(key)
+}));
+
 import { nodemailer } from '@infrastructure/adapters/mailer';
 import { EMAIL_QUEUE } from '@infrastructure/adapters/queue';
 import {
@@ -33,6 +38,7 @@ const mockedMailer = nodemailer as jest.MockedFunction<typeof nodemailer>;
 
 beforeEach(() => {
     jest.clearAllMocks();
+    discardSpooledMock.mockResolvedValue(undefined);
     jest.spyOn(logger, 'warn').mockImplementation(() => logger);
     jest.spyOn(logger, 'error').mockImplementation(() => logger);
 });
@@ -106,5 +112,42 @@ describe('handleEmailJob', () => {
         // Logged on the way out: the requeue is what saves the email, the log is what makes a job
         // that keeps failing visible instead of a queue that quietly refills.
         expect(logger.error).toHaveBeenCalledWith(expect.objectContaining({ error: failure }));
+    });
+
+    /*
+     * `nodemailer()` itself never discards any more — a retried attempt needs its attachment
+     * intact. These pin the two outcomes this worker treats as final, and the one it does not.
+     */
+    describe('discarding the spooled attachment', () => {
+        const withAttachment = {
+            request: { to: 'ada@example.com', attachments: [{ filename: 'x.pdf', key: 'a.pdf' }] },
+            templateName: 'welcome',
+            data: {}
+        } as Parameters<typeof handleEmailJob>[0];
+
+        it('discards it once the send succeeds', async () => {
+            mockedMailer.mockResolvedValue(undefined as never);
+
+            await handleEmailJob(withAttachment);
+
+            expect(discardSpooledMock).toHaveBeenCalledWith('a.pdf');
+        });
+
+        it('discards it for a payload refused as permanently invalid', async () => {
+            await handleEmailJob({
+                request: { to: '', attachments: [{ filename: 'x.pdf', key: 'a.pdf' }] },
+                templateName: 'welcome'
+            } as Parameters<typeof handleEmailJob>[0]);
+
+            expect(discardSpooledMock).toHaveBeenCalledWith('a.pdf');
+        });
+
+        it('leaves it alone when the send fails, so a retry can still resolve it', async () => {
+            mockedMailer.mockRejectedValue(new Error('SMTP refused'));
+
+            await expect(handleEmailJob(withAttachment)).rejects.toThrow('SMTP refused');
+
+            expect(discardSpooledMock).not.toHaveBeenCalled();
+        });
     });
 });

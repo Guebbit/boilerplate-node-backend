@@ -1,9 +1,11 @@
 /**
  * `nodemailer()`'s own attachment handling, in `src/infrastructure/adapters/mailer.ts` — resolving
  * `request.attachments`' `{ filename, key }` off the mail spool into nodemailer's own
- * `{ filename, path }`, and discarding every spooled key once the send has settled, success or
- * failure. `mailer-dispatch.test.ts` covers `enqueueEmail`'s queue/inline routing with no
- * attachments in play; this is the one file that drives real spool files end to end.
+ * `{ filename, path }`. `nodemailer()` never discards the spooled file itself — see
+ * `mailer-dispatch.test.ts`'s `sendInline` cases and `email.worker.test.ts` for the two callers who
+ * actually know a job is finished with it. `mailer-dispatch.test.ts` covers `enqueueEmail`'s
+ * queue/inline routing with no attachments in play; this is the one file that drives real spool
+ * files end to end for the resolving half.
  */
 import { mkdtemp, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -93,8 +95,12 @@ describe('nodemailer — resolving attachments', () => {
     });
 });
 
-describe('nodemailer — discarding spooled attachments', () => {
-    it('discards the spooled file once the send succeeds', async () => {
+describe('nodemailer — never discards its own attachment', () => {
+    it('leaves the spooled file on disk once the send has settled, success or failure', async () => {
+        // The 1.1 regression: a retried job's second attempt resolving a key the first attempt
+        // already deleted, and sending without the attachment. `nodemailer()` may be one attempt
+        // of several behind a queue's retry chain, so only a caller who knows the job is FINISHED
+        // may discard — see `mailer-dispatch.test.ts` and `email.worker.test.ts`.
         const key = await spoolAttachment(Buffer.from('pdf-bytes'), 'pdf');
 
         await nodemailer(
@@ -103,41 +109,6 @@ describe('nodemailer — discarding spooled attachments', () => {
             DATA
         );
 
-        await expect(fileExists(path.join(spoolRoot, key))).resolves.toBe(false);
-    });
-
-    it('still discards the spooled file when the send rejects', async () => {
-        sendMailMock.mockRejectedValueOnce(new Error('smtp refused'));
-        const key = await spoolAttachment(Buffer.from('pdf-bytes'), 'pdf');
-
-        await expect(
-            nodemailer(
-                { to: 'ada@example.com', attachments: [{ filename: 'x.pdf', key }] },
-                'orders.order-confirm',
-                DATA
-            )
-        ).rejects.toThrow('smtp refused');
-
-        await expect(fileExists(path.join(spoolRoot, key))).resolves.toBe(false);
-    });
-
-    it('discards every attachment on a multi-attachment send', async () => {
-        const first = await spoolAttachment(Buffer.from('a'), 'pdf');
-        const second = await spoolAttachment(Buffer.from('b'), 'pdf');
-
-        await nodemailer(
-            {
-                to: 'ada@example.com',
-                attachments: [
-                    { filename: 'a.pdf', key: first },
-                    { filename: 'b.pdf', key: second }
-                ]
-            },
-            'orders.order-confirm',
-            DATA
-        );
-
-        await expect(fileExists(path.join(spoolRoot, first))).resolves.toBe(false);
-        await expect(fileExists(path.join(spoolRoot, second))).resolves.toBe(false);
+        await expect(fileExists(path.join(spoolRoot, key))).resolves.toBe(true);
     });
 });
