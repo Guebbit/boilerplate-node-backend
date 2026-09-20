@@ -17,9 +17,9 @@
  * See: docs/tools/image-processing.md
  */
 import 'dotenv/config';
-import { readdir, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { logger } from '@infrastructure/adapters/logger';
+import { reapDirectory } from '@infrastructure/adapters/filesystem';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import { runScript } from '../db/run-script';
 
@@ -30,32 +30,13 @@ const quarantineRoot = () => path.resolve(process.env.NODE_QUARANTINE_PATH ?? 'q
 const retentionMs = (): number =>
     environmentNumber('NODE_QUARANTINE_RETENTION_HOURS', 24, 1) * 60 * 60 * 1000;
 
-const main = async (): Promise<void> => {
+const main = (): Promise<void> => {
     const root = quarantineRoot();
-    const cutoff = Date.now() - retentionMs();
 
-    let entries: string[];
-    try {
-        entries = await readdir(root);
-    } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-            logger.info({ message: 'Quarantine directory does not exist; nothing to reap.', root });
-            return;
-        }
-        throw error;
-    }
-
-    let reaped = 0;
-    for (const name of entries) {
-        const filePath = path.join(root, name);
-        const info = await stat(filePath);
-        // Directories are not this store's concern — `quarantine()` writes flat files only.
-        if (!info.isFile() || info.mtimeMs > cutoff) continue;
-        await unlink(filePath);
-        reaped += 1;
-    }
-
-    logger.info({ message: 'Quarantine reaped.', root, checked: entries.length, reaped });
+    return reapDirectory(root, Date.now() - retentionMs(), 'Quarantine').then(
+        ({ checked, reaped }) =>
+            void logger.info({ message: 'Quarantine reaped.', root, checked, reaped })
+    );
 };
 
 void runScript(main, () => Promise.resolve());

@@ -8,11 +8,12 @@
  * and `image-store.ts`'s `resolveUnderPublicRoot` already hold for their own stores.
  */
 
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
     discardSpooled,
+    reapSpooled,
     resolveSpooled,
     spoolAttachment
 } from '@infrastructure/adapters/mail-spool';
@@ -103,5 +104,26 @@ describe('discardSpooled', () => {
 
         await expect(readFile(precious)).resolves.toEqual(Buffer.from('keep-me'));
         await rm(outside, { recursive: true, force: true });
+    });
+});
+
+describe('reapSpooled', () => {
+    it('deletes only the files older than the retention window', async () => {
+        const stale = await spoolAttachment(Buffer.from('x'), 'pdf');
+        const fresh = await spoolAttachment(Buffer.from('x'), 'pdf');
+        const staleTime = new Date(Date.now() - 60 * 60 * 1000);
+        await utimes(path.join(spoolRoot, stale), staleTime, staleTime);
+
+        const reaped = await reapSpooled(30 * 60 * 1000);
+
+        expect(reaped).toBe(1);
+        await expect(stat(path.join(spoolRoot, stale))).rejects.toThrow();
+        await expect(stat(path.join(spoolRoot, fresh))).resolves.toBeDefined();
+    });
+
+    it('reports zero when the spool directory was never created', async () => {
+        await rm(spoolRoot, { recursive: true, force: true });
+
+        await expect(reapSpooled(60 * 60 * 1000)).resolves.toBe(0);
     });
 });

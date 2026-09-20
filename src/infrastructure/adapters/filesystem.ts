@@ -1,11 +1,13 @@
 /**
  * @module
- * Filesystem helpers: a move that works across mounts, and a delete that never throws.
- * Kept small and dependency-light so every other adapter that touches disk builds on these two
- * instead of re-deriving the EXDEV fallback or the log-and-swallow pattern on its own.
+ * Filesystem helpers: a move that works across mounts, a delete that never throws, and an
+ * age-based sweep of a flat directory. Kept small and dependency-light so every other adapter
+ * that touches disk builds on these instead of re-deriving the EXDEV fallback, the
+ * log-and-swallow pattern, or the `readdir`/`stat`/`unlink` sweep on its own.
  */
 
-import { copyFile, rename, unlink } from 'node:fs/promises';
+import { copyFile, readdir, rename, stat, unlink } from 'node:fs/promises';
+import path from 'node:path';
 // Shared toolkit helper: unlinks a file and routes any error to the callback instead of
 // throwing, so callers do not need their own try/catch.
 import { deleteFile as toolkitDeleteFile } from '@guebbit/js-toolkit';
@@ -65,3 +67,49 @@ export const deleteFile = (filePath: string) =>
  * @param value - a path in whatever separator style the platform produced
  */
 export const toPosixPath = (value: string): string => value.replaceAll('\\', '/');
+
+/** How many files a sweep looked at, and how many it actually deleted. */
+export interface ReapResult {
+    checked: number;
+    reaped: number;
+}
+
+/**
+ * Deletes every file directly under `root` whose `mtime` is at or before `cutoffMs` — the one
+ * sweep every retention reaper in this codebase needs (`ops/reap-quarantine.ts`,
+ * `mail-spool.ts#reapSpooled`). A missing `root` is not a failure — a store that never wrote
+ * anything has nothing to sweep — it is logged and reported as zero. A subdirectory is left
+ * alone; none of these stores ever writes one.
+ *
+ * @param root - the directory to sweep, resolved by the caller
+ * @param cutoffMs - `Date.now()` epoch millis; a file `mtime` at or before this is deleted
+ * @param label - names the store in the log line (e.g. "Quarantine", "Mail spool")
+ * @returns how many entries were checked and how many were deleted
+ */
+export const reapDirectory = (root: string, cutoffMs: number, label: string): Promise<ReapResult> =>
+    readdir(root)
+        .catch((error: unknown) => {
+            if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+                logger.info({
+                    message: `${label} directory does not exist; nothing to reap.`,
+                    root
+                });
+                return [];
+            }
+            throw error;
+        })
+        .then((entries) =>
+            Promise.all(
+                entries.map((name) => {
+                    const filePath = path.join(root, name);
+                    return stat(filePath).then((info) =>
+                        info.isFile() && info.mtimeMs <= cutoffMs
+                            ? unlink(filePath).then(() => true)
+                            : false
+                    );
+                })
+            ).then((results) => ({
+                checked: entries.length,
+                reaped: results.filter(Boolean).length
+            }))
+        );

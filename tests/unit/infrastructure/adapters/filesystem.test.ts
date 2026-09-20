@@ -6,7 +6,7 @@
  * the public directory (a disk, or a mounted volume). So the EXDEV fallback is not a defensive
  * branch for an exotic host — on a normal Linux deployment it is the only branch that ever runs.
  */
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -132,5 +132,42 @@ describe('toPosixPath', () => {
     it('leaves a path with no separators at all untouched', async () => {
         const { toPosixPath } = await import('@infrastructure/adapters/filesystem');
         expect(toPosixPath('a.png')).toBe('a.png');
+    });
+});
+
+describe('reapDirectory', () => {
+    it('deletes only files at or before the cutoff, and counts every entry checked', async () => {
+        const { reapDirectory } = await import('@infrastructure/adapters/filesystem');
+        const old = await stage('old.pdf');
+        const recent = await stage('recent.pdf');
+        const cutoff = Date.now();
+        await utimes(old, new Date(cutoff - 1000), new Date(cutoff - 1000));
+        await utimes(recent, new Date(cutoff + 60_000), new Date(cutoff + 60_000));
+
+        const result = await reapDirectory(root, cutoff, 'Test');
+
+        expect(result).toEqual({ checked: 2, reaped: 1 });
+        expect(existsSync(old)).toBe(false);
+        expect(existsSync(recent)).toBe(true);
+    });
+
+    it('leaves a subdirectory alone', async () => {
+        const { reapDirectory } = await import('@infrastructure/adapters/filesystem');
+        const nested = path.join(root, 'nested');
+        await mkdir(nested);
+        await utimes(nested, new Date(0), new Date(0));
+
+        const result = await reapDirectory(root, Date.now(), 'Test');
+
+        expect(result).toEqual({ checked: 1, reaped: 0 });
+        expect(existsSync(nested)).toBe(true);
+    });
+
+    it('reports zero, rather than throwing, for a directory that does not exist', async () => {
+        const { reapDirectory } = await import('@infrastructure/adapters/filesystem');
+
+        await expect(
+            reapDirectory(path.join(root, 'never-created'), Date.now(), 'Test')
+        ).resolves.toEqual({ checked: 0, reaped: 0 });
     });
 });

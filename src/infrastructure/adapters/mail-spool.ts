@@ -18,6 +18,7 @@ import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { logger } from '@infrastructure/adapters/logger';
+import { reapDirectory } from './filesystem';
 
 /** Where a spooled attachment lives between the request that staged it and the mail that sends it. */
 const spoolRoot = (): string =>
@@ -76,3 +77,14 @@ export const discardSpooled = (key: string): Promise<void> => {
         }
     );
 };
+
+/**
+ * Deletes every spooled attachment older than `retentionMs` — `ops/reap-mail-spool.ts`'s one
+ * sweep. A file survives this long only when the job that spooled it never finished: see
+ * `mailer.ts` and `email.worker.ts` for who is supposed to {@link discardSpooled} it first.
+ *
+ * @param retentionMs - how old a spooled file must be before it counts as abandoned
+ * @returns how many files were deleted
+ */
+export const reapSpooled = (retentionMs: number): Promise<number> =>
+    reapDirectory(spoolRoot(), Date.now() - retentionMs, 'Mail spool').then(({ reaped }) => reaped);
