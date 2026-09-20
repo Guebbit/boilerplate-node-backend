@@ -28,7 +28,10 @@ const rememberSchema = z.object({ remember: z.enum(RefreshTokenExpiryTime).optio
  * Returns a short-lived access token and sets a long-lived refresh cookie.
  */
 export const postLogin = (
-    request: Request<Record<string, string>, unknown, LoginRequest>,
+    // `LoginRequest | undefined`, because express 5 leaves `request.body` UNDEFINED when no parser
+    // matched the content-type — not `{}`, the way express 4 did. Declaring the truth is what
+    // makes the guards below necessary rather than noise a lint rule would strip.
+    request: Request<Record<string, string>, unknown, LoginRequest | undefined>,
     response: Response
 ) => {
     /*
@@ -37,15 +40,19 @@ export const postLogin = (
      * too-short password while a wrong-but-valid-length one gets 401, leaking info about the
      * guess — and would reject before `recordLoginFailure`, dropping the attempt from the audit
      * trail. The stored-hash check below is the only thing that decides the outcome.
+     *
+     * An absent body falls through the same way a wrong one does, for that same reason: a login
+     * sent with the wrong content-type must not be distinguishable from a login sent with the
+     * wrong password. It used to throw here and answer 500, which was exactly that distinction.
      */
-    const { email, password } = request.body;
+    const { email, password } = request.body ?? {};
 
     /*
      * `remember` IS parsed, and first: it is not a secret, so a 422 here tells a caller nothing
      * about the credentials — while an unknown tier must not slip through to become a cookie with
      * no lifetime at all.
      */
-    const tier = rememberSchema.safeParse({ remember: request.body.remember });
+    const tier = rememberSchema.safeParse({ remember: request.body?.remember });
     if (!tier.success) {
         rejectValidation(response, tier.error);
         return;

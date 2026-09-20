@@ -1,6 +1,9 @@
 {
     "generic": {
         "error-unknown": "Qualcosa è andato storto con la richiesta.",
+        "error-bad-request": "Impossibile leggere la richiesta.",
+        "error-payload-too-large": "La richiesta supera la dimensione accettata da questo endpoint.",
+        "error-unsupported-media-type": "Questo endpoint non accetta quel tipo di contenuto.",
         "error-invalid-data": "Errore: dati forniti non validi.",
         "error-missing-data": "Errore: dati mancanti.",
         "error-internal": "Qualcosa è andato storto dalla nostra parte.",

@@ -23,7 +23,13 @@ import { userService } from '@modules/users';
  * 403 a caller lacking the `users.*` key doing self-service through them.
  */
 export const putAccount = (
-    request: Request<unknown, unknown, UpdateAccountRequest | UpdateAccountRequestMultipart>,
+    // `| undefined` for the reason `post-signup` gives: express 5 leaves the body unset when no
+    // parser matched, multipart route or not.
+    request: Request<
+        unknown,
+        unknown,
+        UpdateAccountRequest | UpdateAccountRequestMultipart | undefined
+    >,
     response: Response
 ) => {
     /* Auth context is guaranteed by isAuth middleware */
@@ -38,8 +44,8 @@ export const putAccount = (
      * `post-signup` gives: `accountService.updateProfile` validates these fields with translated
      * messages, and the generated schema would answer first in English.
      */
-    const { email, username, locale, phone, website, analyticsConsent } =
-        request.body as UpdateAccountRequest;
+    const { email, username, locale, phone, website, analyticsConsent } = (request.body ??
+        {}) as UpdateAccountRequest;
 
     return accountService
         .updateProfile(

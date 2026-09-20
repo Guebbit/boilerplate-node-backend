@@ -1,6 +1,9 @@
 {
     "generic": {
         "error-unknown": "Something went wrong with the request.",
+        "error-bad-request": "The request could not be read.",
+        "error-payload-too-large": "The request is larger than this endpoint accepts.",
+        "error-unsupported-media-type": "This endpoint does not accept that content type.",
         "error-invalid-data": "Error: invalid data provided.",
         "error-missing-data": "Error: missing data.",
         "error-internal": "Something went wrong on our side.",

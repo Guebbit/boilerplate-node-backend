@@ -38,6 +38,10 @@ export const writeUsers = (
         | UpdateUserRequestMultipart
         | UpdateUserByIdRequest
         | UpdateUserByIdRequestMultipart
+        // Express 5 leaves `request.body` UNDEFINED when no parser matched the content-type, and
+        // multer does not fill it in on a non-multipart body either. Declaring that is what makes
+        // the guards below necessary rather than noise a lint rule strips.
+        | undefined
     >,
     response: Response
 ) => {
@@ -49,7 +53,9 @@ export const writeUsers = (
         ids: ['id'],
         booleans: ['active', 'sendSetupEmail']
     });
-    const { role } = request.body as { role?: string };
+    // `?? {}`: express 5 leaves `request.body` unset when no parser matched the content-type,
+    // and multer does not fill it in on a non-multipart body either.
+    const { role } = (request.body ?? {}) as { role?: string };
 
     // `= ''` because `zodUserSchema` wants a string: an absent image is an empty url here.
     const {
@@ -106,7 +112,7 @@ export const writeUsers = (
 
         // Neither a password nor a way to get one to the user: `userService.create` would fill
         // the field with a value nobody is ever told and leave the account permanently unusable.
-        const { password } = request.body as { password?: string };
+        const { password } = (request.body ?? {}) as { password?: string };
         if (!password && !sendSetupEmail) {
             rejectResponse(response, 422, [t('users.field-password-or-setup-required')]);
             return deleteUpload();

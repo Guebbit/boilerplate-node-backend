@@ -109,7 +109,10 @@ export const readUploadedImage = (
         };
 
     return {
-        imageUrl: (request.body as { imageUrl?: string }).imageUrl,
+        // `?? {}` before the read: express 5 leaves `request.body` unset when no parser matched
+        // the content-type. This helper is shared by every image-accepting controller, so the
+        // guard covers all of them at once.
+        imageUrl: ((request.body ?? {}) as { imageUrl?: string }).imageUrl,
         thumbnailUrl: undefined,
         pendingImageKey: undefined,
         deleteUpload: () => Promise.resolve(false)
