@@ -19,8 +19,12 @@ import {
     verifyAccessToken,
     verifyRefreshToken,
     createRefreshToken,
-    createAccessToken
+    createAccessToken,
+    rotateRefreshToken,
+    TokenReuseError
 } from '@modules/account/session/jwt';
+import { runTokenCleanup } from '@modules/account/services';
+import { withEnvironmentOverrides } from '@tests/environment';
 import { RefreshTokenExpiryTime } from '@modules/account/session/config';
 import { keyId } from '@modules/account/session/key-ring';
 import { TokenType } from '@modules/users';
@@ -311,5 +315,114 @@ describe('createAccessToken', () => {
         const accessToken = await createAccessToken(refreshToken);
 
         await expect(verifyAccessToken(accessToken)).resolves.toMatchObject({ amr: ['pwd'] });
+    });
+});
+
+/**
+ * Rotation's theft detection, end to end against a real document.
+ *
+ * The bug this block exists for: `runTokenCleanup` ran ahead of the rotation on the very request
+ * presenting the token, and both read the SAME constant — so the sweep's purge predicate
+ * (`supersededAt < now - grace`) was the exact complement of the detection predicate
+ * (`supersededMsAgo > grace`). Every token the check would have called theft was already gone,
+ * the lookup fell into the "genuinely absent" branch, and an ordinary 401 came back with nothing
+ * revoked. Nothing failed; the defence was simply never reachable.
+ *
+ * The windows are now separate, so there is an interval — past grace, inside the retention window
+ * — in which a replay is recognised. These shrink both to milliseconds and aim at it.
+ */
+describe('rotateRefreshToken reuse detection', () => {
+    /** Past the grace window, comfortably inside the retention window. */
+    const GRACE_MS = 20;
+    const RETENTION_MS = 60_000;
+
+    /** Long enough that a superseded entry is definitively outside the grace window. */
+    const pastGrace = () => new Promise((resolve) => setTimeout(resolve, GRACE_MS * 5));
+
+    const withWindows = <T>(body: () => Promise<T>, retentionMs = RETENTION_MS) =>
+        withEnvironmentOverrides(
+            {
+                NODE_TOKEN_ROTATION_GRACE_MS: String(GRACE_MS),
+                NODE_TOKEN_REUSE_WINDOW_MS: String(retentionMs)
+            },
+            body
+        );
+
+    /**
+     * The assertion the bug killed. Two sessions, one of them rotated and replayed late: the
+     * replay must be recognised as reuse AND the OTHER session must be dead afterwards, because
+     * revoking only the presented token protects nobody — the attacker already has it.
+     */
+    it('revokes every session on the account when a superseded token is replayed', async () => {
+        await withWindows(async () => {
+            const user = await createUser();
+            const id = String(user._id);
+
+            const attacked = await createRefreshToken(id, RefreshTokenExpiryTime.SHORT);
+            const bystander = await createRefreshToken(id, RefreshTokenExpiryTime.SHORT);
+
+            // The legitimate rotation. `attacked` is superseded from here on.
+            await rotateRefreshToken(attacked);
+            await pastGrace();
+
+            // The cleanup the real HTTP path runs FIRST, on every refresh, over every document.
+            // Present here on purpose: it is what used to erase the evidence.
+            await runTokenCleanup();
+
+            await expect(rotateRefreshToken(attacked)).rejects.toBeInstanceOf(TokenReuseError);
+
+            // The session that was never touched is gone too.
+            await expect(createAccessToken(bystander)).rejects.toThrow('Forbidden');
+        });
+    });
+
+    /**
+     * The benign race still reissues. Without this the fix could be "treat every replay as
+     * theft", which logs out two tabs that merely woke up together — the exact failure the grace
+     * window exists to prevent.
+     */
+    it('reissues rather than revoking when the replay lands inside the grace window', async () => {
+        await withWindows(async () => {
+            const user = await createUser();
+            const id = String(user._id);
+
+            const raced = await createRefreshToken(id, RefreshTokenExpiryTime.SHORT);
+            const bystander = await createRefreshToken(id, RefreshTokenExpiryTime.SHORT);
+
+            await rotateRefreshToken(raced);
+
+            // No wait: still inside the grace window.
+            await expect(rotateRefreshToken(raced)).resolves.toMatchObject({
+                accessToken: expect.any(String)
+            });
+
+            await expect(createAccessToken(bystander)).resolves.toEqual(expect.any(String));
+        });
+    });
+
+    /**
+     * The documented limit, asserted so it stays deliberate rather than becoming an accident
+     * again: past the retention window the tombstone is swept and the replay is an ordinary dead
+     * credential. A future change that quietly shortens retention back toward the grace window
+     * fails the first test, not this one — this one just pins what the far side looks like.
+     */
+    it('answers an ordinary rejection once the retention window has passed', async () => {
+        await withWindows(async () => {
+            const user = await createUser();
+            const id = String(user._id);
+
+            const stale = await createRefreshToken(id, RefreshTokenExpiryTime.SHORT);
+            const bystander = await createRefreshToken(id, RefreshTokenExpiryTime.SHORT);
+
+            await rotateRefreshToken(stale);
+            await pastGrace();
+            await runTokenCleanup();
+
+            await expect(rotateRefreshToken(stale)).rejects.toThrow('Forbidden');
+            await expect(rotateRefreshToken(stale)).rejects.not.toBeInstanceOf(TokenReuseError);
+
+            // And the untouched session survives — nothing was revoked.
+            await expect(createAccessToken(bystander)).resolves.toEqual(expect.any(String));
+        }, GRACE_MS);
     });
 });

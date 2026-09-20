@@ -25,6 +25,7 @@ import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { onDomainEvent } from '@kernel/events';
 import { userService, USER_SETUP_REQUESTED } from '@modules/users';
 import { verifyAccessToken, verifyRefreshToken, type TokenData } from './session/jwt';
+import { invalidTokenWindows } from './session/config';
 import { requestAccountSetup } from './services/authentication';
 import { router } from './routes';
 import { accountRateLimits } from './rate-limits';
@@ -154,6 +155,12 @@ export default {
             placeholder: 'your-totp-encryption-key-here'
         }
     ],
+    /*
+     * The two token windows are independent variables with a required ORDER, which no per-key
+     * check can express — see `session/config.ts#invalidTokenWindows` for why getting it wrong
+     * disables reuse detection without failing anything.
+     */
+    customCheck: invalidTokenWindows,
     subscribe: () => {
         /*
          * `users` creates a passwordless account and asks for a way in; this module owns the

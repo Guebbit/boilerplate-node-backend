@@ -89,3 +89,48 @@ export const getTotpEncryptionKey = (): { version: string; key: string } => ({
  */
 export const getRotationGraceMilliseconds = () =>
     environmentNumber('NODE_TOKEN_ROTATION_GRACE_MS', 10_000);
+
+/**
+ * How long a rotated-away refresh token is REMEMBERED, so replaying it still reads as theft.
+ *
+ * Distinct from the grace window above, and the distinction is the whole point. Grace answers
+ * "is this replay a benign race?" and is deliberately tiny. This answers "do we still recognise
+ * this token at all?" — and while it was the same value, the answer was no: `tokenRemoveExpired`
+ * deleted a superseded entry on exactly the cutoff past which `rotateRefreshToken` would have
+ * called it reuse, so the detection branch was unreachable and no theft ever revoked a session.
+ *
+ * A day, because a stolen refresh token is a wasting asset — it is replayed within minutes or
+ * hours, not next week — and because the tombstones are not free: an active client rotates about
+ * every access-token lifetime (`NODE_TOKEN_ACCESS_TIME`, 600s), so 24h is roughly 144 retained
+ * entries per session. Retaining for a refresh token's full lifetime instead would reach ~52,500
+ * entries on the one-year tier, against Mongo's 16 MB document ceiling.
+ *
+ * Past this window a replay answers an ordinary 401 with no revocation. That is a real limit,
+ * chosen rather than stumbled into.
+ *
+ * @returns milliseconds, 86400000 (24h) if `NODE_TOKEN_REUSE_WINDOW_MS` is unset
+ */
+export const getReuseDetectionWindowMilliseconds = () =>
+    environmentNumber('NODE_TOKEN_REUSE_WINDOW_MS', 86_400_000);
+
+/**
+ * The one relationship between them that must hold: a token has to outlive the grace window by
+ * some margin, or there is no interval in which reuse is detectable at all.
+ *
+ * Checked at BOOT rather than at the read, because the failure is silent by nature — everything
+ * keeps working, every replay just answers a clean 401, and the defence is simply gone. That is
+ * precisely the shape of bug this check exists to refuse.
+ *
+ * @returns the problems `account`'s manifest reports, empty when the two are ordered correctly
+ */
+export const invalidTokenWindows = (): string[] => {
+    const grace = getRotationGraceMilliseconds();
+    const reuse = getReuseDetectionWindowMilliseconds();
+
+    return reuse > grace
+        ? []
+        : [
+              `NODE_TOKEN_REUSE_WINDOW_MS (${reuse}ms) must exceed ` +
+                  `NODE_TOKEN_ROTATION_GRACE_MS (${grace}ms), or refresh-token reuse can never be detected`
+          ];
+};

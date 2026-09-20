@@ -171,9 +171,9 @@ flowchart TD
     C["client presents old token"] --> S{"tokenSupersede<br/><i>atomic claim</i>"}
     S -->|"won"| N["mint new token<br/>same absolute expiry"]
     S -->|"lost"| R{"re-read the entry"}
-    R -->|"absent"| F["401 — an ordinary<br/>dead credential"]
+    R -->|"absent — swept, or<br/>never existed"| F["401 — an ordinary<br/>dead credential"]
     R -->|"superseded, WITHIN grace"| N
-    R -->|"superseded, OUTSIDE grace"| X["reuse detected:<br/>revoke the WHOLE refresh set"]
+    R -->|"superseded, PAST grace<br/>still within retention"| X["reuse detected:<br/>revoke the WHOLE refresh set"]
 
     classDef ok fill:#ccfbf1,stroke:#0f766e,color:#111827;
     classDef bad fill:#fee2e2,stroke:#dc2626,color:#111827;
@@ -188,11 +188,38 @@ retry would look exactly like theft. Within it, the loser is reissued its own si
 of rejected — proven under real concurrent load in
 `tests/integration/concurrency/auth-races.test.ts` (R5), not just asserted here.
 
+### Two windows, and why they must not be one
+
 A superseded entry stays in `tokens` — never `$pull`ed immediately — so a later presentation of it
 can still be told apart from noise. `GET /account/sessions` filters these out; they aren't a device
 the account holder should see or be able to revoke on their own. The housekeeping sweep
-(`runTokenCleanup`) removes them once the grace window has long passed, alongside ordinarily
-expired tokens — see `tokenRemoveExpired` in [`users`](./users.md)'s repository.
+(`runTokenCleanup`) removes them eventually, alongside ordinarily expired tokens — see
+`tokenRemoveExpired` in [`users`](./users.md)'s repository.
+
+How long "eventually" is, is its own setting, and the separation is load-bearing:
+
+| Window                         | Default | Answers                                                      |
+| ------------------------------ | ------- | ------------------------------------------------------------ |
+| `NODE_TOKEN_ROTATION_GRACE_MS` | 10s     | Is this replay a benign race, to be reissued?                |
+| `NODE_TOKEN_REUSE_WINDOW_MS`   | 24h     | Do we still REMEMBER this token, so a replay reads as theft? |
+
+While the sweep used the grace window as its cutoff, the two were the same value — and its purge
+predicate (`supersededAt < now - grace`) was the exact complement of the detection predicate
+(`supersededMsAgo > grace`). Since `runTokenCleanup` runs ahead of the rotation on the very request
+presenting the token, and sweeps every document rather than one, a stale token was deleted before
+the reuse check could recognise it. The check fell through to "genuinely absent", answered an
+ordinary 401, and revoked nothing. Nothing failed; the defence was simply unreachable.
+
+So the sweep now uses the RETENTION window, and `account`'s manifest refuses to boot unless
+retention exceeds grace (`session/config.ts#invalidTokenWindows`) — the failure is silent by
+nature, so it is made loud at the only moment it can be.
+
+The retention default is a trade, stated plainly: an active client rotates about once per
+`NODE_TOKEN_ACCESS_TIME` (600s), so 24h keeps roughly 144 entries per session, a few tens of KB.
+Retaining for a refresh token's full lifetime would reach ~52,500 entries on the one-year tier,
+against MongoDB's 16 MB document ceiling. Past the retention window a replay is an ordinary 401
+with no revocation — a real limit, chosen rather than stumbled into, and asserted as such in
+`src/modules/account/tests/integration/jwt.test.ts`.
 
 ## Libraries
 

@@ -18,17 +18,22 @@ import {
 import type { CallerContext } from '@types';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
-import { getRotationGraceMilliseconds } from '../session/config';
+import { getReuseDetectionWindowMilliseconds } from '../session/config';
 
 /**
- * Run one cleanup cycle: remove every expired token, plus every rotated-away one whose grace
- * window has long since passed, from every user document.
+ * Run one cleanup cycle: remove every expired token, plus every rotated-away one older than the
+ * REUSE-DETECTION window, from every user document.
+ *
+ * That window, not the rotation grace window. This sweep runs ahead of the rotation on the very
+ * request presenting the token, and it is collection-wide — so while the two shared a cutoff, a
+ * stale token was deleted before `rotateRefreshToken` could recognise it, by this request or by
+ * any other user's refresh. Reuse detection needs the tombstone to still be there.
  */
 export const runTokenCleanup = (): Promise<void> => {
     // Stryker disable next-line all
     logger.info('Token cleanup: starting expired-token removal');
     return userService
-        .tokenRemoveExpired(getRotationGraceMilliseconds())
+        .tokenRemoveExpired(getReuseDetectionWindowMilliseconds())
         .then((removed) => {
             // Stryker disable next-line all
             logger.info(`Token cleanup: completed, ${removed} document(s) pruned`);
@@ -60,7 +65,7 @@ export const adminTokenCleanup = (
     context: CallerContext
 ): Promise<ResponseSuccess<{ removed: number }> | ResponseReject> =>
     userService
-        .tokenRemoveExpired(getRotationGraceMilliseconds())
+        .tokenRemoveExpired(getReuseDetectionWindowMilliseconds())
         .then((removed) => {
             emitAuditEvent(
                 buildAuditEvent(context, {
