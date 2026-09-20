@@ -273,6 +273,7 @@ export const update = async (
      * contains. `inventory` owns the question.
      */
     const requestedItems = data.items;
+    const itemsRewritten = Boolean(requestedItems && requestedItems.length > 0);
     const updateItemsPromise =
         requestedItems && requestedItems.length > 0
             ? inventoryService.isStockBoundToOrder(String(order._id)).then((bound) => {
@@ -316,6 +317,11 @@ export const update = async (
     return updateItemsPromise.then((earlyResult) => {
         if (earlyResult) return earlyResult;
         return orderRepository.save(order).then((saved) => {
+            // The cached PDF (if one exists) now describes lines that no longer exist. Deleted,
+            // not re-rendered here: the next `GET /orders/{id}/invoice` renders fresh and refills
+            // the cache — nothing on this write path needs the bytes.
+            if (itemsRewritten) void deleteCachedInvoice(String(saved._id));
+
             if (nextStatus === undefined || nextStatus === previousStatus)
                 return generateSuccess(saved);
 

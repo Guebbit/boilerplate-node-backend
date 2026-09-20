@@ -81,7 +81,7 @@ periodically", via `db/run-script.ts`.
 | `npm run reap:orders`            | 02:10 nightly  | No     | Anonymizes an order's remaining PII once its retention window has passed.                               |
 | `npm run reap:payments`          | 02:15 nightly  | No     | Deletes abandoned (never-settled) payment attempts past their retention window.                         |
 | `npm run sweep:order-effects`    | 02:20 nightly  | No     | Re-announces `ORDER_CANCELLED` for a refund the event bus's one delivery attempt did not carry through. |
-| `npm run reap:invoices`          | 02:25 nightly  | No     | Deletes a stored invoice PDF with no order left to name it.                                             |
+| `npm run reap:invoices`          | 02:25 nightly  | No     | Sweeps the invoice cache: an orphaned file with no order left to name it, and any file past its TTL.    |
 | `npm run sweep:webhook-retries`  | every minute   | No     | Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.   |
 
 `docker/crontab` and the six nightly jobs above are staggered five minutes apart so they do not all

@@ -1,13 +1,15 @@
 /**
  * @module
- * The invoice render (`services/invoice.ts`): the order's own frozen locale, the not-found case,
- * a failed render, and the cache-cleanup pair (`deleteCachedInvoice`/`reapOrphanedInvoices`) kept
- * ready for the disk cache that lands next. The second describe block below covers an unrelated
- * concern that happens to share this file for historical reasons — the upload chain re-entering
- * the request locale after multer consumes the stream mid-request.
+ * The invoice render (`services/invoice.ts`): the order's own frozen locale, the not-found case, a
+ * failed render, the TTL cache in front of the render, and the two reap sweeps
+ * (`reapOrphanedInvoices`/`reapExpiredInvoices`). `invoiceCacheTtlMinutes()` itself — the `0` under
+ * demo/test rule — is asserted in `config.test.ts`; this file mocks it to exercise the cache logic
+ * a real test run's forced-`0` TTL would otherwise never reach. The last describe block below
+ * covers an unrelated concern that happens to share this file for historical reasons — the upload
+ * chain re-entering the request locale after multer consumes the stream mid-request.
  */
 
-import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { NextFunction, Request, Response } from 'express';
@@ -43,6 +45,19 @@ jest.mock('../../repository', () => ({
     }
 }));
 
+/**
+ * `invoiceCacheTtlMinutes()` forces `0` under `NODE_ENV=test` — real, on purpose, and asserted in
+ * `config.test.ts`. This mock is what lets the cache-specific describe block below reach the
+ * non-zero branch; every other block defaults it back to `0`, matching what a real test run
+ * already gets for free. `invoiceCachePath()` is left real: `NODE_INVOICE_CACHE_PATH` alone
+ * controls where each block's cache directory is.
+ */
+const ttlMinutesMock = jest.fn(() => 0);
+jest.mock('../../config', () => ({
+    ...jest.requireActual('../../config'),
+    invoiceCacheTtlMinutes: () => ttlMinutesMock()
+}));
+
 /** The HTML handed to the (mocked) PDF renderer. */
 const renderedHtml = () => renderHtmlToPdfMock.mock.calls[0][0] as string;
 
@@ -51,14 +66,38 @@ const orderFixture = (locale = 'en') => ({
     items: [{ product: { title: 'A product', price: 10 }, quantity: 2, locale }]
 });
 
-/** Whether a path names a real file — the cache tests' own way of proving a delete landed. */
+/** Whether a path names a real file — the cache tests' own way of proving a write or delete landed. */
 const fileExists = (target: string): Promise<boolean> =>
     stat(target).then(
         () => true,
         () => false
     );
 
+/** A cache directory scoped to one test file, torn down after. */
+const withCacheRoot = () => {
+    let root: string;
+    const original = process.env.NODE_INVOICE_CACHE_PATH;
+
+    beforeEach(async () => {
+        root = await mkdtemp(path.join(tmpdir(), 'invoice-test-'));
+        process.env.NODE_INVOICE_CACHE_PATH = root;
+    });
+
+    afterEach(async () => {
+        await rm(root, { recursive: true, force: true });
+        if (original === undefined) delete process.env.NODE_INVOICE_CACHE_PATH;
+        else process.env.NODE_INVOICE_CACHE_PATH = original;
+    });
+
+    return {
+        root: () => root,
+        pathFor: (orderId: string) => path.join(root, `${orderId}.pdf`)
+    };
+};
+
 describe('renderInvoicePdf — the order renders in its OWN frozen locale', () => {
+    const cache = withCacheRoot();
+
     beforeEach(() => {
         jest.clearAllMocks();
         renderHtmlToPdfMock.mockResolvedValue(Buffer.from('pdf'));
@@ -129,26 +168,78 @@ describe('renderInvoicePdf — the order renders in its OWN frozen locale', () =
 
         await expect(renderInvoicePdf('order-1')).rejects.toThrow('puppeteer died');
     });
+
+    it('never touches disk when the TTL is 0 — streamed straight from the buffer', async () => {
+        findByIdRawMock.mockResolvedValue(orderFixture('en'));
+        const { renderInvoicePdf } = await import('../../services/invoice');
+
+        await renderInvoicePdf('order-1');
+
+        await expect(fileExists(cache.pathFor('order-1'))).resolves.toBe(false);
+    });
+});
+
+describe('renderInvoicePdf — the TTL cache', () => {
+    const cache = withCacheRoot();
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        renderHtmlToPdfMock.mockResolvedValue(Buffer.from('fresh-bytes'));
+        findByIdRawMock.mockResolvedValue(orderFixture('en'));
+        ttlMinutesMock.mockReturnValue(5);
+    });
+
+    afterEach(() => ttlMinutesMock.mockReturnValue(0));
+
+    it('serves a fresh cache hit without touching the database or Chromium', async () => {
+        await writeFile(cache.pathFor('order-1'), Buffer.from('cached-bytes'));
+        const { renderInvoicePdf } = await import('../../services/invoice');
+
+        await expect(renderInvoicePdf('order-1')).resolves.toEqual(Buffer.from('cached-bytes'));
+
+        expect(findByIdRawMock).not.toHaveBeenCalled();
+        expect(renderHtmlToPdfMock).not.toHaveBeenCalled();
+    });
+
+    it('renders fresh and writes the cache when nothing is cached yet', async () => {
+        const { renderInvoicePdf } = await import('../../services/invoice');
+
+        await expect(renderInvoicePdf('order-1')).resolves.toEqual(Buffer.from('fresh-bytes'));
+
+        expect(renderHtmlToPdfMock).toHaveBeenCalled();
+        await expect(fileExists(cache.pathFor('order-1'))).resolves.toBe(true);
+    });
+
+    it('renders over an expired cache file instead of reading it', async () => {
+        const target = cache.pathFor('order-1');
+        await writeFile(target, Buffer.from('stale-bytes'));
+        // Backdated past the 5-minute TTL, both atime and mtime — `utimes` takes both.
+        const past = new Date(Date.now() - 6 * 60 * 1000);
+        await utimes(target, past, past);
+        const { renderInvoicePdf } = await import('../../services/invoice');
+
+        await expect(renderInvoicePdf('order-1')).resolves.toEqual(Buffer.from('fresh-bytes'));
+
+        expect(renderHtmlToPdfMock).toHaveBeenCalled();
+    });
+
+    it('answers undefined without writing a cache entry for an order that no longer exists', async () => {
+        findByIdRawMock.mockResolvedValue(null);
+        const { renderInvoicePdf } = await import('../../services/invoice');
+
+        await expect(renderInvoicePdf('gone')).resolves.toBeUndefined();
+
+        await expect(fileExists(cache.pathFor('gone'))).resolves.toBe(false);
+    });
 });
 
 describe('deleteCachedInvoice', () => {
-    let storageRoot: string;
-    const originalStoragePath = process.env.NODE_INVOICE_STORAGE_PATH;
+    const cache = withCacheRoot();
 
-    beforeEach(async () => {
-        jest.clearAllMocks();
-        storageRoot = await mkdtemp(path.join(tmpdir(), 'invoice-test-'));
-        process.env.NODE_INVOICE_STORAGE_PATH = storageRoot;
-    });
-
-    afterEach(async () => {
-        await rm(storageRoot, { recursive: true, force: true });
-        if (originalStoragePath === undefined) delete process.env.NODE_INVOICE_STORAGE_PATH;
-        else process.env.NODE_INVOICE_STORAGE_PATH = originalStoragePath;
-    });
+    beforeEach(() => jest.clearAllMocks());
 
     it('deletes the cached file and reports it deleted', async () => {
-        const target = path.join(storageRoot, 'order-1.pdf');
+        const target = cache.pathFor('order-1');
         await writeFile(target, Buffer.from('bytes'));
         const { deleteCachedInvoice } = await import('../../services/invoice');
 
@@ -166,28 +257,17 @@ describe('deleteCachedInvoice', () => {
 });
 
 describe('reapOrphanedInvoices', () => {
-    let storageRoot: string;
-    const originalStoragePath = process.env.NODE_INVOICE_STORAGE_PATH;
+    const cache = withCacheRoot();
 
     /** 24-hex ids shaped like real `_id`s — the only filename shape this reaper ever risks against the database. */
     const ORDER_A = '507f1f77bcf86cd799439011';
     const ORDER_B = '507f1f77bcf86cd799439012';
 
-    beforeEach(async () => {
-        jest.clearAllMocks();
-        storageRoot = await mkdtemp(path.join(tmpdir(), 'invoice-test-'));
-        process.env.NODE_INVOICE_STORAGE_PATH = storageRoot;
-    });
-
-    afterEach(async () => {
-        await rm(storageRoot, { recursive: true, force: true });
-        if (originalStoragePath === undefined) delete process.env.NODE_INVOICE_STORAGE_PATH;
-        else process.env.NODE_INVOICE_STORAGE_PATH = originalStoragePath;
-    });
+    beforeEach(() => jest.clearAllMocks());
 
     it('deletes a file whose order no longer exists, and leaves one whose order does', async () => {
-        const pathA = path.join(storageRoot, `${ORDER_A}.pdf`);
-        const pathB = path.join(storageRoot, `${ORDER_B}.pdf`);
+        const pathA = cache.pathFor(ORDER_A);
+        const pathB = cache.pathFor(ORDER_B);
         await writeFile(pathA, Buffer.from('bytes'));
         await writeFile(pathB, Buffer.from('bytes'));
         existingIdsMock.mockResolvedValue(new Set([ORDER_B]));
@@ -201,7 +281,7 @@ describe('reapOrphanedInvoices', () => {
     });
 
     it('leaves a filename that is not a bare 24-hex id alone, and never risks it against the database', async () => {
-        const strayPath = path.join(storageRoot, 'not-an-order-id.pdf');
+        const strayPath = cache.pathFor('not-an-order-id');
         await writeFile(strayPath, Buffer.from('bytes'));
         const { reapOrphanedInvoices } = await import('../../services/invoice');
 
@@ -211,13 +291,49 @@ describe('reapOrphanedInvoices', () => {
         await expect(fileExists(strayPath)).resolves.toBe(true);
     });
 
-    it('answers 0 without touching the database when the storage directory does not exist yet', async () => {
-        await rm(storageRoot, { recursive: true, force: true });
+    it('answers 0 without touching the database when the cache directory does not exist yet', async () => {
+        await rm(cache.root(), { recursive: true, force: true });
         const { reapOrphanedInvoices } = await import('../../services/invoice');
 
         await expect(reapOrphanedInvoices()).resolves.toBe(0);
 
         expect(existingIdsMock).not.toHaveBeenCalled();
+    });
+});
+
+describe('reapExpiredInvoices', () => {
+    const cache = withCacheRoot();
+
+    const ORDER_A = '507f1f77bcf86cd799439011';
+    const ORDER_B = '507f1f77bcf86cd799439012';
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        ttlMinutesMock.mockReturnValue(5);
+    });
+
+    afterEach(() => ttlMinutesMock.mockReturnValue(0));
+
+    it('deletes a file past the TTL, and leaves one still fresh', async () => {
+        const stale = cache.pathFor(ORDER_A);
+        const fresh = cache.pathFor(ORDER_B);
+        await writeFile(stale, Buffer.from('bytes'));
+        await writeFile(fresh, Buffer.from('bytes'));
+        const past = new Date(Date.now() - 6 * 60 * 1000);
+        await utimes(stale, past, past);
+        const { reapExpiredInvoices } = await import('../../services/invoice');
+
+        await expect(reapExpiredInvoices()).resolves.toBe(1);
+
+        await expect(fileExists(stale)).resolves.toBe(false);
+        await expect(fileExists(fresh)).resolves.toBe(true);
+    });
+
+    it('answers 0 without touching the database when the cache directory does not exist yet', async () => {
+        await rm(cache.root(), { recursive: true, force: true });
+        const { reapExpiredInvoices } = await import('../../services/invoice');
+
+        await expect(reapExpiredInvoices()).resolves.toBe(0);
     });
 });
 

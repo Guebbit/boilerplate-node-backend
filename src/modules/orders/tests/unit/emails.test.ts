@@ -111,8 +111,9 @@ describe('orderConfirmEmail', () => {
     });
 
     /*
-     * The link is what lets a customer reach an invoice that may not be ready yet — the button on
-     * the order page greys out on its own; the email always links to the same place regardless.
+     * The link is what lets a customer reach the order's page and its invoice download button —
+     * the email sends immediately and always links to the same place, whether or not the customer
+     * has visited it yet.
      */
     it('links to the order, carrying its id', () => {
         const { data } = orderConfirmEmail('en', NAME, ORDER, ORDER_ID);

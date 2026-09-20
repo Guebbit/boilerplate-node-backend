@@ -19,12 +19,14 @@ import {
     bankTransferIban,
     bankTransferIbanFriendly,
     bankTransferMaxOpenPerAccount,
+    invoiceCacheTtlMinutes,
     shopCountry,
     shopLegalName,
     shopVatNumber
 } from '../../config';
 import ordersModule from '../../module';
 import { withoutEnvironmentInThisFile } from '@tests/environment';
+import { enableDemoProfile } from '@infrastructure/runtime/demo-profile';
 
 /** Every variable this gate reads, cleared before each case and put back after the file. */
 const TOUCHED = [
@@ -37,7 +39,8 @@ const TOUCHED = [
     'NODE_BANK_TRANSFER_IBAN',
     'NODE_BANK_TRANSFER_BIC',
     'NODE_BANK_TRANSFER_HOLD_HOURS',
-    'NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT'
+    'NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT',
+    'NODE_INVOICE_CACHE_TTL_MINUTES'
 ] as const;
 
 withoutEnvironmentInThisFile(TOUCHED);
@@ -156,5 +159,40 @@ describe('bankTransferMaxOpenPerAccount', () => {
     it('reads NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT when set', () => {
         process.env.NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT = '5';
         expect(bankTransferMaxOpenPerAccount()).toBe(5);
+    });
+});
+
+describe('invoiceCacheTtlMinutes', () => {
+    afterEach(() => enableDemoProfile(false));
+
+    it('defaults to 5', () => {
+        expect(invoiceCacheTtlMinutes()).toBe(5);
+    });
+
+    it('reads NODE_INVOICE_CACHE_TTL_MINUTES when set', () => {
+        process.env.NODE_INVOICE_CACHE_TTL_MINUTES = '30';
+        expect(invoiceCacheTtlMinutes()).toBe(30);
+    });
+
+    it('falls back to the default below the floor of 0, rather than a negative TTL', () => {
+        process.env.NODE_INVOICE_CACHE_TTL_MINUTES = '-1';
+        expect(invoiceCacheTtlMinutes()).toBe(5);
+    });
+
+    // The distinction that keeps a demo deployment's or a test run's invoices off disk — a `0`
+    // TTL is what makes `renderInvoicePdf` stream straight from the buffer, never touching the
+    // cache directory at all.
+    it('is 0 under demo mode, whatever NODE_INVOICE_CACHE_TTL_MINUTES says', () => {
+        process.env.NODE_INVOICE_CACHE_TTL_MINUTES = '30';
+        enableDemoProfile();
+
+        expect(invoiceCacheTtlMinutes()).toBe(0);
+    });
+
+    it('is 0 under NODE_ENV=test, whatever NODE_INVOICE_CACHE_TTL_MINUTES says', () => {
+        process.env.NODE_ENV = 'test';
+        process.env.NODE_INVOICE_CACHE_TTL_MINUTES = '30';
+
+        expect(invoiceCacheTtlMinutes()).toBe(0);
     });
 });

@@ -31,7 +31,7 @@ const SANDBOXED_VARIABLES = {
     NODE_PUBLIC_PATH: 'public',
     NODE_QUARANTINE_PATH: 'quarantine',
     NODE_UPLOAD_STAGING_PATH: 'uploads',
-    NODE_INVOICE_STORAGE_PATH: 'invoices'
+    NODE_INVOICE_CACHE_PATH: 'invoices'
 } as const;
 
 /**

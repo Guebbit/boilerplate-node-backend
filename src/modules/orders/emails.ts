@@ -16,8 +16,8 @@ import type { OrderTransferInstructions } from '@types';
 
 /**
  * Absolute URL for this order's page on the paired frontend — where the customer signs in and
- * downloads the invoice once it's ready, `GET /orders/{id}/invoice` being an authenticated API
- * route rather than something an email client can fetch directly.
+ * downloads the invoice, `GET /orders/{id}/invoice` being an authenticated API route rather than
+ * something an email client can fetch directly.
  *
  * Same construction as `account/emails.ts`'s `accountLink`: joined through `URL` when `NODE_URL`
  * is set (a trailing-slash-dependent concatenation would otherwise produce
@@ -51,9 +51,9 @@ export interface OrderLines {
  * decided up front. The total is `orderTotal`'s arithmetic, not a fresh sum — the email quotes
  * what the order stands for, shipping included.
  *
- * Sent immediately at order creation, never held for the invoice PDF to finish generating.
- * `linkUrl` points at the order's page regardless of whether the invoice is ready yet:
- * the download button there greys out on its own until `invoicePdfStatus` reads `ready`.
+ * Sent immediately at order creation, never held for anything the invoice needs: it renders on
+ * demand, the moment someone actually asks for it. `linkUrl` points at the order's page, where
+ * the download button is always live.
  */
 export const orderConfirmEmail = (
     locale: string,
@@ -126,7 +126,7 @@ export const bankTransferInstructionsEmail = (
             }),
             total: t('orders.email-confirm.total', { total: orderTotal(order) }),
             // Invoice number allocation doesn't wait on payment (see `invoice-numbering.ts`), so
-            // the same link and the same eventually-ready PDF apply here as on the paid path.
+            // the same link, rendering the same invoice on demand, applies here as on the paid path.
             linkLabel: t('orders.email-transfer.link-label'),
             linkUrl: orderLink(orderId),
             footer: t('email.footer')

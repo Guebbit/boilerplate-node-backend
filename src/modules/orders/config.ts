@@ -1,8 +1,9 @@
 /**
  * @module
- * The shop's own identity as it appears on an invoice, plus the bank-transfer payment method's
- * deployment config — both read per call rather than captured at import, the pattern
- * `inventory/config.ts` sets, so a deployment can correct either without a restart.
+ * The shop's own identity as it appears on an invoice, the bank-transfer payment method's
+ * deployment config, and the invoice render cache's own two knobs — all read per call rather than
+ * captured at import, the pattern `inventory/config.ts` sets, so a deployment can correct any of
+ * them without a restart.
  *
  * Owned by `orders` because `./emails`' invoice payload is the only reader of the shop identity.
  * The bank-transfer values are owned here for a different reason: `orders` renders
@@ -15,7 +16,9 @@
  * (`@modules/products`'s `config.ts`), and this module only freezes the number it is handed.
  */
 
+import path from 'node:path';
 import { environmentNumber } from '@infrastructure/runtime/environment';
+import { isDemoMode } from '@infrastructure/runtime/demo-profile';
 
 /**
  * The shop's own country — the ONLY jurisdiction VAT is ever charged at: no destination lookup,
@@ -116,3 +119,26 @@ export const bankTransferMaxOpenPerAccount = (): number =>
  */
 export const bankTransferEnabled = (): boolean =>
     Boolean(bankTransferBeneficiary() && bankTransferIban());
+
+/**
+ * Where a rendered invoice may be cached, resolved against the WORKING DIRECTORY when relative —
+ * same as `NODE_QUARANTINE_PATH`, and, like it, must stay OUTSIDE `NODE_PUBLIC_PATH`: an invoice
+ * carries personal and financial data, and must only be reachable through the authenticated
+ * `GET /orders/{id}/invoice`, never as a guessable static url.
+ * @returns the cache directory
+ */
+export const invoiceCachePath = (): string =>
+    path.resolve(process.env.NODE_INVOICE_CACHE_PATH ?? 'storage/invoices');
+
+/**
+ * How long a rendered invoice stays cached — long enough to absorb one person's burst (download,
+ * view, re-download), never long enough to make the cache a second copy of the order's own
+ * retention. `0` under `isDemoMode()` or `NODE_ENV === 'test'`, WHATEVER the env says: a `0` TTL
+ * means the render never touches the disk at all, so a demo deployment or a test run never leaves
+ * PII behind it did not mean to keep.
+ * @returns the TTL, in minutes; `0` means "never cache"
+ */
+export const invoiceCacheTtlMinutes = (): number => {
+    if (isDemoMode() || process.env.NODE_ENV === 'test') return 0;
+    return environmentNumber('NODE_INVOICE_CACHE_TTL_MINUTES', 5, 0);
+};

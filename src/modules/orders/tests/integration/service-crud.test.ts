@@ -32,6 +32,18 @@ import type { OrderDocument } from '../../model';
 import type { ResponseReject, ResponseSuccess } from '@infrastructure/http/response';
 import { asCustomer, asAdmin } from '../../../../../tests/support/callers';
 
+/**
+ * `deleteCachedInvoice` is the one call `update()`'s line-rewrite path makes into
+ * `services/invoice.ts` — spied on rather than proven through a real cache file, since
+ * `invoiceCacheTtlMinutes()` is forced `0` under `NODE_ENV=test` and would never write one in the
+ * first place. Everything else in the module stays real.
+ */
+const deleteCachedInvoiceMock = jest.fn().mockResolvedValue(true);
+jest.mock('../../services/invoice', () => ({
+    ...jest.requireActual('../../services/invoice'),
+    deleteCachedInvoice: (orderId: string) => deleteCachedInvoiceMock(orderId)
+}));
+
 setupTestDb();
 
 const MISSING_ID = '507f1f77bcf86cd799439011';
@@ -438,6 +450,26 @@ describe('update', () => {
         expect(reloaded!.items).toHaveLength(1);
         expect((reloaded!.items[0].product as { title: string }).title).toBe('Monitor');
         expect(reloaded!.items[0].quantity).toBe(3);
+    });
+
+    it('deletes the cached invoice once the lines it describes no longer exist', async () => {
+        const { order } = await seedOrder();
+        await releaseHold(order);
+        const replacement = await createProduct({ title: 'Monitor', price: 200, onHand: 10 });
+        deleteCachedInvoiceMock.mockClear();
+
+        await update(order, { items: [{ productId: String(replacement._id), quantity: 3 }] });
+
+        expect(deleteCachedInvoiceMock).toHaveBeenCalledWith(String(order._id));
+    });
+
+    it('leaves the cache alone for a write that never touches the lines', async () => {
+        const { order } = await seedOrder();
+        deleteCachedInvoiceMock.mockClear();
+
+        await update(order, { email: 'new-address@example.com' });
+
+        expect(deleteCachedInvoiceMock).not.toHaveBeenCalled();
     });
 
     it('rejects with 404 when a replacement product does not exist', async () => {
