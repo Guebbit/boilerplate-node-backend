@@ -35,15 +35,21 @@ export const postLogin = (
     response: Response
 ) => {
     /*
-     * Read, not parsed against `LoginBody` — a security decision, not an omission.
-     * A login must answer ONE way for every wrong credential: parsing first would 422 a
-     * too-short password while a wrong-but-valid-length one gets 401, leaking info about the
-     * guess — and would reject before `recordLoginFailure`, dropping the attempt from the audit
-     * trail. The stored-hash check below is the only thing that decides the outcome.
+     * Read, not parsed against `LoginBody`. Three reasons, and only the first is about answering
+     * uniformly — `accountService.login` parses anyway, so this is not where a 422 is avoided.
      *
-     * An absent body falls through the same way a wrong one does, for that same reason: a login
-     * sent with the wrong content-type must not be distinguishable from a login sent with the
-     * wrong password. It used to throw here and answer 500, which was exactly that distinction.
+     * Uniform:     whether the ACCOUNT EXISTS. `login` compares against `DUMMY_PASSWORD_HASH` on
+     *              a miss, so an unknown address costs the same bcrypt round as a wrong password
+     *              and both answer 401. That is the property worth protecting, and it holds.
+     * Not uniform: the password's SHAPE. The service answers 422 for a malformed body, the way
+     *              RFC 6749 §5.2 separates `invalid_request` from `invalid_grant`. All it exposes
+     *              is `Password.minLength`, which `openapi.yaml` publishes; the complexity
+     *              pattern deliberately lives on `PasswordNew`, for signup and reset, not here.
+     * Audit:       a 422 raised HERE would return before `recordLoginFailure` and drop the
+     *              attempt from the trail. The service's 422 arrives after it, and is recorded.
+     * Absent body: express 5 leaves `request.body` undefined when no parser matched. It falls
+     *              through as a wrong one does — it used to throw here and answer 500, which was
+     *              a real distinction between a bad content-type and a bad password.
      */
     const { email, password } = request.body ?? {};
 

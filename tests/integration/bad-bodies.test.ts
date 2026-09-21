@@ -114,9 +114,8 @@ describe('a body express never parsed', () => {
      *
      * Deliberately NOT asserted: that a bodyless login matches a WRONG-PASSWORD login. It does
      * not — an unparsable body is 422 and a wrong password is 401, because `accountService.login`
-     * parses `LoginBody` itself. That is a pre-existing split between the service and the comment
-     * on `postLogin`'s own read-don't-parse decision, not something this guard introduced: an
-     * absent body now answers exactly as an empty one always has.
+     * parses `LoginBody` itself. That split is intended, and `postLogin`'s own comment says why:
+     * the shape of a guess is not a secret, only whether the account exists is.
      */
     it('answers a malformed login the same for a real address as for an unknown one', async () => {
         const user = await createUser({ verifiedAt: new Date() }, 'customer');
