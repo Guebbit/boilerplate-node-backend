@@ -43,6 +43,10 @@ interface ComposeFile {
     >;
 }
 
+/** Narrows what `yaml`'s `parse` hands back to the shape this file reads. */
+const isComposeFile = (value: unknown): value is ComposeFile =>
+    typeof value === 'object' && value !== null && 'services' in value;
+
 /**
  * The production compose stack, parsed with merge keys APPLIED.
  *
@@ -52,9 +56,14 @@ interface ComposeFile {
  * this whole file goes red on a refactor that changed nothing about the deployment.
  * https://eemeli.org/yaml/#yaml-1-1-merge-keys
  */
-const compose = parse(readFileSync(path.join(ROOT, 'docker-compose.production.yml'), 'utf8'), {
-    merge: true
-}) as ComposeFile;
+const parsedCompose: unknown = parse(
+    readFileSync(path.join(ROOT, 'docker-compose.production.yml'), 'utf8'),
+    { merge: true }
+);
+if (!isComposeFile(parsedCompose))
+    throw new Error('[production-topology] docker-compose.production.yml did not parse to an object.');
+
+const compose = parsedCompose;
 
 /** The production image's build recipe, as text — the assertions below are about what it does NOT contain. */
 const dockerfile = readFileSync(path.join(ROOT, 'docker', 'Dockerfile.production'), 'utf8');

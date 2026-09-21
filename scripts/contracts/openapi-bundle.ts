@@ -139,6 +139,14 @@ interface BundledDocument {
 const isOperation = (value: unknown): value is Operation =>
     typeof value === 'object' && value !== null;
 
+/**
+ * Narrows what `yaml`'s `parse` hands back — typed `unknown` since it accepts arbitrary YAML —
+ * to the shape this step reads. A malformed bundle (not an object at all) fails here with a
+ * clear message rather than surfacing as a `TypeError` several calls downstream.
+ */
+const isBundledDocument = (value: unknown): value is BundledDocument =>
+    typeof value === 'object' && value !== null;
+
 /** Every operation the bundle holds, flattened out of its paths. */
 const operationsOf = (document_: BundledDocument): Operation[] =>
     Object.values(document_.paths ?? {}).flatMap((pathItem) =>
@@ -186,7 +194,13 @@ const withDefaults = (
  * See: docs/api/contract-fragmentation.md
  */
 export const withAppLevelResponses = (bundled: string): string => {
-    const document_ = parseYaml(bundled) as BundledDocument;
+    // `yaml`: parse the bundled document into a plain object graph.
+    // https://eemeli.org/yaml/#parse-yaml-to-json-value
+    const parsed: unknown = parseYaml(bundled);
+    if (!isBundledDocument(parsed))
+        throw new Error('[openapi] the bundled document did not parse to an object.');
+
+    const document_ = parsed;
     const appLevel = document_['x-app-level-responses'];
 
     if (!appLevel) throw new Error('[openapi] the root declares no `x-app-level-responses`.');
