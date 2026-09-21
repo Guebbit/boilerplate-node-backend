@@ -6,7 +6,9 @@
 #
 # This file is the deployment. It runs the image built by `docker/Dockerfile.production`, mounts
 # no source, exposes no database port to the host, and stops at the four services the application
-# cannot run without. Telemetry is exported over OTLP to a collector that is deliberately NOT
+# cannot run without. Its `setup` service runs `deploy:setup` (indexes plus the shop row) and
+# NEVER the demo seeder — `scenarios/apply.ts` refuses NODE_ENV=production outright, so a
+# production database starts empty and fills with real rows. Telemetry is exported over OTLP to a collector that is deliberately NOT
 # defined here — see the note at the bottom.
 #
 #   export COMPOSE_PROJECT_NAME=acme

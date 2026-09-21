@@ -33,11 +33,11 @@ npm run compose:restart          # or: npm run compose:restart
 On Podman, also set `CONTAINER_LOGS_PATH`, `PROMTAIL_CONFIG` and `CONTAINER_LOG_DRIVER` in `.env`
 (see `.env-example` → _Promtail Log Collection_). Nothing to set on Docker.
 
-That is the whole setup. The `app` container runs `npm run db:bootstrap` before starting the server,
-so the database is indexed and seeded on first boot — you get demo products, users and orders
-rather than empty lists. `db:sync` is idempotent; the seeder skips a database that already holds
-anything, since it builds the order book by driving real checkouts and doing that twice would give
-the shop a second history. `npm run scenario:apply:reset` rebuilds it deliberately.
+That is the whole setup. The `app` container runs `npm run db:bootstrap` before starting the
+server, so the database is indexed and seeded on first boot — you get demo products, users and
+orders rather than empty lists, without asking for them. Which mongod that lands in, and what
+happens on the second boot, is [Which database am I looking at?](#which-database-am-i-looking-at)
+below.
 
 ::: warning Use the scripts, not a bare `compose up`
 Each script passes its runtime's Promtail override with `-f`, which is what gives Promtail a host
@@ -82,6 +82,76 @@ Import one and start clicking; `POST /account/login` already carries credentials
 They are generated rather than hand-written, which is why they cannot rot, and `.gitignore`d rather
 than committed, because their only reader is whoever just asked for one. See
 [Regenerating After a Change](./api/regenerating.md).
+
+## Which database am I looking at?
+
+This repo ships **one** dataset — the `shop` scenario. What changes between the commands below is
+not the data, it is which mongod receives it and who put it there.
+
+```mermaid
+flowchart LR
+    Demo["npm run demo"] --> Throwaway[("throwaway mongod\nin a temp dir")]
+    Compose["npm run compose:restart\n(app container)"] --> Volume[("boilerplate_mongodb_volume\ndatabase container")]
+    HostDev["npm run host -- dev"] --> Volume
+
+    Throwaway -.->|"process exits"| Gone(["gone"])
+    Volume -.->|"compose down -v"| Gone
+
+    classDef cmd fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef store fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef gone fill:#fee2e2,stroke:#dc2626,color:#111827;
+    class Demo,Compose,HostDev cmd;
+    class Throwaway,Volume store;
+    class Gone gone;
+```
+
+| You ran                   | Mongo it talks to                                       | Who seeded it                                                     | Survives a restart            |
+| ------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------- |
+| `npm run demo`            | a throwaway mongod, private to that one process         | `scenarios/run-server.ts`, in-process, before listening           | No — gone with the process    |
+| `npm run compose:restart` | the `database` container's `boilerplate_mongodb_volume` | the **`app` container**, running `db:bootstrap` before its server | Yes — until `compose down -v` |
+| `npm run host -- dev`     | that same volume, over the published port               | **nobody** — this path seeds nothing                              | Yes                           |
+
+### "I destroyed the volumes, and the data was back"
+
+`npm run host -- dev` did not put it there. `compose up` starts two things that matter here — the
+`database` container and the `app` container — and `app`'s startup command is
+`npm run db:bootstrap && npm run dev:docker`. The container seeded the fresh volume before it began
+serving.
+
+Your host process then connects to that same mongod and finds a furnished shop. Two app processes,
+one database.
+
+```bash
+podman compose logs app | head -40    # the bootstrap output, before the server starts listening
+```
+
+To make the host process the only API running, start the data services alone and seed them
+yourself:
+
+```bash
+podman compose up database redis rabbitmq
+npm run host -- db:bootstrap
+```
+
+### The seeding is not repeated, and not automatic in production
+
+`db:sync` is idempotent. The seeder is not — it builds the order book by driving real checkouts —
+so it **skips a database that already holds anything** and exits 0. That is what keeps the second
+`compose up` from giving the shop a second history. `npm run scenario:apply:reset` empties and
+rebuilds on purpose.
+
+A deployment never runs any of it: `npm run deploy:setup` is `db:sync` plus `access:bootstrap`,
+which upserts the shop row and nothing else, and `scenario:apply` refuses outright when
+`NODE_ENV=production`.
+
+| Local                                           | Production                                      |
+| ----------------------------------------------- | ----------------------------------------------- |
+| `db:bootstrap` — indexes **plus** the demo shop | `deploy:setup` — indexes plus an empty shop row |
+| Demo accounts with published passwords          | No seeded accounts at all                       |
+| Wiped and rebuilt freely                        | Real rows; `scenario:apply` is refused          |
+
+What the dataset actually contains, and how the orders inside it are produced rather than written,
+is [The demo profile](./tools/demo-profile.md#how-a-scenario-is-built).
 
 ## Running on the host instead
 

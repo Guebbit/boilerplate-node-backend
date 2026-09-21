@@ -94,11 +94,11 @@ on the host clearly shows, raised from inside `/app`.
 
 ### Core data
 
-| Container  | Image                   | Port(s)                                | Role                                                                                       | Read next                                   |
-| ---------- | ----------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------- |
-| `database` | `mongo:8`               | `27017`                                | Primary datastore. Persists data in a named Docker volume (`boilerplate_mongodb_volume`).  | [MongoDB & Mongoose](./mongodb-mongoose.md) |
-| `redis`    | `redis:7`               | `6379`                                 | Server-side response cache. Cache is intentionally ephemeral — data is lost on restart.    | [Redis Cache](./redis-cache.md)             |
-| `rabbitmq` | `rabbitmq:3-management` | `5672` (AMQP), `15672` (management UI) | Message broker for async jobs (email, PDF generation). Management UI available in browser. | [RabbitMQ](./rabbitmq.md)                   |
+| Container  | Image                   | Port(s)                                | Role                                                                                                                                                                                                                                                            | Read next                                   |
+| ---------- | ----------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `database` | `mongo:8`               | `27017`                                | Primary datastore. Persists in the named volume `boilerplate_mongodb_volume`; seeded by the `app` container's own startup command, never by a host `npm run dev` — see [Which database am I looking at?](../getting-started.md#which-database-am-i-looking-at). | [MongoDB & Mongoose](./mongodb-mongoose.md) |
+| `redis`    | `redis:7`               | `6379`                                 | Server-side response cache. Cache is intentionally ephemeral — data is lost on restart.                                                                                                                                                                         | [Redis Cache](./redis-cache.md)             |
+| `rabbitmq` | `rabbitmq:3-management` | `5672` (AMQP), `15672` (management UI) | Message broker for async jobs (email, PDF generation). Management UI available in browser.                                                                                                                                                                      | [RabbitMQ](./rabbitmq.md)                   |
 
 ### Observability stack
 
@@ -193,6 +193,7 @@ font/rendering libraries, and the baked `mongod` all add up. None of it ships in
 ## How to think about the setup
 
 - **Compose is the local truth**: one file wires together the app plus all sidecars needed for demos and local debugging.
+- **The `app` container owns the seeding**, not you: its startup command is `npm run db:bootstrap && npm run dev:docker`, so a fresh volume arrives furnished — [Which database am I looking at?](../getting-started.md#which-database-am-i-looking-at).
 - **The Dockerfile is intentionally simple**: install dependencies once, add Chromium for PDF support, then let compose decide runtime commands.
 - **Podman is treated as a compatible local engine**, not a separate architecture.
 

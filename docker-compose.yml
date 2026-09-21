@@ -121,6 +121,9 @@ services:
         # database that already holds anything and exits 0, which is what keeps a later boot from
         # either duplicating the history or stopping the container. `scenario:apply:reset` rebuilds
         # on purpose. The seeder also refuses to run when NODE_ENV=production.
+        #
+        # This container is what seeds the `database` volume, for every process that later reads
+        # it — including a host `npm run host -- dev`, which runs no bootstrap of its own.
         command:
             [
                 'sh',
@@ -230,7 +233,13 @@ services:
 
         # Same
         volumes:
-            # NAMED volume. Store mongodb data on the host machine
+            # NAMED volume. Store mongodb data on the host machine.
+            #
+            # This is the ONLY database the dev stack has, and the `app` service above fills it on
+            # first boot (`db:bootstrap`). A host-side `npm run host -- dev` connects to this same
+            # mongod through the published port below and seeds nothing of its own — which is why
+            # a freshly recreated volume already holds the demo shop before you start anything by
+            # hand. See docs/getting-started.md, "Which database am I looking at?".
             - boilerplate_mongodb_volume:/data/db
 
         # Loopback by default, same as the app's own port above: no `MONGO_INITDB_ROOT_*` is set,

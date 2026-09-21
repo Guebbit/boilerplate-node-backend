@@ -3,6 +3,9 @@
 #   docker compose --env-file "clients/acme/.env" \
 #       -f docker-compose.production.yml -f docker-compose.proxy.yml up -d
 #
+# Routing only: this overlay defines no database, no volume and no seeding, and changes nothing
+# about which data the stack it is layered onto holds.
+#
 # The base file is unchanged for anyone who does not want this: it still publishes the API on
 # loopback and says "put any TLS-terminating proxy in front" — this overlay is one way to do that
 # when the proxy itself is ALSO shared across several client stacks on the same box. A single-stack

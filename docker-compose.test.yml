@@ -30,6 +30,9 @@ services:
         image: mongo:8
         # No named volume: this stack is scratch space for one gate run, never a database anyone
         # comes back to. `docker-compose.yml`'s `database` service is the persistent one.
+        #
+        # Nothing seeds this either — the gate's suites create the rows they assert on. The demo
+        # shop belongs to the dev stack and to `npm run demo`, not here.
         healthcheck:
             test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
             interval: 5s
