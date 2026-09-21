@@ -182,8 +182,14 @@ const refuseUnauthenticated = (request: Request, response: Response): void => {
  *
  * See: docs/tools/security.md#machine-to-machine-credentials
  *
+ * The BEARER token is required as well as the context, and that second condition is not
+ * redundant: {@link requirePermissionViaCookie} also writes `request.authContext`, from the
+ * refresh COOKIE, for the one SSE route a browser cannot send a header on. A caller carrying
+ * only that cookie therefore reaches here with a context and no token — and must still be
+ * refused, or the cookie becomes a second way to hold a session on every route this guards.
+ *
  * @param request - must already carry `authContext`, set upstream by `getAuth`
- * @param response - answered 401 when no session was resolved
+ * @param response - answered 401 when no bearer-authenticated session was resolved
  * @param next - called only once a session is confirmed present
  */
 export const isAuth = (request: Request, response: Response, next: NextFunction) => {
@@ -213,8 +219,10 @@ export const isAuth = (request: Request, response: Response, next: NextFunction)
  * - every guard on the route is a tenant-scoped `<family>.any.<action>` key, and
  * - no controller it reaches reads `request.authContext`.
  *
- * `tests/cross-cutting/api-key-authentication.test.ts` asserts the second half, so a controller
- * that starts reading `authContext` behind this guard fails the suite rather than production.
+ * Both halves are asserted. `tests/cross-cutting/authenticated-controllers.test.ts` reads the
+ * real mounted chain and refuses an `authContext!` read on any route this guard fronts;
+ * `tests/cross-cutting/api-key-authentication.test.ts` refuses a module that mounts both guards.
+ * A controller that starts reading `authContext` behind this guard fails the suite, not production.
  *
  * NOT for a step-up route. `requireFreshAuth` reads `authContext` and a credential can never
  * answer a re-authentication challenge, so pairing them gives a partner integration a 401 it can

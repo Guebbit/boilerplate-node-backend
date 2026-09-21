@@ -101,9 +101,12 @@ credentials gets `isAuth` and answers 401 — the direction an auth mistake shou
 Mount `isAuthOrCredential` only where both hold, and both are checkable rather than a matter of
 taste: every guard on the route is a tenant-scoped `<family>.any.<action>` key, and no controller
 it reaches reads `request.authContext`.
-`tests/cross-cutting/api-key-authentication.test.ts` asserts the second half per module, plus that
-no module mounts both guards, so a controller that starts reading `authContext` behind the
-credential guard fails the suite rather than production.
+Both halves are asserted, by the file best placed to ask each.
+`tests/cross-cutting/authenticated-controllers.test.ts` reads Express's own resolved chain per
+route and refuses an `authContext!` read behind anything but `isAuth`;
+`tests/cross-cutting/api-key-authentication.test.ts` drives a real credential over the real chain
+and refuses a module that mounts both guards. A controller that starts reading `authContext`
+behind the credential guard fails the suite rather than production.
 
 Two exclusions are decisions, not consequences, and each says so at its mount:
 
