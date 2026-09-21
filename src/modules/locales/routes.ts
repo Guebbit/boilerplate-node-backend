@@ -33,13 +33,6 @@ import { upsertEntityTranslations } from './controllers/upsert-entity-translatio
  */
 export const router = Router();
 
-/*
- * Why every write below names `isAuthOrCredential` rather than `isAuth`: dictionary writes are
- * `locales.any.*`/`translations.any.*` keys over the tenant's own data, and a translation
- * management system pushing strings is the machine case. The public reads that follow mount no
- * identity guard at all. See docs/tools/security.md#machine-to-machine-credentials.
- */
-
 /**
  * The three public reads, all `browserRevalidate`: Redis still holds them for the hour, but the
  * flag tells the BROWSER to revalidate rather than answer from its own store. Without it, an
