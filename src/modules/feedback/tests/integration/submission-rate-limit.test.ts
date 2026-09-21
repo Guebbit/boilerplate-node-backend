@@ -1,5 +1,6 @@
 import express from 'express';
 import supertest from 'supertest';
+import { withReloadedRateLimits } from '@tests/rate-limit-harness';
 
 /**
  * `submissionLimiter` — the budget for `POST /feedback/contact` — spends on a SUCCESSFUL request,
@@ -10,25 +11,19 @@ import supertest from 'supertest';
  * Lives here rather than in the unit suite because it sends a real request through
  * `express-rate-limit`'s middleware — `src/modules/feedback/tests/unit/rate-limits.test.ts`
  * covers the pure-configuration properties (the default, and its relation to the global budget).
+ *
+ * Not built against `@tests/rate-limit-harness`'s `appAnswering`: the third case below asserts
+ * the log line names the real path, `POST /contact`, which that harness's fixed `/route` cannot
+ * stand in for.
  */
 
-/**
- * Reloads `submissionLimiter` with `NODE_SUBMISSION_RATE_LIMIT_MAX` set to `limit`, restoring the
- * environment variable immediately after — the same recipe `auth-hardening.test.ts` uses for
- * `credentialLimiters`, needed because the limit is captured at import time.
- */
-const submissionLimiterWithBudget = async (limit: number) => {
-    const original = process.env.NODE_SUBMISSION_RATE_LIMIT_MAX;
-    process.env.NODE_SUBMISSION_RATE_LIMIT_MAX = String(limit);
-    jest.resetModules();
-
-    const { submissionLimiter } = await import('@modules/feedback/rate-limits');
-
-    if (original === undefined) delete process.env.NODE_SUBMISSION_RATE_LIMIT_MAX;
-    else process.env.NODE_SUBMISSION_RATE_LIMIT_MAX = original;
-
-    return submissionLimiter;
-};
+/** Reloads `submissionLimiter` with `NODE_SUBMISSION_RATE_LIMIT_MAX` set to `limit`. */
+const submissionLimiterWithBudget = (limit: number) =>
+    withReloadedRateLimits(
+        () => import('@modules/feedback/rate-limits'),
+        { NODE_SUBMISSION_RATE_LIMIT_MAX: String(limit) },
+        (module) => module.submissionLimiter
+    );
 
 describe('submissionLimiter', () => {
     afterEach(() => jest.resetModules());

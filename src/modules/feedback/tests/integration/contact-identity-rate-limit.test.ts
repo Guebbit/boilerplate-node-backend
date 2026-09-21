@@ -1,8 +1,7 @@
 import supertest from 'supertest';
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironmentOverrides } from '@tests/environment';
-import { appAnswering, statusOf } from '@tests/rate-limit-harness';
+import { appAnswering, statusOf, withReloadedRateLimits } from '@tests/rate-limit-harness';
 
 /**
  * Anti-automation Rung 1 (see `docs/tools/security.md#identity--and-block-keyed-budgets--signup-password-reset-the-contact-form`):
@@ -14,16 +13,12 @@ import { appAnswering, statusOf } from '@tests/rate-limit-harness';
  * `src/modules/account/tests/integration/identity-rate-limit.test.ts`.
  */
 
-/** Reloads `@modules/feedback/rate-limits` with the given env vars set — every limiter's budget is
- * captured at import time, so a smaller value only takes effect on a fresh module instance. */
+/** {@link withReloadedRateLimits} bound to this file's one module. */
 const withFeedbackRateLimits = <T>(
     overrides: Record<string, string>,
     pick: (rateLimitsModule: typeof import('@modules/feedback/rate-limits')) => T
 ): Promise<T> =>
-    withEnvironmentOverrides(overrides, () => {
-        jest.resetModules();
-        return import('@modules/feedback/rate-limits').then(pick);
-    });
+    withReloadedRateLimits(() => import('@modules/feedback/rate-limits'), overrides, pick);
 
 describe('contactLimiters', () => {
     afterEach(() => jest.resetModules());

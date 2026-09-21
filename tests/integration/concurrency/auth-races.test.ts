@@ -46,6 +46,7 @@ import { TokenType } from '@modules/users';
 // Not on the barrel — see `users/index.ts`. A spec may reach the model; runtime code may not.
 import { userModel } from '@modules/users/model';
 import { RACE_SIZE, countStatus, expectNoServerErrors, raceN } from '@tests/race';
+import { withReloadedRateLimits } from '@tests/rate-limit-harness';
 
 setupTestDb();
 
@@ -283,18 +284,16 @@ describe('the limiter is raised for these suites, not disabled', () => {
         //
         // A fresh limiter with a budget of 3 rather than 1000 failed requests, because the point
         // is that the mechanism works, not that this test can afford to spend the real budget.
-        const original = process.env.NODE_AUTH_RATE_LIMIT_MAX;
-        process.env.NODE_AUTH_RATE_LIMIT_MAX = '3';
-        jest.resetModules();
+        const { credentialLimiters } = await withReloadedRateLimits(
+            () => import('@modules/account/rate-limits'),
+            { NODE_AUTH_RATE_LIMIT_MAX: '3' },
+            (module) => module
+        );
 
         const expressModule = await import('express');
         const supertestModule = await import('supertest');
-        const { credentialLimiters } = await import('@modules/account/rate-limits');
         const express = expressModule.default;
         const supertest = supertestModule.default;
-
-        if (original === undefined) delete process.env.NODE_AUTH_RATE_LIMIT_MAX;
-        else process.env.NODE_AUTH_RATE_LIMIT_MAX = original;
 
         const app = express();
         app.post('/probe', ...credentialLimiters, (_request, response) => {

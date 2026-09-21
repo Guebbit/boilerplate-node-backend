@@ -1,6 +1,7 @@
 import express from 'express';
 import supertest from 'supertest';
 import { asStub } from '@tests/stub';
+import { withReloadedRateLimits } from '@tests/rate-limit-harness';
 import type { Request, RequestHandler } from 'express';
 import type { AuthContext } from '@types';
 
@@ -44,27 +45,15 @@ const declineAwareApp = (declineLimiter: RequestHandler) => {
  * `auth-hardening.test.ts#limitersWithBudget` — so the module has to be re-evaluated for a
  * different budget to take effect.
  */
-const limitersWithBudget = async (attemptLimit: number, declineLimit = attemptLimit) => {
-    const originals = {
-        attempt: process.env.NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX,
-        decline: process.env.NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX
-    };
-    process.env.NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX = String(attemptLimit);
-    process.env.NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX = String(declineLimit);
-    jest.resetModules();
-
-    const rateLimit = await import('@modules/payments/rate-limits');
-
-    for (const [name, value] of [
-        ['NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX', originals.attempt],
-        ['NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX', originals.decline]
-    ] as const) {
-        if (value === undefined) delete process.env[name];
-        else process.env[name] = value;
-    }
-
-    return rateLimit;
-};
+const limitersWithBudget = (attemptLimit: number, declineLimit = attemptLimit) =>
+    withReloadedRateLimits(
+        () => import('@modules/payments/rate-limits'),
+        {
+            NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX: String(attemptLimit),
+            NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX: String(declineLimit)
+        },
+        (module) => module
+    );
 
 describe('payment-velocity: the confirm-attempt budget', () => {
     afterEach(() => jest.resetModules());
