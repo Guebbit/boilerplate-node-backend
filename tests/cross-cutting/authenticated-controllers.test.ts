@@ -89,6 +89,17 @@ const ROUTED_MODULES: Record<string, Router> = {
     wishlist: wishlistRouter
 };
 
+/**
+ * A non-null ASSERTION of `authContext` — `request.authContext!` or, after destructuring,
+ * `authContext!` — never an optional read (`authContext?.x`, or `authContext` passed as an
+ * optional parameter to a helper like `callerScope`). Those stay unflagged on purpose: a route
+ * behind `isAuthOrCredential` legitimately reads `authContext` when it is there and falls back
+ * to `caller` when it is not, which is the whole point of the split guard. Matched on
+ * `authContext!` alone, not `request.authContext!`, so destructuring `const { authContext } =
+ * request` first does not hide the same assertion from this check.
+ */
+const ASSERTS_AUTH_CONTEXT = /\bauthContext!/;
+
 /** Controllers that assert an auth context, by exported handler name. */
 const handlersReadingAuthContext = (moduleRoot: string): Set<string> => {
     const controllers = path.join(moduleRoot, 'controllers');
@@ -97,7 +108,7 @@ const handlersReadingAuthContext = (moduleRoot: string): Set<string> => {
     const names = new Set<string>();
     for (const file of readdirSync(controllers).filter((f) => f.endsWith('.ts'))) {
         const source = readFileSync(path.join(controllers, file), 'utf8');
-        if (!source.includes('request.authContext!')) continue;
+        if (!ASSERTS_AUTH_CONTEXT.test(source)) continue;
         for (const [, name] of source.matchAll(/export const (\w+) = /g)) names.add(name);
     }
     return names;
@@ -115,6 +126,17 @@ const handlersMountedUnauthenticated = (router: Router): Set<string> => {
     }
     return mounted;
 };
+
+/**
+ * Every `requirePermission` key guarding a route mounted behind `isAuthOrCredential`, module by
+ * module — router-level `use` or per-route, same lookup {@link handlersMountedUnauthenticated}
+ * makes for `isAuth`.
+ */
+const permissionKeysBehindCredentialGuard = (router: Router): string[] =>
+    effectiveRouteTable(router)
+        .filter((row) => [...row.applies, ...row.chain].includes('isAuthOrCredential'))
+        .map((row) => row.permissionKey)
+        .filter((key): key is string => key !== undefined);
 
 describe('every controller reading the caller is mounted behind isAuth', () => {
     it('finds no handler asserting an auth context its route does not guarantee', () => {
@@ -135,6 +157,40 @@ describe('every controller reading the caller is mounted behind isAuth', () => {
         // A canary: an empty result must mean "all guarded", never "nothing was read".
         const total = moduleNames().reduce(
             (count, name) => count + handlersReadingAuthContext(path.join(MODULES_ROOT, name)).size,
+            0
+        );
+        expect(total).toBeGreaterThan(10);
+    });
+});
+
+/**
+ * The other half of `isAuthOrCredential`'s own docblock claim (`src/kernel/middlewares/
+ * authorizations.ts`): every guard behind it is a tenant-scoped `<family>.any.<action>` key. A
+ * `<family>.self.<action>` key behind this guard would be satisfied by
+ * `callerInScope(authContext, 'tenant')` for a human caller and by nothing for a credential,
+ * which is real breakage the first time a credential reaches the route — not a policing rule.
+ */
+describe('every requirePermission key behind isAuthOrCredential is tenant-scoped .any.', () => {
+    it('finds no key with a different breadth segment', () => {
+        const offenders = moduleNames().flatMap((name) => {
+            const router = ROUTED_MODULES[name];
+            if (router === undefined) return [];
+
+            return permissionKeysBehindCredentialGuard(router)
+                .filter((key) => !key.split('.').includes('any'))
+                .map((key) => `${name}: ${key}`);
+        });
+
+        expect(offenders).toEqual([]);
+    });
+
+    it('actually finds keys to check', () => {
+        // A canary matching the one above `handlersReadingAuthContext` has: an empty result must
+        // mean "every key is .any.", never "no route mounts isAuthOrCredential at all".
+        const total = moduleNames().reduce(
+            (count, name) =>
+                count +
+                (ROUTED_MODULES[name] ? permissionKeysBehindCredentialGuard(ROUTED_MODULES[name]).length : 0),
             0
         );
         expect(total).toBeGreaterThan(10);
