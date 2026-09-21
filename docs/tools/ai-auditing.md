@@ -57,20 +57,30 @@ tree touched. The two compliance prompts default an empty argument to the **whol
 than the touched modules — a compliance gap is rarely introduced by the change that happens to
 surface it.
 
-`reachability.md` and `rate-limit-keys.md` are this repo's own: both reason about a mounted
-Express request path, which the paired frontend has no equivalent of.
+### Each repo keeps the prompts its own stack needs
 
-The other five prompt files, plus `tests/audit/compliance-rules.yaml`, are the parts of this kept
-byte-identical with the sibling repo (`boilerplate-vue-frontend`) — the prompts are repo-agnostic
-by design, and the compliance registry is deliberately one shared source of truth: a rule like the
-mandatory signup-consent checkbox spans both repos' responsibility, and a backend-only copy of
-that rule drifting from a frontend-only copy is exactly the failure a shared registry exists to
-prevent. Nothing enforces it: none of these six files are in `SHARED_FILES`, whose rule is that a
-shared file must be owned by one side and regenerated — these are hand-authored on whichever side
-a change originates, and copied to the other. Copy by hand, and check with `diff` when in doubt.
+The two repos do **not** hold one set, and no longer try to. `reachability.md` and
+`rate-limit-keys.md` both reason about a mounted Express request path, which the paired frontend
+has no equivalent of — and its own
+`boilerplate-vue-frontend/tests/audit/accessibility-manual.md` has no counterpart here.
 
-This page is the opposite: deliberately per-repo. It names this repo's own tools, its own `docs/`
-count and its own findings, so the two copies are _expected_ to differ and must not be reconciled.
+Only `spec-drift.md`, `spec-gaps.md` and `suite-bloat.md` exist on both sides, because what they
+ask — does the test agree with the spec, is anything uncovered, is anything redundant — is about
+specs and suites rather than about a runtime.
+
+Nothing keeps even those three in step, and nothing should try. None is in `SHARED_FILES`, whose
+rule is that a shared file must be owned by one side and regenerated. Improve one where you find
+it; carry the improvement across when it applies, and expect the two to drift in between. Reading
+an audit prompt as a spec for its sibling is the mistake to avoid — it is a prompt, and the copy
+in the other repo has its own history.
+
+`tests/audit/compliance-rules.yaml` is not a shared copy either. It lives **here, once**, and both
+compliance prompts read this one file — `compliance-frontend.md` runs from this repo against the
+paired checkout rather than from inside it. So a rule spanning both repos, like the mandatory
+signup-consent checkbox, has exactly one home and no second copy to drift from.
+
+This page is per-repo in the same way. It names this repo's own tools, its own `docs/` count and
+its own findings, so the frontend's copy is _expected_ to differ and must not be reconciled.
 
 ### Naming the scope
 
