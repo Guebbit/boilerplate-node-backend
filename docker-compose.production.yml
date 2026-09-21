@@ -59,8 +59,10 @@
 #
 #   read_only        the image's own filesystem cannot be modified, so a write primitive gained
 #                    through a dependency has nowhere to drop a payload. Every path the app
-#                    legitimately writes is mounted per service below, and each one is `noexec`
-#                    or a volume — a directory that is writable OR executable, never both.
+#                    legitimately writes is mounted per service below — the tmpfs at `/tmp` is
+#                    `noexec`; the named volumes (`uploads`, `storage`, `quarantine`) are not, since
+#                    Docker mounts a named volume `exec` by default and this repo stays
+#                    provider-neutral rather than reaching for a driver-specific opt.
 #   cap_drop         these are node processes serving HTTP or running a scheduler: they bind
 #                    ports above 1024 as a non-root user and need no Linux capability at all.
 #   no-new-privileges  a setuid binary inside the image cannot raise privilege, which closes the

@@ -148,12 +148,14 @@ COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/openapi.yaml /app/asyncapi.yaml ./
 COPY --from=build --chown=node:node /app/tsconfig.json ./
 
-# Uploads land under public/images at runtime. The directory has to exist and be writable by the
-# user below BEFORE the volume is mounted over it, or the first upload fails on a read-only path.
+# Uploads, invoice cache/mail spool and quarantined files land under these three directories at
+# runtime. Each has to exist and be writable by the user below BEFORE its volume is mounted over
+# it, or the first upload/mail/invoice fails on a read-only path.
 #
-# Mount a volume here in production — see `docker-compose.production.yml`: what this directory
-# holds does not survive the container without one.
-RUN mkdir -p public/images && chown -R node:node public/images
+# Mount a volume at each in production — see `docker-compose.production.yml`: what these
+# directories hold does not survive the container without one.
+RUN mkdir -p public/images storage quarantine \
+    && chown -R node:node public/images storage quarantine
 
 # Drop root. The `node` user (uid 1000) ships with the base image, so there is no useradd here and
 # no surprise about which uid owns a bind-mounted volume on the host.

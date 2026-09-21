@@ -115,8 +115,9 @@ an installation-wide role (an operator) instead of a shop role.
 | API port published to all interfaces                        | API port published to `127.0.0.1` only                                                                                           |
 | Full observability stack included                           | No observability containers — see [below](#observability-in-production)                                                          |
 | `NODE_ENABLE_CLUSTERING=1` (multi-process in one container) | `NODE_ENABLE_CLUSTERING=0` — one process per container, always                                                                   |
-| Runs as whatever user starts compose                        | Runs as the non-root `node` user inside the image                                                                                |
+| Runs as whatever user starts compose                        | Runs as the non-root `node` user inside the image, `read_only` root filesystem, all Linux capabilities dropped                   |
 | Mongo is a standalone with no auth                          | Mongo is a single-node replica set (`rs0`), a scoped `readWrite` app user behind a root account, Redis requires `REDIS_PASSWORD` |
+| Uploads/storage/quarantine are host paths or absent         | `uploads`, `storage` and `quarantine` are named volumes — `storage` also holds the outbound mail spool, so back it up            |
 
 Clustering is off on purpose: scale replicas with `--scale app=N` or an orchestrator instead, so
 one thing decides how many processes are live, not two layers of process management fighting a
