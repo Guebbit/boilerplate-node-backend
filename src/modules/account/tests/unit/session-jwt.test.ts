@@ -120,6 +120,36 @@ describe('verifyAccessToken', () => {
     it('rejects nonsense rather than resolving undefined', async () => {
         await expect(verifyAccessToken('not-a-jwt')).rejects.toThrow();
     });
+
+    /**
+     * `alg: none` and algorithm confusion, at the VERIFY side. `createRefreshToken`'s "pins HS256
+     * rather than letting the header choose" test above only proves signing pins the algorithm;
+     * it says nothing about what `verify` accepts. Built by hand rather than through
+     * `jsonwebtoken`'s own `sign()`, which refuses to produce `alg: none` at all.
+     */
+    it('rejects a hand-built alg:none token with no kid', async () => {
+        const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString(
+            'base64url'
+        );
+        const payload = Buffer.from(JSON.stringify({ id: USER_ID })).toString('base64url');
+        // Empty signature segment — the trailing dot is `alg: none`'s whole point.
+        const forged = `${header}.${payload}.`;
+
+        await expect(verifyAccessToken(forged)).rejects.toThrow();
+    });
+
+    it('rejects the same forgery even naming a real kid', async () => {
+        // `verifyAgainstRing` resolves a secret from `kid` BEFORE calling `verify` — a forgery
+        // naming a real ring member gets further in than one that doesn't, so this is the case
+        // that actually exercises the `algorithms: ['HS256']` pin rather than just the kid lookup.
+        const header = Buffer.from(
+            JSON.stringify({ alg: 'none', typ: 'JWT', kid: keyId('access-secret') })
+        ).toString('base64url');
+        const payload = Buffer.from(JSON.stringify({ id: USER_ID })).toString('base64url');
+        const forged = `${header}.${payload}.`;
+
+        await expect(verifyAccessToken(forged)).rejects.toThrow();
+    });
 });
 
 describe('verifyRefreshToken', () => {

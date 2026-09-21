@@ -136,6 +136,30 @@ describe('accountService.signup', () => {
         expect(result.success).toBe(false);
         expect((result as ResponseReject).status).toBe(422);
     });
+
+    it('rejects a breached password even when it satisfies every composition rule', async () => {
+        // `Password1!` is a listed, composition-valid entry in `breached-passwords/list.txt` —
+        // documented on `PLAIN_PASSWORD` above precisely so it stays available for this case.
+        // `assertPasswordNotBreached` is unit-tested on its own; this is the only case proving
+        // `accountService.signup` actually calls it.
+        const result = await accountService.signup(
+            {
+                email: 'breached@example.com',
+                username: 'breacheduser',
+                password: 'Password1!',
+                passwordConfirm: 'Password1!',
+                analyticsConsent: undefined,
+                termsAccepted: true,
+                imageUrl: undefined,
+                thumbnailUrl: undefined,
+                pendingImageKey: undefined
+            },
+            testCallerContext
+        );
+
+        expect(result.success).toBe(false);
+        expect((result as ResponseReject).status).toBe(422);
+    });
 });
 
 describe('accountService.login', () => {
