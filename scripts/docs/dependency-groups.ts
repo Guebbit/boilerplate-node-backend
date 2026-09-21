@@ -54,8 +54,8 @@ export const RUNTIME_GROUPS: DependencyGroup[] = [
         name: 'Persistence',
         purpose:
             'driver + ODM for MongoDB. `mongodb` itself is imported only as a type, to pin the ' +
-            'driver version `mongoose` hands back from `.connection.db` in the raw-driver ' +
-            'data-changelog scripts under `db/`',
+            'driver version `mongoose` hands back from `.connection.db` where the demo profile ' +
+            'snapshots and restores raw documents',
         readMore: '[MongoDB & Mongoose](./mongodb-mongoose.md)',
         match: ['mongodb', 'mongoose']
     },

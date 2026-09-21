@@ -132,7 +132,7 @@ RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 #   api/      orval-generated request/response types and zod schemas, imported as @api/*
 #   shared/   EJS email templates (`shared/views/templates-emails`, resolved against the working
 #             directory by `adapters/mailer.ts`) and the contract fragments
-#   db/       the deploy-time scripts — `db:sync`, `db:data`, `access:bootstrap`, `access:grant`.
+#   db/       the deploy-time scripts — `db:sync`, `access:bootstrap`, `access:grant`.
 #             Named file by file, not as a directory, so the image carries only the scripts it runs
 #   ops/      the scheduled `reap:*` jobs, run by a cron container against this image
 #   public/   express.static root — CSS, favicon, and the committed seed images
@@ -141,9 +141,8 @@ COPY --from=build --chown=node:node /app/src ./src
 COPY --from=build --chown=node:node /app/api ./api
 COPY --from=build --chown=node:node /app/shared ./shared
 COPY --from=build --chown=node:node /app/db/run-script.ts /app/db/index-sync.ts \
-    /app/db/sync-indexes.ts /app/db/cache-clear.ts /app/db/apply-data.ts \
-    /app/db/data-changelog.ts /app/db/bootstrap-access.ts /app/db/grant-access.ts \
-    /app/db/access-grant.ts ./db/
+    /app/db/sync-indexes.ts /app/db/cache-clear.ts /app/db/bootstrap-access.ts \
+    /app/db/grant-access.ts /app/db/access-grant.ts ./db/
 COPY --from=build --chown=node:node /app/ops ./ops
 COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/openapi.yaml /app/asyncapi.yaml ./

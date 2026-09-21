@@ -56,7 +56,6 @@
         "bench": "autocannon -c 20 -d 30 -l http://localhost:${NODE_PORT:-3000}/products",
         "bench:search": "autocannon -c 20 -d 30 -l -m POST -H 'Content-Type: application/json' -b '{\"text\":\"a\"}' http://localhost:${NODE_PORT:-3000}/products/search",
         "db:sync": "tsx db/sync-indexes.ts",
-        "db:data": "tsx db/apply-data.ts",
         "scenario:apply": "tsx scenarios/apply.ts",
         "scenario:images": "tsx scenarios/tools/generate-seed-images.ts",
         "scenario:apply:reset": "tsx scenarios/apply.ts --reset",
