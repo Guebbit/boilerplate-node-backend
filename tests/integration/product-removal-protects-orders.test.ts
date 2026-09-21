@@ -85,7 +85,7 @@ const placePendingOrder = async (product: Awaited<ReturnType<typeof createProduc
     // fire-and-forget dispatch has actually landed on the mock before this clears it.
     await flush();
     mockEnqueueEmail.mockClear();
-    return { user, orderId: String(result.data!._id) };
+    return { user, orderId: String(result.data._id) };
 };
 
 describe('hard-deleting a product with a pending order against it', () => {
@@ -154,7 +154,7 @@ describe('a payment attempt racing the removal event', () => {
         await cartItemSetById(user.id, String(product._id), 1);
         const checkout = await orderConfirm(user.id, testCallerContext);
         if (!checkout.success) throw new Error('setup: checkout was refused');
-        const orderId = String(checkout.data!._id);
+        const orderId = String(checkout.data._id);
 
         // The product vanishes WITHOUT going through the listener that would have cancelled the
         // order — the exact gap `createIntent`'s own check is the backstop for.
@@ -182,7 +182,7 @@ describe('admin offline recording on an order whose product is gone', () => {
         await cartItemSetById(user.id, String(product._id), 1);
         const checkout = await orderConfirm(user.id, testCallerContext);
         if (!checkout.success) throw new Error('setup: checkout was refused');
-        const orderId = String(checkout.data!._id);
+        const orderId = String(checkout.data._id);
 
         await stockLevelRepository.deleteByProductId(String(product._id));
         const raw = await readProduct(String(product._id));

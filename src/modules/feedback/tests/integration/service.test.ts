@@ -15,8 +15,7 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import * as auditPort from '@infrastructure/observability/audit';
 import { feedbackAuditActions } from '@modules/feedback/audit';
 import { FeedbackRequestStatus } from '@types';
-import type { ResponseReject, ResponseSuccess } from '@infrastructure/http/response';
-import type { FeedbackRequestDocument } from '@modules/feedback/model';
+import { asReject, asSuccess } from '@tests/response';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -52,9 +51,6 @@ afterAll(() => {
 afterEach(() => jest.clearAllMocks());
 
 const MISSING_ID = '507f1f77bcf86cd799439011';
-
-const asSuccess = (result: unknown) => result as ResponseSuccess<FeedbackRequestDocument>;
-const asReject = (result: unknown) => result as ResponseReject;
 
 /** A valid creation payload; overrides let each test vary one field at a time. */
 const makePayload = (overrides: Record<string, string> = {}) => ({
@@ -265,7 +261,7 @@ describe('updateStatus', () => {
             status: FeedbackRequestStatus.in_progress
         });
 
-        expect(asSuccess(result).data!.status).toBe(FeedbackRequestStatus.in_progress);
+        expect(asSuccess(result).data.status).toBe(FeedbackRequestStatus.in_progress);
     });
 
     it('persists the change rather than only mutating in memory', async () => {
@@ -282,7 +278,7 @@ describe('updateStatus', () => {
 
         const result = await updateStatus(feedback, { adminNotes: 'Duplicate of #12' });
 
-        expect(asSuccess(result).data!.adminNotes).toBe('Duplicate of #12');
+        expect(asSuccess(result).data.adminNotes).toBe('Duplicate of #12');
     });
 
     it('leaves the status untouched when the payload carries none', async () => {
@@ -343,7 +339,7 @@ describe('updateStatusById', () => {
         });
 
         expect(result.success).toBe(true);
-        expect(asSuccess(result).data!.status).toBe(FeedbackRequestStatus.resolved);
+        expect(asSuccess(result).data.status).toBe(FeedbackRequestStatus.resolved);
     });
 
     it('rejects with 404 for an id that does not exist', async () => {

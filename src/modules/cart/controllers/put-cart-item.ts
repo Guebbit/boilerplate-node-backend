@@ -41,8 +41,7 @@ export const putCartItem = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            // `refused` narrows on `success` but not `result`'s type; `data` is always set here.
-            successResponse<CartResponse>(response, result.data!);
+            successResponse<CartResponse>(response, result.data);
         })
         .catch(catchAs(response, 'updateCartItemById'));
 };

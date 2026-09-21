@@ -37,10 +37,6 @@ export const upsertEntityTranslations = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            // A success result for this endpoint always carries the shape below; this satisfies
-            // the type checker without loosening it.
-            if (!result.data) throw new Error('entity translations write succeeded without data');
-
             return successResponse(response, result.data);
         })
         .catch(catchAs(response, 'upsertEntityTranslations'));

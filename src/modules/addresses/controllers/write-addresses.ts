@@ -9,7 +9,7 @@
 
 import type { Request, Response } from 'express';
 import { AddAddressBody, UpdateAddressBody } from '@api/schemas.zod';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { successResponse } from '@infrastructure/http/response';
 import type { AddressInput, UpdateAddressRequest, AddressesResponse } from '@types';
 import { addressAdd, addressUpdate } from '../service';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
@@ -34,11 +34,6 @@ export const postAddress = (
         .then((result) => {
             if (refused(response, result)) return;
             const { data, message } = result;
-            if (data === undefined) {
-                // A success verdict without a book is a broken service contract, not a bad request.
-                rejectResponse(response, 500, []);
-                return;
-            }
             successResponse<AddressesResponse>(response, data, 200, message);
         })
         .catch(catchAs(response, 'postAddress'));
@@ -65,11 +60,6 @@ export const putAddress = (
         .then((result) => {
             if (refused(response, result)) return;
             const { data, message } = result;
-            if (data === undefined) {
-                // A success verdict without a book is a broken service contract, not a bad request.
-                rejectResponse(response, 500, []);
-                return;
-            }
             successResponse<AddressesResponse>(response, data, 200, message);
         })
         .catch(catchAs(response, 'putAddress'));

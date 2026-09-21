@@ -70,11 +70,6 @@ export const putAccount = (
                 });
 
             const { data } = result;
-            if (data === undefined) {
-                // A success verdict without a user is a broken service contract, not a bad request.
-                rejectResponse(response, 500, []);
-                return;
-            }
 
             // The role comes straight off the already-resolved auth context, same as
             // `get-account.ts` — a profile edit never changes it, so no second lookup here.

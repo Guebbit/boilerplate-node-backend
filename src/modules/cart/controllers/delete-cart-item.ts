@@ -39,8 +39,7 @@ export const deleteCartItem = (
         .cartItemRemoveById(userId, productId, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            // `refused` narrows on `success` but not `result`'s type; `data` is always set here.
-            successResponse<CartResponse>(response, result.data!, 200, t('cart.product-removed'));
+            successResponse<CartResponse>(response, result.data, 200, t('cart.product-removed'));
         })
         .catch(catchAs(response, 'deleteCartItem'));
 };

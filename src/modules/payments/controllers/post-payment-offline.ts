@@ -23,9 +23,6 @@ export const postPaymentOffline = (request: Request<{ orderId?: string }>, respo
         .recordOfflinePayment(String(request.params.orderId), body, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            // A success result for this endpoint always carries the settled payment; this
-            // satisfies the type checker without loosening it.
-            if (!result.data) throw new Error('offline payment recorded without a payment');
             // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform.
             successResponse<Payment>(
                 response,

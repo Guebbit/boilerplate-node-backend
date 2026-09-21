@@ -23,5 +23,5 @@ export const getShippingMethods = (
     const weight = weightSchema.safeParse(request.query.weight).data;
     const result = deliveryService.listMethods(weight);
     // Always a success (see `listMethods`' own docblock); `data` is always set.
-    successResponse<ShippingMethodsResponse>(response, result.data!);
+    successResponse<ShippingMethodsResponse>(response, result.data);
 };

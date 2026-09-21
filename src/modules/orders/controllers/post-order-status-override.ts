@@ -33,10 +33,6 @@ export const postOrderStatusOverride = (
         .overrideStatus(request.params.id, body.to, body.reason, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            if (!result.data) {
-                rejectResponse(response, 500, [t('generic.error-internal')]);
-                return;
-            }
 
             return orderService.withActions(result.data, request.authContext).then((order) => {
                 successResponse<Order>(response, order);

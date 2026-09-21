@@ -56,12 +56,6 @@ export const writeOrders = (
             .create(userId, email, items, callerContextOf(request))
             .then((result) => {
                 if (refused(response, result)) return;
-                // `ResponseSuccess.data` is optional at the type level for endpoints with no
-                // payload; `create` always resolves one on success, so this is exhaustiveness.
-                if (!result.data) {
-                    rejectResponse(response, 500, [t('generic.error-internal')]);
-                    return;
-                }
 
                 // The confirmation mail is `orderService.create`'s — it is a fact about the order,
                 // not about the request that asked for one. See `CallerContext.locale`.
@@ -88,12 +82,6 @@ export const writeOrders = (
         .updateById(id, parseResult.data, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            // `ResponseSuccess.data` is optional at the type level for endpoints with no payload;
-            // `updateById` always resolves one on success, so this is exhaustiveness.
-            if (!result.data) {
-                rejectResponse(response, 500, [t('generic.error-internal')]);
-                return;
-            }
 
             return orderService.withActions(result.data, request.authContext).then((order) => {
                 successResponse<Order>(response, order);

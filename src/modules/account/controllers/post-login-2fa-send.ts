@@ -45,17 +45,10 @@ export const postLoginTwoFactorSend = (
                 rejectResponse(response, result.status, result.errors);
                 return;
             }
-            const { data } = result;
-            if (data === undefined) {
-                // A success verdict without a payload is a broken service contract, not a bad request.
-                authTwoFactorCodeSentTotal.inc({ method, status: 'failure' });
-                rejectResponse(response, 500, []);
-                return;
-            }
             authTwoFactorCodeSentTotal.inc({ method, status: 'success' });
             successResponse<TwoFactorDelivery>(
                 response,
-                data,
+                result.data,
                 200,
                 t('account.two-factor.code-sent')
             );

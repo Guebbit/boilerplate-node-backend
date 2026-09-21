@@ -21,18 +21,14 @@ export interface ResponseNeutral {
 }
 
 /**
- * The envelope shape for a successful response — `success: true` with an optional payload and no
- * errors.
+ * The envelope shape for a successful response — `success: true` with a payload and no errors.
  */
 export interface ResponseSuccess<T> extends ResponseNeutral {
-    // message: "ok"
-    /** Generic payload — the endpoint's actual result. */
-    data?: T;
-    /**
-     * `never` is intentional: it makes success and reject mutually exclusive at type level,
-     * so TypeScript narrows the union from a single `success` check and forbids constructing
-     * a success envelope that also carries errors.
-     */
+    /** The literal (not `boolean`) is what lets TypeScript narrow `ServiceResult<T>` on this field alone. */
+    success: true;
+    /** Generic payload — the endpoint's actual result. Always present; a service with nothing to return passes `undefined` as `T`. */
+    data: T;
+    /** Forbids constructing a success envelope that also carries errors — a check `success: true` alone cannot make. */
     errors: never;
 }
 
@@ -51,6 +47,8 @@ export interface ResponseErrorItem {
  * structured error.
  */
 export interface ResponseReject extends ResponseNeutral {
+    /** The literal (not `boolean`) is what lets TypeScript narrow `ServiceResult<T>` on this field alone. */
+    success: false;
     // explicit undefined keeps `result.data` union-safe
     // (the key is present, so `result.data` type-checks on both branches of the union
     // instead of erroring as a missing property).

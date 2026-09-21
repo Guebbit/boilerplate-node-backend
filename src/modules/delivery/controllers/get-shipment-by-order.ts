@@ -17,7 +17,6 @@ export const getShipmentByOrder = (request: Request<{ orderId?: string }>, respo
         .getForOrder(String(request.params.orderId), request.authContext)
         .then((result) => {
             if (refused(response, result)) return;
-            // `refused` narrows on `success` but not `result`'s type; `data` is always set here.
-            successResponse<Shipment>(response, result.data!);
+            successResponse<Shipment>(response, result.data);
         })
         .catch(catchAs(response, 'getShipmentByOrder'));

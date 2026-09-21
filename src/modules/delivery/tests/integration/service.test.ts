@@ -18,7 +18,7 @@ import { OrderStatus } from '@types';
 import { findShippingMethod, priceShipping, SHIPPING_METHODS } from '@modules/delivery/domain';
 import { recordShipment, recordDelivery, getForOrder } from '@modules/delivery/service';
 import { shipmentRepository } from '@modules/delivery/repository';
-import type { ResponseReject } from '@infrastructure/http/response';
+import { asReject } from '@tests/response';
 import { asCustomer } from '../../../../../tests/support/callers';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
@@ -28,8 +28,6 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 setupTestDb();
-
-const asReject = (result: unknown) => result as ResponseReject;
 
 /** An order ready to ship — `processing`, no shipping method frozen (so `tracked` is `false`). */
 const processingOrderFor = async () => {

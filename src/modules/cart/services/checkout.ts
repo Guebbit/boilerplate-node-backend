@@ -307,14 +307,14 @@ export const orderConfirm = (
              * whatever it is — no forced override: a purchase made by an admin is still an admin
              * action, not a synthetic "user" role.
              */
-            if (result.success && result.data) {
+            if (result.success) {
                 orderService.recordCreated(result.data, context);
                 emitAnalyticsEvent({
                     ...buildAnalyticsBase(context),
                     event: cartAnalyticsEvents.CHECKOUT_COMPLETED,
                     properties: { order_id: String(result.data._id) }
                 });
-            } else if (!result.success) {
+            } else {
                 emitAnalyticsEvent({
                     ...buildAnalyticsBase(context),
                     event: cartAnalyticsEvents.CHECKOUT_FAILED,

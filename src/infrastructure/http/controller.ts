@@ -32,11 +32,18 @@ export type ServiceResult<TData> = ResponseSuccess<TData> | ResponseReject;
  * Covers the REFUSAL only: the success side is where controllers genuinely differ (a raw payload,
  * a transformed one, a 201, an audit event first), so only this half is common enough to share.
  *
+ * The type predicate narrows `result` at the call site: after `if (refused(response, result))
+ * return;`, TypeScript already knows the remaining `result` is a `ResponseSuccess<TData>` with its
+ * `data` present, no cast needed.
+ *
  * @param response - the express response
  * @param result - whatever the service returned
  * @returns `true` when a rejection has been sent and the caller must stop
  */
-export const refused = <TData>(response: Response, result: ServiceResult<TData>): boolean => {
+export const refused = <TData>(
+    response: Response,
+    result: ServiceResult<TData>
+): result is ResponseReject => {
     if (result.success) return false;
 
     rejectResponse(response, result.status, result.errors);

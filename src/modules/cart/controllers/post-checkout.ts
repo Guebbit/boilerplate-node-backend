@@ -34,11 +34,10 @@ export const postCheckout = (request: Request, response: Response): Promise<void
             cartCheckoutTotal.inc({ status: result.success ? 'success' : 'failure' });
             if (refused(response, result)) return;
 
-            // `refused` narrows on `success` but not `result`'s type; `data` is always set here.
             // `withActions` is the one place an `OrderDocument` becomes the wire shape — it also
             // resolves each line's live `current` picture, which a bare `.toJSON()` here would
             // leave off the response entirely.
-            return orderService.withActions(result.data!, request.authContext).then((order) => {
+            return orderService.withActions(result.data, request.authContext).then((order) => {
                 successResponse<CheckoutResponse>(
                     response,
                     { order, message: t('orders.creation-success') },

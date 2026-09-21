@@ -32,8 +32,7 @@ export const deleteWishlistItem = (request: Request<{ productId: string }>, resp
         .then((result) => {
             if (refused(response, result)) return;
 
-            // `refused` narrows on `success` but not `result`'s type; `data` is always set here.
-            successResponse<WishlistResponse>(response, result.data!, 200, result.message);
+            successResponse<WishlistResponse>(response, result.data, 200, result.message);
         })
         .catch(catchAs(response, 'deleteWishlistItem'));
 };

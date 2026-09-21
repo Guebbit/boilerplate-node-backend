@@ -158,12 +158,6 @@ export const writeUsers = (
                 return deleteUpload().then(() => {
                     rejectResponse(response, result.status, result.errors);
                 });
-            // `ResponseSuccess.data` is optional at the type level for endpoints with no payload;
-            // `updateById` always resolves one on success, so this is exhaustiveness.
-            if (!result.data)
-                return deleteUpload().then(() => {
-                    rejectResponse(response, 500, [t('generic.error-internal')]);
-                });
             const saved = result.data;
             return userService.toUserContract(saved).then((contract) => {
                 successResponse<User>(response, contract);

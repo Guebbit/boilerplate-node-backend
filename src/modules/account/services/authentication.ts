@@ -493,7 +493,7 @@ export const signup = (
         // `Document#isNew` stays true until `.save()`, and the rung-2 refusal path is the only
         // one that returns a document never saved — so it reads backwards here: true means NO
         // account was created. https://mongoosejs.com/docs/api/document.html#Document.prototype.isNew
-        if (!result.success || result.data?.isNew) {
+        if (!result.success || result.data.isNew) {
             emitAuditEvent(
                 buildAuditEvent(callerContext, {
                     action: accountAuditActions.AUTH_SIGNED_UP,
@@ -505,7 +505,7 @@ export const signup = (
             return result;
         }
 
-        const newUserId = result.data?.id ?? 'unknown';
+        const newUserId = result.data.id;
         emitAuditEvent(
             buildAuditEvent(callerContext, {
                 action: accountAuditActions.AUTH_SIGNED_UP,

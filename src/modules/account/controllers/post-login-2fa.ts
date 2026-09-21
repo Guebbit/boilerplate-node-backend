@@ -57,12 +57,7 @@ export const postLoginTwoFactor = (
                 return;
             }
 
-            const { data } = result;
-            if (data === undefined) {
-                rejectResponse(response, 500, []);
-                return;
-            }
-            const { user, amr } = data;
+            const { user, amr } = result.data;
             const userId = user._id.toString();
 
             return issueSession(response, userId, undefined, [...amr, 'otp']).then((accessToken) =>

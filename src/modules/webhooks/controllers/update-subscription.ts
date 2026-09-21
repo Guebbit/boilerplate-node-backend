@@ -39,8 +39,6 @@ export const updateWebhookSubscription = (
         .updateSubscription(id, body, tenantCallerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            if (!result.data)
-                throw new Error('webhook subscription update succeeded without a result');
             return successResponse<WebhookSubscriptionCreated>(response, {
                 ...(result.data.subscription.toJSON() as WebhookSubscriptionCreated),
                 newSecret: result.data.newSecret

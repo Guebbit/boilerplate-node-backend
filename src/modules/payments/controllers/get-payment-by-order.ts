@@ -17,9 +17,6 @@ export const getPaymentByOrder = (request: Request<{ orderId?: string }>, respon
         .getForOrder(String(request.params.orderId), request.authContext)
         .then((result) => {
             if (refused(response, result)) return;
-            // A success result for this endpoint always carries the payment; this satisfies the
-            // type checker without loosening it.
-            if (!result.data) throw new Error('payment lookup succeeded without a payment');
             successResponse<Payment>(response, result.data);
         })
         .catch(catchAs(response, 'getPaymentByOrder'));

@@ -26,7 +26,7 @@ export const postDeliverOrder = (request: Request<{ orderId?: string }>, respons
         )
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse<Shipment>(response, result.data!);
+            successResponse<Shipment>(response, result.data);
         })
         .catch(catchAs(response, 'postDeliverOrder'));
 };

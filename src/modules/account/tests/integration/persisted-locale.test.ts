@@ -39,7 +39,7 @@ describe('a user’s persisted locale', () => {
         );
 
         expect(result.success).toBe(true);
-        expect((result as ResponseSuccess<UserDocument>).data!.locale).toBe('it');
+        expect((result as ResponseSuccess<UserDocument>).data.locale).toBe('it');
     });
 
     it('falls back to the boot locale outside a request', async () => {
@@ -58,7 +58,7 @@ describe('a user’s persisted locale', () => {
             testCallerContext
         );
 
-        expect((result as ResponseSuccess<UserDocument>).data!.locale).toBe(getDefaultLocale());
+        expect((result as ResponseSuccess<UserDocument>).data.locale).toBe(getDefaultLocale());
     });
 
     it('is editable afterwards', async () => {
@@ -71,7 +71,7 @@ describe('a user’s persisted locale', () => {
         );
 
         expect(updated.success).toBe(true);
-        expect((updated as ResponseSuccess<UserDocument>).data!.locale).toBe('it');
+        expect((updated as ResponseSuccess<UserDocument>).data.locale).toBe('it');
     });
 
     it('is left alone by an update that does not mention it', async () => {

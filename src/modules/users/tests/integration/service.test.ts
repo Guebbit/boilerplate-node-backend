@@ -662,7 +662,7 @@ describe('userService.update', () => {
         );
 
         expect(result.success).toBe(true);
-        expect((result as ResponseSuccess<UserDocument>).data!.username).toBe('direct-update');
+        expect((result as ResponseSuccess<UserDocument>).data.username).toBe('direct-update');
     });
 });
 

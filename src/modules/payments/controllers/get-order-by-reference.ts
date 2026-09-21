@@ -28,9 +28,6 @@ export const getOrderByReference = (
         .getOrderByReference(parsed.data.ref)
         .then((result) => {
             if (refused(response, result)) return;
-            // A success result for this endpoint always carries the order; this satisfies the
-            // type checker without loosening it.
-            if (!result.data) throw new Error('reference lookup succeeded without an order');
             // `withActions` is what every `orders` read puts on the wire: the lines' `current`
             // images resolved, and the actions this caller may take next — which is the whole
             // point here, since `refund`/`cancel` is where the admin goes from this screen.

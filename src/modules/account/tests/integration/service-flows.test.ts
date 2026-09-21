@@ -50,7 +50,7 @@ describe('accountService.signup', () => {
         );
 
         expect(result.success).toBe(true);
-        expect((result as ResponseSuccess<UserDocument>).data!.email).toBe('new@example.com');
+        expect((result as ResponseSuccess<UserDocument>).data.email).toBe('new@example.com');
     });
 
     it('rejects when passwords do not match', async () => {
@@ -169,7 +169,7 @@ describe('accountService.login', () => {
         const result = await accountService.login('login@example.com', PLAIN_PASSWORD);
 
         expect(result.success).toBe(true);
-        expect((result as ResponseSuccess<UserDocument>).data!.email).toBe('login@example.com');
+        expect((result as ResponseSuccess<UserDocument>).data.email).toBe('login@example.com');
     });
 
     it('rejects with 401 for the wrong password', async () => {

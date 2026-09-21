@@ -16,10 +16,8 @@ export const asReject = <T>(response: ResponseSuccess<T> | ResponseReject): Resp
     return response as ResponseReject;
 };
 
-/** Narrow to the success arm, and to a present `data` — the reject arm declares it `undefined`. */
-export const asSuccess = <T>(
-    response: ResponseSuccess<T> | ResponseReject
-): ResponseSuccess<T> & { data: T } => {
+/** Narrow to the success arm. `data` is already required on `ResponseSuccess`. */
+export const asSuccess = <T>(response: ResponseSuccess<T> | ResponseReject): ResponseSuccess<T> => {
     expect(response.success).toBe(true);
-    return response as ResponseSuccess<T> & { data: T };
+    return response as ResponseSuccess<T>;
 };

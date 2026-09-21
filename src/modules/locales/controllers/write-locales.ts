@@ -43,10 +43,6 @@ export const createLocale = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            // A success result for this endpoint always carries the created language; this
-            // satisfies the type checker without loosening it.
-            if (!result.data) throw new Error('locale create succeeded without a language');
-
             // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform: the
             // document is typed as stored, not as the wire shape `Language` promises.
             return successResponse<Language>(response, result.data.toJSON() as Language, 201);
@@ -73,10 +69,6 @@ export const updateLocale = (
         .updateLanguage(request.params.locale, parseResult.data, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-
-            // A success result for this endpoint always carries the updated language; this
-            // satisfies the type checker without loosening it.
-            if (!result.data) throw new Error('locale update succeeded without a language');
 
             // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform.
             return successResponse<Language>(response, result.data.toJSON() as Language);

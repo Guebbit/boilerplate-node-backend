@@ -27,9 +27,6 @@ export const mintApiKey = (
         .mintApiKey(body, tenantCallerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            // `refused` only reports the reject branch; a success result always carries the
-            // minted credential.
-            if (!result.data) throw new Error('api key minted without a result');
             return successResponse<ApiKeyCreated>(response, result.data, 201);
         })
         .catch(catchAs(response, 'mintApiKey'));

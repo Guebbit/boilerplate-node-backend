@@ -40,9 +40,6 @@ export const putFeedbackStatus = (
         .updateStatusById(request.params.id, body, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            // `refused` only reports the reject branch; a success result for this endpoint always
-            // carries the saved document, so this satisfies the type checker without loosening it.
-            if (!result.data) throw new Error('feedback status update succeeded without a ticket');
             // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform.
             return successResponse<FeedbackRequest>(
                 response,

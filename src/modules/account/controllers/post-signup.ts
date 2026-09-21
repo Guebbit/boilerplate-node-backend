@@ -82,13 +82,6 @@ export const postSignup = (
                 });
 
             const { data } = result;
-            if (data === undefined) {
-                // A success verdict without a user is a broken service contract, not a bad request.
-                authSignupTotal.inc({ status: 'failure' });
-                return deleteUpload().then(() => {
-                    rejectResponse(response, 500, []);
-                });
-            }
 
             // `Document#isNew` stays true until `.save()`: true means rung 2 refused and NO
             // account was created. https://mongoosejs.com/docs/api/document.html#Document.prototype.isNew

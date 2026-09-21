@@ -4,7 +4,7 @@
  */
 
 import type { Request, Response } from 'express';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { successResponse } from '@infrastructure/http/response';
 import type { SessionsResponse } from '@types';
 import { accountService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
@@ -25,14 +25,7 @@ export const getSessions = (request: Request, response: Response) => {
         .then((result) => {
             if (refused(response, result)) return;
 
-            const { data } = result;
-            if (data === undefined) {
-                // A success verdict without sessions is a broken service contract, not a bad request.
-                rejectResponse(response, 500, []);
-                return;
-            }
-
-            successResponse<SessionsResponse>(response, data);
+            successResponse<SessionsResponse>(response, result.data);
         })
         .catch(catchAs(response, 'getSessions'));
 };

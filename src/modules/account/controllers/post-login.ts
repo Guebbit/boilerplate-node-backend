@@ -76,11 +76,6 @@ export const postLogin = (
             }
 
             const { data } = result;
-            if (data === undefined) {
-                // A success verdict without a user is a broken service contract, not a login failure.
-                rejectResponse(response, 500, []);
-                return;
-            }
             const userId = data._id.toString();
 
             /*

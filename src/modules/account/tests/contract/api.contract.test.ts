@@ -363,7 +363,7 @@ describe('POST /account/export', () => {
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 2)]);
         const intent = await createIntent(String(order._id), asCustomer(user.id));
-        const payment = (intent as ResponseSuccess<Payment>).data!;
+        const payment = (intent as ResponseSuccess<Payment>).data;
 
         const response = await api().post('/account/export').set('Authorization', bearer).send();
 

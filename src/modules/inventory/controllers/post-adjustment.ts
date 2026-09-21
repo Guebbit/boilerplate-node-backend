@@ -32,9 +32,6 @@ export const postAdjustment = (request: Request, response: Response) => {
         .adjust(productId, delta, note, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            // `ResponseSuccess.data` is optional at the type level for endpoints with no payload;
-            // `adjust` always resolves one on success, so this is exhaustiveness.
-            if (!result.data) return rejectResponse(response, 500, [t('generic.error-internal')]);
             successResponse<InventoryLevel>(response, result.data, 200, result.message);
         })
         .catch(catchAs(response, 'postAdjustment'));

@@ -24,8 +24,7 @@ export const postReorder = (request: Request<{ orderId: string }>, response: Res
         .then((result) => {
             if (refused(response, result)) return;
 
-            // `refused` narrows on `success` but not `result`'s type; `data` is always set here.
-            successResponse<CartResponse>(response, result.data!, 200, result.message);
+            successResponse<CartResponse>(response, result.data, 200, result.message);
         })
         .catch(catchAs(response, 'postReorder'));
 };

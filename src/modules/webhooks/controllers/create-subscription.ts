@@ -38,9 +38,6 @@ export const createWebhookSubscription = (
         .createSubscription(body, tenantCallerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            // `refused` only reports the reject branch; a success result always carries the
-            // created subscription.
-            if (!result.data) throw new Error('webhook subscription created without a result');
             return successResponse<WebhookSubscriptionCreated>(
                 response,
                 {

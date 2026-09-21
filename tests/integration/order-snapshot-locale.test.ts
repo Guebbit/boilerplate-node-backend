@@ -13,8 +13,7 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { orderService } from '@modules/orders';
 import { cartService } from '@modules/cart';
-import type { OrderDocument } from '@modules/orders';
-import type { ResponseSuccess } from '@infrastructure/http/response';
+import { asSuccess } from '@tests/response';
 import { localeRepository, translationRepository } from '@modules/locales/repository';
 import { makeLocale } from '@modules/locales/factories';
 
@@ -41,8 +40,6 @@ const givenTranslation = (
         locale === FALLBACK ? undefined : 'digest'
     );
 
-const asSuccess = (result: unknown) => result as ResponseSuccess<OrderDocument>;
-
 describe("orderService.create freezes the snapshot in the buyer's stored locale", () => {
     it("embeds the Italian title/description from `user.locale`, over the caller's own", async () => {
         // The admin path: an English-speaking operator placing an order for an Italian customer.
@@ -63,7 +60,7 @@ describe("orderService.create freezes the snapshot in the buyer's stored locale"
             { ...testCallerContext, locale: 'en' }
         );
 
-        const order = asSuccess(result).data!;
+        const order = asSuccess(result).data;
         expect(order.items[0].locale).toBe('it');
         expect(order.items[0].product.title).toBe('Cuccia');
         expect(order.items[0].product.description).toBe('Una cuccia morbida');
@@ -83,7 +80,7 @@ describe("orderService.create freezes the snapshot in the buyer's stored locale"
             { ...testCallerContext, locale: 'en' }
         );
 
-        const order = asSuccess(result).data!;
+        const order = asSuccess(result).data;
         expect(order.items[0].locale).toBe('it');
         expect(order.items[0].product.title).toBe('Dog Bed');
     });
@@ -99,7 +96,7 @@ describe("cartService.orderConfirm freezes the snapshot in the buyer's stored lo
         await cartService.cartItemSetById(user.id, String(product._id), 1);
         const result = await cartService.orderConfirm(user.id, testCallerContext);
 
-        const order = asSuccess(result).data!;
+        const order = asSuccess(result).data;
         expect(order.items[0].locale).toBe('it');
         expect(order.items[0].product.title).toBe('Cuccia');
         expect(String(order.items[0].product._id)).toBe(String(product._id));

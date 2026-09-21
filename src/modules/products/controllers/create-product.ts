@@ -10,7 +10,6 @@ import type { ParamsDictionary } from 'express-serve-static-core';
 import { productService } from '../service';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { t } from '@infrastructure/i18n';
 import { readInput, callerContextOf } from '@infrastructure/http/request';
 import { readUploadedImage } from '@infrastructure/http/uploads';
 import type { CreateProductRequest, CreateProductRequestMultipart, Product } from '@types';
@@ -65,12 +64,6 @@ export const createProduct = (
             if (!result.success)
                 return deleteUpload().then(() => {
                     rejectResponse(response, result.status, result.errors);
-                });
-            // `ResponseSuccess.data` is optional at the type level for endpoints with no payload;
-            // `writeCreate` always resolves one on success, so this is exhaustiveness.
-            if (!result.data)
-                return deleteUpload().then(() => {
-                    rejectResponse(response, 500, [t('generic.error-internal')]);
                 });
             successResponse<Product>(response, productService.toProduct(result.data), 201);
         })

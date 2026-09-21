@@ -5,10 +5,9 @@
  */
 
 import type { Request, Response } from 'express';
-import { t } from '@infrastructure/i18n';
 import { orderService } from '../services';
 import type { CancelOrderRequest, Order } from '@types';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { successResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs, refused } from '@infrastructure/http/controller';
 
@@ -34,12 +33,6 @@ export const postCancelOrder = (
         )
         .then((result) => {
             if (refused(response, result)) return;
-            // `ResponseSuccess.data` is optional at the type level for endpoints with no payload;
-            // `cancelById` always resolves one on success, so this is exhaustiveness.
-            if (!result.data) {
-                rejectResponse(response, 500, [t('generic.error-internal')]);
-                return;
-            }
 
             return orderService.withActions(result.data, request.authContext).then((order) => {
                 successResponse<Order>(response, order, 200, result.message);

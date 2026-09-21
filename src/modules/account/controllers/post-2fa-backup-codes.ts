@@ -40,17 +40,10 @@ export const post2faBackupCodes = (
                 return;
             }
 
-            const { data } = result;
-            if (data === undefined) {
-                // A success verdict without codes is a broken service contract, not a bad request.
-                rejectResponse(response, 500, []);
-                return;
-            }
-
             authTwoFactorBackupCodesRegenerateTotal.inc({ status: 'success' });
             successResponse<TwoFactorBackupCodesRegenerated>(
                 response,
-                data,
+                result.data,
                 200,
                 t('account.two-factor.backup-codes-regenerated')
             );

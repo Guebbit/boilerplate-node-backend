@@ -41,14 +41,11 @@ export const postPaymentConfirm = (request: Request<{ id?: string }>, response: 
             // is a different incident from a spike in declines.
             if (result.success)
                 paymentConfirmTotal.inc({
-                    outcome: result.data?.status === 'succeeded' ? 'succeeded' : 'in_flight'
+                    outcome: result.data.status === 'succeeded' ? 'succeeded' : 'in_flight'
                 });
             else if (declined) paymentConfirmTotal.inc({ outcome: 'declined' });
 
             if (refused(response, result)) return;
-            // A success result for this endpoint always carries the payment; this satisfies the
-            // type checker without loosening it.
-            if (!result.data) throw new Error('payment confirm succeeded without a payment');
             // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform.
             successResponse<Payment>(
                 response,

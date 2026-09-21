@@ -44,18 +44,10 @@ export const post2faConfirm = (
                 return;
             }
 
-            const { data } = result;
-            if (data === undefined) {
-                // A success verdict without the confirmed method is a broken service contract, not a
-                // bad request.
-                rejectResponse(response, 500, []);
-                return;
-            }
-
             authTwoFactorEnrollTotal.inc({ method, status: 'success' });
             successResponse<TwoFactorConfirmed>(
                 response,
-                data,
+                result.data,
                 200,
                 t('account.two-factor.method-added')
             );

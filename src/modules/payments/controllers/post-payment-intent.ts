@@ -26,9 +26,6 @@ export const postPaymentIntent = (request: Request, response: Response) => {
         .createIntent(body.orderId, request.authContext)
         .then((result) => {
             if (refused(response, result)) return;
-            // A success result for this endpoint always carries the intent; this satisfies the
-            // type checker without loosening it.
-            if (!result.data) throw new Error('payment intent create succeeded without a payment');
             // Already the wire shape: this is the one endpoint whose answer carries a field the
             // document does not have (`clientSecret`), so the service serializes it, not this.
             successResponse<Payment>(response, result.data, 201);

@@ -29,7 +29,7 @@ import {
 import { orderRepository } from '../../repository';
 import { inventoryService } from '@modules/inventory';
 import type { OrderDocument } from '../../model';
-import type { ResponseReject, ResponseSuccess } from '@infrastructure/http/response';
+import { asReject, asSuccess } from '@tests/response';
 import { asCustomer, asAdmin } from '../../../../../tests/support/callers';
 
 /**
@@ -48,9 +48,6 @@ setupTestDb();
 
 const MISSING_ID = '507f1f77bcf86cd799439011';
 
-const asReject = (result: unknown) => result as ResponseReject;
-const asSuccess = (result: unknown) => result as ResponseSuccess<OrderDocument>;
-
 /** Creates an order through the service, returning the persisted document. */
 const seedOrder = async () => {
     const user = await createUser({ email: 'buyer@example.com' });
@@ -67,7 +64,7 @@ const seedOrder = async () => {
         testCallerContext
     );
 
-    return { user, keyboard, mouse, order: asSuccess(result).data! };
+    return { user, keyboard, mouse, order: asSuccess(result).data };
 };
 
 /** Re-read an order after something else moved it, so `update` works on current state. */
@@ -95,7 +92,7 @@ describe('create', () => {
 
         expect(result.success).toBe(true);
         expect(result.status).toBe(201);
-        expect(asSuccess(result).data!.email).toBe(user.email);
+        expect(asSuccess(result).data.email).toBe(user.email);
     });
 
     it('assigns each new order its own sequential invoice number', async () => {
@@ -109,7 +106,7 @@ describe('create', () => {
                 [{ productId: String(product._id), quantity: 1 }],
                 testCallerContext
             )
-        ).data!;
+        ).data;
         const second = asSuccess(
             await create(
                 String(user._id),
@@ -117,7 +114,7 @@ describe('create', () => {
                 [{ productId: String(product._id), quantity: 1 }],
                 testCallerContext
             )
-        ).data!;
+        ).data;
 
         expect(first.invoiceNumber).toBeDefined();
         expect(second.invoiceNumber).toBeDefined();
@@ -291,7 +288,7 @@ describe('update', () => {
         const result = await update(await reload(order), { status: 'processing' });
 
         expect(result.success).toBe(true);
-        expect(asSuccess(result).data!.status).toBe('processing');
+        expect(asSuccess(result).data.status).toBe('processing');
     });
 
     /**
@@ -382,7 +379,7 @@ describe('update', () => {
         const result = await update(order, { status: 'pending', email: 'same@example.com' });
 
         expect(result.success).toBe(true);
-        expect(asSuccess(result).data!.email).toBe('same@example.com');
+        expect(asSuccess(result).data.email).toBe('same@example.com');
     });
 
     it('changes the email', async () => {
@@ -532,7 +529,7 @@ describe('updateById', () => {
         );
 
         expect(result.success).toBe(true);
-        expect(asSuccess(result).data!.email).toBe('moved@example.com');
+        expect(asSuccess(result).data.email).toBe('moved@example.com');
     });
 
     it('rejects with 404 for an id that does not exist', async () => {

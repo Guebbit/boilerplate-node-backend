@@ -39,9 +39,6 @@ export const getLocaleEntries = (
         .searchEntries(request.params.locale, { ...parseResult.data, text, tenant })
         .then((result) => {
             if (!result.success) return rejectResponse(response, result.status, result.errors);
-            // A success result for this endpoint always carries a page; this satisfies the type
-            // checker without loosening it.
-            if (!result.data) throw new Error('locale entry search succeeded without a page');
             // `search()` already returns normalized (wire-shape) rows — unlike `findById`/`findOne`,
             // it never hands back a hydrated document, so there is no `.toJSON()` to apply here.
             // The repository factory's `PaginatedResult<TDocument>` names the pre-normalize type,

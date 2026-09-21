@@ -73,10 +73,6 @@ export const updateProduct = (
                 return deleteUpload().then(() => {
                     rejectResponse(response, result.status, result.errors);
                 });
-            if (!result.data)
-                return deleteUpload().then(() => {
-                    rejectResponse(response, 500, [t('generic.error-internal')]);
-                });
             successResponse<Product>(response, productService.toProduct(result.data));
         })
         .catch((error: unknown) =>

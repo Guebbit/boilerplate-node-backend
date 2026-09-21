@@ -27,7 +27,6 @@ export const replayWebhookDelivery = (request: Request<{ id: string }>, response
         .replayDelivery(id, tenantCallerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            if (!result.data) throw new Error('webhook delivery replay succeeded without a result');
             return successResponse<WebhookDelivery>(
                 response,
                 result.data.toJSON() as WebhookDelivery

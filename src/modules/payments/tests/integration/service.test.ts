@@ -36,15 +36,13 @@ import usersModule from '@modules/users/module';
 import accountModule from '@modules/account/module';
 import cartModule from '@modules/cart/module';
 import deliveryModule from '@modules/delivery/module';
-import type { ResponseReject } from '@infrastructure/http/response';
+import { asReject } from '@tests/response';
 import { asCustomer, asAdmin, asModerator } from '../../../../../tests/support/callers';
 
 setupTestDb();
 
 /** The reference the demo's own panel sends — an opaque handle, never a card number. */
 const GOOD_METHOD = 'pm_card_visa';
-
-const asReject = (result: unknown) => result as ResponseReject;
 
 /** One paying customer with one two-line order, the fixture most tests start from. */
 const orderFor = async (price = 25, quantity = 2) => {

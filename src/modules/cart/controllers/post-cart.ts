@@ -40,8 +40,7 @@ export const postCart = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            // `refused` narrows on `success` but not `result`'s type; `data` is always set here.
-            successResponse<CartResponse>(response, result.data!, 200, t('cart.product-added'));
+            successResponse<CartResponse>(response, result.data, 200, t('cart.product-added'));
         })
         .catch(catchAs(response, 'upsertCartItem'));
 };

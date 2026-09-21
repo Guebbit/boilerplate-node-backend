@@ -31,13 +31,7 @@ export const post2faSetup = (request: Request<{ method: string }>, response: Res
                 rejectResponse(response, result.status, result.errors);
                 return;
             }
-            const { data } = result;
-            if (data === undefined) {
-                // A success verdict without a payload is a broken service contract, not a bad request.
-                rejectResponse(response, 500, []);
-                return;
-            }
-            successResponse<TwoFactorSetup>(response, data);
+            successResponse<TwoFactorSetup>(response, result.data);
         })
         .catch((error: unknown) => rejectDatabaseError(response, 'post2faSetup', error));
 };

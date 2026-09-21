@@ -9,7 +9,7 @@
 
 import type { Request, Response } from 'express';
 import type { Payment } from '@types';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { successResponse } from '@infrastructure/http/response';
 import { paymentService } from '../services';
 import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs, refused } from '@infrastructure/http/controller';
@@ -21,13 +21,6 @@ export const postPaymentSync = (request: Request<{ id?: string }>, response: Res
         .syncPayment(paymentId, request.authContext, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-
-            if (!result.data) {
-                // A success verdict without a payment is a broken service contract, not a bad
-                // request.
-                rejectResponse(response, 500, []);
-                return;
-            }
 
             // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform.
             successResponse<Payment>(

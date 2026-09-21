@@ -220,7 +220,7 @@ const reportAttempt = (
 ): ResponseSuccess<PaymentDocument> | ResponseReject => {
     const declined =
         !result.success && result.errors.some(({ code }) => code === 'PAYMENT_DECLINED');
-    const settled = result.success && result.data?.status === 'succeeded';
+    const settled = result.success && result.data.status === 'succeeded';
     if (!settled && !declined) return result;
 
     emitAuditEvent(

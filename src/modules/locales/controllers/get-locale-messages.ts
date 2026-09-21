@@ -24,9 +24,6 @@ export const getLocaleMessages = (
         .readMessages(request.params.locale, request.query.tenant?.trim() || undefined)
         .then((result) => {
             if (!result.success) return rejectResponse(response, result.status, result.errors);
-            // A success result for this endpoint always carries a dictionary; this satisfies the
-            // type checker without loosening it.
-            if (!result.data) throw new Error('locale message read succeeded without a dictionary');
             return successResponse<LocaleMessages>(response, result.data);
         })
         .catch(catchAs(response, 'getLocaleMessages'));

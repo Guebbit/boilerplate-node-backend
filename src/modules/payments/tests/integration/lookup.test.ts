@@ -15,11 +15,9 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, readOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { getOrderByReference, recordOfflinePayment } from '@modules/payments/services';
 import { buildReference } from '@modules/orders';
-import type { ResponseReject } from '@infrastructure/http/response';
+import { asReject } from '@tests/response';
 
 setupTestDb();
-
-const asReject = (result: unknown) => result as ResponseReject;
 
 const orderIdOf = (result: unknown) => String((result as { data?: { _id: unknown } }).data?._id);
 

@@ -54,10 +54,6 @@ export const createLocaleEntry = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            // A success result for this endpoint always carries the created entry; this satisfies
-            // the type checker without loosening it.
-            if (!result.data) throw new Error('locale entry create succeeded without an entry');
-
             refreshOverrides();
 
             // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform: the
@@ -89,10 +85,6 @@ export const updateLocaleEntry = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            // A success result for this endpoint always carries the saved entry; this satisfies
-            // the type checker without loosening it.
-            if (!result.data) throw new Error('locale entry update succeeded without an entry');
-
             refreshOverrides();
 
             // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform.
@@ -113,10 +105,6 @@ const importEntries = (
         .importEntries(request.params.locale, tenant, entries, mode, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-
-            // A success result for this endpoint always carries the import counts; this satisfies
-            // the type checker without loosening it.
-            if (!result.data) throw new Error('locale entry import succeeded without a result');
 
             refreshOverrides();
 

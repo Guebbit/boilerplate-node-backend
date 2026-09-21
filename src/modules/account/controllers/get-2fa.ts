@@ -25,14 +25,7 @@ export const get2fa = (request: Request, response: Response) => {
                 return;
             }
 
-            const { data } = result;
-            if (data === undefined) {
-                // A success verdict without a status is a broken service contract, not a bad request.
-                rejectResponse(response, 500, []);
-                return;
-            }
-
-            successResponse<TwoFactorStatus>(response, data);
+            successResponse<TwoFactorStatus>(response, result.data);
         })
         .catch((error: unknown) => rejectDatabaseError(response, 'get2fa', error));
 };
