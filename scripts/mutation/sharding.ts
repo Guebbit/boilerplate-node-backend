@@ -21,16 +21,21 @@ export interface Shard {
 /**
  * Target lines per shard.
  *
- * Derivation: `observability` measured ~7.1s/mutant at `--concurrency 2`
- * (docs/tools/mutation-testing.md), and density there was ~1 mutant per mutable line. The
- * `mutation` job's `timeout-minutes: 210` reserves up to 20 for the dry run
- * (`dryRunTimeoutMinutes` in `stryker.json`), leaving `(210 - 20) * 60 / 7.1 ≈ 1606` lines of
- * budget. Kept well under that — at 1300 — as headroom for the ~30 modules this ratio has never
- * actually been measured against; it comes from ONE file. Re-derive both numbers together once a
- * few weeks of real shard timings exist, and keep them in the same commit: this constant and the
- * workflow's `timeout-minutes` are coupled and nothing checks that they still agree.
+ * Re-derived 2026-09-21 from a REAL shard, not the single-file extrapolation this constant used
+ * to rest on: `shard-00` (1300 lines, 346 mutants) measured **219 minutes at `--concurrency 2`** —
+ * ~38s/mutant, not the ~7.1s/mutant `observability` alone had suggested. At `--concurrency 1` the
+ * gap was worse than a clean 2x: every other shard in the full sweep still hadn't finished after
+ * 350 minutes (2026-09-21's CI run — all 35 remaining shards hit that ceiling simultaneously).
+ * `--concurrency 2` is back for exactly that reason; see the workflow's own comment.
+ *
+ * 600 lines, at the measured ~38s/mutant, budgets to roughly 100 minutes per shard — real margin
+ * under `timeout-minutes: 350`, and a shard half this size relates roughly half as much of the
+ * integration suite through `enableFindRelatedTests`, which is what actually drove the `bson`
+ * OOMs (`docs/tools/mutation-testing.md#worker-heap-cap`), not concurrency by itself. Re-derive
+ * both numbers together once a few weeks of real shard timings exist at THIS size — this constant
+ * and the workflow's `timeout-minutes` are coupled and nothing checks that they still agree.
  */
-export const TARGET_LINES_PER_SHARD = 1300;
+export const TARGET_LINES_PER_SHARD = 600;
 
 /**
  * Largest-file-first bin packing.

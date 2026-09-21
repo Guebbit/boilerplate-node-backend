@@ -86,11 +86,13 @@ jobs:
         if: github.event_name != 'pull_request'
         runs-on: ubuntu-latest
         # See scripts/mutation/sharding.ts's `TARGET_LINES_PER_SHARD` comment — this number and
-        # that constant are coupled and nothing checks that they still agree. Raised twice,
-        # 2026-09-21: 210->270 after a measured shard (shard-00, local) took 219m at
-        # `--concurrency 2`; 270->350 alongside the drop to `--concurrency 1` below, which roughly
-        # doubles a shard's own wall-clock — 350 is as close to GitHub's 360m hosted-runner
-        # ceiling as leaves any margin at all.
+        # that constant are coupled and nothing checks that they still agree. History, 2026-09-21:
+        # 210->270 after a measured shard took 219m at `--concurrency 2`; 270->350 alongside a drop
+        # to `--concurrency 1` that was meant to roughly double wall-clock but instead made EVERY
+        # remaining shard blow straight through 350m simultaneously (real ratio was worse than 2x).
+        # Concurrency is back to 2 (below) and the shard target dropped 1300->600 lines instead —
+        # smaller shards cost less time AND less peak memory, which concurrency alone couldn't
+        # buy. Left at 350 anyway: real margin, still under GitHub's 360m hosted-runner ceiling.
         timeout-minutes: 350
         permissions:
             contents: read
@@ -127,23 +129,22 @@ jobs:
                       mutation-incremental-${{ matrix.name }}-
 
             - name: Run the mutate scope for ${{ matrix.name }}
-              # `--concurrency 1`, not 2 (and not the config's 4). Capping the heap
-              # (NODE_OPTIONS below) fixed nothing: shard-06 OOM'd the same way right after —
-              # `docs/tools/mutation-testing.md#worker-heap-cap`'s own table calls this out as a
-              # SEPARATE failure mode from the one a heap cap addresses. `bson` allocates its
-              # scratch buffers as ArrayBuffers, outside V8's heap entirely, and the dry run
-              # re-evaluates it once per covering test file — on a file `enableFindRelatedTests`
-              # relates to a wide swath of the integration suite (shard-03, shard-06, shard-34 all
-              # were), two workers accumulating that in parallel is what exhausted a 16 GB runner,
-              # not V8's own ceiling. One worker halves the simultaneous accumulation; it costs
-              # wall-clock, not reliability — a shard that times out can be re-run and picks up
-              # from its incremental cache, one that OOMs produces nothing at all.
+              # `--concurrency 2`, not the config's 4 — a GitHub runner is 4 vCPU / 16 GB, and each
+              # worker carries its own in-memory mongod. `--concurrency 1` (briefly, 2026-09-21) was
+              # meant to fix three shards OOM'ing on `bson`'s off-heap scratch buffers
+              # (docs/tools/mutation-testing.md#worker-heap-cap) — it "fixed" that by making every
+              # shard, not just three, blow through even a 350m timeout, since halving concurrency
+              # roughly doubles wall-clock and the real ratio was worse than 2x. The shard TARGET
+              # (scripts/mutation/sharding.ts) dropped 1300->600 lines instead: a smaller `--mutate`
+              # scope relates less of the integration suite through `enableFindRelatedTests`, which
+              # is what actually drove the accumulation — concurrency was never the right lever.
               #
-              # NODE_OPTIONS still caps V8's own old-space — worth keeping as a second guard, and
-              # raised now that one worker isn't sharing the 16 GB with a second.
+              # NODE_OPTIONS caps V8's own old-space — didn't fix the OOM by itself (see above,
+              # bson's buffers sit outside it), kept anyway as a second, cheap guard against the
+              # OTHER failure mode the same doc section describes.
               env:
-                  NODE_OPTIONS: --max-old-space-size=8192
-              run: npx stryker run stryker.json --mutate '${{ matrix.mutate }}' --concurrency 1 ${{ inputs.force && '--force' || '' }}
+                  NODE_OPTIONS: --max-old-space-size=4096
+              run: npx stryker run stryker.json --mutate '${{ matrix.mutate }}' --concurrency 2 ${{ inputs.force && '--force' || '' }}
 
             - name: Upload the shard's report
               if: always()
