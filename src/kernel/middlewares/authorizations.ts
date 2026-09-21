@@ -226,32 +226,11 @@ export const isAuth = (request: Request, response: Response, next: NextFunction)
 
 /**
  * {@link isAuth} for a route an API KEY may also reach: rejects with 401 unless `getAuth`
- * resolved EITHER a human session or an `sk_...` credential.
+ * resolved EITHER a human session (a genuine bearer one, same as {@link isAuth}) or an `sk_...`
+ * credential.
  *
- * Why this is a second guard and not a widening of `isAuth`: `request.caller` alone means no
- * `authContext`, and ~100 reads across the modules assume one is there — many written
- * `request.authContext!.id`, sound only while `isAuth` guarantees it. Admitting credentials
- * through `isAuth` would turn every one of those into a `TypeError` and a 500, on exactly the
- * routes where a machine credential makes least sense. Splitting the guard instead means a
- * forgotten mount answers 401, which is the direction an auth mistake should fail in.
- *
- * Mount this ONLY where both hold, and they are checkable rather than a matter of taste:
- *
- * - every guard on the route is a tenant-scoped `<family>.any.<action>` key, and
- * - no controller it reaches reads `request.authContext`.
- *
- * Both halves are asserted, both by `tests/cross-cutting/authenticated-controllers.test.ts`: it
- * reads the real mounted chain, refusing an `authContext!` read on any route this guard fronts
- * and a non-`.any.` `requirePermission` key behind one. A controller that starts reading
- * `authContext` behind this guard fails the suite, not production.
- *
- * NOT for a step-up route. `requireFreshAuth` reads `authContext` and a credential can never
- * answer a re-authentication challenge, so pairing them gives a partner integration a 401 it can
- * never clear. No route mounts both today, and that is the rule, not a coincidence.
- *
- * A cookie-only caller does not satisfy this guard either, for the same reason {@link isAuth}
- * refuses one: `requirePermissionViaCookie` sets `caller` too, alongside `authContext`, and
- * `isCredentialCaller` is what tells that apart from a genuine `sk_...` credential.
+ * Why a second guard, where to mount it, and how both halves of that decision are kept honest:
+ * see docs/tools/security.md#machine-to-machine-credentials.
  *
  * @param request - must already carry `authContext` or `caller`, set upstream by `getAuth`
  * @param response - answered 401 when neither was resolved
