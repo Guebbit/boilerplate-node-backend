@@ -97,7 +97,10 @@ x-app-env: &app-env
     # `docker/mongo-init.js`), so the database already in the path is its auth source.
     # `?replicaSet=rs0` matches the bundled `database`'s own one-node set (see `database` and
     # `mongo-rs-init` below) — only on the bundled default; a managed URI supplies its own topology.
-    NODE_DB_URI: '${NODE_DB_URI:-mongodb://${MONGO_APP_USER:-api}:${MONGO_APP_PASSWORD:-}@database:27017/${MONGO_DB:-api}?replicaSet=rs0}'
+    # `tls=true&tlsCAFile=...`: `database` requires TLS (`--tlsMode requireTLS`, see its own
+    # `command:` below) under a self-signed CA `mongo-entrypoint.sh` mints — `/ca-dir` is the
+    # volume that CA's public cert is shared into, mounted read-only on this container too.
+    NODE_DB_URI: '${NODE_DB_URI:-mongodb://${MONGO_APP_USER:-api}:${MONGO_APP_PASSWORD:-}@database:27017/${MONGO_DB:-api}?replicaSet=rs0&tls=true&tlsCAFile=/ca-dir/mongo-ca.crt}'
     NODE_REDIS_URL: '${NODE_REDIS_URL:-redis://:${REDIS_PASSWORD:-}@cache:6379}'
     NODE_RABBITMQ_URL: '${NODE_RABBITMQ_URL:-amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-}@queue:5672}'
 
@@ -160,6 +163,10 @@ services:
             # abandoned after `NODE_QUARANTINE_RETENTION_HOURS` (24h), a window that only means
             # anything if the directory survives a restart.
             - quarantine:/app/quarantine
+            # The bundled Mongo's self-signed CA cert (see `mongo-entrypoint.sh`) — what
+            # `NODE_DB_URI`'s `tlsCAFile` verifies `database`'s certificate against. Read-only:
+            # this container only ever needs to TRUST the CA, never mint from it.
+            - mongo-ca-dir:/ca-dir:ro
 
         depends_on:
             # `required: false`: a managed backing service has no container here to wait on — see
@@ -233,6 +240,8 @@ services:
             # walk an empty read-only path and report nothing to do, every night, silently.
             - storage:/app/storage
             - quarantine:/app/quarantine
+            # Same reasoning as `app`'s own mount — `ops/reap-*`/`sweep:*` connect to Mongo too.
+            - mongo-ca-dir:/ca-dir:ro
         command: ['crond', '-f', '-d', '8']
         depends_on:
             database:
@@ -262,9 +271,13 @@ services:
             <<: *app-env
             # See `cron`'s own comment: a dedicated var sidesteps podman-compose 1.6's suffix bug.
             NODE_SERVICE_NAME: '${NODE_SETUP_SERVICE_NAME:-api-setup}'
-        # Writes to Mongo and nothing else, so it needs no volume — but there is no reason for a
-        # one-shot bootstrap to hold capabilities either.
+        # Writes to Mongo and nothing else, so it needs no volume beyond the CA cert below — but
+        # there is no reason for a one-shot bootstrap to hold capabilities either.
         <<: *hardening
+
+        volumes:
+            # Same reasoning as `app`'s own mount — `db:sync`/`access:bootstrap` connect to Mongo too.
+            - mongo-ca-dir:/ca-dir:ro
 
         command: ['sh', '-c', 'npm run deploy:setup']
         depends_on:
@@ -287,9 +300,9 @@ services:
         # set of one is only this line. `--keyFile` is what auth requires once `--replSet` is on,
         # even with a single member — MongoDB refuses `--auth` alone on a replica set.
         #
-        # `mongo-entrypoint.sh` wraps the image's own entrypoint purely to get the keyFile onto
-        # disk with the right ownership first — see its own header for why that isn't a separate
-        # one-shot service instead.
+        # `mongo-entrypoint.sh` wraps the image's own entrypoint purely to get the keyFile and the
+        # TLS certificates onto disk with the right ownership first — see its own header for why
+        # that isn't a separate one-shot service instead.
         entrypoint: ['bash', '/mongo-entrypoint.sh']
         command: [
                 'mongod',
@@ -303,7 +316,17 @@ services:
                 # over src/) — so server-side JS is a pure NoSQL-injection escalation surface with
                 # nothing depending on it. MongoDB's own security checklist:
                 # https://www.mongodb.com/docs/manual/administration/security-checklist/
-                '--noscripting'
+                '--noscripting',
+                # Wire TLS — a keyFile authenticates replica-set members to each other, it does not
+                # encrypt anything on the wire. `mongo-entrypoint.sh` mints `mongo-server.pem`
+                # (self-signed CA by default; see its own comment for bringing a real one instead).
+                # Deliberately NO `--tlsCAFile` here: that would make mongod demand a certificate
+                # BACK from every connecting client (mTLS), a heavier control than this deployment
+                # chose — client-cert auth on top of SCRAM is real but disproportionate here.
+                '--tlsMode',
+                'requireTLS',
+                '--tlsCertificateKeyFile',
+                '/keyfile-dir/mongo-server.pem'
             ]
         environment:
             # Root stays maintenance-only — the app authenticates as MONGO_APP_USER instead
@@ -317,6 +340,9 @@ services:
         volumes:
             - mongo-data:/data/db
             - mongo-keyfile-dir:/keyfile-dir
+            # Read-write here — `mongo-entrypoint.sh` is what copies the CA's public cert out to
+            # this volume; every OTHER mount of it (`app`/`cron`/`setup`/`mongo-rs-init`) is `:ro`.
+            - mongo-ca-dir:/ca-dir
             - ./docker/mongo-entrypoint.sh:/mongo-entrypoint.sh:ro
             # First-run only, same as the Umami init script: creates MONGO_APP_USER against an
             # empty data directory and never runs again on that volume. Runs during the official
@@ -330,8 +356,21 @@ services:
         # exec database mongosh -u "$MONGO_ROOT_USER" -p`.
         healthcheck:
             # `ping` needs no auth even under `--keyFile` (which implies `--auth`), so this keeps
-            # gating readiness the same way it did as a standalone.
-            test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+            # gating readiness the same way it did as a standalone. `--tls --tlsCAFile`: mongod
+            # requires TLS now (`--tlsMode requireTLS` above), including for this loopback
+            # connection — the cert this validates against is `/keyfile-dir/mongo-ca.crt`, reached
+            # directly since this check runs inside the same container mongod does.
+            test:
+                [
+                    'CMD',
+                    'mongosh',
+                    '--quiet',
+                    '--tls',
+                    '--tlsCAFile',
+                    '/keyfile-dir/mongo-ca.crt',
+                    '--eval',
+                    "db.adminCommand('ping').ok"
+                ]
             interval: 10s
             timeout: 5s
             retries: 5
@@ -351,6 +390,9 @@ services:
             MONGO_ROOT_PASSWORD: '${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in the client env file}'
         volumes:
             - ./docker/mongo-rs-init.sh:/mongo-rs-init.sh:ro
+            # Connects to `database` over the compose network, not the loopback interface the
+            # healthcheck uses — needs its own copy of the CA cert, same reasoning as `app`'s mount.
+            - mongo-ca-dir:/ca-dir:ro
         depends_on:
             database:
                 condition: service_healthy
@@ -409,6 +451,7 @@ services:
 volumes:
     mongo-data:
     mongo-keyfile-dir:
+    mongo-ca-dir:
     redis-data:
     rabbitmq-data:
     uploads:

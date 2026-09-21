@@ -57,6 +57,7 @@ stack:
         stdin-command = '''
             docker compose --env-file clients/acme/.env -f docker-compose.production.yml \
                 exec -T database sh -c 'mongodump --host localhost --port 27017 \
+                --tls --tlsCAFile /keyfile-dir/mongo-ca.crt \
                 -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" \
                 --authenticationDatabase admin --oplog --archive --gzip'
         '''
@@ -98,6 +99,11 @@ distinction matters:
 Both verified end to end against this repo's own stack: a full `--oplog` dump, a selective
 `--nsInclude` restore of just the client's database, and — separately — a full `--oplogReplay`
 restore.
+
+Both `mongorestore` commands above also need `--tls --tlsCAFile <path to the target's CA cert>`
+once the restore target requires TLS — the bundled `database` does (see
+[Reaching the store](../theory/defences/data-layer.md#reaching-the-store)); a scratch throwaway
+instance you spin up for the disaster-recovery drill only needs it if you turned TLS on there too.
 
 ## The rules that hold wherever it runs
 

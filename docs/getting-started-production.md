@@ -63,7 +63,10 @@ maintenance-only — the app itself authenticates as `MONGO_APP_USER`, a `readWr
 starts the `database`/`cache`/`queue` containers below. Pointing at a managed MongoDB, Redis or
 RabbitMQ instead is two edits, not a compose-file change: set `NODE_DB_URI`/`NODE_REDIS_URL`/
 `NODE_RABBITMQ_URL` to the managed connection string, and clear `COMPOSE_PROFILES` so the bundled
-containers never start.
+containers never start. The bundled `database` requires TLS and its default `NODE_DB_URI` already
+carries `tls=true&tlsCAFile=/ca-dir/...` against the self-signed CA `mongo-entrypoint.sh` mints
+([Reaching the store](theory/defences/data-layer.md#reaching-the-store)) — a managed provider's own
+connection string supplies its own TLS, so this is a bundled-default concern only.
 
 ```bash
 docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml up -d --build

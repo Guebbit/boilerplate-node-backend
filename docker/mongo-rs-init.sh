@@ -8,18 +8,23 @@
 # https://www.mongodb.com/docs/manual/reference/method/rs.initiate/
 set -euo pipefail
 
+# `database` requires TLS (`--tlsMode requireTLS` on its own `command:`) — this container connects
+# over the compose network, not the loopback `database` itself uses, so it needs its own copy of
+# the CA cert `mongo-entrypoint.sh` shares out (`/ca-dir`, mounted read-only on this service).
+TLS_OPTS=(--tls --tlsCAFile /ca-dir/mongo-ca.crt)
+
 # `ping` needs no auth even under `--keyFile` (implies `--auth`) — same reason the compose
 # healthcheck on `database` can stay unauthenticated. Belt over `depends_on`'s own
 # `service_healthy` gate: podman-compose 1.6 does not check a healthcheck the same way Docker
 # Compose does, so this loop is what actually blocks until mongod answers.
-until mongosh --host database --quiet --eval "db.adminCommand('ping').ok" >/dev/null 2>&1; do
+until mongosh --host database "${TLS_OPTS[@]}" --quiet --eval "db.adminCommand('ping').ok" >/dev/null 2>&1; do
     sleep 1
 done
 
 # Idempotent: `rs.status()` throws on an uninitiated set ("no replset config has been received"),
 # which is exactly the signal to call `rs.initiate()`. Re-running this script against an
 # already-initiated set is then a no-op, same as every other seeder in this repo.
-mongosh --host database -u "$MONGO_ROOT_USER" -p "$MONGO_ROOT_PASSWORD" \
+mongosh --host database "${TLS_OPTS[@]}" -u "$MONGO_ROOT_USER" -p "$MONGO_ROOT_PASSWORD" \
     --authenticationDatabase admin --quiet --eval '
         try {
             rs.status();
@@ -33,7 +38,7 @@ mongosh --host database -u "$MONGO_ROOT_USER" -p "$MONGO_ROOT_PASSWORD" \
 # `setup`'s own depends_on trusts this exiting 0 only once the set can actually take writes —
 # `rs.initiate()` returns before election finishes, so `db:sync`/`access:bootstrap` racing this
 # exit would otherwise see a set with no PRIMARY yet.
-until mongosh --host database -u "$MONGO_ROOT_USER" -p "$MONGO_ROOT_PASSWORD" \
+until mongosh --host database "${TLS_OPTS[@]}" -u "$MONGO_ROOT_USER" -p "$MONGO_ROOT_PASSWORD" \
     --authenticationDatabase admin --quiet --eval 'rs.isMaster().ismaster' 2>/dev/null \
     | grep -q true; do
     sleep 1
