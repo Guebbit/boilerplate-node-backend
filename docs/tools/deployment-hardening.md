@@ -24,6 +24,7 @@ standard exists, and an equivalent is always noted.
 | [7 · Backups and restore](#backups-and-tested-restore)                   | §13 backup and DR gaps                          | documented elsewhere |
 | [8 · Object storage](#object-storage-for-uploads)                        | §11 storage exhaustion, §13 public buckets      | **recipe below**     |
 | [9 · Clock](#clock)                                                      | §13 time drift                                  | **recipe below**     |
+| [10 · Encryption at rest](#encryption-at-rest)                           | MongoDB Security Checklist, encryption at rest  | **recipe below**     |
 
 ## TLS termination
 
@@ -201,6 +202,35 @@ is minutes out.
 
 Run NTP (`systemd-timesyncd` or `chrony`) and alert on offset. In a container, the clock is the
 host's — fix it there.
+
+## Encryption at rest
+
+`mongo-data` in `docker-compose.production.yml` is a plain Docker named volume. MongoDB Community
+Edition — the image this repo bundles, `docker.io/library/mongo:8` — has
+[no native encrypted storage engine](https://www.mongodb.com/docs/manual/core/security-encryption-at-rest/);
+WiredTiger's own encryption option is Enterprise-only. That makes this a host job, not an app job:
+
+| Host                       | What to turn on                                                                                                   |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Bare metal / VM you run    | LUKS (`cryptsetup`) or `dm-crypt` under the volume's backing disk                                                 |
+| Managed block storage      | the provider's own "encrypted volume" flag — on by default at most of them, worth confirming rather than assuming |
+| A laptop / single-box demo | full-disk encryption (LUKS, FileVault, BitLocker) covers this along with everything else on the box               |
+
+**restic already covers the backup half.** [Backups](./backups.md)'s repository is encrypted
+client-side by default — a stolen bucket or a leaked snapshot of the _backup_ is not a plaintext
+exposure. This recipe is only about the LIVE `mongo-data` volume the running database writes to.
+
+**Field-level encryption for PII that needs it beyond this** is a separate, narrower control —
+`@infrastructure/security/versioned-secret.ts`, the same primitive `account/two-factor/totp.ts`
+uses; see [Secrets at rest](../theory/defences/crypto-and-secrets.md#secrets-at-rest).
+
+**Considered and deferred:** swapping the base image to
+[Percona Server for MongoDB](https://docs.percona.com/percona-server-for-mongodb/8.0/index.html)
+gets native at-rest encryption AND free audit logging (the other Community-Edition gap, see
+[MongoDB Security Checklist](https://www.mongodb.com/docs/manual/administration/security-checklist/))
+without an Enterprise license. It is a real base-image swap, not a config flag — it touches every
+compose file and needs `mongo-entrypoint.sh`/`mongo-init.js` compatibility checked — so it stays a
+separate decision from this recipe rather than bundled into it.
 
 ## Keeping this true
 
