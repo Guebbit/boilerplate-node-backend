@@ -66,8 +66,8 @@ off to `npm run` — see [Database & seed scripts](#database-seed-scripts). `com
 | -------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
 | `test`               | run unit, cross-cutting, integration, then contract                                                     | [Testing & Docs](./testing-and-docs.md)                                                                                          |
 | `test:module`        | verify                                                                                                  | one module's suites, every layer it owns — `-- src/modules/<name>`; serialised because contract and integration share a database | [Quick Start](./testing-quickstart.md) |
-| `test:unit:report`   | verify                                                                                                  | the unit run again, writing `reports/test-report.json` for the reader below                                                      | [Quick Start](./testing-quickstart.md) |
-| `test:report`        | inspect                                                                                                 | per-module rollup, slowest suites, failures named by module, and per-module coverage when `coverage/lcov.info` exists            | [Quick Start](./testing-quickstart.md) |
+| `test:unit:report`   | verify                                                                                                  | the unit run again, writing `tmp/reports/test-report.json` for the reader below                                                  | [Quick Start](./testing-quickstart.md) |
+| `test:report`        | inspect                                                                                                 | per-module rollup, slowest suites, failures named by module, and per-module coverage when `tmp/coverage/lcov.info` exists        | [Quick Start](./testing-quickstart.md) |
 | `test:unit`          | `tests/unit` plus each module's own `tests/unit` — logic below HTTP                                     | [Testing & Docs](./testing-and-docs.md)                                                                                          |
 | `test:cross-cutting` | repo-wide invariants: bundle freshness, locale parity, no hardcoded user text, every controller catches | [Regenerating](../api/regenerating.md)                                                                                           |
 | `test:unit:coverage` | unit + cross-cutting again, in-band, against the per-file coverage floors                               | [Testing & Docs](./testing-and-docs.md)                                                                                          |
@@ -168,7 +168,7 @@ It deliberately does **not** spell out a URI. One that includes the database nam
 `NODE_MONGODB_NAME` without saying so, which is how these scripts used to seed a database nobody
 had configured. It is also deliberately **one** wrapper rather than a `:host` twin per script:
 those were seven copies of one `cross-env` prefix, and `db:cache:clear:host` had already drifted —
-it blanked Redis but not Mongo. `tests/unit/db/host-scripts.test.ts` fails if a second
+it blanked Redis but not Mongo. `tests/unit/scripts/db/host-scripts.test.ts` fails if a second
 hostname-redirecting script appears.
 
 ## Container scripts

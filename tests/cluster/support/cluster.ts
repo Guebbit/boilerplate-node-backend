@@ -122,10 +122,10 @@ const waitForWorkers = (
  * Boot a cluster of `workers` processes with `env` layered over the defaults.
  *
  * Its own in-memory Mongo, because the workers connect over TCP from another process and cannot be
- * handed this one's mongoose connection. Given its own `dbPath` under the repo's `.tmp/`, one per
- * boot: left unset, `mongodb-memory-server` falls back to `os.tmpdir()`, escaping the ownership
- * `tests/support/global-setup.ts`'s own dbpath spends forty lines establishing — ~200 MB per boot
- * landing in a shared `/tmp` instead.
+ * handed this one's mongoose connection. Given its own `dbPath` under the repo's `tmp/test/`, one
+ * per boot: left unset, `mongodb-memory-server` falls back to `os.tmpdir()`, escaping the
+ * ownership `tests/support/global-setup.ts`'s own dbpath spends forty lines establishing —
+ * ~200 MB per boot landing in a shared `/tmp` instead.
  */
 const startCluster = ({
     workers,
@@ -136,7 +136,7 @@ const startCluster = ({
     env?: Record<string, string>;
     bootTimeoutMs?: number;
 }): Promise<Cluster> => {
-    const dbPath = path.join(REPO_ROOT, '.tmp', 'cluster-mongo', randomUUID());
+    const dbPath = path.join(REPO_ROOT, 'tmp', 'test', 'cluster-mongo', randomUUID());
 
     return mkdir(dbPath, { recursive: true })
         .then(() =>

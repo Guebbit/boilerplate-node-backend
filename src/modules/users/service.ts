@@ -610,7 +610,7 @@ const applyEmailChange = (user: UserDocument, newEmail: string): Promise<UserDoc
 };
 
 /**
- * Stamp that an inactive account has been warned, so the reaper (`ops/reap-inactive-accounts.ts`)
+ * Stamp that an inactive account has been warned, so the reaper (`scripts/ops/reap-inactive-accounts.ts`)
  * does not warn it twice. The one field this operation may touch.
  */
 const markInactivityWarned = (user: UserDocument): Promise<UserDocument> => {
@@ -729,7 +729,7 @@ const linkOAuthAccount = (
 
 /**
  * Every account inactive past the warning threshold, never yet warned —
- * `ops/reap-inactive-accounts.ts`'s first stage.
+ * `scripts/ops/reap-inactive-accounts.ts`'s first stage.
  */
 const findInactiveUnwarned = (cutoff: Date) => userRepository.findInactiveUnwarned(cutoff);
 

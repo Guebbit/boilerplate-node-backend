@@ -15,7 +15,7 @@ the working tree. If empty, use `git status --porcelain` to pick the scope.
 
 ## Naming the scope
 
-Output is `reports/audit/suite-bloat/<SCOPE>.md`, where `<SCOPE>` is:
+Output is `tmp/reports/audit/suite-bloat/<SCOPE>.md`, where `<SCOPE>` is:
 
 - a module → the module name (`orders`)
 - a path → the path slugged, `src/` dropped (`src/infrastructure/http` →
@@ -30,9 +30,9 @@ Two tests belong to the same group when they exercise the same branch with
 inputs that are equivalent under the code's own partitioning — not when their
 titles look similar. Use the evidence, in this order:
 
-- `reports/mutation/mutation.json` and `reports/stryker-incremental.json` — which
+- `tmp/reports/mutation/mutation.json` and `tmp/reports/stryker-incremental.json` — which
   mutants each test kills is the ground truth for "what does this test discriminate"
-- `reports/test-report.json` — per-test duration, for the cost ranking
+- `tmp/reports/test-report.json` — per-test duration, for the cost ranking
 - coverage from `npm run test:unit:coverage` when the mutation data is stale
 
 ### 2 — find the passengers
@@ -55,7 +55,7 @@ ones.
 
 ## Output
 
-Write `reports/audit/suite-bloat/<SCOPE>.md`:
+Write `tmp/reports/audit/suite-bloat/<SCOPE>.md`:
 
 | test name | file | duplicate of | mutants killed uniquely | cost | safe to remove | reason |
 
@@ -67,10 +67,10 @@ Rules:
 - Do NOT delete anything. Do NOT edit test files. This is a report.
 - Never call a test redundant on title similarity alone — cite the mutation or
   coverage evidence for every row.
-- If `reports/mutation/mutation.json` is missing or older than the code under
+- If `tmp/reports/mutation/mutation.json` is missing or older than the code under
   audit, say so at the top of the report and downgrade every verdict to
   "unverified". A guess here deletes real coverage.
 - A test whose only job is to pin a rule the contract states is never bloat, even
   at zero unique mutants. Redundancy is measured against other TESTS, not against
   the value of the rule.
-- `reports/` is gitignored. These files are working evidence, not deliverables.
+- `tmp/reports/` is gitignored. These files are working evidence, not deliverables.

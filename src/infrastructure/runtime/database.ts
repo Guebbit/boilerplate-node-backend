@@ -37,7 +37,7 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * database from the host — it blanks the URI and overrides only `NODE_MONGODB_HOST`, so the
  * database name still comes from `.env` instead of drifting in `package.json`.
  *
- * `tests/unit/db/host-scripts.test.ts` pins the behaviour the `host` script depends on.
+ * `tests/unit/scripts/db/host-scripts.test.ts` pins the behaviour the `host` script depends on.
  */
 export const getDatabaseUri = () => {
     // A full URI wins outright — it may carry credentials or options the fragments cannot express.
@@ -55,7 +55,7 @@ export const getDatabaseUri = () => {
  * Exists for orchestrated environments: when the API container starts alongside the database
  * container, the first few connects legitimately fail while Mongo is still initialising.
  *
- * Does not touch `autoIndex` — a caller with its own requirement (`db/sync-indexes.ts` turns it
+ * Does not touch `autoIndex` — a caller with its own requirement (`scripts/db/sync-indexes.ts` turns it
  * off before calling this; `src/app.ts`'s `startServer` turns it off in production) sets it before
  * calling `start()`, and this shared connection helper has no opinion of its own to override that.
  */

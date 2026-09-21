@@ -58,7 +58,7 @@ Never invent a batch number.
 
 ## Output
 
-Write `reports/audit/compliance-frontend/<SCOPE>.findings.md` (in THIS repo — the report is
+Write `tmp/reports/audit/compliance-frontend/<SCOPE>.findings.md` (in THIS repo — the report is
 audit tooling output, kept with the other audit reports regardless of which repo it inspected), a
 table of:
 
@@ -73,7 +73,7 @@ Rules:
 - Do NOT change any file, in either repo. This is a report.
 - A finding needs a citation. No citation, no finding.
 - `NOT-APPLICABLE` needs a reason too — silently skipping a rule is not allowed.
-- `reports/` is gitignored. These files are working evidence, not deliverables — the conclusions
+- `tmp/reports/` is gitignored. These files are working evidence, not deliverables — the conclusions
   belong in the frontend repo's own compliance doc (if one exists), a tracked issue, or a real fix
   commit there.
 

@@ -81,8 +81,8 @@ assuming `ring[0]`.
    every new TOTP enrollment and every delivered-code HMAC now uses `v2`; every row still stamped
    `v1` keeps decrypting against the entry that wrote it.
 2. Re-encrypt existing rows onto the new key, at whatever pace fits — lazily, the next time a row
-   is written for an unrelated reason, or a one-off `ops/` script (see
-   [Data](../reference/data.md#data-a-one-off-script-under-ops)) that reads every `v1`-stamped
+   is written for an unrelated reason, or a one-off `scripts/ops/` script (see
+   [Data](../reference/data.md#data-a-one-off-script-under-scripts-ops)) that reads every `v1`-stamped
    secret, decrypts and re-encrypts it. Until that finishes, both entries must stay in the ring.
 3. Once nothing decrypts against `v1` any more, drop it from the ring and deploy again. A row still
    stamped with a dropped version fails loudly (`Unknown TOTP key version: v1`) rather than reading

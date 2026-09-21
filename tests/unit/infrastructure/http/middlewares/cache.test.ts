@@ -819,7 +819,7 @@ describe('noStore', () => {
 // ─── The TTL policy ──────────────────────────────────────────────────────────
 /**
  * Cache invalidation only fires for writes that go through the API, so anything writing straight
- * to Mongo (`scenario:apply`, an `ops/` script, `mongosh`) leaves stale answers behind until they expire.
+ * to Mongo (`scenario:apply`, a `scripts/ops/` script, `mongosh`) leaves stale answers behind until they expire.
  * Outside production the declared TTL is clamped so that window is seconds, not an hour.
  *
  * `resolveCacheTtl` reads `process.env` on every call, so no re-import is needed between cases —

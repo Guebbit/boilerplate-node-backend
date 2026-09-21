@@ -5,7 +5,7 @@ import path from 'node:path';
  * Guard: `docker/crontab` and `package.json` agree, in both directions.
  *
  * The schedule lives outside the application on purpose (see docs/reference/ops.md#scheduled-jobs)
- * — a `cron` service in compose running the existing `ops/reap-*`/`sweep:*` entry points — which
+ * — a `cron` service in compose running the existing `scripts/ops/reap-*`/`sweep:*` entry points — which
  * makes the crontab a second place that has to agree with `package.json`. Nothing else checks that
  * it still does, so this is that check.
  *
@@ -59,7 +59,7 @@ describe('docker/crontab and package.json agree on the scheduled jobs', () => {
 });
 
 /**
- * The third link in the chain a module removal walks: `tsc` flags an `ops/` script importing a
+ * The third link in the chain a module removal walks: `tsc` flags a `scripts/ops/` script importing a
  * deleted module, this flags the now-dangling `npm run` entry, and the test above already flags
  * the crontab line naming it. Without this, deleting a module leaves its `reap:*`/`sweep:*` script
  * green — `npm run <name>` still "exists", it just fails the moment cron actually runs it.

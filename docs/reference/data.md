@@ -1,18 +1,18 @@
 # Data
 
-`db/` holds everything that shapes or fills a database, and the split is the point:
+`scripts/db/` holds everything that shapes or fills a database, and the split is the point:
 **`db:sync` owns SCHEMA, `scenario:apply` owns DATA.** `db:sync` makes a collection's indexes match
 the schemas that declare them; `scenario:apply` fills a collection. Neither does the other's job.
 
 Neither half is authored here. A module owns its indexes the same way it owns its `openapi.yaml`
 fragment; its demo records live in `scenarios/<name>.ts` instead, outside the module folder — see
-[The demo records](#the-demo-records) for why. `db/` is only where the schema runner lives; the
+[The demo records](#the-demo-records) for why. `scripts/db/` is only where the schema runner lives; the
 seed runner is `scenarios/apply.ts`.
 
 There is no migration TOOL — no `migrate-mongo`, no `umzug` — and no ledger of what ran where. The
 one thing a schema reconciliation cannot cover is a change to data that already exists, and that is
-a one-off script under `ops/`, run by hand and deleted afterwards. Why it stops there is in
-[Data: a one-off script under `ops/`](#data-a-one-off-script-under-ops).
+a one-off script under `scripts/ops/`, run by hand and deleted afterwards. Why it stops there is in
+[Data: a one-off script under `scripts/ops/`](#data-a-one-off-script-under-scripts-ops).
 
 ---
 
@@ -21,7 +21,7 @@ a one-off script under `ops/`, run by hand and deleted afterwards. Why it stops 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 45}}}%%
 flowchart LR
-    Models["per-module model.ts<br/><i>the only author</i>"] --> Sync["db/sync-indexes.ts<br/><i>npm run db:sync</i>"]
+    Models["per-module model.ts<br/><i>the only author</i>"] --> Sync["scripts/db/sync-indexes.ts<br/><i>npm run db:sync</i>"]
     Sync --> Mongo[("MongoDB")]
     Seeds["scenarios/*.ts<br/><i>factories</i>"] --> Index["scenarios/apply.ts<br/><i>the seeder</i>"]
     Index --> Mongo
@@ -41,10 +41,10 @@ An index is declared in one place — `schema.index(...)` in a module's `model.t
 else. `npm run db:sync` reconciles the database with those declarations: it creates what is
 missing and drops what no schema claims.
 
-| File                 | What it is                                                                                                                                   |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `db/index-sync.ts`   | The reconciliation itself, importable so tests can drive it: the duplicate pre-flight, `planIndexSync()` (a dry run) and `applyIndexSync()`. |
-| `db/sync-indexes.ts` | The entry point `npm run db:sync` runs — connection, argument handling, and the report.                                                      |
+| File                         | What it is                                                                                                                                   |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/db/index-sync.ts`   | The reconciliation itself, importable so tests can drive it: the duplicate pre-flight, `planIndexSync()` (a dry run) and `applyIndexSync()`. |
+| `scripts/db/sync-indexes.ts` | The entry point `npm run db:sync` runs — connection, argument handling, and the report.                                                      |
 
 ```bash
 npm run db:sync              # apply
@@ -116,7 +116,7 @@ change restart-safe. In production, turning `autoIndex` off is what makes it res
 `docker-compose.production.yml`'s `setup` service runs `db:sync` before `app`/`cron` start, and a
 later restart with no `setup` re-run simply keeps running on the index that is already there.
 
-## Data: a one-off script under `ops/`
+## Data: a one-off script under `scripts/ops/`
 
 MongoDB is schemaless, so most schema changes need no data work at all. Adding a field, giving one
 a default, removing one, making one optional, adding or dropping an index: all free. Old documents
@@ -138,14 +138,14 @@ What is **not** derivable from a schema is a change to the shape of a value that
 Roughly: **the shape of the container is free; the shape of the value costs a script.**
 
 Those are rare, and each one is a single run against a single database — so each is an ordinary
-one-off script under `ops/`, run through the same wrapper as every scheduled job:
+one-off script under `scripts/ops/`, run through the same wrapper as every scheduled job:
 
 ```ts
-// ops/split-name.ts
+// scripts/ops/split-name.ts
 import 'dotenv/config';
 import mongoose from 'mongoose';
 import { start, stopDatabase } from '@infrastructure/runtime/database';
-import { runScript } from '../db/run-script';
+import { runScript } from '../scripts/db/run-script';
 
 /** Split `name` into `firstName` / `lastName` on rows written before the split. */
 const main = (): Promise<void> =>
@@ -212,13 +212,13 @@ answer is `migrate-mongo`, not a bespoke ledger.
 The records themselves are not in this table — each module's slice lives in `scenarios/<name>.ts`,
 and the seed accounts are declared in `scenarios/accounts.ts`.
 
-Two tests guard the schema half: `tests/integration/db/index-sync.test.ts` runs the reconciliation
+Two tests guard the schema half: `tests/integration/scripts/db/index-sync.test.ts` runs the reconciliation
 against a real database — from nothing, against drift, and twice over — and
-`tests/unit/db/host-scripts.test.ts` pins the URI resolution `npm run host -- db:sync` depends on.
+`tests/unit/scripts/db/host-scripts.test.ts` pins the URI resolution `npm run host -- db:sync` depends on.
 
 ## Tools
 
-| File                | What it is                                                                                                                                                                                                                                                                                    | Read next                                      |
-| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `db/cache-clear.ts` | Drops every cached response belonging to this app — `npm run db:cache:clear`. The API invalidates its own cache on every write it handles, so this is for the writes it did **not** handle: an `ops/` script, a manual edit, a restored dump.                                                 | [Redis Cache](../tools/redis-cache.md)         |
-| `db/run-script.ts`  | The entry-point wrapper the one-shot scripts in `db/` and `ops/` run through. Gives them the three things a bare promise chain does not: a connection opened and closed around the work, a non-zero exit on failure, and the failure printed rather than swallowed as an unhandled rejection. | [Package Scripts](../tools/package-scripts.md) |
+| File                        | What it is                                                                                                                                                                                                                                                                                                    | Read next                                      |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `scripts/db/cache-clear.ts` | Drops every cached response belonging to this app — `npm run db:cache:clear`. The API invalidates its own cache on every write it handles, so this is for the writes it did **not** handle: a `scripts/ops/` script, a manual edit, a restored dump.                                                          | [Redis Cache](../tools/redis-cache.md)         |
+| `scripts/db/run-script.ts`  | The entry-point wrapper the one-shot scripts in `scripts/db/` and `scripts/ops/` run through. Gives them the three things a bare promise chain does not: a connection opened and closed around the work, a non-zero exit on failure, and the failure printed rather than swallowed as an unhandled rejection. | [Package Scripts](../tools/package-scripts.md) |

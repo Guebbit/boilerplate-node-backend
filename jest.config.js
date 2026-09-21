@@ -136,6 +136,7 @@ module.exports = {
     preset: 'ts-jest',
     clearMocks: true,
     coverageProvider: 'v8',
+    coverageDirectory: '<rootDir>/tmp/coverage',
     // `node`, plus clearing every timer a file leaves running — without it each file's whole module
     // graph stays alive, which a single-process run (Stryker's dry run) cannot survive.
     testEnvironment: '<rootDir>/tests/support/test-environment.ts',
@@ -148,16 +149,11 @@ module.exports = {
      */
     testPathIgnorePatterns: [
         '/node_modules/',
-        '<rootDir>/.stryker-tmp/',
-        '<rootDir>/.tmp/',
+        '<rootDir>/tmp/',
         '<rootDir>/.claude/worktrees/',
         '<rootDir>/tests/cluster/'
     ],
-    modulePathIgnorePatterns: [
-        '<rootDir>/.stryker-tmp/',
-        '<rootDir>/.tmp/',
-        '<rootDir>/.claude/worktrees/'
-    ],
+    modulePathIgnorePatterns: ['<rootDir>/tmp/', '<rootDir>/.claude/worktrees/'],
     collectCoverageFrom: [
         'src/**/*.ts',
         '!src/types/**',

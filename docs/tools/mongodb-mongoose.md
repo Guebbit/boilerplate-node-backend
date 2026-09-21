@@ -44,7 +44,7 @@ npm run db:sync              # create what is missing, drop what no schema decla
 npm run db:sync -- --check   # print the plan, change nothing
 ```
 
-`db/index-sync.ts` imports the module registry — which registers every enabled module's models —
+`scripts/db/index-sync.ts` imports the module registry — which registers every enabled module's models —
 and calls [`connection.syncIndexes()`](<https://mongoosejs.com/docs/api/connection.html#Connection.prototype.syncIndexes()>).
 Collections whose model is not registered are left alone, so disabling a module does not strip its
 indexes.
@@ -75,7 +75,7 @@ Production turns it off (`src/app.ts`) and relies on `docker-compose.production.
 `setup` service instead — it runs `db:sync` before `app`/`cron` ever start, so the index set is
 already in place by the time a connection with `autoIndex` off is opened.
 
-`tests/integration/db/index-sync.test.ts` is what holds this. It runs the reconciliation against a
+`tests/integration/scripts/db/index-sync.test.ts` is what holds this. It runs the reconciliation against a
 real database from nothing, against deliberately constructed drift, and twice over, and asserts
 each collection ends up holding **exactly** what its schema declares — the state no other suite can
 reach, since every other test runs against a database that has never disagreed with the code.
@@ -93,10 +93,10 @@ running `db:sync` on deploy is what applies a changed window there. See
 ### Changing data, not shape
 
 A rename, a type change, a backfill or a de-duplication cannot be derived from a schema. Those are
-one-shot scripts under `ops/`, written against the **driver** rather than a Mongoose model —
+one-shot scripts under `scripts/ops/`, written against the **driver** rather than a Mongoose model —
 running today's hooks, defaults and validators over rows that predate them is what corrupts them —
 idempotent, and deleted once they have run everywhere. See
-[Data](../reference/data.md#data-a-one-off-script-under-ops).
+[Data](../reference/data.md#data-a-one-off-script-under-scripts-ops).
 
 ---
 

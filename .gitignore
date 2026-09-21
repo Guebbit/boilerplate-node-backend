@@ -18,23 +18,19 @@ public/images/*
 !public/images/seed/
 !public/images/system/
 
-# Real local storage the app writes to, never repository content: quarantine holds an upload
-# pending processing (src/infrastructure/adapters/image-store.ts), invoices/mail-spool cache
-# generated PDFs and queued mail (src/modules/orders/config.ts, src/infrastructure/adapters/
-# mail-spool.ts). Defaults live at the repo root — NODE_QUARANTINE_PATH/NODE_INVOICE_CACHE_PATH/
-# NODE_MAIL_SPOOL_PATH move them elsewhere in a real deployment.
-quarantine/*
-storage/invoices/*
-storage/mail-spool/*
-
-# test output
-coverage
-
-# mutation testing (stryker sandbox + html report)
-.stryker-tmp
-
-# per-run in-memory Mongo data directories (see tests/support/global-setup.ts)
-.tmp
+# Every run's throwaway output, in one gitignored place: `tmp/coverage` (jest coverage),
+# `tmp/reports` (test reports, mutation reports, mutation-shard reports, audit findings),
+# `tmp/stryker` (Stryker's own per-run sandbox copy of the whole project), `tmp/test` (per-run
+# in-memory Mongo data directories and file sandboxes — see tests/support/global-setup.ts),
+# `tmp/quarantine` (an upload pending processing — src/infrastructure/adapters/image-store.ts)
+# and `tmp/storage` (the invoice cache and the mail spool — src/modules/orders/config.ts,
+# src/infrastructure/adapters/mail-spool.ts).
+#
+# `quarantine` and `storage` are the exception to "throwaway": NODE_QUARANTINE_PATH,
+# NODE_INVOICE_CACHE_PATH and NODE_MAIL_SPOOL_PATH each point a real deployment at a durable
+# mounted volume instead — the unset default living under `tmp/` is a local-dev convenience,
+# not the thing carrying the durability guarantee there.
+tmp
 
 # Written and removed around one assertion in self-barrel-import.test.ts; ignored so a crash
 # mid-test never leaves it tracked.
@@ -52,12 +48,6 @@ src/modules/*/__factories-import-probe.ts
 # docs/tools/ai-auditing.md. The prompts themselves are versioned; this is one developer's
 # convenience, regenerable with a single ln -s.
 /.claude/commands/audit
-
-# Mutation reports are generated, the incremental cache included. It is a CACHE and nothing
-# automated reads it: `mutation.yml` passes `--force` to rebuild from scratch, and the PR run that
-# would consume it does not exist. A local run still keeps and reuses its own copy on disk.
-# See docs/tools/mutation-testing.md#incremental-mode-what-it-is.
-reports/*
 
 # API client collections. Generated whole from openapi.yaml on demand — `npm run contracts:bundle
 # -- bruno insomnia postman` — and never read by the suite, the app or CI. Committing them put

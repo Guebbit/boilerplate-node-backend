@@ -208,7 +208,7 @@ export const paymentRepository: Repository<PaymentDocument> & {
 
     /**
      * Delete every payment attempt that never became money and has sat untouched since before
-     * `cutoff` — `ops/reap-payments.ts`'s sweep. `succeeded` and `refunded` are excluded no
+     * `cutoff` — `scripts/ops/reap-payments.ts`'s sweep. `succeeded` and `refunded` are excluded no
      * matter how old: those are invoices, kept forever like `orders`' own records, not attempts.
      * See `docs/modules/payments.md`'s retention section for the reasoning.
      *

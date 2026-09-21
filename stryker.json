@@ -15,22 +15,22 @@
                 "<rootDir>/tests/cross-cutting/contract-bundles.test.ts",
                 "<rootDir>/tests/cross-cutting/outbox-names.test.ts",
                 "<rootDir>/tests/cluster/",
-                "<rootDir>/.stryker-tmp/",
-                "<rootDir>/.tmp/",
+                "<rootDir>/tmp/",
                 "<rootDir>/.claude/worktrees/"
             ]
         }
     },
     "reporters": ["html", "clear-text", "progress", "json"],
+    "tempDirName": "tmp/stryker",
     "htmlReporter": {
-        "fileName": "reports/mutation/index.html"
+        "fileName": "tmp/reports/mutation/index.html"
     },
     "jsonReporter": {
-        "fileName": "reports/mutation/mutation.json"
+        "fileName": "tmp/reports/mutation/mutation.json"
     },
     "coverageAnalysis": "perTest",
     "incremental": true,
-    "incrementalFile": "reports/stryker-incremental.json",
+    "incrementalFile": "tmp/reports/stryker-incremental.json",
     "dryRunTimeoutMinutes": 20,
     "mutate": [
         "src/infrastructure/**/*.ts",
@@ -39,16 +39,7 @@
         "!src/modules/*/index.ts",
         "!src/modules/*/tests/**"
     ],
-    "ignorePatterns": [
-        "coverage/**",
-        "reports/**",
-        "dist/**",
-        "docs/**",
-        ".tmp/**",
-        ".tmp-*/**",
-        ".stryker-tmp*/**",
-        ".claude/**"
-    ],
+    "ignorePatterns": ["tmp/**", "dist/**", "docs/**", ".claude/**"],
     "thresholds": {
         "high": 80,
         "low": 60,

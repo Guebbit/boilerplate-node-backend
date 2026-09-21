@@ -56,7 +56,7 @@ COPY package.json package-lock.json ./
 # Running it here would fail on a missing module, not merely skip work.
 RUN npm ci --ignore-scripts
 
-# Now the source. `.dockerignore` keeps node_modules, .git, .env, coverage and reports out.
+# Now the source. `.dockerignore` keeps node_modules, .git, .env and tmp/ out.
 COPY . .
 
 # The gate. `postinstall` now has what it needs on disk (bundles the contracts, generates the typed
@@ -132,18 +132,19 @@ RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 #   api/      orval-generated request/response types and zod schemas, imported as @api/*
 #   shared/   EJS email templates (`shared/views/templates-emails`, resolved against the working
 #             directory by `adapters/mailer.ts`) and the contract fragments
-#   db/       the deploy-time scripts — `db:sync`, `access:bootstrap`, `access:grant`.
-#             Named file by file, not as a directory, so the image carries only the scripts it runs
-#   ops/      the scheduled `reap:*` jobs, run by a cron container against this image
+#   scripts/db/   the deploy-time scripts — `db:sync`, `access:bootstrap`, `access:grant`.
+#                 Named file by file, not as a directory, so the image carries only what it runs
+#   scripts/ops/  the scheduled `reap:*` jobs, run by a cron container against this image
 #   public/   express.static root — CSS, favicon, and the committed seed images
 #   openapi.yaml / asyncapi.yaml   served by the docs endpoints and read by response validation
 COPY --from=build --chown=node:node /app/src ./src
 COPY --from=build --chown=node:node /app/api ./api
 COPY --from=build --chown=node:node /app/shared ./shared
-COPY --from=build --chown=node:node /app/db/run-script.ts /app/db/index-sync.ts \
-    /app/db/sync-indexes.ts /app/db/cache-clear.ts /app/db/bootstrap-access.ts \
-    /app/db/grant-access.ts /app/db/access-grant.ts ./db/
-COPY --from=build --chown=node:node /app/ops ./ops
+COPY --from=build --chown=node:node /app/scripts/db/run-script.ts /app/scripts/db/index-sync.ts \
+    /app/scripts/db/sync-indexes.ts /app/scripts/db/cache-clear.ts \
+    /app/scripts/db/bootstrap-access.ts /app/scripts/db/grant-access.ts \
+    /app/scripts/db/access-grant.ts ./scripts/db/
+COPY --from=build --chown=node:node /app/scripts/ops ./scripts/ops
 COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/openapi.yaml /app/asyncapi.yaml ./
 COPY --from=build --chown=node:node /app/tsconfig.json ./
@@ -154,8 +155,8 @@ COPY --from=build --chown=node:node /app/tsconfig.json ./
 #
 # Mount a volume at each in production — see `docker-compose.production.yml`: what these
 # directories hold does not survive the container without one.
-RUN mkdir -p public/images storage quarantine \
-    && chown -R node:node public/images storage quarantine
+RUN mkdir -p public/images tmp/storage tmp/quarantine \
+    && chown -R node:node public/images tmp/storage tmp/quarantine
 
 # Drop root. The `node` user (uid 1000) ships with the base image, so there is no useradd here and
 # no surprise about which uid owns a bind-mounted volume on the host.

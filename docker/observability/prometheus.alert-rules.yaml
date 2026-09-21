@@ -104,7 +104,7 @@ groups:
                 summary: 'Every webhook delivery attempt is failing'
                 description: 'No successful webhook delivery in 30 minutes while attempts keep arriving — a platform-side outage (egress, DNS, signing), not one endpoint.'
 
-          # The retry sweep (`ops/sweep-webhook-retries.ts`, every minute) is what moves a
+          # The retry sweep (`scripts/ops/sweep-webhook-retries.ts`, every minute) is what moves a
           # `pending` row back onto the queue once its `nextAttemptAt` arrives. A nonzero, growing
           # `webhook_deliveries_overdue` (`metrics.ts`) for 15 minutes straight means the cron
           # itself stopped running, not that deliveries are merely retrying on schedule.

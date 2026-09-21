@@ -25,6 +25,12 @@ digest job promotes it.
 | `NODE_QUARANTINE_PATH`     | until the job completes | **durable, outside `public/`** | no               |
 | `NODE_PUBLIC_PATH`         | forever                 | durable                        | yes, `immutable` |
 
+`NODE_QUARANTINE_PATH`'s own unset default happens to live under `tmp/`, gitignored like everything
+else there — a local-dev convenience, not a contradiction of "durable": a real deployment always
+overrides the variable to point at its own mounted volume instead (see
+`docker-compose.production.yml`), and durability comes from that mount, never from the default
+path's name.
+
 ## Architecture
 
 ```mermaid
@@ -63,7 +69,7 @@ flowchart LR
 | Module writeback registration                    | `src/kernel/registry.ts` → `ImageTarget`, `resolveImageTargets`              |
 | `products` writeback                             | `src/modules/products/repository.ts` → `writebackImage`                      |
 | `users`/`account` writeback                      | `src/modules/users/repository.ts` → `writebackImage`                         |
-| Quarantine reaper                                | `ops/reap-quarantine.ts`                                                     |
+| Quarantine reaper                                | `scripts/ops/reap-quarantine.ts`                                             |
 
 ## How it's used
 
@@ -136,7 +142,7 @@ apart.
 
 | Variable                          | Default                             | Meaning                                                                                           |
 | --------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `NODE_QUARANTINE_PATH`            | `quarantine`                        | Where uploads wait between staging and digesting                                                  |
+| `NODE_QUARANTINE_PATH`            | `tmp/quarantine`                    | Where uploads wait between staging and digesting                                                  |
 | `NODE_IMAGE_MAX_INPUT_PIXELS`     | `50_000_000`                        | Decompression-bomb guard, checked before any resize                                               |
 | `NODE_IMAGE_MAX_DIMENSION`        | `2048`                              | Longest edge of a digested original                                                               |
 | `NODE_IMAGE_THUMBNAIL_DIMENSION`  | `320`                               | Longest edge of a thumbnail                                                                       |

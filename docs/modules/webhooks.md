@@ -153,7 +153,7 @@ if each of THEIR endpoints were at fault. `domain#shouldAutoDisable` requires BO
 cleared on the next one) — `webhook_subscriptions_auto_disabled_total` counts how often it fires.
 
 **Delayed retry rides the cron container, not the broker.** `webhookdeliveries.nextAttemptAt`
-carries when a failed row is due again; `npm run sweep:webhook-retries` (`ops/sweep-webhook-retries.ts`)
+carries when a failed row is due again; `npm run sweep:webhook-retries` (`scripts/ops/sweep-webhook-retries.ts`)
 — the one job in `docker/crontab` that runs every minute instead of nightly — publishes every due
 row (and every stranded one, below) to the queue. See
 [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full mechanism.
@@ -222,7 +222,7 @@ also removes the one place the backend fetches a caller-supplied URL (see
 [Server-side request forgery](../theory/defences/ssrf.md)).
 
 The standard procedure catches most of it: `tsc` stops on every file that imports the module
-(`ops/sweep-webhook-retries.ts`, `scenarios/webhooks.ts`, the cross-cutting tests), and the
+(`scripts/ops/sweep-webhook-retries.ts`, `scenarios/webhooks.ts`, the cross-cutting tests), and the
 cross-cutting suite names the permissions, the page and the pairing entries. The module owns its
 queue consumer, its required/forbidden env checks, and its delivery substrate now (`consumers`,
 `requiredConfig` and `forbiddenInProduction` on its own `module.ts`; `transport/` for the signing

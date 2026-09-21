@@ -241,7 +241,7 @@ module.exports = {
          * nothing — the reachability rules read as passing while checking an empty set.
          */
         exclude: {
-            path: String.raw`(^|/)(\.stryker-tmp|\.tmp|\.dev|\.prism|dist|coverage|reports)/`
+            path: String.raw`(^|/)(tmp|\.dev|\.prism|dist)/`
         },
 
         reporterOptions: {

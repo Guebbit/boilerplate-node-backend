@@ -24,7 +24,7 @@
  *
  * They live in this directory rather than in a published plugin package because they are about
  * THIS repo's conventions and have exactly one consumer. One file per rule so each can be
- * unit-tested with `RuleTester` — see `tests/unit/eslint/`.
+ * unit-tested with `RuleTester` — see `tests/unit/scripts/eslint/`.
  */
 import { barrelAllowedSources } from './barrel-allowed-sources';
 import { commentLinks } from './comment-links';

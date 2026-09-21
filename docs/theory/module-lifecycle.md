@@ -142,9 +142,9 @@ them. Wherever the file format allows a comment, that line carries:
 ```
 
 `package.json` is the one exception — its own comments do not survive `npm install`, so its
-scripts are listed on the module's page instead (see step 5 below). An `ops/*.ts` script's own
+scripts are listed on the module's page instead (see step 5 below). A `scripts/ops/*.ts` script's own
 docblock names the `npm run` entry and crontab line that go with it, the same way; see
-`ops/sweep-webhook-retries.ts` for the pattern. `tests/cross-cutting/scheduled-jobs.test.ts` is
+`scripts/ops/sweep-webhook-retries.ts` for the pattern. `tests/cross-cutting/scheduled-jobs.test.ts` is
 what turns a forgotten crontab line, or a script pointing at a file that no longer exists, into a
 failing test rather than a silent 2am cron failure.
 
@@ -317,7 +317,7 @@ rm -rf src/modules/<name>
 Deleting a module another one imports stops `tsc` on the importing file, naming the line. Either
 delete the dependant too, or drop the import.
 
-`tsc` also stops on an `ops/` script that runs the module — delete the script itself to fix it.
+`tsc` also stops on a `scripts/ops/` script that runs the module — delete the script itself to fix it.
 From there the chain flags the rest step by step rather than needing to be walked by hand:
 `tests/cross-cutting/scheduled-jobs.test.ts` fails the `package.json` entry that named the
 now-deleted script, and once that entry is gone too, the same test fails the `docker/crontab` line
@@ -374,7 +374,7 @@ is in**, because only one tier is a verdict on the architecture:
 %%{init: {'flowchart': {'nodeSpacing': 35, 'rankSpacing': 45}}}%%
 flowchart TD
     F["a file breaks"] --> Q{"which tier?"}
-    Q -->|"src/** · db/**"| BAD["<b>FAIL</b><br/>the application tier knew<br/>which domains exist"]
+    Q -->|"src/** · scripts/db/**"| BAD["<b>FAIL</b><br/>the application tier knew<br/>which domains exist"]
     Q -->|"tests/** · scripts/**"| RES["<b>residue</b><br/>read it, rank it, fix it —<br/>but it is not the architecture"]
     Q -->|"asserts the deleted domain"| OK["<b>correct</b><br/>do not 'fix' it"]
     classDef bad fill:#fee2e2,stroke:#dc2626,color:#111827;
@@ -385,7 +385,7 @@ flowchart TD
     class OK good;
 ```
 
-**A break in `src/**`or`db/**` is the only real failure.** It means something in the application
+**A break in `src/**`or`scripts/db/**` is the only real failure.** It means something in the application
 tier named a domain, and that is the thing the four tiers exist to prevent.
 
 Breaks under `tests/**` and `scripts/**` are residue. They are worth fixing, but they do not
@@ -439,7 +439,7 @@ cd "$SB"
 
 rm -rf src/modules/{products,cart,orders}
 # drop the imports + array entries from src/modules.ts
-npx tsc --noEmit                                  # THE assertion: 0 errors in db/**, and none
+npx tsc --noEmit                                  # THE assertion: 0 errors in scripts/db/**, and none
                                                   # in src/** from a module that did not DECLARE
                                                   # the dependency in its manifest
 
@@ -463,8 +463,8 @@ Read them in three piles, because only one is a problem — and it is empty.
 `wishlist` stop compiling because they genuinely import what was deleted. That is a real coupling
 failing loudly at the file and line that holds it, and the answer is to delete the dependents too or
 pick a different set. An earlier run of this check reported "zero files in `src/`"
-— that was true when those four modules did not exist, not a property that was lost. **`db/**` is
-still at zero\*\*, and that is the number this exercise is actually defending.
+— that was true when those four modules did not exist, not a property that was lost.
+**`scripts/db/**` is still at zero\*\*, and that is the number this exercise is actually defending.
 
 **Correct — the section lists and the co-located specs that assert a deleted domain.** Six of the
 errors were the section lists and `client-collections-bundle.ts` naming `products`/`cart`/`orders`, which

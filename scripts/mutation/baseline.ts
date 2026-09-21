@@ -25,7 +25,7 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 /** Where `stryker.json`'s `jsonReporter` writes. */
-export const REPORT_PATH = 'reports/mutation/mutation.json';
+export const REPORT_PATH = 'tmp/reports/mutation/mutation.json';
 
 /** Where the per-file ratchet is committed. */
 export const BASELINE_PATH = 'mutation-baseline.json';
@@ -262,7 +262,7 @@ export const formatRegressions = (comparisons: FileComparison[]): string => {
         `${regressed.length} file(s) scored below their recorded baseline:\n${lines.join('\n')}\n\n` +
         `  A drop means the tests stopped noticing something they used to notice — new code with\n` +
         `  no assertions, or an assertion weakened while refactoring. Read the HTML report at\n` +
-        `  reports/mutation/index.html for the surviving mutants in these files.\n\n` +
+        `  tmp/reports/mutation/index.html for the surviving mutants in these files.\n\n` +
         `  Tolerance is ${SCORE_TOLERANCE} point, which absorbs the timeout/survivor race only.\n` +
         `  If the drop is intentional (code deleted, scope changed), re-record it deliberately\n` +
         `  with \`npm run mutation:check -- --update\` in the same commit, and say why.`

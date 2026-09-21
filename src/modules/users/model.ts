@@ -122,7 +122,7 @@ export interface UserRecord extends Omit<
     deletedAt?: Date;
 
     /**
-     * Stamped by `ops/reap-inactive-accounts.ts` the first time it warns
+     * Stamped by `scripts/ops/reap-inactive-accounts.ts` the first time it warns
      * this account about impending removal — never set anywhere else. Absent means "never
      * warned"; it is also how the script tells its OWN soft-deletes apart from an admin's when
      * deciding what is safe to hard-delete next, since `deletedAt` alone doesn't say who set it.

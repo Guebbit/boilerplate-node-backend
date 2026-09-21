@@ -99,7 +99,7 @@ Four ideas carry the whole repository:
 | `src/app`            | assembly: routes, security, error handling, telemetry, workers |
 | `api/`               | generated types and Zod schemas — never edited by hand         |
 | `shared/`            | contract fragments and EJS email templates                     |
-| `db/`                | index sync and one-off data scripts                            |
+| `scripts/db/`        | index sync and one-off data scripts                            |
 | `scenarios/`         | the demo records and the flow runner, outside `src/` entirely  |
 
 ---

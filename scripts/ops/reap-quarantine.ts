@@ -23,7 +23,8 @@ import { reapDirectory } from '@infrastructure/adapters/filesystem';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import { runScript } from '../db/run-script';
 
-const quarantineRoot = () => path.resolve(process.env.NODE_QUARANTINE_PATH ?? 'quarantine');
+const quarantineRoot = () =>
+    path.resolve(process.env.NODE_QUARANTINE_PATH ?? path.join('tmp', 'quarantine'));
 
 /** How long a quarantine file is left alone before it counts as abandoned. 24 hours by default —
  * long enough that a broker outage lasting a normal maintenance window does not lose anything. */

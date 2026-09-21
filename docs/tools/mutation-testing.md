@@ -79,7 +79,7 @@ Read this first. The rest of the page uses these words precisely, and several of
 | **Concurrency**        | How many mutants Stryker tests **in parallel**. Each one is a separate OS process running a full test runner _and its own in-memory mongod_, so the limit is memory, not CPU cores.                                                                                                      |
 | **`coverageAnalysis`** | Set to `perTest`: Stryker first records which tests touch which code, then runs **only the covering tests** for each mutant instead of the whole suite. This is the main reason a run is minutes and not days — except for static mutants, below.                                        |
 | **Static mutant**      | A mutant in code that runs when the file is **imported**, not when a test calls it — a `new Schema({...})`, a repository built at module scope, a config object. See [Why a run is slow](#why-a-run-is-slow-static-mutants); it is the single biggest cost in this repo.                 |
-| **Incremental**        | Stryker remembers per-mutant results in a committed file, so the next run only re-mutates what changed. **Enabled**, with `workflow_dispatch`'s `force` input rebuilding from scratch on demand. See [Incremental mode](#incremental-mode-what-it-is).                                   |
+| **Incremental**        | Stryker remembers per-mutant results in a gitignored, CI-cached file, so the next run only re-mutates what changed. **Enabled**, with `workflow_dispatch`'s `force` input rebuilding from scratch on demand. See [Incremental mode](#incremental-mode-what-it-is).                       |
 
 ## What a mutant actually is
 
@@ -137,7 +137,7 @@ flowchart LR
     class Free out;
 ```
 
-The source on disk is never left mutated — Stryker works in a throwaway copy under `.stryker-tmp/`.
+The source on disk is never left mutated — Stryker works in a throwaway copy under `tmp/stryker/`.
 
 ## Tools
 
@@ -158,7 +158,7 @@ flowchart TB
     Run --> Killed{"a test failed?"}
     Killed -->|yes| Dead["mutant killed\n— the suite noticed"]
     Killed -->|no| Survived["mutant survived\n— a gap in the suite"]
-    Dead --> Score[("mutation score\nreports/mutation/")]
+    Dead --> Score[("mutation score\ntmp/reports/mutation/")]
     Survived --> Score
     NoCov --> Score
     Score --> Gate{"per-file baseline\nregression?"}
@@ -287,12 +287,12 @@ mutants.** `STRYKER_CONCURRENCY` in `.env` is the one knob worth turning; `JEST_
 It also fixes the memory arithmetic in `jest.config.js`'s own comment: peak RSS is measured per
 worker, and four runners each holding a thirty-worker pool is not a budget anyone sized.
 
-Related, and found the same way: `ignorePatterns` now lists `.tmp/**` and `.stryker-tmp*/**`. Those
-hold the in-memory mongod data directories, which are live files being written by a running jest
+Related, and found the same way: `ignorePatterns` now lists `tmp/**`. That covers the in-memory
+mongod data directories under `tmp/test/`, which are live files being written by a running jest
 while Stryker copies the project into its sandbox — so copying them is both pointless (every jest
 instance starts its own server) and racy. A WiredTiger file removed mid-copy fails the entire run
 with an `ENOENT` naming a filename nothing in the project mentions. `scripts/mutation/stryker-run.ts`
-clears `.tmp` before it starts, which hid this until two runs overlapped.
+clears `tmp/test` before it starts, which hid this until two runs overlapped.
 
 `ignorePatterns` also lists `.claude/**` — untracked agent tooling that only exists on a
 developer's machine, which is why CI never hit the problem it causes. `.claude/commands/audit` is
@@ -300,10 +300,10 @@ an optional SYMLINK to `tests/audit/` (see [AI Auditing](./ai-auditing.md)), and
 copy is a plain `copyfile`, so it aborts the whole run with `EISDIR` before a single mutant is
 instrumented.
 
-The rule the three share: a directory that is gitignored, absent in CI and not read by the suite
+The rule the two share: a directory that is gitignored, absent in CI and not read by the suite
 belongs here — the sandbox needs what the TESTS read, not what the repository happens to contain.
 
-`ignorePatterns` must **not** list `public/**`, even though `coverage/`, `reports/`, `dist/` and
+`ignorePatterns` must **not** list `public/**`, even though `tmp/`, `dist/` and
 `docs/` are all excluded there — the sandbox is the only filesystem the tests see, and
 `tests/unit/scenarios/scenario-images.test.ts` asserts every seed row's `imageUrl` resolves to a
 committed file under `public/images/seed/`. Leave it out of `ignorePatterns` and Stryker refuses to
@@ -362,7 +362,7 @@ Three tells, and any one of them is enough:
 %%{init: {'flowchart': {'nodeSpacing': 40, 'rankSpacing': 40}}}%%
 flowchart TD
     START["worker starts<br/>fresh jest instance, new pid"] --> RUN["runs a mutant's tests"]
-    RUN --> DB["33 unit suites call setupTestDb()<br/>starts a real mongod<br/>writes .tmp/mongo/&lt;pid&gt;/worker-XXXX (~200 MB)"]
+    RUN --> DB["33 unit suites call setupTestDb()<br/>starts a real mongod<br/>writes tmp/test/mongo/&lt;pid&gt;/worker-XXXX (~200 MB)"]
     DB --> KEEP["ts-jest type-checks the mutated file<br/>its LanguageService keeps every version"]
     KEEP --> GROW["heap climbs<br/>~1.1 GB per 4 mutants, measured"]
     GROW -->|"under the limit"| RUN
@@ -380,24 +380,24 @@ flowchart TD
 ```
 
 Measured 2026-08-14: **212 stranded data directories, 71 GB**, inside one sandbox, in under two hours
-— 88 GB across `.stryker-tmp/` once earlier crashed runs were counted. The loop feeds itself: every
+— 88 GB across `tmp/stryker/` once earlier crashed runs were counted. The loop feeds itself: every
 restart pays the full start-up cost again, so throughput falls as the mess grows.
 
 ### Why the cleanup did not catch it
 
 The lifecycle in `tests/support/global-setup.ts` is deliberate and well-argued — each jest instance
-owns `.tmp/mongo/<pid>` and deletes exactly that on the way out. It rests on one assumption:
+owns `tmp/test/mongo/<pid>` and deletes exactly that on the way out. It rests on one assumption:
 
 > one jest instance per run, which reaches `globalTeardown`
 
 Stryker breaks both halves. It starts a **new jest instance per restarted worker**, and it kills them,
 so `globalTeardown` is the one step that never runs. Three consequences, each of which hid the mess:
 
-| Design choice                     | What Stryker does to it                                                                                                                        |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `globalTeardown` deletes the root | Only on a clean exit — so every OOM strands a directory by definition                                                                          |
-| The root comes from `__dirname`   | Under Stryker that resolves **inside the sandbox**, `.stryker-tmp/sandbox-XXXX/.tmp/`, where the documented `rm -rf .tmp` recovery never looks |
-| Ownership is keyed by pid         | Correct for one instance; across hundreds of restarts each new pid simply claims a new directory beside the last                               |
+| Design choice                     | What Stryker does to it                                                                                                                               |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `globalTeardown` deletes the root | Only on a clean exit — so every OOM strands a directory by definition                                                                                 |
+| The root comes from `__dirname`   | Under Stryker that resolves **inside the sandbox**, `tmp/stryker/sandbox-XXXX/tmp/test/`, where the documented `rm -rf tmp/test` recovery never looks |
+| Ownership is keyed by pid         | Correct for one instance; across hundreds of restarts each new pid simply claims a new directory beside the last                                      |
 
 ### The strategy, in order
 
@@ -477,13 +477,10 @@ is in this loop rather than making progress.
 Count the damage as it accumulates:
 
 ```bash
-ls .stryker-tmp/sandbox-*/.tmp/mongo/ | wc -l     # one entry per instance that died
-du -sh .stryker-tmp/                              # what it has cost so far
+ls tmp/stryker/sandbox-*/tmp/test/mongo/ | wc -l  # one entry per instance that died
+du -sh tmp/stryker/                               # what it has cost so far
 grep -c "ran out of memory" <run log>             # restarts, when the log was kept
 ```
-
-Mind the dot: `.tmp` is hidden, so a plain `du -sh .stryker-tmp/sandbox-*/*` misses the entire problem
-and reports a few megabytes of source.
 
 Then narrow it with jest's own instruments, which answer different questions:
 
@@ -989,7 +986,9 @@ a config change to answer; re-derive the ratio from a report instead of re-openi
 
 **The problem.** Every run starts from scratch. Change one line in one service, and Stryker still re-mutates every mutant across the whole codebase — including all the ones in files you did not touch, whose results will be identical to last time.
 
-**The mechanism.** With `incremental: true`, Stryker writes every mutant's result to `reports/stryker-incremental.json` and **you commit that file**. On the next run it compares the new source against what the file remembers:
+**The mechanism.** With `incremental: true`, Stryker writes every mutant's result to
+`tmp/reports/stryker-incremental.json` — gitignored, and kept between runs by CI's own cache
+instead (see below). On the next run it compares the new source against what the file remembers:
 
 - file unchanged → reuse the stored result, run nothing
 - file changed → re-mutate it properly
@@ -998,7 +997,7 @@ a config change to answer; re-derive the ratio from a report instead of re-openi
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 50}}}%%
 flowchart TB
-    Run["stryker run --incremental"] --> Read["read committed\nstryker-incremental.json"]
+    Run["stryker run --incremental"] --> Read["read cached\nstryker-incremental.json"]
     Read --> Compare{"for each file:\nchanged since\nlast run?"}
     Compare -->|"no (≈98% of files)"| Reuse["reuse stored result\nzero tests run"]
     Compare -->|yes| Remutate["re-mutate this file\nrun its covering tests"]
@@ -1121,7 +1120,7 @@ npm run mutation:full -- --limit=2   # an evening's worth
 
 `mutation:full` is the scope bin-packed by `scripts/mutation/sharding.ts` — the same plan the weekly
 CI matrix uses — run one shard after another, each shard's report kept under
-`reports/mutation-shards/`. Stop after two and two are banked; the next evening starts at the third.
+`tmp/reports/mutation-shards/`. Stop after two and two are banked; the next evening starts at the third.
 
 **Sharding is not faster.** A shard narrows _which mutants_ are tested and narrows nothing about the
 suite, so a static mutant inside one still reruns everything. What sharding buys is partial credit:
@@ -1182,7 +1181,7 @@ So sharding is the default, not a fallback:
 
 `mutation-merge` then downloads every shard's report and folds it into `mutation-baseline.json` with
 `--merge` — see [`mergeIntoBaseline`](#the-per-file-ratchet): files a shard didn't touch are left
-exactly as they were, not treated as having left the mutate scope. `reports/*` is gitignored
+exactly as they were, not treated as having left the mutate scope. `tmp/*` is gitignored
 (nothing commits a run's raw output), so `actions/cache` keyed per shard is what makes the week's
 incremental cache worth anything across runs.
 
@@ -1364,8 +1363,8 @@ covered file's real score, never as a grade.
 | `scripts/mutation/baseline.ts`       | Ratchet logic — scoring, comparison, the "never lower" rule, and the merge variant of both                   |
 | `scripts/mutation/check-baseline.ts` | CLI for the commands below                                                                                   |
 | `.github/workflows/mutation.yml`     | Weekly schedule + dispatch, the sharded matrix and its merge job, the PR diff job, the failure issue         |
-| `reports/mutation/index.html`        | Human-readable report (generated per run)                                                                    |
-| `reports/mutation/mutation.json`     | Machine-readable report the ratchet reads                                                                    |
+| `tmp/reports/mutation/index.html`    | Human-readable report (generated per run)                                                                    |
+| `tmp/reports/mutation/mutation.json` | Machine-readable report the ratchet reads                                                                    |
 
 ## Commands
 

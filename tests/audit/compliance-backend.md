@@ -53,7 +53,7 @@ Never invent a batch number.
 
 ## Output
 
-Write `reports/audit/compliance-backend/<SCOPE>.findings.md`, a table of:
+Write `tmp/reports/audit/compliance-backend/<SCOPE>.findings.md`, a table of:
 
 | id | title | applicability | verdict | evidence | severity | references |
 
@@ -66,7 +66,7 @@ Rules:
 - Do NOT change any file. This is a report.
 - A finding needs a citation. No citation, no finding.
 - `NOT-APPLICABLE` needs a reason too — silently skipping a rule is not allowed.
-- `reports/` is gitignored. These files are working evidence, not deliverables — the conclusions
+- `tmp/reports/` is gitignored. These files are working evidence, not deliverables — the conclusions
   belong in `docs/theory/data-protection.md`, a tracked issue, or a real fix commit.
 
 ## Reading the output

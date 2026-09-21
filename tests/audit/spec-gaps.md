@@ -15,7 +15,7 @@ the working tree. If empty, use `git status --porcelain` to pick the scope.
 
 ## Naming the scope
 
-Output is `reports/audit/spec-gaps/<SCOPE>.md`, where `<SCOPE>` is:
+Output is `tmp/reports/audit/spec-gaps/<SCOPE>.md`, where `<SCOPE>` is:
 
 - a module → the module name (`orders`)
 - a path → the path slugged, `src/` dropped (`src/infrastructure/http` →
@@ -68,7 +68,7 @@ scripts rather than assuming — and say why that suite.
 
 ## Output
 
-Write `reports/audit/spec-gaps/<SCOPE>.md`:
+Write `tmp/reports/audit/spec-gaps/<SCOPE>.md`:
 
 | rule | source (file:line) | status | minimal case (G/W/T) | suite |
 
@@ -83,4 +83,4 @@ Rules:
   says so, not silently dropped.
 - A rule that is real but stated nowhere is its own finding: the fix is to write
   the contract text, not the test. Say which is missing.
-- `reports/` is gitignored. These files are working evidence, not deliverables.
+- `tmp/reports/` is gitignored. These files are working evidence, not deliverables.

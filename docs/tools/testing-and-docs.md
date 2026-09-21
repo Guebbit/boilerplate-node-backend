@@ -71,7 +71,7 @@ The five layers answer "did it break". None answers **which module owns the brea
   (cross-cutting)      20    177       0     4.1s
 ```
 
-Plus slowest suites, slowest tests, per-module line coverage when `coverage/lcov.info` exists, and every failure named by the module that owns it.
+Plus slowest suites, slowest tests, per-module line coverage when `tmp/coverage/lcov.info` exists, and every failure named by the module that owns it.
 
 `scripts/testing/report-results.ts` is **kept identical in the paired frontend** — Vitest's `json` reporter emits the shape Jest's `--json` does, so one reader genuinely serves both. By convention now, not by gate: it was on the shared-file list until the list narrowed to the three documents this repo produces and the frontend consumes.
 
@@ -156,7 +156,7 @@ because Cypress drives a real browser and this suite does not.
 
 The suite/test counts below reflect the placement rule every module follows: a `setupTestDb()`-calling
 spec lives in that module's own `tests/integration/`, never its `tests/unit/`, which is why
-`test:integration` carries 36 module files plus the top-level `db/` specs.
+`test:integration` carries 36 module files plus the top-level `scripts/db/` specs.
 Timings are not re-measured here — this machine was under concurrent load — so `test:unit` getting
 lighter and `test:integration` getting heavier is the structural fact worth recording; the absolute
 seconds still want a clean re-measurement on the reference machine.

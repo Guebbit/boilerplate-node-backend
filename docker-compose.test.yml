@@ -65,7 +65,7 @@ services:
             # override (compose reads `.env`, unlike a bare container env) and otherwise pins a
             # known-safe number rather than trusting the host's free memory at all.
             JEST_WORKERS: '${JEST_WORKERS:-8}'
-        # No bind mount, not even for `reports/`/`coverage/` — deliberately, after trying it.
+        # No bind mount, not even for `tmp/` — deliberately, after trying it.
         # `docker/Dockerfile`'s image is owned by root; `--userns=keep-id` (the rootless-podman fix
         # for a bind mount landing as your subuid instead of you) remaps the IN-CONTAINER process
         # to your uid too, which then loses write access to the image's own root-owned `/app` for

@@ -9,7 +9,7 @@
 /**
  * The one shop's pinned `_id` — same format and vintage as `@scenarios/accounts`'s ids.
  *
- * Named for the DEPLOYMENT, not the demo: `db/bootstrap-access.ts` and `db/grant-access.ts` both
+ * Named for the DEPLOYMENT, not the demo: `scripts/db/bootstrap-access.ts` and `scripts/db/grant-access.ts` both
  * ship in the production image and both address the shop through this, so a `DEMO_` prefix would
  * describe the one scenario that is guaranteed absent there.
  *

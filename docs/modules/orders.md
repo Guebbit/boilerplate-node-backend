@@ -204,13 +204,13 @@ See [RabbitMQ](../tools/rabbitmq.md#invoice-pdf-rendering-not-a-queue).
 
 ## Configuration
 
-| Variable                         | Default            | Meaning                                                                                                                                                                                       |
-| -------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_SHOP_COUNTRY`              | —                  | The shop's own jurisdiction — the only one VAT is ever charged at, no destination lookup. Required at boot; the manifest's `requiredConfig` refuses to start without it                       |
-| `NODE_SHOP_VAT_NUMBER`           | —                  | The shop's VAT id, printed on the invoice. Optional — a deployment below the registration threshold prints no VAT number rather than a fake one                                               |
-| `NODE_SHOP_LEGAL_NAME`           | —                  | The shop's legal name, printed on the invoice — distinct from any storefront brand name                                                                                                       |
-| `NODE_INVOICE_CACHE_PATH`        | `storage/invoices` | Where a rendered invoice may be cached. Outside `NODE_PUBLIC_PATH` on purpose — an invoice is personal and financial data, reachable only through the authenticated download route            |
-| `NODE_INVOICE_CACHE_TTL_MINUTES` | `5`                | How long a rendered invoice stays cached. `0` under demo mode or `NODE_ENV=test`, whatever the env says — see [Invoice PDF rendering](../tools/rabbitmq.md#invoice-pdf-rendering-not-a-queue) |
+| Variable                         | Default                | Meaning                                                                                                                                                                                       |
+| -------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_SHOP_COUNTRY`              | —                      | The shop's own jurisdiction — the only one VAT is ever charged at, no destination lookup. Required at boot; the manifest's `requiredConfig` refuses to start without it                       |
+| `NODE_SHOP_VAT_NUMBER`           | —                      | The shop's VAT id, printed on the invoice. Optional — a deployment below the registration threshold prints no VAT number rather than a fake one                                               |
+| `NODE_SHOP_LEGAL_NAME`           | —                      | The shop's legal name, printed on the invoice — distinct from any storefront brand name                                                                                                       |
+| `NODE_INVOICE_CACHE_PATH`        | `tmp/storage/invoices` | Where a rendered invoice may be cached. Outside `NODE_PUBLIC_PATH` on purpose — an invoice is personal and financial data, reachable only through the authenticated download route            |
+| `NODE_INVOICE_CACHE_TTL_MINUTES` | `5`                    | How long a rendered invoice stays cached. `0` under demo mode or `NODE_ENV=test`, whatever the env says — see [Invoice PDF rendering](../tools/rabbitmq.md#invoice-pdf-rendering-not-a-queue) |
 
 The first three are read fresh per call (`config.ts`), so a correction needs no restart; an empty
 string reads as unset, never as a blank invoice row. The VAT RATES charged against an order line

@@ -206,7 +206,7 @@ const deleteCacheFile = (root: string, name: string): Promise<boolean> =>
     );
 
 /**
- * Deletes every cached file with no order left to name it — `ops/reap-invoices.ts`'s one sweep,
+ * Deletes every cached file with no order left to name it — `scripts/ops/reap-invoices.ts`'s one sweep,
  * {@link reapExpiredInvoices} being its other. An orphan is not a normal outcome: `remove()`'s
  * hard-delete path cleans up its own file the moment the order goes. It happens anyway wherever a
  * row is removed OUTSIDE that path — a scenario reset's `emptyDatabase()` (dev/test only, but the
@@ -232,7 +232,7 @@ export const reapOrphanedInvoices = (): Promise<number> =>
     });
 
 /**
- * Deletes every cached file past its TTL — `ops/reap-invoices.ts`'s other sweep, next to
+ * Deletes every cached file past its TTL — `scripts/ops/reap-invoices.ts`'s other sweep, next to
  * {@link reapOrphanedInvoices}. The cache's whole job is to absorb one person's burst; a file
  * older than `invoiceCacheTtlMinutes()` is personal and financial data sitting on disk for
  * nobody, whatever else is true about the order it belongs to — and a stale `.tmp` a crash left

@@ -42,7 +42,7 @@ import path from 'node:path';
 const REPO_ROOT = process.cwd();
 
 /** Where the `test:*:report` scripts write. Overridable so a shard or a CI matrix can keep its own. */
-const DEFAULT_REPORT = path.join(REPO_ROOT, 'reports', 'test-report.json');
+const DEFAULT_REPORT = path.join(REPO_ROOT, 'tmp', 'reports', 'test-report.json');
 
 /** How many rows the "slowest" sections print. Enough to act on, short enough to read. */
 const SLOWEST = 8;
@@ -230,7 +230,7 @@ if (failures.length > 0) {
 /* ── Coverage, bucketed the same way ────────────────────────────────────────────────────────── */
 
 /**
- * Line coverage per module, read from `coverage/lcov.info`.
+ * Line coverage per module, read from `tmp/coverage/lcov.info`.
  *
  * lcov rather than a JSON coverage map because it is the one format BOTH sides emit: Jest's
  * defaults include it, and the frontend's `<paired-frontend>/vitest.config.ts` names it
@@ -265,7 +265,7 @@ const readCoverage = (file: string): Map<string, { hit: number; found: number }>
     return perBucket;
 };
 
-const coverage = readCoverage(path.join(REPO_ROOT, 'coverage', 'lcov.info'));
+const coverage = readCoverage(path.join(REPO_ROOT, 'tmp', 'coverage', 'lcov.info'));
 
 if (coverage) {
     const covered = [...coverage.entries()].toSorted(([a], [b]) =>
@@ -273,7 +273,7 @@ if (coverage) {
     );
     const labelWidth = Math.max(...covered.map(([label]) => label.length), 'module'.length);
 
-    console.log(`\n  line coverage (from coverage/lcov.info)`);
+    console.log(`\n  line coverage (from tmp/coverage/lcov.info)`);
     console.log(`  ${'module'.padEnd(labelWidth)}   lines   covered`);
     for (const [label, { hit, found }] of covered)
         console.log(

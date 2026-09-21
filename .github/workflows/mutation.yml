@@ -110,14 +110,14 @@ jobs:
               run: npm ci
 
             - name: Restore this shard's incremental cache
-              # `reports/*` is gitignored (see .gitignore), so nothing commits this file — without a
+              # `tmp/*` is gitignored (see .gitignore), so nothing commits this file — without a
               # cache, every week pays the full re-mutation cost. The unique `key` per run
               # guarantees a save at the end; `restore-keys` falls back to the shard's most recent
               # cache. `workflow_dispatch`'s `force` input still discards whatever this restores
               # (Stryker's own behaviour), so restoring on that run is harmless, not wasted.
               uses: actions/cache@v4
               with:
-                  path: reports/stryker-incremental.json
+                  path: tmp/reports/stryker-incremental.json
                   key: mutation-incremental-${{ matrix.name }}-${{ github.run_id }}
                   restore-keys: |
                       mutation-incremental-${{ matrix.name }}-
@@ -139,7 +139,7 @@ jobs:
               uses: actions/upload-artifact@v4
               with:
                   name: mutation-${{ matrix.name }}
-                  path: reports/mutation/
+                  path: tmp/reports/mutation/
                   retention-days: 14
 
     mutation-merge:
@@ -239,7 +239,7 @@ jobs:
               uses: actions/upload-artifact@v4
               with:
                   name: mutation-diff
-                  path: reports/mutation/
+                  path: tmp/reports/mutation/
                   retention-days: 14
 
     mutation-notify:

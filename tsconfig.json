@@ -38,10 +38,7 @@
         "tests/**/*.ts",
         "scenarios/**/*.ts",
         "scenarios/**/*.json",
-        "db/**/*.ts",
-        "eslint/**/*.ts",
         "scripts/**/*.ts",
-        "ops/**/*.ts",
         "shared/contracts/*.ts"
     ]
 }

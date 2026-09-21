@@ -13,7 +13,7 @@ import {
     assertPasswordNotBreached
 } from '@infrastructure/security/breached-passwords';
 
-/** In the committed list — see `ops/refresh-breached-passwords.ts`. */
+/** In the committed list — see `scripts/ops/refresh-breached-passwords.ts`. */
 const IN_LIST_PASSWORD = 'Password1!';
 
 /** Composition-valid but not in the (filtered, ~20k-entry) bundled list. */

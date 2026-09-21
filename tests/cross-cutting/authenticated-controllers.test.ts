@@ -145,7 +145,9 @@ describe('every requirePermission key behind isAuthOrCredential is tenant-scoped
         const total = moduleNames().reduce(
             (count, name) =>
                 count +
-                (ROUTED_MODULES[name] ? permissionKeysBehindCredentialGuard(ROUTED_MODULES[name]).length : 0),
+                (ROUTED_MODULES[name]
+                    ? permissionKeysBehindCredentialGuard(ROUTED_MODULES[name]).length
+                    : 0),
             0
         );
         expect(total).toBeGreaterThan(10);

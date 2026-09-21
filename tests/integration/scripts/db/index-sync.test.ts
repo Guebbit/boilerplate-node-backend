@@ -26,11 +26,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import mongoose from 'mongoose';
 import { connect, disconnect } from '@tests/database';
-import { applyIndexSync, findBlockingDuplicates, planIndexSync } from '../../../db/index-sync';
-import { enabledModules } from '../../../src/modules';
+import {
+    applyIndexSync,
+    findBlockingDuplicates,
+    planIndexSync
+} from '../../../../scripts/db/index-sync';
+import { enabledModules } from '../../../../src/modules';
 
 /** Where the canary below looks for the models the registry should have brought in. */
-const MODULES_ROOT = path.join(__dirname, '../../../src/modules');
+const MODULES_ROOT = path.join(__dirname, '../../../../src/modules');
 
 /** The native handle, for the states only the driver can construct. */
 const nativeDb = () => {
@@ -48,7 +52,7 @@ const dropAllIndexes = async () => {
 /**
  * The parts of a registered model these cases read.
  *
- * Declared rather than imported for the same reason `db/index-sync.ts` declares one:
+ * Declared rather than imported for the same reason `scripts/db/index-sync.ts` declares one:
  * `mongoose.models` is a map of `Model<any>`, and reading through it would launder an `any` into
  * every assertion below.
  */
@@ -82,7 +86,7 @@ describe('db:sync', () => {
     it('registered a model from every enabled module that ships one', () => {
         /*
          * The canary for the registry walk, and the reason every assertion below means something.
-         * `db/index-sync.ts` registers models by importing `enabledModules` and relying on each
+         * `scripts/db/index-sync.ts` registers models by importing `enabledModules` and relying on each
          * `module.ts` to reach its own `model.ts`. A module that stopped doing so would drop out
          * silently: every case here would still pass, over one model fewer, and that domain's
          * indexes would quietly stop being built in production.

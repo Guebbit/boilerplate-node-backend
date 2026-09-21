@@ -43,7 +43,7 @@ Do NOT open the implementation (except the contract YAMLs) and do NOT open the
 test files yet.
 
 Write what the behaviour SHOULD be to
-`reports/audit/spec-drift/<SCOPE>.expectations.md`:
+`tmp/reports/audit/spec-drift/<SCOPE>.expectations.md`:
 one row per observable behaviour — status codes, error envelope shape, precedence
 between competing rules, rounding and money semantics, permission boundaries,
 idempotency, ordering. Cite the spec line you derived each from.
@@ -72,7 +72,7 @@ finding, it belongs to `/audit:spec-gaps`. Note it in one line and move on.
 
 ## Output
 
-Write `reports/audit/spec-drift/<SCOPE>.findings.md`, a table of:
+Write `tmp/reports/audit/spec-drift/<SCOPE>.findings.md`, a table of:
 
 | file | test name | spec-derived expectation | actual assertion | mismatch | why |
 
@@ -84,7 +84,7 @@ Rules:
 - A finding needs a spec citation. No citation, no finding — say "spec silent"
   instead, which is itself worth reporting.
 - Prefer three real mismatches over thirty maybes.
-- `reports/` is gitignored. These files are working evidence, not deliverables —
+- `tmp/reports/` is gitignored. These files are working evidence, not deliverables —
   the conclusions belong in a fixed test, a commit message, or a tracked issue.
 
 ## Read the SPEC-SILENT count as the headline
@@ -100,7 +100,7 @@ individual mismatches.
 
 ## Priors worth using
 
-- `reports/stryker-incremental.json` — a surviving mutant on a line whose rule the
+- `tmp/reports/stryker-incremental.json` — a surviving mutant on a line whose rule the
   docs state explicitly is a strong candidate. Use it to order the work, never as
   a finding on its own.
 - Tests whose expected value is produced by the system under test

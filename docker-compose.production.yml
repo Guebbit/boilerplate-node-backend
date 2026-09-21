@@ -158,13 +158,17 @@ services:
             # `x-hardening`'s `read_only` makes `/app` immutable, so every path the app writes
             # needs a mount of its own. These two are NOT tmpfs, and the reason differs for each.
             #
-            # `storage/` holds the invoice cache and the MAIL SPOOL — queued outbound mail that a
-            # restart must not lose, which rules tmpfs out on its own.
-            - storage:/app/storage
-            # `quarantine/` holds uploads awaiting their scan. `reap:quarantine` counts a file
+            # Both live under the code's own `tmp/` default — a local-dev convenience, normally
+            # gitignored and throwaway — and it is THIS mount that makes each durable here
+            # instead, not the folder name.
+            #
+            # `tmp/storage/` holds the invoice cache and the MAIL SPOOL — queued outbound mail
+            # that a restart must not lose, which rules tmpfs out on its own.
+            - storage:/app/tmp/storage
+            # `tmp/quarantine/` holds uploads awaiting their scan. `reap:quarantine` counts a file
             # abandoned after `NODE_QUARANTINE_RETENTION_HOURS` (24h), a window that only means
             # anything if the directory survives a restart.
-            - quarantine:/app/quarantine
+            - quarantine:/app/tmp/quarantine
             # The bundled Mongo's self-signed CA cert (see `mongo-entrypoint.sh`) — what
             # `NODE_DB_URI`'s `tlsCAFile` verifies `database`'s certificate against. Read-only:
             # this container only ever needs to TRUST the CA, never mint from it.
@@ -206,15 +210,16 @@ services:
     # docker-compose.yml and docs/reference/ops.md#scheduled-jobs for the full reasoning. Same
     # image as `app` — `image:` rather than a second `build:`, so a client is never running two
     # images built from the same Dockerfile at slightly different times — only the command
-    # differs, so this container runs `ops/reap-*`/`sweep:*` against the exact image that was
-    # type-checked, never a copy built separately.
+    # differs, so this container runs `scripts/ops/reap-*`/`sweep:*` against the exact image
+    # that was type-checked, never a copy built separately.
     #
     # `crond -f -d 8`: busybox's cron daemon, already in `node:*-alpine`. `-f` foreground, `-d 8`
     # debug-level logging to stderr (nothing here runs syslog). This image runs as the unprivileged
     # `node` user (`docker/Dockerfile.production`'s `USER node`) rather than root, so
     # `docker/crontab` is bind-mounted to `/etc/crontabs/node`, not `/etc/crontabs/root` — a
     # non-root crond reads only the crontab named for its own user. Mounting just this one file is
-    # enough; the image already carries `ops/`, `db/run-script.ts` and `package.json`.
+    # enough; the image already carries `scripts/ops/`, `scripts/db/run-script.ts` and
+    # `package.json`.
     #
     # `replicas: 1` is what actually keeps two `reap:orders` passes from racing; the Mongo lease
     # (`src/infrastructure/persistence/lease.ts`) is the backstop for a future job that does need it.
@@ -240,9 +245,10 @@ services:
             # `reap:quarantine`, `reap:invoices` and `reap:mail-spool` all sweep directories
             # `app` writes, so cron mounts the same two volumes. Without these the jobs would
             # walk an empty read-only path and report nothing to do, every night, silently.
-            - storage:/app/storage
-            - quarantine:/app/quarantine
-            # Same reasoning as `app`'s own mount — `ops/reap-*`/`sweep:*` connect to Mongo too.
+            - storage:/app/tmp/storage
+            - quarantine:/app/tmp/quarantine
+            # Same reasoning as `app`'s own mount — `scripts/ops/reap-*`/`sweep:*` connect to
+            # Mongo too.
             - mongo-ca-dir:/ca-dir:ro
         command: ['crond', '-f', '-d', '8']
         depends_on:

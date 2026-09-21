@@ -23,9 +23,9 @@ flowchart TD
     Root["Repository root<br/><i>configs, specs, manifests</i>"] --> Src["src/"]
     Root --> Contracts["Contracts<br/><i>openapi · asyncapi · api/</i>"]
     Root --> Ops["Ops<br/><i>docker · .github · public</i>"]
-    Root --> Dev["Dev tooling<br/><i>scripts · eslint · .husky</i>"]
-    Root --> Jobs["Scheduled jobs<br/><i>ops/</i>"]
-    Root --> Data["Data<br/><i>db/ · index sync · seeds</i>"]
+    Root --> Dev["Dev tooling<br/><i>scripts · .husky</i>"]
+    Root --> Jobs["Scheduled jobs<br/><i>scripts/ops/</i>"]
+    Root --> Data["Data<br/><i>scripts/db/ · index sync · seeds</i>"]
     Root --> Scenarios["scenarios/<br/><i>demo records &amp; flows</i>"]
     Root --> Tests["tests/"]
 
@@ -49,8 +49,8 @@ flowchart TD
 | [Infrastructure](./src-infrastructure.md) | `src/infrastructure/` — adapters, http, observability, persistence, runtime                                   |
 | [Modules](./src-modules.md)               | The file shapes a module is built from, and which module has which                                            |
 | [Contracts](./contracts.md)               | `openapi.yaml`, `asyncapi.yaml`, `shared/contracts/`, generated `api/`, collection exports, Spectral rulesets |
-| [Data](./data.md)                         | `db/` — the index sync, cache tools, and `scenarios/` — the demo records and the flow runner                  |
-| [Scripts & Hooks](./scripts.md)           | `scripts/`, `ops/`, `eslint/rules/`, `.husky/`                                                                |
+| [Data](./data.md)                         | `scripts/db/` — the index sync, cache tools, and `scenarios/` — the demo records and the flow runner          |
+| [Scripts & Hooks](./scripts.md)           | `scripts/` (including `db/`, `ops/` and `eslint/`), `.husky/`                                                 |
 | [Tests](./tests.md)                       | `tests/`, the co-located module suites, `tests/load/`                                                         |
 | [Ops & Assets](./ops.md)                  | `docker/`, `.github/`, compose files, `public/`                                                               |
 
@@ -103,8 +103,8 @@ explanation; an inventory table says which modules have it. This is where the le
 decision and not an oversight. `api/models/` is the large one — Orval writes it from
 `openapi.yaml` and it is regenerated wholesale.
 
-Anything git does not track is out by definition: `dist/`, `coverage/`, `node_modules/`,
-`reports/`, `.tmp/`, `docs/.vitepress/cache/`.
+Anything git does not track is out by definition: `dist/`, `tmp/`, `node_modules/`,
+`docs/.vitepress/cache/`.
 
 ## Why there are no file counts here
 

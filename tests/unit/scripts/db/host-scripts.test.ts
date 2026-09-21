@@ -35,7 +35,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { getDatabaseUri } from '@infrastructure/runtime/database';
 
-const ROOT = path.join(__dirname, '../../..');
+const ROOT = path.join(__dirname, '../../../..');
 
 const packageScripts: Record<string, string> = JSON.parse(
     readFileSync(path.join(ROOT, 'package.json'), 'utf8')

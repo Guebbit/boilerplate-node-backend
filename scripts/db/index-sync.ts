@@ -21,7 +21,7 @@ import type { IndexDefinition, IndexOptions } from 'mongoose';
  * is never imported, so its models never register and `syncIndexes` leaves their collections
  * alone rather than dropping indexes a disabled domain still owns.
  */
-import { enabledModules } from '../src/modules';
+import { enabledModules } from '../../src/modules';
 
 /**
  * One collection's difference between what is stored and what its schema declares.

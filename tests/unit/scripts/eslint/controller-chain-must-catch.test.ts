@@ -1,9 +1,9 @@
 /**
- * `eslint/rules/controller-chain-must-catch` still fires. See `comment-links.test.ts` for why
+ * `scripts/eslint/controller-chain-must-catch` still fires. See `comment-links.test.ts` for why
  * these four rule tests carry one known-bad input each and no case table.
  */
 import { RuleTester } from 'eslint';
-import { controllerChainMustCatch } from '../../../eslint/rules/controller-chain-must-catch';
+import { controllerChainMustCatch } from '../../../../scripts/eslint/controller-chain-must-catch';
 
 const tester = new RuleTester({
     languageOptions: { ecmaVersion: 'latest', sourceType: 'module' }

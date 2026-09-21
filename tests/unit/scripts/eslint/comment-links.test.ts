@@ -1,5 +1,5 @@
 /**
- * `eslint/rules/comment-links` still fires — a LIVENESS check, not a case table.
+ * `scripts/eslint/comment-links` still fires — a LIVENESS check, not a case table.
  *
  * The exhaustive cases are gone on purpose. Each local rule runs against this repo's own ~1,000
  * files on every `npm run lint`, so a FALSE POSITIVE surfaces in seconds and needs no test. What
@@ -7,7 +7,7 @@
  * looks exactly like a clean run. One known-bad input per rule is what tells the two apart.
  */
 import { RuleTester } from 'eslint';
-import { commentLinks } from '../../../eslint/rules/comment-links';
+import { commentLinks } from '../../../../scripts/eslint/comment-links';
 
 const tester = new RuleTester({
     languageOptions: { ecmaVersion: 'latest', sourceType: 'module' }

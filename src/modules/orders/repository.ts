@@ -250,7 +250,7 @@ const countOpenBankTransfers = (userId: string): Promise<number> =>
     });
 
 /**
- * Which of `ids` still name a real order — `ops/reap-invoices.ts`'s existence check for a stored
+ * Which of `ids` still name a real order — `scripts/ops/reap-invoices.ts`'s existence check for a stored
  * invoice PDF found on disk with nothing left to serve it: `remove()`'s hard-delete path cleans up
  * its own order's file, but a row removed outside it (a scenario reset's `emptyDatabase()`, a
  * manual drop) leaves the file behind with nothing to name it an orphan except this lookup.
@@ -268,7 +268,7 @@ const existingIds = (ids: readonly string[]): Promise<Set<string>> =>
         .then((documents) => new Set(documents.map((document) => String(document._id))));
 
 /**
- * Unset `userId` on every order this account placed, and mark them for `ops/reap-orders.ts`
+ * Unset `userId` on every order this account placed, and mark them for `scripts/ops/reap-orders.ts`
  * to scrub later — `users`' `USER_DELETED` listener. The order row is never touched otherwise:
  * it is the invoice, kept whole until `anonymizeAfter`.
  *
@@ -293,7 +293,7 @@ const ANONYMIZED_EMAIL = 'anonymized@deleted.invalid';
 const ANONYMIZED_TEXT = 'Anonymized';
 
 /**
- * `ops/reap-orders.ts`'s sweep. Every order whose `anonymizeAfter` has elapsed gets its remaining
+ * `scripts/ops/reap-orders.ts`'s sweep. Every order whose `anonymizeAfter` has elapsed gets its remaining
  * PII scrubbed.
  *
  * Scrub:      `email` and the required `shippingAddress` fields (`fullName`, `street`) are

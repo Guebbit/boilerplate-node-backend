@@ -11,7 +11,7 @@ import { orderRepository } from '../repository';
 
 /**
  * `USER_DELETED`'s listener. Unsets `userId` on every order this account
- * placed and marks them for `ops/reap-orders.ts` to scrub after
+ * placed and marks them for `scripts/ops/reap-orders.ts` to scrub after
  * `NODE_ORDER_PII_RETENTION_DAYS` (default 3650, ~10 years — the outer edge of common commercial
  * record-keeping periods). The orders themselves are never touched here: they are invoices,
  * kept under Art. 17(3)(b)/(e) regardless of what happens to the account that placed them.
@@ -30,7 +30,7 @@ export const detachUserId = (userId: string): Promise<void> => {
 };
 
 /**
- * `ops/reap-orders.ts`'s sweep. Scrubs the remaining PII on every order
+ * `scripts/ops/reap-orders.ts`'s sweep. Scrubs the remaining PII on every order
  * whose retention window (stamped by {@link detachUserId}) has elapsed.
  *
  * @returns how many orders were scrubbed

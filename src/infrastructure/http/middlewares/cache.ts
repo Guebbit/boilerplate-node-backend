@@ -50,7 +50,7 @@ const STALE_IF_ERROR_SECONDS = 300;
 
 /**
  * Longest TTL allowed outside production, in seconds — the bound on how long a write that bypassed
- * the API (a seed, a one-off script under `ops/`, a `mongosh` session) can keep serving a stale
+ * the API (a seed, a one-off script under `scripts/ops/`, a `mongosh` session) can keep serving a stale
  * answer. Production is
  * never clamped, because there the API is the only writer. `NODE_REDIS_CACHE_DEV_TTL_MAX=0` opts
  * out.

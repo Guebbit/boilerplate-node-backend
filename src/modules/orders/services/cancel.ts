@@ -174,7 +174,7 @@ export const cancelById = (
 };
 
 /**
- * `ops/sweep-order-effects.ts`'s sweep: the retry behind {@link cancelById}'s marker.
+ * `scripts/ops/sweep-order-effects.ts`'s sweep: the retry behind {@link cancelById}'s marker.
  *
  * Re-announces `ORDER_CANCELLED` for every order still owing a refund, and clears the marker only
  * where every listener returned. Safe to run repeatedly — `payments`' conditional

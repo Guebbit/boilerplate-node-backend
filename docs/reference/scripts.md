@@ -1,10 +1,11 @@
 # Scripts & Hooks
 
 `scripts/` is the repo's own tooling: every file here is the implementation behind an `npm run`
-entry, and none of it ships in the image. `ops/` is the exception that proves it — scheduled jobs
-that run against the production image, so they ship and `scripts/` does not. Alongside both,
-`eslint/rules/` holds the lint rules this codebase wrote for itself, and `.husky/` holds the
-git hooks.
+entry. Most of it never ships — `scripts/ops/` and `scripts/db/` are the two exceptions,
+because those run against a live deployment rather than from a developer's terminal;
+`docker/Dockerfile.production` copies both into the production image and nothing else under
+`scripts/`. `scripts/eslint/` holds the lint rules this codebase wrote for itself, and
+`.husky/` holds the git hooks.
 
 Every script's user-facing name and when to run it is on
 [Package Scripts](../tools/package-scripts.md). This page says what each _file_ is.
@@ -23,7 +24,10 @@ scripts/
 ├── pairing/                  keeping this repo and the paired frontend in step
 ├── mutation/                 the Stryker runs and the per-file ratchet
 ├── testing/                  everything else that runs or reads a test suite
-└── docs/                     generators that write into docs/
+├── docs/                     generators that write into docs/
+├── db/                       deploy-time database scripts — see [Data](./data.md)
+├── ops/                      the scheduled `reap:*`/`sweep:*` jobs, documented below
+└── eslint/                   the repo's own lint rules, documented below
 ```
 
 The demo profile and the data it serves live in `scenarios/`, outside `scripts/` entirely —
@@ -44,8 +48,8 @@ about_, and forcing the two together would cost the gate its readability.
 | `report-`   | turns machine output into a human summary, and never fails                     |
 | `export-`   | writes a data file                                                             |
 | `sync-`     | writes into the paired repo                                                    |
-| `sweep-`    | re-drives work a previous run left unfinished — `ops/` only                    |
-| `reap-`     | deletes or scrubs expired data on a schedule — `ops/` only                     |
+| `sweep-`    | re-drives work a previous run left unfinished — `scripts/ops/` only            |
+| `reap-`     | deletes or scrubs expired data on a schedule — `scripts/ops/` only             |
 | `refresh-`  | rebuilds a committed data file from an upstream source                         |
 | _(no verb)_ | a library — imported by the above, never invoked                               |
 
@@ -153,39 +157,39 @@ The three libraries underneath them:
 | `scripts/docs/module-descriptor.ts` | One typed reader for a module's `module.yaml`, shared by the graph generator and the test that proves every descriptor is well-formed — a second hand-rolled parse of the same file drifts.                | [Strategic DDD](../theory/strategic-ddd.md)              |
 | `scripts/docs/repo-references.ts`   | Whether a path a comment cites still exists — the machinery `check-references.ts` and the `comment-links` lint rule share, so the two agree on what counts as a real path instead of each growing its own. | [Repository Root](./root.md)                             |
 
-## Scheduled jobs — `ops/`
+## Scheduled jobs — `scripts/ops/`
 
-The one folder here that **ships in the production image** (`docker/Dockerfile.production` copies
-it alongside `src/` and `db/`), because these are meant to run against a live database from a cron
-container rather than from a developer's terminal. Each one takes the `db/run-script.ts` wrapper,
-which gives it an exit code, cleanup on the failure path, and a readable error.
+One of the two subtrees that **ship in the production image** — see the intro above. These run
+against a live database from a cron container rather than from a developer's terminal. Each one
+takes the `scripts/db/run-script.ts` wrapper, which gives it an exit code, cleanup on the failure
+path, and a readable error.
 
-| File                                | What it is                                                                                                                                                                                                                                                                                | Read next                                                       |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `ops/reap-quarantine.ts`            | Deletes quarantined uploads past the retention window — `npm run reap:quarantine`. Filesystem-only and safe to repeat.                                                                                                                                                                    | [Image processing](../tools/image-processing.md)                |
-| `ops/reap-inactive-accounts.ts`     | The three-stage inactivity reaper — warn, soft delete, hard delete. Disabled by default; enabling it is the controller's decision.                                                                                                                                                        | [Ops](./ops.md)                                                 |
-| `ops/reap-orders.ts`                | Scrubs order PII once `anonymizeAfter` arrives — `npm run reap:orders`. Never deletes a row: an order is an invoice.                                                                                                                                                                      | [Ops](./ops.md)                                                 |
-| `ops/reap-payments.ts`              | Deletes abandoned payment attempts — `npm run reap:payments`. Deletes, unlike the orders reaper: an attempt that never settled was never money, so there is no invoice to keep.                                                                                                           | [Payments](../modules/payments.md)                              |
-| `ops/reap-invoices.ts`              | Sweeps the invoice CACHE — `npm run reap:invoices`. Orphans and expiry together, since both are cheap and both belong to the same directory.                                                                                                                                              | [Ops](./ops.md)                                                 |
-| `ops/reap-mail-spool.ts`            | Sweeps the mail spool — `npm run reap:mail-spool`. A spooled file outlives its job only when a send died mid-flight; this is the backstop for the rest.                                                                                                                                   | [Email & rendering](../tools/email-and-rendering.md)            |
-| `ops/sweep-order-effects.ts`        | Retries the refund a cancel announced but could not guarantee — `npm run sweep:order-effects`. Registers the modules first, since it works by re-emitting.                                                                                                                                | [Ops](./ops.md)                                                 |
-| `ops/sweep-webhook-retries.ts`      | Enqueues every webhook delivery whose retry is due — `npm run sweep:webhook-retries`. Per-minute, and idempotent: each due row is claimed atomically before it is published.                                                                                                              | [Webhooks](../modules/webhooks.md)                              |
-| `ops/refresh-breached-passwords.ts` | Rebuilds the bundled breached-password list from SecLists, filtered through the contract's own password pattern — `npm run refresh:breached-passwords`. The one file here no scheduler runs: a top-N breach list changes on the order of years, and the trigger is that pattern changing. | [Authentication defences](../theory/defences/authentication.md) |
+| File                                        | What it is                                                                                                                                                                                                                                                                                | Read next                                                       |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `scripts/ops/reap-quarantine.ts`            | Deletes quarantined uploads past the retention window — `npm run reap:quarantine`. Filesystem-only and safe to repeat.                                                                                                                                                                    | [Image processing](../tools/image-processing.md)                |
+| `scripts/ops/reap-inactive-accounts.ts`     | The three-stage inactivity reaper — warn, soft delete, hard delete. Disabled by default; enabling it is the controller's decision.                                                                                                                                                        | [Ops](./ops.md)                                                 |
+| `scripts/ops/reap-orders.ts`                | Scrubs order PII once `anonymizeAfter` arrives — `npm run reap:orders`. Never deletes a row: an order is an invoice.                                                                                                                                                                      | [Ops](./ops.md)                                                 |
+| `scripts/ops/reap-payments.ts`              | Deletes abandoned payment attempts — `npm run reap:payments`. Deletes, unlike the orders reaper: an attempt that never settled was never money, so there is no invoice to keep.                                                                                                           | [Payments](../modules/payments.md)                              |
+| `scripts/ops/reap-invoices.ts`              | Sweeps the invoice CACHE — `npm run reap:invoices`. Orphans and expiry together, since both are cheap and both belong to the same directory.                                                                                                                                              | [Ops](./ops.md)                                                 |
+| `scripts/ops/reap-mail-spool.ts`            | Sweeps the mail spool — `npm run reap:mail-spool`. A spooled file outlives its job only when a send died mid-flight; this is the backstop for the rest.                                                                                                                                   | [Email & rendering](../tools/email-and-rendering.md)            |
+| `scripts/ops/sweep-order-effects.ts`        | Retries the refund a cancel announced but could not guarantee — `npm run sweep:order-effects`. Registers the modules first, since it works by re-emitting.                                                                                                                                | [Ops](./ops.md)                                                 |
+| `scripts/ops/sweep-webhook-retries.ts`      | Enqueues every webhook delivery whose retry is due — `npm run sweep:webhook-retries`. Per-minute, and idempotent: each due row is claimed atomically before it is published.                                                                                                              | [Webhooks](../modules/webhooks.md)                              |
+| `scripts/ops/refresh-breached-passwords.ts` | Rebuilds the bundled breached-password list from SecLists, filtered through the contract's own password pattern — `npm run refresh:breached-passwords`. The one file here no scheduler runs: a top-N breach list changes on the order of years, and the trigger is that pattern changing. | [Authentication defences](../theory/defences/authentication.md) |
 
-## The repo's own lint rules
+## Lint rules — `scripts/eslint/`
 
 A rule enforced after the fact instead of at the keystroke is the same mistake twice over —
 `controller-chain-must-catch` and `no-hardcoded-user-text` were cross-cutting tests once. As lint
 rules they report in the editor and fix on save.
 
-| File                                          | What it is                                                                                                                                                                                              | Read next                                   |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| `eslint/rules/index.ts`                       | The plugin barrel `eslint.config.ts` imports.                                                                                                                                                           | [Repository Root](./root.md)                |
-| `eslint/rules/controller-chain-must-catch.ts` | A promise chain started in a controller must end in a catch. Without it an unhandled rejection reaches the global handler, which answers a generic 500 instead of the status the operation meant.       | [Request Flow](../theory/request-flow.md)   |
-| `eslint/rules/no-hardcoded-user-text.ts`      | User-facing copy comes from a dictionary, never from a literal at the call site — otherwise the string cannot be translated and the locale bundles quietly stop being the source of truth.              | [Modules](./src-modules.md)                 |
-| `eslint/rules/barrel-allowed-sources.ts`      | What a module's barrel may publish: services, domain rules, events and emails as values, its model as types only — never a repository, a model's runtime value, or a wiring file, in any export form.   | [Strategic DDD](../theory/strategic-ddd.md) |
-| `eslint/rules/no-persistence-imports.ts`      | Persistence stays behind the repository, and the import is where that stops being true — caught by name (through a barrel) and by path (a reach into `model.ts`), because neither route sees the other. | [Modules](./src-modules.md)                 |
-| `eslint/rules/comment-links.ts`               | A comment citing a `.ts`/`.tsx` file is checked against the files that actually exist — the source-comment half of what `check-references.ts` does for `docs/*.md`, sharing its machinery.              | [Repository Root](./root.md)                |
+| File                                            | What it is                                                                                                                                                                                              | Read next                                   |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `scripts/eslint/index.ts`                       | The plugin barrel `eslint.config.ts` imports.                                                                                                                                                           | [Repository Root](./root.md)                |
+| `scripts/eslint/controller-chain-must-catch.ts` | A promise chain started in a controller must end in a catch. Without it an unhandled rejection reaches the global handler, which answers a generic 500 instead of the status the operation meant.       | [Request Flow](../theory/request-flow.md)   |
+| `scripts/eslint/no-hardcoded-user-text.ts`      | User-facing copy comes from a dictionary, never from a literal at the call site — otherwise the string cannot be translated and the locale bundles quietly stop being the source of truth.              | [Modules](./src-modules.md)                 |
+| `scripts/eslint/barrel-allowed-sources.ts`      | What a module's barrel may publish: services, domain rules, events and emails as values, its model as types only — never a repository, a model's runtime value, or a wiring file, in any export form.   | [Strategic DDD](../theory/strategic-ddd.md) |
+| `scripts/eslint/no-persistence-imports.ts`      | Persistence stays behind the repository, and the import is where that stops being true — caught by name (through a barrel) and by path (a reach into `model.ts`), because neither route sees the other. | [Modules](./src-modules.md)                 |
+| `scripts/eslint/comment-links.ts`               | A comment citing a `.ts`/`.tsx` file is checked against the files that actually exist — the source-comment half of what `check-references.ts` does for `docs/*.md`, sharing its machinery.              | [Repository Root](./root.md)                |
 
 ## Git hooks
 

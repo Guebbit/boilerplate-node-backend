@@ -40,7 +40,7 @@ module.exports = {
         doNotFollow: { path: 'node_modules' },
         exclude: {
             // `tests/` per module: see the module docblock above on why together with `src`.
-            path: String.raw`(^|/)(tests|\.stryker-tmp|\.tmp|\.dev|\.prism|dist|coverage|reports)/`
+            path: String.raw`(^|/)(tests|tmp|\.dev|\.prism|dist)/`
         },
         reporterOptions: {
             text: { highlightFocused: true }

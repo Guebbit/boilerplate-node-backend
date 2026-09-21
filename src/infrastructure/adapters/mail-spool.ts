@@ -20,9 +20,14 @@ import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { logger } from '@infrastructure/adapters/logger';
 import { reapDirectory } from './filesystem';
 
-/** Where a spooled attachment lives between the request that staged it and the mail that sends it. */
+/**
+ * Where a spooled attachment lives between the request that staged it and the mail that sends it.
+ * The `tmp/storage/mail-spool` default is a local-dev convenience only: a real deployment always
+ * sets `NODE_MAIL_SPOOL_PATH` to its own mounted volume, so durability comes from that mount, not
+ * from this default — same reasoning as `image-store.ts`'s quarantine directory.
+ */
 const spoolRoot = (): string =>
-    path.resolve(process.env.NODE_MAIL_SPOOL_PATH ?? 'storage/mail-spool');
+    path.resolve(process.env.NODE_MAIL_SPOOL_PATH ?? path.join('tmp', 'storage', 'mail-spool'));
 
 /**
  * A spooled key's own shape: random hex, a short lowercase extension. Never anything a producer
@@ -81,7 +86,7 @@ export const discardSpooled = (key: string): Promise<void> => {
 };
 
 /**
- * Deletes every spooled attachment older than `retentionMs` — `ops/reap-mail-spool.ts`'s one
+ * Deletes every spooled attachment older than `retentionMs` — `scripts/ops/reap-mail-spool.ts`'s one
  * sweep. A file survives this long only when the job that spooled it never finished: see
  * `mailer.ts` and `email.worker.ts` for who is supposed to {@link discardSpooled} it first.
  *

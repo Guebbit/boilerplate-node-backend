@@ -380,7 +380,7 @@ Observability is the ability to understand what a running system is doing from i
 
 ### `db:sync` (schema reconciliation)
 
-**What it is.** Not a tool but a script — `db/sync-indexes.ts`, over Mongoose's own
+**What it is.** Not a tool but a script — `scripts/db/sync-indexes.ts`, over Mongoose's own
 `connection.syncIndexes()`. It compares the indexes a database holds against the ones the schemas
 declare, creates the missing and drops the rest.
 
@@ -392,7 +392,7 @@ thing and the migration says another" boot failures.
 
 **In this repo.** `npm run db:sync` applies; `npm run db:sync -- --check` prints the plan and
 changes nothing. `db:bootstrap` runs it before the server starts. Data changes that cannot be
-derived from a schema — a rename, a backfill — are one-off scripts under `ops/` instead.
+derived from a schema — a rename, a backfill — are one-off scripts under `scripts/ops/` instead.
 
 → [MongoDB & Mongoose](./mongodb-mongoose.md) · [Data](../reference/data.md)
 

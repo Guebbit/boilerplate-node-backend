@@ -211,7 +211,7 @@ describe('formatRegressions', () => {
             compareToBaseline(scores([FILE, 40]), baselineOf([FILE, 90]))
         );
 
-        expect(message).toContain('reports/mutation/index.html');
+        expect(message).toContain('tmp/reports/mutation/index.html');
         expect(message).toContain('mutation:check');
     });
 });

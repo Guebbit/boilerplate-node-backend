@@ -9,7 +9,7 @@
  *                                                 mutation-baseline.json, leaving files no shard
  *                                                 measured this sweep untouched
  *
- * Reads `reports/mutation/mutation.json` (or, with `--merge`, every `mutation.json` under
+ * Reads `tmp/reports/mutation/mutation.json` (or, with `--merge`, every `mutation.json` under
  * `--merge-dir`), written by the `json` reporter in `stryker.json`. Run the mutation tests first;
  * this does not run Stryker itself, deliberately, so the check is cheap enough to run twice and so
  * a CI job can split the run and the gate across steps.
@@ -58,7 +58,7 @@ const baseline = readBaseline();
  * A first baseline is only ever written on purpose. Writing on ANY invocation (bare
  * `mutation:check` included) would let a local `mutation` run before a full sweep had ever
  * recorded one silently create a partial, three-file baseline from whatever it happened
- * to touch. `reports/*` — and the baseline it would have graded against — is gitignored, so CI
+ * to touch. `tmp/*` — and the baseline it would have graded against — is gitignored, so CI
  * would never see it either way; only a local run would fall into the trap. Nothing is written
  * without `--update` or `--merge`, and a plain check against a baseline that doesn't exist yet is
  * a no-op, not a failure — there being nothing to compare against yet is not this run's fault.

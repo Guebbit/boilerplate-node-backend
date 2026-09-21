@@ -6,7 +6,7 @@
  * untouched, `--check` in `complete`.
  *
  * WHAT IS DERIVED, always: the package list itself, and who imports each one — scanned from
- * `src/`, `scenarios/`, `scripts/`, `db/` and the root tool configs, `tests/` excluded throughout.
+ * `src/`, `scenarios/`, `scripts/` and the root tool configs, `tests/` excluded throughout.
  * A hand-kept copy of either one is a published number with no guard behind it; the previous,
  * hand-written page missed 32 of 99 packages and still listed 3 that were gone.
  *
@@ -42,7 +42,7 @@ const DEV_START = '<!-- dependency-map:dev:start -->';
 const DEV_END = '<!-- dependency-map:dev:end -->';
 
 /** Top-level directories holding production code — the only places ownership is read from. */
-const SCAN_DIRECTORIES = ['src', 'scenarios', 'scripts', 'db'];
+const SCAN_DIRECTORIES = ['src', 'scenarios', 'scripts'];
 
 /** Root-level tool configs that import packages no production directory does. */
 const SCAN_FILES = [
@@ -96,7 +96,6 @@ const ownerOf = (file: string): string => {
     if (relativePath.startsWith('src/infrastructure/')) return 'infrastructure';
     if (relativePath.startsWith('scenarios/')) return 'scenarios';
     if (relativePath.startsWith('scripts/')) return 'scripts';
-    if (relativePath.startsWith('db/')) return 'db';
     return 'app';
 };
 

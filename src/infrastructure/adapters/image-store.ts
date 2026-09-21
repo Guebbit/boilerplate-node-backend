@@ -119,9 +119,12 @@ const publicRoot = () => path.resolve(process.env.NODE_PUBLIC_PATH ?? 'public');
  *
  * Durable and OUTSIDE `NODE_PUBLIC_PATH`, unlike ephemeral upload staging (`uploadStagingPath` in
  * `http/middlewares/upload.ts`) — a quarantined file must survive a restart, or a pending job wakes to a vanished
- * file and the record it names is stuck on its placeholder forever.
+ * file and the record it names is stuck on its placeholder forever. The `tmp/quarantine` default
+ * is a local-dev convenience only: a real deployment always sets `NODE_QUARANTINE_PATH` to its own
+ * mounted volume, so the durability guarantee comes from that mount, never from this default.
  */
-const quarantineRoot = () => path.resolve(process.env.NODE_QUARANTINE_PATH ?? 'quarantine');
+const quarantineRoot = () =>
+    path.resolve(process.env.NODE_QUARANTINE_PATH ?? path.join('tmp', 'quarantine'));
 
 /** The directory holding one image's thumbnail derivatives. */
 const thumbnailsDirectory = (root: string) =>

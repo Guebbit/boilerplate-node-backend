@@ -77,7 +77,7 @@ export interface ReapResult {
 
 /**
  * Deletes every file directly under `root` whose `mtime` is at or before `cutoffMs` — the one
- * sweep every retention reaper in this codebase needs (`ops/reap-quarantine.ts`,
+ * sweep every retention reaper in this codebase needs (`scripts/ops/reap-quarantine.ts`,
  * `mail-spool.ts#reapSpooled`). A missing `root` is not a failure — a store that never wrote
  * anything has nothing to sweep — it is logged and reported as zero. A subdirectory is left
  * alone; none of these stores ever writes one.

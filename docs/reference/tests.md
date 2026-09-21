@@ -172,29 +172,29 @@ A new module is covered the day it is added, without anyone writing a test for i
 
 One function, no database, no HTTP. Fast enough to run from the pre-commit hook.
 
-| File                                                    | What it guarantees                                                                                                                                                    | Read next                                                |
-| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `tests/unit/db/host-scripts.test.ts`                    | The `host` script and the URI resolver agree over the whole environment matrix — the pin that keeps `npm run host -- <script>` reaching the database `.env` names.    | [Repository Root](./root.md)                             |
-| `tests/unit/db/run-script.test.ts`                      | The `db/` entry-point wrapper opens, closes and exits non-zero on failure.                                                                                            | [Data](./data.md)                                        |
-| `tests/unit/scenarios/scenario-images.test.ts`          | Every seed row's `imageUrl` is a real file under `public/images/seed/`, addressed as the static mount would serve it.                                                 | [Data](./data.md)                                        |
-| `tests/unit/scenarios/check.test.ts`                    | `findUnmetGuarantees` catches a guarantee with no matching subject and a subject no module declared, fed a hand-made map — no database, no real scenario built.       | [Data](./data.md)                                        |
-| `tests/unit/scenarios/accounts.test.ts`                 | The named demo identities and the env vars that override their passwords, reloading the module per case since the overrides are read at module scope.                 | [Demo profile](../tools/demo-profile.md)                 |
-| `tests/unit/eslint/controller-chain-must-catch.test.ts` | The repo's own lint rule fires on the code it is meant to catch and stays quiet otherwise.                                                                            | [Scripts & Hooks](./scripts.md)                          |
-| `tests/unit/eslint/no-hardcoded-user-text.test.ts`      | The same for the hardcoded-copy rule.                                                                                                                                 | [Scripts & Hooks](./scripts.md)                          |
-| `tests/unit/i18n/email-locale.test.ts`                  | Where an email's language is decided — the producer resolves the copy before publishing, so a queued job cannot be rendered in the worker's locale.                   | [Email & PDF Rendering](../tools/email-and-rendering.md) |
-| `tests/unit/infrastructure/i18n/context.test.ts`        | The request-scoped `t`: that two overlapping scopes stay apart, and that code outside any scope still resolves.                                                       | [Request Flow](../theory/request-flow.md)                |
-| `tests/unit/infrastructure/i18n/catalog.test.ts`        | Which languages exist, the per-module dictionary merge, and why the supported list is cached rather than re-read.                                                     | [Internationalisation](../tools/i18n.md)                 |
-| `tests/unit/infrastructure/i18n/overrides.test.ts`      | The database overlay: a stored edit wins, a deleted one stops answering, a failed read keeps the last good copy — plus the timer that spreads an edit across workers. | [Internationalisation](../tools/i18n.md)                 |
-| `tests/unit/kernel/registry.test.ts`                    | `registerModules` calls every declared `subscribe` hook, and treats a module without one as ordinary.                                                                 | [Modules](../theory/modules.md)                          |
-| `tests/unit/kernel/events.test.ts`                      | The event bus breaks the cycle it exists for: a deleted product empties out of every cart without the two modules importing each other.                               | [Events & Logging](../tools/events-and-logging.md)       |
-| `tests/unit/kernel/authorizations.test.ts`              | Token extraction and the role guard.                                                                                                                                  | [Security](../tools/security.md)                         |
-| `tests/unit/kernel/access-query.test.ts`                | The shared read-scoping rule — the caller's rules, compiled into the filter a collection is read with.                                                                | [Authorization](../theory/authorization.md)              |
-| `tests/unit/kernel/step-up.test.ts`                     | Step-up demanded by the KEY: refused before challenged, and the demand recorded.                                                                                      | [Authorization](../theory/authorization.md)              |
-| `tests/cross-cutting/module-permissions.test.ts`        | Every key belongs to a module that exists, and every module claims exactly the keys attributed to it.                                                                 | [Authorization](../theory/authorization.md)              |
-| `tests/unit/scripts/mutation/baseline.test.ts`          | The ratchet reads a Stryker report into per-file scores correctly.                                                                                                    | [Mutation Testing](../tools/mutation-testing.md)         |
-| `tests/unit/scripts/testing/machine-budget.test.ts`     | The sizing arithmetic behind `npm run test:*` — worker counts, shard counts and heap caps, bounded by cores and by free memory rather than total.                     | [Weak Machines](../tools/weak-machines.md)               |
-| `tests/unit/support/file-sandbox.test.ts`               | The file sandbox redirects every file-writing setting, refuses to run or delete outside its root, and attributes a leftover file to the test file that left it.       | [Test layout](#a-test-leaves-no-files-behind)            |
-| `tests/unit/scripts/pairing/spec-identity.test.ts`      | The cross-repo shared-file list and its comparison.                                                                                                                   | [Pairing & Ports](../tools/pairing-and-ports.md)         |
+| File                                                            | What it guarantees                                                                                                                                                    | Read next                                                |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `tests/unit/scripts/db/host-scripts.test.ts`                    | The `host` script and the URI resolver agree over the whole environment matrix — the pin that keeps `npm run host -- <script>` reaching the database `.env` names.    | [Repository Root](./root.md)                             |
+| `tests/unit/scripts/db/run-script.test.ts`                      | The `db/` entry-point wrapper opens, closes and exits non-zero on failure.                                                                                            | [Data](./data.md)                                        |
+| `tests/unit/scenarios/scenario-images.test.ts`                  | Every seed row's `imageUrl` is a real file under `public/images/seed/`, addressed as the static mount would serve it.                                                 | [Data](./data.md)                                        |
+| `tests/unit/scenarios/check.test.ts`                            | `findUnmetGuarantees` catches a guarantee with no matching subject and a subject no module declared, fed a hand-made map — no database, no real scenario built.       | [Data](./data.md)                                        |
+| `tests/unit/scenarios/accounts.test.ts`                         | The named demo identities and the env vars that override their passwords, reloading the module per case since the overrides are read at module scope.                 | [Demo profile](../tools/demo-profile.md)                 |
+| `tests/unit/scripts/eslint/controller-chain-must-catch.test.ts` | The repo's own lint rule fires on the code it is meant to catch and stays quiet otherwise.                                                                            | [Scripts & Hooks](./scripts.md)                          |
+| `tests/unit/scripts/eslint/no-hardcoded-user-text.test.ts`      | The same for the hardcoded-copy rule.                                                                                                                                 | [Scripts & Hooks](./scripts.md)                          |
+| `tests/unit/i18n/email-locale.test.ts`                          | Where an email's language is decided — the producer resolves the copy before publishing, so a queued job cannot be rendered in the worker's locale.                   | [Email & PDF Rendering](../tools/email-and-rendering.md) |
+| `tests/unit/infrastructure/i18n/context.test.ts`                | The request-scoped `t`: that two overlapping scopes stay apart, and that code outside any scope still resolves.                                                       | [Request Flow](../theory/request-flow.md)                |
+| `tests/unit/infrastructure/i18n/catalog.test.ts`                | Which languages exist, the per-module dictionary merge, and why the supported list is cached rather than re-read.                                                     | [Internationalisation](../tools/i18n.md)                 |
+| `tests/unit/infrastructure/i18n/overrides.test.ts`              | The database overlay: a stored edit wins, a deleted one stops answering, a failed read keeps the last good copy — plus the timer that spreads an edit across workers. | [Internationalisation](../tools/i18n.md)                 |
+| `tests/unit/kernel/registry.test.ts`                            | `registerModules` calls every declared `subscribe` hook, and treats a module without one as ordinary.                                                                 | [Modules](../theory/modules.md)                          |
+| `tests/unit/kernel/events.test.ts`                              | The event bus breaks the cycle it exists for: a deleted product empties out of every cart without the two modules importing each other.                               | [Events & Logging](../tools/events-and-logging.md)       |
+| `tests/unit/kernel/authorizations.test.ts`                      | Token extraction and the role guard.                                                                                                                                  | [Security](../tools/security.md)                         |
+| `tests/unit/kernel/access-query.test.ts`                        | The shared read-scoping rule — the caller's rules, compiled into the filter a collection is read with.                                                                | [Authorization](../theory/authorization.md)              |
+| `tests/unit/kernel/step-up.test.ts`                             | Step-up demanded by the KEY: refused before challenged, and the demand recorded.                                                                                      | [Authorization](../theory/authorization.md)              |
+| `tests/cross-cutting/module-permissions.test.ts`                | Every key belongs to a module that exists, and every module claims exactly the keys attributed to it.                                                                 | [Authorization](../theory/authorization.md)              |
+| `tests/unit/scripts/mutation/baseline.test.ts`                  | The ratchet reads a Stryker report into per-file scores correctly.                                                                                                    | [Mutation Testing](../tools/mutation-testing.md)         |
+| `tests/unit/scripts/testing/machine-budget.test.ts`             | The sizing arithmetic behind `npm run test:*` — worker counts, shard counts and heap caps, bounded by cores and by free memory rather than total.                     | [Weak Machines](../tools/weak-machines.md)               |
+| `tests/unit/support/file-sandbox.test.ts`                       | The file sandbox redirects every file-writing setting, refuses to run or delete outside its root, and attributes a leftover file to the test file that left it.       | [Test layout](#a-test-leaves-no-files-behind)            |
+| `tests/unit/scripts/pairing/spec-identity.test.ts`              | The cross-repo shared-file list and its comparison.                                                                                                                   | [Pairing & Ports](../tools/pairing-and-ports.md)         |
 
 ### `tests/unit/infrastructure/runtime/` and `persistence/`
 
@@ -266,7 +266,7 @@ Boots the application against an in-memory MongoDB and drives it as a client wou
 | `tests/integration/concurrency/auth-races.test.ts`     | The account endpoints under simultaneous callers: concurrent signups for one address, and the rest of the race table.                                                                                            | [Concurrency Testing](../tools/concurrency-testing.md) |
 | `tests/integration/concurrency/cart-races.test.ts`     | The cart and checkout endpoints under simultaneous writes of the same product.                                                                                                                                   | [Concurrency Testing](../tools/concurrency-testing.md) |
 | `tests/integration/concurrency/wishlist-races.test.ts` | The wishlist endpoints under concurrent writes — the same shape as the cart's races.                                                                                                                             | [Unit Testing](../tools/unit-testing.md)               |
-| `tests/integration/db/index-sync.test.ts`              | `db:sync` builds every declared index, drops every undeclared one, converges on a second run, and refuses a unique constraint the rows already violate.                                                          | [Data](./data.md)                                      |
+| `tests/integration/scripts/db/index-sync.test.ts`      | `db:sync` builds every declared index, drops every undeclared one, converges on a second run, and refuses a unique constraint the rows already violate.                                                          | [Data](./data.md)                                      |
 | `tests/integration/app/demo-restore.test.ts`           | `restoreScenario`'s `blank` path against a real database, plus two real-HTTP cases proving the defects `emptyDatabase()` and the pinned tenant id exist to close.                                                | [Demo profile](../tools/demo-profile.md)               |
 | `tests/integration/scenarios/shop.test.ts`             | Builds the `shop` scenario for real, then reads every row back through the real serializers against the generated response schemas, and holds every declared guarantee equal to the subjects the build produced. | [Demo profile](../tools/demo-profile.md)               |
 
@@ -342,11 +342,11 @@ the result: `tests/integration/scenarios/apply.test.ts` is the worked example.
 A test run must not write onto the machine it runs on. The application writes files in three
 places, and each defaults to a real directory:
 
-| Setting                    | Default outside tests             | In tests                                  |
-| -------------------------- | --------------------------------- | ----------------------------------------- |
-| `NODE_PUBLIC_PATH`         | `public/` — uploads, thumbnails   | `.tmp/files/<pid>/<test file>/public`     |
-| `NODE_QUARANTINE_PATH`     | `quarantine/`                     | `.tmp/files/<pid>/<test file>/quarantine` |
-| `NODE_UPLOAD_STAGING_PATH` | `<system temp>/node-api-uploads/` | `.tmp/files/<pid>/<test file>/uploads`    |
+| Setting                    | Default outside tests             | In tests                                      |
+| -------------------------- | --------------------------------- | --------------------------------------------- |
+| `NODE_PUBLIC_PATH`         | `public/` — uploads, thumbnails   | `tmp/test/files/<pid>/<test file>/public`     |
+| `NODE_QUARANTINE_PATH`     | `tmp/quarantine/`                 | `tmp/test/files/<pid>/<test file>/quarantine` |
+| `NODE_UPLOAD_STAGING_PATH` | `<system temp>/node-api-uploads/` | `tmp/test/files/<pid>/<test file>/uploads`    |
 
 Two rules, both enforced:
 
@@ -358,11 +358,11 @@ Two rules, both enforced:
 
 ```mermaid
 flowchart LR
-    A["globalSetup<br/>claims .tmp/files/&lt;pid&gt;"] --> B["setupFilesAfterEnv<br/>env → sandbox of this test file"]
+    A["globalSetup<br/>claims tmp/test/files/&lt;pid&gt;"] --> B["setupFilesAfterEnv<br/>env → sandbox of this test file"]
     B --> C["test writes an upload"]
     C --> D["afterEach(emptyFileSandbox)"]
     D --> E["globalTeardown<br/>lists leftover files"]
-    E --> F["deletes .tmp/files/&lt;pid&gt;"]
+    E --> F["deletes tmp/test/files/&lt;pid&gt;"]
     F --> G{"any leftovers?"}
     G -- no --> H["run passes"]
     G -- yes --> I["run fails, naming the test file"]
@@ -375,7 +375,7 @@ does for the in-memory Mongo data.
 
 The one directory here Jest never runs. These are markdown prompts driven by hand against an LLM,
 covering the question no deterministic tool can reach: does the code do what the **docs** promise?
-They write reports to `reports/audit/` and never touch source.
+They write reports to `tmp/reports/audit/` and never touch source.
 
 | File                                 | What it is                                                                                               | Read next                              |
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------- | -------------------------------------- |

@@ -554,14 +554,14 @@ Deleting `products`, `cart` and `orders` together, **re-measured 2026-08-16 at t
 
 | Tier                  | Files that break | What they are                                                           |
 | --------------------- | ---------------- | ----------------------------------------------------------------------- |
-| `db/**`               | **0**            | —                                                                       |
+| `scripts/db/**`       | **0**            | —                                                                       |
 | `src/**` (production) | 10               | four modules that genuinely import it — a real coupling, failing loudly |
 | co-located specs      | 10               | five modules' own tests, reaching for a deleted domain's factories      |
 | `tests/**`            | 4                | central specs using a domain as sample data, or asserting one           |
 | `scripts/**`          | 2                | the section lists, announcing the entry you have not deleted yet        |
 
-**The `db/**`zero is the verdict**, and it is a narrower claim than the one this table used to
-make. An earlier run reported zero in`src/\*\*`too; that was true when`delivery`, `inventory`,
+**The `scripts/db/**`zero is the verdict**, and it is a narrower claim than the one this table used
+to make. An earlier run reported zero in`src/\*\*`too; that was true when`delivery`, `inventory`,
 `payments`and`wishlist` did not exist, and it was never the property being defended. Those four
 break because they genuinely import what was deleted — a compile error naming the file and the
 line, which is the failure a real coupling should produce. What must stay at zero is the tier that

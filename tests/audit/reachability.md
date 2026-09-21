@@ -19,7 +19,7 @@ the working tree. If empty, use `git status --porcelain` to pick the scope.
 
 ## Naming the scope
 
-Output is `reports/audit/reachability/<SCOPE>.md`, where `<SCOPE>` is:
+Output is `tmp/reports/audit/reachability/<SCOPE>.md`, where `<SCOPE>` is:
 
 - a module → the module name (`account`)
 - a path → the path slugged, `src/` dropped (`src/kernel/middlewares` →
@@ -106,7 +106,7 @@ before the replay.
 
 ## Output
 
-Write `reports/audit/reachability/<SCOPE>.md`:
+Write `tmp/reports/audit/reachability/<SCOPE>.md`:
 
 | defence | doc/spec (file:line) | test + altitude | blocked by (file:line) | verdict | proving request |
 
@@ -125,4 +125,4 @@ Rules:
 - A deliberate gap is recorded as deliberate, with the doc or comment that says so.
   Two mounts in this repo refuse api-key callers on purpose and say why at the
   mount — that is a row, not a finding.
-- `reports/` is gitignored. These files are working evidence, not deliverables.
+- `tmp/reports/` is gitignored. These files are working evidence, not deliverables.

@@ -30,11 +30,11 @@ const SOURCE_URL =
 /** Where the filtered, committable list lives — loaded once at boot into a `Set`. */
 const OUTPUT_PATH = path.resolve(
     __dirname,
-    '../src/infrastructure/security/breached-passwords/list.txt'
+    '../../src/infrastructure/security/breached-passwords/list.txt'
 );
 
 /** The committed root bundle, read for its resolved `PasswordNew` schema rather than a fragment. */
-const ROOT_CONTRACT_PATH = path.resolve(__dirname, '../openapi.yaml');
+const ROOT_CONTRACT_PATH = path.resolve(__dirname, '../../openapi.yaml');
 
 /**
  * The `PasswordNew` composition pattern, straight from the contract.

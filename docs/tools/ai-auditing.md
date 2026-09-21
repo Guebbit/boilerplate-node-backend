@@ -42,15 +42,15 @@ Two consequences, both non-negotiable:
 
 ## The seven prompts
 
-| File                                 | Asks                                                                                                                                                           | Writes to                            |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| `tests/audit/spec-drift.md`          | Which tests assert what the **code** does rather than what the **spec** says?                                                                                  | `reports/audit/spec-drift/`          |
-| `tests/audit/spec-gaps.md`           | Which business rules and security boundaries have **zero** coverage?                                                                                           | `reports/audit/spec-gaps/`           |
-| `tests/audit/suite-bloat.md`         | Which tests cost CI time and discriminate nothing?                                                                                                             | `reports/audit/suite-bloat/`         |
-| `tests/audit/compliance-backend.md`  | Which rules in the shared compliance registry (consent, privacy pages, data security, accessibility, …) does this backend violate, and which don't apply here? | `reports/audit/compliance-backend/`  |
-| `tests/audit/compliance-frontend.md` | The same registry, filtered to the paired frontend's half of responsibility.                                                                                   | `reports/audit/compliance-frontend/` |
-| `tests/audit/reachability.md`        | Which defences are correct where they are tested and unreachable through the real mounted path?                                                                | `reports/audit/reachability/`        |
-| `tests/audit/rate-limit-keys.md`     | Which rate-limit budgets bucket callers by something the attacker supplies or rotates for free?                                                                | `reports/audit/rate-limit-keys/`     |
+| File                                 | Asks                                                                                                                                                           | Writes to                                |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `tests/audit/spec-drift.md`          | Which tests assert what the **code** does rather than what the **spec** says?                                                                                  | `tmp/reports/audit/spec-drift/`          |
+| `tests/audit/spec-gaps.md`           | Which business rules and security boundaries have **zero** coverage?                                                                                           | `tmp/reports/audit/spec-gaps/`           |
+| `tests/audit/suite-bloat.md`         | Which tests cost CI time and discriminate nothing?                                                                                                             | `tmp/reports/audit/suite-bloat/`         |
+| `tests/audit/compliance-backend.md`  | Which rules in the shared compliance registry (consent, privacy pages, data security, accessibility, …) does this backend violate, and which don't apply here? | `tmp/reports/audit/compliance-backend/`  |
+| `tests/audit/compliance-frontend.md` | The same registry, filtered to the paired frontend's half of responsibility.                                                                                   | `tmp/reports/audit/compliance-frontend/` |
+| `tests/audit/reachability.md`        | Which defences are correct where they are tested and unreachable through the real mounted path?                                                                | `tmp/reports/audit/reachability/`        |
+| `tests/audit/rate-limit-keys.md`     | Which rate-limit budgets bucket callers by something the attacker supplies or rotates for free?                                                                | `tmp/reports/audit/rate-limit-keys/`     |
 
 All seven take one argument — a module (`orders`), a path, or `--diff` for whatever the working
 tree touched. The two compliance prompts default an empty argument to the **whole repo** rather
@@ -97,7 +97,7 @@ one.
 
 ### The reports are disposable
 
-`reports/` is gitignored, and that is the intended end state, not an oversight. A report is working
+`tmp/` is gitignored, and that is the intended end state, not an oversight. A report is working
 evidence: once its conclusions land as a fixed test, a commit message or a tracked issue, the file
 has done its job. Audit paperwork that outlives the audit goes stale silently and misleads the next
 reader — the prompts are the durable asset here, not their output.
@@ -172,7 +172,7 @@ Claude for `spec-drift` and `spec-gaps` — long-context reasoning over prose vs
 where small local models confabulate citations most confidently, and a fabricated `file:line` costs
 more than the finding was worth.
 
-`suite-bloat` is the exception. It is bookkeeping over `reports/mutation/mutation.json`, and a local
+`suite-bloat` is the exception. It is bookkeeping over `tmp/reports/mutation/mutation.json`, and a local
 Ollama model handles it.
 :::
 

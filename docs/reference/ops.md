@@ -71,8 +71,8 @@ One config per service in the chain. Each is mounted into its container by the c
 The `cron` service in both compose files — busybox `crond` reading `docker/crontab` — is an
 external scheduler: the schedule is deployment configuration instead of code, and the shape
 survives a move off compose unchanged (a `CronJob` on Kubernetes, a systemd timer on a VM). It runs
-the same `ops/reap-*`/`sweep:*` entry points every one of them already documents as "meant to run
-periodically", via `db/run-script.ts`.
+the same `scripts/ops/reap-*`/`sweep:*` entry points every one of them already documents as "meant to run
+periodically", via `scripts/db/run-script.ts`.
 
 | Job                              | Schedule (UTC) | Leased | What it does                                                                                            |
 | -------------------------------- | -------------- | ------ | ------------------------------------------------------------------------------------------------------- |
@@ -86,14 +86,14 @@ periodically", via `db/run-script.ts`.
 | `npm run sweep:webhook-retries`  | every minute   | No     | Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.   |
 
 `docker/crontab` and the seven nightly jobs above are staggered five minutes apart so they do not all
-land on the connection pool at once — each job's own header in `ops/` has the full reasoning.
+land on the connection pool at once — each job's own header in `scripts/ops/` has the full reasoning.
 `sweep:webhook-retries` is the one job on a different schedule entirely: it runs every minute,
 because the sweep interval IS the retry granularity — see
 [webhooks](../modules/webhooks.md#the-delivery-path). `tests/cross-cutting/scheduled-jobs.test.ts`
 asserts `docker/crontab` and `package.json`'s `reap:*`/`sweep:*` scripts agree in both directions —
 a script renamed in one and not the other is either a job that fails every run or cleanup that
 silently stops running — and that every scheduled script still names a file that exists, so
-deleting a module's `ops/*.ts` script flags its crontab line rather than leaving it to fail quietly
+deleting a module's `scripts/ops/*.ts` script flags its crontab line rather than leaving it to fail quietly
 at 2am.
 
 **Mutual exclusion.** `deploy: replicas: 1` on the `cron` service is what actually stops two passes

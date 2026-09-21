@@ -1,7 +1,7 @@
 /**
  * @module
  * The retry sweep: publish every delivery due for another attempt, plus any stranded `in-flight`
- * row whose lease already expired (`ops/sweep-webhook-retries.ts` runs
+ * row whose lease already expired (`scripts/ops/sweep-webhook-retries.ts` runs
  * {@link sweepDueWebhookDeliveries} on a schedule, per-minute, unlike the nightly `reap:*` jobs —
  * see the script's own header).
  *

@@ -25,7 +25,7 @@ import { writeFile } from 'node:fs/promises';
 import { emptyDatabase, isDatabaseEmpty } from '@infrastructure/runtime/database-snapshot';
 import { clearCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
-import { runScript } from '../db/run-script';
+import { runScript } from '../scripts/db/run-script';
 import { DEFAULT_SCENARIO, isScenarioName, buildScenario } from '@scenarios/index';
 import { hasFallbackSeedPassword, seedCredentials } from '@scenarios/accounts';
 import { DEMO_BANK_TRANSFER, SCRIPTED_RATE_LIMITS } from '@scenarios/rate-limits';
@@ -193,7 +193,7 @@ async function seed() {
  * exit the event loop never drains and the process hangs forever after logging completion. Safe
  * here specifically: by this point `stopServer()` has already awaited `shutdownAnalytics()` and
  * `shutdownTracing()`, the two steps with async transport writes in flight, so nothing is
- * truncated. Every other `runScript` caller (`db/`, `ops/`) never imports `src/app.ts` and so
+ * truncated. Every other `runScript` caller (`scripts/db/`, `scripts/ops/`) never imports `src/app.ts` and so
  * never hits this hook, which is why `run-script.ts` itself stays on `process.exitCode`.
  */
 void runScript(seed, () => application?.stopServer() ?? Promise.resolve()).then(() =>

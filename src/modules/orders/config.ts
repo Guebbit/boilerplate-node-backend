@@ -124,11 +124,13 @@ export const bankTransferEnabled = (): boolean =>
  * Where a rendered invoice may be cached, resolved against the WORKING DIRECTORY when relative —
  * same as `NODE_QUARANTINE_PATH`, and, like it, must stay OUTSIDE `NODE_PUBLIC_PATH`: an invoice
  * carries personal and financial data, and must only be reachable through the authenticated
- * `GET /orders/{id}/invoice`, never as a guessable static url.
+ * `GET /orders/{id}/invoice`, never as a guessable static url. The `tmp/storage/invoices` default
+ * is a local-dev convenience only — a real deployment sets `NODE_INVOICE_CACHE_PATH` to its own
+ * mounted volume.
  * @returns the cache directory
  */
 export const invoiceCachePath = (): string =>
-    path.resolve(process.env.NODE_INVOICE_CACHE_PATH ?? 'storage/invoices');
+    path.resolve(process.env.NODE_INVOICE_CACHE_PATH ?? path.join('tmp', 'storage', 'invoices'));
 
 /**
  * How long a rendered invoice stays cached — long enough to absorb one person's burst (download,

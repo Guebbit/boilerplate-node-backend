@@ -424,7 +424,7 @@ export const DEPLOYMENT_TENANT_SLUG = 'shop';
  *
  * Idempotent and safe to run against a live database with no `NODE_ENV` guard: the write is an
  * upsert, unlike `scenarios/apply.ts`'s scenario data. `scenarios/accounts.ts`'s `seedAccessModel`
- * is this plus the seed accounts' memberships; `db/bootstrap-access.ts` is this alone, for a
+ * is this plus the seed accounts' memberships; `scripts/db/bootstrap-access.ts` is this alone, for a
  * production deploy.
  */
 export const bootstrapAccessModel = (name: string): Promise<TenantDocument> =>

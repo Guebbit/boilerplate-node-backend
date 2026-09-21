@@ -372,7 +372,7 @@ rules:
           record whatever status the provider (Stripe/PayPal) reports; there is no local fraud
           scoring or business-rule decline, and a decline is retryable with another payment method
           (service.ts withActions exposes pay: true on a declined order). The account inactivity
-          reaper (ops/reap-inactive-accounts.ts, disabled by default via NODE_INACTIVE_ACCOUNT_DAYS)
+          reaper (scripts/ops/reap-inactive-accounts.ts, disabled by default via NODE_INACTIVE_ACCOUNT_DAYS)
           has a built-in self-service opt-out — logging in before soft-delete resets the clock — and
           once soft-deleted, restoration goes through an admin, which is itself a human-review path,
           not an absence of one. Re-evaluate if a local fraud-scoring/risk-model feature is ever
@@ -381,7 +381,7 @@ rules:
           backend:
               - src/modules/antibot/**, src/infrastructure/http/middlewares/human-challenge.ts, rate-limit.ts
               - src/modules/payments/service.ts (settlePayment, applyWebhookSettlement, applyWebhookDelivery)
-              - ops/reap-inactive-accounts.ts, src/modules/users/service.ts
+              - scripts/ops/reap-inactive-accounts.ts, src/modules/users/service.ts
           frontend: []
       references:
           - GDPR Art. 22

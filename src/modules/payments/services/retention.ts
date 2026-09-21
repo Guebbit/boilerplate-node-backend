@@ -46,7 +46,7 @@ export const findOwnPayments = (userId: string): Promise<Lean<PaymentDocument>[]
     );
 
 /**
- * `ops/reap-payments.ts`'s sweep. Deletes payment attempts that never reached `succeeded` or
+ * `scripts/ops/reap-payments.ts`'s sweep. Deletes payment attempts that never reached `succeeded` or
  * `refunded` and have not been touched in `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` (default 30) —
  * an open checkout the customer walked away from (a declined card nobody retried, a challenge
  * nobody answered), not a financial record. A settled payment is never a candidate here or on

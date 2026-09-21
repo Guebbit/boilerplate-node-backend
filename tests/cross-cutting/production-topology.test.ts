@@ -61,7 +61,9 @@ const parsedCompose: unknown = parse(
     { merge: true }
 );
 if (!isComposeFile(parsedCompose))
-    throw new Error('[production-topology] docker-compose.production.yml did not parse to an object.');
+    throw new Error(
+        '[production-topology] docker-compose.production.yml did not parse to an object.'
+    );
 
 const compose = parsedCompose;
 

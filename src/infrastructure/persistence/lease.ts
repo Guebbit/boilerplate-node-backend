@@ -8,7 +8,7 @@
  * Fencing is NOT implemented. A lease can still expire while its holder is mid-run, and two
  * holders can briefly exist regardless of how the lock itself is built. This repo accepts that
  * and relies on every lease-guarded job being idempotent instead (`docs/reference/data.md`
- * already requires it of `ops/` scripts) — add a fencing token only for a job that turns out not
+ * already requires it of `scripts/ops/` scripts) — add a fencing token only for a job that turns out not
  * to be idempotent, and treat needing one as a signal the job is wrong.
  *
  * See: docs/reference/ops.md#scheduled-jobs

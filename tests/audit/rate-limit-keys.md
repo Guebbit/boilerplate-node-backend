@@ -31,7 +31,7 @@ is why it lives here.
 
 ## Naming the scope
 
-Output is `reports/audit/rate-limit-keys/<SCOPE>.md`, where `<SCOPE>` is:
+Output is `tmp/reports/audit/rate-limit-keys/<SCOPE>.md`, where `<SCOPE>` is:
 
 - a module → the module name (`account`)
 - a path → the path slugged, `src/` dropped
@@ -108,7 +108,7 @@ attacker changes between requests, and what it costs.
 
 ## Output
 
-Write `reports/audit/rate-limit-keys/<SCOPE>.md`:
+Write `tmp/reports/audit/rate-limit-keys/<SCOPE>.md`:
 
 | budget | namespace | key (file:line) | mounted on | partner budget | verdict | bypass |
 
@@ -124,4 +124,4 @@ Rules:
 - A deliberate weak key is recorded as deliberate, with the comment that says so.
   The global browsing brake is address-keyed on purpose — it is a brake, not a
   gate, and it exists to slow a scanner rather than stop an attacker.
-- `reports/` is gitignored. These files are working evidence, not deliverables.
+- `tmp/reports/` is gitignored. These files are working evidence, not deliverables.

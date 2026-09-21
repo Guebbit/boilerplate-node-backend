@@ -12,10 +12,10 @@ src/types/asyncapi.generated.ts
 # from are formatted as normal.
 openapi.yaml
 
-# The mutation incremental cache. Committed on purpose — see the note in `.gitignore` and
-# `stryker.config.json` — and written by Stryker, not by anyone typing JSON. Same reasoning as the
-# file above: reformatting a file only a tool writes fails the check on a commit nobody made.
-reports/stryker-incremental.json
+# Stryker's own incremental cache — gitignored (see `.gitignore`) but still present on disk
+# between local runs, and written by Stryker, not by anyone typing JSON. Same reasoning as the
+# file above: reformatting a file only a tool writes fights the tool that owns it.
+tmp/reports/stryker-incremental.json
 
 # Working directories that belong to tooling rather than to this codebase, and to whoever is
 # running it rather than to this repo's formatting rules. Prettier scans the whole tree, so an

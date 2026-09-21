@@ -3,14 +3,14 @@
  *
  * Exercises `grantAccess` directly, not the CLI wrapper: `grant-access.ts` parses `process.argv`
  * and connects on import, which a test cannot drive per case — same reasoning as
- * `tests/integration/db/index-sync.test.ts`.
+ * `tests/integration/scripts/db/index-sync.test.ts`.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { membershipIn } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
-import { grantAccess, GrantAccessError } from '../../../db/access-grant';
+import { grantAccess, GrantAccessError } from '../../../../scripts/db/access-grant';
 
 setupTestDb();
 

@@ -170,9 +170,10 @@ services:
     # An external scheduler rather than an in-process one (`node-cron` et al.) — see
     # docs/reference/ops.md#scheduled-jobs. The schedule stays deployment configuration instead of
     # compiled into the app, and this shape is identical on a move to Kubernetes (a `CronJob`) or a
-    # VM (a systemd timer). Same image as `app`, since every entry point it runs (`ops/reap-*`,
-    # `sweep:*`) is already part of that image and already correct: `db/run-script.ts` opens a
-    # connection, closes it on both paths, and sets a non-zero exit code on failure.
+    # VM (a systemd timer). Same image as `app`, since every entry point it runs
+    # (`scripts/ops/reap-*`, `sweep:*`) is already part of that image and already correct:
+    # `scripts/db/run-script.ts` opens a connection, closes it on both paths, and sets a
+    # non-zero exit code on failure.
     #
     # `crond` is busybox's cron daemon (the `busybox` apt package in `docker/Dockerfile`).
     # Debian's build has no `-d`, so the flags differ from the production service:

@@ -1,5 +1,5 @@
 /**
- * `eslint/rules/barrel-allowed-sources` still fires. See `comment-links.test.ts` for why these
+ * `scripts/eslint/barrel-allowed-sources` still fires. See `comment-links.test.ts` for why these
  * rule tests carry one known-bad input each and no case table — one per CHECK here, since the
  * star, named and model-name-heuristic paths each independently guard against a repository or a
  * wiring file leaving the barrel. The typescript-eslint parser is required, not the default
@@ -7,7 +7,7 @@
  */
 import { RuleTester } from 'eslint';
 import * as parser from '@typescript-eslint/parser';
-import { barrelAllowedSources } from '../../../eslint/rules/barrel-allowed-sources';
+import { barrelAllowedSources } from '../../../../scripts/eslint/barrel-allowed-sources';
 
 const tester = new RuleTester({
     languageOptions: { parser, ecmaVersion: 'latest', sourceType: 'module' }

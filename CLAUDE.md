@@ -24,7 +24,7 @@ See: `docs/api/contract-fragmentation.md`, `docs/api/regenerating.md`
 ## TypeScript
 
 Every rule in this section is machine-checked — `tseslint.configs.strictTypeChecked` plus the
-project-local rules in `eslint/rules/`. They are written out here because the reasoning matters
+project-local rules in `scripts/eslint/`. They are written out here because the reasoning matters
 when you hit one, not because the doc is the guard.
 
 - MUST use `strict: true` in all TypeScript code.
@@ -267,8 +267,8 @@ When two readings of a request would produce materially different work, ask — 
 likelier one and build it.
 
 - MUST ask before: adding a dependency, changing a contract or a schema, writing a one-off data
-  script under `ops/`, touching auth / security / payments / money, deleting anything, or choosing
-  between two designs that are genuinely close.
+  script under `scripts/ops/`, touching auth / security / payments / money, deleting anything, or
+  choosing between two designs that are genuinely close.
 - Ask **early** and **batched** — one message with the open questions, before the code is written,
   not a drip-feed and not a post-mortem.
 - Decide alone on the mechanical half: naming, where a helper goes, test placement, formatting,

@@ -75,21 +75,21 @@ This second point is also why `@faker-js/faker` (ESM-only from v10) can't be imp
 
 ## File map
 
-| Path                                                              | Contents                                                                                            |
-| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `src/modules/<name>/tests/unit/**`                                | One domain: its service, repository, model, validation and factory                                  |
-| `src/modules/<name>/tests/contract/**`                            | That domain's endpoints against `openapi.yaml`                                                      |
-| `tests/cross-cutting/**`                                          | Properties asserted of EVERY module at once — sweeps, and the shared persistence and i18n substrate |
-| `tests/unit/middlewares/**`                                       | Cache, request logging                                                                              |
-| `tests/unit/infrastructure/**`                                    | Adapters (cache, logger, mailer, queue), HTTP helpers, observability                                |
-| `tests/unit/kernel/**`                                            | The module registry and the domain event bus                                                        |
-| `tests/unit/jobs/**`, `tests/unit/db/**`, `tests/unit/scripts/**` | Scheduled jobs, `db/` wrappers, the repo-hygiene scripts                                            |
-| `tests/unit/scenarios/**`                                         | The scenario registry's own logic — the guarantee checker, the named accounts, seed-row images      |
-| `tests/support/**`                                                | Harness and helpers — never collected as specs                                                      |
-| `tests/support/setup-test-db.ts`, `tests/support/database.ts`     | The `mongodb-memory-server` lifecycle                                                               |
-| `tests/support/setup.ts`                                          | Global Jest setup (rate-limit override, i18next init, system-mongod detection)                      |
-| `tsconfig.jest.json`                                              | The Jest-specific TypeScript config, see above                                                      |
-| `jest.config.js`                                                  | `testMatch`, path aliases, `setupFiles`                                                             |
+| Path                                                          | Contents                                                                                            |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `src/modules/<name>/tests/unit/**`                            | One domain: its service, repository, model, validation and factory                                  |
+| `src/modules/<name>/tests/contract/**`                        | That domain's endpoints against `openapi.yaml`                                                      |
+| `tests/cross-cutting/**`                                      | Properties asserted of EVERY module at once — sweeps, and the shared persistence and i18n substrate |
+| `tests/unit/middlewares/**`                                   | Cache, request logging                                                                              |
+| `tests/unit/infrastructure/**`                                | Adapters (cache, logger, mailer, queue), HTTP helpers, observability                                |
+| `tests/unit/kernel/**`                                        | The module registry and the domain event bus                                                        |
+| `tests/unit/jobs/**`, `tests/unit/scripts/**`                 | Scheduled jobs, `scripts/db/` wrappers, the repo-hygiene scripts                                    |
+| `tests/unit/scenarios/**`                                     | The scenario registry's own logic — the guarantee checker, the named accounts, seed-row images      |
+| `tests/support/**`                                            | Harness and helpers — never collected as specs                                                      |
+| `tests/support/setup-test-db.ts`, `tests/support/database.ts` | The `mongodb-memory-server` lifecycle                                                               |
+| `tests/support/setup.ts`                                      | Global Jest setup (rate-limit override, i18next init, system-mongod detection)                      |
+| `tsconfig.jest.json`                                          | The Jest-specific TypeScript config, see above                                                      |
+| `jest.config.js`                                              | `testMatch`, path aliases, `setupFiles`                                                             |
 
 ## Commands
 

@@ -82,7 +82,7 @@ look like real bugs.
 ```
 
 It needs a JSON report to read, which `test:unit:report` produces. Coverage rows appear only when
-`coverage/lcov.info` exists — run `test:unit:coverage` first if you want them.
+`tmp/coverage/lcov.info` exists — run `test:unit:coverage` first if you want them.
 
 The same script exists in the paired frontend, byte-identical, because Vitest's `json` reporter
 emits the shape Jest's `--json` does. `npm run check:spec-identity` keeps the two copies honest.
