@@ -182,7 +182,7 @@ const withDefaults = (
  *
  * See: docs/api/contract-fragmentation.md
  */
-const withAppLevelResponses = (bundled: string): string => {
+export const withAppLevelResponses = (bundled: string): string => {
     const document_ = parseYaml(bundled) as BundledDocument;
     const appLevel = document_['x-app-level-responses'];
 
