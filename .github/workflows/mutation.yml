@@ -93,6 +93,21 @@ jobs:
               if: steps.mongo-cache.outputs.cache-hit != 'true'
               run: npx tsx scripts/mutation/warm-mongo-cache.ts
 
+            - name: TEMP DIAGNOSTIC — where did that mongod actually come from
+              # The script above reports success in ~200ms, far too fast for a real 122 MB
+              # download, and ~/.cache/mongodb-binaries is still empty afterward — something is
+              # resolving a mongod some OTHER way. Remove once that's understood.
+              if: steps.mongo-cache.outputs.cache-hit != 'true'
+              run: |
+                  echo "--- which mongod ---"
+                  which mongod || echo "no mongod on PATH"
+                  echo "--- every mongod-like binary on the runner ---"
+                  find / -iname "mongod*" -type f 2>/dev/null | head -30
+                  echo "--- ~/.cache/mongodb-binaries ---"
+                  ls -la ~/.cache/mongodb-binaries 2>&1 || echo "does not exist"
+                  echo "--- MONGOMS_* env ---"
+                  env | grep -i mongoms || echo "none set"
+
             - name: Plan this week's shards
               id: plan
               run: npx tsx scripts/mutation/shard-plan.ts >> "$GITHUB_OUTPUT"
