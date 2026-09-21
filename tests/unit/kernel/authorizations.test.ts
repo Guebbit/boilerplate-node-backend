@@ -21,6 +21,7 @@ import {
     getTokenBearer,
     getAuth,
     isAuth,
+    isAuthOrCredential,
     requirePermission,
     requirePermissionViaCookie,
     stillHoldsKeyViaCookie,
@@ -32,7 +33,7 @@ import { emitAuditEvent, coreAuditActions } from '@infrastructure/observability/
 import { makeResponseStub } from '@tests/express';
 import { asCustomer, asAdmin } from '../../support/callers';
 import { callerInScope } from '@kernel/permissions';
-import type { AuthContext } from '@types';
+import type { AuthContext, Caller } from '@types';
 
 // Only the sink is replaced; `buildAuditEvent` and the `coreAuditActions` vocabulary stay real, so an
 // event that stops matching the real builder's shape fails here rather than in production.
@@ -90,6 +91,20 @@ const makeCookieRequest = (jwt?: string) =>
         cookies: jwt === undefined ? {} : { jwt },
         header: jest.fn(),
         path: '/orders/1/invoice',
+        method: 'GET',
+        headers: {}
+    });
+
+/**
+ * Request stub carrying a resolved `sk_...` API-key credential — `getAuth`'s credential branch's
+ * own shape: `caller` and `credentialId` together, `authContext` never set.
+ */
+const makeCredentialRequest = () =>
+    asStub<Request>({
+        header: jest.fn(() => undefined),
+        caller: asStub<Caller>({}),
+        credentialId: 'cred-1',
+        path: '/protected',
         method: 'GET',
         headers: {}
     });
@@ -303,6 +318,54 @@ describe('isAuth', () => {
         );
 
         expect(mockedEmitAuditEvent).not.toHaveBeenCalled();
+    });
+});
+
+describe('isAuthOrCredential', () => {
+    it('passes through a bearer-authenticated human session', () => {
+        const next = jest.fn();
+
+        isAuthOrCredential(
+            makeRequest({ authorization: 'Bearer valid.token', authContext: asCustomer('user-1') }),
+            makeResponseStub(),
+            next
+        );
+
+        expect(next).toHaveBeenCalledTimes(1);
+    });
+
+    it('passes through a resolved API-key credential', () => {
+        const next = jest.fn();
+
+        isAuthOrCredential(makeCredentialRequest(), makeResponseStub(), next);
+
+        expect(next).toHaveBeenCalledTimes(1);
+    });
+
+    /**
+     * The regression this guard exists to close: `requirePermissionViaCookie` sets `caller`
+     * exactly as the credential branch does, so `caller`'s bare presence used to admit a
+     * cookie-only request here as if it were a credential. A route mounting this guard never
+     * built to accept a refresh cookie must still refuse one.
+     */
+    it('rejects with 401 a caller resolved from the refresh cookie alone, no bearer token', () => {
+        const next = jest.fn();
+        const response = makeResponseStub();
+
+        isAuthOrCredential(makeRequest({ authContext: asCustomer('user-1') }), response, next);
+
+        expect(next).not.toHaveBeenCalled();
+        expect(response.status).toHaveBeenCalledWith(401);
+    });
+
+    it('rejects with 401 when neither a session nor a credential was resolved', () => {
+        const next = jest.fn();
+        const response = makeResponseStub();
+
+        isAuthOrCredential(makeRequest(), response, next);
+
+        expect(next).not.toHaveBeenCalled();
+        expect(response.status).toHaveBeenCalledWith(401);
     });
 });
 

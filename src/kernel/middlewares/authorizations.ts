@@ -168,6 +168,35 @@ const refuseUnauthenticated = (request: Request, response: Response): void => {
 };
 
 /**
+ * Whether `getAuth` (or, for the one SSE route, {@link requirePermissionViaCookie}) resolved a
+ * human session with a BEARER token — never true for a cookie alone.
+ *
+ * Both fields are required, and neither implies the other: {@link requirePermissionViaCookie}
+ * writes `authContext` from the refresh COOKIE, for the one route a browser cannot send a header
+ * on, with no bearer token on the request at all. A caller carrying only that cookie must read as
+ * having no bearer session — or the cookie becomes a second way to hold a session on every route
+ * that checks for one, including ones never built to accept it.
+ *
+ * @param request - read, never mutated
+ * @returns whether this request carries a bearer-authenticated session
+ */
+const hasBearerSession = (request: Request): boolean =>
+    request.authContext !== undefined && getTokenBearer(request) !== undefined;
+
+/**
+ * Whether `caller` was resolved from an `sk_...` API-key credential rather than a human session.
+ *
+ * `caller`'s own presence cannot tell the two apart: {@link requirePermissionViaCookie} sets it
+ * too, alongside `authContext`. `credentialId` is the one field only the credential branch of
+ * `getAuth` ever writes — see its own doc comment in `globals.d.ts`.
+ *
+ * @param request - read, never mutated
+ * @returns whether this request carries a resolved API-key credential
+ */
+const isCredentialCaller = (request: Request): boolean =>
+    request.caller !== undefined && request.credentialId !== undefined;
+
+/**
  * Reject with 401 unless `getAuth` resolved a human SESSION onto the request.
  *
  * Session only, deliberately. An `sk_...` credential resolves to `request.caller` and no
@@ -182,20 +211,12 @@ const refuseUnauthenticated = (request: Request, response: Response): void => {
  *
  * See: docs/tools/security.md#machine-to-machine-credentials
  *
- * The BEARER token is required as well as the context, and that second condition is not
- * redundant: {@link requirePermissionViaCookie} also writes `request.authContext`, from the
- * refresh COOKIE, for the one SSE route a browser cannot send a header on. A caller carrying
- * only that cookie therefore reaches here with a context and no token — and must still be
- * refused, or the cookie becomes a second way to hold a session on every route this guards.
- *
  * @param request - must already carry `authContext`, set upstream by `getAuth`
  * @param response - answered 401 when no bearer-authenticated session was resolved
  * @param next - called only once a session is confirmed present
  */
 export const isAuth = (request: Request, response: Response, next: NextFunction) => {
-    const token = getTokenBearer(request);
-
-    if (!request.authContext || !token) {
+    if (!hasBearerSession(request)) {
         refuseUnauthenticated(request, response);
         return;
     }
@@ -228,12 +249,16 @@ export const isAuth = (request: Request, response: Response, next: NextFunction)
  * answer a re-authentication challenge, so pairing them gives a partner integration a 401 it can
  * never clear. No route mounts both today, and that is the rule, not a coincidence.
  *
+ * A cookie-only caller does not satisfy this guard either, for the same reason {@link isAuth}
+ * refuses one: `requirePermissionViaCookie` sets `caller` too, alongside `authContext`, and
+ * `isCredentialCaller` is what tells that apart from a genuine `sk_...` credential.
+ *
  * @param request - must already carry `authContext` or `caller`, set upstream by `getAuth`
  * @param response - answered 401 when neither was resolved
  * @param next - called once either is confirmed present
  */
 export const isAuthOrCredential = (request: Request, response: Response, next: NextFunction) => {
-    if (!request.authContext && !request.caller) {
+    if (!hasBearerSession(request) && !isCredentialCaller(request)) {
         refuseUnauthenticated(request, response);
         return;
     }
