@@ -47,9 +47,10 @@ export const postLogin = (
      *              pattern deliberately lives on `PasswordNew`, for signup and reset, not here.
      * Audit:       a 422 raised HERE would return before `recordLoginFailure` and drop the
      *              attempt from the trail. The service's 422 arrives after it, and is recorded.
-     * Absent body: express 5 leaves `request.body` undefined when no parser matched. It falls
-     *              through as a wrong one does — it used to throw here and answer 500, which was
-     *              a real distinction between a bad content-type and a bad password.
+     * Absent body: express 5 leaves `request.body` undefined when no parser matched. The `?? {}`
+     *              below turns that into an ordinary empty body rather than a synchronous
+     *              `TypeError` on the destructure, so `accountService.login` reaches its own
+     *              422 the same way a JSON body missing both fields would.
      */
     const { email, password } = request.body ?? {};
 

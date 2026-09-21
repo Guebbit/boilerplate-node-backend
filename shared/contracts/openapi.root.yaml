@@ -30,8 +30,8 @@ servers:
 # Two middlewares sit in front of every route and can refuse before it runs: the global rate
 # limiter (`app.use(rateLimiter)`), and the body parser — whose size, syntax and encoding checks
 # account for three of the four statuses below. Neither is any one endpoint's business, so
-# neither was ever written into a module fragment — which left ~80 operations able to answer a
-# status their own contract denied.
+# neither belongs in a module fragment — an operation left to declare its own would either
+# duplicate these four everywhere or answer a status its own contract denies.
 #
 # Declared ONCE here and merged into every matching operation by `scripts/contracts/openapi-bundle.ts`,
 # rather than hand-copied into each fragment. A hand-copied list is a published claim with no guard

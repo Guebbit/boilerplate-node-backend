@@ -96,20 +96,16 @@ export const getRotationGraceMilliseconds = () =>
 /**
  * How long a rotated-away refresh token is REMEMBERED, so replaying it still reads as theft.
  *
- * Distinct from the grace window above, and the distinction is the whole point. Grace answers
- * "is this replay a benign race?" and is deliberately tiny. This answers "do we still recognise
- * this token at all?" — and while it was the same value, the answer was no: `tokenRemoveExpired`
- * deleted a superseded entry on exactly the cutoff past which `rotateRefreshToken` would have
- * called it reuse, so the detection branch was unreachable and no theft ever revoked a session.
+ * Distinct from the grace window above: grace answers "is this replay a benign race?" and is
+ * deliberately tiny; this answers "do we still recognise this token at all?"
  *
- * A day, because a stolen refresh token is a wasting asset — it is replayed within minutes or
- * hours, not next week — and because the tombstones are not free: an active client rotates about
- * every access-token lifetime (`NODE_TOKEN_ACCESS_TIME`, 600s), so 24h is roughly 144 retained
- * entries per session. Retaining for a refresh token's full lifetime instead would reach ~52,500
- * entries on the one-year tier, against Mongo's 16 MB document ceiling.
- *
- * Past this window a replay answers an ordinary 401 with no revocation. That is a real limit,
- * chosen rather than stumbled into.
+ * Default: a day. A stolen refresh token is a wasting asset — replayed within minutes or hours,
+ *          not next week.
+ * Cost:    an active client rotates about every access-token lifetime
+ *          (`NODE_TOKEN_ACCESS_TIME`, 600s), so 24h is roughly 144 retained entries per session.
+ *          A full refresh-token lifetime instead would reach ~52,500 on the one-year tier,
+ *          against Mongo's 16 MB document ceiling.
+ * Past it: an ordinary 401, no revocation — a real limit, chosen rather than stumbled into.
  *
  * @returns milliseconds, 86400000 (24h) if `NODE_TOKEN_REUSE_WINDOW_MS` is unset
  */

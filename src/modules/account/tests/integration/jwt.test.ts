@@ -228,9 +228,9 @@ describe('createAccessToken', () => {
         );
 
         // Revoke the way the real logout path does: reload with credentials, then revoke. The
-        // reload is what keeps the in-memory `tokens` in step — the database write itself is an
-        // atomic `$pull` and no longer depends on it (see the note above `tokenAdd` in the user
-        // model, and the guard immediately below this test).
+        // reload keeps this test's in-memory `tokens` in step with the database; the write itself
+        // is an atomic `$pull` that needs no reload of its own (see the note above `tokenAdd` in
+        // the user model, and the guard immediately below this test).
         const loaded = await userRepository.findByIdWithCredentials(String(user._id));
         await loaded!.tokenRemoveAll(TokenType.REFRESH);
 
@@ -356,9 +356,9 @@ describe('rotateRefreshToken reuse detection', () => {
         );
 
     /**
-     * The assertion the bug killed. Two sessions, one of them rotated and replayed late: the
-     * replay must be recognised as reuse AND the OTHER session must be dead afterwards, because
-     * revoking only the presented token protects nobody — the attacker already has it.
+     * Two sessions, one of them rotated and replayed late: the replay must be recognised as
+     * reuse AND the OTHER session must be dead afterwards, because revoking only the presented
+     * token protects nobody — the attacker already has it.
      */
     it('revokes every session on the account when a superseded token is replayed', async () => {
         await withWindows(async () => {
@@ -373,7 +373,8 @@ describe('rotateRefreshToken reuse detection', () => {
             await pastGrace();
 
             // The cleanup the real HTTP path runs FIRST, on every refresh, over every document.
-            // Present here on purpose: it is what used to erase the evidence.
+            // Present here on purpose: a sweep that purged the superseded tombstone before this
+            // point would leave rotateRefreshToken nothing to recognise as reuse.
             await runTokenCleanup();
 
             await expect(rotateRefreshToken(attacked)).rejects.toBeInstanceOf(TokenReuseError);

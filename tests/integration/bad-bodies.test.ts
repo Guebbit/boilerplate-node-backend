@@ -36,8 +36,8 @@ setupTestDb();
 const OVERSIZED_BODY = JSON.stringify({ email: 'a'.repeat(200_000) });
 
 /**
- * Every route that reads `request.body` without parsing it through Zod first — the four sites the
- * guard had to be applied at. Each one used to throw a `TypeError` on a body express never
+ * Every route that reads `request.body` without parsing it through Zod first — the four sites a
+ * guard is required at, or an unguarded destructure throws a `TypeError` on a body express never
  * parsed.
  *
  * `POST /account/signup` and `PUT /account` are multipart routes and are here deliberately:

@@ -59,7 +59,7 @@ surface it.
 
 ### Each repo keeps the prompts its own stack needs
 
-The two repos do **not** hold one set, and no longer try to. `reachability.md` and
+The two repos do **not** hold one set. `reachability.md` and
 `rate-limit-keys.md` both reason about a mounted Express request path, which the paired frontend
 has no equivalent of — and its own
 `boilerplate-vue-frontend/tests/audit/accessibility-manual.md` has no counterpart here.

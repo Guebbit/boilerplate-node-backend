@@ -11,8 +11,8 @@ import { parse } from 'yaml';
  * dependency's postinstall runs during the image build. None of them breaks a test, a type or a
  * lint rule. They break the deployment, in production, silently.
  *
- * These were the manual half of the 2026-09-20 pentest: checks a human ran by reading the files.
- * A human reading a file is a check that happens once. This is the same reading, on every push.
+ * Each is the kind of property a human catches by reading the files, once, in review — and never
+ * again once the reviewer's attention moves elsewhere. This is the same reading, on every push.
  *
  * Deliberately narrow. It asserts the four properties that were actually reasoned about, not an
  * inventory of every key in the compose file — a census fails on the next legitimate edit and

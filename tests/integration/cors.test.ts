@@ -1,14 +1,13 @@
 /**
  * CORS: what a disallowed origin gets.
  *
- * The regression this exists for: the disallowed branch used to answer `callback(new Error(...))`,
- * which tells the `cors` package the REQUEST failed. It threw into the express error chain and a
- * perfectly valid call — right password, right body — answered a generic 500 before its route
- * ever ran. Anyone could drive the 5xx rate with one header.
- *
- * The property being pinned is that refusing an origin is a matter of OMITTING a response header,
- * never of failing the request: the browser's same-origin policy is what withholds the body from
- * the calling page, and a curl or server-to-server caller is unaffected either way.
+ * The property being pinned: refusing an origin is a matter of OMITTING the CORS response header,
+ * never of failing the request. Answering `callback(new Error(...))` instead would tell the
+ * `cors` package the REQUEST itself failed, throwing into the express error chain and turning a
+ * perfectly valid call — right password, right body — into a generic 500 before its route ever
+ * ran, letting anyone drive the 5xx rate with one header. The browser's same-origin policy is
+ * what withholds the body from the calling page; a curl or server-to-server caller is unaffected
+ * either way.
  *
  * Drives the real app through the shared harness, so the assertions cover the real middleware
  * order rather than a privately-assembled stack.
@@ -51,9 +50,9 @@ describe('CORS', () => {
     });
 
     /**
-     * The 500 was reachable on any endpoint, including one that would otherwise have answered a
-     * deliberate status. `POST /account/login` with no body is the case the pentest hit: a real
-     * rejection, which the CORS error used to replace with a generic server fault.
+     * The property from the file header, pinned on an endpoint that answers a deliberate status
+     * of its own. `POST /account/login` with a wrong password must still answer that rejection
+     * rather than a generic server fault, whatever the request's origin header says.
      */
     it('does not turn a disallowed origin into a server error on a real endpoint', async () => {
         const response = await api()

@@ -1,12 +1,11 @@
 /**
  * Can an `sk_...` credential actually REACH a route, and only the right ones.
  *
- * The bug this exists for: `isAuth` checked `request.authContext` and never `request.caller`, so
- * every credential-authenticated request died at the guard with a 401. `getAuth` resolved the
- * credential correctly and `requirePermission` handled it correctly — the middleware between them
- * did not, and nothing noticed because the api-key suite calls `resolveCredential` directly and
- * its contract test drives the admin routes with a SESSION token. The resolver was proven; the
- * path to it never was.
+ * `getAuth` resolving a credential and `requirePermission` checking its key are each proven on
+ * their own — the api-key suite drives `resolveCredential` directly, the contract suite drives
+ * the admin routes with a SESSION token — but neither proves the identity GUARD between them
+ * actually admits a credential onto a route built to accept one. This file is that middle link,
+ * over the real mounted chain.
  *
  * Two halves, and the second is the one that keeps the first true:
  *
@@ -74,14 +73,14 @@ describe('an api key over the real chain', () => {
 
         const response = await api().get('/users').set('Authorization', `Bearer ${secret}`);
 
-        // The assertion that was impossible before the fix: anything but 401 at the guard.
+        // The credential must clear the identity guard, not just the permission check below it.
         expect(response.status).toBe(200);
     });
 
     /**
      * 403, not 401, and the difference is the whole point of splitting the two guards: the
-     * credential authenticated fine, it just does not hold this key. A 401 here would be the old
-     * bug wearing a different status.
+     * credential authenticated fine, it just does not hold this key. A 401 here would mean the
+     * identity guard rejected a valid credential, the same failure at a different status.
      */
     it('is refused with 403 on a tenant route its permission does not cover', async () => {
         const secret = await credentialHolding(['users.any.read']);

@@ -25,9 +25,10 @@ import { getReuseDetectionWindowMilliseconds } from '../session/config';
  * REUSE-DETECTION window, from every user document.
  *
  * That window, not the rotation grace window. This sweep runs ahead of the rotation on the very
- * request presenting the token, and it is collection-wide — so while the two shared a cutoff, a
- * stale token was deleted before `rotateRefreshToken` could recognise it, by this request or by
- * any other user's refresh. Reuse detection needs the tombstone to still be there.
+ * request presenting the token, and it is collection-wide, so a stale tombstone from ANY user's
+ * refresh could be swept mid-request. Purging on the grace window instead would delete a
+ * superseded entry before `rotateRefreshToken` could ever recognise a later replay as reuse — the
+ * tombstone has to survive at least as long as reuse detection is willing to look for it.
  */
 export const runTokenCleanup = (): Promise<void> => {
     // Stryker disable next-line all
