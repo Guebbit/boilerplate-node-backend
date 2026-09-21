@@ -23,15 +23,18 @@ import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 export const router = Router();
 
 /*
- * Write routes mount `isAuthOrCredential`, not `isAuth`: an `sk_...` api key may reach them.
- * Catalogue writes are `products.any.*`/`translations.any.*` keys; the public reads above
- * mount no identity guard at all. A PIM or supplier feed is the machine case.
+ * `getAuth` on everything, no identity guard here: the reads below are a storefront and must
+ * answer an anonymous browser. Each write names its own guard instead, and that guard is
+ * `isAuthOrCredential` — catalogue writes are `products.any.*`/`translations.any.*` keys over
+ * the tenant's own data, so a PIM or a supplier feed may hold them. See
+ * docs/tools/security.md#machine-to-machine-credentials.
  */
-
-// Apply getAuth to all routes so admins get extra visibility
 router.use(getAuth);
 
-/** Shared cache middleware for both search entry points, keyed on the query parameters that change the answer. */
+/**
+ * Shared cache middleware for both search entry points, keyed on the query parameters that
+ * change the answer.
+ */
 const cacheProductsSearch = searchCache('products', searchProductsKeyParameters);
 
 // POST /products/search — must come before /:id to avoid matching "search" as an id

@@ -1,11 +1,11 @@
 /**
  * @module
- * The feedback route table. `routes.ts` mounts ONE public route (the visitor contact form), then
- * `router.use(getAuth, isAuthOrCredential)` and a `requirePermission('feedback.*')` per route — everything
- * below the mount is keyed, purely by position, and
- * nothing looks wrong either way if that's gotten wrong. Assertions here are positional for that
- * reason (see `effectiveRouteTable` in `tests/support/routes.ts`); per-route middleware alone
- * would pass whatever happened.
+ * The feedback route table. `routes.ts` mounts ONE public route (the visitor contact form),
+ * then `router.use(getAuth, isAuthOrCredential)` and a `requirePermission('feedback.*')` per
+ * route — everything below the mount is keyed, purely by position, and nothing looks wrong
+ * either way if that is gotten wrong. Assertions here are positional for that reason (see
+ * `effectiveRouteTable` in `tests/support/routes.ts`); per-route middleware alone would pass
+ * whatever happened.
  */
 
 import {

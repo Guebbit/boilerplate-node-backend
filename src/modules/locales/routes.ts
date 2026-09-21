@@ -1,12 +1,12 @@
 /**
  * @module
  * Express router for locale discovery and translation administration. The four GET reads are
- * public — an unauthenticated client is exactly who needs a dictionary — with only the manifest
- * taking `getAuth`, to include inactive languages for admins. Every write is admin-gated per mount
- * (`getAuth, isAuthOrCredential, requirePermission(...)` spelled on each route, not a shared
- * `router.use`) and invalidates
- * the shared Redis cache. Route order matters: `/tenants` and `/:locale/messages` must be declared
- * before `/:locale`, or Express's first-match wins the wildcard instead.
+ * public — an unauthenticated client is exactly who needs a dictionary — with only the
+ * manifest taking `getAuth`, to include inactive languages for admins. Every write is gated per
+ * mount (`getAuth, isAuthOrCredential, requirePermission(...)` spelled on each route, not a
+ * shared `router.use`) and invalidates the shared Redis cache. Route order matters: `/tenants`
+ * and `/:locale/messages` must be declared before `/:locale`, or Express's first-match wins the
+ * wildcard instead.
  */
 
 import { Router } from 'express';
@@ -28,13 +28,16 @@ import { deleteLocaleEntry } from './controllers/delete-locale-entry';
 import { getEntityTranslations } from './controllers/get-entity-translations';
 import { upsertEntityTranslations } from './controllers/upsert-entity-translations';
 
-/** Express router mounted at `/locales` — see the module header for the ordering and guard rules. */
+/**
+ * Express router mounted at `/locales` — see the module header for the ordering and guard rules.
+ */
 export const router = Router();
 
 /*
- * Write routes mount `isAuthOrCredential`, not `isAuth`: an `sk_...` api key may reach them.
- * Dictionary writes are `locales.any.*`/`translations.any.*` keys. A translation-management
- * system pushing strings is the machine case; the public reads above are untouched.
+ * Why every write below names `isAuthOrCredential` rather than `isAuth`: dictionary writes are
+ * `locales.any.*`/`translations.any.*` keys over the tenant's own data, and a translation
+ * management system pushing strings is the machine case. The public reads that follow mount no
+ * identity guard at all. See docs/tools/security.md#machine-to-machine-credentials.
  */
 
 /**
@@ -94,9 +97,9 @@ router.delete(
 );
 
 // Uncached on purpose — see the controller for why the editing screen is the one read that is not.
-// `locales.any.update`, not `locales.self.read`: every visitor holds the read key — it is how the shop
-// renders in their language — and this is the EDITING screen, which lists every string including
-// the ones no page has asked for yet.
+// `locales.any.update`, not `locales.self.read`: every visitor holds the read key — it is how
+// the shop renders in their language — and this is the EDITING screen, which lists every string
+// including the ones no page has asked for yet.
 router.get(
     '/:locale/entries',
     getAuth,

@@ -1,10 +1,11 @@
 /**
  * @module
- * Inventory route table tests. Every route here is staff's, guarded by one
- * `router.use(getAuth, isAuthOrCredential, requireUnrestricted)` at the top — the customer-facing half of this module is
- * deliberately not a route at all, since a shopper learns about stock from `available` on the
- * product page. A route mounted above the guard, or the guard losing `requirePermission`, would publish
- * the counters and the ledger to anyone.
+ * Inventory route table tests. Every route here is staff's, reached past one
+ * `router.use(getAuth, isAuthOrCredential)` at the top plus the `inventory.any.*` key each mount
+ * names — the customer-facing half of this module is deliberately not a route at all, since a
+ * shopper learns about stock from `available` on the product page. A route mounted above the
+ * guard, or a mount losing its `requirePermission`, would publish the counters and the ledger
+ * to anyone.
  */
 
 import { routeSignatures, guardsOn, identityGuardIndex } from '@tests/routes';
