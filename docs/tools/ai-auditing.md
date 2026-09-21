@@ -8,7 +8,7 @@ notice that the docs promise a rule the contract never encodes.
 **Prose ↔ code is the gap**, and it is the one place a language model beats a program rather than
 approximating one. This repo has ~56 files under `docs/` stating rules no schema enforces.
 
-`tests/audit/` holds five prompts that live in exactly that gap. They are plain markdown, run by
+`tests/audit/` holds seven prompts that live in exactly that gap. They are plain markdown, run by
 hand against an LLM, and they write reports — never code.
 
 ## The one rule
@@ -40,7 +40,7 @@ Two consequences, both non-negotiable:
 - **A finding without a citation is not a finding.** Either a `file:line` in the spec, or nothing.
   Prose confidence is not evidence.
 
-## The five prompts
+## The seven prompts
 
 | File                                 | Asks                                                                                                                                                           | Writes to                            |
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
@@ -49,13 +49,18 @@ Two consequences, both non-negotiable:
 | `tests/audit/suite-bloat.md`         | Which tests cost CI time and discriminate nothing?                                                                                                             | `reports/audit/suite-bloat/`         |
 | `tests/audit/compliance-backend.md`  | Which rules in the shared compliance registry (consent, privacy pages, data security, accessibility, …) does this backend violate, and which don't apply here? | `reports/audit/compliance-backend/`  |
 | `tests/audit/compliance-frontend.md` | The same registry, filtered to the paired frontend's half of responsibility.                                                                                   | `reports/audit/compliance-frontend/` |
+| `tests/audit/reachability.md`        | Which defences are correct where they are tested and unreachable through the real mounted path?                                                                | `reports/audit/reachability/`        |
+| `tests/audit/rate-limit-keys.md`     | Which rate-limit budgets bucket callers by something the attacker supplies or rotates for free?                                                                | `reports/audit/rate-limit-keys/`     |
 
-All five take one argument — a module (`orders`), a path, or `--diff` for whatever the working
+All seven take one argument — a module (`orders`), a path, or `--diff` for whatever the working
 tree touched. The two compliance prompts default an empty argument to the **whole repo** rather
 than the touched modules — a compliance gap is rarely introduced by the change that happens to
 surface it.
 
-The five prompt files, plus `tests/audit/compliance-rules.yaml`, are the parts of this kept
+`reachability.md` and `rate-limit-keys.md` are this repo's own: both reason about a mounted
+Express request path, which the paired frontend has no equivalent of.
+
+The other five prompt files, plus `tests/audit/compliance-rules.yaml`, are the parts of this kept
 byte-identical with the sibling repo (`boilerplate-vue-frontend`) — the prompts are repo-agnostic
 by design, and the compliance registry is deliberately one shared source of truth: a rule like the
 mandatory signup-consent checkbox spans both repos' responsibility, and a backend-only copy of
@@ -136,7 +141,8 @@ ln -s ../../tests/audit .claude/commands/audit
 ```
 
 That gives `/audit:spec-drift orders`, `/audit:spec-gaps inventory`, `/audit:suite-bloat --diff`,
-`/audit:compliance-backend`, `/audit:compliance-frontend`.
+`/audit:compliance-backend`, `/audit:compliance-frontend`, `/audit:reachability account`,
+`/audit:rate-limit-keys --diff`.
 The symlink is local, gitignored and regenerable — the files under `tests/audit/` remain the only
 copy.
 
