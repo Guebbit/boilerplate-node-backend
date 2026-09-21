@@ -16,9 +16,9 @@ import mongoose from 'mongoose';
  * a module-level singleton here would be re-created per file, while the environment crosses both
  * that boundary and the one into worker processes.
  *
- * This bounds the DISK cost and the process count. It is not what bounds the worker's memory — that
- * growth is `bson`'s 17 MiB module-scope buffer, re-allocated per module registry and unrelated to
- * connections; see the case study in `docs/tools/mutation-testing.md`.
+ * This bounds the DISK cost and the process count, not memory: what keeps memory flat across files
+ * is freeing each file when it ends — `tests/support/test-environment.ts`, and
+ * docs/tools/mutation-testing.md#the-bson-warning-sign for what it looks like when that fails.
  *
  * ── ISOLATION IS UNCHANGED ───────────────────────────────────────────────────────────────────────
  * A database name per file keeps files apart, `clearAll` still empties collections between cases,

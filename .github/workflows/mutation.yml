@@ -77,22 +77,16 @@ jobs:
         # `antibot` went unmeasured for a month despite sitting right in the old `stryker.deep.json`'s
         # own `mutate` list. `mutation-matrix` walks that scope itself every week instead.
         #
-        # `maxTestRunnerReuse: 1` in `stryker.json` is load-bearing here, not a tuning knob. Every
-        # test file that reaches mongoose re-evaluates `bson`, which allocates a 17 MiB buffer at
-        # module scope, and Stryker never exits the worker — so the copies accumulate. Measured on
-        # one file: 23 OOM restarts at reuse 5, none at 1, and the run was HALF the time because a
-        # restart costs less than the crash-and-retry it replaces.
+        # `maxTestRunnerReuse: 1` in `stryker.json` restarts the test runner after every mutant. It
+        # contained memory that climbed per mutant — old test files kept alive, each holding
+        # `bson`'s 17 MiB — which tests/support/test-environment.ts now frees. Raising it is not yet
+        # re-measured: docs/tools/mutation-testing.md#concurrency-and-reuse.
         needs: mutation-matrix
         if: github.event_name != 'pull_request'
         runs-on: ubuntu-latest
-        # See scripts/mutation/sharding.ts's `TARGET_LINES_PER_SHARD` comment — this number and
-        # that constant are coupled and nothing checks that they still agree. History, 2026-09-21:
-        # 210->270 after a measured shard took 219m at `--concurrency 2`; 270->350 alongside a drop
-        # to `--concurrency 1` that was meant to roughly double wall-clock but instead made EVERY
-        # remaining shard blow straight through 350m simultaneously (real ratio was worse than 2x).
-        # Concurrency is back to 2 (below) and the shard target dropped 1300->600 lines instead —
-        # smaller shards cost less time AND less peak memory, which concurrency alone couldn't
-        # buy. Left at 350 anyway: real margin, still under GitHub's 360m hosted-runner ceiling.
+        # Coupled to scripts/mutation/sharding.ts's `TARGET_LINES_PER_SHARD`, and nothing checks
+        # that they still agree. 350 leaves margin over that constant's ~100-minute budget while
+        # staying under GitHub's 360-minute hosted-runner ceiling.
         timeout-minutes: 350
         permissions:
             contents: read

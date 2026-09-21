@@ -194,12 +194,11 @@ code, only the ruler changed.
 tests, so the per-mutant cost goes up. That is why the full scope is always sharded and runs weekly
 rather than as an unsharded nightly — see [The three commands](#the-three-commands).
 
-**What made the merge safe: the `bson` leak had to be fixed first.** Loading the integration suites
-into a mutation run used to trigger an unbounded memory leak — not from the database, from a 17 MiB
-scratch buffer `bson` allocates at module scope on every evaluation, accumulating in a worker
-Stryker never exits. `stryker.json`'s `maxTestRunnerReuse: 1` restarts the test runner after every
-mutant so the copies cannot accumulate: 0 OOM restarts where reuse 5 produced 23, on the same file.
-The full investigation is under [the OOM strand loop](#when-a-run-never-finishes-—-the-oom-strand-loop) below.
+**What the merge depends on: a test file must free its memory when it ends.** A mutation run loads
+far more files per process than `npm test` does, so anything a file leaves reachable accumulates —
+and `bson`'s 17 MiB buffer makes each leftover file expensive. The cause and the fix are in
+[One process per dry run](#one-process-per-dry-run); how `bson` shows up is under
+[the `bson` warning sign](#the-bson-warning-sign).
 
 ### What is still excluded, and why
 
@@ -645,12 +644,14 @@ mongoose imports bson.
 collect, and the process grows regardless: a worker capped at 1400 MB was measured at 6.6 GB RSS.
 The cap only ever decided _when_ the worker died, never _whether_ it grew.
 
-**What is left.** The repo cannot share one `bson` across registries: jest routes even
-`createRequire` through its own resolver, and `process` and the core-module objects are re-created
-per test file, so every channel a shim could use is isolated by design. The remaining levers are
-Stryker's `maxTestRunnerReuse` (restart the runner every _n_ mutants) and an upstream report against
-`bson` — the latter not yet filed; nothing on `mongodb/js-bson` names this eager module-scope
-allocation as a leak (checked 2026-09-01).
+**What this investigation missed — found 2026-09-21.** The retainer walk above stopped at
+`system / Context .buffer`: `bson`'s own module scope. One step further, to the GC root, would have
+shown why that scope was still alive: a timer from `express-rate-limit` and an observer from
+`prom-client`, each pinning its test file's whole context. The buffers piled up because the files
+were never freed — not because Stryker's worker never exits. Fixed in
+`tests/support/test-environment.ts`; see [One process per dry run](#one-process-per-dry-run) and
+[the `bson` warning sign](#the-bson-warning-sign). No upstream report against `bson` is needed:
+freeing the file frees its buffer.
 
 The former is not a workaround invented under pressure — it is Stryker's own sanctioned answer to a
 dependency holding module-scope state a reused worker can't shed.
@@ -672,7 +673,9 @@ not spend a day rediscovering it.
 
 **The rule this earns.** Group-by tells you _what_ is in a heap; only the edges tell you _who holds
 it_. Identifying a kind of object and then guessing its owner from what that kind is usually for is
-not a diagnosis — it is the same guess with a number attached to it.
+not a diagnosis — it is the same guess with a number attached to it. And follow the edges all the
+way to a GC root: stopping at the first owner found (here, `bson`'s module scope) names the victim,
+not the culprit.
 
 ### Related: the same arithmetic kills a plain `npm test` {#jest-worker-count}
 
@@ -758,13 +761,12 @@ them gets the same ~4.2 GB. Measured 2026-09-20, a full run hit that ceiling dir
 concurrency 6, 4, 2 and 1, with 10+ GB of the machine free throughout. `STRYKER_WORKER_HEAP_MB=8192`
 survived where unset did not.
 
-Two failure modes wear the same "ran out of memory" label, and only one of them is the `bson` leak:
+Two failure modes wear the same "ran out of memory" label:
 
-| Symptom                                                   | Cause                                          | The lever                                        |
-| --------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------ |
-| Crash in the first minute, identical at every concurrency | a worker wants more than V8's ~4.2 GB default  | `STRYKER_WORKER_HEAP_MB`                         |
-| Slow climb across many mutants, RSS far above any cap     | `bson` buffers, outside the heap V8 bounds     | `maxTestRunnerReuse` — a cap cannot              |
-| Steady climb through the DRY run, one step per test file  | a file's context kept alive by a live callback | [the test environment](#one-process-per-dry-run) |
+| Symptom                                                   | Cause                                                                    | The lever                                                       |
+| --------------------------------------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| Crash in the first minute, identical at every concurrency | a worker wants more than V8's ~4.2 GB default                            | `STRYKER_WORKER_HEAP_MB`                                        |
+| Climb per test file or per mutant, RSS far above any cap  | old test files kept alive, each holding `bson`'s 17 MiB outside the heap | [the test environment](#one-process-per-dry-run) — a cap cannot |
 
 Budget `STRYKER_WORKER_HEAP_MB × STRYKER_CONCURRENCY` against free RAM, and re-measure the default
 on your own Node version rather than trusting the number above: it reads like a V8 default, not a
@@ -803,6 +805,33 @@ then held 220–620 MB from the first file to the last.
 --runInBand --logHeapUsage <files>`, then a heap snapshot after two files. Count a per-file
 object (`Mongoose` works) and walk its retainer path to a GC root — the root names the culprit.
 
+### The `bson` warning sign {#the-bson-warning-sign}
+
+`bson` is not a leak on its own. It is the **amplifier** that makes any other leak expensive, and
+the first thing a memory dump shows — which is why it was blamed for a month.
+
+|                            |                                                                                                                                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **What it does**           | reserves a 17 MiB scratch buffer at module scope, every time the module is evaluated ([`src/bson.ts`](https://github.com/mongodb/js-bson/blob/main/src/bson.ts)) <!-- doc-paths:ignore --> |
+| **When that is harmless**  | on its own, always: jest evaluates it once per test FILE, and the buffer is freed with the file                                                                                            |
+| **When it becomes a leak** | a test file stays reachable after it ends — then its 17 MiB stays too, and the next file adds another                                                                                      |
+| **Why it hides**           | the buffer is an `ArrayBuffer`, outside V8's heap: `--max-old-space-size` never sees it, and `heapUsed` never counts it                                                                    |
+| **How it shows**           | `process.memoryUsage().arrayBuffers` climbing ~17 MiB per test file; a heap dump dominated by ~17 MB buffers                                                                               |
+
+Measured 2026-09-21, 40 test files in one process, `arrayBuffers` after each:
+
+| after file | files retained (before the fix) | files freed (after) |
+| ---------- | ------------------------------- | ------------------- |
+| 1          | 38 MB                           | 38 MB               |
+| 10         | 195 MB                          | 36 MB               |
+| 20         | 390 MB                          | 53 MB               |
+| 40         | 726 MB, still climbing          | 71 MB, flat         |
+
+**If you see it:** do not look at `bson`. Look for what keeps old test files alive — walk a heap
+snapshot's retainer path from one of the buffers **all the way to a GC root**, not just to the
+module that owns it. The root names the real culprit: in 2026-09 a timer and a performance
+observer; next time perhaps an event listener on a shared object, or a global registry.
+
 ## The dry run's own timeout
 
 `stryker.json` sets `dryRunTimeoutMinutes: 20`. It used not to set it at all, which left Stryker's
@@ -812,7 +841,7 @@ old three-night rotation, three or four shards lost that coin flip on ordinary n
 340–360 seconds with nothing to show for it. 20 minutes is a flat setup-cost budget against a job
 measured in hours; it hides nothing, unlike narrowing what the dry run has to execute would.
 
-## Concurrency and maxTestRunnerReuse — the current numbers
+## Concurrency and maxTestRunnerReuse — the current numbers {#concurrency-and-reuse}
 
 Both are measurements with an expiry date, not constants — re-measure them when the numbers below stop matching the machine or the project.
 
@@ -824,9 +853,14 @@ What moved was the project, not the machine: the module count went from nine to 
 
 4 is kept as the shared default because this value is committed and the safe number is a property of the machine, not the project — a contributor's laptop is not a 30 GB desktop. Raise it per machine via `STRYKER_CONCURRENCY` in `.env` (see [the worker-pool multiplication](#the-worker-pool-multiplication)). CI overrides it independently — `mutation.yml` passes `--concurrency 2` for the sharded weekly matrix, because a standard GitHub runner is 4 vCPU / 16 GB, not 32/30.
 
-**`maxTestRunnerReuse: 1`.** [The bson case study](#case-study-the-buffers-were-not-io-at-all) explains _why_ a runner has to be recycled at all — a 17 MiB scratch buffer `bson` allocates at module scope on every evaluation, which a normal `npm test` never notices (its workers exit and return the memory) but a Stryker worker does, because it never exits between mutants. `5` was the number under the old unit-only ruler, picked because it kept a worker's peak near 2.8 GB (measured 2026-08-14: RSS grows ~470 MB per mutant and does not plateau — 1634 MB at the end of the dry run, 5850 MB nine mutants later, linear the whole way).
+**`maxTestRunnerReuse: 1`** restarts the test runner after every mutant. It was set because memory
+climbed from mutant to mutant — measured at reuse 5: **23 OOM restarts on one file**; at 1: **0**,
+and half the time.
 
-**`1` is the number now, and it is not a tuning knob — it is load-bearing.** Once every worker also opens a real `mongod` (the ruler merge), reuse 5 measured **23 OOM restarts on one file**; reuse 1 measured **0**, and finished in HALF the time, because a clean restart between mutants costs less than the crash-and-retry loop it replaces. `.github/workflows/mutation.yml`'s `mutation` job carries the same reasoning. Do not raise this back up to buy fewer process spawns without re-measuring the OOM count first — the case that justified 5 no longer holds under a worker that also carries a database. Re-measure with:
+That climb was [old test files kept alive](#one-process-per-dry-run), each holding
+[`bson`'s 17 MiB](#the-bson-warning-sign) — fixed 2026-09-21. **Reuse 1 is therefore probably no
+longer needed**, while every restart costs a fresh process, jest and `mongod` per mutant. Not yet
+re-measured: raise it (3, then 2 if that fails) only after checking RSS stays flat across mutants:
 
 ```bash
 npx stryker run --mutate <one file> --concurrency 1

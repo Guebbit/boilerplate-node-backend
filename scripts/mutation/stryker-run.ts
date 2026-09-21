@@ -95,10 +95,9 @@ export const runStryker = ({
     const passedConcurrency = args.some((argument) => argument.startsWith('--concurrency'));
 
     /*
-     * `--max-old-space-size` is containment, not a cure for the `bson` leak: it decides how quickly
-     * that one announces itself. It IS the cure for the other failure — V8's default is a flat
-     * ~4.2 GB here rather than a share of the machine, and a worker wanting more dies in the first
-     * minute. See docs/tools/mutation-testing.md#worker-heap-cap.
+     * `--max-old-space-size` raises V8's default, a flat ~4.2 GB here rather than a share of the
+     * machine — a worker wanting more dies in the first minute. It cannot bound memory held outside
+     * the heap, such as `bson`'s buffers. See docs/tools/mutation-testing.md#worker-heap-cap.
      *
      * `...process.env`, never `.env` merged in first: `.env`'s real `NODE_RATE_LIMIT_REDIS_ENABLED`/
      * `NODE_REDIS_URL` would otherwise reach every spawned jest before `tests/support/setup.ts` can

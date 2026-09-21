@@ -21,19 +21,10 @@ export interface Shard {
 /**
  * Target lines per shard.
  *
- * Re-derived 2026-09-21 from a REAL shard, not the single-file extrapolation this constant used
- * to rest on: `shard-00` (1300 lines, 346 mutants) measured **219 minutes at `--concurrency 2`** —
- * ~38s/mutant, not the ~7.1s/mutant `observability` alone had suggested. At `--concurrency 1` the
- * gap was worse than a clean 2x: every other shard in the full sweep still hadn't finished after
- * 350 minutes (2026-09-21's CI run — all 35 remaining shards hit that ceiling simultaneously).
- * `--concurrency 2` is back for exactly that reason; see the workflow's own comment.
- *
- * 600 lines, at the measured ~38s/mutant, budgets to roughly 100 minutes per shard — real margin
- * under `timeout-minutes: 350`, and a shard half this size relates roughly half as much of the
- * integration suite through `enableFindRelatedTests`, which is what actually drove the `bson`
- * OOMs (`docs/tools/mutation-testing.md#worker-heap-cap`), not concurrency by itself. Re-derive
- * both numbers together once a few weeks of real shard timings exist at THIS size — this constant
- * and the workflow's `timeout-minutes` are coupled and nothing checks that they still agree.
+ * Measured:  `shard-00`, 1300 lines / 346 mutants, 219 minutes at `--concurrency 2` — ~38s/mutant.
+ * Budget:    600 lines at that rate is roughly 100 minutes a shard.
+ * Coupled:   the workflow's `timeout-minutes`; nothing checks that the two still agree.
+ * Re-derive: both together, once real timings exist at this size.
  */
 export const TARGET_LINES_PER_SHARD = 600;
 
