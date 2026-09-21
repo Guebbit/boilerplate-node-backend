@@ -49,10 +49,39 @@
 # finish successfully before they start, so a fresh deployment gets its indexes and its shop's row
 # before anything serves a request.
 
+# ── CONTAINER HARDENING, ONCE ───────────────────────────────────────────────────────────────────
+# Merged into `app`, `cron` and `setup` with `<<: *hardening` — all three run the SAME image, so
+# they have the same needs and a divergence between them would be an accident rather than a
+# decision. `USER node` in the Dockerfile already drops root; these drop what root was not the
+# only way to get:
+#
+#   read_only        the image's own filesystem cannot be modified, so a write primitive gained
+#                    through a dependency has nowhere to drop a payload. Every path the app
+#                    legitimately writes is mounted per service below, and each one is `noexec`
+#                    or a volume — a directory that is writable OR executable, never both.
+#   cap_drop         these are node processes serving HTTP or running a scheduler: they bind
+#                    ports above 1024 as a non-root user and need no Linux capability at all.
+#   no-new-privileges  a setuid binary inside the image cannot raise privilege, which closes the
+#                    usual escape from the non-root user above.
+#   tmpfs /tmp       where an upload waits while the request is checked — `NODE_UPLOAD_STAGING_PATH`
+#                    defaults into the system temp directory, and `npm_config_cache` is pointed
+#                    here too. `noexec`/`nosuid`: a file the client chose the bytes of lands here,
+#                    and nothing should ever run it. Sized because a tmpfs charges real memory —
+#                    this bounds concurrent uploads, not one upload's size, which
+#                    `NODE_MAX_UPLOAD_BYTES` does.
+#
+# CIS Docker Benchmark 5.12 / 5.25.
+x-hardening: &hardening
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+        - /tmp:mode=1777,size=64m,noexec,nosuid
+
 x-app-env: &app-env
     NODE_ENV: 'production'
-    # Every service here starts through `npm`, and every one runs with a read-only root (see the
-    # hardening block on `app`). npm's cache — and the `_logs/` it writes a failure report into —
+    # Every service here starts through `npm`, and every one runs with a read-only root (see
+    # `x-hardening` above). npm's cache — and the `_logs/` it writes a failure report into —
     # default under `$HOME`, which is inside the image and therefore immutable. Pointed at the
     # tmpfs instead so the failure path has somewhere to write; verified that an exit code still
     # propagates either way, this is what keeps the report itself.
@@ -110,33 +139,7 @@ services:
             # over plain HTTP, and the auth cookies this application sets are not safe that way.
             - '127.0.0.1:${NODE_PORT:-3000}:${NODE_PORT:-3000}'
 
-        # ── Container hardening ─────────────────────────────────────────────────────────────
-        # `USER node` in the Dockerfile already drops root. These three drop what root was not
-        # the only way to get:
-        #
-        #   read_only        the image's own filesystem cannot be modified, so a write primitive
-        #                    gained through a dependency has nowhere to drop a payload. Every
-        #                    path the app legitimately writes is mounted below, and each one is
-        #                    `noexec` or a volume — a directory that is writable OR executable,
-        #                    never both.
-        #   cap_drop         this is a node process serving HTTP: it binds a port above 1024 as a
-        #                    non-root user and needs no Linux capability at all.
-        #   no-new-privileges  a setuid binary inside the image cannot raise privilege, which
-        #                    closes the usual escape from the non-root user above.
-        #
-        # CIS Docker Benchmark 5.12 / 5.25. Applied to `app` here; `cron` and `setup` run the
-        # same image and repeat them, because compose merges nothing between services.
-        read_only: true
-        cap_drop: [ALL]
-        security_opt: [no-new-privileges:true]
-
-        tmpfs:
-            # Where an upload waits while the request is checked — `NODE_UPLOAD_STAGING_PATH`
-            # defaults into the system temp directory. `noexec`/`nosuid`: a file the client chose
-            # the bytes of lands here, and nothing should ever run it. Sized because a tmpfs
-            # charges real memory — this bounds concurrent uploads, not one upload's size, which
-            # `NODE_MAX_UPLOAD_BYTES` does.
-            - /tmp:mode=1777,size=64m,noexec,nosuid
+        <<: *hardening
 
         volumes:
             # Uploaded images. WITHOUT this the container's own filesystem holds them and a
@@ -145,8 +148,8 @@ services:
             # S3-compatible `ImageStore` backend — see `infrastructure/adapters/image-store.ts`.
             - uploads:/app/public/images
 
-            # `read_only: true` above makes `/app` immutable, so every path the app writes needs a
-            # mount of its own. These two are NOT tmpfs, and the reason is different for each.
+            # `x-hardening`'s `read_only` makes `/app` immutable, so every path the app writes
+            # needs a mount of its own. These two are NOT tmpfs, and the reason differs for each.
             #
             # `storage/` holds the invoice cache and the MAIL SPOOL — queued outbound mail that a
             # restart must not lose, which rules tmpfs out on its own.
@@ -217,15 +220,9 @@ services:
             # suffix when the same base variable is given a different literal suffix in more than
             # one service (verified — `api-cron-cron`), so each derived name gets its own variable.
             NODE_SERVICE_NAME: '${NODE_CRON_SERVICE_NAME:-api-cron}'
-        # Same three as `app`, repeated rather than shared: compose merges nothing between
-        # services, and this container runs the reapers — the jobs that DELETE things — so it is
-        # the last one that should be able to rewrite its own image.
-        read_only: true
-        cap_drop: [ALL]
-        security_opt: [no-new-privileges:true]
-
-        tmpfs:
-            - /tmp:mode=1777,size=64m,noexec,nosuid
+        # This container runs the reapers — the jobs that DELETE things — so it is the last one
+        # that should be able to rewrite its own image.
+        <<: *hardening
 
         volumes:
             - ./docker/crontab:/etc/crontabs/node:ro
@@ -263,14 +260,9 @@ services:
             <<: *app-env
             # See `cron`'s own comment: a dedicated var sidesteps podman-compose 1.6's suffix bug.
             NODE_SERVICE_NAME: '${NODE_SETUP_SERVICE_NAME:-api-setup}'
-        # Writes to Mongo and nothing else, so it needs no volume — but it runs the same image
-        # and there is no reason for a one-shot bootstrap to hold capabilities either.
-        read_only: true
-        cap_drop: [ALL]
-        security_opt: [no-new-privileges:true]
-
-        tmpfs:
-            - /tmp:mode=1777,size=64m,noexec,nosuid
+        # Writes to Mongo and nothing else, so it needs no volume — but there is no reason for a
+        # one-shot bootstrap to hold capabilities either.
+        <<: *hardening
 
         command: ['sh', '-c', 'npm run deploy:setup']
         depends_on:
@@ -413,8 +405,8 @@ volumes:
     redis-data:
     rabbitmq-data:
     uploads:
-    # Both exist because `app` runs with a read-only root — see the hardening block on that
-    # service for why neither may be a tmpfs.
+    # Both exist because `app` runs with a read-only root — see `app`'s own `volumes:` for why
+    # neither may be a tmpfs.
     storage:
     quarantine:
 # ── OBSERVABILITY IS NOT IN THIS FILE, ON PURPOSE ───────────────────────────────────────────────
