@@ -9,7 +9,6 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment } from '@tests/environment';
-import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { cartService } from '../../services';
@@ -29,7 +28,7 @@ import usersModule from '@modules/users/module';
 import accountModule from '@modules/account/module';
 import cartModule from '@modules/cart/module';
 import deliveryModule from '@modules/delivery/module';
-import { asCustomer } from '../../../../../tests/support/callers';
+import { asCustomer, testCallerContext } from '@tests/callers';
 
 setupTestDb();
 

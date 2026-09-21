@@ -6,7 +6,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { testCallerContext } from '@tests/caller-context';
+import { testCallerContext } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
 // Relative, not the barrel: a module's own tests may not import its own `index.ts` (CLAUDE.md's
 // barrel rules apply to tests too), so this reaches the sibling file directly.

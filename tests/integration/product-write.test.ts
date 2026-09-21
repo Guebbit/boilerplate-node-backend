@@ -7,7 +7,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { testCallerContext } from '@tests/caller-context';
+import { testCallerContext } from '@tests/callers';
 import { createProduct } from '@modules/products/tests/factories';
 import { productService } from '@modules/products';
 import type { ProductDocument } from '@modules/products';

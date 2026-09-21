@@ -17,7 +17,7 @@ import { userRepository } from '@modules/users/tests/factories';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { twoFactorService } from '@modules/account/services';
 import { DELIVERED_CODE_MAX_ATTEMPTS } from '@modules/account/two-factor';
-import { testCallerContext } from '@tests/caller-context';
+import { testCallerContext } from '@tests/callers';
 
 /**
  * Every mail the app queued, newest last.

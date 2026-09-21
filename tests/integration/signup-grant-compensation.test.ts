@@ -9,7 +9,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { testCallerContext } from '@tests/caller-context';
+import { testCallerContext } from '@tests/callers';
 import { asStub } from '@tests/stub';
 import { accountService } from '@modules/account';
 import { userRepository, PLAIN_PASSWORD } from '@modules/users/tests/factories';

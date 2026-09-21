@@ -12,7 +12,7 @@ import { create } from '@modules/orders/services';
 import { ordersAuditActions } from '../../audit';
 import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
-import { callerAs } from '../../../../../tests/support/callers';
+import { callerAs } from '@tests/callers';
 import type { CallerContext } from '@types';
 
 /*

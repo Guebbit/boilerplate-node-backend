@@ -10,7 +10,7 @@
 import { userService } from '@modules/users';
 import { runTokenCleanup, accountService } from '@modules/account/services';
 import { logger } from '@infrastructure/adapters/logger';
-import { testCallerContext } from '@tests/caller-context';
+import { testCallerContext } from '@tests/callers';
 import * as auditPort from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../../audit';
 

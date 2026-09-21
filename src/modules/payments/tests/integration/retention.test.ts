@@ -18,7 +18,6 @@ import { createIntent, confirmPayment, reapAbandonedPayments } from '@modules/pa
 import { paymentRepository } from '@modules/payments/repository';
 import { paymentModel } from '@modules/payments/model';
 import { userService } from '@modules/users';
-import { testCallerContext } from '@tests/caller-context';
 import paymentsModule from '@modules/payments/module';
 import inventoryModule from '@modules/inventory/module';
 import ordersModule from '@modules/orders/module';
@@ -29,7 +28,7 @@ import cartModule from '@modules/cart/module';
 import deliveryModule from '@modules/delivery/module';
 import type { ResponseSuccess } from '@infrastructure/http/response';
 import type { Payment } from '@types';
-import { asCustomer, asAdmin } from '../../../../../tests/support/callers';
+import { asCustomer, asAdmin, testCallerContext } from '@tests/callers';
 
 setupTestDb();
 

@@ -8,7 +8,6 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { testCallerContext } from '@tests/caller-context';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
@@ -19,7 +18,7 @@ import { findShippingMethod, priceShipping, SHIPPING_METHODS } from '@modules/de
 import { recordShipment, recordDelivery, getForOrder } from '@modules/delivery/service';
 import { shipmentRepository } from '@modules/delivery/repository';
 import { asReject } from '@tests/response';
-import { asCustomer } from '../../../../../tests/support/callers';
+import { asCustomer, testCallerContext } from '@tests/callers';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,

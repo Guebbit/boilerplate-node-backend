@@ -7,8 +7,7 @@
 import { asStub } from '@tests/stub';
 import { observePort } from '@tests/ports';
 import { setupTestDb } from '@tests/setup-test-db';
-import { testCallerContext } from '@tests/caller-context';
-import { callerContextAs } from '@tests/callers';
+import { testCallerContext, callerContextAs } from '@tests/callers';
 import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
 import * as userService from '@modules/users/service';
 import { USER_SETUP_REQUESTED } from '../../events';

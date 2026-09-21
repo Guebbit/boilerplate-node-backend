@@ -16,7 +16,7 @@ import { orderService } from '@modules/orders/services';
 import { ORDER_CANCELLED } from '../../events';
 import { orderRepository } from '../../repository';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
-import { asAdmin } from '../../../../../tests/support/callers';
+import { asAdmin } from '@tests/callers';
 
 setupTestDb();
 

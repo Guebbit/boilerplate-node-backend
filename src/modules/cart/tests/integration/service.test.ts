@@ -10,7 +10,6 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { testCallerContext } from '@tests/caller-context';
 import { withEnvironment, withoutEnvironment } from '@tests/environment';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 
@@ -54,7 +53,7 @@ import {
 } from '@modules/cart/services';
 import { cartRepository } from '@modules/cart/repository';
 import { userService } from '@modules/users';
-import { asCustomer } from '@tests/callers';
+import { asCustomer, testCallerContext } from '@tests/callers';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
 import cartModule from '@modules/cart/module';

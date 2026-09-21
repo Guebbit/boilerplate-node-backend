@@ -12,7 +12,6 @@
 import { asStub } from '@tests/stub';
 import { Types } from 'mongoose';
 import { setupTestDb } from '@tests/setup-test-db';
-import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, saveProduct } from '@modules/products/tests/factories';
 import {
@@ -30,7 +29,7 @@ import { orderRepository } from '../../repository';
 import { inventoryService } from '@modules/inventory';
 import type { OrderDocument } from '../../model';
 import { asReject, asSuccess } from '@tests/response';
-import { asCustomer, asAdmin } from '../../../../../tests/support/callers';
+import { asCustomer, asAdmin, testCallerContext } from '@tests/callers';
 
 /**
  * `deleteCachedInvoice` is the one call `update()`'s line-rewrite path makes into

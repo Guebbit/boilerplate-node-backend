@@ -7,7 +7,6 @@
  * 409) because a client can act on that difference.
  */
 import { setupTestDb } from '@tests/setup-test-db';
-import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
@@ -21,7 +20,7 @@ import * as analyticsPort from '@infrastructure/observability/analytics';
 import { ordersAuditActions } from '../../audit';
 import { ordersAnalyticsEvents } from '../../analytics';
 import { observePort } from '@tests/ports';
-import { asCustomer, asAdmin, asModerator } from '../../../../../tests/support/callers';
+import { asCustomer, asAdmin, asModerator, testCallerContext } from '@tests/callers';
 
 // The queue, not the copy: `mail-copy.test.ts` pins what the email says.
 jest.mock('@infrastructure/adapters/mailer', () => ({

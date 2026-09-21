@@ -19,7 +19,7 @@
 
 import { Types } from 'mongoose';
 import { orderService, actorOf } from '../../services';
-import { asCustomer, asAdmin, asModerator } from '../../../../../tests/support/callers';
+import { asCustomer, asAdmin, asModerator } from '@tests/callers';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 

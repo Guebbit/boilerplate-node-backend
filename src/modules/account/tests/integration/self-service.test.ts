@@ -7,7 +7,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { testCallerContext } from '@tests/caller-context';
+import { testCallerContext } from '@tests/callers';
 import {
     createUser,
     LEGACY_PASSWORD,

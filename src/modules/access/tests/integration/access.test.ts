@@ -36,8 +36,7 @@ import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { PERMISSION_KEYS, permissionsOfRole } from '@kernel/permissions';
 import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
-import { testCallerContext } from '@tests/caller-context';
-import { callerContextAs } from '@tests/callers';
+import { testCallerContext, callerContextAs } from '@tests/callers';
 import { accessAuditActions } from '../../audit';
 
 /* Replaced, not spied on — see `tests/support/ports.ts` for why. */

@@ -8,7 +8,6 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, forceOrderStatus, toOrderItem } from '@modules/orders/tests/factories';
@@ -37,7 +36,7 @@ import accountModule from '@modules/account/module';
 import cartModule from '@modules/cart/module';
 import deliveryModule from '@modules/delivery/module';
 import { asReject } from '@tests/response';
-import { asCustomer, asAdmin, asModerator } from '../../../../../tests/support/callers';
+import { asCustomer, asAdmin, asModerator, testCallerContext } from '@tests/callers';
 
 setupTestDb();
 

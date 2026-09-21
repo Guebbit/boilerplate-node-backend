@@ -7,7 +7,6 @@
 
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
-import { testCallerContext } from '@tests/caller-context';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import * as productService from '@modules/products/service';
@@ -24,7 +23,7 @@ import deliveryModule from '@modules/delivery/module';
 import accountModule from '@modules/account/module';
 import usersModule from '@modules/users/module';
 import ordersModule from '@modules/orders/module';
-import { asCustomer, asAdmin } from '../../../../../tests/support/callers';
+import { asCustomer, asAdmin, testCallerContext } from '@tests/callers';
 
 /**
  * Mock the image store, not the filesystem underneath it.

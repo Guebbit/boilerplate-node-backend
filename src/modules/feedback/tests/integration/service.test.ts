@@ -7,7 +7,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { testCallerContext } from '@tests/caller-context';
+import { testCallerContext } from '@tests/callers';
 import { observePort } from '@tests/ports';
 import { create, search, updateStatus, updateStatusById, remove } from '@modules/feedback/service';
 import { feedbackRequestRepository } from '@modules/feedback/repository';
