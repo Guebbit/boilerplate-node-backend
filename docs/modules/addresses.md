@@ -99,6 +99,13 @@ buy); `null` means they named an entry that is not theirs or does not exist. Che
 the second case, not silently ship nowhere — collapsing the two would let a stale id downgrade to
 "no address" instead of failing loudly.
 
+`fullName`/`street`/`city`/`zip`/`country`/`phone` are stored AES-256-GCM under
+`NODE_PII_ENCRYPTION_KEY` (`@infrastructure/security/pii-encryption`) — none of them is ever
+queried on directly, so encrypting them costs no lookup capability. `repository.ts` is the one
+place that encrypts (every write) and decrypts (every read) — `service.ts` and `cart`'s checkout
+snapshot both see plaintext, never the stored ciphertext. See
+[Secrets at rest](../theory/defences/crypto-and-secrets.md#secrets-at-rest).
+
 ## Related pages
 
 - [`account`](./account.md) — shares the `/account` URL prefix and the frontend screen

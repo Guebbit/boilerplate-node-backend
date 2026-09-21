@@ -68,5 +68,16 @@ export default {
                     .findByIdWithCredentials(subject.userId)
                     .then((user) => (user ? ownSessions(user.tokens) : []))
         }
+    ],
+    requiredConfig: [
+        // A phone number encrypted under the shipped placeholder is recoverable by anyone who has
+        // read this repository — same failure shape `NODE_TOTP_ENCRYPTION_KEY` guards against,
+        // same fix. Shared with `addresses` (never optional without this module, per its own
+        // `dependsOn`), so declaring it here covers both.
+        {
+            key: 'NODE_PII_ENCRYPTION_KEY',
+            minLength: 16,
+            placeholder: 'your-pii-encryption-key-here'
+        }
     ]
 } satisfies AppModule;

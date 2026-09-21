@@ -21,6 +21,7 @@ import {
     validationErrors
 } from '@infrastructure/http/response';
 import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
+import { encryptPii } from '@infrastructure/security/pii-encryption';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { zodUserSchema, TokenType, hashToken, toUser } from './model';
 import type { UserDocument, Token } from './model';
@@ -245,7 +246,7 @@ export const update = (
             }
             // The preference that outlives the request — see the `locale` field on the user schema.
             if (data.locale !== undefined) user.locale = data.locale;
-            if (data.phone !== undefined) user.phone = data.phone;
+            if (data.phone !== undefined) user.phone = encryptPii(data.phone);
             if (data.website !== undefined) user.website = data.website;
             // Absent leaves the stored choice alone, same as every field above; only an explicit
             // boolean changes it.

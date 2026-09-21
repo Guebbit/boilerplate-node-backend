@@ -11,6 +11,7 @@ import { createUser } from '@modules/users/tests/factories';
 // Relative, not the barrel: a module's own tests may not import its own `index.ts` (CLAUDE.md's
 // barrel rules apply to tests too), so this reaches the sibling file directly.
 import * as addressService from '../../service';
+import { addressBookModel } from '../../model';
 import { cartService } from '@modules/cart';
 import { countOrders } from '@modules/orders/tests/factories';
 import { createProduct, readProduct } from '@modules/products/tests/factories';
@@ -218,5 +219,34 @@ describe('checkout and the address', () => {
 
         expect(result.success).toBe(true);
         expect(result.success && result.data?.shippingAddress).toBeUndefined();
+    });
+});
+
+describe('PII at rest', () => {
+    it('stores fullName/street/city/zip/country/phone encrypted, never as the plaintext submitted', async () => {
+        const user = await createUser();
+        await addressService.addressAdd(user.id, { ...HOME, phone: '+39 059 000001' });
+
+        // Bypasses the repository's own decrypt on purpose — this is what a raw DB read, or a
+        // stolen disk/backup, would actually see.
+        const stored = await addressBookModel.findOne({ userId: user._id }).lean();
+        const [entry] = stored?.items ?? [];
+
+        expect(entry?.fullName).not.toBe(HOME.fullName);
+        expect(entry?.street).not.toBe(HOME.street);
+        expect(entry?.city).not.toBe(HOME.city);
+        expect(entry?.zip).not.toBe(HOME.zip);
+        expect(entry?.country).not.toBe(HOME.country);
+        expect(entry?.phone).not.toBe('+39 059 000001');
+        // Versioned-secret's own wire format — see infrastructure/security/versioned-secret.ts.
+        expect(entry?.fullName).toMatch(/^v\d+(?::[\da-f]+){3}$/);
+    });
+
+    it('round-trips through the repository back to the plaintext submitted', async () => {
+        const user = await createUser();
+        await addressService.addressAdd(user.id, { ...HOME, phone: '+39 059 000001' });
+
+        const view = await addressService.addressesGet(user.id);
+        expect(view.addresses[0]).toMatchObject({ ...HOME, phone: '+39 059 000001' });
     });
 });

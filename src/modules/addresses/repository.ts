@@ -12,6 +12,21 @@ import {
     toObjectId,
     type Repository
 } from '@infrastructure/persistence/create-repository';
+import { encryptPii } from '@infrastructure/security/pii-encryption';
+import { decryptAddressItem } from './pii';
+
+/**
+ * Every book this module hands back is decrypted first — `findByUserId` and every write method's
+ * return value alike — so every caller (`addresses/service.ts`'s wire mapping,
+ * `cart/services/checkout.ts`'s order snapshot) sees plaintext regardless of whether it asked for
+ * a fresh read or the result of its own write. `Object.assign` onto the existing subdocument,
+ * not a replaced array: keeps the Mongoose DocumentArray's own methods intact on a document
+ * nothing here calls `.save()` on again.
+ */
+const decryptBook = (book: AddressBookDocument): AddressBookDocument => {
+    for (const item of book.items) Object.assign(item, decryptAddressItem(item));
+    return book;
+};
 
 /**
  * Every write loads the book, edits it in memory and saves — a READ-MODIFY-WRITE, which the cart
@@ -40,11 +55,36 @@ export const addressBookRepository: Repository<AddressBookDocument> & {
     }),
 
     /**
+     * Overrides the factory's own `create` — the one write path above doesn't cover:
+     * `insertIfAbsentForOwner` (`scenarios/seed.ts`) calls this directly with a plaintext fixture
+     * from `makeAddressBook`, never through `addEntry`. Same encrypt-then-decrypt shape as every
+     * other write below.
+     */
+    create: (data) =>
+        addressBookModel
+            .create({
+                ...data,
+                items: (data.items ?? []).map((item) => ({
+                    ...item,
+                    fullName: encryptPii(item.fullName),
+                    street: encryptPii(item.street),
+                    city: encryptPii(item.city),
+                    zip: encryptPii(item.zip),
+                    country: encryptPii(item.country),
+                    ...(item.phone === undefined ? {} : { phone: encryptPii(item.phone) })
+                }))
+            })
+            .then(decryptBook),
+
+    /**
      * Fetch a user's book. `null` means they never saved an address — the same state as an
      * empty book.
      */
     findByUserId: (userId: string) =>
-        addressBookModel.findOne({ userId: toObjectId(userId) }).exec(),
+        addressBookModel
+            .findOne({ userId: toObjectId(userId) })
+            .exec()
+            .then((book) => (book ? decryptBook(book) : book)),
 
     /**
      * Append one entry, creating the book if the user has none.
@@ -61,8 +101,17 @@ export const addressBookRepository: Repository<AddressBookDocument> & {
         const wantsDefault = (entry.default ?? false) || book.items.length === 0;
         if (wantsDefault) for (const item of book.items) item.default = false;
 
-        book.items.push({ ...entry, default: wantsDefault });
-        return book.save();
+        book.items.push({
+            ...entry,
+            fullName: encryptPii(entry.fullName),
+            street: encryptPii(entry.street),
+            city: encryptPii(entry.city),
+            zip: encryptPii(entry.zip),
+            country: encryptPii(entry.country),
+            ...(entry.phone === undefined ? {} : { phone: encryptPii(entry.phone) }),
+            default: wantsDefault
+        });
+        return book.save().then(decryptBook);
     },
 
     /**
@@ -77,18 +126,18 @@ export const addressBookRepository: Repository<AddressBookDocument> & {
         if (!book || !entry) return null;
 
         if (changes.label !== undefined) entry.label = changes.label;
-        if (changes.fullName !== undefined) entry.fullName = changes.fullName;
-        if (changes.street !== undefined) entry.street = changes.street;
-        if (changes.city !== undefined) entry.city = changes.city;
-        if (changes.zip !== undefined) entry.zip = changes.zip;
-        if (changes.country !== undefined) entry.country = changes.country;
-        if (changes.phone !== undefined) entry.phone = changes.phone;
+        if (changes.fullName !== undefined) entry.fullName = encryptPii(changes.fullName);
+        if (changes.street !== undefined) entry.street = encryptPii(changes.street);
+        if (changes.city !== undefined) entry.city = encryptPii(changes.city);
+        if (changes.zip !== undefined) entry.zip = encryptPii(changes.zip);
+        if (changes.country !== undefined) entry.country = encryptPii(changes.country);
+        if (changes.phone !== undefined) entry.phone = encryptPii(changes.phone);
         if (changes.default === true) {
             for (const item of book.items) item.default = false;
             entry.default = true;
         }
 
-        return book.save();
+        return book.save().then(decryptBook);
     },
 
     /**
@@ -103,7 +152,7 @@ export const addressBookRepository: Repository<AddressBookDocument> & {
         book.items = book.items.filter((item) => String(item._id) !== addressId);
         if (entry.default && book.items.length > 0) book.items[0].default = true;
 
-        return book.save();
+        return book.save().then(decryptBook);
     },
 
     /**

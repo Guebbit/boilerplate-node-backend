@@ -174,6 +174,7 @@ const startCluster = ({
                     NODE_TOTP_ENCRYPTION_KEY: 'cluster-suite-totp-encryption-key',
                     NODE_WEBHOOK_SECRET_ENCRYPTION_KEY:
                         'cluster-suite-webhook-secret-encryption-key',
+                    NODE_PII_ENCRYPTION_KEY: 'cluster-suite-pii-encryption-key',
                     /*
                      * Clustering is OFF by default — `NODE_ENABLE_CLUSTERING` gates the fork, and
                      * `NODE_CLUSTER_WORKERS` alone does nothing. Without this the child is a single

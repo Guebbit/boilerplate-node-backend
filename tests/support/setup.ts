@@ -221,6 +221,9 @@ process.env.NODE_TOTP_ENCRYPTION_KEY ??= 'test-totp-encryption-key';
 /** Same reasoning again — a webhook subscription's secret ring (`modules/webhooks/secrets.ts`). */
 process.env.NODE_WEBHOOK_SECRET_ENCRYPTION_KEY ??= 'test-webhook-secret-encryption-key';
 
+/** Same reasoning again — address-book and user-phone PII (`src/infrastructure/security/pii-encryption.ts`). */
+process.env.NODE_PII_ENCRYPTION_KEY ??= 'test-pii-encryption-key';
+
 /**
  * Same again for the payment webhook: signing and verifying both refuse an absent secret, which is
  * the right production behaviour and would otherwise fail every webhook suite in CI.

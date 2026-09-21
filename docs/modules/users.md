@@ -107,6 +107,12 @@ flowchart LR
     class C,W,AB,SU done;
 ```
 
+`phone` is stored AES-256-GCM under `NODE_PII_ENCRYPTION_KEY`
+(`@infrastructure/security/pii-encryption`) — `service.ts`'s `update` encrypts it on the one write
+path, `toUser` (`model.ts`) decrypts it on the way out, whether the source document was hydrated or
+`search()`'s `.lean()` result. See
+[Secrets at rest](../theory/defences/crypto-and-secrets.md#secrets-at-rest).
+
 ## Soft delete vs. erasure
 
 `DELETE /users/:id` soft-deletes by default — `deletedAt` is stamped, nothing else moves, and a

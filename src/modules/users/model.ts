@@ -15,6 +15,7 @@ import { t } from '@infrastructure/i18n';
 import { CreateUserBody, createUserBodyPasswordMin } from '@api/schemas.zod';
 import { type User } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
+import { decryptPii } from '@infrastructure/security/pii-encryption';
 
 /**
  * Token types used in jwt-auth
@@ -740,7 +741,10 @@ export const toUser = (document: UserDocument, role: string | null): User => ({
     ...(document.imageUrl === undefined ? {} : { imageUrl: document.imageUrl }),
     ...(document.thumbnailUrl === undefined ? {} : { thumbnailUrl: document.thumbnailUrl }),
     ...(document.locale === undefined ? {} : { locale: document.locale }),
-    ...(document.phone === undefined ? {} : { phone: document.phone }),
+    // Stored encrypted (`./service`'s `update`, under `NODE_PII_ENCRYPTION_KEY`) — this is the
+    // one place a document's `phone` reaches the wire, hydrated or lean/searched alike, so it's
+    // the one place that decrypts it.
+    ...(document.phone === undefined ? {} : { phone: decryptPii(document.phone, 'user phone') }),
     ...(document.website === undefined ? {} : { website: document.website }),
     ...(document.analyticsConsent === undefined
         ? {}

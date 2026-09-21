@@ -19,6 +19,7 @@ import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { assignRole, membershipsOf, rolesOf } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
+import { toUser } from '../../model';
 import type { UserDocument } from '../../model';
 
 // See `tests/support/ports.ts`: the namespace import above must resolve a plain `jest.fn()`,
@@ -208,6 +209,20 @@ describe('userService.search', () => {
         const result = await userService.search({ username: 'bob' });
 
         expect(result.items).toHaveLength(1);
+    });
+
+    it('decrypts phone through toUser on a lean/searched item, the same as a hydrated one', async () => {
+        const user = await createUser({ email: 'phoned@example.com', username: 'phoned' });
+        await userService.updateById(
+            user._id.toString(),
+            { phone: '+1 555 0100' },
+            testCallerContext
+        );
+
+        // `search()` is the `.lean()` path (`create-repository.ts#findAll`) — unlike every other
+        // read in this suite, `toUser` receives a plain object here, not a hydrated document.
+        const result = await userService.search({ username: 'phoned' });
+        expect(toUser(result.items[0], null).phone).toBe('+1 555 0100');
     });
 
     it('filters on the active column, not on soft-deletion', async () => {
@@ -472,6 +487,22 @@ describe('userService.updateById', () => {
 
         const refreshed = await userRepository.findByIdWithCredentials(id);
         expect(refreshed!.password).toBe(originalHash);
+    });
+
+    it('stores phone encrypted, never as the plaintext submitted, and decrypts it back through toUser', async () => {
+        const user = await createUser();
+        const id = user._id.toString();
+
+        await userService.updateById(id, { phone: '+1 555 0100' }, testCallerContext);
+
+        // Bypasses `toUser` on purpose — this is what a raw DB read, or a stolen disk/backup,
+        // would actually see.
+        const stored = await userRepository.findById(id);
+        expect(stored!.phone).not.toBe('+1 555 0100');
+        // Versioned-secret's own wire format — see infrastructure/security/versioned-secret.ts.
+        expect(stored!.phone).toMatch(/^v\d+(?::[\da-f]+){3}$/);
+
+        expect(toUser(stored!, null).phone).toBe('+1 555 0100');
     });
 
     it('returns reject result when the user does not exist', async () => {

@@ -66,8 +66,9 @@ Then set the new value in the client env file and redeploy — the running `app`
 hold the old password in memory until they restart. Rotate `MONGO_ROOT_PASSWORD` the same way
 against the `admin` database, with `db.getSiblingDB("admin").updateUser("<MONGO_ROOT_USER>", ...)`.
 
-**`NODE_TOTP_ENCRYPTION_KEY` / `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY`.** Each is a **ring**, the same
-shape as the JWT secrets above but with an explicit version rather than a derived `kid`:
+**`NODE_TOTP_ENCRYPTION_KEY` / `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY` / `NODE_PII_ENCRYPTION_KEY`.**
+Each is a **ring**, the same shape as the JWT secrets above but with an explicit version rather
+than a derived `kid`:
 `v2:<new-secret>,v1:<old-secret>` — newest first, `parseVersionedKeyRing` in
 `@infrastructure/security/versioned-secret`. A bare value with no `v1:` prefix is still accepted
 (a single-key deployment needs no format change), and `versioned-secret.ts` stamps every ciphertext
