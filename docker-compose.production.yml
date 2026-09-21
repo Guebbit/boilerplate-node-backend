@@ -291,14 +291,19 @@ services:
         # disk with the right ownership first — see its own header for why that isn't a separate
         # one-shot service instead.
         entrypoint: ['bash', '/mongo-entrypoint.sh']
-        command:
-            [
+        command: [
                 'mongod',
                 '--replSet',
                 'rs0',
                 '--keyFile',
                 '/keyfile-dir/mongo-keyfile',
-                '--bind_ip_all'
+                '--bind_ip_all',
+                # This repo's queries all go through Mongoose/the generated repositories — no
+                # `$where`, `mapReduce`, `$accumulator` or `$function` anywhere (verified by grep
+                # over src/) — so server-side JS is a pure NoSQL-injection escalation surface with
+                # nothing depending on it. MongoDB's own security checklist:
+                # https://www.mongodb.com/docs/manual/administration/security-checklist/
+                '--noscripting'
             ]
         environment:
             # Root stays maintenance-only — the app authenticates as MONGO_APP_USER instead
