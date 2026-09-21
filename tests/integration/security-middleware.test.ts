@@ -1,25 +1,17 @@
 /**
  * Two properties of `src/app/security.ts` that nothing else asserts: helmet's headers reach an
- * ordinary API response, and a spoofed `X-Forwarded-For` buys no rate-limit budget when
+ * ordinary API response, and a spoofed `X-Forwarded-For` buys no fresh rate-limit bucket when
  * `NODE_TRUST_PROXY_HOPS` is `0` (the deployment default).
  *
- * The trust-proxy case does not restate `identity-rate-limit.test.ts`'s address-block cases —
- * those prove the OPPOSITE property on purpose, with `appAnswering`'s `trustProxyHop` set to
- * `true`. This is the same harness with it left `false`, which is what `app.set('trust proxy', 0)`
- * means to Express: `request.ip` is the socket address, and `X-Forwarded-For` is never read.
+ * The trust-proxy case drives the real app, unlike `identity-rate-limit.test.ts`'s address-block
+ * cases: those prove a limiter's own budget arithmetic against a trivial harness with
+ * `appAnswering`'s `trustProxyHop` set by the test, which is a property of `express-rate-limit`,
+ * not of this repo's code. This file's job is proving `src/app/security.ts` itself applied
+ * `NODE_TRUST_PROXY_HOPS`, which only the real, fully-wired app can show.
  *
  * See: docs/tools/security.md
  */
-import supertest from 'supertest';
 import { api } from '@tests/http';
-import { appAnswering, statusOf, withReloadedRateLimits } from '@tests/rate-limit-harness';
-
-/** {@link withReloadedRateLimits} bound to this file's one module. */
-const withAccountRateLimits = <T>(
-    overrides: Record<string, string>,
-    pick: (rateLimitsModule: typeof import('@modules/account/rate-limits')) => T
-): Promise<T> =>
-    withReloadedRateLimits(() => import('@modules/account/rate-limits'), overrides, pick);
 
 describe('helmet', () => {
     /*
@@ -38,28 +30,27 @@ describe('helmet', () => {
 });
 
 describe('trust proxy', () => {
-    afterEach(() => jest.resetModules());
+    /**
+     * Drives the REAL app, not a narrower header — the property under test is what
+     * `src/app/security.ts` does with `NODE_TRUST_PROXY_HOPS`, and a synthetic app built with
+     * Express's own default (`trust proxy` unset) would pass whether or not that code ran at
+     * all. The global `rateLimiter` (`src/app/security.ts:207`) is mounted ahead of every route
+     * and keys its bucket on `request.ip` with no override, so its `RateLimit-Remaining` header
+     * is a direct read on what Express resolved `request.ip` to.
+     *
+     * Two requests, two DIFFERENT forged `X-Forwarded-For` values, from the one real socket
+     * address this test process holds: if `X-Forwarded-For` were consulted, each would open its
+     * own fresh bucket and `remaining` would not move between them. It drops by exactly one
+     * instead — both spent the same bucket, the real socket address, because
+     * `NODE_TRUST_PROXY_HOPS=0` (this repo's test and production default) never reads the header.
+     */
+    it('does not let a forged X-Forwarded-For move the caller to a fresh rate-limit bucket', async () => {
+        const first = await api().get('/').set('X-Forwarded-For', '203.0.113.5');
+        const second = await api().get('/').set('X-Forwarded-For', '198.51.100.9');
 
-    it('does not let a forged X-Forwarded-For buy a fresh address-block budget', async () => {
-        const signupLimiters = await withAccountRateLimits(
-            {
-                NODE_SIGNUP_RATE_LIMIT_MAX: '50',
-                NODE_SIGNUP_RATE_LIMIT_ADDRESS_MAX: '50',
-                NODE_SIGNUP_RATE_LIMIT_BLOCK_MAX: '2'
-            },
-            (module) => module.signupLimiters
-        );
+        const remaining = (response: Awaited<typeof first>) =>
+            Number(response.headers['ratelimit-remaining']);
 
-        // `trustProxyHop: false` — Express's own default, and what `NODE_TRUST_PROXY_HOPS=0`
-        // means in the real app: `X-Forwarded-For` is never consulted for `request.ip`.
-        const app = appAnswering(201, false, ...signupLimiters);
-        const attempt = (forgedIp: string, email: string) =>
-            supertest(app).post('/route').set('X-Forwarded-For', forgedIp).send({ email });
-
-        expect(await statusOf(attempt('203.0.113.5', 'one@example.com'))).toBe(201);
-        expect(await statusOf(attempt('203.0.113.5', 'two@example.com'))).toBe(201);
-        // A DIFFERENT forged address, spent against the SAME real socket address — untrusted, so
-        // it lands in the same block bucket rather than opening a fresh one.
-        expect(await statusOf(attempt('198.51.100.9', 'three@example.com'))).toBe(429);
+        expect(remaining(second)).toBe(remaining(first) - 1);
     });
 });

@@ -1,22 +1,21 @@
 /**
  * What a request with a BAD BODY gets — the status, and that it is never a 500.
  *
- * Three causes reached the same generic 500 before this suite existed, and the shared cost was
- * that a client error was indistinguishable from a server fault in metrics and alerting: anyone
- * could drive the 5xx rate with one malformed request.
+ * A client error must be distinguishable from a server fault in metrics and alerting: nobody
+ * should be able to drive the 5xx rate with one malformed request.
  *
- * | Send | Was | Is |
- * | --- | --- | --- |
- * | Body over `NODE_JSON_BODY_LIMIT` | 500 | 413 |
- * | Malformed JSON | 500 | 400 |
- * | A charset or content-encoding the parser cannot read | 500 | 415 |
- * | Wrong or absent content-type | 500, via a `TypeError` | the route's own answer |
+ * | Send | Answer |
+ * | --- | --- |
+ * | Body over `NODE_JSON_BODY_LIMIT` | 413 |
+ * | Malformed JSON | 400 |
+ * | A charset or content-encoding the parser cannot read | 415 |
+ * | Wrong or absent content-type | the route's own answer |
  *
- * The third is the one that is easy to get wrong twice. Express 5 leaves `request.body`
- * UNDEFINED when no parser matched — not `{}`, the way express 4 did — so every unguarded
- * destructure threw synchronously, before any promise chain's `.catch` could see it. The fix is a
- * guard at each read, NOT a 400: the request reaches its route and gets whatever that route says
- * about a request missing every field, which for login is the same 401 a wrong password gets.
+ * The last row is the one easy to get wrong twice. Express 5 leaves `request.body` UNDEFINED
+ * when no parser matched — not `{}`, the way express 4 did — so an unguarded destructure throws
+ * synchronously, before any promise chain's `.catch` can see it. The fix is a guard at each read,
+ * NOT a 400: the request reaches its route and gets whatever that route says about a request
+ * missing every field, which for login is the same 401 a wrong password gets.
  *
  * Also holds the hostile-CONTENT cases (depth, `__proto__`), which are a different question —
  * well-formed bodies carrying something nasty — but need this exact harness.
@@ -25,7 +24,8 @@
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { api } from '@tests/http';
+import { parse as parseYaml } from 'yaml';
+import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 
@@ -35,18 +35,34 @@ setupTestDb();
 const OVERSIZED_BODY = JSON.stringify({ email: 'a'.repeat(200_000) });
 
 /**
- * Every route that reads `request.body` without parsing it through Zod first — the six sites the
- * guard had to be applied at, reachable without a session. Each one used to throw a `TypeError`
- * on a body express never parsed.
+ * Every route that reads `request.body` without parsing it through Zod first — the four sites the
+ * guard had to be applied at. Each one used to throw a `TypeError` on a body express never
+ * parsed.
  *
  * `POST /account/signup` and `PUT /account` are multipart routes and are here deliberately:
  * multer is no protection, it calls `next()` untouched when the content-type is not multipart.
+ * `PUT /account` and `POST /users` sit behind an auth guard, so `authorize` gets a session onto
+ * the request before the guard can turn a body-parsing question into a 401 one.
  */
 const BODY_READING_ROUTES = [
-    { method: 'post' as const, path: '/account/login' },
-    { method: 'post' as const, path: '/account/signup' },
-    { method: 'put' as const, path: '/account' },
-    { method: 'post' as const, path: '/users' }
+    { method: 'post' as const, path: '/account/login', authorize: undefined },
+    { method: 'post' as const, path: '/account/signup', authorize: undefined },
+    {
+        method: 'put' as const,
+        path: '/account',
+        authorize: async () => {
+            const { bearer } = await authenticateAs('user');
+            return bearer;
+        }
+    },
+    {
+        method: 'post' as const,
+        path: '/users',
+        authorize: async () => {
+            const { bearer } = await authenticateAs('admin');
+            return bearer;
+        }
+    }
 ];
 
 describe('a body the parser refused', () => {
@@ -102,11 +118,20 @@ describe('a body the parser refused', () => {
      * `x-app-level-responses`, and an operation that accepts a body must carry it. Asserted here
      * rather than in a contract test because the status and its declaration were added together
      * and are worth failing together.
+     *
+     * Under the operation's OWN `responses`, not just present somewhere in the file: the
+     * component the ref points at is declared once regardless of whether the merge that attaches
+     * it to `POST /account/login` ran at all.
      */
     it('is a status the contract declares for the operation that answered it', () => {
-        const bundled = readFileSync(path.join(__dirname, '..', '..', 'openapi.yaml'), 'utf8');
+        const bundled = parseYaml(
+            readFileSync(path.join(__dirname, '..', '..', 'openapi.yaml'), 'utf8')
+        ) as { paths: Record<string, { post?: { responses?: Record<string, unknown> } }> };
 
-        expect(bundled).toContain('UnsupportedMediaType');
+        const responses = bundled.paths['/account/login']?.post?.responses;
+
+        expect(responses).toHaveProperty('415');
+        expect(JSON.stringify(responses?.['415'])).toContain('UnsupportedMediaType');
     });
 
     /**
@@ -126,24 +151,36 @@ describe('a body the parser refused', () => {
 });
 
 describe('a body express never parsed', () => {
+    /**
+     * `< 500` alone is true for a 401 too, which every guarded route answers on ANY unauthorized
+     * request — a body-parsing bug behind the guard would still pass. A real session (or, for
+     * `/users`, a caller with `users.any.create`) proves the request actually reached the
+     * controller's own guard, not the auth middleware in front of it.
+     */
     it.each(BODY_READING_ROUTES)(
         '$method $path does not fail on a text/plain body',
-        async ({ method, path }) => {
+        async ({ method, path, authorize }) => {
             const response = await api()
                 [method](path)
                 .set('Content-Type', 'text/plain')
+                .set(authorize ? { Authorization: await authorize() } : {})
                 .send('not json at all');
 
             expect(response.status).toBeLessThan(500);
+            expect(response.status).not.toBe(401);
         }
     );
 
     it.each(BODY_READING_ROUTES)(
         '$method $path does not fail with no content-type at all',
-        async ({ method, path }) => {
-            const response = await api()[method](path).send();
+        async ({ method, path, authorize }) => {
+            const response = await api()
+                [method](path)
+                .set(authorize ? { Authorization: await authorize() } : {})
+                .send();
 
             expect(response.status).toBeLessThan(500);
+            expect(response.status).not.toBe(401);
         }
     );
 
