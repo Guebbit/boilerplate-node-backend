@@ -20,6 +20,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import type { Router } from 'express';
 import { effectiveRouteTable, guardsOn, identityGuardIndex } from '@tests/routes';
+import { ROUTED_MODULES } from '@tests/routed-modules';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
@@ -34,52 +35,7 @@ jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').securityMock()
 );
 
-import { router as accountRouter } from '@modules/account/routes';
-import { router as addressesRouter } from '@modules/addresses/routes';
-import { router as antibotRouter } from '@modules/antibot/routes';
-import { router as apiKeysRouter } from '@modules/api-keys/routes';
-import { router as auditLogsRouter } from '@modules/audit-logs/routes';
-import { router as cartRouter } from '@modules/cart/routes';
-import { router as deliveryRouter } from '@modules/delivery/routes';
-import { router as feedbackRouter } from '@modules/feedback/routes';
-import { router as inventoryRouter } from '@modules/inventory/routes';
-import { router as localesRouter } from '@modules/locales/routes';
-import { router as observabilityRouter } from '@modules/observability/routes';
-import { router as ordersRouter } from '@modules/orders/routes';
-import { router as paymentsRouter } from '@modules/payments/routes';
-import { router as productsRouter } from '@modules/products/routes';
-import { router as usersRouter } from '@modules/users/routes';
-import { router as webhooksRouter } from '@modules/webhooks/routes';
-import { router as wishlistRouter } from '@modules/wishlist/routes';
-
 const MODULES_ROOT = path.join(__dirname, '..', '..', 'src', 'modules');
-
-/**
- * Every module that mounts a router, by name — imported directly rather than through
- * `src/modules.ts`, so this file drags in only what it needs rather than the whole registry.
- *
- * Static, which is the point: a module added under `src/modules/` with no line here fails the
- * "imports one router per module directory" check below instead of silently going unguarded.
- */
-const ROUTED_MODULES: Record<string, Router> = {
-    account: accountRouter,
-    addresses: addressesRouter,
-    antibot: antibotRouter,
-    'api-keys': apiKeysRouter,
-    'audit-logs': auditLogsRouter,
-    cart: cartRouter,
-    delivery: deliveryRouter,
-    feedback: feedbackRouter,
-    inventory: inventoryRouter,
-    locales: localesRouter,
-    observability: observabilityRouter,
-    orders: ordersRouter,
-    payments: paymentsRouter,
-    products: productsRouter,
-    users: usersRouter,
-    webhooks: webhooksRouter,
-    wishlist: wishlistRouter
-};
 
 /** The four HTTP methods that change state — the ones this guard applies to. */
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
