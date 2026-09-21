@@ -136,7 +136,9 @@ module.exports = {
     preset: 'ts-jest',
     clearMocks: true,
     coverageProvider: 'v8',
-    testEnvironment: 'node',
+    // `node`, plus clearing every timer a file leaves running — without it each file's whole module
+    // graph stays alive, which a single-process run (Stryker's dry run) cannot survive.
+    testEnvironment: '<rootDir>/tests/support/test-environment.ts',
     maxWorkers: fromEnvironment('JEST_WORKERS', DEFAULT_MAX_WORKERS),
     workerIdleMemoryLimit: `${fromEnvironment('JEST_WORKER_MEMORY_MB', DEFAULT_WORKER_MEMORY_MB)}MB`,
     testMatch: ['**/tests/**/*.test.ts'],

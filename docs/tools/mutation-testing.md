@@ -760,14 +760,48 @@ survived where unset did not.
 
 Two failure modes wear the same "ran out of memory" label, and only one of them is the `bson` leak:
 
-| Symptom                                                   | Cause                                         | The lever                           |
-| --------------------------------------------------------- | --------------------------------------------- | ----------------------------------- |
-| Crash in the first minute, identical at every concurrency | a worker wants more than V8's ~4.2 GB default | `STRYKER_WORKER_HEAP_MB`            |
-| Slow climb across many mutants, RSS far above any cap     | `bson` buffers, outside the heap V8 bounds    | `maxTestRunnerReuse` — a cap cannot |
+| Symptom                                                   | Cause                                          | The lever                                        |
+| --------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------ |
+| Crash in the first minute, identical at every concurrency | a worker wants more than V8's ~4.2 GB default  | `STRYKER_WORKER_HEAP_MB`                         |
+| Slow climb across many mutants, RSS far above any cap     | `bson` buffers, outside the heap V8 bounds     | `maxTestRunnerReuse` — a cap cannot              |
+| Steady climb through the DRY run, one step per test file  | a file's context kept alive by a live callback | [the test environment](#one-process-per-dry-run) |
 
 Budget `STRYKER_WORKER_HEAP_MB × STRYKER_CONCURRENCY` against free RAM, and re-measure the default
 on your own Node version rather than trusting the number above: it reads like a V8 default, not a
 documented constant.
+
+## One process per dry run — why a file must free its memory {#one-process-per-dry-run}
+
+Stryker's jest runner forces `runInBand: true`. The dry run therefore executes every related test
+file inside ONE process, and `workerIdleMemoryLimit` never gets a worker to recycle. Whatever a
+file leaves reachable, the next hundred files add to.
+
+What made files leave everything reachable: a callback still registered with Node when the file
+ended. Its closure belongs to the file's VM context, so the whole context stays alive with it.
+
+```mermaid
+flowchart LR
+    Node["Node's timer list /<br/>perf_hooks observer set"] --> CB["callback created<br/>inside the test file"]
+    CB --> Ctx["the file's VM context"]
+    Ctx --> Graph["app, models, Mongoose,<br/>every module the file loaded"]
+```
+
+| Who registered it                     | What                       | Never released because       |
+| ------------------------------------- | -------------------------- | ---------------------------- |
+| `express-rate-limit`'s MemoryStore    | an interval per limiter    | nothing calls `shutdown()`   |
+| prom-client's `collectDefaultMetrics` | a GC `PerformanceObserver` | nothing calls `disconnect()` |
+
+Measured 2026-09-21, shard-30's 117 related files in band at a 4 GB heap: 35–80 MB retained per
+file, `Ineffective mark-compacts near heap limit` around file 64 — with or without Stryker, at any
+concurrency. A plain `npm test` never shows it: its workers are recycled.
+
+**The fix** is `tests/support/test-environment.ts`, the `testEnvironment` of every jest config. It
+tracks the timers and observers a file starts and clears the survivors at teardown. The same run
+then held 220–620 MB from the first file to the last.
+
+**Finding the next one**, if the heap climbs again: `npx jest -c jest.config.mutation.js
+--runInBand --logHeapUsage <files>`, then a heap snapshot after two files. Count a per-file
+object (`Mongoose` works) and walk its retainer path to a GC root — the root names the culprit.
 
 ## The dry run's own timeout
 

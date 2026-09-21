@@ -109,6 +109,7 @@ export const DEV_GROUPS: DependencyGroup[] = [
         readMore: '[Testing & Docs](./testing-and-docs.md)',
         match: [
             'jest',
+            'jest-environment-node',
             'ts-jest',
             '@swc/core',
             '@swc/jest',
