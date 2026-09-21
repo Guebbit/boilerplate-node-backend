@@ -716,9 +716,9 @@ const sessionRemove = (id: string, sessionId: string) =>
 /** Spend a refresh token by value alone, no user id in the filter — the single-session logout. */
 const tokenRemoveByValue = (token: string) => userRepository.tokenRemoveByValue(token);
 
-/** Sweep every token past its rotation grace window. */
-const tokenRemoveExpired = (supersededGraceMs: number) =>
-    userRepository.tokenRemoveExpired(supersededGraceMs);
+/** Sweep every token past its reuse-detection retention window. */
+const tokenRemoveExpired = (supersededRetentionMs: number) =>
+    userRepository.tokenRemoveExpired(supersededRetentionMs);
 
 /** Mark a refresh token superseded — the one-time-use half of rotation. */
 const tokenSupersede = (token: string) => userRepository.tokenSupersede(token);

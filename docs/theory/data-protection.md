@@ -100,6 +100,7 @@ non-placeholder value before serving EU/EEA traffic; the rest ship safe defaults
 | **`NODE_TOKEN_ACCESS`**              | —              | Access-token signing secret. The app refuses to boot on the shipped placeholder                                              |
 | **`NODE_TOKEN_REFRESH`**             | —              | Refresh-token signing secret. Same boot-time check                                                                           |
 | `NODE_TOKEN_ROTATION_GRACE_MS`       | `10000`        | Refresh-token rotation grace window                                                                                          |
+| `NODE_TOKEN_REUSE_WINDOW_MS`         | `86400000`     | How long a rotated-away refresh token is remembered, so replaying it is recognised as theft                                  |
 | `NODE_REAUTH_TIME_CRITICAL`          | `300`          | Step-up freshness window for money/destructive routes                                                                        |
 | `NODE_REAUTH_TIME_SENSITIVE`         | `900`          | Step-up freshness window for identity/session/export routes                                                                  |
 | `NODE_LOG_PERSONAL_FIELDS`           | `hash`         | How `email`/`ip`/`phone`/etc. are treated on the way into logs                                                               |
