@@ -49,10 +49,12 @@ import {
     cartItemRemoveById,
     cartRemove,
     orderConfirm,
+    cartService,
     productRemoveFromCartsById
 } from '@modules/cart/services';
 import { cartRepository } from '@modules/cart/repository';
 import { userService } from '@modules/users';
+import { asCustomer } from '@tests/callers';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
 import cartModule from '@modules/cart/module';
@@ -343,6 +345,16 @@ describe('cartItemSetById', () => {
 
         await expect(storedQuantity(first.id, String(product._id))).resolves.toBe(1);
     });
+
+    it('sets a line straight to the 999 cap — the set path never goes through the add refusal', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+
+        const result = await cartItemSetById(user.id, String(product._id), 999);
+
+        expect(result.success).toBe(true);
+        await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(999);
+    });
 });
 
 describe('cartItemAddById', () => {
@@ -434,6 +446,63 @@ describe('cartItemAddById', () => {
             cart!.items.filter((item) => String(item.productId) === String(product._id))
         ).toHaveLength(1);
         await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(2);
+    });
+
+    /*
+     * The line, not just the request: `UpsertCartItemRequest.quantity` already bounds one
+     * request to 999, but nothing stopped two `'add'`s from clearing that ceiling together until
+     * the repository filter carried the cap itself.
+     */
+    it('refuses an add that would push a line past 999, and changes nothing', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        await cartItemSetById(user.id, String(product._id), 999);
+
+        const result = await cartItemAddById(user.id, String(product._id), 1);
+
+        expect(result.success).toBe(false);
+        expect(asReject(result).status).toBe(422);
+        const [error] = asReject(result).errors;
+        expect(error.code).toBe('CART_QUANTITY_LIMIT');
+        expect(error.message).toBe(t('cart.quantity-limit'));
+        await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(999);
+    });
+});
+
+describe('reorderIntoCart', () => {
+    it('clamps a reordered line to 999 instead of pushing it past the cap', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        await cartItemSetById(user.id, String(product._id), 998);
+        const order = await createOrder(user, [toOrderItem(product, 2)]);
+
+        const result = await cartService.reorderIntoCart(
+            asCustomer(user.id),
+            String(order._id),
+            testCallerContext
+        );
+
+        expect(result.success).toBe(true);
+        // 999, not 1000: the order asked to add 2, only 1 fit.
+        await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(999);
+    });
+
+    it('skips a line already at 999, the same as an unavailable product', async () => {
+        const user = await createUser();
+        const kept = await createProduct({ title: 'Kept' });
+        const full = await createProduct({ title: 'Full' });
+        await cartItemSetById(user.id, String(full._id), 999);
+        const order = await createOrder(user, [toOrderItem(kept, 1), toOrderItem(full, 1)]);
+
+        const result = await cartService.reorderIntoCart(
+            asCustomer(user.id),
+            String(order._id),
+            testCallerContext
+        );
+
+        expect(result.success).toBe(true);
+        await expect(storedQuantity(user.id, String(kept._id))).resolves.toBe(1);
+        await expect(storedQuantity(user.id, String(full._id))).resolves.toBe(999);
     });
 });
 

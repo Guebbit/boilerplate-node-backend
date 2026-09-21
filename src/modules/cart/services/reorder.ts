@@ -23,9 +23,10 @@ import type { AuthContext } from '@types';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { CART_LINE_MAX } from '../model';
 import { cartAnalyticsEvents } from '../analytics';
 import { cartAuditActions } from '../audit';
-import { cartRepository } from '../repository';
+import { cartRepository, QUANTITY_LIMIT } from '../repository';
 import { toCartView, type CartView } from './view';
 
 /** A line the order asks for, resolved against today's catalogue. */
@@ -47,8 +48,10 @@ interface ReorderLine {
  * whose `orders.self.read` condition already carries it) does not exclude a soft-deleted order.
  * Lines are re-resolved against today's catalogue via `findPublicById`, and a vanished/inactive
  * product is SKIPPED, not refused, unlike `./items`' `upsertCartItem` — a total skip answers 409
- * `REORDER_UNAVAILABLE` rather than an empty 200. Writes to the cart happen sequentially; see the
- * loop below for why.
+ * `REORDER_UNAVAILABLE` rather than an empty 200. A line already at (or requesting past)
+ * `CART_LINE_MAX` is clamped to what room is left, and skipped outright once none is — the same
+ * best-effort treatment as an unavailable product, not a refusal. Writes to the cart happen
+ * sequentially; see the loop below for why.
  */
 export const reorderIntoCart = (
     authContext: AuthContext,
@@ -96,10 +99,35 @@ export const reorderIntoCart = (
 
                 /*
                  * One at a time, in the original order: each `upsertLine` reads and rewrites the
-                 * same cart document, so a parallel add would lose lines to a last-write-wins race.
+                 * same cart document, so a parallel add would lose lines to a last-write-wins race
+                 * — which is also what lets `quantities` below track each write without re-reading
+                 * the cart per line.
                  */
-                for (const line of addable)
-                    await cartRepository.upsertLine(userId, line.productId, line.quantity, 'add');
+                const existingCart = await cartRepository.findByUserId(userId);
+                const quantities = new Map(
+                    (existingCart?.items ?? []).map((item) => [
+                        String(item.productId),
+                        item.quantity
+                    ])
+                );
+
+                for (const line of addable) {
+                    const already = quantities.get(line.productId) ?? 0;
+                    const room = CART_LINE_MAX - already;
+                    if (room <= 0) continue;
+
+                    const added = Math.min(line.quantity, room);
+                    const result = await cartRepository.upsertLine(
+                        userId,
+                        line.productId,
+                        added,
+                        'add'
+                    );
+                    // QUANTITY_LIMIT here means `quantities` was already stale by write time (a
+                    // concurrent change to this same cart) — best-effort, so the line is skipped
+                    // rather than retried.
+                    if (result !== QUANTITY_LIMIT) quantities.set(line.productId, already + added);
+                }
 
                 return cartRepository
                     .findByUserId(userId)

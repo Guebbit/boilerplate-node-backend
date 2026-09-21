@@ -7,8 +7,9 @@
  * See: docs/modules/cart.md
  */
 
-import type { UpdateWriteOpResult } from 'mongoose';
-import { cartModel, applyCartTransform } from './model';
+import type { UpdateWriteOpResult, QueryFilter } from 'mongoose';
+import { Types } from 'mongoose';
+import { cartModel, applyCartTransform, CART_LINE_MAX } from './model';
 import type { CartDocument } from './model';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import {
@@ -21,6 +22,26 @@ import {
 export type CartLineMode = 'set' | 'add';
 
 /**
+ * What {@link upsertLine} resolves to in `'add'` mode when the increment would push a line past
+ * {@link CART_LINE_MAX} — there is nothing to return, since nothing was written.
+ */
+export const QUANTITY_LIMIT = 'quantity-limit';
+
+/** Pushes a brand-new line onto the cart, creating the cart document itself if none exists yet. */
+const pushNewLine = (
+    owner: QueryFilter<CartDocument>,
+    line: Types.ObjectId,
+    quantity: number
+): Promise<CartDocument> =>
+    cartModel
+        .findOneAndUpdate(
+            { ...owner, 'items.productId': { $ne: line } },
+            { $push: { items: { productId: line, quantity } } },
+            { upsert: true, returnDocument: 'after' }
+        )
+        .exec();
+
+/**
  * Set or increment one cart line, creating the cart if the user has none.
  *
  * CONCURRENCY. Each write's condition lives IN THE FILTER, not a preceding read, so mongod
@@ -29,6 +50,14 @@ export type CartLineMode = 'set' | 'add';
  * cart insert, or a duplicate line), so a duplicate key is retried rather than surfaced, per
  * MongoDB's own guidance for a contended upsert — it converges next pass. `attemptsLeft` only
  * bounds a pathological loop.
+ *
+ * `'add'` mode carries a second condition IN THE SAME FILTER — `quantity <= CART_LINE_MAX -
+ * quantity` — so a line actually AT the cap can never pass it: that comparison is what the
+ * document lock the increment already takes makes atomic, not a read beforehand two concurrent
+ * adds could both act on. A filter miss is then ambiguous — no such line yet, or one that no
+ * longer matches because a concurrent write already changed it — so it costs one more read to
+ * settle: still no line, push it; room reappeared since the first attempt, retry the whole call
+ * (the same convergence the duplicate-key branch below uses); genuinely no room, QUANTITY_LIMIT.
  */
 const upsertLine = (
     userId: string,
@@ -36,34 +65,68 @@ const upsertLine = (
     quantity: number,
     mode: CartLineMode,
     attemptsLeft = 3
-): Promise<CartDocument> => {
+): Promise<CartDocument | typeof QUANTITY_LIMIT> => {
     const owner = { userId: toObjectId(userId) };
     const line = toObjectId(productId);
 
-    return cartModel
-        .findOneAndUpdate(
-            { ...owner, 'items.productId': line },
-            mode === 'set'
-                ? { $set: { 'items.$.quantity': quantity } }
-                : { $inc: { 'items.$.quantity': quantity } },
-            { returnDocument: 'after' }
-        )
-        .exec()
-        .then(
-            (cart) =>
-                cart ??
-                cartModel
-                    .findOneAndUpdate(
-                        { ...owner, 'items.productId': { $ne: line } },
-                        { $push: { items: { productId: line, quantity } } },
-                        { upsert: true, returnDocument: 'after' }
-                    )
+    // `$elemMatch`, not two top-level `'items.x'` conditions: MongoDB only guarantees the update's
+    // `items.$` binds to the element BOTH conditions matched together when they are joined this
+    // way — two separate conditions can each match a DIFFERENT element, and `$` then updates
+    // whichever the FIRST one found. Silent on a passing case (any two-line cart still updates
+    // SOME line), so it only ever showed up as `q` landing on the wrong product.
+    // https://www.mongodb.com/docs/manual/reference/operator/update/positional/#--em-multiple--em--array-conditions
+    const matchExistingLine: QueryFilter<CartDocument> =
+        mode === 'set'
+            ? { ...owner, 'items.productId': line }
+            : {
+                  ...owner,
+                  items: {
+                      $elemMatch: { productId: line, quantity: { $lte: CART_LINE_MAX - quantity } }
+                  }
+              };
+
+    return (
+        cartModel
+            .findOneAndUpdate(
+                matchExistingLine,
+                mode === 'set'
+                    ? { $set: { 'items.$.quantity': quantity } }
+                    : { $inc: { 'items.$.quantity': quantity } },
+                { returnDocument: 'after' }
+            )
+            .exec()
+            // Explicit generic: without it, TS infers this callback's return type from the OUTER
+            // function's declared return rather than its own body, and drops the `QUANTITY_LIMIT`
+            // branch below.
+            .then<CartDocument | typeof QUANTITY_LIMIT>((cart) => {
+                if (cart) return cart;
+                if (mode === 'set') return pushNewLine(owner, line, quantity);
+
+                return cartModel
+                    .findOne({ ...owner, 'items.productId': line })
                     .exec()
-        )
-        .catch((error: unknown) => {
-            if (attemptsLeft <= 1 || !isDuplicateKey(error)) throw error;
-            return upsertLine(userId, productId, quantity, mode, attemptsLeft - 1);
-        });
+                    .then<CartDocument | typeof QUANTITY_LIMIT>((existing) => {
+                        const currentQuantity = existing?.items.find((item) =>
+                            item.productId.equals(line)
+                        )?.quantity;
+
+                        if (currentQuantity === undefined)
+                            return pushNewLine(owner, line, quantity);
+                        if (currentQuantity + quantity > CART_LINE_MAX) return QUANTITY_LIMIT;
+
+                        // Room exists now, even though the atomic attempt above just missed — read
+                        // afterward, so still not the answer itself; only the next attempt's own
+                        // filter can commit to it.
+                        if (attemptsLeft <= 1)
+                            throw new Error('cart: exhausted retries resolving a contended add');
+                        return upsertLine(userId, productId, quantity, mode, attemptsLeft - 1);
+                    });
+            })
+            .catch((error: unknown) => {
+                if (attemptsLeft <= 1 || !isDuplicateKey(error)) throw error;
+                return upsertLine(userId, productId, quantity, mode, attemptsLeft - 1);
+            })
+    );
 };
 
 /**
@@ -79,7 +142,7 @@ export const cartRepository: Repository<CartDocument> & {
         productId: string,
         quantity: number,
         mode: CartLineMode
-    ) => Promise<CartDocument>;
+    ) => Promise<CartDocument | typeof QUANTITY_LIMIT>;
     removeLine: (userId: string, productId: string) => Promise<CartDocument | null>;
     clearLines: (userId: string) => Promise<CartDocument | null>;
     clearLinesIfUnchanged: (userId: string, version: number) => Promise<CartDocument | null>;

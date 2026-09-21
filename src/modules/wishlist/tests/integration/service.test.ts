@@ -201,6 +201,29 @@ describe('wishlistMoveToCart', () => {
         const cart = await cartService.cartGetForBadge(user.id);
         expect(cart.items).toEqual([]);
     });
+
+    /*
+     * The one cart refusal that is NOT "not found": unlike the two cases above, the cart's own
+     * 422 says something the shopper needs to hear, so it passes through rather than becoming
+     * this module's 404 — the product is fine, the existing cart line is just already full.
+     */
+    it('forwards the cart 422 once the existing line is already at 999, instead of a 404', async () => {
+        const user = await createUser();
+        const product = await createProduct();
+        await cartService.cartItemAddById(user.id, String(product._id), 999);
+        await wishlistService.wishlistAdd(user.id, String(product._id), testCallerContext);
+
+        const result = await wishlistService.wishlistMoveToCart(
+            user.id,
+            String(product._id),
+            testCallerContext
+        );
+
+        expect(result.success).toBe(false);
+        expect(result.status).toBe(422);
+        // Still saved, same as the other refusals above — nothing was lost.
+        expect(await savedIds(user.id)).toEqual([String(product._id)]);
+    });
 });
 
 describe('the module subscriptions', () => {

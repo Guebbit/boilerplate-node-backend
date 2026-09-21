@@ -109,9 +109,14 @@ const wishlistMoveToCart = (
         if (!saved) return generateReject(404, [t('wishlist.not-found')]);
 
         return cartService.cartItemAddById(userId, productId).then((added) => {
-            // The line stays saved. A product can come back, and a refusal to buy it now is not a
-            // reason to throw away the fact that somebody wants it.
-            if (!added.success) return generateReject(404, [t('wishlist.product-not-found')]);
+            // The line stays saved either way. A product genuinely gone from the catalogue reads
+            // as this module's own 404 (a refusal to buy it now is not a reason to throw away the
+            // fact that somebody wants it); the cart's own 422 — the line is already at
+            // `CART_LINE_MAX` — says something the shopper needs to hear, so it passes through.
+            if (!added.success)
+                return added.errors.some((error) => error.code === 'CART_QUANTITY_LIMIT')
+                    ? added
+                    : generateReject(404, [t('wishlist.product-not-found')]);
 
             return wishlistRepository.removeLine(userId, productId).then((updated) => {
                 emitAnalyticsEvent({

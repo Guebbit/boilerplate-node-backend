@@ -21,7 +21,7 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { cartAnalyticsEvents } from '../analytics';
 import { cartAuditActions } from '../audit';
-import { cartRepository } from '../repository';
+import { cartRepository, QUANTITY_LIMIT } from '../repository';
 import { readCartLines, toCartView, type CartLine, type CartView } from './view';
 
 /**
@@ -60,6 +60,10 @@ export const cartGetForView = (userId: string, context: CallerContext): Promise<
  * via `findPublicById`. `./reorder` applies the same predicate itself because it SKIPS unavailable
  * lines rather than refusing. Stock is deliberately excluded here — checked only at checkout,
  * where units are actually held.
+ *
+ * `'set'` always fits `CART_LINE_MAX` on its own (the request itself is bounded to it), so only
+ * `'add'` — wishlist's move-to-cart, the one caller that reaches this in `'add'` mode — can hit
+ * `QUANTITY_LIMIT`.
  */
 const upsertCartItem = (
     userId: string,
@@ -70,10 +74,14 @@ const upsertCartItem = (
     productService.findPublicById(id).then((product) => {
         if (!product) return generateReject(404, [t('products.not-found')]);
 
-        return cartRepository
-            .upsertLine(userId, id, quantity, mode)
-            .then((cart) => toCartView(cart))
-            .then((view) => generateSuccess(view));
+        return cartRepository.upsertLine(userId, id, quantity, mode).then((result) => {
+            if (result === QUANTITY_LIMIT)
+                return generateReject(422, [
+                    { code: 'CART_QUANTITY_LIMIT', message: t('cart.quantity-limit') }
+                ]);
+
+            return toCartView(result).then((view) => generateSuccess(view));
+        });
     });
 
 /**

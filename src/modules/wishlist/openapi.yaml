@@ -92,6 +92,8 @@ paths:
                 # whether a product may be in a basket is decided once, where every caller of the
                 # cart inherits it.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # Also the cart's answer: the product's existing cart line is already at 999,
+                # so adding this one more would pass it. `errors[].code` is `CART_QUANTITY_LIMIT`.
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
