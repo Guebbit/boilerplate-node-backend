@@ -13,7 +13,8 @@ import {
     getExpiryTime,
     getExpiryTimeMilliseconds,
     getAccessTokenRing,
-    getRefreshTokenRing
+    getRefreshTokenRing,
+    invalidTokenWindows
 } from '@modules/account/session/config';
 
 /**
@@ -26,7 +27,9 @@ const TOKEN_ENV_KEYS = [
     'NODE_TOKEN_REFRESH_TIME_LONG',
     'NODE_TOKEN_ACCESS_TIME',
     'NODE_TOKEN_ACCESS',
-    'NODE_TOKEN_REFRESH'
+    'NODE_TOKEN_REFRESH',
+    'NODE_TOKEN_ROTATION_GRACE_MS',
+    'NODE_TOKEN_REUSE_WINDOW_MS'
 ] as const;
 
 const originalEnvironment: Record<string, string | undefined> = {};
@@ -153,5 +156,39 @@ describe('the access-token TTL', () => {
         process.env.NODE_TOKEN_REFRESH_TIME_LONG = '2592000';
 
         expect(getExpiryTime()).toBe(600);
+    });
+});
+
+describe('invalidTokenWindows', () => {
+    it('reports no problem when the reuse window comfortably outlives the grace window', () => {
+        process.env.NODE_TOKEN_ROTATION_GRACE_MS = '10000';
+        process.env.NODE_TOKEN_REUSE_WINDOW_MS = '86400000';
+
+        expect(invalidTokenWindows()).toEqual([]);
+    });
+
+    it('reports no problem on the documented defaults (10s grace, 24h reuse)', () => {
+        expect(invalidTokenWindows()).toEqual([]);
+    });
+
+    it('refuses a reuse window equal to the grace window', () => {
+        // Equal, not just smaller: `reuse > grace` is the boot check's own condition, and a token
+        // superseded exactly `grace` ago is already past both cutoffs at once -- there is no
+        // instant in which a replay reads as reuse rather than an ordinary expired token.
+        process.env.NODE_TOKEN_ROTATION_GRACE_MS = '10000';
+        process.env.NODE_TOKEN_REUSE_WINDOW_MS = '10000';
+
+        expect(invalidTokenWindows()).toEqual([
+            'NODE_TOKEN_REUSE_WINDOW_MS (10000ms) must exceed NODE_TOKEN_ROTATION_GRACE_MS (10000ms), or refresh-token reuse can never be detected'
+        ]);
+    });
+
+    it('refuses a reuse window shorter than the grace window', () => {
+        process.env.NODE_TOKEN_ROTATION_GRACE_MS = '86400000';
+        process.env.NODE_TOKEN_REUSE_WINDOW_MS = '10000';
+
+        expect(invalidTokenWindows()).toEqual([
+            'NODE_TOKEN_REUSE_WINDOW_MS (10000ms) must exceed NODE_TOKEN_ROTATION_GRACE_MS (86400000ms), or refresh-token reuse can never be detected'
+        ]);
     });
 });
