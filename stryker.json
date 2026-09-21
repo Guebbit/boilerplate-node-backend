@@ -13,7 +13,11 @@
                 "<rootDir>/tests/fuzz/",
                 "<rootDir>/src/modules/[^/]+/tests/contract/",
                 "<rootDir>/tests/cross-cutting/contract-bundles.test.ts",
-                "<rootDir>/tests/cross-cutting/outbox-names.test.ts"
+                "<rootDir>/tests/cross-cutting/outbox-names.test.ts",
+                "<rootDir>/tests/cluster/",
+                "<rootDir>/.stryker-tmp/",
+                "<rootDir>/.tmp/",
+                "<rootDir>/.claude/worktrees/"
             ]
         }
     },
