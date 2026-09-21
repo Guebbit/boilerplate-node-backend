@@ -67,47 +67,6 @@ jobs:
             - name: Install dependencies
               run: npm ci
 
-            - name: Warm the mongodb-memory-server binary cache
-              # Root cause of a mass dry-run "OOM" this workflow was actually hitting, 2026-09-21:
-              # every shard's dry run went completely silent for 4+ minutes right after "Starting
-              # initial test run", then crashed — not real memory growth, but `scenarios/support/
-              # ephemeral-mongod.ts`'s own documented stall: `mongodb-memory-server` has no cached
-              # binary on a fresh runner (`~/.cache/mongodb-binaries` starts empty every time,
-              # unlike a developer's machine or `docker/Dockerfile`, which bakes one in at build
-              # time), so `--concurrency 2`'s two workers both try to download it at once and
-              # contend on the library's own download lock — worse the more shards run at once,
-              # which is why this got dramatically worse going from 36 shards to 77. Downloading it
-              # ONCE here, before the matrix, and restoring the same cache in every shard job below
-              # means no shard job ever downloads it at all.
-              id: mongo-cache
-              uses: actions/cache@v4
-              with:
-                  path: ~/.cache/mongodb-binaries
-                  key: mongodb-binaries-${{ hashFiles('package-lock.json') }}
-
-            - name: Download it once, if the cache above missed
-              # scripts/mutation/warm-mongo-cache.ts, not an inline `node -e`: the one-liner
-              # "succeeded" here in under a second with no output at all and left the cache
-              # directory empty (2026-09-21) — silent in exactly the way that let the real problem
-              # go unnoticed. The script logs every stage and exits non-zero loudly on failure.
-              if: steps.mongo-cache.outputs.cache-hit != 'true'
-              run: npx tsx scripts/mutation/warm-mongo-cache.ts
-
-            - name: TEMP DIAGNOSTIC — where did that mongod actually come from
-              # The script above reports success in ~200ms, far too fast for a real 122 MB
-              # download, and ~/.cache/mongodb-binaries is still empty afterward — something is
-              # resolving a mongod some OTHER way. Remove once that's understood.
-              if: steps.mongo-cache.outputs.cache-hit != 'true'
-              run: |
-                  echo "--- which mongod ---"
-                  which mongod || echo "no mongod on PATH"
-                  echo "--- every mongod-like binary on the runner ---"
-                  find / -iname "mongod*" -type f 2>/dev/null | head -30
-                  echo "--- ~/.cache/mongodb-binaries ---"
-                  ls -la ~/.cache/mongodb-binaries 2>&1 || echo "does not exist"
-                  echo "--- MONGOMS_* env ---"
-                  env | grep -i mongoms || echo "none set"
-
             - name: Plan this week's shards
               id: plan
               run: npx tsx scripts/mutation/shard-plan.ts >> "$GITHUB_OUTPUT"
@@ -140,6 +99,21 @@ jobs:
         strategy:
             # One slow shard must not hide the results of the other dozen.
             fail-fast: false
+            # UNVALIDATED, 2026-09-21 — do not treat this as a confirmed fix, and do not raise
+            # shard count again until it has actually been tested. The 77-shard sweep this same
+            # day had 61+ of 77 shards fail identically: dead silence for 4+ minutes right after
+            # "Starting initial test run", then a crash Stryker itself mislabels as OOM
+            # (child-process-proxy.js's handleUnexpectedExit reports any unexpected child exit
+            # that way, not only a real one). The 36-shard sweep earlier that day had the same
+            # symptom on only 2 of 36. A mongod-binary-download-contention theory was investigated
+            # and DISASPROVEN with direct evidence (npm ci's own postinstall already downloads it
+            # reliably, every job, well before Stryker ever runs). Leading hypothesis now: GitHub
+            # throttles or contends shared resources across this many near-simultaneous jobs on
+            # this account, independent of shard content — identical timing regardless of what's
+            # actually in a shard is what points here rather than at test content. `max-parallel`
+            # is the next thing to try, capping how many of these run at once instead of touching
+            # per-job concurrency or shard size again. Needs a real run to confirm before trusting.
+            max-parallel: 15
             matrix:
                 include: ${{ fromJson(needs.mutation-matrix.outputs.shards) }}
         steps:
@@ -155,15 +129,6 @@ jobs:
 
             - name: Install dependencies
               run: npm ci
-
-            - name: Restore the mongodb-memory-server binary cache
-              # `mutation-matrix` downloads this once, before any shard starts — see its own
-              # comment. Same key, so this is always a hit here; nothing in this job ever
-              # downloads the binary itself.
-              uses: actions/cache@v4
-              with:
-                  path: ~/.cache/mongodb-binaries
-                  key: mongodb-binaries-${{ hashFiles('package-lock.json') }}
 
             - name: Restore this shard's incremental cache
               # `reports/*` is gitignored (see .gitignore), so nothing commits this file — without a
