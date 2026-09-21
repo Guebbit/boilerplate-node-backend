@@ -86,8 +86,12 @@ jobs:
                   key: mongodb-binaries-${{ hashFiles('package-lock.json') }}
 
             - name: Download it once, if the cache above missed
+              # scripts/mutation/warm-mongo-cache.ts, not an inline `node -e`: the one-liner
+              # "succeeded" here in under a second with no output at all and left the cache
+              # directory empty (2026-09-21) — silent in exactly the way that let the real problem
+              # go unnoticed. The script logs every stage and exits non-zero loudly on failure.
               if: steps.mongo-cache.outputs.cache-hit != 'true'
-              run: node -e "require('mongodb-memory-server').MongoMemoryServer.create().then((s) => s.stop())"
+              run: npx tsx scripts/mutation/warm-mongo-cache.ts
 
             - name: Plan this week's shards
               id: plan
