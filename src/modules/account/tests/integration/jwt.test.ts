@@ -339,6 +339,13 @@ describe('rotateRefreshToken reuse detection', () => {
     /** Long enough that a superseded entry is definitively outside the grace window. */
     const pastGrace = () => new Promise((resolve) => setTimeout(resolve, GRACE_MS * 5));
 
+    /**
+     * A retention window past its own grace window, the way `invalidTokenWindows` requires at
+     * boot, but still comfortably inside {@link pastGrace}'s wait — so the sweep below finds it
+     * expired without the test waiting any longer for it.
+     */
+    const RETENTION_FOR_SWEEP_MS = GRACE_MS + 10;
+
     const withWindows = <T>(body: () => Promise<T>, retentionMs = RETENTION_MS) =>
         withEnvironmentOverrides(
             {
@@ -423,6 +430,6 @@ describe('rotateRefreshToken reuse detection', () => {
 
             // And the untouched session survives — nothing was revoked.
             await expect(createAccessToken(bystander)).resolves.toEqual(expect.any(String));
-        }, GRACE_MS);
+        }, RETENTION_FOR_SWEEP_MS);
     });
 });
