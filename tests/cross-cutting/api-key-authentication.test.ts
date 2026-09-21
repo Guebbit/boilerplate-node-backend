@@ -12,8 +12,13 @@
  *
  * 1. A real credential, over the real Express chain, against real routes — allowed where its key
  *    matches, 403 where it does not, 401 on a route whose subject is the caller themselves.
- * 2. The mount-shape rules that make the split checkable rather than a matter of taste, so a
- *    route added later cannot quietly land on the wrong side.
+ * 2. That no module mounts BOTH identity guards, so which routes admit a credential stays a
+ *    property of the module rather than of the line a route happens to sit on.
+ *
+ * The other half of the mount rule — that no controller behind `isAuthOrCredential` reads
+ * `request.authContext` — belongs to `tests/cross-cutting/authenticated-controllers.test.ts`,
+ * which asks it per ROUTE off Express's own resolved stack rather than per file off the source
+ * text, and so needs no list of exceptions to stay true.
  *
  * See: docs/tools/security.md#machine-to-machine-credentials
  */
@@ -31,6 +36,7 @@ import { mint } from '@modules/api-keys/services/api-keys';
 
 setupTestDb();
 
+/** Where the source-level rule below looks for each module's `routes.ts`. */
 const MODULES_ROOT = path.join(__dirname, '..', '..', 'src', 'modules');
 
 /**
@@ -134,14 +140,9 @@ describe('an api key over the real chain', () => {
 });
 
 /**
- * The rules that keep the split honest as routes are added. Source-level, because they are
- * properties of how a module is WRITTEN — a request-level test can only reach the routes someone
- * remembered to add to it.
- */
-/**
  * A file's CODE, with comment lines dropped.
  *
- * Both rules below match guard names, and every deliberate exclusion carries a comment NAMING the
+ * The rule below matches guard names, and every deliberate exclusion carries a comment NAMING the
  * guard it chose not to mount — `orders` and `api-keys` each say why in prose. A raw-text match
  * reads those as mounts and reports the two best-documented decisions in the codebase as
  * violations.
@@ -157,6 +158,11 @@ const codeOf = (file: string): string =>
         })
         .join('\n');
 
+/**
+ * The rule that keeps the split honest as routes are added. Source-level, because it is a
+ * property of how a module is WRITTEN — a request-level test can only reach the routes someone
+ * remembered to add to it.
+ */
 describe('the guard split', () => {
     const routeFiles = readdirSync(MODULES_ROOT)
         .map((name) => ({ name, file: path.join(MODULES_ROOT, name, 'routes.ts') }))
@@ -172,44 +178,4 @@ describe('the guard split', () => {
 
         expect(/\bisAuth\b/.test(mounts) && /\bisAuthOrCredential\b/.test(mounts)).toBe(false);
     });
-
-    /**
-     * The rule that makes `isAuthOrCredential` safe: a controller behind it must never read
-     * `request.authContext`, because a credential resolves to none. This is what stops the
-     * one-line "just widen `isAuth`" fix from being reintroduced route by route — the ~100
-     * `authContext!` reads elsewhere are sound only while nothing credential-shaped can reach
-     * them.
-     */
-    it.each(routeFiles)(
-        '$name reads no authContext behind a credential guard',
-        ({ name, file }) => {
-            if (!/\bisAuthOrCredential\b/.test(codeOf(file))) return;
-
-            const controllers = path.join(MODULES_ROOT, name, 'controllers');
-            const offenders = (existsSync(controllers) ? readdirSync(controllers) : [])
-                .filter((entry) => entry.endsWith('.ts'))
-                .filter((entry) =>
-                    readFileSync(path.join(controllers, entry), 'utf8').includes('authContext')
-                )
-                // A module may mount the credential guard on SOME routes and leave its public reads
-                // ungated; only a controller the guard actually fronts is in scope. Those are listed
-                // per module below rather than parsed out of the router, because the parse would be
-                // the same guess the rule exists to remove.
-                .filter((entry) => !PUBLIC_READ_CONTROLLERS[name]?.includes(entry));
-
-            expect(offenders).toEqual([]);
-        }
-    );
 });
-
-/**
- * Controllers that read `authContext` but sit on a route mounting NO identity guard — a public
- * read that personalises itself when a session happens to be present.
- *
- * Listed rather than inferred: each is a deliberate arrangement its own module documents, and a
- * rule that guessed at it would be asserting the guess.
- */
-const PUBLIC_READ_CONTROLLERS: Record<string, string[]> = {
-    products: ['get-product-item.ts', 'get-products.ts'],
-    locales: ['get-locales.ts']
-};

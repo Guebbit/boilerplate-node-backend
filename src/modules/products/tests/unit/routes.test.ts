@@ -83,12 +83,12 @@ describe('product routes — authorization', () => {
         );
 
         expect(row).toBeDefined();
+        const identity = identityGuardIndex(row!.chain);
+
         // Both, and in this order: `requirePermission` alone would read the role off an absent auth context.
-        expect(identityGuardIndex(row!.chain)).toBeGreaterThanOrEqual(0);
+        expect(identity).toBeGreaterThanOrEqual(0);
         expect(row!.chain).toContain('requirePermissionGuard');
-        expect(identityGuardIndex(row!.chain)).toBeLessThan(
-            row!.chain.indexOf('requirePermissionGuard')
-        );
+        expect(identity).toBeLessThan(row!.chain.indexOf('requirePermissionGuard'));
     });
 
     it.each(['POST /', 'PATCH /:id'])(

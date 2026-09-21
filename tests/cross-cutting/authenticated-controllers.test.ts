@@ -18,6 +18,9 @@ jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
 
 import { router as accountRouter } from '@modules/account/routes';
 import { router as addressesRouter } from '@modules/addresses/routes';
+import { router as antibotRouter } from '@modules/antibot/routes';
+import { router as apiKeysRouter } from '@modules/api-keys/routes';
+import { router as auditLogsRouter } from '@modules/audit-logs/routes';
 import { router as cartRouter } from '@modules/cart/routes';
 import { router as deliveryRouter } from '@modules/delivery/routes';
 import { router as feedbackRouter } from '@modules/feedback/routes';
@@ -28,6 +31,7 @@ import { router as ordersRouter } from '@modules/orders/routes';
 import { router as paymentsRouter } from '@modules/payments/routes';
 import { router as productsRouter } from '@modules/products/routes';
 import { router as usersRouter } from '@modules/users/routes';
+import { router as webhooksRouter } from '@modules/webhooks/routes';
 import { router as wishlistRouter } from '@modules/wishlist/routes';
 
 /**
@@ -40,7 +44,13 @@ import { router as wishlistRouter } from '@modules/wishlist/routes';
  * That claim is what this file checks. A controller that starts reading the caller and is mounted
  * on a public route fails here rather than answering `undefined.id` at runtime.
  *
- * The second half of that question — which routes are unauthenticated — is answered from
+ * `isAuth` and NOT `isAuthOrCredential`, deliberately — this is the file that enforces the
+ * difference. An `sk_...` credential resolves to `request.caller` with no `authContext` at all,
+ * so a `!` read behind the credential guard is the same broken claim as a `!` read behind no
+ * guard, and is reported the same way. Widening the filter to accept both guards would delete
+ * the only check standing between that split and a 500.
+ *
+ * The second half of the question — which routes are unauthenticated — is answered from
  * {@link effectiveRouteTable}, not by reading `routes.ts` as text. Regexing the source answers a
  * weaker question: a guard written through a variable, a spread, or a multi-line `router.use`
  * reads as unguarded. By the time this runs, Express has already resolved every spelling of a
@@ -52,13 +62,19 @@ const MODULES_ROOT = path.join(__dirname, '..', '..', 'src', 'modules');
 const moduleNames = (): string[] => readdirSync(MODULES_ROOT);
 
 /**
- * Modules that mount a router, imported directly — the same ones
+ * Every module that mounts a router, imported directly — the same seventeen
  * `tests/cross-cutting/write-routes-are-guarded.test.ts` imports, and for the same reason: this
  * file needs the real mounted stack, not a re-parse of the source that produced it.
+ *
+ * Every one of them, not only the ones that looked relevant: a module missing here is silently
+ * skipped by the check below rather than reported, so an incomplete list reads as a clean pass.
  */
 const ROUTED_MODULES: Record<string, Router> = {
     account: accountRouter,
     addresses: addressesRouter,
+    antibot: antibotRouter,
+    'api-keys': apiKeysRouter,
+    'audit-logs': auditLogsRouter,
     cart: cartRouter,
     delivery: deliveryRouter,
     feedback: feedbackRouter,
@@ -69,6 +85,7 @@ const ROUTED_MODULES: Record<string, Router> = {
     payments: paymentsRouter,
     products: productsRouter,
     users: usersRouter,
+    webhooks: webhooksRouter,
     wishlist: wishlistRouter
 };
 
