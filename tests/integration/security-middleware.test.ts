@@ -12,20 +12,14 @@
  */
 import supertest from 'supertest';
 import { api } from '@tests/http';
-import { withEnvironmentOverrides } from '@tests/environment';
-import { appAnswering, statusOf } from '@tests/rate-limit-harness';
+import { appAnswering, statusOf, withReloadedRateLimits } from '@tests/rate-limit-harness';
 
-/** Reloads `@modules/account/rate-limits` with the given env vars set — the limiter's budget is
- * captured at import time, so a smaller value only takes effect on a fresh module instance. Same
- * pattern as `identity-rate-limit.test.ts`'s own helper. */
+/** {@link withReloadedRateLimits} bound to this file's one module. */
 const withAccountRateLimits = <T>(
     overrides: Record<string, string>,
     pick: (rateLimitsModule: typeof import('@modules/account/rate-limits')) => T
 ): Promise<T> =>
-    withEnvironmentOverrides(overrides, () => {
-        jest.resetModules();
-        return import('@modules/account/rate-limits').then(pick);
-    });
+    withReloadedRateLimits(() => import('@modules/account/rate-limits'), overrides, pick);
 
 describe('helmet', () => {
     /*

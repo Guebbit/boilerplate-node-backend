@@ -2,6 +2,7 @@ import express from 'express';
 import supertest from 'supertest';
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
+import { withReloadedRateLimits } from '@tests/rate-limit-harness';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 
 /**
@@ -13,34 +14,75 @@ setupTestDb();
 /**
  * Freshly-constructed `credentialLimiters` with a small budget on each half.
  *
- * The two are separately settable because a case about one bucket has to leave the other with room
- * — give both the same budget and whichever fills first is the one every assertion sees.
+ * The two are separately settable because a case about one bucket has to leave the other with
+ * room — give both the same budget and whichever fills first is the one every assertion sees.
  *
- * `rateLimit()` reads its options once, at construction, so the module has to be re-evaluated
- * for a different budget to take effect — the suite otherwise runs with the raised limit from
- * `tests/support/setup.ts`.
+ * See {@link withReloadedRateLimits} for why a reload is what a small budget costs.
  */
-const limitersWithBudget = async (identityLimit: number, addressLimit = identityLimit) => {
-    const originals = {
-        identity: process.env.NODE_AUTH_RATE_LIMIT_MAX,
-        address: process.env.NODE_AUTH_RATE_LIMIT_ADDRESS_MAX
-    };
-    process.env.NODE_AUTH_RATE_LIMIT_MAX = String(identityLimit);
-    process.env.NODE_AUTH_RATE_LIMIT_ADDRESS_MAX = String(addressLimit);
-    jest.resetModules();
+const limitersWithBudget = (identityLimit: number, addressLimit = identityLimit) =>
+    withReloadedRateLimits(
+        () => import('@modules/account/rate-limits'),
+        {
+            NODE_AUTH_RATE_LIMIT_MAX: String(identityLimit),
+            NODE_AUTH_RATE_LIMIT_ADDRESS_MAX: String(addressLimit)
+        },
+        (rateLimits) => rateLimits.credentialLimiters
+    );
 
-    const { credentialLimiters } = await import('@modules/account/rate-limits');
+/**
+ * A login app whose limiter AND challenge gate come out of ONE reload.
+ *
+ * They must share a module instance: the gate reads the property name the identity limiter was
+ * configured with, so a second reload hands back a gate pointing at a limiter nobody is
+ * spending. That is why {@link limitersWithBudget} cannot be reused here — it returns the
+ * limiters alone.
+ *
+ * @param identityLimit - the per-identity budget the reloaded module is built with
+ * @returns an express app answering 401 past the full chain
+ */
+const appWithBudget = async (identityLimit: number) => {
+    const { credentialLimiters, loginChallengeGate } = await withReloadedRateLimits(
+        () => import('@modules/account/rate-limits'),
+        { NODE_AUTH_RATE_LIMIT_MAX: String(identityLimit) },
+        (rateLimits) => rateLimits
+    );
 
-    for (const [name, value] of [
-        ['NODE_AUTH_RATE_LIMIT_MAX', originals.identity],
-        ['NODE_AUTH_RATE_LIMIT_ADDRESS_MAX', originals.address]
-    ] as const) {
-        if (value === undefined) delete process.env[name];
-        else process.env[name] = value;
-    }
-
-    return credentialLimiters;
+    const app = express();
+    app.use(express.json());
+    app.post(
+        '/login',
+        ...credentialLimiters,
+        loginChallengeGate,
+        (_request, response: express.Response) => {
+            response.status(401).json({ success: false });
+        }
+    );
+    return app;
 };
+
+/**
+ * What the global error handler answers for a thrown value, over real HTTP.
+ *
+ * Mounted behind a route that throws rather than called directly: `handleUncaughtError` is an
+ * express error handler, and half of what is under test is that express routes a synchronous
+ * throw to it at all.
+ *
+ * `import()` inside, not at the top of the file: cases elsewhere here call
+ * `jest.resetModules()`, so a handler captured once would be a stale instance holding a stale
+ * `t()`.
+ *
+ * @param thrown - what the route throws
+ * @returns the supertest response
+ */
+const answerFor = (thrown: unknown) =>
+    import('@app/error-handling').then(({ handleUncaughtError }) => {
+        const throwing = express();
+        throwing.get('/boom', () => {
+            throw thrown;
+        });
+        throwing.use(handleUncaughtError);
+        return supertest(throwing).get('/boom');
+    });
 
 describe('credential endpoints are rate limited separately', () => {
     /**
@@ -145,35 +187,6 @@ describe('loginChallengeGate — rung 3 only once the identity budget is mostly 
         else process.env.NODE_ANTIBOT_PROVIDER = ORIGINAL_PROVIDER;
     });
 
-    /**
-     * Same `jest.resetModules()` recipe `limitersWithBudget` uses: `credentialLimiters` and
-     * `loginChallengeGate` must come from the SAME module instance, since the gate reads the
-     * property name the identity limiter was configured with.
-     */
-    const appWithBudget = async (identityLimit: number) => {
-        const original = process.env.NODE_AUTH_RATE_LIMIT_MAX;
-        process.env.NODE_AUTH_RATE_LIMIT_MAX = String(identityLimit);
-        jest.resetModules();
-
-        const { credentialLimiters, loginChallengeGate } =
-            await import('@modules/account/rate-limits');
-
-        if (original === undefined) delete process.env.NODE_AUTH_RATE_LIMIT_MAX;
-        else process.env.NODE_AUTH_RATE_LIMIT_MAX = original;
-
-        const app = express();
-        app.use(express.json());
-        app.post(
-            '/login',
-            ...credentialLimiters,
-            loginChallengeGate,
-            (_request, response: express.Response) => {
-                response.status(401).json({ success: false });
-            }
-        );
-        return app;
-    };
-
     it('never engages while no provider is selected, budget spent or not', async () => {
         delete process.env.NODE_ANTIBOT_PROVIDER;
         const app = await appWithBudget(4);
@@ -218,16 +231,9 @@ describe('the 500 handler', () => {
      * key in it. None of it may reach an unauthenticated caller.
      */
     it('tells the client nothing about what actually threw', async () => {
-        const { handleUncaughtError } = await import('@app/error-handling');
         const secret = 'mongodb://admin:hunter2@internal-db:27017';
 
-        const throwing = express();
-        throwing.get('/boom', () => {
-            throw new Error(`connection failed to ${secret}`);
-        });
-        throwing.use(handleUncaughtError);
-
-        const response = await supertest(throwing).get('/boom');
+        const response = await answerFor(new Error(`connection failed to ${secret}`));
 
         expect(response.status).toBe(500);
         expect(JSON.stringify(response.body)).not.toContain('hunter2');
@@ -246,7 +252,6 @@ describe('the 500 handler', () => {
      */
     it('answers a genuine oversized-body rejection with its own status', async () => {
         const { handleUncaughtError } = await import('@app/error-handling');
-
         const parsing = express();
         parsing.use(express.json({ limit: '100b' }));
         parsing.post('/echo', (_request, response) => response.json({ ok: true }));
@@ -267,15 +272,9 @@ describe('the 500 handler', () => {
      * every library that annotates an internal failure with a 4xx starts leaking its own status.
      */
     it('ignores a client status on an error that does not expose itself', async () => {
-        const { handleUncaughtError } = await import('@app/error-handling');
-
-        const throwing = express();
-        throwing.get('/boom', () => {
-            throw Object.assign(new Error('internal detail'), { status: 400, expose: false });
-        });
-        throwing.use(handleUncaughtError);
-
-        const response = await supertest(throwing).get('/boom');
+        const response = await answerFor(
+            Object.assign(new Error('internal detail'), { status: 400, expose: false })
+        );
 
         expect(response.status).toBe(500);
         expect(response.body.errors[0].code).toBe('INTERNAL_ERROR');
@@ -283,15 +282,9 @@ describe('the 500 handler', () => {
 
     /** And the range is the other half — an exposed 5xx is still a server fault. */
     it('does not hand a 5xx back to the client just because it is exposed', async () => {
-        const { handleUncaughtError } = await import('@app/error-handling');
-
-        const throwing = express();
-        throwing.get('/boom', () => {
-            throw Object.assign(new Error('upstream is down'), { status: 503, expose: true });
-        });
-        throwing.use(handleUncaughtError);
-
-        const response = await supertest(throwing).get('/boom');
+        const response = await answerFor(
+            Object.assign(new Error('upstream is down'), { status: 503, expose: true })
+        );
 
         expect(response.status).toBe(500);
         expect(JSON.stringify(response.body)).not.toContain('upstream');
@@ -304,16 +297,9 @@ describe('the 500 handler', () => {
      * directly instead of unwinding through here.
      */
     it('still returns the copy a deliberate error carries', async () => {
-        const { handleUncaughtError } = await import('@app/error-handling');
         const multer = await import('multer');
 
-        const throwing = express();
-        throwing.get('/boom', () => {
-            throw new multer.MulterError('LIMIT_FILE_SIZE', 'avatar');
-        });
-        throwing.use(handleUncaughtError);
-
-        const response = await supertest(throwing).get('/boom');
+        const response = await answerFor(new multer.MulterError('LIMIT_FILE_SIZE', 'avatar'));
 
         expect(response.status).toBe(400);
         expect(response.body.errors).toContainEqual(

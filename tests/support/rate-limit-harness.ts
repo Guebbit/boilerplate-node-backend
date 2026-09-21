@@ -12,6 +12,35 @@
 import express from 'express';
 import type { RequestHandler } from 'express';
 import type supertest from 'supertest';
+import { withEnvironmentOverrides } from './environment';
+
+/**
+ * Reload a rate-limit module with the given variables set, and pick what the case needs out of
+ * it.
+ *
+ * `express-rate-limit` reads its options ONCE, at construction, so a limiter's budget is fixed
+ * the moment its module is first imported — by which time `tests/support/setup.ts` has already
+ * raised every budget to keep unrelated suites off the limiter. A case that wants a small budget
+ * therefore has to discard the module registry and import again, with the variables in place.
+ *
+ * `withEnvironmentOverrides` rather than a hand-rolled save/restore: it puts the environment back
+ * whether the import resolved or threw, and a variable left changed fails a LATER case in the
+ * file rather than this one.
+ *
+ * @param modulePath - loader for the rate-limit module, e.g. `() => import('@modules/account/rate-limits')`
+ * @param overrides - variable name → value, for the duration of the import
+ * @param pick - takes the freshly-loaded module, returns the limiters the case drives
+ * @returns whatever `pick` returned, from the new module instance
+ */
+export const withReloadedRateLimits = <TModule, TPicked>(
+    modulePath: () => Promise<TModule>,
+    overrides: Record<string, string>,
+    pick: (rateLimitsModule: TModule) => TPicked
+): Promise<TPicked> =>
+    withEnvironmentOverrides(overrides, () => {
+        jest.resetModules();
+        return modulePath().then(pick);
+    });
 
 /**
  * A trivial app that always answers `status`, past the given limiter chain.
