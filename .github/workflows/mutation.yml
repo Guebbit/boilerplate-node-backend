@@ -99,21 +99,6 @@ jobs:
         strategy:
             # One slow shard must not hide the results of the other dozen.
             fail-fast: false
-            # UNVALIDATED, 2026-09-21 — do not treat this as a confirmed fix, and do not raise
-            # shard count again until it has actually been tested. The 77-shard sweep this same
-            # day had 61+ of 77 shards fail identically: dead silence for 4+ minutes right after
-            # "Starting initial test run", then a crash Stryker itself mislabels as OOM
-            # (child-process-proxy.js's handleUnexpectedExit reports any unexpected child exit
-            # that way, not only a real one). The 36-shard sweep earlier that day had the same
-            # symptom on only 2 of 36. A mongod-binary-download-contention theory was investigated
-            # and DISASPROVEN with direct evidence (npm ci's own postinstall already downloads it
-            # reliably, every job, well before Stryker ever runs). Leading hypothesis now: GitHub
-            # throttles or contends shared resources across this many near-simultaneous jobs on
-            # this account, independent of shard content — identical timing regardless of what's
-            # actually in a shard is what points here rather than at test content. `max-parallel`
-            # is the next thing to try, capping how many of these run at once instead of touching
-            # per-job concurrency or shard size again. Needs a real run to confirm before trusting.
-            max-parallel: 15
             matrix:
                 include: ${{ fromJson(needs.mutation-matrix.outputs.shards) }}
         steps:
@@ -145,18 +130,12 @@ jobs:
 
             - name: Run the mutate scope for ${{ matrix.name }}
               # `--concurrency 2`, not the config's 4 — a GitHub runner is 4 vCPU / 16 GB, and each
-              # worker carries its own in-memory mongod. `--concurrency 1` (briefly, 2026-09-21) was
-              # meant to fix three shards OOM'ing on `bson`'s off-heap scratch buffers
-              # (docs/tools/mutation-testing.md#worker-heap-cap) — it "fixed" that by making every
-              # shard, not just three, blow through even a 350m timeout, since halving concurrency
-              # roughly doubles wall-clock and the real ratio was worse than 2x. The shard TARGET
-              # (scripts/mutation/sharding.ts) dropped 1300->600 lines instead: a smaller `--mutate`
-              # scope relates less of the integration suite through `enableFindRelatedTests`, which
-              # is what actually drove the accumulation — concurrency was never the right lever.
+              # worker carries its own in-memory mongod.
               #
-              # NODE_OPTIONS caps V8's own old-space — didn't fix the OOM by itself (see above,
-              # bson's buffers sit outside it), kept anyway as a second, cheap guard against the
-              # OTHER failure mode the same doc section describes.
+              # NODE_OPTIONS pins V8's old-space at 4 GB per worker, so two fit the runner with room
+              # for their mongods. The dry run runs every related test file in ONE process; it fits
+              # because tests/support/test-environment.ts frees each file's memory at teardown —
+              # docs/tools/mutation-testing.md#one-process-per-dry-run.
               env:
                   NODE_OPTIONS: --max-old-space-size=4096
               run: npx stryker run stryker.json --mutate '${{ matrix.mutate }}' --concurrency 2 ${{ inputs.force && '--force' || '' }}
