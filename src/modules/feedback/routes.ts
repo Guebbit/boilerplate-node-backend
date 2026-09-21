@@ -47,9 +47,10 @@ router.post(
  * Everything below is admin-only. POSITIONAL — guards routes below it, not above — which is why
  * the one public route sits alone at the top. `tests/cross-cutting/authenticated-controllers.test.ts`
  * catches a misplaced route that also reads the caller.
+ *
+ * `isAuthOrCredential`: everything below is the operator's view, gated by `feedback.any.*` keys
+ * and reading no `authContext`. The public submission route above is unaffected.
  */
-// `isAuthOrCredential`: everything below is the operator's view, gated by `feedback.any.*`
-// keys and reading no `authContext`. The public submission route above is unaffected.
 router.use(getAuth, isAuthOrCredential);
 
 /**

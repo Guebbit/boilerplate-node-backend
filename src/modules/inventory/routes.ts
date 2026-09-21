@@ -22,10 +22,11 @@ export const router = Router();
 /*
  * Exposing the counters or ledger publicly would tell competitors what sells and tell customers
  * how close they are to missing out — a dark pattern when true, a lie when not.
+ *
+ * `isAuthOrCredential`, not `isAuth`: an `sk_...` api key may reach this module. Stock levels,
+ * receipts and adjustments are the surface a warehouse system talks to, and the clearest
+ * machine-to-machine case in the app.
  */
-// `isAuthOrCredential`, not `isAuth`: an `sk_...` api key may reach this module.
-// Stock levels, receipts and adjustments: the surface a warehouse system talks to, and
-// the clearest machine-to-machine case in the app.
 router.use(getAuth, isAuthOrCredential);
 
 // GET /inventory/levels — the stock board, scarcest first
