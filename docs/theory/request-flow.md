@@ -170,6 +170,26 @@ most worth recording never reaches the audit trail.
 Business rules live in the
 service, and the ones worth proving without a database live in `domain/`.
 
+### `request.body` is not an object
+
+Express 5 leaves `request.body` **`undefined`** when no body parser matched the content-type —
+not `{}`, the way express 4 did. Multer is no protection either: on a non-multipart body it calls
+`next()` without touching the field, so a multipart route is exactly as exposed as a JSON one.
+
+Every read therefore guards — `request.body ?? {}`, or a parameter typed `Body | undefined` where
+the handler destructures directly. Without it the destructure throws **synchronously**, before
+any promise chain's `.catch` can see it, and the request answers a generic 500. A client could
+drive the 5xx rate with one header.
+
+The guard is a `?? {}` and never a 400, and that is the whole point: the request reaches its
+route and gets whatever that route says about a request missing every field. For login that is
+the same answer a wrong password gets, which is what keeps a malformed request from becoming an
+enumeration oracle. `tests/integration/bad-bodies.test.ts` pins it per route.
+
+The sites that read a body without parsing it through Zod first are the ones this bites —
+`post-login`, `post-signup`, `put-account`, `write-users`, and the shared `readUploadedImage`.
+Each links here rather than restating it.
+
 ### Optional acceleration
 
 [Redis cache hooks](../tools/redis-cache.md) speed up repeated reads, but the API still works when Redis is off.

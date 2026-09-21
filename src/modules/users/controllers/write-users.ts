@@ -38,9 +38,8 @@ export const writeUsers = (
         | UpdateUserRequestMultipart
         | UpdateUserByIdRequest
         | UpdateUserByIdRequestMultipart
-        // Express 5 leaves `request.body` UNDEFINED when no parser matched the content-type, and
-        // multer does not fill it in on a non-multipart body either. Declaring that is what makes
-        // the guards below necessary rather than noise a lint rule strips.
+        // Express 5 may never populate the body, multer included — see
+        // docs/theory/request-flow.md#requestbody-is-not-an-object
         | undefined
     >,
     response: Response
@@ -53,8 +52,6 @@ export const writeUsers = (
         ids: ['id'],
         booleans: ['active', 'sendSetupEmail']
     });
-    // `?? {}`: express 5 leaves `request.body` unset when no parser matched the content-type,
-    // and multer does not fill it in on a non-multipart body either.
     const { role } = (request.body ?? {}) as { role?: string };
 
     // `= ''` because `zodUserSchema` wants a string: an absent image is an empty url here.

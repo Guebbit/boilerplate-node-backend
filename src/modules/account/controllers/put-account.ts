@@ -23,8 +23,7 @@ import { userService } from '@modules/users';
  * 403 a caller lacking the `users.*` key doing self-service through them.
  */
 export const putAccount = (
-    // `| undefined` for the reason `post-signup` gives: express 5 leaves the body unset when no
-    // parser matched, multipart route or not.
+    // `| undefined`, multipart route or not — docs/theory/request-flow.md#requestbody-is-not-an-object
     request: Request<
         unknown,
         unknown,
