@@ -764,19 +764,4 @@ describe('userService.remove', () => {
 
         expect(await userRepository.findById(id)).toBeNull();
     });
-
-    it("refuses to hard-delete a shop's last owner, with AccessInvariantError (409 once mapped)", async () => {
-        // `createUser`'s `role` parameter grants the membership `administratorsOf` reads —
-        // presets themselves need no seeding, they're read straight from the shared YAML.
-        const user = await createUser({}, 'admin');
-
-        // Rejects rather than resolving to a 409 envelope — same as `create()`'s own escalation
-        // refusal; the caller's `.catch()` (`createDeleteController`, or `account`'s own generic
-        // one) is what maps `AccessInvariantError` to 409 via `databaseErrorInterpreter`.
-        await expect(userService.remove(user, true)).rejects.toMatchObject({
-            name: 'AccessInvariantError'
-        });
-        // Refused BEFORE the write: the account and its cascades must survive a refused erasure.
-        expect(await userRepository.findById(user.id)).not.toBeNull();
-    });
 });

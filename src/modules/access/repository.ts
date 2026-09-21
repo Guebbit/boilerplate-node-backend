@@ -66,16 +66,6 @@ export const membershipRepository = {
     deleteById: (id: MembershipDocument['_id']): Promise<{ deletedCount?: number }> =>
         membershipModel.deleteOne({ _id: id }).exec(),
 
-    /** Re-create a row with its ORIGINAL id — the compensating half of a delete-then-check. */
-    restore: (membership: MembershipDocument): Promise<MembershipDocument> =>
-        membershipModel.create({
-            _id: membership._id,
-            userId: membership.userId,
-            tenantId: membership.tenantId,
-            scope: membership.scope,
-            role: membership.role
-        }),
-
     /** Every person holding any of the given role names in one place. */
     findByRoles: (
         tenantId: string | null,

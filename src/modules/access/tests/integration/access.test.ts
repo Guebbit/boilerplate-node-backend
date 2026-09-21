@@ -138,28 +138,13 @@ describe('the invariants', () => {
         ).resolves.toBeDefined();
     });
 
-    it('refuses to remove the last member who can administer a shop', async () => {
+    it('removes even the last member who can administer a shop, leaving it with none', async () => {
         const shop = await ensureTenant('shop', 'The Shop');
         await assignRole('only-owner', String(shop._id), 'tenant', 'admin');
 
-        // Without this a shop becomes unadministrable and only somebody with a database client
-        // can put it right.
-        await expect(revokeRole('only-owner', String(shop._id), 'tenant')).rejects.toThrow(
-            /only member who can administer/
-        );
-    });
+        await revokeRole('only-owner', String(shop._id), 'tenant');
 
-    it('puts the membership back after refusing, not just the error', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
-        await assignRole('only-owner', String(shop._id), 'tenant', 'admin');
-
-        // The refusal deletes first and restores second (no replica set to run a transaction
-        // against in dev/test — see the docblock on `revokeRole`). This is what proves the
-        // restore actually lands, not only that the promise rejects.
-        await expect(revokeRole('only-owner', String(shop._id), 'tenant')).rejects.toThrow(
-            AccessInvariantError
-        );
-        expect(await administratorsOf(String(shop._id), 'tenant')).toEqual(['only-owner']);
+        expect(await administratorsOf(String(shop._id), 'tenant')).toEqual([]);
     });
 
     it('surfaces a rejecting delete instead of losing it silently', async () => {
@@ -176,45 +161,6 @@ describe('the invariants', () => {
         );
 
         spy.mockRestore();
-    });
-
-    it('cannot leave zero administrators from two concurrent last-two revokes', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
-        await assignRole('owner-a', String(shop._id), 'tenant', 'admin');
-        await assignRole('owner-b', String(shop._id), 'tenant', 'admin');
-
-        // No transaction to serialize these — both deletes can land before either checks. The
-        // guarantee this shape buys is weaker than a transaction's (a genuine tie can refuse
-        // both instead of letting one through), but the one thing it must never do is let both
-        // succeed and leave the shop with nobody who can administer it.
-        const outcomes = await Promise.allSettled([
-            revokeRole('owner-a', String(shop._id), 'tenant'),
-            revokeRole('owner-b', String(shop._id), 'tenant')
-        ]);
-
-        expect(outcomes.filter((outcome) => outcome.status === 'fulfilled').length).toBeLessThan(2);
-        expect(await administratorsOf(String(shop._id), 'tenant')).not.toEqual([]);
-    });
-
-    it('revokes a role that never administered the place, even with zero admins in it', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
-        await assignRole('shopper', String(shop._id), 'tenant', 'customer');
-
-        // Nobody administers this shop at all — a check that ran for every revoke regardless of
-        // which role was deleted would refuse and restore a `customer` revoke here on the
-        // strength of an administrator count `customer` could never have contributed to.
-        await expect(revokeRole('shopper', String(shop._id), 'tenant')).resolves.toBeUndefined();
-        expect(await membershipIn('shopper', String(shop._id), 'tenant')).toBeNull();
-    });
-
-    it('allows removing an administrator once another one exists', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
-        await assignRole('owner-a', String(shop._id), 'tenant', 'admin');
-        await assignRole('owner-b', String(shop._id), 'tenant', 'admin');
-
-        await revokeRole('owner-a', String(shop._id), 'tenant');
-
-        expect(await administratorsOf(String(shop._id), 'tenant')).toEqual(['owner-b']);
     });
 
     it('counts administrators by what they HOLD, computed against the shared presets', async () => {
@@ -360,24 +306,12 @@ describe('auditing a role change', () => {
 describe('revokeAllOf', () => {
     it('clears every membership a person holds, tenant and platform alike', async () => {
         const shop = await ensureTenant('shop', 'The Shop');
-        // A second administrator in EACH scope, so neither revoke below is a last-admin case.
-        await assignRole('another-admin', String(shop._id), 'tenant', 'admin');
-        await assignRole('another-operator', null, 'platform', 'operator');
         await assignRole('person-1', String(shop._id), 'tenant', 'admin');
         await assignRole('person-1', null, 'platform', 'operator');
 
         await revokeAllOf('person-1');
 
         expect(await membershipsOf('person-1')).toEqual([]);
-    });
-
-    it('refuses, and keeps every row, when one membership is the shop’s last administrator', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
-        await assignRole('only-owner', String(shop._id), 'tenant', 'admin');
-        await assignRole('only-owner', null, 'platform', 'operator');
-
-        await expect(revokeAllOf('only-owner')).rejects.toThrow(AccessInvariantError);
-        expect(await administratorsOf(String(shop._id), 'tenant')).toEqual(['only-owner']);
     });
 });
 

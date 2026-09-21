@@ -379,15 +379,10 @@ export const updateById = (
  * already soft-deleted). A hard delete first revokes EVERY membership the account holds —
  * `revokeAllOf`, not a single tenant-scoped `revokeRole`: an account can hold a platform seat
  * alongside its tenant one, and either row surviving the user it points at is an erasure gap.
- * This is also the one place a revoke's `restoreIfNowUnadministered` can refuse the whole delete
- * with 409 BEFORE `user.deleted` fires, rather than leaving a shop with nobody who can administer
- * it — left to REJECT with `AccessInvariantError`, same as `create()`, rather than enveloped
- * here: `@infrastructure/http/errors`' `databaseErrorInterpreter` carries the same 409 mapping,
- * and every caller of this function already sits behind it (`createDeleteController`'s own
- * `.catch`, or `account`'s own generic one for the self-delete confirm flow). Only past that does
- * it emit `user.deleted`, awaited before the write, so cart cleanup happens without this module
- * knowing the cart exists — keeping the dependency arrow pointing cart → users. Only the hard
- * path touches either, since a soft delete is a restore waiting to happen.
+ * Only then does it emit `user.deleted`, awaited before the write, so cart cleanup happens
+ * without this module knowing the cart exists — keeping the dependency arrow pointing
+ * cart → users. Only the hard path touches either, since a soft delete is a restore waiting to
+ * happen.
  */
 export const remove = (
     user: UserDocument,

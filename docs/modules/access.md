@@ -5,8 +5,8 @@
 where.
 **Depends on** — nothing. It sits low enough in the graph that [`account`](./account.md),
 [`api-keys`](./api-keys.md) and [`users`](./users.md) all import it, never the reverse.
-**Breaks if you change** — the last-administrator refusal in `assignRole`/`revokeRole`: it is the
-one thing standing between a shop and locking every operator out of it at once.
+**Breaks if you change** — the escalation refusal in `assignRole`: it is the one thing standing
+between any grant form and a privilege-escalation endpoint.
 :::
 
 ## Its neighbourhood
@@ -66,12 +66,17 @@ presets before writing a membership, so a role that exists nowhere can never be 
 administrators. One fact, one home, on each side of that line.
 :::
 
-Every invariant here is a refusal, not a comment: the last administrator in a scope cannot be
-revoked, a granter cannot hand over a role they do not themselves hold, and self-service signup can
-only ever assign the one default role (`assignDefaultRole`) — never a caller-supplied name, which
+Every invariant here is a refusal, not a comment: a granter cannot hand over a role they do not
+themselves hold, and self-service signup can only ever assign the one default role (`assignDefaultRole`) — never a caller-supplied name, which
 is what would turn signup into a privilege-escalation door. The same exemption covers an admin
 holding `users.any.create`: granting the default role there isn't escalation either, since every
 key on that role is `.self.` — power over the new account's own data, not the shop's.
+
+::: info The last administrator CAN be removed
+Revoking, demoting or deleting a shop's last administrator is allowed, and leaves the shop with
+none. A refusal would only guard against an operator who knows what they are doing, and the repair
+is one database write: give somebody an administrator membership again.
+:::
 
 ## Related pages
 

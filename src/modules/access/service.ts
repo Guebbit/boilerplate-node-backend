@@ -1,7 +1,7 @@
 /**
  * @module
- * Reading and writing the authorization model — and refusing the writes that would leave it in a
- * state nobody can recover from.
+ * Reading and writing the authorization model — and refusing the writes that would make it lie:
+ * an undeclared role, or a grant the granter could not make themselves.
  *
  * Every rule below is one somebody learned the expensive way, and each is a REFUSAL rather than a
  * note in a docblock. A model whose invariants are documented is a model whose invariants drift:
@@ -35,7 +35,7 @@ export const VERIFIED_CUSTOMER_ROLE = 'customer';
  */
 const CREATE_USER_KEY = 'users.any.create';
 
-/** Raised when a write would leave the model in a state the next request cannot recover from. */
+/** Raised when a write would assign a role nothing declares, or grant more than the granter holds. */
 export class AccessInvariantError extends Error {
     constructor(message: string) {
         super(message);
@@ -260,25 +260,8 @@ export const promoteVerifiedCustomer = (userId: string, tenantId: string): Promi
 /**
  * Take somebody's role in a place away.
  *
- * Refuses to leave nobody who can administer it: without this a shop becomes unadministrable and
- * only somebody with a database client can put it right.
- *
- * Deletes first, then checks — not a transaction. A session transaction would close the race
- * outright, but it needs a replica set, and only the production compose profile has one
- * (`docker/mongo-rs-init.sh`); local dev (`docker-compose.yml`) and the test gate
- * (`docker-compose.test.yml` and the in-process `mongod` under jest) both run standalone Mongo,
- * where opening a session throws. Wiring replica-set support into dev and test infrastructure is a
- * change of its own, well past this fix.
- *
- * The delete is awaited now (it was fired with `void` before), so a rejection reaches the caller's
- * `.catch` instead of vanishing behind an orphaned membership row. And the delete happening FIRST,
- * checked after, is what {@link restoreIfNowUnadministered} exists for: it puts the row back and
- * throws the same refusal a pre-delete check would have, if the delete just emptied the
- * administrator set. Two concurrent revokes of the last two administrators can still both delete
- * before either checks — both then see zero, both restore their own row, and BOTH calls end in the
- * same refusal, which is the weaker but still-safe guarantee this shape buys without a transaction:
- * the set is never left with nobody who can administer it, even though a genuine tie over-refuses
- * rather than letting one revoke through.
+ * Allowed even when it removes a place's last administrator, on purpose: an operator who does that
+ * knows what they are doing, and a new administrator is one database write away.
  *
  * @param context - the caller to audit this revoke against, or `undefined` for a system caller
  *   with no request to attribute it to (e.g. the account-deletion cascade in `users/service.ts`'s
@@ -301,19 +284,7 @@ export const revokeRole = (
         }
         revokedRole = membership.role;
 
-        return membershipRepository
-            .deleteById(membership._id)
-            .then(() => {
-                // Only a role that could have BEEN one of the administrators matters here — a
-                // place with, say, zero `admin` memberships was never administered by them in the
-                // first place, so revoking a `customer` there must not be refused on their behalf.
-                if (!administratorRoleNames(scope).includes(membership.role)) {
-                    return undefined;
-                }
-
-                return restoreIfNowUnadministered(tenantId, scope, membership);
-            })
-            .then(() => membership.role);
+        return membershipRepository.deleteById(membership._id).then(() => membership.role);
     });
 
     if (!context) return attempt.then(() => undefined);
@@ -350,39 +321,12 @@ export const revokeRole = (
 };
 
 /**
- * Puts a just-deleted membership back and refuses, if deleting it left nobody who can administer
- * this place — see {@link revokeRole} for why this runs AFTER the delete rather than before it.
- *
- * @param membership - the row {@link revokeRole} already deleted
- * @throws AccessInvariantError when the place is now left with no administrator
- */
-const restoreIfNowUnadministered = (
-    tenantId: string | null,
-    scope: AuthorizationScope,
-    membership: MembershipDocument
-): Promise<void> =>
-    administratorsOf(tenantId, scope).then((administrators) => {
-        if (administrators.length > 0) {
-            return;
-        }
-
-        return membershipRepository.restore(membership).then(() => {
-            throw new AccessInvariantError(
-                `[access] "${membership.userId}" is the only member who can administer ` +
-                    `this ${scope}. Give somebody else that role first — a place with ` +
-                    `nobody to administer it can only be repaired from a database client.`
-            );
-        });
-    });
-
-/**
  * The role names that WOULD count as administering a scope — "unrestricted" is no longer one
  * token to match, there is no wildcard, so a role counts when its declared `permissions` array is
  * a SUPERSET of every key this scope currently declares. Computed against
  * `shared/authorization-roles.yaml`, in memory — the preset list is small and fixed for the
  * process's lifetime, so no query is worth it here. {@link administratorsOf} turns this into who
- * actually holds one; {@link revokeRole} uses it to know whether a revoked role could ever have
- * been the thing keeping a place administered at all.
+ * actually holds one.
  */
 const administratorRoleNames = (scope: AuthorizationScope): string[] => {
     const required = PERMISSION_KEYS.filter((key) => key.scope === scope).map((key) => key.key);

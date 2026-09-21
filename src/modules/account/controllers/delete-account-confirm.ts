@@ -68,9 +68,8 @@ export const deleteAccountConfirm = (
             });
         })
         .catch((error: unknown) => {
-            // Same interpreter every other write path answers through — an account that is its
-            // shop's last administrator refuses this with 409 (`AccessInvariantError`), not a
-            // flat 500 that would swallow that into an unhelpful "something went wrong".
+            // Same interpreter every other write path answers through, so a recognised database
+            // failure gets its own status rather than a flat 500.
             rejectDatabaseError(response, 'deleteAccountConfirm', error);
         });
 };
