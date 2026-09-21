@@ -9,6 +9,7 @@
  * | --- | --- | --- |
  * | Body over `NODE_JSON_BODY_LIMIT` | 500 | 413 |
  * | Malformed JSON | 500 | 400 |
+ * | A charset or content-encoding the parser cannot read | 500 | 415 |
  * | Wrong or absent content-type | 500, via a `TypeError` | the route's own answer |
  *
  * The third is the one that is easy to get wrong twice. Express 5 leaves `request.body`
@@ -22,6 +23,8 @@
  *
  * See: docs/theory/request-flow.md
  */
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
@@ -65,6 +68,45 @@ describe('a body the parser refused', () => {
 
         expect(response.status).toBe(400);
         expect(response.body.errors[0].code).toBe('BAD_REQUEST');
+    });
+
+    /**
+     * 415, and BOTH ways body-parser reaches it — `charset.unsupported` and
+     * `encoding.unsupported` are separate throw sites and only one of them would catch a
+     * regression in the other.
+     *
+     * Not a hand-set `.status` on an `Error`: that would assert the handler reads the fields the
+     * test wrote, which is the one thing not in question. These are headers a client can really
+     * send, refused by the real parser in front of the real app.
+     *
+     * The statuses body-parser does NOT reach this way are worth knowing while reading the
+     * cases: `charset=utf-7` is accepted outright, and `charset=utf-32` decodes to nonsense and
+     * comes back 400 `entity.parse.failed`, not 415.
+     */
+    it.each([
+        ['an unreadable charset', { 'Content-Type': 'application/json; charset=iso-8859-1' }],
+        [
+            'an unreadable content-encoding',
+            { 'Content-Type': 'application/json', 'Content-Encoding': 'nonsense' }
+        ]
+    ])('answers 415 on %s', async (_label, headers) => {
+        const response = await api().post('/account/login').set(headers).send('{"email":"a@b.c"}');
+
+        expect(response.status).toBe(415);
+        expect(response.body.errors[0].code).toBe('UNSUPPORTED_MEDIA_TYPE');
+    });
+
+    /**
+     * The contract half of the same change. 415 is an APP-level response — nothing in
+     * `account`'s fragment declares it — so it reaches the spec only through
+     * `x-app-level-responses`, and an operation that accepts a body must carry it. Asserted here
+     * rather than in a contract test because the status and its declaration were added together
+     * and are worth failing together.
+     */
+    it('is a status the contract declares for the operation that answered it', () => {
+        const bundled = readFileSync(path.join(__dirname, '..', '..', 'openapi.yaml'), 'utf8');
+
+        expect(bundled).toContain('UnsupportedMediaType');
     });
 
     /**

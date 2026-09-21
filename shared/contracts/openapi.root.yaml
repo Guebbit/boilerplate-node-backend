@@ -27,10 +27,11 @@ servers:
 
 # ---------- Responses the APPLICATION answers, on operations that never declare them. ----------
 #
-# Three middlewares sit in front of every route and can refuse before it runs: the global rate
-# limiter (`app.use(rateLimiter)`), and the body parser's size and syntax checks. None of them is
-# any one endpoint's business, so none of them was ever written into a module fragment — which
-# left ~80 operations able to answer a status their own contract denied.
+# Two middlewares sit in front of every route and can refuse before it runs: the global rate
+# limiter (`app.use(rateLimiter)`), and the body parser — whose size, syntax and encoding checks
+# account for three of the four statuses below. Neither is any one endpoint's business, so
+# neither was ever written into a module fragment — which left ~80 operations able to answer a
+# status their own contract denied.
 #
 # Declared ONCE here and merged into every matching operation by `scripts/contracts/openapi-bundle.ts`,
 # rather than hand-copied into each fragment. A hand-copied list is a published claim with no guard
@@ -44,6 +45,9 @@ x-app-level-responses:
         appliesTo: requestBody
     '413':
         response: PayloadTooLarge
+        appliesTo: requestBody
+    '415':
+        response: UnsupportedMediaType
         appliesTo: requestBody
     '429':
         response: TooManyRequests
@@ -269,6 +273,16 @@ components:
                 (`NODE_JSON_BODY_LIMIT`, 100kb by default; multipart uploads are bounded separately
                 by `NODE_MAX_UPLOAD_BYTES`). Refused by the body parser before any route runs,
                 which is why it is declared for every body-accepting operation rather than by hand.
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+        UnsupportedMediaType:
+            description: >-
+                The request body declares a character set or a content encoding the body parser
+                cannot read. Refused before any route runs, like `413` above — a body whose
+                content-type simply matches no parser is NOT this: it reaches the route, which
+                answers whatever it says about a request missing every field.
             content:
                 application/json:
                     schema:

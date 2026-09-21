@@ -129,8 +129,9 @@ interface BundledDocument {
 }
 
 /**
- * Whether this path-item entry is an operation at all. `parameters`, `summary` and `$ref` sit
- * beside the methods and must not collect responses.
+ * Narrows a path-item entry to the fields this step reads. Only the keys in
+ * {@link OPERATION_METHODS} are ever passed in, so all this rejects is a method the path item
+ * does not declare.
  */
 const isOperation = (value: unknown): value is Operation =>
     typeof value === 'object' && value !== null;
@@ -189,6 +190,10 @@ const withAppLevelResponses = (bundled: string): string => {
 
     for (const operation of operationsOf(document_))
         operation.responses = withDefaults(operation, appLevel);
+
+    // Deleted once it has been spent: it is an instruction to this script, and a consumer reading
+    // the published contract has no use for a key describing how the contract was assembled.
+    delete document_['x-app-level-responses'];
 
     /*
      * `lineWidth: 0` disables line folding. A folded `description:` is still valid YAML and still
