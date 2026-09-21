@@ -15,7 +15,8 @@
  * when no parser matched — not `{}`, the way express 4 did — so an unguarded destructure throws
  * synchronously, before any promise chain's `.catch` can see it. The fix is a guard at each read,
  * NOT a 400: the request reaches its route and gets whatever that route says about a request
- * missing every field, which for login is the same 401 a wrong password gets.
+ * missing every field, which for login is a 422 — see the enumeration test below for why that is
+ * NOT the same answer a wrong password gets, and is not meant to be.
  *
  * Also holds the hostile-CONTENT cases (depth, `__proto__`), which are a different question —
  * well-formed bodies carrying something nasty — but need this exact harness.

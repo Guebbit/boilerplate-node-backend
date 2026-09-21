@@ -70,8 +70,8 @@ model makes membership itself sensitive — a medical or legal product, say — 
 same non-committal 200 the reset endpoint uses and deliver the outcome by email instead. That is
 a product decision, not a code defect, and nothing here assumes it stays this way.
 
-Recorded because a pentest raises it every time. `openapi.yaml`'s own comment on the signup route
-documents the `409` as the intended response.
+Recorded because a pentest raises it every time. `src/modules/account/openapi.yaml`'s own comment
+on the signup route documents the `409` as the intended response.
 
 ## Taking the session
 

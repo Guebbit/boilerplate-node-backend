@@ -240,10 +240,10 @@ export const isAuth = (request: Request, response: Response, next: NextFunction)
  * - every guard on the route is a tenant-scoped `<family>.any.<action>` key, and
  * - no controller it reaches reads `request.authContext`.
  *
- * Both halves are asserted. `tests/cross-cutting/authenticated-controllers.test.ts` reads the
- * real mounted chain and refuses an `authContext!` read on any route this guard fronts;
- * `tests/cross-cutting/api-key-authentication.test.ts` refuses a module that mounts both guards.
- * A controller that starts reading `authContext` behind this guard fails the suite, not production.
+ * Both halves are asserted, both by `tests/cross-cutting/authenticated-controllers.test.ts`: it
+ * reads the real mounted chain, refusing an `authContext!` read on any route this guard fronts
+ * and a non-`.any.` `requirePermission` key behind one. A controller that starts reading
+ * `authContext` behind this guard fails the suite, not production.
  *
  * NOT for a step-up route. `requireFreshAuth` reads `authContext` and a credential can never
  * answer a re-authentication challenge, so pairing them gives a partner integration a 401 it can

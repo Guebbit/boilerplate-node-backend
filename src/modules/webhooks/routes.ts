@@ -20,8 +20,8 @@ import { listWebhookEvents } from './controllers/list-events';
 export const router = Router();
 
 // `isAuthOrCredential`, not `isAuth`: an `sk_...` api key may reach this module.
-// Subscription management for machine consumers. Refusing the machines is what this
-// module exists to serve.
+// Subscription management for machine consumers. Serving the machines is what this
+// module exists to do.
 router.use(getAuth, isAuthOrCredential);
 
 router.get('/subscriptions', requirePermission('webhooks.any.read'), listWebhookSubscriptions);

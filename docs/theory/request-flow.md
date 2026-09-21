@@ -233,11 +233,13 @@ until something proves otherwise.
 
 ## What an unhandled error tells the client
 
-The global handler answers in three branches, and the order is the point: a `MulterError` becomes
-400, a driver failure that `databaseErrorInterpreter` recognises as a _client_ mistake becomes
-that 4xx, and everything else is 500. A middleware that already has the `Response` in hand — file
-upload validation, for one — answers `rejectResponse` directly instead of throwing something for
-this handler to translate.
+The global handler answers in four branches, and the order is the point: a `MulterError` becomes
+400; a library that follows the `http-errors` contract (`expose: true`, a 4xx `.status`/
+`.statusCode`) — body-parser's oversized-body and malformed-body rejections among them — answers
+that declared status (400/413/415), never the library's own message; a driver failure that
+`databaseErrorInterpreter` recognises as a _client_ mistake becomes that 4xx; and everything else
+is 500. A middleware that already has the `Response` in hand — file upload validation, for one —
+answers `rejectResponse` directly instead of throwing something for this handler to translate.
 
 ### The database branch is a safety net, not a substitute
 

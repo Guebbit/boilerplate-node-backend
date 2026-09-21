@@ -7,7 +7,10 @@
  * boundary, never by assuming a neighbour's text is concatenated above.
  *
  * Compiled by `redocly bundle` rather than concatenated, because the comments that matter are in
- * the MODULE files, which are authored, not in the bundle, which nobody reads by hand.
+ * the MODULE files, which are authored, not in the bundle, which nobody reads by hand. One step
+ * runs after it, on the bundle: {@link withAppLevelResponses} merges the root's
+ * `x-app-level-responses` (429, and 400/413/415 for a body-carrying operation) into every
+ * operation that doesn't already declare its own.
  *
  * Deleting a module is `rm -rf` of its folder plus its block in the root's path index; forgetting
  * the second half is a bundle failure naming the exact line.

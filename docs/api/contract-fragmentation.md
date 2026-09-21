@@ -35,7 +35,7 @@ layout and shared parts are declared in one file under `scripts/contracts/`.
 
 | Bundle                   | Verb          | What does it                                                             |
 | ------------------------ | ------------- | ------------------------------------------------------------------------ |
-| `openapi.yaml`           | **compiled**  | `redocly bundle` resolves `$ref` across whole documents                  |
+| `openapi.yaml`           | **compiled**  | `redocly bundle` resolves `$ref` across whole documents, then the root's `x-app-level-responses` (429, and 400/413/415 for a body-carrying operation — none of them any one module's business) is merged into every operation that doesn't already declare its own |
 | `asyncapi.yaml`          | **merged**    | `scripts/contracts/asyncapi-bundles.ts` copies four maps; `$ref`s stay untouched |
 | `asyncapi.public.yaml`   | **merged**    | the same merge over the shared sections only — one `SHARED_SECTIONS` list decides which |
 | the 4 client collections | **generated** | produced whole from `openapi.yaml` + the dataset, nothing on disk between; untracked |
@@ -251,7 +251,9 @@ keep its comments" to "do the sources keep theirs"**. A module's contract is now
 document rather than a slice of one, so the explanations sit in the file that is actually read and
 edited, and the bundle is an artefact nobody opens by hand. Once that is true, `redocly bundle` does
 the job the standard way — resolving `$ref` — and the 252 comments across the sources are untouched
-by it.
+by it. One step runs after it, on the bundled document rather than on a source: merging
+`x-app-level-responses` into every operation, since a `$ref` has to be resolved first for an
+operation to be reachable exactly once — see `scripts/contracts/openapi-bundle.ts`.
 
 What this bought, beyond deleting a custom bundler:
 
