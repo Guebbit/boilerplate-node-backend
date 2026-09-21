@@ -109,8 +109,9 @@ export const readUploadedImage = (
         };
 
     return {
-        // `?? {}` before the read (docs/theory/request-flow.md#requestbody-is-not-an-object).
-        // Shared by every image-accepting controller, so the guard covers all of them at once.
+        // `?? {}` before the read: express 5 leaves `request.body` unset when no parser matched
+        // the content-type. This helper is shared by every image-accepting controller, so the
+        // guard covers all of them at once.
         imageUrl: ((request.body ?? {}) as { imageUrl?: string }).imageUrl,
         thumbnailUrl: undefined,
         pendingImageKey: undefined,

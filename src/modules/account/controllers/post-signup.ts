@@ -25,8 +25,9 @@ import { logAntibotRefusal } from '@infrastructure/http/middlewares/antibot-log'
  * Register a new user account.
  */
 export const postSignup = (
-    // `| undefined`, multipart route or not: express 5 may never populate the body, and multer
-    // does not fill it in — docs/theory/request-flow.md#requestbody-is-not-an-object
+    // `| undefined`: express 5 leaves `request.body` unset when no parser matched the
+    // content-type, and multer is no protection — it calls `next()` untouched on a non-multipart
+    // body. See the guard on the destructure below.
     request: Request<unknown, unknown, SignupRequest | SignupRequestMultipart | undefined>,
     response: Response
 ) => {
@@ -36,10 +37,10 @@ export const postSignup = (
      * answer first in Zod's own English (`tests/integration/locale.test.ts` asserts it doesn't).
      */
     /*
-     * Defaulted rather than passed through, for the reason the `imageUrl` default below gives:
-     * `signup` hands these straight to `zodUserSchema`, which wants strings. An absent body then
-     * answers the same translated 422 a body of empty fields does — `false` for the terms,
-     * because a request nobody sent accepted nothing.
+     * Defaulted rather than passed through as `undefined`, for the reason the `imageUrl` default
+     * below gives: `signup` hands these straight to `zodUserSchema`, which wants strings. An
+     * absent body therefore answers the same translated 422 a body of empty fields does, instead
+     * of throwing — `false` for the terms because a request nobody sent accepted nothing.
      */
     const {
         email = '',
