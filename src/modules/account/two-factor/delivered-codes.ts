@@ -7,7 +7,7 @@
 
 import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import type { TwoFactorMethodRecord } from '@modules/users';
-import { getTotpEncryptionKey } from '../session/config';
+import { getTotpEncryptionKeyRing } from '../session/config';
 import { cooldownRemaining } from '../cooldown';
 
 /** Digits in a delivered code — six, the length every authenticator app has taught people to expect. */
@@ -33,11 +33,16 @@ export const DELIVERED_CODE_MAX_ATTEMPTS = 5;
  * database dump in milliseconds, while an HMAC is not without the key, which lives in the
  * environment rather than the database. Not entropy stretching — blast-radius reduction.
  *
+ * Always the ring's newest (`[0]`) key: unlike a TOTP secret, a delivered code is never persisted
+ * across a rotation — it lives at most `DELIVERED_CODE_TTL_MS`, so there is no old ciphertext to
+ * decrypt against an earlier entry, only an in-flight code that a rotation mid-window invalidates
+ * (the same trade `docs/tools/security.md`'s JWT rotation makes for a session mid-refresh).
+ *
  * @param code - the digits, as sent
  * @returns the hex digest to store in the entry's `codeHash`
  */
 export const hashDeliveredCode = (code: string): string =>
-    createHmac('sha256', getTotpEncryptionKey().key).update(code).digest('hex');
+    createHmac('sha256', getTotpEncryptionKeyRing()[0].key).update(code).digest('hex');
 
 /** A fresh zero-padded code, from the CSPRNG rather than `Math.random`. */
 export const generateDeliveredCode = (): string =>

@@ -5,16 +5,17 @@
  */
 
 import { environmentNumber } from '@infrastructure/runtime/environment';
+import {
+    parseVersionedKeyRing,
+    type VersionedKey
+} from '@infrastructure/security/versioned-secret';
 
 /**
- * The secret-ring encryption key, versioned the same way `account/session/config.ts`'s
- * `getTotpEncryptionKey` is — a single key today, with the version prefix already in every
- * ciphertext so a future rotation can decrypt old rows against their own key.
+ * The secret-ring encryption key ring, parsed the same way `account/session/config.ts`'s
+ * `getTotpEncryptionKeyRing` is — see {@link parseVersionedKeyRing} for the env var's wire format.
  */
-export const getWebhookEncryptionKey = (): { version: string; key: string } => ({
-    version: 'v1',
-    key: process.env.NODE_WEBHOOK_SECRET_ENCRYPTION_KEY ?? ''
-});
+export const getWebhookEncryptionKeyRing = (): VersionedKey[] =>
+    parseVersionedKeyRing(process.env.NODE_WEBHOOK_SECRET_ENCRYPTION_KEY);
 
 /**
  * How many subscriptions ONE tenant may hold — the fan-out guard this module exists for: one

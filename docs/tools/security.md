@@ -46,6 +46,56 @@ refresh window in play (`NODE_TOKEN_REFRESH_TIME_LONG` — a year by default —
 `logout-all` for every account instead of waiting), then drop the old secret and deploy again.
 Skipping the wait window logs out every session still signed with the entry you remove.
 
+## Database credential and key rotation
+
+Three separate secrets, three separate rotation procedures — none of them automated, all of them
+either a `mongosh` command or an env-var edit plus a deploy.
+
+**`MONGO_APP_PASSWORD` / `MONGO_ROOT_PASSWORD`.** `docker/mongo-init.js` only ever runs against an
+empty data directory, so editing the client env file alone does nothing to an existing volume —
+change the password inside Mongo itself, then update the env file to match:
+
+```bash
+docker compose --env-file "clients/<name>/.env" -f docker-compose.production.yml \
+  exec database mongosh -u "$MONGO_ROOT_USER" -p --authenticationDatabase admin --eval '
+    db.getSiblingDB("<MONGO_DB>").updateUser("<MONGO_APP_USER>", { pwd: "<new password>" })
+  '
+```
+
+Then set the new value in the client env file and redeploy — the running `app`/`cron` containers
+hold the old password in memory until they restart. Rotate `MONGO_ROOT_PASSWORD` the same way
+against the `admin` database, with `db.getSiblingDB("admin").updateUser("<MONGO_ROOT_USER>", ...)`.
+
+**`NODE_TOTP_ENCRYPTION_KEY` / `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY`.** Each is a **ring**, the same
+shape as the JWT secrets above but with an explicit version rather than a derived `kid`:
+`v2:<new-secret>,v1:<old-secret>` — newest first, `parseVersionedKeyRing` in
+`@infrastructure/security/versioned-secret`. A bare value with no `v1:` prefix is still accepted
+(a single-key deployment needs no format change), and `versioned-secret.ts` stamps every ciphertext
+it writes with the ring entry that wrote it, so a decrypt looks up the STORED version rather than
+assuming `ring[0]`.
+
+**To rotate:**
+
+1. Prepend the new secret, keep the old one: `NODE_TOTP_ENCRYPTION_KEY=v2:<new>,v1:<old>`. Deploy —
+   every new TOTP enrollment and every delivered-code HMAC now uses `v2`; every row still stamped
+   `v1` keeps decrypting against the entry that wrote it.
+2. Re-encrypt existing rows onto the new key, at whatever pace fits — lazily, the next time a row
+   is written for an unrelated reason, or a one-off `ops/` script (see
+   [Data](../reference/data.md#data-a-one-off-script-under-ops)) that reads every `v1`-stamped
+   secret, decrypts and re-encrypts it. Until that finishes, both entries must stay in the ring.
+3. Once nothing decrypts against `v1` any more, drop it from the ring and deploy again. A row still
+   stamped with a dropped version fails loudly (`Unknown TOTP key version: v1`) rather than reading
+   as garbage — confirm the migration actually reached every row before this step, not after.
+
+A delivered code (`account/two-factor/delivered-codes.ts`) is the one exception: it is never
+persisted across a rotation (`DELIVERED_CODE_TTL_MS` is ten minutes), so it always signs and
+verifies against `ring[0]` — a rotation mid-flight invalidates a code in transit, the same trade the
+JWT rotation above makes for a session mid-refresh.
+
+**Optional, not built:** a startup probe warning when a key's recorded version looks old enough to
+need attention. Needs a "rotated since X" timestamp somewhere first, which nothing here writes
+today — a follow-on, not part of this runbook.
+
 ## Machine-to-machine credentials
 
 A JWT proves a PERSON signed in; a partner integration or a webhook consumer calling back into the

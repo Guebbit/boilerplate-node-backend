@@ -10,7 +10,7 @@ import {
     encryptVersionedSecret,
     decryptVersionedSecret
 } from '@infrastructure/security/versioned-secret';
-import { getTotpEncryptionKey } from '../session/config';
+import { getTotpEncryptionKeyRing } from '../session/config';
 
 /** RFC 6238 default: a code is valid for this many seconds. */
 const TOTP_STEP_SECONDS = 30;
@@ -29,7 +29,7 @@ const TOTP_EPOCH_TOLERANCE_SECONDS = TOTP_STEP_SECONDS;
  * @returns the versioned ciphertext to store in the method entry's `secret`
  */
 export const encryptTotpSecret = (plaintext: string): string =>
-    encryptVersionedSecret(plaintext, getTotpEncryptionKey());
+    encryptVersionedSecret(plaintext, getTotpEncryptionKeyRing());
 
 /**
  * Decrypt a stored TOTP secret.
@@ -40,7 +40,7 @@ export const encryptTotpSecret = (plaintext: string): string =>
  *   (tampering, or the wrong key version)
  */
 export const decryptTotpSecret = (stored: string): string =>
-    decryptVersionedSecret(stored, getTotpEncryptionKey(), 'TOTP');
+    decryptVersionedSecret(stored, getTotpEncryptionKeyRing(), 'TOTP');
 
 /**
  * The `otpauth://` URI an authenticator app scans to enroll — the frontend renders it as a QR

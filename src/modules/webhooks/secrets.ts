@@ -2,7 +2,7 @@
  * @module
  * Secret-ring encryption at rest, and the ring operations built on it — mint, rotate, drop.
  * Encryption itself is `@infrastructure/security/versioned-secret`'s — AES-256-GCM under a
- * versioned key from `getWebhookEncryptionKey` (`./config`, backed by
+ * versioned key ring from `getWebhookEncryptionKeyRing` (`./config`, backed by
  * `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY`, `requiredConfig` — see `./module`) — shared with
  * `account/two-factor/totp.ts`'s TOTP secret encryption.
  *
@@ -17,7 +17,7 @@ import {
     encryptVersionedSecret,
     decryptVersionedSecret
 } from '@infrastructure/security/versioned-secret';
-import { getWebhookEncryptionKey } from './config';
+import { getWebhookEncryptionKeyRing } from './config';
 import type { WebhookSecretRingEntry } from './model';
 
 /**
@@ -29,7 +29,7 @@ const generatePlaintextSecret = (): string => `whsec_${randomBytes(32).toString(
 
 /** Encrypt a ring secret for storage. See `encryptVersionedSecret` for the wire format. */
 export const encryptRingSecret = (plaintext: string): string =>
-    encryptVersionedSecret(plaintext, getWebhookEncryptionKey());
+    encryptVersionedSecret(plaintext, getWebhookEncryptionKeyRing());
 
 /**
  * Decrypt a stored ring secret.
@@ -38,7 +38,7 @@ export const encryptRingSecret = (plaintext: string): string =>
  *   (tampering, or a key version this deployment no longer holds)
  */
 export const decryptRingSecret = (stored: string): string =>
-    decryptVersionedSecret(stored, getWebhookEncryptionKey(), 'webhook secret');
+    decryptVersionedSecret(stored, getWebhookEncryptionKeyRing(), 'webhook secret');
 
 /** A new ring entry, and the plaintext it was minted with — the caller hands the plaintext back exactly once. */
 export const mintRingSecret = (): { entry: WebhookSecretRingEntry; plaintext: string } => {

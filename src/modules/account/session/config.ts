@@ -7,6 +7,10 @@
  */
 
 import { environmentNumber } from '@infrastructure/runtime/environment';
+import {
+    parseVersionedKeyRing,
+    type VersionedKey
+} from '@infrastructure/security/versioned-secret';
 
 /** The "remember me" tiers a refresh token may be issued under — see the table in the doc above. */
 export enum RefreshTokenExpiryTime {
@@ -65,18 +69,17 @@ export const getAccessTokenRing = (): string[] => parseKeyRing(process.env.NODE_
 export const getRefreshTokenRing = (): string[] => parseKeyRing(process.env.NODE_TOKEN_REFRESH);
 
 /**
- * The key every second factor's stored material is protected with — see `two-factor/`. It
+ * The key ring every second factor's stored material is protected with — see `two-factor/`. It
  * encrypts a device secret and keys the HMAC of a delivered code.
  *
- * Unlike the JWT secrets above, this one is versioned: `two-factor/totp.ts` prefixes every
- * ciphertext with the version this returns, so a future key rotation can decrypt old rows with
- * their own key while signing new ones with the new one, instead of a migration that cannot tell
- * which key any given row used.
+ * Unlike the JWT secrets above, each entry is versioned: `two-factor/totp.ts` prefixes every
+ * ciphertext with the version of the ring entry (`ring[0]` at encryption time) it was written
+ * under, so a future key rotation can decrypt old rows against their own entry while signing new
+ * ones with the new one, instead of a migration that cannot tell which key any given row used. See
+ * {@link parseVersionedKeyRing} for the env var's wire format.
  */
-export const getTotpEncryptionKey = (): { version: string; key: string } => ({
-    version: 'v1',
-    key: process.env.NODE_TOTP_ENCRYPTION_KEY ?? ''
-});
+export const getTotpEncryptionKeyRing = (): VersionedKey[] =>
+    parseVersionedKeyRing(process.env.NODE_TOTP_ENCRYPTION_KEY);
 
 /**
  * How long a just-rotated refresh token is still honoured. Long
