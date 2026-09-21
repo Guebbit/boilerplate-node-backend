@@ -165,6 +165,7 @@ A new module is covered the day it is added, without anyone writing a test for i
 | `tests/cross-cutting/serialize.property.test.ts`            | The universal guarantees of serialisation, over generated documents: the public id present and the internal fields gone, whatever the input.                                                                                                    | [Property Testing](../tools/property-testing.md)                                                                           |
 | `tests/cross-cutting/money-reconciliation.property.test.ts` | The composition `orders.orderTotal` + `delivery.priceShipping` that cart, payments and the confirmation email each perform themselves: reconciling lines and shipping never invents or drops a cent.                                            | [Property Testing](../tools/property-testing.md)                                                                           |
 | `tests/cross-cutting/coverage-thresholds.test.ts`           | Every coverage floor in `jest.config.js` is attached to code that exists: a key that matches no file, or whose every match is excluded from coverage, is ignored in silence while reading like a gate. That is how three keys detached at once. | [Unit Testing](../tools/unit-testing.md) · [Mutation Testing](../tools/mutation-testing.md) · [Repository Root](./root.md) |
+| `tests/cross-cutting/production-topology.test.ts`           | The deployment's four invisible decisions: containers read-only with no capabilities, no data port published to the host, no debugger flag, no dependency lifecycle script run during the image build.                                          | [Docker & Podman](../tools/docker-and-podman.md) · [Security](../tools/security.md)                                        |
 
 ## `tests/unit/`
 
@@ -381,6 +382,8 @@ They write reports to `reports/audit/` and never touch source.
 | `tests/audit/suite-bloat.md`         | Near-duplicate tests that cost CI time and discriminate nothing.                                         | [AI Auditing](../tools/ai-auditing.md) |
 | `tests/audit/compliance-backend.md`  | This backend against `compliance-rules.yaml`'s backend-responsibility rules (consent, data security, …). | [AI Auditing](../tools/ai-auditing.md) |
 | `tests/audit/compliance-frontend.md` | The paired frontend against the same registry's frontend-responsibility rules.                           | [AI Auditing](../tools/ai-auditing.md) |
+| `tests/audit/reachability.md`        | Defences that are correct where tested and unreachable through the real mounted path.                    | [AI Auditing](../tools/ai-auditing.md) |
+| `tests/audit/rate-limit-keys.md`     | Rate-limit budgets bucketed on something the attacker supplies or rotates for free.                      | [AI Auditing](../tools/ai-auditing.md) |
 
 ## Co-located module tests
 
