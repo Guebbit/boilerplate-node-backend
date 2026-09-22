@@ -29,6 +29,31 @@ A deployment that never sends webhooks removes the module, and that one path goe
 | Protocol smuggling via SSRF | `gopher://`, `dict://`, `file://` where the client library allows it                    | The guard requires `https:` (the one dev/test demo host aside), and Node's client speaks HTTP(S) only regardless.                                                                                                                                                                                                                                                        |
 | Webhook / callback abuse    | user-registered URLs hit by the server — SSRF as a feature, and port scanning by timing | This IS the surface, and it is the one the guard is for. Private, loopback, link-local and CGNAT ranges are refused before the first request, so a subscription cannot be turned into an internal port scanner — see [The delivery path](../../modules/webhooks.md#the-delivery-path).                                                                                   |
 
+## Ranges refused, and why
+
+RFC 1918 private space, RFC 1122 loopback, RFC 3927 / RFC 4291 link-local (this is what blocks the
+cloud metadata endpoint `169.254.169.254`), RFC 4193 IPv6 unique-local, RFC 6598 carrier-grade NAT,
+RFC 919 broadcast, and both families' unspecified (`0.0.0.0`, `::`) and multicast ranges — plus
+three IPv6 forms that embed an address `ip-address`'s own `embeddedIPv4()` does NOT unwrap: 6to4
+(RFC 3056, `2002::/16`), Teredo (RFC 4380, `2001::/32`), and the deprecated IPv4-compatible form
+(RFC 4291 §2.5.5.1, `::/96` — `::a.b.c.d`, distinct from the IPv4-_mapped_ `::ffff:a.b.c.d` form
+`embeddedIPv4()` already covers). All three carry an IPv4 address in their bits — 6to4 plainly,
+Teredo XOR-obfuscated, the compat form plainly again — that would otherwise read as an ordinary
+global address to every other check: a literal encoding `169.254.169.254` inside any of the three
+is invisible to a check that only unwraps the mapped form. Refused outright rather than decoded: a
+legitimate outbound target has no reason to be specified as a transition-mechanism literal, and
+native 6to4/Teredo relaying is still enabled on some hosts and networks despite the public relay
+infrastructure having mostly been decommissioned.
+
+## What the guard deliberately does not do
+
+- **No redirect handling.** A 3xx must not be followed without re-running this same check on the
+  `Location` header — the simplest correct answer, refuse every redirect outright, is the caller's
+  job. `webhook-delivery.ts` does exactly that (see the "SSRF — via redirect" row above).
+- **No timeout math.** The caller wraps the whole outbound attempt — this resolution included — in
+  one `AbortSignal.timeout`, rather than this module owning a second timer that would need to stay
+  in sync with the first.
+
 ## The PDF renderer, specifically
 
 A headless browser is the classic SSRF-by-accident: hand it a URL and it will fetch anything, and

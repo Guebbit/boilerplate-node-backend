@@ -1,50 +1,13 @@
 /**
  * @module
  * SSRF guard for an outbound request this server initiates on someone else's behalf: resolve,
- * THEN validate, THEN pin — never validate a hostname and let the HTTP client resolve it a second
- * time, because the second lookup is free to answer differently (DNS rebinding, the classic SSRF
- * TOCTOU). Generic on purpose — this file names no caller and no module; `webhooks` is the only
- * one today, a fact about the current build, not something this guard depends on.
+ * THEN validate, THEN pin, so a second DNS lookup can never answer differently once a target is
+ * decided — the DNS-rebinding TOCTOU. Generic — no caller named; `webhooks` is the only one today.
  *
- * Infrastructure, not `domain/`, on purpose: this module does DNS I/O, and `domain/` is
- * lint-guaranteed free of it.
+ * Infrastructure, not `domain/`: this module does DNS I/O.
  *
- * IP-range checks use `ip-address` (already a repo dependency, MIT, typed) rather than hand-rolled
- * CIDR math — its `Address4`/`Address6` classes cover every range this guard cares about,
- * including the one a naive check misses: an IPv4-mapped IPv6 literal (`::ffff:127.0.0.1`).
- * `Address6`'s `isPrivate`/`isLoopback`/`isLinkLocal`/`isCGNAT`/`isBroadcast`/`isUnspecified` all
- * unwrap the embedded IPv4 before classifying (`ip-address`'s own `embeddedIPv4()` doc), so the
- * mapped form is judged by what it actually reaches, not by its IPv6 wrapper.
- *
- * Ranges refused, and why: RFC 1918 private space, RFC 1122 loopback, RFC 3927 / RFC 4291
- * link-local (this is what blocks the cloud metadata endpoint `169.254.169.254`), RFC 4193 IPv6
- * unique-local, RFC 6598 carrier-grade NAT, RFC 919 broadcast, both families' unspecified
- * (`0.0.0.0`, `::`) and multicast ranges, and three IPv6 forms that embed an address
- * `embeddedIPv4()` does NOT unwrap: 6to4 (RFC 3056, `2002::/16`), Teredo (RFC 4380, `2001::/32`),
- * and the deprecated IPv4-compatible form (RFC 4291 §2.5.5.1, `::/96` — `::a.b.c.d`, distinct from
- * the IPv4-*mapped* `::ffff:a.b.c.d` `embeddedIPv4()` already covers). All three carry an IPv4
- * address in their bits — 6to4 plainly, Teredo XOR-obfuscated, the compat form plainly again — that
- * this guard would otherwise never see: a literal encoding `169.254.169.254` in any of the three
- * reads as an ordinary global address to every other check here. Refused outright rather than
- * decoded: a legitimate outbound target has no reason to be specified as a transition-mechanism
- * literal, and native 6to4/Teredo relaying is still enabled on some hosts and networks despite the
- * public relay infrastructure having mostly been decommissioned — the compat form's own automatic
- * tunneling is dead everywhere by now, but it costs nothing to judge it the same way as the other
- * two rather than carve out an exception.
- *
- * One exact hostname may be exempted from the `https:` and private-address checks — see
- * {@link resolveSafeOutboundTarget}'s `exemptHostname` parameter — for a caller's own
- * development/test-only exemption. Parsing, credentials and DNS resolution are never exempted;
- * this file has no idea what that hostname is or why it is exempt, only that its caller decided
- * so.
- *
- * What this module does NOT do:
- *  - No redirect handling. A 3xx must not be followed without re-running this same check on the
- *    `Location` header, and the simplest correct answer — refuse every redirect outright — is the
- *    caller's job, not this file's.
- *  - No timeout math. The caller wraps the *whole* outbound attempt — this resolution included —
- *    in one `AbortSignal.timeout`, rather than this module owning a second timer that would need
- *    to stay in sync with the first.
+ * Ranges refused and why, `ip-address`'s role, and what this guard deliberately leaves to its
+ * caller (redirects, timeouts) — see docs/theory/defences/ssrf.md.
  */
 
 import { resolve4, resolve6 } from 'node:dns/promises';
@@ -298,7 +261,8 @@ const buildPinnedLookup = (address: string): LookupFunction => {
  *   parsing, credentials and DNS resolution still run in full. For a caller's own
  *   development/test-only exemption; absent for every other caller and every other call.
  * @param signal - the caller's total-attempt-budget abort, so a slow resolver can't add its own
- *   time on top of whatever the caller times the rest of the attempt at — see the module docblock.
+ *   time on top of whatever the caller times the rest of the attempt at. This module owns no
+ *   second timer of its own — one `AbortSignal.timeout` covers the whole outbound attempt.
  * @throws {SsrfRefusedError} see {@link SsrfRefusalReason} for every reason this can refuse
  */
 export const resolveSafeOutboundTarget = (

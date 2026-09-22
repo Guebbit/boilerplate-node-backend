@@ -20,7 +20,9 @@ import { resourceFromAttributes } from '@opentelemetry/resources';
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 // `BatchSpanProcessor` queues finished spans and exports them in batches on a timer,
 // instead of one HTTP call per span (SimpleSpanProcessor). `SpanProcessor` is the interface type.
-import { BatchSpanProcessor, type SpanProcessor } from '@opentelemetry/sdk-trace-node';
+// From `@opentelemetry/sdk-trace`, not the `-node` package: the latter now only re-exports the
+// former and its own README points callers there directly.
+import { BatchSpanProcessor, type SpanProcessor } from '@opentelemetry/sdk-trace';
 // `OTLPTraceExporter` speaks OTLP over HTTP/protobuf — the vendor-neutral wire format
 // understood by Jaeger, Tempo, Honeycomb, Datadog, the OTel Collector, etc.
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
@@ -48,15 +50,20 @@ let started = false;
  * Returning an empty array is a deliberate no-op mode: without `OTEL_EXPORTER_OTLP_ENDPOINT`
  * the SDK still runs (spans are created, `traceId` is available for log correlation) but
  * nothing is shipped anywhere. That is what keeps local dev and tests quiet.
+ *
+ * Exported so a test can construct the real processor without going through `startTracing()`,
+ * which monkey-patches global modules and is not safe to call inside a shared Jest worker.
  */
-const buildProcessors = (): SpanProcessor[] => {
+export const buildProcessors = (): SpanProcessor[] => {
     // Standard OTel env var, e.g. `http://localhost:4318` (collector) — base URL only, no path.
     const otlpEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
     if (!otlpEndpoint) return [];
 
     return [
-        new BatchSpanProcessor(
-            new OTLPTraceExporter({
+        // `@opentelemetry/sdk-trace`'s `BatchSpanProcessor` takes one options object (`{ exporter,
+        // ... }`), unlike the deprecated `sdk-trace-base` two-argument form this replaced.
+        new BatchSpanProcessor({
+            exporter: new OTLPTraceExporter({
                 // OTLP/HTTP mandates the `/v1/traces` suffix; the env var holds only the base.
                 url: `${otlpEndpoint}/v1/traces`,
                 // Optional auth/tenant headers, supplied as `key=value,key2=value2`
@@ -75,7 +82,7 @@ const buildProcessors = (): SpanProcessor[] => {
                       )
                     : {}
             })
-        )
+        })
     ];
 };
 
