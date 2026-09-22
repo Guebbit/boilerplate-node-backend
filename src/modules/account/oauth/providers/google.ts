@@ -5,7 +5,7 @@
  */
 
 import { decode } from 'jsonwebtoken';
-import { getOAuthCredentials } from '../config';
+import { getOAuthCredentials, OAUTH_FETCH_TIMEOUT_MS } from '../config';
 import type { OAuthIdentity, OAuthProvider } from './port';
 
 /** This registry's key — also the value Google's docs use, and what lands on `OAuthAccount.provider`. */
@@ -41,6 +41,12 @@ const assertValidClaims = (claims: GoogleIdTokenClaims): void => {
     if (!VALID_ISSUERS.has(claims.iss)) throw new Error('Google ID token: unexpected issuer');
     if (claims.aud !== clientId) throw new Error('Google ID token: unexpected audience');
     if (claims.exp * 1000 < Date.now()) throw new Error('Google ID token: expired');
+    // `decode(idToken, { json: true })` returns `unknown`, cast to `GoogleIdTokenClaims` — a
+    // check the compiler cannot make good on. Without this, a token missing `sub` would carry
+    // `providerId: undefined` through as the identity key, the same collision GitHub's own
+    // missing-`id` case has — every such token would share one bogus identity row.
+    if (typeof claims.sub !== 'string' || claims.sub.length === 0)
+        throw new Error('Google ID token: missing subject');
 };
 
 /**
@@ -83,7 +89,9 @@ export const googleOAuthProvider: OAuthProvider = {
                 redirect_uri: redirectUri,
                 grant_type: 'authorization_code',
                 code_verifier: codeVerifier
-            })
+            }),
+            // Node: abort rather than hold an OAuth callback open on a slow/hung Google.
+            signal: AbortSignal.timeout(OAUTH_FETCH_TIMEOUT_MS)
         })
             .then((response) => {
                 if (!response.ok)

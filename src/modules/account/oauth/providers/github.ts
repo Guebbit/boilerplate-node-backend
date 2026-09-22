@@ -5,7 +5,7 @@
  * never appears on `/user` at all.
  */
 
-import { getOAuthCredentials } from '../config';
+import { getOAuthCredentials, OAUTH_FETCH_TIMEOUT_MS } from '../config';
 import type { OAuthIdentity, OAuthProvider } from './port';
 
 /** This registry's key — lands on `OAuthAccount.provider`. */
@@ -35,7 +35,9 @@ const githubApiGet = <T>(path: string, accessToken: string): Promise<T> =>
         headers: {
             Authorization: `Bearer ${accessToken}`,
             Accept: 'application/vnd.github+json'
-        }
+        },
+        // Node: abort rather than hold an OAuth callback open on a slow/hung GitHub.
+        signal: AbortSignal.timeout(OAUTH_FETCH_TIMEOUT_MS)
     }).then((response) => {
         if (!response.ok) throw new Error(`GitHub API ${path} failed: ${response.status}`);
         return response.json() as Promise<T>;
@@ -82,7 +84,9 @@ export const githubOAuthProvider: OAuthProvider = {
                 client_secret: clientSecret ?? '',
                 redirect_uri: redirectUri,
                 code_verifier: codeVerifier
-            })
+            }),
+            // Node: abort rather than hold an OAuth callback open on a slow/hung GitHub.
+            signal: AbortSignal.timeout(OAUTH_FETCH_TIMEOUT_MS)
         })
             .then((response) => {
                 if (!response.ok)
@@ -101,6 +105,13 @@ export const githubOAuthProvider: OAuthProvider = {
                 ]);
             })
             .then(([user, emails]): OAuthIdentity => {
+                // `githubApiGet`'s `T` is a type ANNOTATION, not a runtime check — a malformed or
+                // future-shaped `/user` response would otherwise pass `String(undefined)` through
+                // as the literal providerId `"undefined"`, silently shared by every such response
+                // and colliding every affected account onto the same identity row.
+                if (typeof user.id !== 'number')
+                    throw new Error('GitHub token exchange: profile response carries no id');
+
                 // The primary is the one address that identifies the account; a non-primary
                 // verified address is not the same claim — see the port's `emailVerified` doc.
                 const primary = emails.find((entry) => entry.primary);

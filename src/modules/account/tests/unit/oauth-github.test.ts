@@ -156,4 +156,45 @@ describe('githubOAuthProvider.exchangeCode', () => {
             githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
         ).rejects.toThrow();
     });
+
+    /*
+     * B15: `githubApiGet<GithubUser>`'s `T` is a compile-time annotation only — nothing checked
+     * that `/user` actually carried an `id`. `String(undefined)` reads as the literal providerId
+     * `"undefined"`, which every account missing `id` the same way would collide onto.
+     */
+    it('rejects a profile response with no id, rather than minting providerId "undefined"', async () => {
+        jest.spyOn(globalThis, 'fetch')
+            .mockResolvedValueOnce(jsonResponse({ access_token: 'gh-token' }))
+            .mockResolvedValueOnce(jsonResponse({ ...user, id: undefined }))
+            .mockResolvedValueOnce(jsonResponse(emails));
+
+        await expect(
+            githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
+        ).rejects.toThrow(/id/);
+    });
+
+    /*
+     * B15: none of the three fetch calls carried a timeout — a hung github.com held the whole
+     * OAuth callback open indefinitely. `fetch` is stubbed to only ever settle when the request's
+     * OWN `AbortSignal` fires, the way a real aborted fetch behaves, so this proves the signal
+     * reaches the request rather than merely proving a timer exists somewhere.
+     */
+    it('aborts and rejects rather than waiting forever on a hung GitHub', async () => {
+        jest.useFakeTimers();
+        jest.spyOn(globalThis, 'fetch').mockImplementation(
+            (_input, init) =>
+                new Promise((_resolve, reject) => {
+                    init?.signal?.addEventListener('abort', () => {
+                        reject(new Error('The operation was aborted.'));
+                    });
+                })
+        );
+
+        const exchange = githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier');
+        const assertion = expect(exchange).rejects.toThrow();
+        jest.runAllTimers();
+        await assertion;
+
+        jest.useRealTimers();
+    });
 });

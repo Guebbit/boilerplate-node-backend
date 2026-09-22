@@ -7,6 +7,16 @@
 
 import type { MfaChallenge } from '@types';
 
+/**
+ * How long a provider's own HTTP calls (token exchange, and GitHub's profile/email follow-ups)
+ * are allowed before this app gives up — one shared value so an unresponsive provider cannot hold
+ * an OAuth callback, and so `./providers/*` never picks its own number. `AbortSignal.timeout`
+ * wraps the whole outbound attempt, the same pattern `antibot-providers/turnstile.ts` and
+ * `webhooks/transport/webhook-delivery.ts` already use.
+ * https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal/timeout_static
+ */
+export const OAUTH_FETCH_TIMEOUT_MS = 5000;
+
 /** One provider's client credentials, absent when a deployment never set them. */
 export interface OAuthCredentials {
     clientId?: string;
