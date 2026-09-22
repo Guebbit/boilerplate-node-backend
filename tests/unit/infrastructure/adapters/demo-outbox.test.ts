@@ -24,9 +24,9 @@ it('records newest first, with primitive template variables as readable lines', 
     expect(oldest.lines).toEqual(expect.arrayContaining(['greeting: Hello', 'count: 2']));
 });
 
-it('lifts the token out of a link URL when no bare token variable exists', () => {
+it('lifts the token out of a link URL"s `?token=` query parameter when no bare token variable exists', () => {
     recordDemoEmail({ to: 'a@b.it', subject: 'Reset' }, 'reset', {
-        linkUrl: 'http://localhost:3000/account/reset/d2740058f8b671c6ae12fc8618b09129'
+        linkUrl: 'http://localhost:8080/en/password-reset/confirm?token=d2740058f8b671c6ae12fc8618b09129'
     });
     expect(readDemoOutbox()[0].token).toBe('d2740058f8b671c6ae12fc8618b09129');
 });
@@ -34,9 +34,23 @@ it('lifts the token out of a link URL when no bare token variable exists', () =>
 it('prefers a bare token variable over the link', () => {
     recordDemoEmail({ to: 'a@b.it', subject: 'Verify' }, 'verify', {
         token: 'bare-token',
-        linkUrl: 'http://localhost:3000/account/verify/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+        linkUrl: 'http://localhost:8080/en/verify-email/confirm?token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
     });
     expect(readDemoOutbox()[0].token).toBe('bare-token');
+});
+
+it('finds the token when the link carries other query parameters around it', () => {
+    recordDemoEmail({ to: 'a@b.it', subject: 'Verify' }, 'verify', {
+        linkUrl: 'http://localhost:8080/en/verify-email/confirm?ref=welcome&token=abc123&utm=demo'
+    });
+    expect(readDemoOutbox()[0].token).toBe('abc123');
+});
+
+it('records no token for a link that carries none — the order confirmation\'s own link', () => {
+    recordDemoEmail({ to: 'a@b.it', subject: 'Order placed' }, 'order-confirm', {
+        linkUrl: 'http://localhost:8080/en/orders/order-1'
+    });
+    expect(readDemoOutbox()[0].token).toBeUndefined();
 });
 
 it('clears to an empty inbox — the per-spec reset the demo router performs', () => {

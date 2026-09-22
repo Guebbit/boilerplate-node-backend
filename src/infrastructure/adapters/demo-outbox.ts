@@ -22,7 +22,10 @@ export interface DemoOutboxEmail {
     subject: string;
     /** The outbox name that rendered this send — see {@link EmailContent.template} in `mailer.ts`. */
     template: string;
-    /** The template's `token` variable when it carries one — the reset/verify flows' payload. */
+    /**
+     * The `token` variable when the template carries one — the reset/verify flows' payload,
+     * whether a bare template variable or the `?token=` query param on the mailed link.
+     */
     token?: string;
     /** Every primitive template variable, for specs that assert on rendered content. */
     lines: string[];
@@ -45,9 +48,11 @@ export const recordDemoEmail = (
 ): void => {
     const variables = data as Record<string, unknown>;
     // The reset/verify templates carry their token inside a link URL rather than as a bare
-    // variable; the suite wants the token itself, so it is lifted out of the last path segment.
+    // variable; the suite wants the token itself, so it is lifted out of the link's `?token=`
+    // query parameter.
     const linkUrl = typeof variables.linkUrl === 'string' ? variables.linkUrl : undefined;
-    const linkToken = /\/([\da-f]{16,})$/.exec(linkUrl ?? '')?.[1];
+    const linkTokenMatch = /[&?]token=([^&]+)/.exec(linkUrl ?? '');
+    const linkToken = linkTokenMatch ? decodeURIComponent(linkTokenMatch[1]) : undefined;
     outbox.unshift({
         to: request.to,
         subject: request.subject ?? '',

@@ -91,7 +91,7 @@ const DATA: Data = {
     greeting: 'Hello, Ada!',
     intro: 'We received a request to reset your password.',
     linkLabel: 'Reset my password',
-    linkUrl: 'https://example.com/account/reset/reset-token-value',
+    linkUrl: 'https://example.com/en/password-reset/confirm?token=reset-token-value',
     ignore: 'If you did not request this, you can safely ignore this email.',
     footer: 'Sent by the Ecommerce Demo team.'
 };
