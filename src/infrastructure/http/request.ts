@@ -18,20 +18,9 @@ import type { Caller, CallerContext, TenantCallerContext } from '@types';
 import { t } from '@infrastructure/i18n';
 import { Types } from 'mongoose';
 import { coerceStringArray, getJson } from '@guebbit/js-toolkit';
+import { parseBooleanWord } from '@infrastructure/runtime/environment';
 import { rejectResponse } from '@infrastructure/http/response';
 import { stripUndefined } from '@infrastructure/persistence/factories';
-
-/** String spellings of a boolean, as URLs, HTML forms and common clients send them. */
-const FORM_BOOLEANS: Record<string, boolean> = {
-    true: true,
-    '1': true,
-    on: true,
-    yes: true,
-    false: false,
-    '0': false,
-    off: false,
-    no: false
-};
 
 /**
  * Parse a string-transported value as a boolean.
@@ -44,8 +33,9 @@ const FORM_BOOLEANS: Record<string, boolean> = {
  */
 export const parseFormBoolean = (value: unknown): unknown => {
     if (typeof value !== 'string') return value;
-    const normalized = value.trim().toLowerCase();
-    return normalized in FORM_BOOLEANS ? FORM_BOOLEANS[normalized] : value;
+    // `??`, not the ternary `parseFormJson` needs: `parseBooleanWord` only ever returns
+    // `boolean | undefined`, never `null`/`0`/`''`, so there is no falsy-but-valid case to protect.
+    return parseBooleanWord(value) ?? value;
 };
 
 /**

@@ -8,6 +8,7 @@
  */
 import {
     hardDeleteSchema,
+    optionalBooleanSchema,
     pageSchema,
     pageSizeSchema,
     paginationSchema
@@ -33,6 +34,28 @@ describe('hardDeleteSchema', () => {
     // the destructive option.
     it.each(['maybe', 'not-a-boolean', 1, {}])('rejects %p', (value) => {
         expect(hardDeleteSchema.safeParse(value).success).toBe(false);
+    });
+});
+
+describe('optionalBooleanSchema', () => {
+    // The full vocabulary, not just 'true'/'false' — a query string, a multipart form and an
+    // analytics-consent checkbox all spell "on"/"off" more than one way.
+    it.each(['true', 'yes', '1', 'on'])('decodes %p as true', (value) => {
+        expect(optionalBooleanSchema.parse(value)).toBe(true);
+    });
+
+    it.each(['false', 'no', '0', 'off'])('decodes %p as false', (value) => {
+        expect(optionalBooleanSchema.parse(value)).toBe(false);
+    });
+
+    it.each([undefined, '', null])('leaves the absent value %p undefined', (value) => {
+        expect(optionalBooleanSchema.parse(value)).toBeUndefined();
+    });
+
+    // Rejected rather than silently coerced to a fixed default — a filter nobody can interpret
+    // must not quietly become "no filter" or "false".
+    it('rejects an unrecognised word with a 422-worthy failure', () => {
+        expect(optionalBooleanSchema.safeParse('garbage').success).toBe(false);
     });
 });
 

@@ -28,7 +28,7 @@ import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { zodUserSchema, userService, type TokenType, type UserDocument } from '@modules/users';
 import { parseFormBoolean } from '@infrastructure/http/request';
 import type { CallerContext } from '@types';
-import { analyticsConsentSchema } from '@infrastructure/http/schemas';
+import { optionalBooleanSchema } from '@infrastructure/http/schemas';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import { accountAnalyticsEvents } from '../analytics';
@@ -377,10 +377,10 @@ export const signup = (
         .extend({
             passwordConfirm: z.string(),
             // Shared with `PUT /account`'s: both decode the same multipart-string trap
-            // (`analyticsConsentSchema`'s own doc covers it), signup just narrows it to
+            // (`optionalBooleanSchema`'s own doc covers it), signup just narrows it to
             // non-optional-by-intent (absent lands as `undefined`, stored as `false`).
-            analyticsConsent: analyticsConsentSchema,
-            // Not `analyticsConsentSchema`'s shape: signup needs the multipart decode
+            analyticsConsent: optionalBooleanSchema,
+            // Not `optionalBooleanSchema`'s shape: signup needs the multipart decode
             // (`parseFormBoolean`) but a literal-true requirement, not an optional one.
             termsAccepted: z.preprocess(
                 parseFormBoolean,

@@ -62,11 +62,30 @@ export const parseEnvironmentDecimal = (raw: string | undefined): number | undef
 export const environmentDecimal = (key: string, fallback: number): number =>
     parseEnvironmentDecimal(process.env[key]) ?? fallback;
 
-/** The strings a deployment may write for "on", either case. */
+/** The words a caller may write for "on", either case. */
 const TRUTHY = new Set(['1', 'true', 'yes', 'on']);
 
-/** The strings a deployment may write for "off", either case. */
+/** The words a caller may write for "off", either case. */
 const FALSY = new Set(['0', 'false', 'no', 'off']);
+
+/**
+ * Decode one word as a boolean, case-insensitively — the vocabulary an env var, a query string
+ * and a form field all use — or say it isn't one.
+ *
+ * A `Set` lookup rather than a property lookup on a plain object: `'constructor' in {}` is true
+ * (every object inherits from `Object.prototype`), so keying a lookup on caller-controlled text
+ * through `in` or bracket access can resolve to an inherited method instead of "not found".
+ * `Set.has` carries no prototype chain to fall into.
+ *
+ * @param word - the raw text to decode
+ * @returns `true`/`false` for a recognised word, `undefined` for anything else (including blank)
+ */
+export const parseBooleanWord = (word: string): boolean | undefined => {
+    const normalized = word.trim().toLowerCase();
+    if (TRUTHY.has(normalized)) return true;
+    if (FALSY.has(normalized)) return false;
+    return undefined;
+};
 
 /**
  * A switch from the environment, or `fallback` when the variable says nothing recognisable.
@@ -77,13 +96,8 @@ const FALSY = new Set(['0', 'false', 'no', 'off']);
  * @param key - the variable's name
  * @param fallback - the value a deployment gets when it did not usably set one
  */
-export const environmentFlag = (key: string, fallback: boolean): boolean => {
-    const raw = process.env[key]?.trim().toLowerCase();
-    if (raw === undefined || raw === '') return fallback;
-    if (TRUTHY.has(raw)) return true;
-    if (FALSY.has(raw)) return false;
-    return fallback;
-};
+export const environmentFlag = (key: string, fallback: boolean): boolean =>
+    parseBooleanWord(process.env[key] ?? '') ?? fallback;
 
 /**
  * A closed-set choice from the environment — the shape a provider/mode selector reads: trimmed,

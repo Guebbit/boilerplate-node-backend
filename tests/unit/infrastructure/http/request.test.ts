@@ -18,6 +18,7 @@ import {
     callerContextOf,
     extractAndValidateId,
     isValidObjectId,
+    parseFormBoolean,
     readInput
 } from '@infrastructure/http/request';
 
@@ -574,6 +575,35 @@ describe('isValidObjectId', () => {
         expect(isValidObjectId(undefined)).toBe(false);
         expect(isValidObjectId('')).toBe(false);
         expect(isValidObjectId('not-an-id')).toBe(false);
+    });
+});
+
+describe('parseFormBoolean', () => {
+    it.each(['true', '1', 'on', 'yes', ' TRUE '])('reads %p as true', (value) => {
+        expect(parseFormBoolean(value)).toBe(true);
+    });
+
+    it.each(['false', '0', 'off', 'no'])('reads %p as false', (value) => {
+        expect(parseFormBoolean(value)).toBe(false);
+    });
+
+    it('returns an unrecognised word untouched, for the validator to reject', () => {
+        expect(parseFormBoolean('garbage')).toBe('garbage');
+    });
+
+    it('does not resolve to an inherited Object.prototype member', () => {
+        // The defect this closes (B26): a plain-object lookup keyed on user input, `word in
+        // FORM_BOOLEANS`, is true for 'constructor' because every object inherits it from
+        // `Object.prototype` — so `?flag=constructor` decoded to the Object constructor function
+        // rather than reaching the validator as an unrecognised string.
+        expect(parseFormBoolean('constructor')).toBe('constructor');
+        expect(parseFormBoolean('toString')).toBe('toString');
+        expect(parseFormBoolean('__proto__')).toBe('__proto__');
+    });
+
+    it('leaves a non-string value untouched', () => {
+        expect(parseFormBoolean(true)).toBe(true);
+        expect(parseFormBoolean(undefined)).toBe(undefined);
     });
 });
 

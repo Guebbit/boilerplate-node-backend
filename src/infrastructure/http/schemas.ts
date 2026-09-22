@@ -107,15 +107,16 @@ export const weightSchema = z.preprocess(
 );
 
 /**
- * `analyticsConsent` as `PUT /account`'s multipart body may carry it: `multipart/form-data`
- * types every value as a string, and `'false'` is truthy, the same trap {@link hardDeleteSchema}
- * guards against. Decodes the recognised spellings via `parseFormBoolean`; anything else reaches
- * `z.boolean()` unchanged and fails validation (422) rather than being guessed at.
+ * A boolean as any transport may carry it: a JSON body sends a real one, but a query string or a
+ * multipart body types every value as text, and `'false'` is truthy, the same trap
+ * {@link hardDeleteSchema} guards against. Decodes the recognised spellings via `parseFormBoolean`;
+ * anything else reaches `z.boolean()` unchanged and fails validation (422) rather than being
+ * guessed at.
  *
- * Optional and undefaulted, unlike `hardDeleteSchema`: this is PATCH semantics — absent means
- * "leave the stored consent alone", never "withdraw it".
+ * Optional and undefaulted: absent means "leave the field alone" (PATCH semantics) or "no filter"
+ * (search semantics), never a value this schema invents.
  */
-export const analyticsConsentSchema = z.preprocess(
+export const optionalBooleanSchema = z.preprocess(
     (value) => parseFormBoolean(blankToUndefined(value)),
     z.boolean().optional()
 );

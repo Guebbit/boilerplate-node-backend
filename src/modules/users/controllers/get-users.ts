@@ -6,32 +6,25 @@
  * See: docs/modules/users.md
  */
 
-import { z } from 'zod';
 import { SearchUsersBody } from '@api/schemas.zod';
 import { userService } from '../service';
-import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
+import { optionalBooleanSchema, pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
 import { createSearchController } from '@infrastructure/surfaces/create-search-controller';
 import { rolesOfMany } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type { User } from '@types';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 
-/** A boolean as a query string spells it. */
-const queryBoolean = z.preprocess(
-    (value) => (typeof value === 'string' ? value === 'true' : value),
-    z.boolean().optional()
-);
-
 /**
  * Extends the orval-generated `SearchUsersBody`; page/pageSize and `active` are coerced from
- * strings since GET carries them as query text, not JSON types. page/pageSize come from the
- * shared http schemas so all search endpoints agree on what's legal; absent stays absent, since
- * `normalizePagination` owns the defaults.
+ * strings since GET carries them as query text, not JSON types. page/pageSize and `active` come
+ * from the shared http schemas so all search endpoints agree on what's legal; absent stays
+ * absent, since `normalizePagination` owns the defaults.
  */
 const searchUsersQuerySchema = SearchUsersBody.extend({
     page: pageSchema,
     pageSize: pageSizeSchema,
-    active: queryBoolean
+    active: optionalBooleanSchema
 });
 
 /**
