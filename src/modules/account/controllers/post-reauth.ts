@@ -45,25 +45,17 @@ export const postReauth = (
             }
 
             /*
-             * The password proof has already succeeded by this point — only the re-mint is left.
-             * Same reasoning `postPasswordChange` applies: if issueSession fails, the response
-             * must still say success rather than 500ing over a step-up prompt the caller already
-             * answered correctly.
+             * Unlike `postPasswordChange`'s own re-mint step, nothing durable has happened yet —
+             * `accountService.reauth` only compared the password, it wrote nothing and revoked no
+             * session. A failed re-mint here means the WHOLE point of this endpoint (a fresh
+             * `auth_time`-bearing session, to clear a step-up challenge) did not happen, so it
+             * must propagate to the outer `.catch` and answer 500 — a 200 with no token would
+             * claim the challenge was cleared when it was not.
              */
-            return issueSession(response, id)
-                .then((token) => {
-                    authReauthTotal.inc({ status: 'success' });
-                    successResponse<AuthTokens>(
-                        response,
-                        { token },
-                        200,
-                        t('account.reauth.success')
-                    );
-                })
-                .catch(() => {
-                    authReauthTotal.inc({ status: 'success' });
-                    successResponse(response, undefined, 200, t('account.reauth.success'));
-                });
+            return issueSession(response, id).then((token) => {
+                authReauthTotal.inc({ status: 'success' });
+                successResponse<AuthTokens>(response, { token }, 200, t('account.reauth.success'));
+            });
         })
         .catch((error: unknown) => {
             authReauthTotal.inc({ status: 'failure' });

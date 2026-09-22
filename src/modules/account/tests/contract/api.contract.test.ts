@@ -16,7 +16,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { userRepository } from '@modules/users/tests/factories';
 import { EMAIL_VERIFY_TOKEN_TYPE } from '@modules/account/services';
-import { TokenType } from '@modules/users';
+import { TokenType, userService } from '@modules/users';
 import * as mailerPort from '@infrastructure/adapters/mailer';
 import itUsers from '@modules/users/locales/it.json';
 import itShared from '../../../../locales/it.json';
@@ -354,6 +354,26 @@ describe('POST /account/reauth', () => {
             .send({ password: PLAIN_PASSWORD });
 
         expect(setCookie(response, 'jwt')).toBeDefined();
+    });
+
+    /*
+     * B22: unlike `POST /account/password`, `accountService.reauth` writes nothing and revokes no
+     * session — it only compares the password. A failed re-mint here means the whole point of the
+     * endpoint (a fresh session, to clear a step-up challenge) did not happen, so it must answer
+     * 500, not the false 200-with-no-token the code used to degrade to.
+     */
+    it('answers 500 with no jwt cookie when the re-mint fails, rather than a false 200', async () => {
+        const { bearer } = await loginWithCookie();
+        jest.spyOn(userService, 'tokenAdd').mockRejectedValueOnce(new Error('write conflict'));
+
+        const response = await api()
+            .post('/account/reauth')
+            .set('Authorization', bearer)
+            .send({ password: PLAIN_PASSWORD });
+
+        expect(response.status).toBe(500);
+        expect(setCookie(response, 'jwt')).toBeUndefined();
+        jest.restoreAllMocks();
     });
 });
 
