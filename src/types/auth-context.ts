@@ -54,9 +54,8 @@ export interface AuthContext {
     imageUrl?: string;
     /**
      * Epoch seconds this session last actually proved itself — carried from the token's own
-     * `auth_time` claim, never derived here. `0` means "unknown/never" (a token minted before
-     * this claim existed), which reads as infinitely old — see `TokenData` in
-     * `account/session/jwt.ts`. `requireFreshAuth` is what reads this; nothing else should need to.
+     * required `auth_time` claim, never derived here. See `TokenData` in `account/session/jwt.ts`.
+     * `requireFreshAuth` is what reads this; nothing else should need to.
      */
     authTime: number;
     /** How `authTime` was proved — RFC 8176 values, `['pwd']` today. Same source as `authTime`. */

@@ -834,6 +834,37 @@ describe('requireFreshAuth', () => {
         expect(next).not.toHaveBeenCalled();
         expect(response.status).toHaveBeenCalledWith(401);
     });
+
+    /*
+     * B16: the module docblock promises "every rejection from the identity guards is audited",
+     * but this direct mount challenged with no trail at all — unlike `requirePermission`'s own
+     * declared-stepUp path, which already emits the same action.
+     */
+    it('audits the refusal with SECURITY_REAUTH_REQUIRED, same as the declared-stepUp path', () => {
+        requireFreshAuth(300)(
+            makeRequest({ authContext: { ...asCustomer('user-1'), authTime: nowSeconds() - 999 } }),
+            makeStepUpResponseStub(),
+            jest.fn()
+        );
+
+        expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: coreAuditActions.SECURITY_REAUTH_REQUIRED,
+                actor_user_id: 'user-1',
+                outcome: 'failure'
+            })
+        );
+    });
+
+    it('does not audit a session that passes the freshness check', () => {
+        requireFreshAuth(300)(
+            makeRequest({ authContext: { ...asCustomer('user-1'), authTime: nowSeconds() } }),
+            makeStepUpResponseStub(),
+            jest.fn()
+        );
+
+        expect(mockedEmitAuditEvent).not.toHaveBeenCalled();
+    });
 });
 
 describe('requireFreshAuthWhen', () => {

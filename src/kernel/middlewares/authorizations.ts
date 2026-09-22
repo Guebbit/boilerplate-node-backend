@@ -558,6 +558,15 @@ export const requireFreshAuth =
             return;
         }
 
+        // The module docblock's own promise — "every rejection from the identity guards is
+        // audited" — which this direct mount had not kept: `requirePermission`'s OWN step-up path
+        // (`declared.stepUp`, above) already audits `SECURITY_REAUTH_REQUIRED`, but a route mounting
+        // `requireFreshAuth`/`requireFreshAuthWhen` directly — `cart`, `payments`, `account` itself,
+        // per this file's own module doc — challenged with no trail at all.
+        auditRefusal(request, {
+            action: coreAuditActions.SECURITY_REAUTH_REQUIRED,
+            metadata: { reason: 'fresh_auth_required', maxAgeSeconds }
+        });
         challengeForFreshAuth(response, maxAgeSeconds);
     };
 
