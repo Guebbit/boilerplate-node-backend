@@ -610,6 +610,25 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
         expect(refresh.body.data.token).toBeDefined();
     });
 
+    /*
+     * B1: the mongoose `email` schema's own `match` — the backstop behind the Zod-validated
+     * route, see `users/model.ts` — used to reject a plus-tag and an 8+ character TLD, both real
+     * shapes an inbox can hold. Signup is the first place either would ever reach it.
+     */
+    it('accepts a plus-tag address with a long TLD', async () => {
+        const response = await api().post('/account/signup').send({
+            email: 'ada+shop@mail.example.photography',
+            username: 'adashop',
+            password: PLAIN_PASSWORD,
+            passwordConfirm: PLAIN_PASSWORD,
+            termsAccepted: true
+        });
+
+        expect(response.status).toBe(201);
+        expect(response).toSatisfyApiSpec();
+        expect(response.body.data.email).toBe('ada+shop@mail.example.photography');
+    });
+
     it('re-sends for an unverified account and the emailed token then verifies it', async () => {
         const { user, bearer } = await loginWithCookie();
 
@@ -689,6 +708,23 @@ describe('PUT /account (email change) and /account/email-change-confirm', () => 
         const stored = await userRepository.findById(user.id);
         expect(stored?.email).toBe('new-address@example.com');
         expect(stored?.verifiedAt).toBeInstanceOf(Date);
+    });
+
+    it('round-trips a plus-tag address: confirms, and GET /account shows it', async () => {
+        const { bearer } = await loginWithCookie({ verifiedAt: new Date() });
+        const changeRequest = await api()
+            .put('/account')
+            .set('Authorization', bearer)
+            .send({ email: 'ada+shop@mail.example.photography' });
+        expect(changeRequest.status).toBe(200);
+
+        const token = verifyTokenFromMail();
+        const confirm = await api().post('/account/email-change-confirm').send({ token });
+        expect(confirm.status).toBe(200);
+        expect(confirm).toSatisfyApiSpec();
+
+        const account = await api().get('/account').set('Authorization', bearer);
+        expect(account.body.data.email).toBe('ada+shop@mail.example.photography');
     });
 
     it('keeps authenticating under the OLD address until the token is spent', async () => {

@@ -27,12 +27,15 @@ describe('userSchema — what a user must carry', () => {
 
     it('constrains the email to something that can be delivered to', () => {
         // The schema's own `match`, exercised through the compiled pattern rather than restated:
-        // this is the last line of defence for accounts created outside the Zod-validated route,
-        // and every account-recovery flow depends on the address being reachable.
+        // this is the last line of defence for accounts created outside the Zod-validated route
+        // (OAuth signup — see `account/services/oauth.ts`), and every account-recovery flow
+        // depends on the address being reachable. Loose by design: a plus-tag and a long TLD are
+        // real shapes an inbox can hold, so the pattern only refuses what could never be one.
         const pattern = pathOptions(userSchema, 'email').match as RegExp;
 
         expect(pattern.test('ada@example.com')).toBe(true);
         expect(pattern.test('ada.lovelace@sub.example.co.uk')).toBe(true);
+        expect(pattern.test('ada+shop@mail.example.photography')).toBe(true);
         expect(pattern.test('not-an-address')).toBe(false);
         expect(pattern.test('ada@example')).toBe(false);
         expect(pattern.test('@example.com')).toBe(false);

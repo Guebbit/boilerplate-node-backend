@@ -304,7 +304,18 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
         email: {
             type: String,
             required: true,
-            match: /^[\w-]+(?:\.[\w-]+)*@(?:[\w-]+\.)+[A-Za-z]{2,7}$/
+            // A backstop, not the real check — `zodUserSchema.email` above (and the generated
+            // `CreateUserBody`/`SignupBody`) already validate against Zod's own email format for
+            // every path that parses a body. This exists for the one path that does not: OAuth
+            // signup writes a provider's own `email` straight through `userService.create`
+            // (`account/services/oauth.ts`) with no Zod parse in between. Loose on purpose — one
+            // "@", one "." after it, no whitespace — so it can only ever reject something that
+            // could never be a real address, not narrow a valid shape a provider or a caller
+            // legitimately sends. `[^\s@]` rather than `\S` in the local/domain parts — still
+            // loose on the character set, but a second `@` or a whitespace-free comma-joined
+            // address (`a@b.com,evil@c.test`) cannot smuggle past a single-`@`, single-match
+            // anchor the way `\S+@\S+` would let it.
+            match: /^[^\s@]+@[^\s@]+\.[^\s@]+$/
         },
         username: {
             type: String,
