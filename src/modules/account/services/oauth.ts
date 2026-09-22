@@ -12,10 +12,11 @@ import { userService, type UserDocument } from '@modules/users';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { isUnrestrictedRole } from '@kernel/permissions';
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
 import type { OAuthIdentity } from '../oauth/providers/port';
-import { assignRole, VERIFIED_CUSTOMER_ROLE } from '@modules/access';
+import { assignRole, rolesOf, VERIFIED_CUSTOMER_ROLE } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**
@@ -50,43 +51,13 @@ export class OAuthAccountUnverifiedError extends Error {
 }
 
 /**
- * Audit + analytics for an existing identity that just logged in — the case-1 tail.
- *
- * Suppressed when the account has 2FA armed: the callback does not mint a session in that case,
- * it issues a challenge instead (see `get-oauth-callback.ts`'s 1b handling), so this is not yet a
- * completed login. `session/login-observability.ts#recordLoginSuccess` fires the generic tail
- * once the challenge is answered — same as a password login's own 2FA branch.
- */
-const recordLogin = (
-    user: UserDocument,
-    provider: string,
-    context: CallerContext
-): UserDocument => {
-    if (!user.twoFactorEnabledAt) {
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: accountAuditActions.AUTH_LOGIN,
-                actor_user_id: user.id,
-                actor_role: 'user',
-                outcome: 'success',
-                metadata: { via: provider }
-            })
-        );
-        emitAnalyticsEvent({
-            ...buildAnalyticsBase(context),
-            distinctId: user.id,
-            event: accountAnalyticsEvents.USER_LOGGED_IN
-        });
-    }
-    return user;
-};
-
-/**
  * Link a NEW provider identity onto an existing, verified-match account — the case-2 tail.
  *
- * The link itself always audits — it genuinely happened. The `USER_LOGGED_IN` analytics event is
- * suppressed under the same 2FA condition {@link recordLogin} applies: linking is not a completed
- * login when the callback is about to redirect to a challenge instead of a session.
+ * The link itself always audits — it genuinely happened, with the account's REAL role (an
+ * account linking its first provider is not necessarily a plain `user`). The `USER_LOGGED_IN`
+ * analytics event is suppressed when the account has 2FA armed: the callback does not mint a
+ * session in that case, it issues a challenge instead (see `get-oauth-callback.ts`'s 1b
+ * handling), so linking is not yet a completed login.
  */
 const linkToExistingAccount = (
     user: UserDocument,
@@ -100,25 +71,29 @@ const linkToExistingAccount = (
             providerId: identity.providerId,
             connectedAt: new Date()
         })
-        .then(() => {
-            emitAuditEvent(
-                buildAuditEvent(context, {
-                    action: accountAuditActions.AUTH_OAUTH_LINKED,
-                    actor_user_id: user.id,
-                    actor_role: 'user',
-                    outcome: 'success',
-                    metadata: { via: provider }
-                })
-            );
-            if (!user.twoFactorEnabledAt) {
-                emitAnalyticsEvent({
-                    ...buildAnalyticsBase(context),
-                    distinctId: user.id,
-                    event: accountAnalyticsEvents.USER_LOGGED_IN
-                });
-            }
-            return user;
-        });
+        .then(() =>
+            // Read fresh from the membership — the document carries no role of its own, same
+            // reasoning `postLogin` gives for its own AUTH_LOGIN.
+            rolesOf(user.id, DEPLOYMENT_TENANT_ID).then((roles) => {
+                emitAuditEvent(
+                    buildAuditEvent(context, {
+                        action: accountAuditActions.AUTH_OAUTH_LINKED,
+                        actor_user_id: user.id,
+                        actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
+                        outcome: 'success',
+                        metadata: { via: provider }
+                    })
+                );
+                if (!user.twoFactorEnabledAt) {
+                    emitAnalyticsEvent({
+                        ...buildAnalyticsBase(context),
+                        distinctId: user.id,
+                        event: accountAnalyticsEvents.USER_LOGGED_IN
+                    });
+                }
+                return user;
+            })
+        );
 
 /** Create a fresh, password-less account for a never-seen identity — the case-3 tail. */
 const signupFromOAuth = (
@@ -176,16 +151,31 @@ const signupFromOAuth = (
         });
 
 /**
- * Resolve an `OAuthIdentity` to a `UserDocument`, creating or linking as needed, and record
- * whichever of the three outcomes happened.
+ * Which of the three branches {@link loginOrCreateFromOAuth} took — the controller needs this to
+ * decide whether IT still owes an `AUTH_LOGIN`: a login does, once a session actually exists to
+ * record; a link or a signup already audited itself in full here, and recording a second,
+ * generic "login" on top would double-count the event.
+ */
+export type OAuthOutcome = 'login' | 'link' | 'signup';
+
+/**
+ * Resolve an `OAuthIdentity` to a `UserDocument`, creating or linking as needed.
  *
  * `providerId`, never `email`, is the identity key looked up first — an email match is only
  * consulted when no identity is already on file, and only ever LINKS, never silently logs in:
  * an attacker cannot borrow someone else's email to walk into their account.
  *
+ * An already-linked identity (case 1) records NOTHING here — unlike the link and signup cases,
+ * a plain login is not yet a fact until the caller actually mints a session, which is not this
+ * function's decision: `get-oauth-callback.ts` calls `recordLoginSuccess` itself once it has,
+ * the same way `postLogin`'s own success tail does. Recording it here, unconditionally, is
+ * exactly the bug this now avoids: it can only ever emit the SIGNED-IN caller's role, and does
+ * not know it — the controller does, once a session exists to look one up for.
+ *
  * @param provider - the registry name (`'google'`, `'github'`, ...)
  * @param identity - what the provider's token exchange resolved
- * @param context - for the audit/analytics emitted here
+ * @param context - for the link/signup audit and analytics emitted here
+ * @returns the resolved user, tagged with which branch produced it — see {@link OAuthOutcome}
  * @throws {@link OAuthEmailUnverifiedError} when an existing account matches by email but the
  *   provider does not vouch for it
  * @throws {@link OAuthAccountUnverifiedError} when it matches an account that never proved that
@@ -195,19 +185,23 @@ export const loginOrCreateFromOAuth = (
     provider: string,
     identity: OAuthIdentity,
     context: CallerContext
-): Promise<UserDocument> =>
+): Promise<{ user: UserDocument; outcome: OAuthOutcome }> =>
     userService
-        // WITH credentials, unlike every other lookup in this file: `recordLogin` below may need
-        // to build a 2FA login challenge off `user.twoFactorMethods`, which is `select: false` —
+        // WITH credentials, unlike every other lookup in this file: the controller may need to
+        // build a 2FA login challenge off `user.twoFactorMethods`, which is `select: false` —
         // see 1b in docs/theory/defences/authentication.md#federated-login.
         .findByOAuthIdentity(provider, identity.providerId)
         .then((existing) => {
-            if (existing) return recordLogin(existing, provider, context);
+            if (existing) return { user: existing, outcome: 'login' as const };
 
             // Same reason as the lookup above: `linkToExistingAccount` below may hand this
             // account straight to a 2FA challenge too.
             return userService.findByEmail(identity.email).then((byEmail) => {
-                if (!byEmail) return signupFromOAuth(provider, identity, context);
+                if (!byEmail)
+                    return signupFromOAuth(provider, identity, context).then((user) => ({
+                        user,
+                        outcome: 'signup' as const
+                    }));
 
                 if (!identity.emailVerified) throw new OAuthEmailUnverifiedError(identity.email);
 
@@ -215,7 +209,10 @@ export const loginOrCreateFromOAuth = (
                 // `OAuthAccountUnverifiedError`.
                 if (!byEmail.verifiedAt) throw new OAuthAccountUnverifiedError(identity.email);
 
-                return linkToExistingAccount(byEmail, provider, identity, context);
+                return linkToExistingAccount(byEmail, provider, identity, context).then((user) => ({
+                    user,
+                    outcome: 'link' as const
+                }));
             });
         });
 

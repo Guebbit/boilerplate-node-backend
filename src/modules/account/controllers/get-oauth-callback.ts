@@ -12,7 +12,6 @@ import { t } from '@infrastructure/i18n';
 import { rejectResponse } from '@infrastructure/http/response';
 import { logger } from '@infrastructure/adapters/logger';
 import { callerContextOf } from '@infrastructure/http/request';
-import type { UserDocument } from '@modules/users';
 import { resolveOAuthProvider } from '../oauth/providers';
 import {
     stateMatches,
@@ -35,7 +34,11 @@ import {
     OAuthAccountUnverifiedError
 } from '../services';
 import { issueSession } from '../session/session';
+import { recordLoginSuccess } from '../session/login-observability';
 import { authOauthTotal } from '../metrics';
+import { isUnrestrictedRole } from '@kernel/permissions';
+import { rolesOf } from '@modules/access';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**
  * GET /account/oauth/:provider/callback
@@ -101,7 +104,7 @@ export const getOAuthCallback = (request: Request, response: Response) => {
     return provider
         .exchangeCode(query.code, oauthRedirectUri(provider.name), verifier)
         .then((identity) => loginOrCreateFromOAuth(provider.name, identity, context))
-        .then((user: UserDocument) => {
+        .then(({ user, outcome }) => {
             /*
              * A factor armed on the password path applies here too — 2FA is a control on the
              * ACCOUNT, not on one login method. Minting a session directly would let a provider
@@ -110,10 +113,30 @@ export const getOAuthCallback = (request: Request, response: Response) => {
              */
             if (!user.twoFactorEnabledAt) {
                 return issueSession(response, user.id, undefined, [provider.name]).then(() => {
-                    authOauthTotal.inc({ provider: providerName, status: 'success' });
-                    destroyStateCookie(response);
-                    destroyVerifierCookie(response);
-                    response.redirect(302, oauthFrontendCallbackUrl());
+                    /*
+                     * Only a genuine LOGIN owes this: `link`/`signup` already audited themselves
+                     * in full inside `loginOrCreateFromOAuth` — recording AUTH_LOGIN here too
+                     * would double-count the event under a second action name. The role is read
+                     * fresh from the membership, never assumed, the same reasoning `postLogin`
+                     * gives for its own tail.
+                     */
+                    return (
+                        outcome === 'login'
+                            ? rolesOf(user.id, DEPLOYMENT_TENANT_ID).then((roles) =>
+                                  recordLoginSuccess(
+                                      request,
+                                      user.id,
+                                      isUnrestrictedRole(roles.tenant),
+                                      { via: provider.name }
+                                  )
+                              )
+                            : Promise.resolve()
+                    ).then(() => {
+                        authOauthTotal.inc({ provider: providerName, status: 'success' });
+                        destroyStateCookie(response);
+                        destroyVerifierCookie(response);
+                        response.redirect(302, oauthFrontendCallbackUrl());
+                    });
                 });
             }
 

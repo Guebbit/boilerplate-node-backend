@@ -12,8 +12,18 @@ import { decode } from 'jsonwebtoken';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api } from '@tests/http';
 import { setCookie, cookieHeader } from '@tests/cookies';
-import { userRepository } from '@modules/users/tests/factories';
+import { createUser, userRepository } from '@modules/users/tests/factories';
 import { enableDemoProfile } from '@infrastructure/runtime/demo-profile';
+import * as auditPort from '@infrastructure/observability/audit';
+import { observePort } from '@tests/ports';
+import { accountAuditActions } from '../../audit';
+
+/* Replaced, not spied on — see `tests/support/ports.ts` for why. */
+jest.mock('@infrastructure/observability/audit', () => ({
+    __esModule: true,
+    ...jest.requireActual('@infrastructure/observability/audit'),
+    emitAuditEvent: jest.fn()
+}));
 
 setupTestDb();
 
@@ -24,6 +34,7 @@ beforeAll(() => {
 afterAll(() => {
     enableDemoProfile(false);
 });
+afterEach(() => jest.restoreAllMocks());
 
 /**
  * A start response's `state` and `verifier` cookies, as one `Cookie` request header — both are
@@ -133,6 +144,48 @@ describe('GET /account/oauth/:provider/callback', () => {
 
         const matches = await userRepository.count({ email: 'oauth.demo@example.com' });
         expect(matches).toBe(1);
+    });
+
+    /*
+     * B4: `recordLogin` (services/oauth.ts) used to hardcode `actor_role: 'user'` and never
+     * touched `authLoginTotal` — an admin logging in through a provider was audited as a plain
+     * user, and invisible to the shared login metric every other method reports through.
+     */
+    it('audits an admin already linked to the provider as admin, once, on login', async () => {
+        const admin = await createUser(
+            { email: 'oauth.demo@example.com', verifiedAt: new Date() },
+            'admin'
+        );
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        // First callback: no identity linked yet, email matches — this is the LINK branch, not
+        // login, and audits its own AUTH_OAUTH_LINKED. Cleared before the case under test so only
+        // the second callback's events are asserted.
+        await (async () => {
+            const start = await api().get('/account/oauth/fake');
+            const callbackUrl = new URL(start.headers.location);
+            await api()
+                .get(callbackUrl.pathname + callbackUrl.search)
+                .set('Cookie', attemptCookies(start));
+        })();
+        auditSpy.mockClear();
+
+        const start = await api().get('/account/oauth/fake');
+        const callbackUrl = new URL(start.headers.location);
+        const response = await api()
+            .get(callbackUrl.pathname + callbackUrl.search)
+            .set('Cookie', attemptCookies(start));
+
+        expect(response.status).toBe(302);
+        const loginCalls = auditSpy.mock.calls.filter(
+            ([event]) => event.action === accountAuditActions.AUTH_LOGIN
+        );
+        expect(loginCalls).toHaveLength(1);
+        expect(loginCalls[0][0]).toMatchObject({
+            actor_user_id: admin.id,
+            actor_role: 'admin',
+            outcome: 'success'
+        });
     });
 });
 

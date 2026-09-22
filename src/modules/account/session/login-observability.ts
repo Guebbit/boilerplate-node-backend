@@ -29,11 +29,17 @@ export const recordLoginFailure = (request: Request): void => {
     );
 };
 
-/** Emit login success observability (metrics + audit + analytics). */
+/**
+ * Emit login success observability (metrics + audit + analytics).
+ *
+ * @param metadata - extra audit detail specific to how this login happened — e.g. `{ via:
+ *   'google' }` for an OAuth callback, absent for a plain password login.
+ */
 export const recordLoginSuccess = (
     request: Request,
     userId: string,
-    requireUnrestricted: boolean
+    requireUnrestricted: boolean,
+    metadata?: Record<string, unknown>
 ): void => {
     const role = requireUnrestricted ? 'admin' : 'user';
     const context = callerContextOf(request);
@@ -43,7 +49,8 @@ export const recordLoginSuccess = (
             action: accountAuditActions.AUTH_LOGIN,
             actor_user_id: userId,
             actor_role: role,
-            outcome: 'success'
+            outcome: 'success',
+            ...(metadata ? { metadata } : {})
         })
     );
     emitAnalyticsEvent({

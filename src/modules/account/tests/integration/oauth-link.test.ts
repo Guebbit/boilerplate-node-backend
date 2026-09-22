@@ -52,7 +52,15 @@ const oauthAccountsOf = async (userId: string) => {
 };
 
 describe('loginOrCreateFromOAuth — case 1: an already-linked identity', () => {
-    it('logs the existing account in without creating anything new', async () => {
+    /*
+     * B4: this branch used to audit + analytics-emit the login itself, hardcoding
+     * `actor_role: 'user'` and never touching `authLoginTotal` — wrong for an admin, and
+     * invisible to the metric every other login method reports through. Recording a login is
+     * only a fact once a session actually exists, which is a CONTROLLER decision
+     * (`get-oauth-callback.ts` calls `recordLoginSuccess`, reading the account's real role) —
+     * so this branch resolves the account and tags the outcome, and emits nothing at all.
+     */
+    it('resolves the existing account, tagged as a login, without creating anything new', async () => {
         const user = await createUser({ email: 'existing@example.com' });
         await userRepository.linkOAuthAccount(user.id, {
             provider: 'google',
@@ -64,62 +72,34 @@ describe('loginOrCreateFromOAuth — case 1: an already-linked identity', () => 
 
         const resolved = await loginOrCreateFromOAuth('google', identity(), testCallerContext);
 
-        expect(resolved.id).toBe(user.id);
+        expect(resolved.outcome).toBe('login');
+        expect(resolved.user.id).toBe(user.id);
         expect(await userRepository.count({})).toBe(1);
-        expect(auditSpy).toHaveBeenCalledWith(
-            expect.objectContaining({
-                action: accountAuditActions.AUTH_LOGIN,
-                actor_user_id: user.id
-            })
-        );
-        expect(analyticsSpy).toHaveBeenCalledWith(
-            expect.objectContaining({ event: accountAnalyticsEvents.USER_LOGGED_IN })
-        );
-    });
-
-    /*
-     * 1b: the callback does not mint a session for this account — it issues a 2FA challenge
-     * instead (`get-oauth-callback.ts`) — so recording AUTH_LOGIN/USER_LOGGED_IN here would claim
-     * a login that has not happened yet. `postLoginTwoFactor` fires the generic tail once the
-     * challenge is actually answered.
-     */
-    it('does not claim a completed login when the account has 2FA armed', async () => {
-        const user = await createUser({
-            email: 'existing@example.com',
-            twoFactorEnabledAt: new Date().toISOString()
-        });
-        await userRepository.linkOAuthAccount(user.id, {
-            provider: 'google',
-            providerId: 'subject-1',
-            connectedAt: new Date()
-        });
-        const auditSpy = observePort(auditPort.emitAuditEvent);
-        const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
-
-        const resolved = await loginOrCreateFromOAuth('google', identity(), testCallerContext);
-
-        expect(resolved.id).toBe(user.id);
         expect(auditSpy).not.toHaveBeenCalled();
         expect(analyticsSpy).not.toHaveBeenCalled();
     });
 });
 
 describe('loginOrCreateFromOAuth — case 2: a verified email matching an existing account', () => {
-    it('links the new identity onto the account', async () => {
-        const user = await createUser({ email: identity().email, verifiedAt: new Date() });
+    it('links the new identity onto the account, audited with its real role', async () => {
+        const user = await createUser({ email: identity().email, verifiedAt: new Date() }, 'admin');
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
         const resolved = await loginOrCreateFromOAuth('google', identity(), testCallerContext);
 
-        expect(resolved.id).toBe(user.id);
+        expect(resolved.outcome).toBe('link');
+        expect(resolved.user.id).toBe(user.id);
         expect(await userRepository.count({})).toBe(1);
         const linked = await oauthAccountsOf(user.id);
         expect(linked).toHaveLength(1);
         expect(linked[0]).toMatchObject({ provider: 'google', providerId: 'subject-1' });
+        // B4: this hardcoded `actor_role: 'user'` — wrong for an account that already holds
+        // 'admin', the exact shape a first-ever OAuth link on an existing admin account takes.
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: accountAuditActions.AUTH_OAUTH_LINKED,
-                actor_user_id: user.id
+                actor_user_id: user.id,
+                actor_role: 'admin'
             })
         );
     });
@@ -135,7 +115,7 @@ describe('loginOrCreateFromOAuth — case 2: a verified email matching an existi
 
         const resolved = await loginOrCreateFromOAuth('google', identity(), testCallerContext);
 
-        expect(resolved.id).toBe(user.id);
+        expect(resolved.user.id).toBe(user.id);
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({ action: accountAuditActions.AUTH_OAUTH_LINKED })
         );
@@ -181,12 +161,13 @@ describe('loginOrCreateFromOAuth — case 3: a never-seen identity and email', (
     it('creates a password-less, pre-verified account', async () => {
         const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
 
-        const created = await loginOrCreateFromOAuth('google', identity(), testCallerContext);
+        const resolved = await loginOrCreateFromOAuth('google', identity(), testCallerContext);
 
-        expect(created.email).toBe(identity().email);
-        expect(created.verifiedAt).toBeInstanceOf(Date);
-        expect(created.active).toBe(true);
-        const stored = await userRepository.findByIdWithCredentials(created.id);
+        expect(resolved.outcome).toBe('signup');
+        expect(resolved.user.email).toBe(identity().email);
+        expect(resolved.user.verifiedAt).toBeInstanceOf(Date);
+        expect(resolved.user.active).toBe(true);
+        const stored = await userRepository.findByIdWithCredentials(resolved.user.id);
         expect(stored?.password).toBeUndefined();
         expect(stored?.oauthAccounts).toEqual([
             expect.objectContaining({ provider: 'google', providerId: 'subject-1' })
@@ -207,6 +188,6 @@ describe('loginOrCreateFromOAuth — case 3: a never-seen identity and email', (
         // Two different accounts: `users_oauth_identity` scopes uniqueness to (provider,
         // providerId) together, not `providerId` alone — different providers can coincidentally
         // reuse the same subject shape without colliding.
-        expect(google.id).not.toBe(github.id);
+        expect(google.user.id).not.toBe(github.user.id);
     });
 });
