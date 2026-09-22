@@ -31,6 +31,18 @@ const bannedDoubleCasts = [
 ];
 
 /**
+ * The `TryStatement` ban — a production try/catch is allowed only where a throwing API has no
+ * safe wrapper and the failure has a local answer. `no-restricted-syntax` does not merge across
+ * configs (the nearest match REPLACES the list), so every block that configures that rule lists
+ * this, or the ban would silently lift for exactly those files.
+ */
+const bannedTryCatch = {
+    selector: 'TryStatement',
+    message:
+        'try/catch in production code is for the rare spot where a throwing API has no safe wrapper and the failure has a local answer. Prefer returning a verdict or letting the rejection reach the pipeline’s handler; if this spot truly needs one, disable this rule on the line with a description of what is being contained.'
+};
+
+/**
  * A `factories.ts` builder import — matches `./factories`, `../factories` and a sibling module's
  * `@modules/<name>/factories`, whole-specifier so `@infrastructure/persistence/factories` (the
  * generic helpers a builder is built FROM, not a builder itself) does not also match a bare
@@ -421,15 +433,7 @@ export default tseslint.config(
         files: ['src/**/*.ts'],
         rules: {
             'local/no-hardcoded-user-text': 'error',
-            'no-restricted-syntax': [
-                'error',
-                ...bannedDoubleCasts,
-                {
-                    selector: 'TryStatement',
-                    message:
-                        'try/catch in production code is for the rare spot where a throwing API has no safe wrapper and the failure has a local answer. Prefer returning a verdict or letting the rejection reach the pipeline’s handler; if this spot truly needs one, disable this rule on the line with a description of what is being contained.'
-                }
-            ]
+            'no-restricted-syntax': ['error', ...bannedDoubleCasts, bannedTryCatch]
         }
     },
 
@@ -1172,11 +1176,7 @@ export default tseslint.config(
                     message:
                         'An analytics event constant is SCREAMING_SNAKE — `CART_ITEM_ADDED`. Every other module spells its own that way, and one that does not is the entry a reader scanning the catalogue misses.'
                 },
-                {
-                    selector: 'TryStatement',
-                    message:
-                        'try/catch in production code is for the rare spot where a throwing API has no safe wrapper and the failure has a local answer. Prefer returning a verdict or letting the rejection reach the pipeline’s handler; if this spot truly needs one, disable this rule on the line with a description of what is being contained.'
-                }
+                bannedTryCatch
             ]
         }
     },
