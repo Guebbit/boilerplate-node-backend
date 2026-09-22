@@ -13,6 +13,7 @@
 
 import type { Request } from 'express';
 import { Counter, Histogram, Gauge } from 'prom-client';
+import { routeTemplateOf } from '@infrastructure/http/request';
 import { metricsRegistry } from '@infrastructure/observability/metrics-registry';
 
 /**
@@ -81,12 +82,8 @@ export const UNMATCHED_ROUTE = 'unmatched';
  * @returns the mounted route template, or `unmatched`
  */
 export const getRouteLabel = (request: Request): string => {
-    // Express types `route` as `any`, and it may hold a RegExp or an array for routes declared
-    // that way; only a plain string names one template, and anything else is not worth a series
-    // of its own. Read through `unknown` so the `any` stops here.
-    const matched: unknown = request.route;
-    const template = (matched as { path?: unknown } | undefined)?.path;
-    if (typeof template !== 'string') return UNMATCHED_ROUTE;
+    const template = routeTemplateOf(request);
+    if (template === undefined) return UNMATCHED_ROUTE;
 
     const mounted = `${request.baseUrl}${template}`;
     // `router.get('/')` mounted at `/orders` spells itself `/orders/`; the trailing slash is the

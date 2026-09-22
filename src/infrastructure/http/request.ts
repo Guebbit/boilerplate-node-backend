@@ -389,3 +389,20 @@ export const extractAndValidateId = (
  */
 export const isValidObjectId = (id: string | undefined): id is string =>
     !!id && Types.ObjectId.isValid(id);
+
+/**
+ * The raw Express route template a request matched, or `undefined` when nothing did.
+ *
+ * Express types `request.route` as `any`, and it may hold a RegExp or an array for a route
+ * declared that way; only a plain string names one template. Read through `unknown` so the `any`
+ * stops here rather than leaking into every caller. Callers apply their own mount-point join and
+ * normalization on top — idempotency fingerprinting and the HTTP metrics label want different
+ * shapes from the same raw template.
+ *
+ * @param request - the request, read after routing
+ */
+export const routeTemplateOf = (request: Request): string | undefined => {
+    const matched: unknown = request.route;
+    const template = (matched as { path?: unknown } | undefined)?.path;
+    return typeof template === 'string' ? template : undefined;
+};

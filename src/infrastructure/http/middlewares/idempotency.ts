@@ -20,6 +20,7 @@
 import { createHash } from 'node:crypto';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { canonicalize } from '@guebbit/js-toolkit';
+import { routeTemplateOf } from '@infrastructure/http/request';
 import { rejectResponse } from '@infrastructure/http/response';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { logger } from '@infrastructure/adapters/logger';
@@ -68,12 +69,9 @@ const hasProtoKey = (value: unknown): boolean => {
  * @param request - the incoming request, already matched to its route
  */
 const fingerprintOf = (request: Request): string => {
-    // Express types `route` as `any` — same gap `getRouteLabel` (metrics-http.ts) reads through
-    // `unknown` for. Only a plain string names a real template; anything else falls back to the
-    // request's own path.
-    const matchedRoute: unknown = request.route;
-    const routeTemplate = (matchedRoute as { path?: unknown } | undefined)?.path;
-    const routePath = typeof routeTemplate === 'string' ? routeTemplate : request.path;
+    // No matched template (should not happen — this middleware is mounted per route) falls back
+    // to the request's own path rather than fingerprinting nothing.
+    const routePath = routeTemplateOf(request) ?? request.path;
 
     /*
      * js-toolkit: rebuilds the body with every object's keys sorted, recursively, so the SAME
