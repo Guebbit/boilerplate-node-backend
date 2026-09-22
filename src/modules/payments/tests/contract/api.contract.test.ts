@@ -332,6 +332,26 @@ describe('POST /payments/webhook', () => {
         expect(settled!.status).toBe('succeeded');
     });
 
+    /*
+     * B2: `parseWebhook` cast the parsed JSON straight to `PaymentWebhookEventBody`, `status`
+     * included — the cast typed the field, it never checked it, so any string reached
+     * `settlePayment` and got written to the row verbatim.
+     */
+    it('refuses a status this provider does not recognise, and leaves the row alone', async () => {
+        const { paymentId, providerRef } = await preparedPayment();
+
+        const response = await deliver({
+            id: `evt_${paymentId}`,
+            providerRef,
+            status: 'refunded'
+        });
+
+        expect(response.status).toBe(400);
+        expect(response).toSatisfyApiSpec();
+        const untouched = await paymentRepository.findById(paymentId);
+        expect(untouched!.status).toBe('requires_confirmation');
+    });
+
     it('answers a MessageResponse, not the PaymentEnvelope every other route answers', async () => {
         // A deliberate shape difference: the caller is a machine with no use for the payment back,
         // and `toSatisfyApiSpec()` alone would pass a `PaymentEnvelope` here too, since the two

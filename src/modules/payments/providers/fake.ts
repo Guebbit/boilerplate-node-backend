@@ -15,13 +15,34 @@ import { logger } from '@infrastructure/adapters/logger';
 import { verifyWebhookSignature, WebhookRejected } from './webhook-signature';
 import type { PaymentProvider, ProviderPaymentState, ProviderPaymentStatus } from './index';
 
-/** The webhook body as it arrives — the contract's `PaymentWebhookEvent`, flat. */
+/** The webhook body as it arrives — the contract's `PaymentWebhookEvent`, flat. `status` is
+ * unchecked JSON at this point; the cast is `unknown` wearing the union's name until
+ * {@link isProviderPaymentStatus} actually proves it. */
 interface PaymentWebhookEventBody {
     id?: string;
     providerRef?: string;
-    status?: ProviderPaymentStatus;
+    status?: string;
     cardLast4?: string;
 }
+
+/** Every status `ProviderPaymentStatus` actually names — the runtime half of the type. */
+const PROVIDER_PAYMENT_STATUSES: ReadonlySet<ProviderPaymentStatus> = new Set([
+    'requires_action',
+    'processing',
+    'succeeded',
+    'declined'
+]);
+
+/**
+ * Whether a JSON body's `status` string is one this provider (or the service reading its output)
+ * actually knows — `JSON.parse(...) as PaymentWebhookEventBody` types the field, it does not
+ * check it, so an arbitrary string (`'refunded'`, a typo, a future provider status this one has
+ * not learned yet) would otherwise reach `settlePayment` and get written to the row verbatim.
+ */
+const isProviderPaymentStatus = (status: string): status is ProviderPaymentStatus =>
+    // `Set<T>.has` is typed to `T`; this cast is what the membership check itself is proving —
+    // the return type above is the real guarantee a caller gets.
+    PROVIDER_PAYMENT_STATUSES.has(status as ProviderPaymentStatus);
 
 /**
  * The method references this provider recognises, and what each one does. Anything else succeeds
@@ -150,6 +171,8 @@ export const fakePaymentProvider: PaymentProvider = {
             })
             .then((event) => {
                 if (!event.id) throw new WebhookRejected('Event carries no id');
+                if (event.status !== undefined && !isProviderPaymentStatus(event.status))
+                    throw new WebhookRejected(`Unrecognised payment status: ${event.status}`);
                 // The wire shape is flat; `ProviderPaymentState` is the shape the SERVICE reads.
                 // Assembling it here is the whole job of an adapter — a real provider builds the
                 // same object out of its own nested event instead.
