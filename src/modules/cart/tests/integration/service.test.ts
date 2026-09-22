@@ -55,7 +55,9 @@ import { cartRepository } from '@modules/cart/repository';
 import { userService } from '@modules/users';
 import { asCustomer, testCallerContext } from '@tests/callers';
 import { registerModules } from '@kernel/registry';
-import { resetDomainEvents } from '@kernel/events';
+import { resetDomainEvents, emitDomainEvent } from '@kernel/events';
+import { PRODUCT_DELETED } from '@modules/products';
+import { logger } from '@infrastructure/adapters/logger';
 import cartModule from '@modules/cart/module';
 import inventoryModule from '@modules/inventory/module';
 import productsModule from '@modules/products/module';
@@ -1040,9 +1042,8 @@ describe('productRemoveFromCartsById', () => {
         await cartItemSetById(first.id, String(kept._id), 2);
         await cartItemSetById(second.id, String(doomed._id), 3);
 
-        const result = await productRemoveFromCartsById(String(doomed._id));
+        await productRemoveFromCartsById(String(doomed._id));
 
-        expect(result.success).toBe(true);
         // Both carts cleaned, and the unrelated line survives — a `$pull` that matched too
         // broadly would empty the whole cart instead.
         await expect(cartGet(second.id)).resolves.toEqual([]);
@@ -1051,23 +1052,34 @@ describe('productRemoveFromCartsById', () => {
         expect(firstItems[0].productId).toBe(String(kept._id));
     });
 
-    it('reports how many carts were touched', async () => {
-        const user = await createUser();
+    it('resolves without error when no cart holds the product', async () => {
         const product = await createProduct();
-        await cartItemSetById(user.id, String(product._id), 1);
 
-        const result = await productRemoveFromCartsById(String(product._id));
-
-        expect(result.message).toContain('1 cart(s)');
+        await expect(productRemoveFromCartsById(String(product._id))).resolves.toBeUndefined();
     });
 
-    it('succeeds and reports zero when no cart holds the product', async () => {
-        const product = await createProduct();
+    /*
+     * B11: a repository failure used to be caught INSIDE this function and turned into a resolved
+     * `ResponseReject` — a shape nothing ever read, since this function is only ever a domain-event
+     * handler (see the module docblock), never an HTTP response. `emitDomainEvent` only notices a
+     * handler failing through a REJECTED promise; swallowing it here meant a genuine write failure
+     * came back as `settled: true` and was never logged.
+     */
+    it('propagates a repository failure, so the event bus sees and logs it', async () => {
+        registerModules([cartModule]);
+        jest.spyOn(cartRepository, 'removeProductFromAll').mockRejectedValueOnce(
+            new Error('write conflict')
+        );
+        const loggedError = jest.spyOn(logger, 'error').mockImplementation(() => logger);
 
-        const result = await productRemoveFromCartsById(String(product._id));
+        const settled = await emitDomainEvent(PRODUCT_DELETED, {
+            productId: 'irrelevant',
+            hardDelete: false
+        });
 
-        expect(result.success).toBe(true);
-        expect(result.message).toContain('0 cart(s)');
+        expect(settled).toBe(false);
+        expect(loggedError).toHaveBeenCalled();
+        resetDomainEvents();
     });
 });
 

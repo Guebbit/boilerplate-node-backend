@@ -2,17 +2,13 @@
  * @module
  * Cleanup entry points — what OTHER modules call when something they own disappears.
  *
- * Neither is reachable from a cart route. They exist because a cart holds references to two things
- * it does not own, a user and a product, and nothing else tidies up after either. `../module.ts`
- * wires both to the domain events that fire on deletion.
+ * Neither is reachable from a cart route: both are only ever domain-event handlers (`../module.ts`
+ * wires them to the events that fire on deletion), so a REJECTED promise, not an HTTP envelope, is
+ * the correct shape here — that is what `emitDomainEvent` (`kernel/events.ts`) reads to decide
+ * whether a handler failed and log it. They exist because a cart holds references to two things it
+ * does not own, a user and a product, and nothing else tidies up after either.
  */
 
-import {
-    generateSuccess,
-    type ResponseSuccess,
-    type ResponseReject
-} from '@infrastructure/http/response';
-import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { cartRepository } from '../repository';
 
 /**
@@ -25,19 +21,6 @@ import { cartRepository } from '../repository';
 export const cartDeleteByUserId = (userId: string): Promise<void> =>
     cartRepository.deleteByUserId(userId);
 
-/**
- * Remove a product from all users' carts by product ID.
- */
-export const productRemoveFromCartsById = (
-    id: string
-): Promise<ResponseSuccess<undefined> | ResponseReject> =>
-    cartRepository
-        .removeProductFromAll(id)
-        .then((result) =>
-            generateSuccess(
-                undefined,
-                200,
-                `Product ${id} removed from ${result.modifiedCount} cart(s)`
-            )
-        )
-        .catch((error: unknown) => rejectDatabaseEnvelope('cart', error));
+/** Remove a product from all users' carts by product ID. */
+export const productRemoveFromCartsById = (id: string): Promise<void> =>
+    cartRepository.removeProductFromAll(id).then(() => undefined);
