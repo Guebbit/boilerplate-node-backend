@@ -33,6 +33,13 @@ router.use(getAuth, isAuthOrCredential);
 /** Cache reader keyed on the same query parameters `getUsers`'s schema accepts. */
 const cacheUsersSearch = searchCache('users', searchUsersKeyParameters);
 
+/**
+ * Cache invalidation shared by every write route below. A user change must clear both the cached
+ * `GET /users` search and the cached `GET /account` the same caller reads — clearing only one
+ * leaves the other serving the old profile.
+ */
+const invalidateUsers = invalidateCache(['users', 'account']);
+
 // POST /users/search — must come before /:id to avoid matching "search" as an id
 router.post('/search', requirePermission('users.any.read'), cacheUsersSearch, getUsers);
 
@@ -44,7 +51,7 @@ router.post(
     '/',
     requirePermission('users.any.create'),
     uploadLimiter,
-    invalidateCache(['users', 'account']),
+    invalidateUsers,
     upload.single('imageUpload'),
     writeUsers
 );
@@ -54,7 +61,7 @@ router.put(
     '/',
     requirePermission('users.any.update'),
     uploadLimiter,
-    invalidateCache(['users', 'account']),
+    invalidateUsers,
     upload.single('imageUpload'),
     writeUsers
 );
@@ -63,7 +70,7 @@ router.put(
 router.delete(
     '/',
     requirePermission('users.any.delete'),
-    invalidateCache(['users', 'account']),
+    invalidateUsers,
     deleteUsers
 );
 
@@ -80,7 +87,7 @@ router.put(
     '/:id',
     requirePermission('users.any.update'),
     uploadLimiter,
-    invalidateCache(['users', 'account']),
+    invalidateUsers,
     upload.single('imageUpload'),
     writeUsers
 );
@@ -89,7 +96,7 @@ router.put(
 router.delete(
     '/:id',
     requirePermission('users.any.delete'),
-    invalidateCache(['users', 'account']),
+    invalidateUsers,
     deleteUsers
 );
 
@@ -97,7 +104,7 @@ router.delete(
 router.delete(
     '/:id/hard',
     requirePermission('users.any.delete'),
-    invalidateCache(['users', 'account']),
+    invalidateUsers,
     routeFlag('hardDelete'),
     deleteUsers
 );
@@ -108,6 +115,6 @@ router.delete(
 router.delete(
     '/:id/2fa',
     requirePermission('users.any.update'),
-    invalidateCache(['users', 'account']),
+    invalidateUsers,
     deleteUserTwoFactor
 );
