@@ -65,9 +65,9 @@ const build = (url: string): RedisClientType => {
 
 /**
  * The one client every limiter shares — lifecycle (memoised handle, deduped connect, warn-once)
- * delegated to {@link manageConnection}, same as the cache and queue adapters. Unlike them, this
- * fails CLOSED: `getOrThrow` rejects instead of resolving `undefined`, and the outage logs at
- * `error` rather than `warn` — see the header for why.
+ * delegated to {@link manageConnection}, same as the cache adapter. Unlike it, this fails CLOSED:
+ * `getOrThrow` rejects instead of resolving `undefined`, and the outage logs at `error` rather
+ * than `warn` — see the header for why.
  */
 let redisConnection: ManagedConnection<RedisClientType> | undefined;
 

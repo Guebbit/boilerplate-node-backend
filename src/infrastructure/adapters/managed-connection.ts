@@ -1,16 +1,55 @@
 /**
  * @module
- * One optional connection's lifecycle, stated once. Redis and RabbitMQ are both *optional*:
- * unconfigured is a supported deployment, unreachable is a degraded one, and neither may turn a
- * request into an error. That takes the same six pieces every time — memoised handle, shared
- * in-flight connect, warn-once flag, a getter resolving `undefined` instead of rejecting, a
- * `DependencyStatus` reader, and a close — so the rules live here and each adapter supplies only
- * what is genuinely its own. Deliberately does NOT retry on a timer: recovery is demand-driven.
+ * One optional Redis connection's lifecycle, stated once for both the cache adapter and the
+ * rate-limit store: unconfigured is a supported deployment, unreachable is a degraded one, and
+ * neither may turn a request into an error. That takes the same six pieces every time — memoised
+ * handle, shared in-flight connect, warn-once latch, a getter resolving `undefined` instead of
+ * rejecting, a `DependencyStatus` reader, and a close — so the rules live here and each adapter
+ * supplies only what is genuinely its own. Deliberately does NOT retry on a timer: recovery is
+ * demand-driven.
+ *
+ * RabbitMQ (`queue.ts`) does not use `manageConnection`: amqplib's own opt-in `recovery` retries
+ * the CONNECTION forever and re-runs `setup` after every reconnect, which this module has no
+ * equivalent for. It does share {@link unavailabilityLatch}, the one piece that generalises.
  *
  * See: docs/tools/redis-cache.md, docs/tools/rabbitmq.md
  */
 
 import { logger } from '@infrastructure/adapters/logger';
+
+/** What {@link unavailabilityLatch} builds: log an outage once, then say whether one was logged. */
+export interface UnavailabilityLatch {
+    /** Log `error` through the latch's `log` callback, unless already latched. */
+    report: (error: unknown) => void;
+
+    /** Reset the latch. Returns whether it had been set — whether a warning was ever logged. */
+    clear: () => boolean;
+}
+
+/**
+ * A warn-once latch: an unreachable dependency fails on every operation that touches it, which is
+ * one log line per request rather than one for the outage. `report` logs the first failure in a
+ * run of them and stays quiet until `clear` runs; `clear`'s return value is what a caller uses to
+ * decide whether a recovery is worth announcing — silent if nobody was ever warned.
+ *
+ * @param log - called with the error the first time `report` runs after a `clear`
+ */
+export const unavailabilityLatch = (log: (error: unknown) => void): UnavailabilityLatch => {
+    let latched = false;
+
+    return {
+        report: (error) => {
+            if (latched) return;
+            log(error);
+            latched = true;
+        },
+        clear: () => {
+            const wasLatched = latched;
+            latched = false;
+            return wasLatched;
+        }
+    };
+};
 
 /**
  * One dependency's state, in the only four words `GET /observability/health` uses. `disabled` is
@@ -120,7 +159,8 @@ export interface ManagedConnection<THandle> {
 /**
  * Build one managed connection.
  *
- * @param options - the three adapter-specific operations plus its enablement rule
+ * @param options - how to open, check and close the handle; its enablement rule; its outage
+ *   message; and two optional knobs, a non-default log level and a recovery callback
  * @returns the lifecycle, closed over module-level state private to this call
  */
 export const manageConnection = <THandle>({
@@ -138,33 +178,16 @@ export const manageConnection = <THandle>({
     /** The in-flight connect, so a burst during startup does not thunder-herd its own attempt. */
     let connectPromise: Promise<THandle> | undefined;
 
-    /**
-     * Latches the "it is down" warning: a dead dependency emits per failed operation, which would
-     * be one log line per request. Cleared on a successful connect so a later outage is reported.
-     */
-    let warningLogged = false;
-
-    /** Implements {@link ManagedConnection.reportUnavailable} — warn once, then latch quiet. */
-    const reportUnavailable = (error: unknown) => {
-        if (warningLogged) return;
-
+    /** Implements {@link ManagedConnection.reportUnavailable} via the shared warn-once latch. */
+    const latch = unavailabilityLatch((error) => {
+        // Stryker disable all
         if (unavailableLevel === 'error') {
-            // Stryker disable all
-            logger.error({
-                message: unavailableMessage,
-                error
-            });
-            // Stryker restore all
+            logger.error({ message: unavailableMessage, error });
         } else {
-            // Stryker disable all
-            logger.warn({
-                message: unavailableMessage,
-                error
-            });
-            // Stryker restore all
+            logger.warn({ message: unavailableMessage, error });
         }
-        warningLogged = true;
-    };
+        // Stryker restore all
+    });
 
     /** `connect()` resolving `undefined` means "cannot be built" — configuration ruled it out, not a failure. */
     class NotConfigured extends Error {}
@@ -173,20 +196,19 @@ export const manageConnection = <THandle>({
     const attempt = (): Promise<THandle> => {
         if (connectPromise) return connectPromise;
 
-        const wasWarned = warningLogged;
-
         const running: Promise<THandle> = connect()
             .then((opened) => {
                 if (opened === undefined) throw new NotConfigured();
 
                 handle = opened;
-                if (wasWarned) onRecovered?.();
-                warningLogged = false;
+                // `clear()`'s return is "was a warning ever logged for this outage" — recovery is
+                // only worth announcing when one was.
+                if (latch.clear()) onRecovered?.();
                 return opened;
             })
             .catch((error: unknown) => {
                 handle = undefined;
-                if (!(error instanceof NotConfigured)) reportUnavailable(error);
+                if (!(error instanceof NotConfigured)) latch.report(error);
                 throw error;
             })
             .finally(() => {
@@ -212,8 +234,7 @@ export const manageConnection = <THandle>({
         if (!isEnabled()) return Promise.resolve(undefined);
         // Reuse a handle that is still good; a dead one falls through to a fresh attempt.
         if (handle && isReady(handle)) return Promise.resolve(handle);
-        // Resolve, never reject: a failed connect is a skipped optimisation for the cache and an
-        // inline fallback for the queue, not a failed request.
+        // Resolve, never reject: a failed connect is a skipped optimisation, not a failed request.
         return attempt().catch(() => undefined);
     };
 
@@ -234,7 +255,7 @@ export const manageConnection = <THandle>({
             handle = undefined;
         },
 
-        reportUnavailable,
+        reportUnavailable: latch.report,
 
         stop: () => {
             // An attempt still running owns the handle this is about to close, so it is settled
@@ -252,7 +273,7 @@ export const manageConnection = <THandle>({
                     .finally(() => {
                         handle = undefined;
                         connectPromise = undefined;
-                        warningLogged = false;
+                        latch.clear();
                     })
             );
         }

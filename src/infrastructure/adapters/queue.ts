@@ -5,11 +5,12 @@
  * the work inline (see `adapters/mailer.ts` → `enqueueEmail`).
  *
  * Reconnection is amqplib's own opt-in `recovery` option (2.0.1+), not
- * `@infrastructure/adapters/managed-connection`: recovery retries the CONNECTION forever with
- * backoff and re-runs `setup` after every successful (re)connect — exactly "declare the queues,
- * re-bind every consumer", the one thing this adapter needs redone whenever the connection comes
- * back. `managed-connection.ts` stays for Redis, where recovery is demand-driven (the next cache
- * read retries) rather than a background loop this module now gets for free.
+ * `@infrastructure/adapters/managed-connection`'s lifecycle: recovery retries the CONNECTION
+ * forever with backoff and re-runs `setup` after every successful (re)connect — exactly "declare
+ * the queues, re-bind every consumer", the one thing this adapter needs redone whenever the
+ * connection comes back. `managed-connection.ts`'s own lifecycle stays for Redis, where recovery
+ * is demand-driven (the next cache read retries) rather than a background loop; only its shared
+ * warn-once latch is reused here.
  *
  * See: docs/tools/rabbitmq.md
  */
@@ -31,7 +32,10 @@ import amqplib, {
 import type { ZodType } from 'zod';
 import { getJson } from '@guebbit/js-toolkit';
 import { logger } from '@infrastructure/adapters/logger';
-import type { DependencyStatus } from '@infrastructure/adapters/managed-connection';
+import {
+    unavailabilityLatch,
+    type DependencyStatus
+} from '@infrastructure/adapters/managed-connection';
 import { WORKER_CHANNELS } from '@types';
 import { environmentFlag, environmentNumber } from '@infrastructure/runtime/environment';
 import { queueJobsDeadLetteredTotal } from '@infrastructure/observability/metrics-queue';
@@ -90,23 +94,18 @@ let recoveringConnection: RecoveringChannelModel | undefined;
 /** Whether {@link ensureConnecting} has already dialed — separate from {@link recoveringConnection} so a burst of calls before the first connect settles shares the one attempt instead of each starting its own. */
 let connectionStarted = false;
 
-/** Warn-once latch: log an outage once, then stay quiet until {@link reportUnavailable}'s caller sees it recover. */
-let warningLogged = false;
-
 /**
- * Log once that the broker is unreachable, then latch quiet — shared by a publish that fails
- * mid-flight and the connection's own `disconnect` event, so either path reports it exactly once.
+ * Warn-once latch, shared by a publish that fails mid-flight and the connection's own
+ * `disconnect` event, so either path reports the outage exactly once.
  *
  * `error`, not `warn`: unlike the cache, a dead queue is not just a lost optimisation —
  * `quarantineUploadedImages` and `enqueueImageDigest` both degrade to running work inline, which
  * changes request latency and revives the unawaited-fallback race this was written to close.
  */
-const reportUnavailable = (error: unknown): void => {
-    if (warningLogged) return;
+const unavailabilityLog = unavailabilityLatch((error) =>
     // Stryker disable next-line all
-    logger.error({ message: 'RabbitMQ unavailable, queue operations will be skipped.', error });
-    warningLogged = true;
-};
+    logger.error({ message: 'RabbitMQ unavailable, queue operations will be skipped.', error })
+);
 
 /**
  * How long {@link setupChannel} waits before re-opening a channel that closed while its
@@ -137,14 +136,14 @@ const setupChannel = async (model: ChannelModel): Promise<void> => {
     // backoff. If the connection is ALSO down, `createConfirmChannel` below rejects harmlessly —
     // amqplib's own recovery reaches `setupChannel` again once it reconnects, same as any other
     // (re)connect; this is only for the channel-only close that recovery never sees at all.
-    ch.on('error', reportUnavailable);
+    ch.on('error', unavailabilityLog.report);
     ch.on('close', () => {
         if (currentChannel !== ch) return;
         currentChannel = undefined;
         // `.unref()` — same reasoning as `RECOVERY_OPTIONS`'s own docblock: a timer nothing else
         // is waiting on must not be the reason a test process (or a graceful shutdown) hangs.
         const retry = setTimeout(() => {
-            void setupChannel(model).catch(reportUnavailable);
+            void setupChannel(model).catch(unavailabilityLog.report);
         }, CHANNEL_REOPEN_DELAY_MS);
         retry.unref();
     });
@@ -191,19 +190,18 @@ const ensureConnecting = (): void => {
             // Fires on every RECONNECT — never on this first connect, which is what THIS promise
             // IS resolving for; a listener attached here cannot also catch the event that led to it.
             model.on('connect', () => {
-                if (!warningLogged) return;
+                if (!unavailabilityLog.clear()) return;
                 // Stryker disable next-line all
                 logger.info({ message: 'RabbitMQ reachable again, queue operations resumed.' });
-                warningLogged = false;
             });
             model.on('disconnect', (error) => {
                 currentChannel = undefined;
-                reportUnavailable(error);
+                unavailabilityLog.report(error);
             });
         })
         // Only reachable when `maxRetries` is finite (`NODE_ENV=test` above) — production's
         // `Infinity` default never rejects this promise, so there is nothing to catch there.
-        .catch(reportUnavailable);
+        .catch(unavailabilityLog.report);
 };
 
 /**
@@ -249,7 +247,7 @@ export const stopQueue = (): Promise<void> => {
     recoveringConnection = undefined;
     connectionStarted = false;
     currentChannel = undefined;
-    warningLogged = false;
+    unavailabilityLog.clear();
     if (!connection) return Promise.resolve();
     return connection.close().catch(() => undefined);
 };
@@ -538,7 +536,7 @@ export const publishToQueue = <TPayload = unknown>(
                 })
         )
         .catch((error: unknown) => {
-            reportUnavailable(error);
+            unavailabilityLog.report(error);
             return false;
         });
 };
@@ -606,7 +604,7 @@ const safeAck = (ch: ConfirmChannel, incoming: ConsumeMessage): void => {
     try {
         ch.ack(incoming);
     } catch (error) {
-        reportUnavailable(error);
+        unavailabilityLog.report(error);
     }
 };
 
@@ -622,7 +620,7 @@ const safeNack = (
     try {
         ch.nack(incoming, allUpTo, requeue);
     } catch (error) {
-        reportUnavailable(error);
+        unavailabilityLog.report(error);
     }
 };
 
