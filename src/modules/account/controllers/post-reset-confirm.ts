@@ -12,7 +12,7 @@ import { accountService, PASSWORD_RESET_TOKEN_TYPE } from '../services';
 import { destroyRefreshCookie, destroyLoggedCookie } from '../session/cookies';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { PasswordResetConfirmRequest } from '@types';
-import { parseBody, refused } from '@infrastructure/http/controller';
+import { parseBody, refused, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
@@ -88,7 +88,5 @@ export const postResetConfirm = (
                     });
             });
         })
-        .catch(() => {
-            rejectResponse(response, 500, []);
-        });
+        .catch(catchAs(response, 'postResetConfirm'));
 };

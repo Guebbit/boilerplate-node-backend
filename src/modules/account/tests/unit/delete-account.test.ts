@@ -118,7 +118,7 @@ describe('DELETE /account — deleteAccountRequest', () => {
         expect(mockSuccessResponse).toHaveBeenCalled();
     });
 
-    it('returns 500 when service throws', async () => {
+    it('returns 500 when service throws, logged rather than swallowed', async () => {
         mockFindByEmail.mockRejectedValue(new Error('db error'));
 
         const req = {
@@ -128,7 +128,10 @@ describe('DELETE /account — deleteAccountRequest', () => {
 
         await deleteAccountRequest(req as never, res);
 
-        expect(mockRejectResponse).toHaveBeenCalledWith(res, 500, []);
+        // Through `catchAs` now, the same interpreter every other write path answers through —
+        // `errors` defaults to `[]` inside `rejectResponse` itself, never passed explicitly by
+        // the caller.
+        expect(mockRejectResponse).toHaveBeenCalledWith(res, 500);
     });
 });
 

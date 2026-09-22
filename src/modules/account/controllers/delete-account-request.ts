@@ -8,9 +8,10 @@ import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { userService } from '@modules/users';
 import { accountService } from '../services';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { successResponse } from '@infrastructure/http/response';
 import { authAccountDeleteTotal } from '../metrics';
 import { callerContextOf } from '@infrastructure/http/request';
+import { catchAs } from '@infrastructure/http/controller';
 
 /**
  * Sends the account-deletion confirmation email; the token is minted and delivered by the
@@ -46,5 +47,5 @@ export const deleteAccountRequest = (request: Request, response: Response) => {
                     );
                 });
         })
-        .catch(() => rejectResponse(response, 500, []));
+        .catch(catchAs(response, 'deleteAccountRequest'));
 };

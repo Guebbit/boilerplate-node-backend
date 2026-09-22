@@ -801,6 +801,44 @@ describe('PUT /account (email change) and /account/email-change-confirm', () => 
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
     });
+
+    /*
+     * B17: `PUT /account`'s own request-time check (`emailOrPendingEmailTaken`) already refuses a
+     * SECOND request naming an address already pending elsewhere — so the only way this write
+     * still collides is a genuine concurrent race that check cannot see (two requests landing
+     * within the same brief window), which a sequential test cannot reproduce deterministically.
+     * The other account's email is forced straight through the repository instead, standing in
+     * for whichever write actually won that race — what's under test is `completeEmailChange`'s
+     * handling of the resulting E11000, not how the collision came about.
+     */
+    it('answers 409 when the new address was claimed by someone else in the meantime', async () => {
+        const changer = await loginWithCookie({
+            email: 'racer-one@example.com',
+            verifiedAt: new Date()
+        });
+        await api()
+            .put('/account')
+            .set('Authorization', changer.bearer)
+            .send({ email: 'contested@example.com' });
+        const token = verifyTokenFromMail();
+
+        const holder = await createUser({
+            email: 'racer-two@example.com',
+            verifiedAt: new Date()
+        });
+        const holderDocument = await userRepository.findById(holder.id);
+        if (!holderDocument) throw new Error('test fixture missing: holder document');
+        holderDocument.email = 'contested@example.com';
+        await userRepository.save(holderDocument);
+
+        const confirm = await api().post('/account/email-change-confirm').send({ token });
+
+        expect(confirm.status).toBe(409);
+        expect(confirm).toSatisfyApiSpec();
+        // The loser changes nothing — still the account it started as.
+        const stored = await userRepository.findById(changer.user.id);
+        expect(stored?.email).toBe(changer.user.email);
+    });
 });
 
 describe('the address book: /account/addresses', () => {

@@ -13,7 +13,7 @@ import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { VerifyEmailConfirmRequest } from '@types';
 import { authEmailChangeConfirmTotal } from '../metrics';
 import { accountService, EMAIL_CHANGE_TOKEN_TYPE } from '../services';
-import { rejectValidation } from '@infrastructure/http/controller';
+import { rejectValidation, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
@@ -69,8 +69,12 @@ export const postEmailChangeConfirm = (
                     });
             });
         })
-        .catch(() => {
+        .catch((error: unknown) => {
             authEmailChangeConfirmTotal.inc({ status: 'failure' });
-            rejectResponse(response, 500, []);
+            // The status is DERIVED, not assumed 500: the new address being claimed by another
+            // account between the request and this confirm is a real 409 (a unique-index refusal
+            // on the save), not a server failure — `catchAs` is what tells the two apart, and logs
+            // whichever one actually happened instead of swallowing it.
+            catchAs(response, 'postEmailChangeConfirm')(error);
         });
 };

@@ -11,7 +11,7 @@ import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { VerifyEmailConfirmRequest } from '@types';
 import { authEmailVerifyTotal } from '../metrics';
 import { accountService, EMAIL_VERIFY_TOKEN_TYPE } from '../services';
-import { rejectValidation } from '@infrastructure/http/controller';
+import { rejectValidation, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
@@ -61,8 +61,8 @@ export const postVerifyConfirm = (
                     });
             });
         })
-        .catch(() => {
+        .catch((error: unknown) => {
             authEmailVerifyTotal.inc({ status: 'failure' });
-            rejectResponse(response, 500, []);
+            catchAs(response, 'postVerifyConfirm')(error);
         });
 };

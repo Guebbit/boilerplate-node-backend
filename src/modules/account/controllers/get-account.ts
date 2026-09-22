@@ -9,6 +9,7 @@ import type { User } from '@types';
 import { userService } from '@modules/users';
 import { accountService } from '../services';
 import { callerContextOf } from '@infrastructure/http/request';
+import { catchAs } from '@infrastructure/http/controller';
 
 /**
  * GET /account — the authenticated user's full profile, read fresh from the users collection.
@@ -31,5 +32,5 @@ export const getAccount = (request: Request, response: Response): void => {
                 successResponse<User>(response, userService.toUser(user, authContext.roles.tenant));
             else rejectResponse(response, 401);
         })
-        .catch(() => rejectResponse(response, 500));
+        .catch(catchAs(response, 'getAccount'));
 };
