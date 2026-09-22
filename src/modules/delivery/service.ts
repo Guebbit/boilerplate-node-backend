@@ -212,13 +212,53 @@ export const recordShipment = (
     });
 };
 
+/** The refusal every {@link recordDelivery} gate answers alike — one shape, one place. */
+const notShippedReject = (): ResponseReject =>
+    generateReject(409, [
+        { code: 'ORDER_NOT_SHIPPED', message: t('delivery.not-shippable-for-delivery') }
+    ]);
+
 /**
- * Record a parcel's arrival — the delivery door. Stamps the shipment FIRST, then asks `orders`
- * to move: an order that cannot legally reach `delivered` refuses before anything is written. The
- * shipment record itself must still be `shipped` regardless of `forced` — a parcel with no
- * recorded handover has nothing to stamp arrived, override or not; `forced` only widens which
- * ORDER statuses are eligible (an override holder's call — useful when the order's own status
- * field fell out of step with a shipment that genuinely did go out).
+ * The write half of {@link recordDelivery}, run only once a live `shipped` parcel is confirmed to
+ * exist. The order moves FIRST, the shipment is stamped second — a parcel record is evidence the
+ * order arrived, not the other way round. Stamping the shipment first and only then asking
+ * `orders` to move would let a refused order move leave a `delivered` parcel paired with an order
+ * stuck at `shipped`, which nothing — forced included, since the caller already confirmed the
+ * shipment — could ever move forward again. This order leaves BOTH sides exactly where they stood
+ * on a failed order move; the caller's own upfront read is what keeps this narrowed to a genuine
+ * concurrent race rather than the common case (no shipment at all) that must never reach here.
+ */
+const moveAndStampDelivered = (
+    orderId: string,
+    context: CallerContext,
+    forced: boolean | undefined,
+    reason: string | undefined
+): Promise<ResponseSuccess<Shipment> | ResponseReject> => {
+    const moveOrder = forced
+        ? orderService.forceMove(orderId, OrderStatus.delivered, reason!, context)
+        : orderService.markDelivered(orderId);
+
+    return moveOrder.then((moved) => {
+        if (!moved) return notShippedReject();
+
+        return shipmentRepository
+            .updateStatusIfIn(orderId, ['shipped'], 'delivered', { deliveredAt: new Date() })
+            .then((updated) => {
+                if (!updated) return notShippedReject();
+
+                auditDelivered(context, orderId);
+                return generateSuccess(toShipmentResponse(updated));
+            });
+    });
+};
+
+/**
+ * Record a parcel's arrival — the delivery door. Confirms the shipment is actually `shipped`
+ * FIRST — a READ, nothing written yet — then asks `orders` to move, then stamps the shipment
+ * `delivered`. `forced` only widens which ORDER statuses are eligible; it never means the
+ * shipment doesn't have to exist. Without the upfront read, a forced delivery of an order with no
+ * parcel on file could move the order to `delivered` and only THEN discover there was nothing to
+ * stamp — a 409 that lies about what already happened, since the order move is not rolled back.
  * @param orderId - the order that arrived
  * @param context - the caller, for the audit entry
  * @param forced - skip the normal `shipped`-only order-status gate; requires `orders.any.override` + `reason`
@@ -238,43 +278,12 @@ export const recordDelivery = (
         const eligible = forced
             ? canOverrideTo(order.status, OrderStatus.delivered)
             : canTransition(order.status, OrderStatus.delivered, 'system');
-        if (!eligible)
-            return generateReject(409, [
-                { code: 'ORDER_NOT_SHIPPED', message: t('delivery.not-shippable-for-delivery') }
-            ]);
+        if (!eligible) return notShippedReject();
 
-        /*
-         * The order moves FIRST, the shipment is stamped second — a parcel record is evidence the
-         * order arrived, not the other way round. Stamping the shipment first and only then
-         * asking `orders` to move would let a refused order move leave a `delivered` parcel
-         * paired with an order stuck at `shipped`, which nothing — forced included, since a
-         * forced move here still demands the shipment be `shipped` — could ever move forward
-         * again. This order leaves BOTH sides exactly where they stood on a failed order move.
-         */
-        const moveOrder = forced
-            ? orderService.forceMove(orderId, OrderStatus.delivered, reason!, context)
-            : orderService.markDelivered(orderId);
+        return shipmentRepository.findByOrderId(orderId).then((shipment) => {
+            if (shipment?.status !== 'shipped') return notShippedReject();
 
-        return moveOrder.then((moved) => {
-            if (!moved)
-                return generateReject(409, [
-                    { code: 'ORDER_NOT_SHIPPED', message: t('delivery.not-shippable-for-delivery') }
-                ]);
-
-            return shipmentRepository
-                .updateStatusIfIn(orderId, ['shipped'], 'delivered', { deliveredAt: new Date() })
-                .then((shipment) => {
-                    if (!shipment)
-                        return generateReject(409, [
-                            {
-                                code: 'ORDER_NOT_SHIPPED',
-                                message: t('delivery.not-shippable-for-delivery')
-                            }
-                        ]);
-
-                    auditDelivered(context, orderId);
-                    return generateSuccess(toShipmentResponse(shipment));
-                });
+            return moveAndStampDelivered(orderId, context, forced, reason);
         });
     });
 };

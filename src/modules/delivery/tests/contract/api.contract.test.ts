@@ -10,7 +10,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/callers';
 import { api, authenticateAs } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
-import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
+import { createOrder, readOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { deliveryService } from '@modules/delivery/service';
 import { OrderStatus } from '@types';
 
@@ -123,5 +123,30 @@ describe('POST /delivery/order/{orderId}/deliver', () => {
         expect(response.status).toBe(200);
         expect(response.body.data.status).toBe('delivered');
         expect(response).toSatisfyApiSpec();
+    });
+
+    /*
+     * B20: `recordDelivery` used to move the order to `delivered` BEFORE checking a shipment
+     * existed to stamp — a forced deliver on an order with no parcel on file still succeeded in
+     * moving the order, and only then answered 409, a refusal that lied about what already
+     * happened. `forced` widens which ORDER statuses are eligible; it never means the shipment
+     * doesn't have to exist.
+     */
+    it('answers 409 and leaves the order untouched when forced-delivering one with no shipment', async () => {
+        const { user, bearer: adminBearer } = await authenticateAs('admin');
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.processing
+        });
+
+        const response = await api()
+            .post(`/delivery/order/${String(order._id)}/deliver`)
+            .set('Authorization', adminBearer)
+            .send({ forced: true, reason: 'testing the override path' });
+
+        expect(response.status).toBe(409);
+        expect(response).toSatisfyApiSpec();
+        const stored = await readOrder(String(order._id));
+        expect(stored?.status).toBe(OrderStatus.processing);
     });
 });
