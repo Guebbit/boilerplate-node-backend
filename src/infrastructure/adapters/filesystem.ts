@@ -59,6 +59,35 @@ export const deleteFile = (filePath: string) =>
     );
 
 /**
+ * Delete one file outright, treating "already gone" as success rather than a failure worth
+ * logging — a cache cleanup or reaper sweep racing another deletion of the SAME file is the
+ * ordinary case here, not an error.
+ *
+ * Unlike {@link deleteFile}, this never throws AND never logs for that ordinary case — the caller
+ * decides what identifies the file in the warning it DOES log, via `fields`, since an orderId, a
+ * bare filename and a spool key each name their file a different way.
+ *
+ * @param filePath - the file to remove
+ * @param message - the warning logged for anything other than "already gone" (`ENOENT`)
+ * @param fields - fields identifying the file to a reader of that warning
+ * @returns whether a file was actually deleted
+ */
+export const unlinkIfPresent = (
+    filePath: string,
+    message: string,
+    fields: Record<string, unknown>
+): Promise<boolean> =>
+    unlink(filePath).then(
+        () => true,
+        (error: unknown) => {
+            if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
+                // Stryker disable next-line all
+                logger.warn({ message, ...fields, error });
+            return false;
+        }
+    );
+
+/**
  * Rewrite a filesystem path as a URL path: every backslash becomes a forward slash.
  *
  * `path.posix.normalize()` won't do this — it leaves existing backslashes alone, since on POSIX

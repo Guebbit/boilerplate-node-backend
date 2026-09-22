@@ -11,10 +11,10 @@
 
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import ejs from 'ejs';
-import { logger } from '@infrastructure/adapters/logger';
 import { renderHtmlToPdf } from '@infrastructure/adapters/pdf';
+import { unlinkIfPresent } from '@infrastructure/adapters/filesystem';
 import { getDefaultLocale } from '@infrastructure/i18n';
 import { orderRepository } from '../repository';
 import { invoiceDocument, type InvoiceOrder } from '../emails';
@@ -143,15 +143,7 @@ export const renderInvoicePdf = (orderId: string): Promise<Buffer | undefined> =
  * @returns whether a file was actually deleted
  */
 export const deleteCachedInvoice = (orderId: string): Promise<boolean> =>
-    unlink(invoicePdfPath(orderId)).then(
-        () => true,
-        (error: unknown) => {
-            if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
-                // Stryker disable next-line all
-                logger.warn({ message: 'Could not delete cached invoice PDF.', orderId, error });
-            return false;
-        }
-    );
+    unlinkIfPresent(invoicePdfPath(orderId), 'Could not delete cached invoice PDF.', { orderId });
 
 /** A Mongo ObjectId's own shape — what every `<orderId>.pdf` this cache ever writes is named after. */
 const ORDER_ID_PATTERN = /^([\da-f]{24})\.pdf$/;
@@ -195,15 +187,7 @@ const cachedInvoiceFiles = (): Promise<{ root: string; files: CachedInvoiceFile[
  * one also reaches a stale `.tmp` a reaper found, which no orderId alone resolves a path for.
  */
 const deleteCacheFile = (root: string, name: string): Promise<boolean> =>
-    unlink(path.join(root, name)).then(
-        () => true,
-        (error: unknown) => {
-            if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
-                // Stryker disable next-line all
-                logger.warn({ message: 'Could not delete cached invoice file.', name, error });
-            return false;
-        }
-    );
+    unlinkIfPresent(path.join(root, name), 'Could not delete cached invoice file.', { name });
 
 /**
  * Deletes every cached file with no order left to name it — `scripts/ops/reap-invoices.ts`'s one sweep,

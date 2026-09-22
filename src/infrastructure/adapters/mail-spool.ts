@@ -16,9 +16,8 @@
 
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { mkdir, unlink, writeFile } from 'node:fs/promises';
-import { logger } from '@infrastructure/adapters/logger';
-import { reapDirectory } from './filesystem';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { reapDirectory, unlinkIfPresent } from './filesystem';
 
 /**
  * Where a spooled attachment lives between the request that staged it and the mail that sends it.
@@ -75,13 +74,8 @@ export const discardSpooled = (key: string): Promise<void> => {
     const target = resolveSpooled(key);
     if (!target) return Promise.resolve();
 
-    return unlink(target).then(
-        () => undefined,
-        (error: unknown) => {
-            if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
-                // Stryker disable next-line all
-                logger.warn({ message: 'Could not discard spooled attachment.', key, error });
-        }
+    return unlinkIfPresent(target, 'Could not discard spooled attachment.', { key }).then(
+        () => undefined
     );
 };
 
