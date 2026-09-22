@@ -17,7 +17,6 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import {
     AccessInvariantError,
-    administratorsOf,
     assertCanGrant,
     assignRole,
     assignDefaultRole,
@@ -33,7 +32,7 @@ import {
 } from '../../service';
 import { membershipRepository } from '../../repository';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
-import { PERMISSION_KEYS, permissionsOfRole } from '@kernel/permissions';
+import { permissionsOfRole } from '@kernel/permissions';
 import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
 import { testCallerContext, callerContextAs } from '@tests/callers';
@@ -143,7 +142,10 @@ describe('the invariants', () => {
 
         await revokeRole('only-owner', String(shop._id), 'tenant');
 
-        expect(await administratorsOf(String(shop._id), 'tenant')).toEqual([]);
+        expect(await rolesOf('only-owner', String(shop._id))).toEqual({
+            tenant: null,
+            platform: null
+        });
     });
 
     it('surfaces a rejecting delete instead of losing it silently', async () => {
@@ -160,19 +162,6 @@ describe('the invariants', () => {
         );
 
         spy.mockRestore();
-    });
-
-    it('counts administrators by what they HOLD, computed against the shared presets', async () => {
-        const shop = await ensureTenant('shop', 'The Shop');
-        const everyTenantKey = PERMISSION_KEYS.filter((key) => key.scope === 'tenant').map(
-            (key) => key.key
-        );
-        // `admin` is the only preset that holds every tenant key — proving the invariant asks
-        // the YAML, not a hand-picked name, by checking that fact rather than assuming it.
-        expect(permissionsOfRole('admin')).toEqual(expect.arrayContaining(everyTenantKey));
-        await assignRole('person-1', String(shop._id), 'tenant', 'admin');
-
-        expect(await administratorsOf(String(shop._id), 'tenant')).toEqual(['person-1']);
     });
 
     // `deleteRole` and the editable per-tenant role it operated on are gone — presets are the

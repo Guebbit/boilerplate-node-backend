@@ -62,8 +62,9 @@ A role's PERMISSIONS live in `shared/authorization-roles.yaml` alone — the sam
 reads byte-for-byte — never in this module's own collection. What this module stores is the other
 half: WHO holds a role, in which shop, at which scope. `assignRole` validates a name against the
 presets before writing a membership, so a role that exists nowhere can never be silently assigned;
-`administratorsOf` counts membership rows but asks the presets which role names count as
-administrators. One fact, one home, on each side of that line.
+`isUnrestrictedRole` (`@kernel/permissions`) asks those same presets whether a held name counts as
+an administrator, rather than matching against a hardcoded list here. One fact, one home, on each
+side of that line.
 :::
 
 Every invariant here is a refusal, not a comment: a granter cannot hand over a role they do not

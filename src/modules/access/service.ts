@@ -11,7 +11,7 @@
  */
 
 import type { AuthorizationScope, CallerContext } from '@types';
-import { findRole, PERMISSION_KEYS, PRESET_ROLES } from '@kernel/permissions';
+import { findRole } from '@kernel/permissions';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
 import type { AuditAction } from '@infrastructure/observability/audit';
@@ -318,41 +318,6 @@ export const revokeRole = (
             throw error;
         }
     );
-};
-
-/**
- * The role names that WOULD count as administering a scope — "unrestricted" is no longer one
- * token to match, there is no wildcard, so a role counts when its declared `permissions` array is
- * a SUPERSET of every key this scope currently declares. Computed against
- * `shared/authorization-roles.yaml`, in memory — the preset list is small and fixed for the
- * process's lifetime, so no query is worth it here. {@link administratorsOf} turns this into who
- * actually holds one.
- */
-const administratorRoleNames = (scope: AuthorizationScope): string[] => {
-    const required = PERMISSION_KEYS.filter((key) => key.scope === scope).map((key) => key.key);
-    return PRESET_ROLES.filter(
-        (role) => role.scope === scope && required.every((key) => role.permissions.includes(key))
-    ).map((role) => role.name);
-};
-
-/**
- * Everyone holding an unrestricted role in a place, by user id.
- *
- * The candidate names come from {@link administratorRoleNames}; which userIds actually HOLD one
- * of those names is still the one thing the database answers, since assignment is the data half
- * of this model.
- */
-export const administratorsOf = (
-    tenantId: string | null,
-    scope: AuthorizationScope
-): Promise<string[]> => {
-    const names = administratorRoleNames(scope);
-
-    return names.length === 0
-        ? Promise.resolve([])
-        : membershipRepository
-              .findByRoles(tenantId, scope, names)
-              .then((memberships) => memberships.map((one) => one.userId));
 };
 
 /**

@@ -3,8 +3,7 @@
  * Audit actions this module emits, declared by augmentation — see `modules/account/audit.ts` for
  * why, rather than a shared enum. A role grant or revocation is the one action in this module that
  * changes what somebody may do, which is exactly the class of event a compliance query needs to
- * find by prefix (`access.*`) — everything else here (`membershipsOf`, `administratorsOf`, …) only
- * reads.
+ * find by prefix (`access.*`) — everything else here (`membershipsOf`, `rolesOf`, …) only reads.
  */
 
 /** The audit action vocabulary this module owns. */

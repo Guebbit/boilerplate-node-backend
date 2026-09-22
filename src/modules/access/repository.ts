@@ -66,14 +66,6 @@ export const membershipRepository = {
     deleteById: (id: MembershipDocument['_id']): Promise<{ deletedCount?: number }> =>
         membershipModel.deleteOne({ _id: id }).exec(),
 
-    /** Every person holding any of the given role names in one place. */
-    findByRoles: (
-        tenantId: string | null,
-        scope: AuthorizationScope,
-        roleNames: readonly string[]
-    ): Promise<MembershipDocument[]> =>
-        membershipModel.find({ tenantId, scope, role: { $in: roleNames } }).exec(),
-
     /** Every membership row for a set of people, in one place — the batched sibling of `findOne`. */
     findByUserIds: (
         userIds: readonly string[],
