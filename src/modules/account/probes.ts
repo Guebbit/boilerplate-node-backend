@@ -36,12 +36,14 @@ export const probes: Probe[] = [
         body: {
             username: 'root',
             email: '{{seedAdminEmail}}',
-            password: '{{seedAdminPassword}}'
+            password: '{{seedAdminPassword}}',
+            passwordConfirm: '{{seedAdminPassword}}',
+            termsAccepted: true
         }
     },
     {
         name: 'Probe: rate limit (send repeatedly)',
-        why: `A wrong password on purpose. Send it in a burst — the auth rate limiter answers 429, a status the contract never declares because it belongs to middleware rather than to any operation.`,
+        why: `A wrong password on purpose. One send only answers 401 — the identity budget (\`NODE_AUTH_RATE_LIMIT_MAX\`, 10 by default) counts failed attempts, and a rate limiter has nothing to answer with until it is exhausted. Send this same request 10+ times in a row to see the 429, a status the contract never declares because it belongs to middleware rather than to any operation.`,
         method: 'POST',
         path: '/account/login',
         body: {
