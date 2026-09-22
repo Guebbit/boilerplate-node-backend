@@ -143,6 +143,28 @@ export interface RequestInputDeclaration<TId extends string> {
 }
 
 /**
+ * `request.body` as a plain object, safe to index — never the array or scalar a body can also be.
+ *
+ * Express 5 leaves `request.body` `undefined` when nothing parsed it, and a JSON body is just as
+ * legally a bare string, number, `null` or an array as it is an object. Every caller here means
+ * "the object my controller reads fields off", so anything else collapses to `{}` rather than
+ * being cast past what the type checker would otherwise catch.
+ *
+ * Typed by `body` alone (`Pick<Request, 'body'>`), not the full `Request`: `uploads.ts`'s caller
+ * only has that much of the request to give it.
+ *
+ * @param request - the incoming request, or anything carrying its `body`
+ */
+export const bodyRecordOf = (request: Pick<Request, 'body'>): Record<string, unknown> => {
+    // `request.body` is typed `any` by Express; routed through `unknown` before the narrowing
+    // below so the `any` stops here rather than infecting every caller.
+    const body: unknown = request.body;
+    return typeof body === 'object' && body !== null && !Array.isArray(body)
+        ? (body as Record<string, unknown>)
+        : {};
+};
+
+/**
  * Read a route's input according to one declaration, so the multi-source rules aren't
  * re-assembled at every call site.
  *
@@ -203,9 +225,7 @@ export const readInput = <TId extends string = never>(
     };
     const values: Record<RequestInputSource, Record<string, unknown>> = {
         params: request.params,
-        // Express 5 leaves `req.body` UNDEFINED when the request carries no body (express 4
-        // defaulted it to `{}`) — a body-less `DELETE /cart/:productId` otherwise surfaced as 500.
-        body: (request.body ?? {}) as Record<string, unknown>,
+        body: bodyRecordOf(request),
         query: request.query as Record<string, unknown>
     };
     const sources = SURFACE_SOURCES[declaration.surface].map((source) =>

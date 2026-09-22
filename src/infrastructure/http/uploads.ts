@@ -8,6 +8,7 @@
 
 import type { Request } from 'express';
 import { imageStore } from '@infrastructure/adapters/image-store';
+import { bodyRecordOf } from '@infrastructure/http/request';
 
 /**
  * Extract uploaded file paths from a multer-processed request, from whichever of the three shapes
@@ -108,11 +109,13 @@ export const readUploadedImage = (
             deleteUpload: () => imageStore.removeQuarantined(pendingKey)
         };
 
+    // This helper is shared by every image-accepting controller, so the "no body at all" guard
+    // (express 5 leaves `request.body` unset when no parser matched the content-type) covers all
+    // of them at once.
+    const bodyImageUrl = bodyRecordOf(request).imageUrl;
+
     return {
-        // `?? {}` before the read: express 5 leaves `request.body` unset when no parser matched
-        // the content-type. This helper is shared by every image-accepting controller, so the
-        // guard covers all of them at once.
-        imageUrl: ((request.body ?? {}) as { imageUrl?: string }).imageUrl,
+        imageUrl: typeof bodyImageUrl === 'string' ? bodyImageUrl : undefined,
         thumbnailUrl: undefined,
         pendingImageKey: undefined,
         deleteUpload: () => Promise.resolve(false)

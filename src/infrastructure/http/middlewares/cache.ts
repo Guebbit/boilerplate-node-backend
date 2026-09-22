@@ -18,6 +18,7 @@ import {
     invalidateCacheTagsLogged,
     setCacheValue
 } from '@infrastructure/adapters/cache';
+import { bodyRecordOf } from '@infrastructure/http/request';
 import { logger } from '@infrastructure/adapters/logger';
 import { cacheRequestsTotal } from '@infrastructure/observability/metrics-cache';
 import { environmentNumber } from '@infrastructure/runtime/environment';
@@ -220,7 +221,7 @@ const getCacheKey = (request: Request, sortedKeyParameters: readonly string[], k
     // it unifies differ in both — `GET /products` and `POST /products/search`.
     const identity = keyAs ?? `${request.method}:${path}`;
     // Express 5 leaves `body` undefined when the request carries none, which every GET does.
-    const body = (request.body ?? {}) as Record<string, unknown>;
+    const body = bodyRecordOf(request);
     // `Object.hasOwn`, not `in`: the latter walks the prototype chain, so a parameter named
     // `toString` would count as present on every request.
     //

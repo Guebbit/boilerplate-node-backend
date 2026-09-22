@@ -54,8 +54,9 @@ export const writeUsers = (
         booleans: ['active', 'sendSetupEmail']
     });
     // `?? {}`: express 5 leaves `request.body` unset when no parser matched the content-type,
-    // and multer does not fill it in on a non-multipart body either.
-    const { role } = (request.body ?? {}) as { role?: string };
+    // and multer does not fill it in on a non-multipart body either. No cast needed: `role` is
+    // already on every branch of `request.body`'s own generated type, declared above.
+    const { role } = request.body ?? {};
 
     // `= ''` because `zodUserSchema` wants a string: an absent image is an empty url here.
     const {
@@ -112,7 +113,8 @@ export const writeUsers = (
 
         // Neither a password nor a way to get one to the user: `userService.create` would fill
         // the field with a value nobody is ever told and leave the account permanently unusable.
-        const { password } = (request.body ?? {}) as { password?: string };
+        // No cast: `password` is already on every branch of `request.body`'s own generated type.
+        const { password } = request.body ?? {};
         if (!password && !sendSetupEmail) {
             rejectResponse(response, 422, [t('users.field-password-or-setup-required')]);
             return deleteUpload();

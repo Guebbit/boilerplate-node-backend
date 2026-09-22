@@ -40,12 +40,12 @@ export const putAccount = (
     const { imageUrl, thumbnailUrl, pendingImageKey, deleteUpload } = readUploadedImage(request);
 
     /*
-     * Read through the request type rather than parsed against `UpdateAccountBody`, for the reason
-     * `post-signup` gives: `accountService.updateProfile` validates these fields with translated
-     * messages, and the generated schema would answer first in English.
+     * Read through the request's own declared type rather than parsed against `UpdateAccountBody`,
+     * for the reason `post-signup` gives: `accountService.updateProfile` validates these fields
+     * with translated messages, and the generated schema would answer first in English. No further
+     * cast needed: every field read here is common to both `request.body`'s own union members.
      */
-    const { email, username, locale, phone, website, analyticsConsent } = (request.body ??
-        {}) as UpdateAccountRequest;
+    const { email, username, locale, phone, website, analyticsConsent } = request.body ?? {};
 
     return accountService
         .updateProfile(
