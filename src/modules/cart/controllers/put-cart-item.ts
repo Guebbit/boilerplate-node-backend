@@ -4,12 +4,11 @@
  */
 
 import type { Request, Response } from 'express';
-import { t } from '@infrastructure/i18n';
 import { UpdateCartItemByIdBody } from '@api/schemas.zod';
 import { cartService } from '../services';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { successResponse } from '@infrastructure/http/response';
 import type { CartResponse, UpdateCartItemByIdRequest } from '@types';
-import { isValidObjectId, readInput, callerContextOf } from '@infrastructure/http/request';
+import { requireObjectId, readInput, callerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
@@ -31,10 +30,7 @@ export const putCartItem = (
     // productId travels via path param or body; body shape is already validated above.
     const { productId } = readInput(request, { surface: 'write', ids: ['productId'] });
 
-    if (!isValidObjectId(productId)) {
-        rejectResponse(response, 422, [t('generic.error-missing-data')]);
-        return;
-    }
+    if (!requireObjectId(response, productId)) return;
 
     return cartService
         .cartItemUpdateQuantity(userId, productId, quantity, callerContextOf(request))

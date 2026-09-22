@@ -9,9 +9,9 @@
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { cartService } from '../services';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { successResponse } from '@infrastructure/http/response';
 import type { CartResponse, RemoveCartItemRequest } from '@types';
-import { isValidObjectId, readInput, callerContextOf } from '@infrastructure/http/request';
+import { requireObjectId, readInput, callerContextOf } from '@infrastructure/http/request';
 import { catchAs, refused } from '@infrastructure/http/controller';
 
 /**
@@ -30,10 +30,7 @@ export const deleteCartItem = (
     // that can ever supply one.
     const { productId } = readInput(request, { surface: 'write', ids: ['productId'] });
 
-    if (!isValidObjectId(productId)) {
-        rejectResponse(response, 422, [t('generic.error-missing-data')]);
-        return;
-    }
+    if (!requireObjectId(response, productId)) return;
 
     return cartService
         .cartItemRemoveById(userId, productId, callerContextOf(request))

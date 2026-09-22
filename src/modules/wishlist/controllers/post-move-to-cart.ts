@@ -5,9 +5,8 @@
  */
 
 import type { Request, Response } from 'express';
-import { t } from '@infrastructure/i18n';
-import { callerContextOf, isValidObjectId } from '@infrastructure/http/request';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { callerContextOf, requireObjectId } from '@infrastructure/http/request';
+import { successResponse } from '@infrastructure/http/response';
 import { wishlistService } from '../service';
 import { catchAs, refused } from '@infrastructure/http/controller';
 import type { WishlistResponse } from '@types';
@@ -22,12 +21,7 @@ export const postMoveToCart = (request: Request<{ productId: string }>, response
     const userId = request.authContext!.id;
     const { productId } = request.params;
 
-    if (!isValidObjectId(productId)) {
-        // 422 rather than 404: the request is syntactically fine and its value is unusable,
-        // which is what tells a caller the id was malformed rather than merely absent.
-        rejectResponse(response, 422, [t('generic.error-missing-data')]);
-        return;
-    }
+    if (!requireObjectId(response, productId)) return;
 
     return wishlistService
         .wishlistMoveToCart(userId, productId, callerContextOf(request))

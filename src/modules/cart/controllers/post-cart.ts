@@ -7,9 +7,9 @@ import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { UpsertCartItemBody } from '@api/schemas.zod';
 import { cartService } from '../services';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { successResponse } from '@infrastructure/http/response';
 import type { CartResponse, UpsertCartItemRequest } from '@types';
-import { isValidObjectId, callerContextOf } from '@infrastructure/http/request';
+import { requireObjectId, callerContextOf } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
@@ -30,10 +30,7 @@ export const postCart = (
     const { productId, quantity } = body;
 
     // OpenAPI models Id as a plain string; Mongo-specific ObjectId format still needs its own check.
-    if (!isValidObjectId(productId)) {
-        rejectResponse(response, 422, [t('generic.error-missing-data')]);
-        return;
-    }
+    if (!requireObjectId(response, productId)) return;
 
     return cartService
         .cartItemAdd(userId, productId, quantity, callerContextOf(request))

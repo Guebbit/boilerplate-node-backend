@@ -373,6 +373,34 @@ export const tenantCallerContextOf = (
 };
 
 /**
+ * Check if a value is a valid MongoDB ObjectId. Thin wrapper around Mongoose's `isValid` for
+ * readability.
+ *
+ * The `id is string` return type makes this a type guard: `if (isValidObjectId(x))` narrows `x`
+ * from `string | undefined` to `string`, removing the need for a non-null assertion downstream.
+ */
+export const isValidObjectId = (id: string | undefined): id is string =>
+    !!id && Types.ObjectId.isValid(id);
+
+/**
+ * A type guard that also answers 422 when `value` is not a well-formed ObjectId — the check every
+ * write route with a body- or param-carried id (`cart`, `wishlist`) repeats before touching its
+ * service, bundled with the one answer it always gives: the request is syntactically fine and its
+ * value is unusable, which is what tells a caller the id was malformed rather than merely absent.
+ * `orders`' own equivalent checks answer 404 instead — a deliberate difference, not one to route
+ * through this.
+ *
+ * @param response - the express response, used only on failure
+ * @param value - the candidate id
+ * @returns whether `value` is a valid ObjectId, narrowing it to `string` when true
+ */
+export const requireObjectId = (response: Response, value: string | undefined): value is string => {
+    if (isValidObjectId(value)) return true;
+    rejectResponse(response, 422, [t('generic.error-missing-data')]);
+    return false;
+};
+
+/**
  * Validate a MongoDB ObjectId from request params/body, answering 422 and returning `undefined`
  * when it doesn't validate.
  *
@@ -390,25 +418,8 @@ export const extractAndValidateId = (
 ): string | undefined => {
     // Route param first (`/products/:id`), then body — a param is the more explicit intent.
     const { id } = readInput(request, { surface, ids: ['id'] });
-    // `Types.ObjectId.isValid` checks the format (24 hex chars / 12 bytes), not existence.
-    if (!id || !Types.ObjectId.isValid(id)) {
-        // 422 Unprocessable Entity: syntactically valid request, semantically unusable value.
-        // Developer-oriented text in `message`, translated user-facing text in `errors`.
-        rejectResponse(response, 422, [t('generic.error-missing-data')]);
-        return undefined;
-    }
-    return id;
+    return requireObjectId(response, id) ? id : undefined;
 };
-
-/**
- * Check if a value is a valid MongoDB ObjectId. Thin wrapper around Mongoose's `isValid` for
- * readability.
- *
- * The `id is string` return type makes this a type guard: `if (isValidObjectId(x))` narrows `x`
- * from `string | undefined` to `string`, removing the need for a non-null assertion downstream.
- */
-export const isValidObjectId = (id: string | undefined): id is string =>
-    !!id && Types.ObjectId.isValid(id);
 
 /**
  * The raw Express route template a request matched, or `undefined` when nothing did.
