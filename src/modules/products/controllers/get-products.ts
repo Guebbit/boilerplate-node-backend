@@ -14,7 +14,12 @@ import {
 } from '@api/schemas.zod';
 import { productService } from '../service';
 import { callerContextOf } from '@infrastructure/http/request';
-import { optionalBooleanSchema, pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
+import {
+    blankToUndefined,
+    optionalBooleanSchema,
+    pageSchema,
+    pageSizeSchema
+} from '@infrastructure/http/schemas';
 import { createSearchController } from '@infrastructure/surfaces/create-search-controller';
 
 /**
@@ -27,11 +32,11 @@ const searchProductsQuerySchema = SearchProductsBody.extend({
     page: pageSchema,
     pageSize: pageSizeSchema,
     minPrice: z.preprocess(
-        (value) => (value === '' || value === null ? undefined : value),
+        blankToUndefined,
         z.coerce.number().min(searchProductsBodyMinPriceMin).optional()
     ),
     maxPrice: z.preprocess(
-        (value) => (value === '' || value === null ? undefined : value),
+        blankToUndefined,
         z.coerce.number().min(searchProductsBodyMaxPriceMin).optional()
     ),
     // A query string spells a boolean as text; the body carries a real one.

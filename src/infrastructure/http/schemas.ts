@@ -48,7 +48,7 @@ const HARD_DELETE_DEFAULT = false;
  * attempt to set anything. Mapping them to `undefined` lets `.optional()` / `.default()` handle
  * them as absent instead of producing a spurious 422.
  */
-const blankToUndefined = (value: unknown): unknown =>
+export const blankToUndefined = (value: unknown): unknown =>
     // `== null` catches the explicit `null` a JSON body can carry as well as `undefined`.
     value === '' || value == undefined ? undefined : value;
 
