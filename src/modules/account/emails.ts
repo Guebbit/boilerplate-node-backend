@@ -9,37 +9,20 @@
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
-
-/**
- * Absolute URL for a one-time account link.
- *
- * Built here rather than in the template, where it would be assembled from `process.env`
- * mid-markup. A template that only interpolates cannot reach for configuration, which is the
- * property that makes it renderable from a worker with nothing but the payload.
- *
- * Joined through `URL` when `NODE_URL` is set, same reasoning as `oauth/config.ts`'s
- * `oauthRedirectUri`: concatenation depended on `NODE_URL` carrying a trailing slash, and without
- * one produced `https://api.example.comaccount/…`. Unlike that one, this has no fallback host —
- * a relative link in a mail body is merely useless without `NODE_URL`, not a wrong destination
- * the way an OAuth redirect would be, so `NODE_URL` unset still returns the bare path.
- */
-const accountLink = (route: string, token: string): string => {
-    const path = `account/${route}/${token}`;
-    return process.env.NODE_URL ? new URL(path, process.env.NODE_URL).href : path;
-};
+import { frontendLink, type TokenLinkKind } from '@infrastructure/http/frontend-link';
 
 /**
  * Email verification: the email carrying the one-time confirmation link. Shared by both
- * verification tokens (`account/services/verification.ts`) — only `route` differs, so a
- * signup/re-send link lands on `/account/verify/:token` and an email-change link on
- * `/account/email-change/:token`; the copy makes no claim about which address it is.
- * @param route - `'verify'` or `'email-change'`, matching the frontend route the token confirms
+ * verification tokens (`account/services/verification.ts`) — only `kind` differs, so a
+ * signup/re-send link lands on the frontend's verify-email page and an email-change link on its
+ * email-change page; the copy makes no claim about which address it is.
+ * @param kind - `'verify'` or `'email-change'`, matching the frontend page the token confirms
  */
 export const verifyRequestEmail = (
     locale: string,
     name: string,
     token: string,
-    route: 'verify' | 'email-change' = 'verify'
+    kind: Extract<TokenLinkKind, 'verify' | 'email-change'> = 'verify'
 ): EmailContent => {
     const t = translator(locale);
     return {
@@ -52,7 +35,7 @@ export const verifyRequestEmail = (
             greeting: t('account.email.verify-request.greeting', { name }),
             intro: t('account.email.verify-request.intro'),
             linkLabel: t('account.email.verify-request.link-label'),
-            linkUrl: accountLink(route, token),
+            linkUrl: frontendLink(kind, { locale, token }),
             ignore: t('account.email.verify-request.ignore'),
             footer: t('email.footer')
         }
@@ -98,7 +81,7 @@ export const resetRequestEmail = (locale: string, name: string, token: string): 
             greeting: t('account.email.reset-request.greeting', { name }),
             intro: t('account.email.reset-request.intro'),
             linkLabel: t('account.email.reset-request.link-label'),
-            linkUrl: accountLink('reset', token),
+            linkUrl: frontendLink('reset', { locale, token }),
             ignore: t('account.email.reset-request.ignore'),
             footer: t('email.footer')
         }
@@ -123,7 +106,7 @@ export const setupRequestEmail = (locale: string, name: string, token: string): 
             greeting: t('account.email.setup-request.greeting', { name }),
             intro: t('account.email.setup-request.intro'),
             linkLabel: t('account.email.setup-request.link-label'),
-            linkUrl: accountLink('reset', token),
+            linkUrl: frontendLink('reset', { locale, token }),
             ignore: t('account.email.setup-request.ignore'),
             footer: t('email.footer')
         }
@@ -196,7 +179,7 @@ export const deleteRequestEmail = (locale: string, name: string, token: string):
             greeting: t('account.email.delete-request.greeting', { name }),
             intro: t('account.email.delete-request.intro'),
             linkLabel: t('account.email.delete-request.link-label'),
-            linkUrl: accountLink('delete', token),
+            linkUrl: frontendLink('delete', { locale, token }),
             ignore: t('account.email.delete-request.ignore'),
             footer: t('email.footer')
         }

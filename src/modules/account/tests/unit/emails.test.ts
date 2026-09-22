@@ -14,15 +14,16 @@ import {
     deleteRequestEmail,
     deleteConfirmEmail
 } from '@modules/account/emails';
+import { frontendLink } from '@infrastructure/http/frontend-link';
 
 const NAME = 'Ada Lovelace';
 const TOKEN = 'a1b2c3d4e5f6';
 
 /**
- * The four that exist to deliver a link, paired with the path segment each must produce.
- * `setupRequestEmail` shares `resetRequestEmail`'s route deliberately — both spend a
+ * The four that exist to deliver a link, paired with the `frontendLink` kind each must delegate
+ * to. `setupRequestEmail` shares `resetRequestEmail`'s kind deliberately — both spend a
  * `password`-type token at `POST /account/reset-confirm` (see `authentication.ts`'s
- * `requestAccountSetup`) — so it's excluded from the "each token to its own route" case below.
+ * `requestAccountSetup`) — so it's excluded from the "each token to its own kind" case below.
  */
 const LINK_EMAILS = [
     ['verifyRequestEmail', verifyRequestEmail, 'account.verify-request', 'verify'],
@@ -66,66 +67,32 @@ describe('account emails — the template each one names', () => {
 });
 
 describe('account emails — the action links', () => {
-    it.each(LINK_EMAILS)('%s points at /account/%s/<token>', (_name, build, _template, route) => {
+    it.each(LINK_EMAILS)('%s delegates to frontendLink(%s, …)', (_name, build, _template, kind) => {
         const { data } = build('en', NAME, TOKEN);
 
-        // The whole path, not just the token: a link missing the `account/` prefix or naming the
-        // wrong route reaches a page that cannot spend the token, and the user's only recourse is
-        // another link with the same defect.
-        expect(data.linkUrl).toBe(`${process.env.NODE_URL ?? ''}account/${route}/${TOKEN}`);
+        // The whole link, not just the token: `frontendLink` itself is covered by its own unit
+        // suite (`tests/unit/infrastructure/http/frontend-link.test.ts`) — what this builder owns
+        // is picking the right KIND and passing the recipient's own locale and token through
+        // unchanged, never a swapped or hard-coded one.
+        expect(data.linkUrl).toBe(frontendLink(kind, { locale: 'en', token: TOKEN }));
     });
 
-    it('sends each token to its own route, never another flow"s', () => {
-        // The consequence worth naming: a reset token delivered on the delete route, or the other
+    it('sends each token to its own kind, never another flow"s', () => {
+        // The consequence worth naming: a reset token delivered on the delete page, or the other
         // way round, is an account action performed by someone who asked for a different one.
         const verify = verifyRequestEmail('en', NAME, TOKEN).data.linkUrl as string;
         const reset = resetRequestEmail('en', NAME, TOKEN).data.linkUrl as string;
         const remove = deleteRequestEmail('en', NAME, TOKEN).data.linkUrl as string;
 
         expect(new Set([verify, reset, remove]).size).toBe(3);
-        expect(verify).toContain('/verify/');
-        expect(reset).toContain('/reset/');
-        expect(remove).toContain('/delete/');
     });
 
-    it('joins the base URL without losing or doubling the separator', () => {
-        // Asserting the joined result rather than the pieces is what catches a "helpful" slash
-        // added on either side.
-        const url = verifyRequestEmail('en', NAME, TOKEN).data.linkUrl as string;
+    it('carries the recipient"s own locale into the link, not just the copy', () => {
+        const english = verifyRequestEmail('en', NAME, TOKEN).data.linkUrl as string;
+        const italian = verifyRequestEmail('it', NAME, TOKEN).data.linkUrl as string;
 
-        expect(url).not.toContain('//account/');
-        expect(url.endsWith(`account/verify/${TOKEN}`)).toBe(true);
-    });
-
-    it('joins correctly even when NODE_URL carries no trailing slash', () => {
-        // Concatenation would depend on `NODE_URL`'s own trailing slash — missing one would
-        // produce `https://api.example.comaccount/verify/…`. `URL`-based joining resolves it
-        // either way, same reasoning as `oauth/config.ts`'s `oauthRedirectUri`.
-        const original = process.env.NODE_URL;
-        process.env.NODE_URL = 'https://api.example.com';
-
-        try {
-            expect(verifyRequestEmail('en', NAME, TOKEN).data.linkUrl).toBe(
-                `https://api.example.com/account/verify/${TOKEN}`
-            );
-        } finally {
-            if (original !== undefined) process.env.NODE_URL = original;
-        }
-    });
-
-    it('still produces a usable path when no base URL is configured', () => {
-        // `?? ''` — a deployment with no `NODE_URL` set must not emit the string "undefined" in
-        // the middle of every link in every email it sends.
-        const original = process.env.NODE_URL;
-        delete process.env.NODE_URL;
-
-        try {
-            expect(verifyRequestEmail('en', NAME, TOKEN).data.linkUrl).toBe(
-                `account/verify/${TOKEN}`
-            );
-        } finally {
-            if (original !== undefined) process.env.NODE_URL = original;
-        }
+        expect(new URL(english).pathname.startsWith('/en/')).toBe(true);
+        expect(new URL(italian).pathname.startsWith('/it/')).toBe(true);
     });
 });
 

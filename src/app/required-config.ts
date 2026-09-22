@@ -28,10 +28,10 @@ import { resolvePersonalFieldMode } from '@infrastructure/adapters/logger';
 import { resolveAnalyticsProvider } from '@infrastructure/observability/analytics';
 
 /**
- * `NODE_URL` is unconditional: unset, `account/emails.ts` and `account/oauth/config.ts` build
- * relative links, so every password-reset mail and OAuth callback points nowhere — a failure that
- * surfaces as a support ticket, never as an error. `NODE_CORS_ORIGIN` is checked in production
- * only, where its `http://localhost:8080` fallback (`app/security.ts`) cannot be the right answer.
+ * `NODE_URL` is unconditional: unset, `account/oauth/config.ts` builds a relative OAuth redirect
+ * URI, so every login through a real provider points nowhere — a failure that surfaces as a
+ * support ticket, never as an error. `NODE_CORS_ORIGIN` is checked in production only, where its
+ * `http://localhost:8080` fallback (`app/security.ts`) cannot be the right answer.
  *
  * Both are the app's own. The shop's jurisdiction and its two VAT rates are NOT — `orders` and
  * `products` declare those on their own manifests, so deleting either module deletes its gate.
