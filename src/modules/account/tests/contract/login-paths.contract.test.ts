@@ -99,7 +99,9 @@ interface LoginPath {
      * account's id (for the audit's `actor_user_id`). Omitted on the refresh path — see the
      * module doc on why it isn't in the success table.
      */
-    attemptSuccess?: (role: 'admin' | 'customer') => Promise<{ response: Response; userId: string }>;
+    attemptSuccess?: (
+        role: 'admin' | 'customer'
+    ) => Promise<{ response: Response; userId: string }>;
 
     /** The status a SUCCESSFUL attempt on this path answers with. */
     successStatus?: number;
@@ -220,23 +222,26 @@ describe.each([passwordPath, oauthPath])(
         it.each([
             ['admin', 'admin'],
             ['customer', 'user']
-        ] as const)('membership %s logs in audited as %s, exactly once', async (membershipRole, auditRole) => {
-            const auditSpy = observePort(auditPort.emitAuditEvent);
-            const incSpy = jest.spyOn(authLoginTotal, 'inc');
+        ] as const)(
+            'membership %s logs in audited as %s, exactly once',
+            async (membershipRole, auditRole) => {
+                const auditSpy = observePort(auditPort.emitAuditEvent);
+                const incSpy = jest.spyOn(authLoginTotal, 'inc');
 
-            const { response, userId } = await attemptSuccess!(membershipRole);
+                const { response, userId } = await attemptSuccess!(membershipRole);
 
-            expect(response.status).toBe(successStatus);
-            const loginCalls = auditSpy.mock.calls.filter(
-                ([event]) => event.action === accountAuditActions.AUTH_LOGIN
-            );
-            expect(loginCalls).toHaveLength(1);
-            expect(loginCalls[0][0]).toMatchObject({
-                actor_user_id: userId,
-                actor_role: auditRole,
-                outcome: 'success'
-            });
-            expect(incSpy).toHaveBeenCalledWith({ status: 'success' });
-        });
+                expect(response.status).toBe(successStatus);
+                const loginCalls = auditSpy.mock.calls.filter(
+                    ([event]) => event.action === accountAuditActions.AUTH_LOGIN
+                );
+                expect(loginCalls).toHaveLength(1);
+                expect(loginCalls[0][0]).toMatchObject({
+                    actor_user_id: userId,
+                    actor_role: auditRole,
+                    outcome: 'success'
+                });
+                expect(incSpy).toHaveBeenCalledWith({ status: 'success' });
+            }
+        );
     }
 );
