@@ -26,19 +26,11 @@ const restore = (previous: ReadonlyMap<string, string | undefined>): void => {
  * @param value - what to set it to
  * @param body - what to run with it set
  */
-export const withEnvironment = async (
+export const withEnvironment = (
     key: string,
     value: string,
     body: () => Promise<void>
-): Promise<void> => {
-    const previous = new Map([[key, process.env[key]]]);
-    process.env[key] = value;
-    try {
-        await body();
-    } finally {
-        restore(previous);
-    }
-};
+): Promise<void> => withEnvironmentOverrides({ [key]: value }, body);
 
 /**
  * {@link withEnvironment} for several variables at once, returning what `body` resolves to — the
