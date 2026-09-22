@@ -162,6 +162,11 @@ export const handleUncaughtError = (
 export const installErrorHandling = (app: Express): void => {
     app.use(handleUncaughtError);
 
+    // No handler under a test runner, for either process-level event: registering one for
+    // `unhandledRejection` swallows it into an audit line instead of letting Jest's own handler
+    // pin the rejection on the test that caused it, same reasoning as `uncaughtException` below.
+    if (process.env.NODE_ENV === 'test') return;
+
     /*
      * Process-level error handlers — audit unhandled rejections/exceptions
      */
@@ -174,10 +179,6 @@ export const installErrorHandling = (app: Express): void => {
             error: reason
         });
     });
-
-    // No handler under a test runner: registering one replaces Node's default (print the stack,
-    // exit 1), and Jest's own is what reports the throw against the test that caused it.
-    if (process.env.NODE_ENV === 'test') return;
 
     process.on('uncaughtException', (error, origin) => {
         // The raw `error`, not hand-picked `name`/`message` fields — see the unhandledRejection
