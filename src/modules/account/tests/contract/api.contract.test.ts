@@ -17,6 +17,7 @@ import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { userRepository } from '@modules/users/tests/factories';
 import { EMAIL_VERIFY_TOKEN_TYPE } from '@modules/account/services';
 import { TokenType, userService } from '@modules/users';
+import { logger } from '@infrastructure/adapters/logger';
 import * as mailerPort from '@infrastructure/adapters/mailer';
 import itUsers from '@modules/users/locales/it.json';
 import itShared from '../../../../locales/it.json';
@@ -313,6 +314,28 @@ describe('POST /account/password', () => {
 
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
+    });
+
+    /*
+     * B23: unlike reauth (B22), the password write and the session revoke have already happened
+     * by the time the re-mint runs — a 500 here would misreport a change that DID succeed. The
+     * degrade to 200-without-a-token is correct; what was missing is any trail at all for it.
+     */
+    it('still answers 200 with no token, logged, when the re-mint fails', async () => {
+        const { bearer } = await loginWithCookie();
+        const loggedWarn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+        jest.spyOn(userService, 'tokenAdd').mockRejectedValueOnce(new Error('write conflict'));
+
+        const response = await api().post('/account/password').set('Authorization', bearer).send({
+            currentPassword: PLAIN_PASSWORD,
+            password: REPLACEMENT_PASSWORD,
+            passwordConfirm: REPLACEMENT_PASSWORD
+        });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toBeUndefined();
+        expect(loggedWarn).toHaveBeenCalled();
+        jest.restoreAllMocks();
     });
 });
 

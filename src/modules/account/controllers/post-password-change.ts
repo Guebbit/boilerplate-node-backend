@@ -7,6 +7,7 @@
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { t } from '@infrastructure/i18n';
+import { logger } from '@infrastructure/adapters/logger';
 import { ChangePasswordBody } from '@api/schemas.zod';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
@@ -86,7 +87,14 @@ export const postPasswordChange = (
                         t('account.password-change.success')
                     );
                 })
-                .catch(() => {
+                .catch((error: unknown) => {
+                    // Still a real fact worth finding — a swallowed re-mint failure had no
+                    // trail at all before this, even though the degrade to 200 above is correct.
+                    logger.warn({
+                        message: 'Password changed, but the session re-mint failed.',
+                        userId: id,
+                        error
+                    });
                     authPasswordChangeTotal.inc({ status: 'success' });
                     successResponse(response, undefined, 200, t('account.password-change.success'));
                 });

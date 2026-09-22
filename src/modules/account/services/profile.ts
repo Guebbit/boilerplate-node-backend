@@ -9,6 +9,7 @@
 
 import { z } from 'zod';
 import { getDefaultLocale, t } from '@infrastructure/i18n';
+import { logger } from '@infrastructure/adapters/logger';
 import bcrypt from 'bcrypt';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { resetConfirmEmail, deleteConfirmEmail, emailChangeNoticeEmail } from '../emails';
@@ -177,7 +178,15 @@ export const passwordResetChange = (
                         })
                     );
                 })
-                .catch(() => undefined);
+                .catch((error: unknown) => {
+                    // Still just a missing audit row, not a reset failure — see the comment
+                    // above — but a swallowed lookup failure had no trail at all before this.
+                    logger.warn({
+                        message: 'Could not audit a completed password reset.',
+                        userId: String(user._id),
+                        error
+                    });
+                });
 
             /*
              * The recipient's OWN language first. These links are clicked from an email client,

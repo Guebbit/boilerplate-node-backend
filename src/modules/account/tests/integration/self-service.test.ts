@@ -33,7 +33,9 @@ import { accountAuditActions } from '../../audit';
 import { accountAnalyticsEvents } from '../../analytics';
 import { observePort } from '@tests/ports';
 import { rolesOf } from '@modules/access';
+import * as accessPort from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import { logger } from '@infrastructure/adapters/logger';
 
 /*
  * The audit port is REPLACED, not spied on: `jest.spyOn` cannot redefine the non-configurable
@@ -52,6 +54,17 @@ jest.mock('@infrastructure/observability/analytics', () => ({
     ...jest.requireActual('@infrastructure/observability/analytics'),
     emitAnalyticsEvent: jest.fn()
 }));
+
+/*
+ * Same non-configurable-getter reason as the two ports above — `rolesOf` is wrapped in a
+ * `jest.fn` that CALLS THROUGH to the real implementation by default (every other describe block
+ * here needs the genuine membership lookup), so only the one B23 case that overrides it with
+ * `mockRejectedValueOnce` ever sees anything else.
+ */
+jest.mock('@modules/access', () => {
+    const actual = jest.requireActual<typeof import('@modules/access')>('@modules/access');
+    return { __esModule: true, ...actual, rolesOf: jest.fn(actual.rolesOf) };
+});
 
 setupTestDb();
 
@@ -699,6 +712,38 @@ describe('passwordResetChange', () => {
         expect(roles.tenant).toBe('unverified');
         const reloaded = await userRepository.findById(user.id);
         expect(reloaded?.verifiedAt ?? null).toBeNull();
+    });
+
+    /*
+     * B23: the audit-role lookup after a completed reset caught its own rejection with no
+     * logging at all — a swallowed failure had no trail. The reset itself must still succeed:
+     * the password already changed, and a missing audit row is the worst case, not a reason to
+     * fail the response.
+     */
+    it('still succeeds, logged, when the post-reset role lookup fails', async () => {
+        const user = await createUser({ password: LEGACY_PASSWORD });
+        const loggedWarn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+        // The mock factory above wraps `rolesOf` in a plain `jest.fn`, so this is genuinely a
+        // mock function, not the real export the compiler otherwise sees.
+        const mockedRolesOf = accessPort.rolesOf as jest.MockedFunction<typeof accessPort.rolesOf>;
+        mockedRolesOf.mockRejectedValueOnce(new Error('lookup unavailable'));
+
+        const result = asSuccess(
+            await accountService.passwordResetChange(
+                user,
+                REPLACEMENT_PASSWORD,
+                REPLACEMENT_PASSWORD,
+                testCallerContext
+            )
+        );
+
+        expect(result.data?.email).toBe(user.email);
+        const withNew = await accountService.login(user.email, REPLACEMENT_PASSWORD);
+        expect(withNew.success).toBe(true);
+        // Fire-and-forget: give the rejected lookup's own microtask a turn before asserting.
+        await Promise.resolve();
+        expect(loggedWarn).toHaveBeenCalledWith(expect.objectContaining({ userId: user.id }));
+        jest.restoreAllMocks();
     });
 });
 
