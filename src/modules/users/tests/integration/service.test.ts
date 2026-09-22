@@ -44,6 +44,19 @@ const { imageStore } = jest.requireMock<{ imageStore: { remove: jest.Mock } }>(
 
 setupTestDb();
 
+/**
+ * Awaits `userService.create`, asserts the envelope succeeded, and returns the created document —
+ * every case in `describe('userService.create', ...)` bar the breach one expects success, so
+ * unwrapping here keeps each test one assertion shorter.
+ */
+const expectCreated = async (
+    ...args: Parameters<typeof userService.create>
+): Promise<UserDocument> => {
+    const result = await userService.create(...args);
+    expect(result.success).toBe(true);
+    return (result as ResponseSuccess<UserDocument>).data;
+};
+
 describe('userService.validateData', () => {
     it('returns an empty array for valid user data', () => {
         const errors = userService.validateData({
@@ -304,7 +317,7 @@ describe('userService.create', () => {
         // `callerContextAs('admin')`, not `testCallerContext`: `create` always grants a
         // membership now (the implicit `customer` default included), and an anonymous granter
         // cannot grant anything — same invariant a real route guard would already have enforced.
-        const user = await userService.create(
+        const user = await expectCreated(
             {
                 email: 'created@example.com',
                 username: 'createduser',
@@ -320,7 +333,7 @@ describe('userService.create', () => {
     });
 
     it('creates a user in the role the request names', async () => {
-        const user = await userService.create(
+        const user = await expectCreated(
             {
                 email: 'superadmin@example.com',
                 username: 'superadmin',
@@ -338,7 +351,7 @@ describe('userService.create', () => {
     it('lets a moderator create a user in the default role, despite lacking its own self keys', async () => {
         // `moderator` holds none of `customer`'s keys — `users.any.create` is the one thing that
         // makes handing out the account's OWN starting role not an escalation.
-        const user = await userService.create(
+        const user = await expectCreated(
             {
                 email: 'moderator-made@example.com',
                 username: 'moderatormade',
@@ -370,6 +383,26 @@ describe('userService.create', () => {
         expect(await userRepository.findOne({ email: 'never-created@example.com' })).toBeNull();
     });
 
+    // B25: this ran on `update` already, but never on `create` — an admin could hand a brand-new
+    // account a password already on every breach list, the exact exposure the update path closes.
+    it('rejects a breached password with 422, and creates no user row', async () => {
+        const result = await userService.create(
+            {
+                email: 'breached@example.com',
+                username: 'breacheduser',
+                // A listed, composition-valid entry in `breached-passwords/list.txt` — same
+                // fixture `account/tests/integration/service-flows.test.ts` uses for its own
+                // breach case, so composition rules alone can't be what rejects it.
+                password: 'Password1!'
+            },
+            callerContextAs('admin')
+        );
+
+        expect(result.success).toBe(false);
+        expect((result as ResponseReject).status).toBe(422);
+        expect(await userRepository.findOne({ email: 'breached@example.com' })).toBeNull();
+    });
+
     describe('with no password', () => {
         afterEach(() => {
             resetDomainEvents();
@@ -378,7 +411,7 @@ describe('userService.create', () => {
         it('fills the field with something the caller was never told, rather than leaving it empty', async () => {
             // `password` is `required: true` at the Mongoose layer (see `./model`) regardless of
             // what the contract allows, so a create with no password still has to write SOMETHING.
-            const user = await userService.create(
+            const user = await expectCreated(
                 { email: 'no-password@example.com', username: 'nopassworduser' },
                 callerContextAs('admin')
             );
@@ -394,7 +427,7 @@ describe('userService.create', () => {
                 seen.push(userId);
             });
 
-            await userService.create(
+            await expectCreated(
                 { email: 'no-setup@example.com', username: 'nosetupuser' },
                 callerContextAs('admin')
             );
@@ -408,7 +441,7 @@ describe('userService.create', () => {
                 seen.push(userId);
             });
 
-            const user = await userService.create(
+            const user = await expectCreated(
                 {
                     email: 'setup-me@example.com',
                     username: 'setupmeuser',

@@ -109,7 +109,9 @@ export const enqueueIfPending = (user: UserDocument): Promise<UserDocument> =>
  * optional: left out, a random value nobody is told fills the `required` field, and
  * `sendSetupEmail: true` queues a setup mail (`USER_SETUP_REQUESTED`) until a real one is set.
  * Typed off `CreateUserRequest` rather than a hand-picked `Pick`, since a hand-copied list is what
- * silently dropped `active` from `update()` below.
+ * silently dropped `active` from `update()` below. Returns a result envelope, same protocol
+ * `update` follows — a breached password fails the whole create, and the controller reads
+ * `result.success` rather than a thrown error.
  */
 export const create = (
     data: CreateUserRequest & {
@@ -117,77 +119,85 @@ export const create = (
         pendingImageKey?: string;
     },
     context: CallerContext
-): Promise<UserDocument> => {
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     const passwordProvided = Boolean(data.password && data.password.trim().length > 0);
-    // 32 random bytes as hex, same as `tokenAdd` below uses for a reset token: unguessable and
-    // never surfaced anywhere, so "unusable until set" is enforced by nobody knowing it.
-    const password =
-        data.password && data.password.trim().length > 0
-            ? data.password
-            : randomBytes(32).toString('hex');
-    // Matching the document field's old default, when an operator names none — an operator
-    // typing the address in is the vouching, same reasoning as `verifiedAt` above.
-    const role = data.role ?? VERIFIED_CUSTOMER_ROLE;
 
-    return userRepository
-        .create({ verifiedAt: new Date(), ...data, password })
-        .then((user) =>
-            /*
-             * The membership is the ONLY grant — there is no column beside it.
-             * Awaited before the audit event: a rejected escalation must fail the whole create,
-             * not just a column that already saved. `assignRole` is passed `context` so a
-             * refused escalation is itself audited (the single most useful entry this
-             * vocabulary can produce) — which is also why the fix for the orphan row below is a
-             * compensating delete rather than validating ahead of the write: doing that would
-             * skip `assignRole` (and its audit) entirely on a caller who was always going to fail.
-             */
-            assignRole(
-                String(user._id),
-                DEPLOYMENT_TENANT_ID,
-                'tenant',
-                role,
-                context.caller.permissions,
-                context
-            ).then(
-                () => user,
-                (error: unknown) =>
-                    userRepository.deleteOne(user).then(() => {
-                        throw error;
-                    })
+    // Checked before anything is written — same rule `update` follows. Only ever run against an
+    // OPERATOR-SUPPLIED password: the generated fallback just below is 32 random bytes, and
+    // checking a value nobody chose against a breach list would only ever waste the round trip.
+    return (
+        passwordProvided ? assertPasswordNotBreached(data.password!) : Promise.resolve([])
+    ).then((breachErrors) => {
+        if (breachErrors.length > 0) return generateReject(422, breachErrors);
+
+        // 32 random bytes as hex, same as `tokenAdd` below uses for a reset token: unguessable and
+        // never surfaced anywhere, so "unusable until set" is enforced by nobody knowing it.
+        const password = passwordProvided ? data.password! : randomBytes(32).toString('hex');
+        // Matching the document field's old default, when an operator names none — an operator
+        // typing the address in is the vouching, same reasoning as `verifiedAt` above.
+        const role = data.role ?? VERIFIED_CUSTOMER_ROLE;
+
+        return userRepository
+            .create({ verifiedAt: new Date(), ...data, password })
+            .then((user) =>
+                /*
+                 * The membership is the ONLY grant — there is no column beside it.
+                 * Awaited before the audit event: a rejected escalation must fail the whole create,
+                 * not just a column that already saved. `assignRole` is passed `context` so a
+                 * refused escalation is itself audited (the single most useful entry this
+                 * vocabulary can produce) — which is also why the fix for the orphan row below is a
+                 * compensating delete rather than validating ahead of the write: doing that would
+                 * skip `assignRole` (and its audit) entirely on a caller who was always going to fail.
+                 */
+                assignRole(
+                    String(user._id),
+                    DEPLOYMENT_TENANT_ID,
+                    'tenant',
+                    role,
+                    context.caller.permissions,
+                    context
+                ).then(
+                    () => user,
+                    (error: unknown) =>
+                        userRepository.deleteOne(user).then(() => {
+                            throw error;
+                        })
+                )
             )
-        )
-        .then((user) => {
-            emitAuditEvent(
-                buildAuditEvent(context, {
-                    action: usersAuditActions.ADMIN_USER_CREATED,
-                    outcome: 'success',
-                    target_type: 'user',
-                    target_id: String(user._id),
-                    // Recorded here, not by `account`'s domain-event handler: that handler has no
-                    // request to build a `CallerContext` from, only a `userId`, so the admin's
-                    // action is the only point in the flow with someone to attribute it to.
-                    ...(passwordProvided
-                        ? {}
-                        : { metadata: { sendSetupEmail: Boolean(data.sendSetupEmail) } })
-                })
-            );
-            emitAnalyticsEvent({
-                ...buildAnalyticsBase(context),
-                // The new user, not the admin who created it — the funnel counts who came into
-                // existence, not who did the typing.
-                distinctId: String(user._id),
-                event: usersAnalyticsEvents.USER_CREATED,
-                properties: { admin_created: true }
-            });
-
-            return enqueueIfPending(user).then(() => {
-                if (passwordProvided || !data.sendSetupEmail) return user;
-
-                return emitDomainEvent(USER_SETUP_REQUESTED, { userId: String(user._id) }).then(
-                    () => user
+            .then((user) => {
+                emitAuditEvent(
+                    buildAuditEvent(context, {
+                        action: usersAuditActions.ADMIN_USER_CREATED,
+                        outcome: 'success',
+                        target_type: 'user',
+                        target_id: String(user._id),
+                        // Recorded here, not by `account`'s domain-event handler: that handler has no
+                        // request to build a `CallerContext` from, only a `userId`, so the admin's
+                        // action is the only point in the flow with someone to attribute it to.
+                        ...(passwordProvided
+                            ? {}
+                            : { metadata: { sendSetupEmail: Boolean(data.sendSetupEmail) } })
+                    })
                 );
-            });
-        });
+                emitAnalyticsEvent({
+                    ...buildAnalyticsBase(context),
+                    // The new user, not the admin who created it — the funnel counts who came into
+                    // existence, not who did the typing.
+                    distinctId: String(user._id),
+                    event: usersAnalyticsEvents.USER_CREATED,
+                    properties: { admin_created: true }
+                });
+
+                return enqueueIfPending(user).then((pending) => {
+                    if (passwordProvided || !data.sendSetupEmail) return pending;
+
+                    return emitDomainEvent(USER_SETUP_REQUESTED, {
+                        userId: String(pending._id)
+                    }).then(() => pending);
+                });
+            })
+            .then((user) => generateSuccess(user, 201));
+    });
 };
 
 /**

@@ -7,7 +7,7 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
-import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
+import { createUser, PLAIN_PASSWORD, userRepository } from '@modules/users/tests/factories';
 import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
 
@@ -173,6 +173,25 @@ describe('POST /users', () => {
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
     });
+
+    // B25: this 422 already fired on PUT (below); POST skipped the check entirely, so an admin
+    // could hand a brand-new account a password already on every breach list.
+    it('refuses a breached password, and creates no user row', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const response = await api().post('/users').set('Authorization', bearer).send({
+            email: 'breached-create@example.com',
+            username: 'breachedcreateuser',
+            // A listed, composition-valid entry in `breached-passwords/list.txt` — same fixture
+            // `account/tests/integration/service-flows.test.ts` uses for its own breach case.
+            password: 'Password1!'
+        });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+        expect(
+            await userRepository.findOne({ email: 'breached-create@example.com' })
+        ).toBeNull();
+    });
 });
 
 describe('PUT /users/{id}', () => {
@@ -193,6 +212,24 @@ describe('PUT /users/{id}', () => {
         expect(response.status).toBe(200);
         expect(response).toSatisfyApiSpec();
         assertNoCredentials(response.body);
+    });
+
+    // B25: this path already ran the breach check inside `userService.update` — no behaviour
+    // change here, only the missing contract-level coverage the box asks for.
+    it('refuses a breached password', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const target = await createUser({
+            username: 'editbreached',
+            email: 'editbreached@example.com'
+        });
+
+        const response = await api()
+            .put(`/users/${String(target._id)}`)
+            .set('Authorization', bearer)
+            .send({ email: target.email, username: target.username, password: 'Password1!' });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
     });
 });
 

@@ -133,14 +133,18 @@ export const writeUsers = (
                 },
                 callerContextOf(request)
             )
-            .then((user) =>
+            .then((result) => {
+                if (!result.success)
+                    return deleteUpload().then(() => {
+                        rejectResponse(response, result.status, result.errors);
+                    });
                 // `toUserContract` picks only the `User` contract's own fields, so the hashed
                 // password and tokens on the document never reach `res.json`. The role is read
                 // fresh from the membership just written — never off the document, which holds none.
-                userService
-                    .toUserContract(user)
-                    .then((contract) => successResponse<User>(response, contract, 201))
-            )
+                return userService.toUserContract(result.data).then((contract) => {
+                    successResponse<User>(response, contract, 201);
+                });
+            })
             .catch((error: unknown) =>
                 deleteUpload().then(() => {
                     rejectDatabaseError(response, 'writeUser', error);
