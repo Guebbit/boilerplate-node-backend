@@ -13,6 +13,7 @@
 
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
+import { logger } from '@infrastructure/adapters/logger';
 import { registerCredentialResolver, type ResolvedCredential } from '@kernel/authentication';
 import { keysInScope, isUnrestricted } from '@kernel/permissions';
 import { holdsKey } from '@kernel/ability';
@@ -73,8 +74,16 @@ const fromBearerToken = (token: string): Promise<ResolvedCredential | undefined>
 
         return currentCallerOf(apiKey).then((currentCaller) => {
             // Fire-and-forget — see `repository.ts#touchLastUsed`'s own doc comment for why this
-            // path never awaits it.
-            void apiKeyRepository.touchLastUsed(String(apiKey._id));
+            // path never awaits it. A rejection has nobody else to catch it, so it is logged here
+            // rather than left to surface as an unhandled rejection with nothing to tie it back to
+            // this key.
+            void apiKeyRepository.touchLastUsed(String(apiKey._id)).catch((error: unknown) => {
+                logger.warn({
+                    message: 'Could not stamp the last-used time on an api key.',
+                    apiKeyId: String(apiKey._id),
+                    error
+                });
+            });
 
             const permissions = currentCaller
                 ? apiKey.permissions.filter((key) => holdsKey(currentCaller, key))

@@ -20,6 +20,7 @@ import '@modules/api-keys/module';
 import { mint, revoke } from '@modules/api-keys/services/api-keys';
 import { apiKeyRepository } from '@modules/api-keys/repository';
 import { mintApiKey } from '@modules/api-keys/credentials';
+import { logger } from '@infrastructure/adapters/logger';
 
 setupTestDb();
 
@@ -188,5 +189,39 @@ describe('touchLastUsed', () => {
 
         const reloaded = await apiKeyRepository.findById(String(apiKey._id));
         expect(reloaded?.lastUsedAt).toBeInstanceOf(Date);
+    });
+
+    /*
+     * B8: `module.ts`'s `fromBearerToken` fires this fire-and-forget (`void
+     * apiKeyRepository.touchLastUsed(...)`, by design — see the repository's own doc comment) with
+     * no `.catch`. A rejection there had nobody left to see it; logged instead, so a failed stamp
+     * is visible without costing the resolve it rides on.
+     */
+    it('logs a warning and still resolves the credential when the stamp write fails', async () => {
+        const user = await createRealUser('touch-fails');
+        const userId = String(user._id);
+        // Resolve re-floors against what the minter holds NOW (`currentCallerOf`), not the mint
+        // context's own claimed permissions — needs a real membership row, same as the
+        // demoted-minter case above.
+        await assignRole(userId, TEST_TENANT_ID, 'tenant', 'admin');
+        const context = contextFor(userId, ['apikeys.any.read']);
+        const minted = await mint(
+            { name: 'about to fail its touch', permissions: ['apikeys.any.read'] },
+            context
+        );
+        if (!minted.data) throw new Error('setup failed: mint was refused');
+        const loggedWarn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+        jest.spyOn(apiKeyRepository, 'touchLastUsed').mockRejectedValueOnce(
+            new Error('write conflict')
+        );
+
+        const resolved = await resolveCredential(minted.data.secret);
+
+        expect(resolved?.caller.permissions).toContain('apikeys.any.read');
+        // Fire-and-forget: give the rejected touch's own microtask a turn before asserting the log.
+        await Promise.resolve();
+        expect(loggedWarn).toHaveBeenCalledWith(
+            expect.objectContaining({ apiKeyId: minted.data.id })
+        );
     });
 });
