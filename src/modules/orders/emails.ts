@@ -10,24 +10,10 @@
 import type { TFunction } from 'i18next';
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
+import { frontendLink } from '@infrastructure/http/frontend-link';
 import { invoiceCurrency, shopCountry, shopLegalName, shopVatNumber } from './config';
 import { orderTotal, orderTaxBreakdown, type TaxRateSummary } from './domain';
 import type { OrderTransferInstructions } from '@types';
-
-/**
- * Absolute URL for this order's page on the paired frontend — where the customer signs in and
- * downloads the invoice, `GET /orders/{id}/invoice` being an authenticated API route rather than
- * something an email client can fetch directly.
- *
- * Same construction as `account/emails.ts`'s `accountLink`: joined through `URL` when `NODE_URL`
- * is set (a trailing-slash-dependent concatenation would otherwise produce
- * `https://api.example.comorders/…`), no fallback host when it isn't — a relative link in a mail
- * body is merely useless without `NODE_URL`, not a wrong destination.
- */
-const orderLink = (orderId: string): string => {
-    const path = `orders/${orderId}`;
-    return process.env.NODE_URL ? new URL(path, process.env.NODE_URL).href : path;
-};
 
 /**
  * The minimum either document needs from an order: a title and a price per line.
@@ -80,7 +66,7 @@ export const orderConfirmEmail = (
             ),
             total: t('orders.email-confirm.total', { total: orderTotal(order) }),
             linkLabel: t('orders.email-confirm.link-label'),
-            linkUrl: orderLink(orderId),
+            linkUrl: frontendLink('order', { locale, id: orderId }),
             footer: t('email.footer')
         }
     };
@@ -128,7 +114,7 @@ export const bankTransferInstructionsEmail = (
             // Invoice number allocation doesn't wait on payment (see `invoice-numbering.ts`), so
             // the same link, rendering the same invoice on demand, applies here as on the paid path.
             linkLabel: t('orders.email-transfer.link-label'),
-            linkUrl: orderLink(orderId),
+            linkUrl: frontendLink('order', { locale, id: orderId }),
             footer: t('email.footer')
         }
     };

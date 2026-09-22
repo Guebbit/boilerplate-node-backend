@@ -12,6 +12,7 @@ import {
     type InvoiceVatBlock
 } from '@modules/orders/emails';
 import { orderTotal, orderTaxBreakdown } from '@modules/orders/domain';
+import { frontendLink } from '@infrastructure/http/frontend-link';
 
 const NAME = 'Ada Lovelace';
 const ORDER_ID = 'order-1';
@@ -113,12 +114,14 @@ describe('orderConfirmEmail', () => {
     /*
      * The link is what lets a customer reach the order's page and its invoice download button —
      * the email sends immediately and always links to the same place, whether or not the customer
-     * has visited it yet.
+     * has visited it yet. `frontendLink` itself is covered by its own unit suite
+     * (`tests/unit/infrastructure/http/frontend-link.test.ts`); what this builder owns is passing
+     * the order's own id and the recipient's own locale through unchanged.
      */
-    it('links to the order, carrying its id', () => {
+    it('links to the order, on the paired frontend, carrying its id and locale', () => {
         const { data } = orderConfirmEmail('en', NAME, ORDER, ORDER_ID);
 
-        expect(data.linkUrl).toContain(ORDER_ID);
+        expect(data.linkUrl).toBe(frontendLink('order', { locale: 'en', id: ORDER_ID }));
     });
 
     /*
