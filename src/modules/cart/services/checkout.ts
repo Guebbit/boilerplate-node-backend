@@ -65,12 +65,14 @@ const toShippingAddress = (address: AddressItem) => ({
  * @param addressId - the shipping address's entry id, or `undefined` for the default/no address
  * @param shippingMethodId - the chosen shipping method's id, or `undefined` for none
  * @param paymentMethod - the chosen payment method's id, or `undefined` for `card`
+ * @param notes - free-text notes the buyer left at checkout, or `undefined` for none
  */
 const runCheckout = async (
     userId: string,
     addressId: string | undefined,
     shippingMethodId: string | undefined,
-    paymentMethod: string | undefined
+    paymentMethod: string | undefined,
+    notes: string | undefined
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
     const user = await userService.getById(userId);
     if (!user) return generateReject(404, []);
@@ -234,6 +236,7 @@ const runCheckout = async (
         userId: user.id,
         email: user.email,
         locale: buyerLocale,
+        notes,
         lines: joined.map((line) => ({
             item: { productId: line.productId, quantity: line.quantity },
             product: line.product.toObject() as Lean<ProductDocument>
@@ -296,9 +299,10 @@ export const orderConfirm = (
     context: CallerContext,
     addressId?: string,
     shippingMethodId?: string,
-    paymentMethod?: string
+    paymentMethod?: string,
+    notes?: string
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
-    runCheckout(userId, addressId, shippingMethodId, paymentMethod)
+    runCheckout(userId, addressId, shippingMethodId, paymentMethod, notes)
         .catch((error: unknown) => rejectDatabaseEnvelope('cart', error))
         .then((result) => {
             /*

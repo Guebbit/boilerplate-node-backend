@@ -252,6 +252,33 @@ describe('POST /cart/checkout', () => {
         expect(response).toSatisfyApiSpec();
     });
 
+    /*
+     * B3: the controller cast `request.body` instead of parsing it against the contract, so
+     * `notes` — a field the contract has always declared — never reached the order.
+     */
+    it('wires notes through to the order', async () => {
+        const { bearer } = await authenticateWithCart();
+        const response = await api()
+            .post('/cart/checkout')
+            .set('Authorization', bearer)
+            .send({ notes: 'Leave with the concierge' });
+
+        expect(response.status).toBe(201);
+        expect(response).toSatisfyApiSpec();
+        expect(response.body.data.order.notes).toBe('Leave with the concierge');
+    });
+
+    it('matches the error contract for an unrecognised payment method value', async () => {
+        const { bearer } = await authenticateWithCart();
+        const response = await api()
+            .post('/cart/checkout')
+            .set('Authorization', bearer)
+            .send({ paymentMethod: 'crypto' });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
     it('empties the cart on success', async () => {
         const { bearer } = await authenticateWithCart();
         await api().post('/cart/checkout').set('Authorization', bearer);

@@ -76,6 +76,8 @@ export interface PlaceOrderInput {
     /** When a `bank_transfer` order's hold should expire — the email needs this alongside the order. */
     payBy?: Date;
     shipping?: PlaceOrderShipping;
+    /** Free-text notes the buyer left at checkout — `undefined` writes no `notes` field at all. */
+    notes?: string;
 }
 
 /** The verdict `placeOrder` returns — a plain outcome, not an HTTP envelope; see this file's docblock. */
@@ -125,6 +127,7 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
         email: input.email,
         items: orderItems,
         invoiceNumber,
+        ...(input.notes ? { notes: input.notes } : {}),
         ...(input.paymentMethod ? { paymentMethod: input.paymentMethod } : {}),
         ...(input.payBy ? { payBy: input.payBy } : {}),
         ...(transferReference ? { transferReference } : {}),

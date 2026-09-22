@@ -166,7 +166,7 @@ paths:
         post:
             tags: [Orders]
             summary: Checkout (place order from cart)
-            description: Converts the authenticated user's current cart into a new order. The cart is cleared upon success. An optional email address and order notes can be supplied in the request body. Returns the created order.
+            description: Converts the authenticated user's current cart into a new order. The cart is cleared upon success. Optional order notes can be supplied in the request body. Returns the created order. The order's email is always the authenticated caller's own — checkout is account-bound; a future guest checkout would bring an `email` field back.
             operationId: checkout
             security:
                 - bearerAuth: []
@@ -335,8 +335,6 @@ components:
             type: object
             additionalProperties: false
             properties:
-                email:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
                 notes:
                     type: string
                     description: Optional order notes

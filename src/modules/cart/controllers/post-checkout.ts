@@ -6,9 +6,10 @@
 
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
+import { CheckoutBody } from '@api/schemas.zod';
 import { cartService } from '../services';
 import { successResponse } from '@infrastructure/http/response';
-import { catchAs, refused } from '@infrastructure/http/controller';
+import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { cartCheckoutTotal } from '../metrics';
 import { callerContextOf } from '@infrastructure/http/request';
 import { orderService } from '@modules/orders';
@@ -20,16 +21,22 @@ import type { CheckoutResponse } from '@types';
  * `cart_checkout_total` increments once per call, before `refused()`, on both outcomes —
  * a failed checkout is still a result the business metric must record.
  */
-export const postCheckout = (request: Request, response: Response): Promise<void> => {
+export const postCheckout = (request: Request, response: Response) => {
     const userId = request.authContext!.id;
     // `?? {}` because a checkout without a body is legal and Express 5 leaves `body` undefined.
-    const { addressId, shippingMethodId, paymentMethod } = (request.body ?? {}) as {
-        addressId?: string;
-        shippingMethodId?: string;
-        paymentMethod?: string;
-    };
+    const body = parseBody(CheckoutBody, request.body ?? {}, response);
+    if (!body) return;
+    const { addressId, shippingMethodId, paymentMethod, notes } = body;
+
     return cartService
-        .orderConfirm(userId, callerContextOf(request), addressId, shippingMethodId, paymentMethod)
+        .orderConfirm(
+            userId,
+            callerContextOf(request),
+            addressId,
+            shippingMethodId,
+            paymentMethod,
+            notes
+        )
         .then((result) => {
             cartCheckoutTotal.inc({ status: result.success ? 'success' : 'failure' });
             if (refused(response, result)) return;
