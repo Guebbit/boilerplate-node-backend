@@ -91,7 +91,11 @@ startEphemeralMongo({ startInProcess: startInProcessMongod })
             process.once(signal, () => {
                 void mongo
                     .stop()
-                    .catch(() => undefined)
+                    .catch((error: unknown) => {
+                        // Still exits either way — a stuck data directory left behind (~200 MB) is
+                        // a cleanup annoyance, not a reason to hang the shutdown a signal asked for.
+                        console.error('[demo] failed to stop the ephemeral mongod:', error);
+                    })
                     .then(() => process.exit(0));
             });
 
