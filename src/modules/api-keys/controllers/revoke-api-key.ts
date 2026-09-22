@@ -6,12 +6,9 @@
  */
 
 import type { Request, Response } from 'express';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { isBadObjectId } from '@infrastructure/persistence/mongo-errors';
-import { t } from '@infrastructure/i18n';
+import { successResponse } from '@infrastructure/http/response';
 import { tenantCallerContextOf, extractAndValidateId } from '@infrastructure/http/request';
-import { refused } from '@infrastructure/http/controller';
+import { catchAs, refused } from '@infrastructure/http/controller';
 import { apiKeysService } from '../services';
 
 /**
@@ -20,6 +17,8 @@ import { apiKeysService } from '../services';
  * answers 200.
  */
 export const revokeApiKey = (request: Request<{ id: string }>, response: Response) => {
+    // Already validated as a well-formed ObjectId here, so `revokeApiKey` below can never raise
+    // the CastError a malformed one would — no not-found mapping needed on its catch.
     const id = extractAndValidateId(request, response, 'path');
     if (!id) return;
 
@@ -29,9 +28,5 @@ export const revokeApiKey = (request: Request<{ id: string }>, response: Respons
             if (refused(response, result)) return;
             successResponse(response, undefined, 200, result.message);
         })
-        .catch((error: unknown) => {
-            if (isBadObjectId(error))
-                return rejectResponse(response, 404, [t('generic.error-not-found')]);
-            rejectDatabaseError(response, 'revokeApiKey', error);
-        });
+        .catch(catchAs(response, 'revokeApiKey'));
 };

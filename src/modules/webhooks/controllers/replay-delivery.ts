@@ -5,12 +5,9 @@
  */
 
 import type { Request, Response } from 'express';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { isBadObjectId } from '@infrastructure/persistence/mongo-errors';
-import { t } from '@infrastructure/i18n';
+import { successResponse } from '@infrastructure/http/response';
 import { tenantCallerContextOf, extractAndValidateId } from '@infrastructure/http/request';
-import { refused } from '@infrastructure/http/controller';
+import { catchAs, refused } from '@infrastructure/http/controller';
 import type { WebhookDelivery } from '@types';
 import { webhooksService } from '../services';
 
@@ -20,6 +17,8 @@ import { webhooksService } from '../services';
  */
 export const replayWebhookDelivery = (request: Request<{ id: string }>, response: Response) => {
     // 'path': this route carries no body — params-only, unlike `write`'s params-then-body.
+    // Already validated as a well-formed ObjectId here, so `replayDelivery` below can never
+    // raise the CastError a malformed one would — no not-found mapping needed on its catch.
     const id = extractAndValidateId(request, response, 'path');
     if (!id) return;
 
@@ -32,9 +31,5 @@ export const replayWebhookDelivery = (request: Request<{ id: string }>, response
                 result.data.toJSON() as WebhookDelivery
             );
         })
-        .catch((error: unknown) => {
-            if (isBadObjectId(error))
-                return rejectResponse(response, 404, [t('generic.error-not-found')]);
-            rejectDatabaseError(response, 'replayWebhookDelivery', error);
-        });
+        .catch(catchAs(response, 'replayWebhookDelivery'));
 };

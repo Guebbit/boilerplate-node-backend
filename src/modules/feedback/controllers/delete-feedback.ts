@@ -8,12 +8,9 @@
  */
 
 import type { Request, Response } from 'express';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { isBadObjectId } from '@infrastructure/persistence/mongo-errors';
-import { t } from '@infrastructure/i18n';
+import { successResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
-import { refused } from '@infrastructure/http/controller';
+import { catchAsNotFound, refused } from '@infrastructure/http/controller';
 import { feedbackRequestService } from '../service';
 
 /**
@@ -29,8 +26,4 @@ export const deleteFeedback = (request: Request<{ id: string }>, response: Respo
             if (refused(response, result)) return;
             successResponse(response, undefined, 200, result.message);
         })
-        .catch((error: unknown) => {
-            if (isBadObjectId(error))
-                return rejectResponse(response, 404, [t('generic.error-not-found')]);
-            rejectDatabaseError(response, 'deleteFeedback', error);
-        });
+        .catch(catchAsNotFound(response, 'deleteFeedback', 'generic.error-not-found'));

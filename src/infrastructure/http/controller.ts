@@ -16,6 +16,8 @@ import {
     type ResponseReject
 } from './response';
 import { rejectDatabaseError } from './errors';
+import { isBadObjectId } from '@infrastructure/persistence/mongo-errors';
+import { t } from '@infrastructure/i18n';
 
 /**
  * The operation name printed in a stack trace, an audit/log line and the generated
@@ -91,6 +93,26 @@ export const refused = <TData>(
 export const catchAs =
     (response: Response, context: string) =>
     (error: unknown): void => {
+        rejectDatabaseError(response, context, error);
+    };
+
+/**
+ * {@link catchAs}'s counterpart for a route where a malformed id and an unknown one answer the
+ * SAME 404 — Mongoose turns a badly-shaped id into a `CastError` rather than a miss, and the two
+ * look identical from outside, so both get `notFoundKey` instead of the 422
+ * `rejectDatabaseError`'s own interpreter would otherwise give a `CastError`.
+ *
+ * @param response - the express response
+ * @param context - developer-facing operation name, recorded in the log line for any OTHER error
+ * @param notFoundKey - the i18n key to answer with when the error is a bad ObjectId
+ */
+export const catchAsNotFound =
+    (response: Response, context: string, notFoundKey: string) =>
+    (error: unknown): void => {
+        if (isBadObjectId(error)) {
+            rejectResponse(response, 404, [t(notFoundKey)]);
+            return;
+        }
         rejectDatabaseError(response, context, error);
     };
 

@@ -9,9 +9,7 @@
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { isBadObjectId } from '@infrastructure/persistence/mongo-errors';
-import { namedHandler, operationName } from '@infrastructure/http/controller';
+import { catchAsNotFound, namedHandler, operationName } from '@infrastructure/http/controller';
 
 /** What makes one entity's read-one different from another's. */
 export interface ItemControllerSpec {
@@ -52,11 +50,6 @@ export const createItemController = ({ entity, fetch, notFoundKey }: ItemControl
                 }
                 successResponse(response, item);
             })
-            .catch((error: unknown) => {
-                // A malformed id reaches Mongoose as a CastError rather than a miss, and the
-                // honest answer is the same 404 a well-formed unknown id gets.
-                if (isBadObjectId(error)) return rejectResponse(response, 404, [t(notFoundKey)]);
-                rejectDatabaseError(response, operation, error);
-            });
+            .catch(catchAsNotFound(response, operation, notFoundKey));
     });
 };

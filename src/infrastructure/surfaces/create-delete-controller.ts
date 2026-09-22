@@ -9,13 +9,11 @@
  */
 
 import type { Request, Response } from 'express';
-import { t } from '@infrastructure/i18n';
-import { rejectResponse, successResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { isBadObjectId } from '@infrastructure/persistence/mongo-errors';
+import { successResponse } from '@infrastructure/http/response';
 import { extractAndValidateId, readInput, callerContextOf } from '@infrastructure/http/request';
 import { hardDeleteSchema } from '@infrastructure/http/schemas';
 import {
+    catchAsNotFound,
     namedHandler,
     operationName,
     refused,
@@ -101,11 +99,6 @@ export const createDeleteController = ({
                 );
                 successResponse(response, undefined, 200, result.message);
             })
-            .catch((error: unknown) => {
-                // A malformed id reaches Mongoose as a CastError rather than a miss, and the
-                // honest answer is the same 404 a well-formed unknown id gets.
-                if (isBadObjectId(error)) return rejectResponse(response, 404, [t(notFoundKey)]);
-                rejectDatabaseError(response, operation, error);
-            });
+            .catch(catchAsNotFound(response, operation, notFoundKey));
     });
 };
