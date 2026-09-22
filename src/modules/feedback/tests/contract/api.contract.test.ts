@@ -74,6 +74,17 @@ describe('POST /feedback/contact', () => {
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
     });
+
+    // D2: `maxLength` moved from a controller-only zod override into openapi.yaml itself, so the
+    // generated schema is now what enforces it — this pins the limit stays enforced end to end.
+    it('matches the error contract for a message past the 5000-character limit', async () => {
+        const response = await api()
+            .post('/feedback/contact')
+            .send({ ...CONTACT_PAYLOAD, message: 'a'.repeat(5001) });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
 });
 
 describe('GET /feedback', () => {

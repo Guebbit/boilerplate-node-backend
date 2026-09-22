@@ -4,7 +4,6 @@
  */
 
 import type { Request, Response } from 'express';
-import { z } from 'zod';
 import { UpdateWebhookSubscriptionBody } from '@api/schemas.zod';
 import type { UpdateWebhookSubscriptionRequest, WebhookSubscriptionCreated } from '@types';
 import { successResponse } from '@infrastructure/http/response';
@@ -12,18 +11,12 @@ import { tenantCallerContextOf, extractAndValidateId } from '@infrastructure/htt
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { webhooksService } from '../services';
 
-/** Same scheme restriction as `create-subscription.ts`, only when `url` is actually sent. */
-const updateWebhookSubscriptionSchema = UpdateWebhookSubscriptionBody.extend({
-    url: z
-        .url()
-        .refine((url) => url.startsWith('https://'), 'Webhook URL must use https://')
-        .optional()
-});
-
 /**
  * PATCH /webhooks/subscriptions/:id
  * Partial update, plus the two secret-ring actions (`rotateSecret`, `removeSecretId`) — see
- * `openapi.yaml`'s description for how a rotation's overlap works.
+ * `openapi.yaml`'s description for how a rotation's overlap works. Same `https://` scheme
+ * restriction as `create-subscription.ts`, enforced by the generated schema's own `pattern`,
+ * only when `url` is actually sent.
  */
 export const updateWebhookSubscription = (
     request: Request<{ id: string }, unknown, UpdateWebhookSubscriptionRequest>,
@@ -32,7 +25,7 @@ export const updateWebhookSubscription = (
     const id = extractAndValidateId(request, response);
     if (!id) return;
 
-    const body = parseBody(updateWebhookSubscriptionSchema, request.body, response);
+    const body = parseBody(UpdateWebhookSubscriptionBody, request.body, response);
     if (!body) return;
 
     return webhooksService

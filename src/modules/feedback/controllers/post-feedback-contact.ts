@@ -8,22 +8,30 @@
 
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { CreateFeedbackRequestBody } from '@api/schemas.zod';
+import {
+    CreateFeedbackRequestBody,
+    createFeedbackRequestBodyNameMax,
+    createFeedbackRequestBodySubjectMax,
+    createFeedbackRequestBodyMessageMax
+} from '@api/schemas.zod';
 import { successResponse } from '@infrastructure/http/response';
 import type { CreateFeedbackRequest, FeedbackRequest } from '@types';
 import { feedbackRequestService } from '../service';
 import { catchAs, parseBody } from '@infrastructure/http/controller';
 
 /**
- * Built on the orval-generated CreateFeedbackRequestBody (kept in sync with
- * openapi.yaml); fields are overridden to add trimming and length limits not
- * expressed in the OpenAPI schema.
+ * Built on the orval-generated CreateFeedbackRequestBody (kept in sync with openapi.yaml, which
+ * already carries the length limits — re-applied here from its own generated constants, not
+ * hand-copied numbers, so the two can't drift). Fields are overridden only for what the contract
+ * itself can't express on top of that: trimming, and "not just whitespace" via `.min(1)`.
+ * `.extend()` REPLACES a field's schema rather than adding to it, so the limit has to be
+ * restated, not just the trim/min.
  */
 const createFeedbackSchema = CreateFeedbackRequestBody.extend({
-    name: z.string().trim().max(120).optional(),
+    name: z.string().trim().max(createFeedbackRequestBodyNameMax).optional(),
     email: z.string().trim().pipe(z.email()),
-    subject: z.string().trim().min(1).max(200),
-    message: z.string().trim().min(1).max(5000)
+    subject: z.string().trim().min(1).max(createFeedbackRequestBodySubjectMax),
+    message: z.string().trim().min(1).max(createFeedbackRequestBodyMessageMax)
 });
 
 /**

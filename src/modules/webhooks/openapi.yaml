@@ -200,6 +200,12 @@ paths:
 components:
     schemas:
         # ---------- webhooks — the schemas only this module's paths reference. ----------
+        #
+        # Every `url` field's `pattern` below is wrapped in a non-capturing group, `(?:^https://)`
+        # rather than the bare `^https://`: orval's zod generator strips a pattern's trailing `/`
+        # on the assumption it's a `/regex/` literal's own delimiter, which silently turned
+        # `^https://` into the one-slash `^https:/` — a check almost nothing fails. The group's
+        # closing `)` isn't a `/`, so the strip never fires; the anchor and match are unchanged.
         WebhookSubscription:
             type: object
             additionalProperties: false
@@ -210,6 +216,7 @@ components:
                 url:
                     type: string
                     format: uri
+                    pattern: '(?:^https://)'
                 description:
                     type: string
                 eventTypes:
@@ -251,6 +258,7 @@ components:
                 url:
                     type: string
                     format: uri
+                    pattern: '(?:^https://)'
                 description:
                     type: string
                 eventTypes:
@@ -337,6 +345,7 @@ components:
                 url:
                     type: string
                     format: uri
+                    pattern: '(?:^https://)'
                     description: Must be `https://`. Validated again, against the resolved IP, on every delivery.
                 description:
                     type: string
@@ -352,6 +361,8 @@ components:
                 url:
                     type: string
                     format: uri
+                    pattern: '(?:^https://)'
+                    description: Must be `https://` — same rule `CreateWebhookSubscriptionRequest` states.
                 description:
                     type: string
                 eventTypes:
