@@ -11,6 +11,7 @@ import { t } from '@infrastructure/i18n';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { isBadObjectId } from '@infrastructure/persistence/mongo-errors';
+import { namedHandler, operationName } from '@infrastructure/http/controller';
 
 /** What makes one entity's read-one different from another's. */
 export interface ItemControllerSpec {
@@ -39,30 +40,23 @@ export interface ItemControllerSpec {
  */
 export const createItemController = ({ entity, fetch, notFoundKey }: ItemControllerSpec) => {
     // The name printed in stack traces, the request log line and `docs/modules/` — e.g. `getProductItem`.
-    const operation = `get${entity.charAt(0).toUpperCase()}${entity.slice(1)}Item`;
+    const operation = operationName('get', entity, 'Item');
 
-    // A computed property key, not a plain function expression, so `handler.name` is `operation`
-    // instead of the generic name an anonymous function would carry.
-    const handler = {
-        [operation](request: Request, response: Response) {
-            // The module's own fetch — a miss answers `null`/`undefined`/`void`, never throws.
-            return fetch(String(request.params.id), request)
-                .then((item) => {
-                    if (!item) {
-                        rejectResponse(response, 404, [t(notFoundKey)]);
-                        return;
-                    }
-                    successResponse(response, item);
-                })
-                .catch((error: unknown) => {
-                    // A malformed id reaches Mongoose as a CastError rather than a miss, and the
-                    // honest answer is the same 404 a well-formed unknown id gets.
-                    if (isBadObjectId(error))
-                        return rejectResponse(response, 404, [t(notFoundKey)]);
-                    rejectDatabaseError(response, operation, error);
-                });
-        }
-    }[operation];
-
-    return handler;
+    return namedHandler(operation, (request: Request, response: Response) => {
+        // The module's own fetch — a miss answers `null`/`undefined`/`void`, never throws.
+        return fetch(String(request.params.id), request)
+            .then((item) => {
+                if (!item) {
+                    rejectResponse(response, 404, [t(notFoundKey)]);
+                    return;
+                }
+                successResponse(response, item);
+            })
+            .catch((error: unknown) => {
+                // A malformed id reaches Mongoose as a CastError rather than a miss, and the
+                // honest answer is the same 404 a well-formed unknown id gets.
+                if (isBadObjectId(error)) return rejectResponse(response, 404, [t(notFoundKey)]);
+                rejectDatabaseError(response, operation, error);
+            });
+    });
 };

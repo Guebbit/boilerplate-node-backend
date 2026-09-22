@@ -11,7 +11,7 @@ import type { Request, Response } from 'express';
 import type { ZodType } from 'zod';
 import { successResponse } from '@infrastructure/http/response';
 import { readInput } from '@infrastructure/http/request';
-import { catchAs, parseBody } from '@infrastructure/http/controller';
+import { catchAs, namedHandler, operationName, parseBody } from '@infrastructure/http/controller';
 
 /** What makes one entity's search different from another's. */
 export interface SearchControllerSpec<TSchema extends ZodType, TResult> {
@@ -46,35 +46,29 @@ export const createSearchController = <TSchema extends ZodType, TResult>({
     runSearch
 }: SearchControllerSpec<TSchema, TResult>) => {
     // The name printed in stack traces, the request log line and `docs/modules/` — e.g. `getProducts`.
-    const operation = `get${entity.charAt(0).toUpperCase()}${entity.slice(1)}`;
+    const operation = operationName('get', entity);
 
-    // A computed property key, not a plain function expression, so `handler.name` is `operation`
-    // instead of the generic name an anonymous function would carry.
-    const handler = {
-        [operation](request: Request, response: Response) {
-            // readInput: merges params/query/body into one object, per the `search` surface's
-            // rules — see docs/theory/request-input.md. `id` is a batch filter (an array), so it
-            // goes through `stringArrays`, not `ids` — `ids` collapses a repeated key to its first
-            // entry, which is correct for `update`/`delete` (one row) but would silently turn
-            // `?id=a&id=b` into `?id=a` here.
-            const input = readInput(request, { surface: 'search', stringArrays: ['id'] });
-            // extendInput: the module's own overlay — coercions or request-derived values a plain
-            // field list can't express.
-            const merged = extendInput ? { ...input, ...extendInput(input, request) } : input;
+    return namedHandler(operation, (request: Request, response: Response) => {
+        // readInput: merges params/query/body into one object, per the `search` surface's
+        // rules — see docs/theory/request-input.md. `id` is a batch filter (an array), so it
+        // goes through `stringArrays`, not `ids` — `ids` collapses a repeated key to its first
+        // entry, which is correct for `update`/`delete` (one row) but would silently turn
+        // `?id=a&id=b` into `?id=a` here.
+        const input = readInput(request, { surface: 'search', stringArrays: ['id'] });
+        // extendInput: the module's own overlay — coercions or request-derived values a plain
+        // field list can't express.
+        const merged = extendInput ? { ...input, ...extendInput(input, request) } : input;
 
-            // parseBody: validates the merged input against the module's schema; 422s and returns
-            // undefined on failure.
-            const parsed = parseBody(schema, merged, response);
-            if (!parsed) return;
+        // parseBody: validates the merged input against the module's schema; 422s and returns
+        // undefined on failure.
+        const parsed = parseBody(schema, merged, response);
+        if (!parsed) return;
 
-            // runSearch: the module's own search, given the validated input.
-            return runSearch(parsed, request)
-                .then((result) => {
-                    successResponse(response, result);
-                })
-                .catch(catchAs(response, operation)); // logs the failure under `operation`, then 500s
-        }
-    }[operation];
-
-    return handler;
+        // runSearch: the module's own search, given the validated input.
+        return runSearch(parsed, request)
+            .then((result) => {
+                successResponse(response, result);
+            })
+            .catch(catchAs(response, operation)); // logs the failure under `operation`, then 500s
+    });
 };

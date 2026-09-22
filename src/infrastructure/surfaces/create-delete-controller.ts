@@ -15,7 +15,13 @@ import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { isBadObjectId } from '@infrastructure/persistence/mongo-errors';
 import { extractAndValidateId, readInput, callerContextOf } from '@infrastructure/http/request';
 import { hardDeleteSchema } from '@infrastructure/http/schemas';
-import { refused, rejectValidation, type ServiceResult } from '@infrastructure/http/controller';
+import {
+    namedHandler,
+    operationName,
+    refused,
+    rejectValidation,
+    type ServiceResult
+} from '@infrastructure/http/controller';
 import {
     emitAuditEvent,
     buildAuditEvent,
@@ -56,57 +62,50 @@ export const createDeleteController = ({
     notFoundKey
 }: DeleteControllerSpec) => {
     // The name printed in stack traces, audit logs and the request log line — e.g. `deleteOrder`.
-    const operation = `delete${entity.charAt(0).toUpperCase()}${entity.slice(1)}`;
+    const operation = operationName('delete', entity);
 
-    // A computed property key, not a plain function expression, so `handler.name` is `operation`
-    // instead of the generic name an anonymous function would carry.
-    const handler = {
-        [operation](request: Request, response: Response) {
-            // Reads `:id` off the route, 422s and returns undefined if it's missing or malformed.
-            const id = extractAndValidateId(request, response, 'delete');
-            if (!id) return Promise.resolve();
+    return namedHandler(operation, (request: Request, response: Response) => {
+        // Reads `:id` off the route, 422s and returns undefined if it's missing or malformed.
+        const id = extractAndValidateId(request, response, 'delete');
+        if (!id) return Promise.resolve();
 
-            // `hardDelete` arrives three ways (path segment via `routeFlag`, query, or body) and
-            // is OR'd across sources rather than following surface precedence: any true wins, all
-            // false/absent defaults to false, any undecodable value 422s. OR avoids `false`
-            // (the default, what nobody types) ever outvoting a `true` someone deliberately sent
-            // on a different transport.
-            const input = readInput(request, { surface: 'delete', anyTrue: ['hardDelete'] });
-            // Validates the merged `hardDelete` value against its schema; 422s and returns
-            // undefined on failure.
-            const parseResult = hardDeleteSchema.safeParse(input.hardDelete);
-            if (!parseResult.success)
-                return Promise.resolve(rejectValidation(response, parseResult.error));
-            const hardDelete = parseResult.data;
+        // `hardDelete` arrives three ways (path segment via `routeFlag`, query, or body) and
+        // is OR'd across sources rather than following surface precedence: any true wins, all
+        // false/absent defaults to false, any undecodable value 422s. OR avoids `false`
+        // (the default, what nobody types) ever outvoting a `true` someone deliberately sent
+        // on a different transport.
+        const input = readInput(request, { surface: 'delete', anyTrue: ['hardDelete'] });
+        // Validates the merged `hardDelete` value against its schema; 422s and returns
+        // undefined on failure.
+        const parseResult = hardDeleteSchema.safeParse(input.hardDelete);
+        if (!parseResult.success)
+            return Promise.resolve(rejectValidation(response, parseResult.error));
+        const hardDelete = parseResult.data;
 
-            return remove(id, hardDelete)
-                .then((result) => {
-                    // Sends the error envelope and stops here if the service refused.
-                    if (refused(response, result)) return;
+        return remove(id, hardDelete)
+            .then((result) => {
+                // Sends the error envelope and stops here if the service refused.
+                if (refused(response, result)) return;
 
-                    emitAuditEvent(
-                        buildAuditEvent(callerContextOf(request), {
-                            action:
-                                typeof auditAction === 'function'
-                                    ? auditAction(hardDelete)
-                                    : auditAction,
-                            outcome: 'success',
-                            target_type: entity,
-                            target_id: id,
-                            metadata: { hardDelete }
-                        })
-                    );
-                    successResponse(response, undefined, 200, result.message);
-                })
-                .catch((error: unknown) => {
-                    // A malformed id reaches Mongoose as a CastError rather than a miss, and the
-                    // honest answer is the same 404 a well-formed unknown id gets.
-                    if (isBadObjectId(error))
-                        return rejectResponse(response, 404, [t(notFoundKey)]);
-                    rejectDatabaseError(response, operation, error);
-                });
-        }
-    }[operation];
-
-    return handler;
+                emitAuditEvent(
+                    buildAuditEvent(callerContextOf(request), {
+                        action:
+                            typeof auditAction === 'function'
+                                ? auditAction(hardDelete)
+                                : auditAction,
+                        outcome: 'success',
+                        target_type: entity,
+                        target_id: id,
+                        metadata: { hardDelete }
+                    })
+                );
+                successResponse(response, undefined, 200, result.message);
+            })
+            .catch((error: unknown) => {
+                // A malformed id reaches Mongoose as a CastError rather than a miss, and the
+                // honest answer is the same 404 a well-formed unknown id gets.
+                if (isBadObjectId(error)) return rejectResponse(response, 404, [t(notFoundKey)]);
+                rejectDatabaseError(response, operation, error);
+            });
+    });
 };

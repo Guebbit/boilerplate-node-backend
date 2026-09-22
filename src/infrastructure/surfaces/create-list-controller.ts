@@ -11,7 +11,7 @@ import type { Request, Response } from 'express';
 import type { ZodType } from 'zod';
 import { successResponse } from '@infrastructure/http/response';
 import { readInput, type RequestInputDeclaration } from '@infrastructure/http/request';
-import { catchAs, parseBody } from '@infrastructure/http/controller';
+import { catchAs, namedHandler, operationName, parseBody } from '@infrastructure/http/controller';
 
 /** What makes one entity's list different from another's. */
 export interface ListControllerSpec<TSchema extends ZodType, TResult> {
@@ -53,30 +53,24 @@ export const createListController = <TSchema extends ZodType, TResult>({
     runList
 }: ListControllerSpec<TSchema, TResult>) => {
     // The name printed in stack traces, the request log line and `docs/modules/` — e.g. `getInventoryLevels`.
-    const operation = `get${entity.charAt(0).toUpperCase()}${entity.slice(1)}`;
+    const operation = operationName('get', entity);
 
-    // A computed property key, not a plain function expression, so `handler.name` is `operation`
-    // instead of the generic name an anonymous function would carry.
-    const handler = {
-        [operation](request: Request, response: Response) {
-            // readInput merges the query string into one object per the `list` surface's rules
-            // (docs/theory/request-input.md); parseBody then validates it against the query
-            // schema, 422ing and returning undefined on failure.
-            const parsed = parseBody(
-                schema,
-                readInput(request, { ...input, surface: 'list' }),
-                response
-            );
-            if (!parsed) return Promise.resolve();
+    return namedHandler(operation, (request: Request, response: Response) => {
+        // readInput merges the query string into one object per the `list` surface's rules
+        // (docs/theory/request-input.md); parseBody then validates it against the query
+        // schema, 422ing and returning undefined on failure.
+        const parsed = parseBody(
+            schema,
+            readInput(request, { ...input, surface: 'list' }),
+            response
+        );
+        if (!parsed) return Promise.resolve();
 
-            // runList: the module's own query, given the validated input.
-            return runList(parsed, request)
-                .then((result) => {
-                    successResponse(response, result);
-                })
-                .catch(catchAs(response, operation)); // logs the failure under `operation`, then 500s
-        }
-    }[operation];
-
-    return handler;
+        // runList: the module's own query, given the validated input.
+        return runList(parsed, request)
+            .then((result) => {
+                successResponse(response, result);
+            })
+            .catch(catchAs(response, operation)); // logs the failure under `operation`, then 500s
+    });
 };

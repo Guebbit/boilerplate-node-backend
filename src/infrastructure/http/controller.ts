@@ -7,7 +7,7 @@
  * `controller-chain-must-catch` walks the AST looking for. Helpers keep all three visible.
  */
 
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import type { ZodError, ZodType } from 'zod';
 import {
     rejectResponse,
@@ -16,6 +16,36 @@ import {
     type ResponseReject
 } from './response';
 import { rejectDatabaseError } from './errors';
+
+/**
+ * The operation name printed in a stack trace, an audit/log line and the generated
+ * `docs/modules/` tables — one formula every controller factory under `infrastructure/surfaces/`
+ * derives its handler's name from, rather than each concatenating `verb` + capitalized `entity`
+ * by hand.
+ *
+ * @param verb - the operation's verb, already lower-case — `'get'`, `'delete'`
+ * @param entity - the entity name, cased the way the module wants it in the name
+ * @param suffix - appended after `entity`, for an operation that would otherwise collide with
+ *   another on the same entity — `'Item'` distinguishes a read-one from a list's plain `getX`
+ */
+export const operationName = (verb: string, entity: string, suffix = ''): string =>
+    `${verb}${entity.charAt(0).toUpperCase()}${entity.slice(1)}${suffix}`;
+
+/**
+ * Give an Express handler the name `operation`, in place of the generic name an anonymous
+ * function carries — what every stack trace, the request log line and `docs/modules/` print.
+ *
+ * A computed property key is the one way to do this without `Object.defineProperty`: a function
+ * expression's `.name` is read-only once assigned, but an object literal's method takes its name
+ * from the key it was declared under, including a key computed from a variable.
+ *
+ * @param operation - the name to give `handler`, from {@link operationName}
+ * @param handler - the Express handler itself
+ */
+export const namedHandler = <THandler extends (request: Request, response: Response) => unknown>(
+    operation: string,
+    handler: THandler
+): THandler => ({ [operation]: handler })[operation];
 
 /**
  * What a service hands back: either data with a status, or a status and the reasons — the exact
