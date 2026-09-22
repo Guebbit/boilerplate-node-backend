@@ -146,10 +146,22 @@ const unwrapField = (schema: ZodType): ZodType => {
     return schema;
 };
 
+/**
+ * Shapes a valid email address can take, and that a hand-tightened validator most often gets
+ * wrong: a plus-tag (RFC 5321 mailbox extension), an 8+ character TLD (`.photography`, not just
+ * `.com`), and a subdomain. One is picked per call, same PRNG as everything else here.
+ */
+const EMAIL_SHAPES: (() => string)[] = [
+    () => `${randomAlpha(8)}@example.com`,
+    () => `${randomAlpha(6)}+${randomAlpha(4)}@example.com`,
+    () => `${randomAlpha(8)}@example.photography`,
+    () => `${randomAlpha(8)}@mail.example.com`
+];
+
 const randomStringForFormat = (format?: string): string => {
     switch (format) {
         case 'email': {
-            return `${randomAlpha(8)}@example.com`;
+            return EMAIL_SHAPES[randomInt(0, EMAIL_SHAPES.length - 1)]();
         }
         case 'url': {
             return `https://example.com/${randomAlpha(8)}`;
