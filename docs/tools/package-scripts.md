@@ -131,6 +131,12 @@ for exactly which is which.
 | `docs:roles` / `check:docs-roles`               | the effective role matrix in `docs/demo-ecommerce/`                                                                   | [Reference: Scripts](../reference/scripts.md)     |
 | `docs:dependencies` / `check:docs-dependencies` | the two tables in [Package Dependencies](./package-dependencies.md), from `package.json` and who imports each package | [Package Dependencies](./package-dependencies.md) |
 
+## Docker scripts
+
+| Script                                              | Job                                                                              | Read more                                     |
+| --------------------------------------------------- | -------------------------------------------------------------------------------- | --------------------------------------------- |
+| `docker:dockerignore` / `check:docker-dockerignore` | `docker/Dockerfile.dockerignore`, from the root `.dockerignore` (`.git` kept IN) | [Reference: Scripts](../reference/scripts.md) |
+
 ## Database & seed scripts
 
 `db:sync` owns **schema** (the indexes, reconciled against the schemas that declare them); the

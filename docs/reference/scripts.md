@@ -25,6 +25,7 @@ scripts/
 ├── mutation/                 the Stryker runs and the per-file ratchet
 ├── testing/                  everything else that runs or reads a test suite
 ├── docs/                     generators that write into docs/
+├── docker/                   generators that write into docker/
 ├── db/                       deploy-time database scripts — see [Data](./data.md)
 ├── ops/                      the scheduled `reap:*`/`sweep:*` jobs, documented below
 └── eslint/                   the repo's own lint rules, documented below
@@ -156,6 +157,12 @@ The three libraries underneath them:
 | `scripts/docs/dependency-groups.ts` | The hand-kept half of the dependency page: which family a package belongs to and why. Everything else on that page is derived, and would drift the moment it were typed here too.                          | [Package Dependencies](../tools/package-dependencies.md) |
 | `scripts/docs/module-descriptor.ts` | One typed reader for a module's `module.yaml`, shared by the graph generator and the test that proves every descriptor is well-formed — a second hand-rolled parse of the same file drifts.                | [Strategic DDD](../theory/strategic-ddd.md)              |
 | `scripts/docs/repo-references.ts`   | Whether a path a comment cites still exists — the machinery `check-references.ts` and the `comment-links` lint rule share, so the two agree on what counts as a real path instead of each growing its own. | [Repository Root](./root.md)                             |
+
+## Docker — `scripts/docker/`
+
+| File                                                 | What it is                                                                                                                                                                                                                                                                                                          | Read next |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `scripts/docker/generate-dockerfile-dockerignore.ts` | Writes `docker/Dockerfile.dockerignore` from the root `.dockerignore`, `.git` kept IN — Docker/Buildah use a per-Dockerfile ignore file INSTEAD of the root one, not merged with it, so a hand-kept second copy drifts the moment the root list changes. `npm run docker:dockerignore`; its check mode is the gate. | —         |
 
 ## Scheduled jobs — `scripts/ops/`
 
