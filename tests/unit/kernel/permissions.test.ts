@@ -9,6 +9,7 @@ import { z } from 'zod';
 import {
     ANONYMOUS_ROLE,
     keysDocumentSchema,
+    permissionModelVersion,
     PERMISSION_KEYS,
     PRESET_ROLES,
     rolesDocumentSchema
@@ -146,5 +147,40 @@ describe('the real shared authorization files', () => {
         const held = new Set(admin!.permissions);
 
         expect(platformKeys.some((key) => held.has(key))).toBe(false);
+    });
+});
+
+/*
+ * B14: a plain `PERMISSION_KEYS.length` cannot tell "the same keys" from "different keys of the
+ * same count" — a rename or a key-for-key swap left the version untouched, so a client's cached
+ * rules would go stale silently. These pin the fingerprint's actual properties instead.
+ */
+describe('permissionModelVersion', () => {
+    it('changes when a key is swapped for a different one, count unchanged', () => {
+        const before = permissionModelVersion(['products.self.read', 'orders.self.read']);
+        const after = permissionModelVersion(['products.self.read', 'orders.self.write']);
+
+        expect(after).not.toBe(before);
+    });
+
+    it('does not change when the same keys are merely reordered', () => {
+        const forward = permissionModelVersion(['products.self.read', 'orders.self.read']);
+        const backward = permissionModelVersion(['orders.self.read', 'products.self.read']);
+
+        expect(backward).toBe(forward);
+    });
+
+    it('changes when a key is added or removed', () => {
+        const smaller = permissionModelVersion(['products.self.read']);
+        const larger = permissionModelVersion(['products.self.read', 'orders.self.read']);
+
+        expect(larger).not.toBe(smaller);
+    });
+
+    it('is a non-negative integer', () => {
+        const version = permissionModelVersion(PERMISSION_KEYS.map((entry) => entry.key));
+
+        expect(Number.isInteger(version)).toBe(true);
+        expect(version).toBeGreaterThanOrEqual(0);
     });
 });

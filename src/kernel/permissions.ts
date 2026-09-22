@@ -16,6 +16,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { parse } from 'yaml';
 import { z } from 'zod';
@@ -194,6 +195,28 @@ const rolesDocument = readShared('authorization-roles.yaml', rolesDocumentSchema
 
 /** Every declared key, in the order the shared file lists them. */
 export const PERMISSION_KEYS: readonly PermissionKey[] = keysDocument.keys;
+
+/**
+ * A fingerprint of a permission-key set, for `GET /account/abilities`' cache-busting `version`.
+ *
+ * A plain COUNT (the previous version of this) cannot tell "the same 40 keys" from "40 DIFFERENT
+ * keys" — a key rename or a key-for-key swap leaves the length untouched, so a client's cached
+ * rules would silently go stale. Hashing the sorted key names instead catches any change to the
+ * SET: sorted first, so declaring the same keys in a different order (a YAML edit that reorders
+ * without adding or removing anything) is not itself a version bump.
+ *
+ * `sha256`, node's own — not reimplemented — over the newline-joined, sorted names; the first 4
+ * bytes of the digest, read as an unsigned integer, are enough entropy for a cache key that only
+ * ever needs to change or not, never to be collision-proof against an adversary.
+ * https://nodejs.org/api/crypto.html#cryptocreatehashalgorithm-options
+ *
+ * @param keys - the declared keys' own `key` names
+ * @returns a non-negative integer, stable under reordering, that changes when the SET changes
+ */
+export const permissionModelVersion = (keys: readonly string[]): number => {
+    const digest = createHash('sha256').update(keys.toSorted().join('\n')).digest();
+    return digest.readUInt32BE(0);
+};
 
 /**
  * Every CASL subject a declared key names, deduplicated and sorted — published on

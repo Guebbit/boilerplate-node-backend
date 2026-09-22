@@ -21,6 +21,7 @@ import { buildAbility } from '@kernel/ability';
 import {
     anonymousCaller,
     callerInScope,
+    permissionModelVersion,
     PERMISSION_KEYS,
     PERMISSION_SUBJECTS
 } from '@kernel/permissions';
@@ -30,11 +31,12 @@ import type { AuthContext } from '@types';
  * The permission model's own version.
  *
  * Bumped when the KEYS change, not when a role does — a client caches these, and this is what
- * tells it the cache is about a different model rather than merely a different person. Derived
- * from the declared set rather than typed in, so it cannot be forgotten: adding or removing a key
- * changes it, editing a role does not.
+ * tells it the cache is about a different model rather than merely a different person. A
+ * fingerprint of the declared set (see {@link permissionModelVersion}) rather than typed in or a
+ * plain count, so a key rename or swap cannot be forgotten either: only reordering the same set
+ * leaves it unchanged, and editing a role never touches it at all.
  */
-const modelVersion = PERMISSION_KEYS.length;
+const modelVersion = permissionModelVersion(PERMISSION_KEYS.map((entry) => entry.key));
 
 /**
  * One scope's rules, in CASL's wire format.
