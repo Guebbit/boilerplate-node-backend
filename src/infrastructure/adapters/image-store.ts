@@ -123,7 +123,7 @@ const publicRoot = () => path.resolve(process.env.NODE_PUBLIC_PATH ?? 'public');
  * is a local-dev convenience only: a real deployment always sets `NODE_QUARANTINE_PATH` to its own
  * mounted volume, so the durability guarantee comes from that mount, never from this default.
  */
-const quarantineRoot = () =>
+export const quarantineRoot = () =>
     path.resolve(process.env.NODE_QUARANTINE_PATH ?? path.join('tmp', 'quarantine'));
 
 /** The directory holding one image's thumbnail derivatives. */
