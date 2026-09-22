@@ -159,6 +159,15 @@ module.exports = {
         },
 
         {
+            name: 'no-non-package-json',
+            comment:
+                "An import that resolves only because some OTHER dependency happens to pull the same package in too — `npm-no-pkg` (no package.json dependency-cruiser can trace back to any declared one) or `npm-unknown` (resolves under node_modules, but package.json's own dependencies/devDependencies never named it). It works today and stops the moment that other tree reshapes. Scoped to src|scenarios|scripts, the same three trees `generate-dependency-map.ts` scans for the same reason.",
+            severity: 'error',
+            from: { path: '^(src|scenarios|scripts)/' },
+            to: { dependencyTypes: ['npm-no-pkg', 'npm-unknown'] }
+        },
+
+        {
             name: 'module-internals-are-private',
             comment:
                 "A module has one public path, `@modules/<name>`, and the moment anything reaches past it the module stops being deletable. `eslint-plugin-boundaries` states this for one module reaching another and cannot state it for the tiers that are not modules: `src/app/` reaching `@modules/account/session/jwt` passes every lint rule. This is that gap, for all thirteen at once. Scoped to `from: ^src/` on purpose — `scenarios/<name>.ts` needs its own module's repository, model and factories directly, and sits outside `src/` precisely so this rule does not reach it.",

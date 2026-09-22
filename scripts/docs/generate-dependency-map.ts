@@ -17,7 +17,8 @@
  * visible, not a build failure, per `docs/theory/modules.md`'s "less policing" stance.
  */
 
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { builtinModules } from 'node:module';
 import path from 'node:path';
 import { format, resolveConfig } from 'prettier';
 import {
@@ -118,6 +119,30 @@ const importSpecifiers = (source: string): string[] =>
 const packageFor = (specifier: string, packages: string[]): string | undefined =>
     packages.find((name) => specifier === name || specifier.startsWith(`${name}/`));
 
+/** Node's own modules — `node:fs`, and the bare form every one still resolves under too. */
+const BUILTIN_MODULES = new Set(builtinModules);
+const isBuiltin = (specifier: string): boolean =>
+    specifier.startsWith('node:') || BUILTIN_MODULES.has(specifier);
+
+/** The installable package name a specifier belongs to — `@scope/pkg` kept whole, else the first segment. */
+const packageRootOf = (specifier: string): string =>
+    specifier.startsWith('@')
+        ? specifier.split('/').slice(0, 2).join('/')
+        : (specifier.split('/')[0] ?? specifier);
+
+/**
+ * An import `node_modules` resolves but `package.json` never declared — exactly the D1 defect:
+ * it works today only because some OTHER dependency happens to pull it in too, and disappears
+ * the moment that one's tree changes shape. `npm ls <package>` on the failing line names the
+ * real dependent to declare it against.
+ */
+const undeclaredImportError = (specifier: string, file: string): Error =>
+    new Error(
+        `[dependency-map] ${path.relative(ROOT, file)} imports "${specifier}", which ` +
+            'node_modules resolves but package.json does not declare as a dependency. ' +
+            "Add it to package.json's dependencies (or devDependencies for tooling-only code)."
+    );
+
 /** Every scanned package name mapped to the set of areas that import it, production code only. */
 const readOwnership = (packages: string[]): Map<string, Set<string>> => {
     const files = [
@@ -130,10 +155,17 @@ const readOwnership = (packages: string[]): Map<string, Set<string>> => {
         const source = readFileSync(file, 'utf8');
         const owner = ownerOf(file);
         for (const specifier of importSpecifiers(source)) {
+            if (isBuiltin(specifier)) continue;
+
             const packageName = packageFor(specifier, packages);
-            if (!packageName) continue;
-            ownership.set(packageName, ownership.get(packageName) ?? new Set());
-            ownership.get(packageName)?.add(owner);
+            if (packageName) {
+                ownership.set(packageName, ownership.get(packageName) ?? new Set());
+                ownership.get(packageName)?.add(owner);
+                continue;
+            }
+
+            if (existsSync(path.join(ROOT, 'node_modules', packageRootOf(specifier))))
+                throw undeclaredImportError(specifier, file);
         }
     }
 
