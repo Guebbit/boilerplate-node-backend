@@ -787,23 +787,6 @@ describe('requireFreshAuth', () => {
         expect(next).toHaveBeenCalledTimes(1);
     });
 
-    it('treats a token with no auth_time at all as infinitely old — fails closed', () => {
-        // A token minted before `requireFreshAuth` existed carries no `auth_time` claim at all.
-        // `resolve()` in account/module.ts normalizes an absent claim to `0`; this is what that
-        // `0` has to mean once it reaches the guard.
-        const next = jest.fn();
-        const response = makeStepUpResponseStub();
-
-        requireFreshAuth(300)(
-            makeRequest({ authContext: { ...asCustomer('user-1'), authTime: 0 } }),
-            response,
-            next
-        );
-
-        expect(next).not.toHaveBeenCalled();
-        expect(response.status).toHaveBeenCalledWith(401);
-    });
-
     it('carries REAUTH_REQUIRED and the tier in the error envelope', () => {
         const response = makeStepUpResponseStub();
 

@@ -72,9 +72,15 @@ const findByIdReturning = (user: unknown) => {
 /**
  * Sign a fixture the way `jwt.ts` itself signs — `keyid` stamped from the secret. A fixture built
  * with plain `sign()` would carry no `kid` at all and never match a ring member.
+ *
+ * `auth_time`/`amr` default in, since `TokenData` requires both on every real token — `payload`
+ * overrides either when a case is specifically about one of them.
  */
 const signAs = (secret: string, payload: object, options: SignOptions = {}) =>
-    sign(payload, secret, { ...options, keyid: keyId(secret) });
+    sign({ auth_time: Math.floor(Date.now() / 1000), amr: ['pwd'], ...payload }, secret, {
+        ...options,
+        keyid: keyId(secret)
+    });
 
 beforeEach(() => {
     // `reset`, not `clear`: these doubles are given a resolved or rejected value per test, and

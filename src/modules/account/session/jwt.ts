@@ -29,17 +29,16 @@ export interface TokenData {
     /**
      * Epoch seconds at which the user last actually proved themselves — stamped once, at login
      * (`createRefreshToken`), then COPIED FORWARD on every access-token mint and every rotation,
-     * never re-stamped from the clock. Optional, honestly: a token signed before this claim
-     * existed carries none at all. Every reader treats an absent value as `0` (infinitely old)
-     * rather than trusting it, so a pre-existing session is asked to re-authenticate at its first
-     * sensitive action instead of reading as freshly authenticated.
+     * never re-stamped from the clock. Required: `keyForId` already refuses any token whose `kid`
+     * names no current ring member, and every token this app has ever signed under a live ring
+     * member carries this claim — there is no reachable token that carries a `kid` but not this.
      */
-    auth_time?: number;
+    auth_time: number;
     /**
      * How the `auth_time` proof was made — RFC 8176 values. `['pwd']` today; a second factor
-     * would add `'otp'`. Copied forward exactly like `auth_time`, same optionality, same reason.
+     * would add `'otp'`. Copied forward exactly like `auth_time`, same reasoning.
      */
-    amr?: string[];
+    amr: string[];
 }
 
 /**
@@ -270,19 +269,14 @@ export const rotateRefreshToken = (
 ): Promise<{ accessToken: string; refreshToken: string; refreshMaxAgeMs: number }> =>
     // Signature/expiry/ring lookup only, no DB round trip yet — same as `verifyAccessToken`.
     verifyAgainstRing(oldToken, getRefreshTokenRing()).then(
-        ({ id, exp, auth_time: rawAuthTime, amr }) => {
+        ({ id, exp, auth_time: authTime, amr }) => {
             // `exp` is seconds since epoch (the JWT convention); clamp to at least 1s so a token that
             // verified with almost no time left still signs rather than producing `expiresIn: 0`,
             // which `jsonwebtoken` treats as "no expiry" — the opposite of what's intended here.
             const remainingMs = Math.max(exp * 1000 - Date.now(), 1000);
-            // Copied forward through rotation too, same rule `createAccessToken` follows. A token
-            // carrying no `auth_time`/`amr` at all falls back the same way `resolve()` does elsewhere
-            // — infinitely old, `pwd` as the only method it could possibly have used.
-            const authTime = rawAuthTime ?? 0;
-            const carriedAmr = amr ?? ['pwd'];
 
             return userService.tokenSupersede(oldToken).then((won) => {
-                if (won) return reissueRotated(id, remainingMs, authTime, carriedAmr);
+                if (won) return reissueRotated(id, remainingMs, authTime, amr);
 
                 return userService.findByTokenValue(oldToken).then((user) => {
                     const digest = hashToken(oldToken);
@@ -298,14 +292,13 @@ export const rotateRefreshToken = (
                     // Still live (no `supersededAt`) despite losing the claim: only reachable through
                     // a race tighter than `tokenSupersede` itself allows for. Treat it as live — the
                     // credential is exactly as valid as the caller believes it is.
-                    if (!entry.supersededAt)
-                        return reissueRotated(id, remainingMs, authTime, carriedAmr);
+                    if (!entry.supersededAt) return reissueRotated(id, remainingMs, authTime, amr);
 
                     const supersededMsAgo = Date.now() - entry.supersededAt.getTime();
                     if (supersededMsAgo <= getRotationGraceMilliseconds())
                         // The benign race: someone else's rotation of this SAME token already won,
                         // moments ago. Reissue rather than reject — see the module doc above.
-                        return reissueRotated(id, remainingMs, authTime, carriedAmr);
+                        return reissueRotated(id, remainingMs, authTime, amr);
 
                     // Superseded well outside the grace window: THIS is the signal that distinguishes
                     // reuse from an ordinary dead credential — a token this account rotated away, on

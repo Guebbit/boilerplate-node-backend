@@ -36,9 +36,17 @@ setupTestDb();
 const ACCESS_SECRET = 'test-access-secret';
 const REFRESH_SECRET = 'test-refresh-secret';
 
-/** Sign a fixture the way `jwt.ts` itself signs — `keyid` stamped from the secret. */
+/**
+ * Sign a fixture the way `jwt.ts` itself signs — `keyid` stamped from the secret.
+ *
+ * `auth_time`/`amr` default in, since `TokenData` requires both on every real token — `payload`
+ * overrides either when a case is specifically about one of them.
+ */
 const signAs = (secret: string, payload: object, options: SignOptions = {}) =>
-    sign(payload, secret, { ...options, keyid: keyId(secret) });
+    sign({ auth_time: Math.floor(Date.now() / 1000), amr: ['pwd'], ...payload }, secret, {
+        ...options,
+        keyid: keyId(secret)
+    });
 
 const originalEnvironment: Record<string, string | undefined> = {};
 const ENV_KEYS = [

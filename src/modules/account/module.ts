@@ -97,12 +97,10 @@ const resolve = (verify: (token: string) => Promise<TokenData>) => (token: strin
                       // rather than anything the request could name.
                       tenantId: membership.tenantId,
                       imageUrl: user.imageUrl,
-                      // Absent (a token minted before this claim existed) reads as infinitely
-                      // old — fail closed, so a pre-existing session is asked to re-authenticate
-                      // at its first sensitive action rather than being treated as freshly
-                      // authenticated.
-                      authTime: claims.auth_time ?? 0,
-                      amr: claims.amr ?? [],
+                      // `TokenData.auth_time`/`amr` are required — see that interface's own doc
+                      // for why no token this app verifies can be missing either.
+                      authTime: claims.auth_time,
+                      amr: claims.amr,
                       // Read fresh off the document every request, unlike `authTime`/`amr`: a
                       // consent WITHDRAWAL has to apply to the very next event, not wait for the
                       // caller to log in again. `?? false` for the same reason as `admin` above —
