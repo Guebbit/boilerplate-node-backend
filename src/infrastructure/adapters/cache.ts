@@ -15,6 +15,11 @@ import {
     manageConnection,
     type DependencyStatus
 } from '@infrastructure/adapters/managed-connection';
+import {
+    closeRedisClient,
+    redisClientOptions,
+    redisUrlFromHostPort
+} from '@infrastructure/adapters/redis';
 import { environmentFlag } from '@infrastructure/runtime/environment';
 import { cacheInvalidationFailuresTotal } from '@infrastructure/observability/metrics-cache';
 
@@ -30,13 +35,8 @@ const CACHE_PREFIX = process.env.NODE_REDIS_CACHE_PREFIX ?? 'boilerplate-node-ba
  * Returns `undefined` when neither is set — which is the signal that caching is off
  * (see `isCacheEnabled`), not an error.
  */
-const getRedisUrl = (): string | undefined => {
-    if (process.env.NODE_REDIS_URL) return process.env.NODE_REDIS_URL;
-    if (!process.env.NODE_REDIS_PORT) return;
-
-    const host = process.env.NODE_REDIS_HOST ?? '127.0.0.1';
-    return `redis://${host}:${process.env.NODE_REDIS_PORT}`;
-};
+const getRedisUrl = (): string | undefined =>
+    process.env.NODE_REDIS_URL ?? redisUrlFromHostPort('NODE_REDIS_HOST', 'NODE_REDIS_PORT');
 
 /**
  * Cache usage is on only when Redis is configured and not explicitly disabled — two independent
@@ -64,19 +64,8 @@ const cacheConnection = manageConnection<RedisClientType>({
         // is the "cannot be built" signal rather than a failure worth warning about.
         if (!redisUrl) return Promise.resolve(undefined);
 
-        const client: RedisClientType = createClient({
-            // `redis://[:password@]host:port[/db]` — parsed by node-redis itself.
-            url: redisUrl,
-            socket: {
-                // Fail fast (1s). A cache lookup must never dominate request latency; if Redis
-                // is slow to accept connections we would rather serve the request uncached.
-                connectTimeout: 1000,
-                // `false` disables node-redis' automatic reconnect loop. Deliberate: the loop
-                // would retry in the background forever and log on every attempt. Instead each
-                // attempt is one clean try, so recovery is driven by traffic.
-                reconnectStrategy: false
-            }
-        });
+        // `redis://[:password@]host:port[/db]` — parsed by node-redis itself.
+        const client: RedisClientType = createClient(redisClientOptions(redisUrl));
 
         // node-redis is an EventEmitter and an unhandled 'error' event would crash the process,
         // so this listener is mandatory, not just for logging.
@@ -86,23 +75,7 @@ const cacheConnection = manageConnection<RedisClientType>({
         // the lifecycle, and one that never finished connecting has nothing worth reusing.
         return client.connect().then(() => client);
     },
-    close: (client) => {
-        // Nothing was ever opened: caching is off, or the last connect failed. Either way there
-        // is no socket to release.
-        if (!client) return Promise.resolve();
-
-        return (
-            client
-                // `quit()` sends the QUIT command and waits for queued replies — the polite close.
-                .quit()
-                .then(
-                    () => undefined,
-                    // If QUIT itself fails (already-dead socket), `destroy()` drops the socket
-                    // immediately, discarding anything still queued.
-                    () => client.destroy()
-                )
-        );
-    }
+    close: closeRedisClient
 });
 
 /**

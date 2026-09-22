@@ -16,6 +16,11 @@ import {
     manageConnection,
     type ManagedConnection
 } from '@infrastructure/adapters/managed-connection';
+import {
+    closeRedisClient,
+    redisClientOptions,
+    redisUrlFromHostPort
+} from '@infrastructure/adapters/redis';
 
 /**
  * Key namespace for every limiter counter. Separate from the cache's prefix so
@@ -36,12 +41,11 @@ const redisUrl = (): string | undefined => {
      * test, and without this the limiters would fail open against a Redis that is not there.
      */
     if (!environmentFlag('NODE_RATE_LIMIT_REDIS_ENABLED', true)) return;
-    if (process.env.NODE_RATE_LIMIT_REDIS_URL) return process.env.NODE_RATE_LIMIT_REDIS_URL;
-    if (process.env.NODE_REDIS_URL) return process.env.NODE_REDIS_URL;
-    if (!process.env.NODE_REDIS_PORT) return;
-
-    const host = process.env.NODE_REDIS_HOST ?? '127.0.0.1';
-    return `redis://${host}:${process.env.NODE_REDIS_PORT}`;
+    return (
+        process.env.NODE_RATE_LIMIT_REDIS_URL ??
+        process.env.NODE_REDIS_URL ??
+        redisUrlFromHostPort('NODE_REDIS_HOST', 'NODE_REDIS_PORT')
+    );
 };
 
 /**
@@ -50,17 +54,7 @@ const redisUrl = (): string | undefined => {
  * @param url - the limiter's Redis URL — see {@link redisUrl}
  */
 const build = (url: string): RedisClientType => {
-    const redisClient: RedisClientType = createClient({
-        url,
-        socket: {
-            connectTimeout: 1000,
-            /*
-             * No reconnect loop, like the cache's client: it would retry forever, keeping the
-             * event loop alive after the process should exit. One clean try per command instead.
-             */
-            reconnectStrategy: false
-        }
-    });
+    const redisClient: RedisClientType = createClient(redisClientOptions(url));
 
     // node-redis is an EventEmitter and an unhandled 'error' event would crash the process, so this
     // listener is mandatory rather than merely useful.
@@ -110,12 +104,7 @@ const connectionFor = (url: string): ManagedConnection<RedisClientType> => {
         isReady: (client) => client.isReady,
         close: (client) => {
             redisClient = undefined;
-            return client
-                ? client.quit().then(
-                      () => undefined,
-                      () => client.destroy()
-                  )
-                : Promise.resolve();
+            return closeRedisClient(client);
         },
         onRecovered: () =>
             // Stryker disable next-line all
