@@ -206,6 +206,42 @@ const fakeLogin = async () => {
 const codeFor = (secret: string, stepsFromNow = 1): Promise<string> =>
     generate({ secret, epoch: Math.floor(Date.now() / 1000) + stepsFromNow * 30 });
 
+/*
+ * B24: an already-linked identity used to resolve straight to a session (case 1 in
+ * `services/oauth.ts`) regardless of `active`/`deletedAt` — the ONLY thing standing between a
+ * deactivated account and a live cookie was the password path's own filter, which OAuth never
+ * went through. `verifiedAt` is set here so the fallback this account now falls through to
+ * (`findByOAuthIdentity` no longer matches it) reaches the mint-time guard in `jwt.ts` instead of
+ * stopping one branch earlier on an unrelated unverified-email check.
+ */
+describe('GET /account/oauth/:provider/callback — deactivated/deleted account (B24)', () => {
+    it('refuses the login: redirects with an error, sets no session cookie, audits no AUTH_LOGIN', async () => {
+        const user = await createUser({
+            email: 'oauth.demo@example.com',
+            verifiedAt: new Date(),
+            active: false,
+            deletedAt: new Date()
+        });
+        await userRepository.linkOAuthAccount(user.id, {
+            provider: 'fake',
+            providerId: 'fake-oauth-subject',
+            connectedAt: new Date()
+        });
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        const response = await fakeLogin();
+
+        expect(response.status).toBe(302);
+        expect(response.headers.location).toContain('error=');
+        expect(setCookie(response, 'jwt')).toBeUndefined();
+        expect(setCookie(response, 'isAuth')).toBeUndefined();
+        const loginCalls = auditSpy.mock.calls.filter(
+            ([event]) => event.action === accountAuditActions.AUTH_LOGIN
+        );
+        expect(loginCalls).toHaveLength(0);
+    });
+});
+
 describe('GET /account/oauth/:provider/callback — 2FA armed (1b)', () => {
     it('challenges instead of minting a session, and mints one only once the code is answered', async () => {
         // First login creates the OAuth-only account; enroll TOTP on it through its own session.

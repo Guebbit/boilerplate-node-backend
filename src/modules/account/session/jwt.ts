@@ -10,6 +10,7 @@
 import { randomUUID } from 'node:crypto';
 import { sign, verify, decode } from 'jsonwebtoken';
 import { userService, TokenType, hashToken } from '@modules/users';
+import type { UserDocument } from '@modules/users';
 import {
     getAccessTokenRing,
     getRefreshTokenRing,
@@ -40,6 +41,17 @@ export interface TokenData {
      */
     amr: string[];
 }
+
+/**
+ * Refuse to mint for a user already loaded (unfiltered, by id) rather than found through a
+ * pre-filtered query — `createRefreshToken` and `reissueRotated` both load `userService`'s own
+ * `findByIdWithCredentials`, which GDPR export/erase deliberately still need unfiltered. Mirrors
+ * the `active`/`deletedAt` clause `users/repository.ts`'s `AUTHENTICATABLE_FILTER` applies at the
+ * query, the backstop for every path that reaches a mint without going through `findForLogin` —
+ * an OAuth login that resolved through a linked identity or an email fallback, chiefly.
+ */
+const isAuthenticatable = (user: Pick<UserDocument, 'active' | 'deletedAt'>): boolean =>
+    user.active !== false && !user.deletedAt;
 
 /**
  * Verify a token against whichever ring member its `kid` header names, HS256 pinned throughout.
@@ -139,7 +151,7 @@ export const createRefreshToken = (
         // Credentials included: minting a session pushes onto this document's `tokens`.
         .findByIdWithCredentials(id)
         .then((user) => {
-            if (!user) throw new Error('User not found');
+            if (!user || !isAuthenticatable(user)) throw new Error('User not found');
             /*
              * Signed through `signRefreshToken`, whose `jwtid` is what makes two refresh tokens
              * minted in the same second different. The payload is `{ id }` plus JWT's own
@@ -237,7 +249,7 @@ const reissueRotated = (
     amr: string[]
 ): Promise<{ accessToken: string; refreshToken: string; refreshMaxAgeMs: number }> =>
     userService.findByIdWithCredentials(id).then((user) => {
-        if (!user) throw new Error('User not found');
+        if (!user || !isAuthenticatable(user)) throw new Error('User not found');
 
         const claims = { id, auth_time: authTime, amr } as TokenData;
         const newRefreshToken = signRefreshToken(claims, Math.ceil(remainingMs / 1000));

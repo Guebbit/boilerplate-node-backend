@@ -193,6 +193,21 @@ describe('createRefreshToken', () => {
         ).rejects.toThrow('User not found');
     });
 
+    // B24: a deactivated or soft-deleted account must never get a fresh session, no matter which
+    // caller resolved it — `findForLogin` already blocks the password path; this is the mint
+    // itself refusing, the backstop for a resolver that doesn't filter (an OAuth login through an
+    // already-linked identity, chiefly).
+    it.each([
+        ['deactivated', { active: false }],
+        ['soft-deleted', { deletedAt: new Date() }]
+    ])('rejects for a %s account', async (_label, overrides) => {
+        const user = await createUser(overrides);
+
+        await expect(
+            createRefreshToken(String(user._id), RefreshTokenExpiryTime.SHORT)
+        ).rejects.toThrow('User not found');
+    });
+
     it('accumulates tokens rather than replacing them, so multi-device login works', async () => {
         const user = await createUser();
 
@@ -323,6 +338,25 @@ describe('createAccessToken', () => {
         const accessToken = await createAccessToken(refreshToken);
 
         await expect(verifyAccessToken(accessToken)).resolves.toMatchObject({ amr: ['pwd'] });
+    });
+});
+
+describe('rotateRefreshToken', () => {
+    // B24: the same guard `createRefreshToken` applies, at rotation's own reissue step —
+    // deactivating an account mid-session must stop its NEXT refresh from reissuing, not just
+    // block a fresh login.
+    it('refuses to reissue for an account deactivated since the token was minted', async () => {
+        const user = await createUser();
+        const refreshToken = await createRefreshToken(
+            String(user._id),
+            RefreshTokenExpiryTime.SHORT
+        );
+
+        const loaded = await userRepository.findByIdWithCredentials(String(user._id));
+        loaded!.active = false;
+        await loaded!.save();
+
+        await expect(rotateRefreshToken(refreshToken)).rejects.toThrow('User not found');
     });
 });
 

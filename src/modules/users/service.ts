@@ -524,12 +524,16 @@ const findForLogin = (email: string | undefined) =>
 /**
  * The credentialed account already linked to this federated identity, if any — `select: false`
  * fields included because a caller may need to build a 2FA login challenge off
- * `user.twoFactorMethods` right after.
+ * `user.twoFactorMethods` right after. `active: { $ne: false }`/`deletedAt: undefined`, same
+ * clause `findForLogin` filters on: a deactivated or soft-deleted account must not walk straight
+ * into a session through a provider it linked before either happened.
  */
 const findByOAuthIdentity = (provider: string, providerId: string) =>
     userRepository.findOneWithCredentials({
         'oauthAccounts.provider': provider,
-        'oauthAccounts.providerId': providerId
+        'oauthAccounts.providerId': providerId,
+        active: { $ne: false },
+        deletedAt: undefined
     });
 
 /** The hydrated document with the pending-email-change field loaded. */
