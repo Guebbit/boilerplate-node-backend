@@ -32,11 +32,20 @@
  * `.github/workflows/fuzz.yml` at a much larger one. A failure is usually a real finding.
 
  * ── What it deliberately does not cover ──────────────────────────────────────────────────────
- * `multipart/form-data` operations are skipped: their bodies are files, `fast-check` has nothing
- * useful to say about a PNG, and the upload path already has
+ * The FILE half of a `multipart/form-data` operation is skipped: its body is a file, `fast-check`
+ * has nothing useful to say about a PNG, and the upload path already has
  * `tests/integration/upload-security.test.ts` driving real magic-byte checks. The count is
- * asserted below so "skipped" cannot quietly
- * become "skipped everything".
+ * asserted below so "skipped" cannot quietly become "skipped everything".
+ *
+ * ── S13: the multipart operations, fuzzed anyway ─────────────────────────────────────────────
+ * Every `multipart/form-data` operation here ALSO declares an `application/json` variant — a
+ * create/update with no file — and `readInput`'s decode rule
+ * (`docs/theory/request-input.md`#"Only the string transports are decoded") coerces a
+ * string-typed boolean/array ONLY for a real multipart body; a `application/x-www-form-urlencoded`
+ * one is treated exactly like JSON, untouched. The second `describe.each` below sends the same
+ * hostile, spec-valid arbitrary as urlencoded instead of JSON — the one transport that is
+ * genuinely still untested here, since every field arrives as a bare string without ever being a
+ * real file upload.
  */
 import fc from 'fast-check';
 import { api, authenticateAs } from '@tests/http';
@@ -298,5 +307,54 @@ describe.each(
             neverCrashesOffContract(operation)(response);
             if (operation.requiresAuth) expect(response.status).toBe(401);
         });
+    }, 120_000);
+});
+
+/*
+ * S13: the multipart operations' JSON-shaped variant, sent as urlencoded — see the module doc.
+ * Every one of these also declares an `application/json` body, so `bodySchema` is always present.
+ */
+const MULTIPART_FUZZABLE = OPERATIONS.filter(
+    (operation) => operation.isMultipart && operation.bodySchema
+);
+
+describe('the multipart operations, urlencoded', () => {
+    it('fuzzes more than zero of them', () => {
+        // Mirrors "skips only the multipart operations" above: a walk that stopped finding any
+        // dual-content-type operation would make this whole block pass by testing nothing.
+        expect(MULTIPART_FUZZABLE.length).toBeGreaterThan(0);
+    });
+});
+
+describe.each(
+    MULTIPART_FUZZABLE.map(
+        (operation) => [`${operation.method.toUpperCase()} ${operation.path}`, operation] as const
+    )
+)('%s (urlencoded)', (_label, operation) => {
+    it('never answers 5xx, and always answers something the spec documents', async () => {
+        const { bearer } = await authenticateAs('admin');
+        // Every MULTIPART_FUZZABLE operation has a bodySchema by construction (the filter above).
+        const bodyArbitrary = bodyArbitraryFor(operation.bodySchema)!;
+        const url = buildUrl(operation);
+
+        await fc.assert(
+            fc.asyncProperty(bodyArbitrary, async (body) => {
+                // superagent: `.type('form')` serialises the body as
+                // `application/x-www-form-urlencoded` via `qs.stringify`, the same encoding
+                // `express.urlencoded({ extended: true })` (app/security.ts) decodes with — so a
+                // nested field round-trips through bracket notation rather than flattening.
+                // https://ladjs.github.io/superagent/#request-body
+                const response = await api()
+                    [operation.method](url)
+                    .set('Authorization', bearer)
+                    .set('Accept-Language', 'en')
+                    .type('form')
+                    .send(body as Record<string, unknown>);
+
+                expect(response.status).toBeLessThan(500);
+                expect(response).toSatisfyApiSpec();
+            }),
+            { seed: SEED, numRuns: FUZZ_RUNS_PER_OPERATION, endOnFailure: true }
+        );
     }, 120_000);
 });
