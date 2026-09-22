@@ -29,6 +29,7 @@ import amqplib, {
     type MessagePropertyHeaders
 } from 'amqplib';
 import type { ZodType } from 'zod';
+import { getJson } from '@guebbit/js-toolkit';
 import { logger } from '@infrastructure/adapters/logger';
 import type { DependencyStatus } from '@infrastructure/adapters/managed-connection';
 import { WORKER_CHANNELS } from '@types';
@@ -568,23 +569,14 @@ export interface ConsumeOptions<TPayload = unknown> {
 /**
  * Parse a delivered message's JSON body.
  *
- * Split out of `handleDelivery` purely to keep the `try`/`catch` JSON.parse forces from adding
- * its own level to that function's nesting — same one-assertion-at-the-boundary story as before,
- * just named. `undefined` is a safe failure sentinel: valid JSON never parses to it.
+ * `undefined` is a safe failure sentinel: valid JSON never parses to it.
  *
  * @param incoming - the raw delivered message
  * @returns the parsed value, or `undefined` when the body is not valid JSON
  */
-const parseMessageBody = (incoming: ConsumeMessage): unknown => {
-    // eslint-disable-next-line no-restricted-syntax -- JSON.parse has no non-throwing form; a malformed message is dropped, not a crash
-    try {
-        // `.content` is a Buffer; `toString()` assumes UTF-8 JSON, matching
-        // what `publishToQueue` writes.
-        return JSON.parse(incoming.content.toString());
-    } catch {
-        return undefined;
-    }
-};
+const parseMessageBody = (incoming: ConsumeMessage): unknown =>
+    // `.content` is a Buffer; `toString()` assumes UTF-8 JSON, matching what `publishToQueue` writes.
+    getJson(incoming.content.toString());
 
 /**
  * How many times THIS delivery has already cycled through the retry queue — the count RabbitMQ

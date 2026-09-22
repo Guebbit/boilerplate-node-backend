@@ -11,6 +11,7 @@
  */
 
 import type { NextFunction, Request, Response } from 'express';
+import { getJson } from '@guebbit/js-toolkit';
 import {
     claimCacheRefresh,
     getCacheValue,
@@ -130,21 +131,32 @@ const serializeCachedResponse = (key: string, value: CachedResponse): string | u
 };
 
 /**
+ * Whether a parsed value has the three fields `CachedResponse` requires.
+ *
+ * A stored entry can outlive the shape it was written under — a deploy that changes this
+ * interface leaves old Redis entries in place — so a field-by-field check catches that, not just
+ * "is it JSON".
+ */
+const isCachedResponse = (value: unknown): value is CachedResponse =>
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as Record<string, unknown>).status === 'number' &&
+    typeof (value as Record<string, unknown>).staleAt === 'number' &&
+    'body' in value;
+
+/**
  * Read one stored envelope back.
  *
- * A corrupt value — half-written, hand-edited — degrades to a cache miss. If the parse failure
- * escaped, one bad key would turn a working endpoint into a 500 until someone deleted it by hand.
+ * A corrupt value — half-written, hand-edited, or shaped by a since-changed version of this
+ * interface — degrades to a cache miss. If the parse failure escaped, one bad key would turn a
+ * working endpoint into a 500 until someone deleted it by hand.
  *
  * @param raw - the bytes `getCacheValue` returned
  * @returns the envelope, or `undefined` when it cannot be read
  */
 const parseCachedResponse = (raw: string): CachedResponse | undefined => {
-    // eslint-disable-next-line no-restricted-syntax -- JSON.parse has no non-throwing form; a corrupt entry is a miss, not a 500
-    try {
-        return JSON.parse(raw) as CachedResponse;
-    } catch {
-        return undefined;
-    }
+    const parsed = getJson(raw);
+    return isCachedResponse(parsed) ? parsed : undefined;
 };
 
 /**

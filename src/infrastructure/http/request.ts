@@ -17,7 +17,7 @@ import type { Caller, CallerContext, TenantCallerContext } from '@types';
 // i18next middleware has already set up by the time a controller runs.
 import { t } from '@infrastructure/i18n';
 import { Types } from 'mongoose';
-import { coerceStringArray } from '@guebbit/js-toolkit';
+import { coerceStringArray, getJson } from '@guebbit/js-toolkit';
 import { rejectResponse } from '@infrastructure/http/response';
 import { stripUndefined } from '@infrastructure/persistence/factories';
 
@@ -71,15 +71,14 @@ const parseFormNumber = (value: unknown): unknown => {
  * nested object arrives as a JSON-encoded string in one field. Anything not a string is returned
  * untouched (an application/json body already has real types); invalid JSON is returned
  * untouched too, so the validator downstream reports it rather than this helper throwing.
+ *
+ * `parsed === undefined` rather than `??`: valid JSON can decode to `null`, `0` or `''`, and
+ * `??` would treat those as failures and fall back to the raw string instead of the parsed value.
  */
 export const parseFormJson = (value: unknown): unknown => {
     if (typeof value !== 'string') return value;
-    // eslint-disable-next-line no-restricted-syntax -- JSON.parse throws on invalid input; caught locally so the raw string reaches the validator instead of crashing the request
-    try {
-        return JSON.parse(value) as unknown;
-    } catch {
-        return value;
-    }
+    const parsed = getJson(value);
+    return parsed === undefined ? value : parsed;
 };
 
 /** The three places a value can arrive from. Named so a route can declare which ones it reads. */
