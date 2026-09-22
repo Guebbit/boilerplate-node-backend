@@ -508,9 +508,17 @@ export default tseslint.config(
      * the caller an answer and owes the system its cleanup. So the rule is scoped here rather
      * than run repo-wide, which is exactly the distinction the old source-scanning test drew by
      * only ever looking inside `controllers/` directories.
+     *
+     * `infrastructure/http/middlewares/**` and `infrastructure/surfaces/**` owe the same answer:
+     * a middleware sits in front of every controller behind it, and a surface factory generates
+     * one outright — the same obligation, one level removed.
      */
     {
-        files: ['src/modules/*/controllers/**/*.ts'],
+        files: [
+            'src/modules/*/controllers/**/*.ts',
+            'src/infrastructure/http/middlewares/**/*.ts',
+            'src/infrastructure/surfaces/**/*.ts'
+        ],
         rules: {
             'local/controller-chain-must-catch': 'error'
         }

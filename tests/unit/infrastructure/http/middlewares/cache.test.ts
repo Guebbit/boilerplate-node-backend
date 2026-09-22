@@ -227,6 +227,28 @@ describe('setCache', () => {
         expect(next).toHaveBeenCalledTimes(1);
     });
 
+    /*
+     * A Redis outage must reach the global error handler, not hang the request — with no
+     * `.catch()`, `getCacheValue` rejecting left `next()` never called and no response ever
+     * sent: the request just hangs until its client (or a proxy) times it out.
+     */
+    it('forwards a Redis failure to next() instead of hanging the request', async () => {
+        const redisError = new Error('redis down');
+        mockedCache.getCacheValue.mockRejectedValue(redisError);
+
+        const middleware = setCache(60, { tags: ['products'], keyParameters: [] });
+        const { response } = createResponse();
+        const next = jest.fn() as NextFunction;
+
+        await middleware(
+            asStub<Request>({ method: 'GET', originalUrl: '/products', query: {}, locale: 'en' }),
+            response,
+            next
+        );
+
+        expect(next).toHaveBeenCalledWith(redisError);
+    });
+
     it('stores successful uncached responses after the handler runs', async () => {
         mockedCache.getCacheValue.mockResolvedValue(undefined);
 

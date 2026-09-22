@@ -126,6 +126,23 @@ describe('quarantineUploadedImages — broker ready', () => {
         expect(imageStore.removeQuarantined).toHaveBeenCalledWith('a.png');
         expect(deleteFile).toHaveBeenCalledTimes(2);
     });
+
+    /*
+     * The cleanup step itself is a promise chain with no `.catch()` of its own — without one on
+     * the middleware's own outer chain, a rejection here never reaches `next()` and the request
+     * just hangs, rather than answering the 500 an ordinary thrown error would.
+     */
+    it('still reaches next() when the sibling-failure cleanup itself rejects', async () => {
+        imageStore.quarantine
+            .mockResolvedValueOnce('a.png')
+            .mockRejectedValueOnce(new Error('disk full'));
+        imageStore.removeQuarantined.mockRejectedValueOnce(new Error('cleanup also failed'));
+        const request: Partial<Request> = {
+            files: [uploaded('/staging/a.png'), uploaded('/staging/b.png')]
+        };
+
+        await expect(run(request)).resolves.toBeInstanceOf(Error);
+    });
 });
 
 describe('quarantineUploadedImages — no broker ready', () => {

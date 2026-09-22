@@ -371,44 +371,52 @@ export const setCache = (seconds = 0, options: CacheOptions) => {
         const graceSeconds = Math.min(STALE_WHILE_REVALIDATE_SECONDS, ttl);
 
         const cacheKey = getCacheKey(request, sortedKeyParameters, options.keyAs);
-        return getCacheValue(cacheKey).then((raw) => {
-            const cachedResponse = raw === undefined ? undefined : parseCachedResponse(raw);
+        return (
+            getCacheValue(cacheKey)
+                .then((raw) => {
+                    const cachedResponse = raw === undefined ? undefined : parseCachedResponse(raw);
 
-            // Nothing cached — hard-expired, invalidated, or never written. Same as today.
-            if (!cachedResponse) {
-                response.set('x-cache', 'MISS');
-                cacheRequestsTotal.inc({ result: 'miss' });
-                armCacheWrite(response, cacheKey, ttl, graceSeconds, options.tags);
-                next();
-                return;
-            }
+                    // Nothing cached — hard-expired, invalidated, or never written. Same as today.
+                    if (!cachedResponse) {
+                        response.set('x-cache', 'MISS');
+                        cacheRequestsTotal.inc({ result: 'miss' });
+                        armCacheWrite(response, cacheKey, ttl, graceSeconds, options.tags);
+                        next();
+                        return;
+                    }
 
-            // Fast path: still within the soft TTL.
-            if (Date.now() < cachedResponse.staleAt) {
-                response.set('x-cache', 'HIT');
-                cacheRequestsTotal.inc({ result: 'hit' });
-                response.status(cachedResponse.status).json(cachedResponse.body);
-                return;
-            }
+                    // Fast path: still within the soft TTL.
+                    if (Date.now() < cachedResponse.staleAt) {
+                        response.set('x-cache', 'HIT');
+                        cacheRequestsTotal.inc({ result: 'hit' });
+                        response.status(cachedResponse.status).json(cachedResponse.body);
+                        return;
+                    }
 
-            // Past the soft TTL: exactly one caller, across every worker and replica, rebuilds —
-            // everyone else reads back their OWN key's stale body rather than wait. Nobody ever
-            // receives the rebuilder's response object, so this cannot leak across callers (see
-            // the trap note on getCacheScope above `armCacheWrite`'s docblock).
-            return claimCacheRefresh(cacheKey, graceSeconds).then((wonClaim) => {
-                if (!wonClaim) {
-                    response.set('x-cache', 'STALE');
-                    cacheRequestsTotal.inc({ result: 'stale' });
-                    response.status(cachedResponse.status).json(cachedResponse.body);
-                    return;
-                }
+                    // Past the soft TTL: exactly one caller, across every worker and replica, rebuilds —
+                    // everyone else reads back their OWN key's stale body rather than wait. Nobody ever
+                    // receives the rebuilder's response object, so this cannot leak across callers (see
+                    // the trap note on getCacheScope above `armCacheWrite`'s docblock).
+                    return claimCacheRefresh(cacheKey, graceSeconds).then((wonClaim) => {
+                        if (!wonClaim) {
+                            response.set('x-cache', 'STALE');
+                            cacheRequestsTotal.inc({ result: 'stale' });
+                            response.status(cachedResponse.status).json(cachedResponse.body);
+                            return;
+                        }
 
-                response.set('x-cache', 'REFRESH');
-                cacheRequestsTotal.inc({ result: 'refresh' });
-                armCacheWrite(response, cacheKey, ttl, graceSeconds, options.tags);
-                next();
-            });
-        });
+                        response.set('x-cache', 'REFRESH');
+                        cacheRequestsTotal.inc({ result: 'refresh' });
+                        armCacheWrite(response, cacheKey, ttl, graceSeconds, options.tags);
+                        next();
+                    });
+                })
+                // A Redis failure here — `getCacheValue` or `claimCacheRefresh` rejecting — must not
+                // hang the request: `next(error)` reaches the global handler exactly as an ordinary
+                // thrown error would, rather than leaving neither a response nor a next() call ever
+                // made.
+                .catch(next)
+        );
     };
 };
 
