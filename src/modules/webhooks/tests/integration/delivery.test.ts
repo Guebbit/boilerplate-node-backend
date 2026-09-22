@@ -28,10 +28,12 @@ import {
 } from '@modules/webhooks/domain';
 import type { WebhookSubscriptionDocument } from '@modules/webhooks/model';
 import { createUser } from '@modules/users/tests/factories';
+import { userService } from '@modules/users';
 import { callerAs, TEST_TENANT_ID } from '@tests/callers';
 import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
 import { webhooksAuditActions } from '@modules/webhooks/audit';
+import { logger } from '@infrastructure/adapters/logger';
 
 // The real `node:https`, with this suite's own throwaway CA injected into every request — see
 // `https-test-server.ts`'s own doc for why `NODE_TLS_REJECT_UNAUTHORIZED` does NOT work here.
@@ -373,6 +375,48 @@ describe('sustained failure', () => {
         expect(enqueueEmailMock).not.toHaveBeenCalled();
         // The email is the courtesy; the audit trail is the record — one missing must not cost
         // the other.
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: webhooksAuditActions.SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED,
+                target_id: String(subscription._id)
+            })
+        );
+    });
+
+    /*
+     * B7: the owner lookup behind the courtesy email (`attempt.ts`'s `notifyOwnerOfAutoDisable`)
+     * had no `.catch` — a rejection there had nobody left to see it, since the caller does not
+     * await this branch either. Logged instead, so a lookup failure is visible without costing
+     * the disable itself, which already committed via the audit entry above.
+     */
+    it('logs a failed owner lookup instead of losing it, and still auto-disables', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const owner = await createUser({ email: 'owner@example.com' });
+        const subscription = await createSubscription(
+            `${server.url}/hook`,
+            ['*'],
+            String(owner._id)
+        );
+        const loggedError = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+        // Real DB, deliberately made to fail: `getById` is the one call this fixture cannot
+        // otherwise force to reject.
+        jest.spyOn(userService, 'getById').mockRejectedValueOnce(new Error('lookup unavailable'));
+
+        for (let chain = 0; chain < WEBHOOK_MAX_CONSECUTIVE_FAILURES - 1; chain++) {
+            const job = await createPendingDelivery(subscription, `order.paid.lookupfail.${chain}`);
+            await runChainToCompletion(job.deliveryId);
+        }
+        await backdateFailingStreak(String(subscription._id));
+        const finalJob = await createPendingDelivery(subscription, 'order.paid.lookupfail.final');
+        await runChainToCompletion(finalJob.deliveryId);
+        // The lookup runs off the auto-disable write, not off the HTTP response — give its
+        // microtask chain a turn before asserting.
+        await Promise.resolve();
+
+        expect(enqueueEmailMock).not.toHaveBeenCalled();
+        expect(loggedError).toHaveBeenCalledWith(
+            expect.objectContaining({ subscriptionId: String(subscription._id) })
+        );
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: webhooksAuditActions.SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED,

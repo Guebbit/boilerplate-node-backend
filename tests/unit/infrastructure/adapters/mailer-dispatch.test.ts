@@ -225,25 +225,24 @@ describe('enqueueEmail — path 3: broker configured, publish fails', () => {
 });
 
 /**
- * Path 3 exists only because `publishToQueue` promises a boolean. This is what the promise is
- * worth: `enqueueEmail` reads `published` and has no rejection handler, so an adapter that
- * rejected instead of answering `false` would skip the inline fallback entirely — and every
- * producer writes `void enqueueEmail(...)`, so the loss would surface as an `unhandledRejection`
- * with no request id rather than as a failed request.
- *
- * The guard against that lives in `queue.test.ts`, which pins the adapter to `false`. This case
- * pins the reason it has to.
+ * `publishToQueue` promises a boolean — `queue.test.ts` pins the adapter to `false`, never a
+ * rejection, so this is the adapter breaking its own contract, not a path `enqueueEmail` designs
+ * for. Every producer writes `void enqueueEmail(...)`, so without a catch here this would surface
+ * as an `unhandledRejection` with no request id rather than as a logged, attributable failure.
  */
-describe('enqueueEmail — path 3 depends on the adapter never rejecting', () => {
+describe('enqueueEmail — a publish that rejects instead of answering false', () => {
     beforeEach(() => {
         isQueueEnabledMock.mockReturnValue(true);
         publishToQueueMock.mockRejectedValue(new Error('Channel closed'));
     });
 
-    it('has no fallback left when the publish rejects instead of answering false', async () => {
-        await expect(enqueueEmail(REQUEST, TEMPLATE, DATA)).rejects.toThrow('Channel closed');
+    it('logs the failure and resolves instead of rejecting, with no inline fallback attempt', async () => {
+        await expect(enqueueEmail(REQUEST, TEMPLATE, DATA)).resolves.toBeUndefined();
 
         expect(sendMailMock).not.toHaveBeenCalled();
+        expect(loggerMock.error).toHaveBeenCalledWith(
+            expect.objectContaining({ template: TEMPLATE, to: REQUEST.to })
+        );
     });
 });
 
@@ -301,16 +300,19 @@ describe('enqueueEmail — the inline paths discard their own attachment', () =>
         await expect(fileExists(path.join(spoolRoot, key))).resolves.toBe(false);
     });
 
-    it('discards it even when the inline send itself rejects', async () => {
+    it('discards it, logs, and still resolves when the inline send itself rejects', async () => {
         isQueueEnabledMock.mockReturnValue(false);
         sendMailMock.mockRejectedValueOnce(new Error('smtp refused'));
         const key = await spoolAttachment(Buffer.from('x'), 'pdf');
 
         await expect(
             enqueueEmail({ ...REQUEST, attachments: [{ filename: 'x.pdf', key }] }, TEMPLATE, DATA)
-        ).rejects.toThrow('smtp refused');
+        ).resolves.toBeUndefined();
 
         await expect(fileExists(path.join(spoolRoot, key))).resolves.toBe(false);
+        expect(loggerMock.error).toHaveBeenCalledWith(
+            expect.objectContaining({ template: TEMPLATE, to: REQUEST.to })
+        );
     });
 
     it('never touches it on the queued path, which has a retry chain ahead of it', async () => {

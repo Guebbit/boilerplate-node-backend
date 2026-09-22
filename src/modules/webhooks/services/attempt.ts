@@ -15,6 +15,7 @@
 
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { getDefaultLocale } from '@infrastructure/i18n';
+import { logger } from '@infrastructure/adapters/logger';
 import { emitAuditEvent } from '@infrastructure/observability/audit';
 import type { AuditEvent } from '@infrastructure/observability/audit';
 import { userService } from '@modules/users';
@@ -58,11 +59,24 @@ const notifyOwnerOfAutoDisable = (subscription: WebhookSubscriptionDocument | nu
         target_id: String(subscription._id)
     } satisfies AuditEvent);
 
-    void userService.getById(subscription.ownerUserId).then((owner) => {
-        if (!owner) return;
-        const mail = subscriptionDisabledEmail(getDefaultLocale(), subscription.url);
-        void enqueueEmail({ to: owner.email, subject: mail.subject }, mail.template, mail.data);
-    });
+    void userService
+        .getById(subscription.ownerUserId)
+        .then((owner) => {
+            if (!owner) return;
+            const mail = subscriptionDisabledEmail(getDefaultLocale(), subscription.url);
+            void enqueueEmail({ to: owner.email, subject: mail.subject }, mail.template, mail.data);
+        })
+        .catch((error: unknown) => {
+            // The audit entry above already recorded the disable — a failed lookup here only
+            // costs the courtesy email, not the fact of it. Logged so the miss is visible instead
+            // of surfacing as an unhandled rejection with nothing left to tie it back to this
+            // subscription.
+            logger.error({
+                message: 'Could not notify the subscription owner of an auto-disable.',
+                subscriptionId: String(subscription._id),
+                error
+            });
+        });
 };
 
 /**

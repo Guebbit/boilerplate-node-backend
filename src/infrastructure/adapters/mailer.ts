@@ -361,31 +361,46 @@ export const enqueueEmail = (
     data: Data,
     priority: JobPriority = 'normal'
 ): Promise<void> => {
-    // No broker configured → send inline.
-    if (!isQueueEnabled()) return sendInline(request, templateName, data);
+    const dispatch = isQueueEnabled()
+        ? // The type argument is the point: this literal is checked against the very type the
+          // worker declares, so producer and consumer cannot drift apart silently. It is the
+          // GENERATED contract type — `asyncapi.workers.yaml` declares `request` with
+          // `additionalProperties: false`, so a local widening would permit a field the contract
+          // forbids.
+          publishToQueue<EmailJobPayload>({
+              queue: EMAIL_QUEUE,
+              // Must be JSON-serializable — `publishToQueue` stringifies it. Anything non-plain
+              // (streams, Buffers, functions) in `request` would not survive the round trip.
+              payload: { request, templateName, data },
+              priority
+          }).then((published) => {
+              if (!published) {
+                  // Fallback: queue publish failed, send directly.
+                  return sendInline(request, templateName, data);
+              }
+              // `debug` level: enqueueing is routine, and the worker logs the actual delivery.
+              // Stryker disable all
+              logger.debug({
+                  message: 'Email job enqueued.',
+                  to: request.to,
+                  template: templateName
+              });
+              // Stryker restore all
+          })
+        : // No broker configured → send inline.
+          sendInline(request, templateName, data);
 
-    // The type argument is the point: this literal is checked against the very type the worker
-    // declares, so producer and consumer cannot drift apart silently. It is the GENERATED contract
-    // type — `asyncapi.workers.yaml` declares `request` with `additionalProperties: false`, so a
-    // local widening would permit a field the contract forbids.
-    return publishToQueue<EmailJobPayload>({
-        queue: EMAIL_QUEUE,
-        // Must be JSON-serializable — `publishToQueue` stringifies it. Anything non-plain
-        // (streams, Buffers, functions) in `request` would not survive the round trip.
-        payload: { request, templateName, data },
-        priority
-    }).then((published) => {
-        if (!published) {
-            // Fallback: queue publish failed, send directly.
-            return sendInline(request, templateName, data);
-        }
-        // `debug` level: enqueueing is routine, and the worker logs the actual delivery.
-        // Stryker disable all
-        logger.debug({
-            message: 'Email job enqueued.',
+    // Every one of this function's 13+ call sites writes `void enqueueEmail(...)` — a rejection
+    // here has nobody left to catch it, and would otherwise surface as an unhandled rejection with
+    // no request id and no idea which email was lost. Logged with the two facts needed to find it
+    // (which template, which recipient), then resolved: a lost email is never worth failing the
+    // request that triggered it.
+    return dispatch.catch((error: unknown) => {
+        logger.error({
+            message: 'Email dispatch failed; the message was not delivered.',
+            template: templateName,
             to: request.to,
-            template: templateName
+            error
         });
-        // Stryker restore all
     });
 };
