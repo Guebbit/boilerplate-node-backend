@@ -30,12 +30,29 @@ export interface OwnedSeedRepository<TFixture> {
 }
 
 /**
- * Insert one fixture by its fixed `_id`, unless it is already there.
+ * Shared by {@link insertIfAbsent} and {@link insertIfAbsentForOwner}: write `fixture` through
+ * `create()` unless `present()` finds it.
  *
- * Goes through `create()`/`save()` rather than `updateOne(..., { upsert: true })`, so pre-save
- * hooks still run — most importantly the bcrypt password hash, which a raw driver write would skip.
- * An existing `_id` is SKIPPED, never rewritten: re-running this does not repair a database seeded
- * from older fixtures — this never updates, which is why it is named "insert", not "upsert".
+ * `create()`/`save()` rather than `updateOne(..., { upsert: true })`, so pre-save hooks still run —
+ * most importantly the bcrypt password hash, which a raw driver write would skip. An existing row
+ * is SKIPPED, never rewritten: re-running this does not repair a database seeded from older
+ * fixtures — this never updates, which is why it is named "insert", not "upsert".
+ *
+ * @param present - resolves to the row if one is already there, else `undefined`
+ * @param repository - the owning module's repository
+ * @param fixture - the document to write
+ */
+const insertIfAbsentBy = <TFixture>(
+    present: () => PromiseLike<unknown>,
+    repository: { create: (data: TFixture) => Promise<unknown> },
+    fixture: TFixture
+): Promise<SeedOutcome> =>
+    Promise.resolve(present()).then((existing) =>
+        existing ? 'skipped' : repository.create(fixture).then((): SeedOutcome => 'created')
+    );
+
+/**
+ * Insert one fixture by its fixed `_id`, unless it is already there.
  *
  * @param repository - the owning module's repository
  * @param fixture - a document with a pinned `_id`
@@ -44,9 +61,7 @@ export const insertIfAbsent = <TFixture extends { _id: Types.ObjectId }>(
     repository: SeedRepository<TFixture>,
     fixture: TFixture
 ): Promise<SeedOutcome> =>
-    Promise.resolve(repository.findById(fixture._id.toString())).then((existing) =>
-        existing ? 'skipped' : repository.create(fixture).then((): SeedOutcome => 'created')
-    );
+    insertIfAbsentBy(() => repository.findById(fixture._id.toString()), repository, fixture);
 
 /**
  * {@link insertIfAbsent}, keyed by the fixture's OWNER rather than by its id.
@@ -62,6 +77,4 @@ export const insertIfAbsentForOwner = <TFixture extends { userId: Types.ObjectId
     repository: OwnedSeedRepository<TFixture>,
     fixture: TFixture
 ): Promise<SeedOutcome> =>
-    Promise.resolve(repository.findByUserId(fixture.userId.toString())).then((existing) =>
-        existing ? 'skipped' : repository.create(fixture).then((): SeedOutcome => 'created')
-    );
+    insertIfAbsentBy(() => repository.findByUserId(fixture.userId.toString()), repository, fixture);

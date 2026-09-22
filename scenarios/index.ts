@@ -29,12 +29,6 @@ import { driveShopHistory, type ShopHistory } from './flows/shop-history';
 import { backdateHistory } from './flows/backdate';
 import type { SeedOutcome } from '@scenarios/seed';
 
-/** One module's `shop` registration: how to seed it. */
-export interface ScenarioModule {
-    /** Write this module's slice of the `shop` scenario. Called only by {@link seedShop}. */
-    seed: () => Promise<SeedOutcome[]>;
-}
-
 /**
  * Every module with `shop` fixtures — the rows that exist BEFORE anybody uses the shop.
  *
