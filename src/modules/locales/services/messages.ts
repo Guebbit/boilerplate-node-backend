@@ -60,8 +60,11 @@ export const readApiOverrides = async (): Promise<Record<string, Record<string, 
     const rows = await localeEntryRepository.listEntriesByTenant(backendTenant());
 
     const byLocale = new Map<string, { key: string; value: string }[]>();
-    for (const { locale, key, value } of rows)
-        byLocale.set(locale, [...(byLocale.get(locale) ?? []), { key, value }]);
+    for (const { locale, key, value } of rows) {
+        const entries = byLocale.get(locale) ?? [];
+        entries.push({ key, value });
+        byLocale.set(locale, entries);
+    }
 
     const overrides: Record<string, Record<string, unknown>> = {};
     for (const [locale, entries] of byLocale) {
