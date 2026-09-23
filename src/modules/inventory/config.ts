@@ -2,8 +2,7 @@
  * @module
  * The two numbers a deployment tunes, read in one place — one file rather than a copy in each
  * consumer, since a second transcription is how the admin board and the gauge end up disagreeing
- * about what "low" means (not hypothetical: `lowStockThreshold` was written out twice here before
- * this file existed). Both are read per call rather than captured at import, so an operator
+ * about what "low" means. Both are read per call rather than captured at import, so an operator
  * changing an env var affects the next request and tests can vary them per case.
  *
  * See: docs/modules/inventory.md

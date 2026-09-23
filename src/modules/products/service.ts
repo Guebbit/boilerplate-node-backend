@@ -305,7 +305,7 @@ export const update = (
     if (data.title !== undefined) product.title = data.title;
     if (data.price !== undefined) product.price = data.price;
     /*
-     * No stock write here, and the contract no longer offers one: `UpdateProductRequest` and its
+     * No stock write here, and the contract offers none: `UpdateProductRequest` and its
      * siblings carry no counter field.
      *
      * An absolute write would be wrong here: setting a count to 40 says nothing about what
