@@ -3,23 +3,12 @@
  * Controller for `GET /webhooks/deliveries`.
  */
 
-import { z } from 'zod';
-import { paginationSchema } from '@infrastructure/http/schemas';
+import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
+import { ListWebhookDeliveriesQueryParams } from '@api/schemas.zod';
 import { createListController } from '@infrastructure/surfaces/create-list-controller';
 import { tenantCallerContextOf } from '@infrastructure/http/request';
 import type { WebhookDelivery, WebhookDeliveriesResponse } from '@types';
 import { webhooksService } from '../services';
-
-/**
- * Pagination plus the two filters this list takes. `status` is closed to the wire enum
- * (`../model.ts`'s `WebhookDeliveryStatus`) rather than free text, matching every other closed
- * filter in this repo (`audit-logs`' `outcome` is the precedent) — an unrecognised value is a 422,
- * not a filter that silently matches everything.
- */
-const listWebhookDeliveriesQuerySchema = paginationSchema.extend({
-    subscriptionId: z.string().optional(),
-    status: z.enum(['pending', 'in-flight', 'succeeded', 'exhausted']).optional()
-});
 
 /**
  * GET /webhooks/deliveries
@@ -27,7 +16,13 @@ const listWebhookDeliveriesQuerySchema = paginationSchema.extend({
  */
 export const listWebhookDeliveries = createListController({
     entity: 'webhookDeliveries',
-    schema: listWebhookDeliveriesQuerySchema,
+    // `status` closed to the generated wire enum — an unrecognised value 422s rather than
+    // silently matching every row, same as `audit-logs`' `outcome`. `page`/`pageSize` swapped
+    // for the infra pair so an absent one stays absent for `normalizePagination` to default.
+    schema: ListWebhookDeliveriesQueryParams.extend({
+        page: pageSchema,
+        pageSize: pageSizeSchema
+    }).partial(),
     runList: (parsed, request) =>
         webhooksService.listDeliveries(tenantCallerContextOf(request), parsed).then((result) => {
             const items: unknown = result.items;

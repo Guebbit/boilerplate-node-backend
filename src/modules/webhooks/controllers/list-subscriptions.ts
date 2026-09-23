@@ -3,17 +3,12 @@
  * Controller for `GET /webhooks/subscriptions`.
  */
 
-import { z } from 'zod';
-import { paginationSchema } from '@infrastructure/http/schemas';
+import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
+import { ListWebhookSubscriptionsQueryParams } from '@api/schemas.zod';
 import { createListController } from '@infrastructure/surfaces/create-list-controller';
 import { tenantCallerContextOf } from '@infrastructure/http/request';
 import type { WebhookSubscription, WebhookSubscriptionsResponse } from '@types';
 import { webhooksService } from '../services';
-
-/** Pagination plus the one filter this list takes — `enabled`, pre-decoded by `readInput`'s `booleans`. */
-const listWebhookSubscriptionsQuerySchema = paginationSchema.extend({
-    enabled: z.boolean().optional()
-});
 
 /**
  * GET /webhooks/subscriptions
@@ -21,7 +16,12 @@ const listWebhookSubscriptionsQuerySchema = paginationSchema.extend({
  */
 export const listWebhookSubscriptions = createListController({
     entity: 'webhookSubscriptions',
-    schema: listWebhookSubscriptionsQuerySchema,
+    // `page`/`pageSize` swapped for the infra pair so an absent one stays absent for
+    // `normalizePagination` to default; `enabled` is pre-decoded by `readInput`'s `booleans`.
+    schema: ListWebhookSubscriptionsQueryParams.extend({
+        page: pageSchema,
+        pageSize: pageSizeSchema
+    }).partial(),
     input: { booleans: ['enabled'] },
     runList: (parsed, request) =>
         webhooksService.listSubscriptions(tenantCallerContextOf(request), parsed).then((result) => {
