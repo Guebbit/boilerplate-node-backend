@@ -7,9 +7,8 @@
 import type { Request, Response } from 'express';
 import { ConfirmTwoFactorMethodBody, ConfirmTwoFactorMethodParams } from '@api/schemas.zod';
 import type { TwoFactorConfirmed, TwoFactorConfirmRequest } from '@types';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { rejectValidation } from '@infrastructure/http/controller';
+import { successResponse } from '@infrastructure/http/response';
+import { rejectValidation, refused, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { t } from '@infrastructure/i18n';
 import { twoFactorService } from '../services';
@@ -38,9 +37,8 @@ export const post2faConfirm = (
     return twoFactorService
         .confirmTwoFactorMethod(id, method, body.data.code, callerContextOf(request))
         .then((result) => {
-            if (!result.success) {
+            if (refused(response, result)) {
                 authTwoFactorEnrollTotal.inc({ method, status: 'failure' });
-                rejectResponse(response, result.status, result.errors);
                 return;
             }
 
@@ -52,5 +50,5 @@ export const post2faConfirm = (
                 t('account.two-factor.method-added')
             );
         })
-        .catch((error: unknown) => rejectDatabaseError(response, 'post2faConfirm', error));
+        .catch(catchAs(response, 'post2faConfirm'));
 };

@@ -7,13 +7,13 @@
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { ReauthBody } from '@api/schemas.zod';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { ReauthRequest, AuthTokens } from '@types';
 import { accountService } from '../services';
 import { issueSession } from '../session/session';
 import { authReauthTotal } from '../metrics';
-import { rejectValidation } from '@infrastructure/http/controller';
+import { rejectValidation, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
@@ -38,9 +38,8 @@ export const postReauth = (
     return accountService
         .reauth(id, parseResult.data.password, callerContextOf(request))
         .then((result) => {
-            if (!result.success) {
+            if (refused(response, result)) {
                 authReauthTotal.inc({ status: 'failure' });
-                rejectResponse(response, result.status, result.errors);
                 return;
             }
 

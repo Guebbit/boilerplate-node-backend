@@ -9,13 +9,13 @@ import { z } from 'zod';
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import { ChangePasswordBody } from '@api/schemas.zod';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { ChangePasswordRequest, AuthTokens } from '@types';
 import { accountService } from '../services';
 import { issueSession } from '../session/session';
 import { authPasswordChangeTotal } from '../metrics';
-import { rejectValidation } from '@infrastructure/http/controller';
+import { rejectValidation, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
@@ -64,9 +64,8 @@ export const postPasswordChange = (
             callerContextOf(request)
         )
         .then((result) => {
-            if (!result.success) {
+            if (refused(response, result)) {
                 authPasswordChangeTotal.inc({ status: 'failure' });
-                rejectResponse(response, result.status, result.errors);
                 return;
             }
 

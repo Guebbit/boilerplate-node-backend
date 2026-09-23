@@ -8,8 +8,7 @@ import type { Request, Response } from 'express';
 import { SetupTwoFactorMethodParams } from '@api/schemas.zod';
 import type { TwoFactorSetup } from '@types';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { rejectValidation } from '@infrastructure/http/controller';
+import { rejectValidation, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { twoFactorService } from '../services';
 
@@ -33,5 +32,5 @@ export const post2faSetup = (request: Request<{ method: string }>, response: Res
             }
             successResponse<TwoFactorSetup>(response, result.data);
         })
-        .catch((error: unknown) => rejectDatabaseError(response, 'post2faSetup', error));
+        .catch(catchAs(response, 'post2faSetup'));
 };

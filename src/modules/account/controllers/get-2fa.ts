@@ -6,7 +6,7 @@
 import type { Request, Response } from 'express';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import type { TwoFactorStatus } from '@types';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { catchAs } from '@infrastructure/http/controller';
 
 import { twoFactorService } from '../services';
 
@@ -27,5 +27,5 @@ export const get2fa = (request: Request, response: Response) => {
 
             successResponse<TwoFactorStatus>(response, result.data);
         })
-        .catch((error: unknown) => rejectDatabaseError(response, 'get2fa', error));
+        .catch(catchAs(response, 'get2fa'));
 };

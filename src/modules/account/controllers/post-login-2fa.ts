@@ -15,7 +15,7 @@ import { recordLoginSuccess } from '../session/login-observability';
 import { authTwoFactorChallengeTotal } from '../metrics';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { rejectValidation } from '@infrastructure/http/controller';
+import { rejectValidation, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { isUnrestrictedCaller } from '../roles';
 import { readMfaChallengeCookie, destroyMfaChallengeCookie } from '../oauth/mfa-redirect';
@@ -49,9 +49,8 @@ export const postLoginTwoFactor = (
     return twoFactorService
         .verifyLoginChallenge(challenge, code, callerContextOf(request))
         .then((result) => {
-            if (!result.success) {
+            if (refused(response, result)) {
                 authTwoFactorChallengeTotal.inc({ status: 'failure' });
-                rejectResponse(response, result.status, result.errors);
                 return;
             }
 

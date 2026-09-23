@@ -7,9 +7,8 @@
 import type { Request, Response } from 'express';
 import { RemoveTwoFactorMethodBody, RemoveTwoFactorMethodParams } from '@api/schemas.zod';
 import type { TwoFactorCodeRequest } from '@types';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { rejectValidation } from '@infrastructure/http/controller';
+import { successResponse } from '@infrastructure/http/response';
+import { rejectValidation, refused, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { t } from '@infrastructure/i18n';
 import { twoFactorService } from '../services';
@@ -39,9 +38,8 @@ export const delete2faMethod = (
     return twoFactorService
         .removeTwoFactorMethod(id, method, body.data.code, callerContextOf(request))
         .then((result) => {
-            if (!result.success) {
+            if (refused(response, result)) {
                 authTwoFactorDisableTotal.inc({ method, status: 'failure' });
-                rejectResponse(response, result.status, result.errors);
                 return;
             }
             authTwoFactorDisableTotal.inc({ method, status: 'success' });
@@ -52,5 +50,5 @@ export const delete2faMethod = (
                 t('account.two-factor.method-removed')
             );
         })
-        .catch((error: unknown) => rejectDatabaseError(response, 'delete2faMethod', error));
+        .catch(catchAs(response, 'delete2faMethod'));
 };

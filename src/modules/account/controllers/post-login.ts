@@ -11,9 +11,9 @@ import { accountService, twoFactorService, runTokenCleanup } from '../services';
 import { RefreshTokenExpiryTime } from '../session/config';
 import { issueSession } from '../session/session';
 import { recordLoginFailure, recordLoginSuccess } from '../session/login-observability';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { rejectValidation } from '@infrastructure/http/controller';
+import { rejectValidation, refused } from '@infrastructure/http/controller';
 import type { LoginRequest, LoginOutcome } from '@types';
 import { isUnrestrictedCaller } from '../roles';
 
@@ -67,9 +67,8 @@ export const postLogin = (
     return runTokenCleanup()
         .then(() => accountService.login(email, password))
         .then((result) => {
-            if (!result.success) {
+            if (refused(response, result)) {
                 recordLoginFailure(request);
-                rejectResponse(response, result.status, result.errors);
                 return;
             }
 

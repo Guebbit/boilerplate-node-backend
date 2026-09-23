@@ -9,7 +9,7 @@ import { SendTwoFactorCodeBody } from '@api/schemas.zod';
 import type { TwoFactorSendRequest, TwoFactorDelivery } from '@types';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
-import { rejectValidation } from '@infrastructure/http/controller';
+import { rejectValidation, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { t } from '@infrastructure/i18n';
 import { twoFactorService } from '../services';
@@ -40,9 +40,8 @@ export const postLoginTwoFactorSend = (
     return twoFactorService
         .sendLoginCode(challenge, method, callerContextOf(request))
         .then((result) => {
-            if (!result.success) {
+            if (refused(response, result)) {
                 authTwoFactorCodeSentTotal.inc({ method, status: 'failure' });
-                rejectResponse(response, result.status, result.errors);
                 return;
             }
             authTwoFactorCodeSentTotal.inc({ method, status: 'success' });
