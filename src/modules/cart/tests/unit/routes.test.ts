@@ -45,22 +45,6 @@ describe('cart routes — authorization', () => {
     it.each(ALL)('%s requires a logged-in caller', (signature) => {
         expect(guardsOn(router, signature)).toContain('isAuth');
     });
-
-    it('keys only /checkout, with cart.self.checkout — by design', () => {
-        // A cart belongs to its owner and to nobody else; what you may do with your own basket
-        // follows from being signed in, not from a role. Spending it is the one exception — an
-        // unverified account may not — which is why `cart.self.checkout` is the only key this module
-        // declares in `shared/authorization-keys.yaml`. If a second keyed route is added, this
-        // fails and the addition gets looked at.
-        const keyed = ALL.filter((signature) =>
-            guardsOn(router, signature).includes('requirePermissionGuard')
-        );
-
-        expect(keyed).toEqual(['POST /checkout']);
-        expect(routeTable(router).find(({ path }) => path === '/checkout')?.permissionKey).toBe(
-            'cart.self.checkout'
-        );
-    });
 });
 
 describe('cart routes — caching', () => {

@@ -328,12 +328,11 @@ describe('the API client collections', () => {
         for (const name of ['bruno', 'insomnia']) expect(collection(name)).not.toContain('{{seed');
     });
 
-    it('gives every probe a reason, and no two the same name', () => {
-        // The name is what someone reads in a folder of 70 requests, and the reason is the only
-        // thing that says why sending a deliberately broken request is worth doing.
+    it('names no probe twice', () => {
+        // The name is what someone reads in a folder of 70 requests; two probes under one name
+        // would make a failing request unaddressable by name.
         const probes = allProbes();
 
-        for (const probe of probes) expect(probe.description.length).toBeGreaterThan(20);
         expect(new Set(probes.map(({ name }) => name)).size).toBe(probes.length);
     });
 

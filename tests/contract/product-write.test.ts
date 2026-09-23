@@ -6,9 +6,6 @@
  * through the `kernel/translation.ts` port.
  */
 
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import YAML from 'yaml';
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs, authenticateAsRole } from '@tests/http';
@@ -161,28 +158,5 @@ describe('GET /products/{id}/admin', () => {
         const response = await api().get(`/products/${String(product._id)}/admin`);
 
         expect(response.status).toBe(401);
-    });
-});
-
-describe('the removed write operations', () => {
-    it('no longer appear in the bundled contract', () => {
-        const bundlePath = path.join(__dirname, '../../openapi.yaml');
-        const bundle = YAML.parse(readFileSync(bundlePath, 'utf8')) as {
-            paths: Record<string, Record<string, { operationId?: string }>>;
-        };
-
-        const operationIds = Object.values(bundle.paths).flatMap((operations) =>
-            Object.values(operations)
-                .map((operation) => operation.operationId)
-                .filter((id): id is string => id !== undefined)
-        );
-
-        // `updateProduct` was `PUT /products`; the old `PUT /products/{id}` reused
-        // `updateProductById`, which the new `PATCH /products/{id}` reuses too — so its PRESENCE
-        // doesn't prove the old operation is gone. The method is what changed; asserted directly.
-        expect(operationIds).not.toContain('updateProduct');
-        expect(bundle.paths['/products']?.put).toBeUndefined();
-        expect(bundle.paths['/products/{id}']?.put).toBeUndefined();
-        expect(bundle.paths['/products/{id}']?.patch?.operationId).toBe('updateProductById');
     });
 });

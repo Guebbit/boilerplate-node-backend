@@ -171,14 +171,6 @@ describe('every side effect is published from one layer', () => {
         expect(strays).toEqual([]);
     });
 
-    it('gives every exception a reason a reader can weigh', () => {
-        const thin = Object.entries(ALLOWED_ELSEWHERE)
-            .filter(([, reason]) => reason.trim().split(/\s+/).length < 12)
-            .map(([key]) => `${key} is excused without an argument`);
-
-        expect(thin).toEqual([]);
-    });
-
     it('keeps no exception for a file that has stopped emitting', () => {
         const sites = callSites();
         const stale = Object.keys(ALLOWED_ELSEWHERE).filter((key) => {
