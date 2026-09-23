@@ -250,6 +250,55 @@ const findConfirmable = (
 };
 
 /**
+ * Settle an already-fetched, already-scoped payment via the provider, gated on it currently
+ * sitting in one of `allowed` — the part {@link confirmPayment} and {@link syncPayment} do
+ * identically once each has decided the call may proceed at all. Split from {@link settleVia} so
+ * {@link syncPayment}'s own idempotent-terminal shortcut can run on the SAME read rather than a
+ * second one.
+ * @param payment - the payment, already read for this caller
+ * @param allowed - the statuses this action may run from
+ * @param providerCall - the provider-specific action (confirm or re-read), given the payment's own
+ *   `providerRef`
+ */
+const settleFound = (
+    payment: PaymentDocument,
+    allowed: readonly PaymentStatus[],
+    providerCall: (providerRef: string) => Promise<ProviderPaymentState>
+): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> => {
+    const found = findConfirmable(payment, allowed);
+    if ('success' in found) return Promise.resolve(found);
+    return providerCall(found.providerRef)
+        .then((state) => settlePayment(found, state))
+        .then(settlementResponse);
+};
+
+/**
+ * Settle one payment via the provider — {@link confirmPayment}'s whole body: read the payment
+ * scoped to its caller, refuse a status this action does not run from, hand the provider's own
+ * account of it to {@link settlePayment}, and audit/analyse the outcome.
+ * @param paymentId - the payment to settle
+ * @param authContext - the caller; the payment must be theirs
+ * @param context - the caller context to audit/analyse the attempt against
+ * @param allowed - the statuses this action may run from
+ * @param providerCall - the provider-specific action (confirm or re-read), given the payment's own
+ *   `providerRef`
+ */
+const settleVia = (
+    paymentId: string,
+    authContext: AuthContext | undefined,
+    context: CallerContext,
+    allowed: readonly PaymentStatus[],
+    providerCall: (providerRef: string) => Promise<ProviderPaymentState>
+): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
+    paymentRepository
+        .findByIdScoped(paymentId, callerScope(authContext))
+        .then((payment) => {
+            if (!payment) return generateReject(404, [t('payments.not-found')]);
+            return settleFound(payment, allowed, providerCall);
+        })
+        .then((result) => reportAttempt(result, paymentId, context));
+
+/**
  * Confirm a payment — the browser handing over the method its provider widget tokenised.
  *
  * The answer is not always final. A card the bank wants a challenge for comes back
@@ -266,18 +315,9 @@ export const confirmPayment = (
     authContext: AuthContext | undefined,
     context: CallerContext
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
-    paymentRepository
-        .findByIdScoped(paymentId, callerScope(authContext))
-        .then((payment) => {
-            if (!payment) return generateReject(404, [t('payments.not-found')]);
-            const found = findConfirmable(payment, CONFIRMABLE_PAYMENT_STATUSES);
-            if ('success' in found) return found;
-            return resolvePaymentProvider()
-                .confirm(found.providerRef, paymentMethodRef)
-                .then((state) => settlePayment(found, state))
-                .then(settlementResponse);
-        })
-        .then((result) => reportAttempt(result, paymentId, context));
+    settleVia(paymentId, authContext, context, CONFIRMABLE_PAYMENT_STATUSES, (providerRef) =>
+        resolvePaymentProvider().confirm(providerRef, paymentMethodRef)
+    );
 
 /**
  * Re-read a payment from the provider and apply whatever it says — the browser reporting that it
@@ -303,12 +343,9 @@ export const syncPayment = (
             if (!SETTLEABLE_PAYMENT_STATUSES.includes(payment.status))
                 return generateSuccess(payment, 200);
 
-            const found = findConfirmable(payment, SETTLEABLE_PAYMENT_STATUSES);
-            if ('success' in found) return found;
-            return resolvePaymentProvider()
-                .retrieve(found.providerRef)
-                .then((state) => settlePayment(found, state))
-                .then(settlementResponse);
+            return settleFound(payment, SETTLEABLE_PAYMENT_STATUSES, (providerRef) =>
+                resolvePaymentProvider().retrieve(providerRef)
+            );
         })
         .then((result) => reportAttempt(result, paymentId, context));
 
