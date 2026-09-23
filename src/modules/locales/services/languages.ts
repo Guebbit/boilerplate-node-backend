@@ -7,11 +7,7 @@
  * already answers an empty page on its own.
  */
 
-import {
-    LocaleDirection,
-    type CreateLocaleRequest,
-    type UpdateLocaleRequest
-} from '@types';
+import { LocaleDirection, type CreateLocaleRequest, type UpdateLocaleRequest } from '@types';
 import { getFallbackLocale, t } from '@infrastructure/i18n';
 import {
     generateReject,

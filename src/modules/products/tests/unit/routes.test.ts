@@ -122,7 +122,9 @@ describe('product routes — caching', () => {
         // `GET /` and `POST /search` are the same query behind two verbs, so they must share
         // `keyAs` — otherwise the same page is stored twice and invalidated once.
         const listing = chainOf(router, 'GET /').find((entry) => entry.startsWith('setCache'));
-        const search = chainOf(router, 'POST /search').find((entry) => entry.startsWith('setCache'));
+        const search = chainOf(router, 'POST /search').find((entry) =>
+            entry.startsWith('setCache')
+        );
 
         expect(listing).toBe(search);
         expect(listing).toContain('setCache(3600');
@@ -140,7 +142,9 @@ describe('product routes — caching', () => {
             const entry = chainOf(router, signature).find((each) => each.startsWith('setCache'));
 
             expect(entry).toContain('setCache(3600');
-            expect(optionsOf(chainOf(router, signature), 'setCache')).toMatchObject({ tags: [TAG] });
+            expect(optionsOf(chainOf(router, signature), 'setCache')).toMatchObject({
+                tags: [TAG]
+            });
         }
     );
 

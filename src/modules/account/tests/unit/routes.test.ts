@@ -161,7 +161,9 @@ describe('account routes — authorization', () => {
 
 describe('account routes — credential rate limiting', () => {
     it.each(RATE_LIMITED)('%s carries ALL THREE credential budgets', (signature) => {
-        const limiters = chainOf(router, signature).filter((entry) => entry.startsWith('credentials-'));
+        const limiters = chainOf(router, signature).filter((entry) =>
+            entry.startsWith('credentials-')
+        );
 
         // Identity, address AND address-block: each is keyed differently and defends an attack
         // the other two miss. Any one missing reads as protected and is not.

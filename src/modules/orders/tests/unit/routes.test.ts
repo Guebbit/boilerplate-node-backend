@@ -101,7 +101,9 @@ describe('order routes — authorization', () => {
 describe('order routes — caching', () => {
     it('caches the two listings under one shared key', () => {
         const listing = chainOf(router, 'GET /').find((entry) => entry.startsWith('setCache'));
-        const search = chainOf(router, 'POST /search').find((entry) => entry.startsWith('setCache'));
+        const search = chainOf(router, 'POST /search').find((entry) =>
+            entry.startsWith('setCache')
+        );
 
         expect(listing).toBe(search);
         expect(listing).toContain('setCache(3600');
@@ -116,15 +118,17 @@ describe('order routes — caching', () => {
         const entry = chainOf(router, 'GET /:id').find((each) => each.startsWith('setCache'));
 
         expect(entry).toContain('setCache(3600');
-        expect(optionsOf(chainOf(router, 'GET /:id'), 'setCache')).toMatchObject({ tags: ['orders'] });
+        expect(optionsOf(chainOf(router, 'GET /:id'), 'setCache')).toMatchObject({
+            tags: ['orders']
+        });
     });
 
     // Not cached — every hit renders fresh, and there is no separate ready/pending status left to
     // invalidate a cache entry over.
     it('GET /:id/invoice carries no setCache', () => {
-        expect(chainOf(router, 'GET /:id/invoice').some((entry) => entry.startsWith('setCache'))).toBe(
-            false
-        );
+        expect(
+            chainOf(router, 'GET /:id/invoice').some((entry) => entry.startsWith('setCache'))
+        ).toBe(false);
     });
 
     it('invalidates products too wherever stock moves, and only there', () => {
@@ -157,7 +161,8 @@ describe('order routes — invoice rate limiting', () => {
         // route alone needs a budget the rest of the router does not.
         const unexpected = routeSignatures(router).filter(
             (signature) =>
-                signature !== 'GET /:id/invoice' && chainOf(router, signature).includes('orders-invoice')
+                signature !== 'GET /:id/invoice' &&
+                chainOf(router, signature).includes('orders-invoice')
         );
 
         expect(chainOf(router, 'GET /:id/invoice')).toContain('orders-invoice');

@@ -110,7 +110,9 @@ describe('locale routes — caching', () => {
         const entry = chainOf(router, signature).find((each) => each.startsWith('setCache'));
 
         expect(entry).toContain('setCache(3600');
-        expect(optionsOf(chainOf(router, signature), 'setCache')).toMatchObject({ tags: ['locales'] });
+        expect(optionsOf(chainOf(router, signature), 'setCache')).toMatchObject({
+            tags: ['locales']
+        });
     });
 
     it('tells browsers to revalidate, so a translator sees their own save', () => {

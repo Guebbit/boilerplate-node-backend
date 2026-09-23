@@ -73,7 +73,9 @@ describe('feedback routes — the positional guard', () => {
 describe('feedback routes — caching', () => {
     it('caches the admin listing and its DTO twin on one key, at the shorter TTL', () => {
         const listing = chainOf(router, 'GET /').find((entry) => entry.startsWith('setCache'));
-        const search = chainOf(router, 'POST /search').find((entry) => entry.startsWith('setCache'));
+        const search = chainOf(router, 'POST /search').find((entry) =>
+            entry.startsWith('setCache')
+        );
 
         expect(listing).toBe(search);
         // 600, not the 3600 the catalogue uses: an operator queue is read while it changes.
@@ -135,7 +137,8 @@ describe('feedback routes — human-challenge gate (rung 3)', () => {
     it('mounts the gate on no other route', () => {
         const unexpected = routeSignatures(router).filter(
             (signature) =>
-                signature !== 'POST /contact' && chainOf(router, signature).includes('humanChallengeGate')
+                signature !== 'POST /contact' &&
+                chainOf(router, signature).includes('humanChallengeGate')
         );
 
         expect(unexpected).toEqual([]);

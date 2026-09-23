@@ -226,7 +226,6 @@ describe('search', () => {
         // a totalPages computed from the page size rather than the total is a classic off-by-one.
         expect(meta).toMatchObject({ page: 1, pageSize: 2, totalItems: 3, totalPages: 2 });
     });
-
 });
 
 describe('updateStatus', () => {

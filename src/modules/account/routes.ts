@@ -169,7 +169,6 @@ router.post('/password/check', passwordCheckLimiter, postPasswordCheck);
 // POST /account/reauth — step-up: re-prove the password, refresh auth_time (requires auth)
 router.post('/reauth', credentialLimiters, isAuth, postReauth);
 
-// GET /account/refresh — create a new access token from the jwt cookie
 /*
  * GET /account/abilities — the rules the server enforces, for a client to render from.
  *
@@ -178,6 +177,7 @@ router.post('/reauth', credentialLimiters, isAuth, postReauth);
  */
 router.get('/abilities', getAuth, getMyAbilities);
 
+// GET /account/refresh — create a new access token from the jwt cookie
 router.get('/refresh', getRefreshToken);
 
 // POST /account/logout — revoke THIS session's refresh token (cookie is the credential)

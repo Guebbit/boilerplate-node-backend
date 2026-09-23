@@ -125,9 +125,7 @@ describe('GET /feedback', () => {
         const { bearer } = await authenticateAs('admin');
         await createFeedbackRequest();
 
-        const response = await api()
-            .get('/feedback?status=archived')
-            .set('Authorization', bearer);
+        const response = await api().get('/feedback?status=archived').set('Authorization', bearer);
 
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();

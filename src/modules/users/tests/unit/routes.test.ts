@@ -85,7 +85,9 @@ describe('user routes — authorization', () => {
 describe('user routes — caching and uploads', () => {
     it('caches the two listings under one shared key', () => {
         const listing = chainOf(router, 'GET /').find((entry) => entry.startsWith('setCache'));
-        const search = chainOf(router, 'POST /search').find((entry) => entry.startsWith('setCache'));
+        const search = chainOf(router, 'POST /search').find((entry) =>
+            entry.startsWith('setCache')
+        );
 
         expect(listing).toBe(search);
         expect(listing).toContain('setCache(3600');
@@ -97,7 +99,9 @@ describe('user routes — caching and uploads', () => {
     });
 
     it('caches the single read under the users tag', () => {
-        expect(optionsOf(chainOf(router, 'GET /:id'), 'setCache')).toMatchObject({ tags: ['users'] });
+        expect(optionsOf(chainOf(router, 'GET /:id'), 'setCache')).toMatchObject({
+            tags: ['users']
+        });
     });
 
     it.each([

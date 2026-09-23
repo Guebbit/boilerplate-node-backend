@@ -184,8 +184,7 @@ async function seed() {
  * would otherwise skip it and leave the Mongo and Redis sockets open, hanging the process.
  * `stopServer` closes everything `bootInfrastructure` opened, the locale-refresh interval
  * included. Nothing to do when a gate returned before the app was ever imported.
- */
-/*
+ *
  * `process.exit()`, not the bare promise `runScript` usually resolves into: importing `../src/app`
  * pulls in `@opentelemetry/instrumentation`'s ESM patching (`otel-sdk.ts`), which registers a
  * `module.register()` loader hook backed by its own worker thread. That hook is process-lifetime

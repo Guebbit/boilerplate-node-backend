@@ -67,12 +67,7 @@ router.put(
 );
 
 // DELETE /users — id in body
-router.delete(
-    '/',
-    requirePermission('users.any.delete'),
-    invalidateUsers,
-    deleteUsers
-);
+router.delete('/', requirePermission('users.any.delete'), invalidateUsers, deleteUsers);
 
 // GET /users/:id
 router.get(
@@ -93,12 +88,7 @@ router.put(
 );
 
 // DELETE /users/:id — soft delete unless ?hardDelete=true
-router.delete(
-    '/:id',
-    requirePermission('users.any.delete'),
-    invalidateUsers,
-    deleteUsers
-);
+router.delete('/:id', requirePermission('users.any.delete'), invalidateUsers, deleteUsers);
 
 // DELETE /users/:id/hard — the same operation, with the flag spelled in the path
 router.delete(

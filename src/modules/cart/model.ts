@@ -37,15 +37,15 @@ export interface CartDocument extends Document {
     createdAt?: Date;
     updatedAt?: Date;
     /**
-     * Mongoose's version key, declared here because this is the one document whose version is
-     * READ by application code rather than only maintained by the driver.
+     * Mongoose's version key — the name belongs to the driver, not to this codebase — declared
+     * here because this is the one document whose version is READ by application code rather
+     * than only maintained by the driver.
      *
      * Checkout empties the cart conditionally on the version it read the lines at — see
      * `clearLinesIfUnchanged` in `./repository` — which is what stops two parallel
      * checkouts turning one cart into two orders. `Document` types it as `any`, so naming it
      * gives the comparison an actual type and gives the field somewhere to be explained.
      */
-    /* `__v` is Mongoose's own version key: the name belongs to the driver, not to this codebase. */
     __v: number;
 }
 

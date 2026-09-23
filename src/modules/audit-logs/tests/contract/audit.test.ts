@@ -97,9 +97,7 @@ describe('GET /audit', () => {
             level: 'info'
         });
 
-        const response = await api()
-            .get('/audit?outcome=bogus')
-            .set('Authorization', bearer);
+        const response = await api().get('/audit?outcome=bogus').set('Authorization', bearer);
 
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
