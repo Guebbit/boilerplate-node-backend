@@ -65,9 +65,11 @@ export const putAccount = (
         )
         .then((result) => {
             if (!result.success)
-                return deleteUpload().then(() => {
-                    rejectResponse(response, result.status, result.errors);
-                });
+                return deleteUpload()
+                    .catch(() => undefined)
+                    .then(() => {
+                        rejectResponse(response, result.status, result.errors);
+                    });
 
             const { data } = result;
 
@@ -82,6 +84,8 @@ export const putAccount = (
         })
         .catch((error: unknown) => {
             rejectDatabaseError(response, 'putAccount', error);
-            return deleteUpload();
+            // The response is already sent — a rejected cleanup must not become an unhandled
+            // promise rejection on top of it.
+            return deleteUpload().catch(() => undefined);
         });
 };

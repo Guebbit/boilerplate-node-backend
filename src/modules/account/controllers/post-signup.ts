@@ -76,10 +76,12 @@ export const postSignup = (
         )
         .then((result) => {
             if (!result.success)
-                return deleteUpload().then(() => {
-                    authSignupTotal.inc({ status: 'failure' });
-                    rejectResponse(response, result.status, result.errors);
-                });
+                return deleteUpload()
+                    .catch(() => undefined)
+                    .then(() => {
+                        authSignupTotal.inc({ status: 'failure' });
+                        rejectResponse(response, result.status, result.errors);
+                    });
 
             const { data } = result;
 
@@ -91,16 +93,18 @@ export const postSignup = (
                 // is discarded same as any other refusal.
                 logAntibotRefusal('email-policy', request.method, request.path, 201);
                 authSignupTotal.inc({ status: 'refused' });
-                return deleteUpload().then(() => {
-                    // SIGNUP_DEFAULT_ROLE, not read off a membership that was never written
-                    // (this document is never saved) — exactly what a genuine signup's response
-                    // shows, which is the whole point of this branch being indistinguishable.
-                    successResponse<User>(
-                        response,
-                        userService.toUser(data, SIGNUP_DEFAULT_ROLE),
-                        201
-                    );
-                });
+                return deleteUpload()
+                    .catch(() => undefined)
+                    .then(() => {
+                        // SIGNUP_DEFAULT_ROLE, not read off a membership that was never written
+                        // (this document is never saved) — exactly what a genuine signup's response
+                        // shows, which is the whole point of this branch being indistinguishable.
+                        successResponse<User>(
+                            response,
+                            userService.toUser(data, SIGNUP_DEFAULT_ROLE),
+                            201
+                        );
+                    });
             }
 
             // Registration successful
@@ -134,6 +138,8 @@ export const postSignup = (
         .catch((error: unknown) => {
             authSignupTotal.inc({ status: 'failure' });
             rejectDatabaseError(response, 'signup', error);
-            return deleteUpload();
+            // The response is already sent — a rejected cleanup must not become an unhandled
+            // promise rejection on top of it.
+            return deleteUpload().catch(() => undefined);
         });
 };

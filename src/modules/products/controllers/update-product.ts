@@ -48,7 +48,9 @@ export const updateProduct = (
 
     if (!id) {
         rejectResponse(response, 422, [t('generic.error-missing-data')]);
-        return deleteUpload();
+        // The response is already sent — a rejected cleanup must not become an unhandled
+        // promise rejection on top of it.
+        return deleteUpload().catch(() => undefined);
     }
 
     return productService
@@ -70,14 +72,18 @@ export const updateProduct = (
         )
         .then((result) => {
             if (!result.success)
-                return deleteUpload().then(() => {
-                    rejectResponse(response, result.status, result.errors);
-                });
+                return deleteUpload()
+                    .catch(() => undefined)
+                    .then(() => {
+                        rejectResponse(response, result.status, result.errors);
+                    });
             successResponse<Product>(response, productService.toProduct(result.data));
         })
         .catch((error: unknown) =>
-            deleteUpload().then(() => {
-                rejectDatabaseError(response, 'updateProduct', error);
-            })
+            deleteUpload()
+                .catch(() => undefined)
+                .then(() => {
+                    rejectDatabaseError(response, 'updateProduct', error);
+                })
         );
 };

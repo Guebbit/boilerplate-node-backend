@@ -108,7 +108,9 @@ export const writeUsers = (
         // PUT without an id is invalid
         if (request.method === 'PUT') {
             rejectResponse(response, 422, [t('generic.error-missing-data')]);
-            return deleteUpload();
+            // The response is already sent — a rejected cleanup must not become an unhandled
+            // promise rejection on top of it.
+            return deleteUpload().catch(() => undefined);
         }
 
         // Neither a password nor a way to get one to the user: `userService.create` would fill
@@ -117,7 +119,7 @@ export const writeUsers = (
         const { password } = request.body ?? {};
         if (!password && !sendSetupEmail) {
             rejectResponse(response, 422, [t('users.field-password-or-setup-required')]);
-            return deleteUpload();
+            return deleteUpload().catch(() => undefined);
         }
 
         return userService
@@ -137,9 +139,11 @@ export const writeUsers = (
             )
             .then((result) => {
                 if (!result.success)
-                    return deleteUpload().then(() => {
-                        rejectResponse(response, result.status, result.errors);
-                    });
+                    return deleteUpload()
+                        .catch(() => undefined)
+                        .then(() => {
+                            rejectResponse(response, result.status, result.errors);
+                        });
                 // `toUserContract` picks only the `User` contract's own fields, so the hashed
                 // password and tokens on the document never reach `res.json`. The role is read
                 // fresh from the membership just written — never off the document, which holds none.
@@ -148,9 +152,11 @@ export const writeUsers = (
                 });
             })
             .catch((error: unknown) =>
-                deleteUpload().then(() => {
-                    rejectDatabaseError(response, 'writeUser', error);
-                })
+                deleteUpload()
+                    .catch(() => undefined)
+                    .then(() => {
+                        rejectDatabaseError(response, 'writeUser', error);
+                    })
             );
     }
 
@@ -161,9 +167,11 @@ export const writeUsers = (
         .updateById(id, { ...request.body, ...validated }, callerContextOf(request))
         .then((result) => {
             if (!result.success)
-                return deleteUpload().then(() => {
-                    rejectResponse(response, result.status, result.errors);
-                });
+                return deleteUpload()
+                    .catch(() => undefined)
+                    .then(() => {
+                        rejectResponse(response, result.status, result.errors);
+                    });
             const saved = result.data;
             return userService.toUserContract(saved).then((contract) => {
                 successResponse<User>(response, contract);
@@ -172,8 +180,10 @@ export const writeUsers = (
         .catch((error: unknown) =>
             // Matches the create branch above: an upload this request wrote must not survive a
             // failed write, or the file is orphaned with nothing referencing it.
-            deleteUpload().then(() => {
-                rejectDatabaseError(response, 'writeUser', error);
-            })
+            deleteUpload()
+                .catch(() => undefined)
+                .then(() => {
+                    rejectDatabaseError(response, 'writeUser', error);
+                })
         );
 };

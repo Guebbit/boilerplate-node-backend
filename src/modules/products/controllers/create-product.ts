@@ -62,14 +62,18 @@ export const createProduct = (
         )
         .then((result) => {
             if (!result.success)
-                return deleteUpload().then(() => {
-                    rejectResponse(response, result.status, result.errors);
-                });
+                return deleteUpload()
+                    .catch(() => undefined)
+                    .then(() => {
+                        rejectResponse(response, result.status, result.errors);
+                    });
             successResponse<Product>(response, productService.toProduct(result.data), 201);
         })
         .catch((error: unknown) =>
-            deleteUpload().then(() => {
-                rejectDatabaseError(response, 'createProduct', error);
-            })
+            deleteUpload()
+                .catch(() => undefined)
+                .then(() => {
+                    rejectDatabaseError(response, 'createProduct', error);
+                })
         );
 };
