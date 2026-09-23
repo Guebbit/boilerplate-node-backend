@@ -349,6 +349,89 @@ export interface SignupInput {
 }
 
 /**
+ * Rejects a password found in a breach corpus. Checked ahead of the email-policy check and the
+ * database lookup below: a breached password fails signup on its own, so there's nothing to gain
+ * from checking anything else first.
+ * @returns the 422 reject, or `undefined` to let signup continue
+ */
+const guardBreachedPassword = (password: string): Promise<ResponseReject | undefined> =>
+    assertPasswordNotBreached(password).then((breachErrors) =>
+        breachErrors.length > 0 ? generateReject(422, breachErrors) : undefined
+    );
+
+/**
+ * Rung 2 of the anti-automation ladder — off by default, see `adapters/antibot`. A refused
+ * verdict answers exactly like a genuine signup, from a document this call never persists — a
+ * script gets nothing to iterate on. The unsaved-document check is how the audit trail and the
+ * upload cleanup still tell the two apart.
+ * @returns the decoy success, or `undefined` to let signup continue
+ */
+const guardEmailPolicy = (input: SignupInput): Promise<ResponseSuccess<UserDocument> | undefined> =>
+    checkEmailPolicy(input.email).then((verdict) =>
+        verdict === 'refused'
+            ? generateSuccess<UserDocument>(
+                  userService.buildSignupDecoy({
+                      email: input.email,
+                      username: input.username,
+                      imageUrl: input.imageUrl ?? '',
+                      thumbnailUrl: input.thumbnailUrl,
+                      analyticsConsent: input.analyticsConsent,
+                      termsAccepted: input.termsAccepted
+                  })
+              )
+            : undefined
+    );
+
+/**
+ * The one database round trip signup can't skip: an email already on an account refuses here,
+ * everything else creates one — one `.catch` for both, since a taken email is answered from the
+ * same lookup a database error would also throw from.
+ */
+const createAccountIfEmailFree = (
+    input: SignupInput
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
+    userService
+        .emailTaken(input.email)
+        .then<ResponseSuccess<UserDocument> | ResponseReject>((taken) => {
+            if (taken) return generateReject(409, [t('account.signup.email-already-used')]);
+            return userService
+                .registerSelfService({
+                    username: input.username,
+                    email: input.email,
+                    imageUrl: input.imageUrl ?? '',
+                    thumbnailUrl: input.thumbnailUrl,
+                    pendingImageKey: input.pendingImageKey,
+                    password: input.password,
+                    analyticsConsent: input.analyticsConsent,
+                    termsAccepted: input.termsAccepted,
+                    // The language they signed up in, kept for work that happens later without a
+                    // request to read `Accept-Language` from — a queued email, a nightly job.
+                    // Editable afterwards from the user endpoints.
+                    locale: getCurrentLocale()
+                })
+                .then((createdUser) =>
+                    // The membership, not a caller-supplied name — `assignDefaultRole` never
+                    // accepts one, which is what makes self-service signup structurally unable to
+                    // grant anything but `unverified`. A refused grant undoes the row rather than
+                    // leaving an account nobody can sign into and the email permanently unable to
+                    // retry.
+                    assignDefaultRole(String(createdUser._id), DEPLOYMENT_TENANT_ID).then(
+                        () => createdUser,
+                        (error: unknown) =>
+                            userService.discardFailedSignup(createdUser).then(() => {
+                                throw error;
+                            })
+                    )
+                )
+                .then((createdUser) =>
+                    userService
+                        .enqueueIfPending(createdUser)
+                        .then((user) => generateSuccess<UserDocument>(user))
+                );
+        })
+        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
+
+/**
  * Register new user.
  *
  * @param input - the submitted fields and the server-derived image paths
@@ -365,9 +448,7 @@ export const signup = (
         passwordConfirm,
         analyticsConsent,
         termsAccepted,
-        imageUrl,
-        thumbnailUrl,
-        pendingImageKey
+        imageUrl
     } = input;
 
     const parseResult = zodUserSchema
@@ -401,87 +482,16 @@ export const signup = (
             termsAccepted
         });
 
+    // One gate per line: a breached password, then the antibot decoy, then the email-taken
+    // lookup that creates the account — the first one to answer is what signup returns.
     const outcome: Promise<ResponseSuccess<UserDocument> | ResponseReject> = parseResult.success
-        ? // Ahead of the email-policy check and the DB lookup below: a breached password fails
-          // signup on its own, so there's nothing to gain from checking anything else first.
-          assertPasswordNotBreached(password).then((breachErrors) =>
-              breachErrors.length > 0
-                  ? Promise.resolve(generateReject(422, breachErrors))
-                  : // Rung 2 of the anti-automation ladder — off by default, see `adapters/antibot`.
-                    checkEmailPolicy(email).then((verdict) =>
-                        verdict === 'refused'
-                            ? // Answer exactly like a genuine signup, from a document this call
-                              // never persists — a script gets nothing to iterate on. The
-                              // unsaved-document check is how the audit trail and the upload
-                              // cleanup still tell the two apart.
-                              Promise.resolve(
-                                  generateSuccess<UserDocument>(
-                                      userService.buildSignupDecoy({
-                                          email,
-                                          username,
-                                          imageUrl: imageUrl ?? '',
-                                          thumbnailUrl,
-                                          analyticsConsent,
-                                          termsAccepted
-                                      })
-                                  )
-                              )
-                            : userService
-                                  .emailTaken(email)
-                                  .then<ResponseSuccess<UserDocument> | ResponseReject>((taken) => {
-                                      if (taken)
-                                          return generateReject(409, [
-                                              t('account.signup.email-already-used')
-                                          ]);
-                                      return userService
-                                          .registerSelfService({
-                                              username,
-                                              email,
-                                              imageUrl: imageUrl ?? '',
-                                              thumbnailUrl,
-                                              pendingImageKey,
-                                              password,
-                                              analyticsConsent,
-                                              termsAccepted,
-                                              // The language they signed up in, kept for work
-                                              // that happens later without a request to read
-                                              // `Accept-Language` from — a queued email, a
-                                              // nightly job. Editable afterwards from the user
-                                              // endpoints.
-                                              locale: getCurrentLocale()
-                                          })
-                                          .then((createdUser) =>
-                                              // The membership, not a caller-supplied name —
-                                              // `assignDefaultRole` never accepts one, which is
-                                              // what makes self-service signup structurally
-                                              // unable to grant anything but `unverified`. A
-                                              // refused grant undoes the row rather than leaving
-                                              // an account nobody can sign into and the email
-                                              // permanently unable to retry.
-                                              assignDefaultRole(
-                                                  String(createdUser._id),
-                                                  DEPLOYMENT_TENANT_ID
-                                              ).then(
-                                                  () => createdUser,
-                                                  (error: unknown) =>
-                                                      userService
-                                                          .discardFailedSignup(createdUser)
-                                                          .then(() => {
-                                                              throw error;
-                                                          })
-                                              )
-                                          )
-                                          .then((createdUser) =>
-                                              userService
-                                                  .enqueueIfPending(createdUser)
-                                                  .then((user) =>
-                                                      generateSuccess<UserDocument>(user)
-                                                  )
-                                          );
-                                  })
-                                  .catch((error: unknown) => rejectDatabaseEnvelope('auth', error))
-                    )
-          )
+        ? guardBreachedPassword(password)
+              .then<ResponseReject | ResponseSuccess<UserDocument> | undefined>(
+                  (rejected) => rejected ?? guardEmailPolicy(input)
+              )
+              .then<ResponseReject | ResponseSuccess<UserDocument>>(
+                  (settled) => settled ?? createAccountIfEmailFree(input)
+              )
         : Promise.resolve(generateReject(422, validationErrors(parseResult.error)));
 
     return outcome.then((result) => {
