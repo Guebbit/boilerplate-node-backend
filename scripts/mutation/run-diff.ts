@@ -39,30 +39,28 @@
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import path from 'node:path';
 import { runStryker } from './stryker-run';
+import { changedMutable, mutableFiles } from './mutate-scope';
 import { REPO_ROOT, mergeBase } from '../git-base';
-
-/** What a changed file must look like to be worth mutating: production TypeScript, not a spec. */
-const MUTABLE = /^src\/.+\.ts$/;
-const NOT_MUTABLE = /\.d\.ts$|\/tests\/|\.test\.ts$|^src\/types\//;
 
 const baseArgument = process.argv.find((a) => a.startsWith('--base='));
 const base = baseArgument ? baseArgument.slice('--base='.length) : 'origin/main';
 
+/** Every file the diff touched, changed or added or renamed into — unfiltered. */
 const changedFiles = (): string[] =>
-    execFileSync('git', ['diff', '--name-only', '--diff-filter=ACMR', `${mergeBase(base, 'mutation-diff')}...HEAD`], {
-        cwd: REPO_ROOT,
-        encoding: 'utf8'
-    })
+    execFileSync(
+        'git',
+        ['diff', '--name-only', '--diff-filter=ACMR', `${mergeBase(base, 'mutation-diff')}...HEAD`],
+        {
+            cwd: REPO_ROOT,
+            encoding: 'utf8'
+        }
+    )
         .split('\n')
         .map((line) => line.trim())
-        .filter((file) => MUTABLE.test(file) && !NOT_MUTABLE.test(file))
-        // A file deleted later in the branch is still in the diff; Stryker cannot mutate it.
-        .filter((file) => existsSync(path.join(REPO_ROOT, file)));
+        .filter((line) => line !== '');
 
-const files = changedFiles();
+const files = changedMutable(changedFiles(), mutableFiles());
 
 if (files.length === 0) {
     console.log('[mutation-diff] no mutable source files changed — nothing to measure.');

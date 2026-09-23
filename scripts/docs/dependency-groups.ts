@@ -122,9 +122,11 @@ export const DEV_GROUPS: DependencyGroup[] = [
     },
     {
         name: 'Deeper testing',
-        purpose: 'mutation testing, property-based testing, and load testing',
+        purpose:
+            'mutation testing, property-based testing, load testing, and matching a changed ' +
+            "file against `stryker.json`'s own `mutate` globs the same way Stryker itself does",
         readMore: '[Mutation Testing](./mutation-testing.md), [Load Testing](./load-testing.md)',
-        match: ['@stryker-mutator/*', 'fast-check', 'autocannon']
+        match: ['@stryker-mutator/*', 'fast-check', 'autocannon', 'minimatch']
     },
     {
         name: 'Linting and formatting',

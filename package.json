@@ -148,6 +148,7 @@
         "jest-openapi": "^0.14.2",
         "jiti": "^2.6.1",
         "mermaid": "^11.14.0",
+        "minimatch": "^10.2.6",
         "mongodb-memory-server": "^11.0.1",
         "nodemon": "^3.1.14",
         "npm-check-updates": "^22.2.3",
