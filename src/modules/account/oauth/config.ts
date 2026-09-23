@@ -43,25 +43,29 @@ export const isOAuthProviderConfigured = (name: string): boolean => {
 };
 
 /**
+ * Joins `path` onto this app's own `NODE_URL`, ABSOLUTE — a provider rejects a relative
+ * `redirect_uri`, and so does `new URL()` in anything that parses our own `Location` back.
+ * Concatenation made that depend on `NODE_URL` carrying a trailing slash:
+ * `https://api.example.com` with no slash produced `https://api.example.comaccount/oauth/…`, and
+ * `NODE_URL` unset produced a path with no leading slash. `URL` resolves both. The localhost
+ * fallback only ever applies where the boot-time `NODE_URL` check is skipped — which is
+ * `NODE_ENV=test`, and nothing else (`kernel/required-config.ts`).
+ *
+ * @param path - relative to `NODE_URL`, no leading slash
+ */
+const backendUrl = (path: string): string =>
+    new URL(path, process.env.NODE_URL ?? 'http://localhost:3000/').href;
+
+/**
  * The redirect URI this app presents to every provider for `provider` — always derived from
  * `NODE_URL`, NEVER from the request. A request-supplied redirect target is an open-redirect /
  * callback-confusion vector; deriving it here, the one place both the start and callback
  * controllers read it from, is what keeps that true.
  *
- * Built through `URL` rather than concatenated, because this one has to be ABSOLUTE — a provider
- * rejects a relative `redirect_uri`, and so does `new URL()` in anything that parses our own
- * `Location` back. Concatenation made that depend on `NODE_URL` carrying a trailing slash:
- * `https://api.example.com` with no slash produced `https://api.example.comaccount/oauth/…`, and
- * `NODE_URL` unset produced a path with no leading slash. `URL` resolves both. The localhost
- * fallback matches `oauthFrontendCallbackUrl` below and only ever applies where the boot-time
- * `NODE_URL` check is skipped — which is `NODE_ENV=test`, and nothing else
- * (`kernel/required-config.ts`).
- *
  * @param provider - the registry key, matching `GET /account/oauth/:provider`'s route param
  */
 export const oauthRedirectUri = (provider: string): string =>
-    new URL(`account/oauth/${provider}/callback`, process.env.NODE_URL ?? 'http://localhost:3000/')
-        .href;
+    backendUrl(`account/oauth/${provider}/callback`);
 
 /** The paired frontend's OAuth landing page — everything below appends its own query to this. */
 const oauthFrontendCallbackBase = (): string =>
