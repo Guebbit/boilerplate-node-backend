@@ -7,7 +7,7 @@
  * attaches — lives in `../uploads`, not here.
  */
 
-import type { Request, RequestHandler } from 'express';
+import type { NextFunction, Request, RequestHandler } from 'express';
 // multer is the `multipart/form-data` body parser for Express. It populates `request.file` /
 // `request.files` and, with diskStorage, writes the bytes to disk before the handler runs.
 // `FileFilterCallback` is the signature of the accept/reject callback used below.
@@ -267,6 +267,55 @@ export const validateUploadedImages: RequestHandler = (request, response, next) 
 };
 
 /**
+ * Roll back a batch where at least one file failed to quarantine.
+ *
+ * A staged file is nobody's responsibility now: a successful `quarantine` already consumed its
+ * own, and deleting a file that is gone is a no-op. Anything that DID make it into quarantine is
+ * now unreferenced too — the request is about to fail, so no row will ever name it.
+ *
+ * @param staged - the staged file paths this request wrote
+ * @param results - one `allSettled` result per staged file, same order as `staged`
+ */
+const cleanupAfterPartialQuarantine = (
+    staged: string[],
+    results: PromiseSettledResult<string>[]
+): Promise<unknown> =>
+    Promise.all([
+        ...staged.map((stagedPath) => deleteFile(stagedPath)),
+        ...results
+            .filter((result) => result.status === 'fulfilled')
+            .map((result) => imageStore.removeQuarantined(result.value))
+    ]);
+
+/**
+ * Digest a batch of already-quarantined keys inline, because no broker is currently reachable to
+ * hand the job to instead — see {@link quarantineUploadedImages} for why this path exists at all.
+ *
+ * On success, the real, already-promoted URLs are attached to the request. On failure, every key
+ * is un-quarantined before the error reaches `next`, since nothing will ever reference them.
+ *
+ * @param request - the in-flight request the digested URLs are attached to
+ * @param keys - quarantine keys returned by `imageStore.quarantine`, one per staged file
+ * @param next - Express's `next`, called once the digest settles either way
+ */
+const digestQuarantinedKeysInline = (
+    request: Request,
+    keys: string[],
+    next: NextFunction
+): Promise<void> =>
+    Promise.all(keys.map((key) => digestQuarantinedImage(key, key)))
+        .then((digested) => {
+            request.storedImageUrls = digested.map((result) => result.imageUrl);
+            request.storedThumbnailUrls = digested.map((result) => result.thumbnailUrl);
+            next();
+        })
+        .catch((error: unknown) =>
+            Promise.all(keys.map((key) => imageStore.removeQuarantined(key))).then(() =>
+                next(error)
+            )
+        );
+
+/**
  * Third and last step: quarantine the staged file and — with no broker currently reachable to
  * hand the digest job to — run the whole digest pipeline right here.
  *
@@ -292,18 +341,10 @@ export const quarantineUploadedImages: RequestHandler = (request, _response, nex
         .then(
             (results) => {
                 const failed = results.find((result) => result.status === 'rejected');
-                if (failed) {
-                    return Promise.all([
-                        // Staged files are nobody's responsibility now. A successful `quarantine`
-                        // already consumed its own, and deleting a file that is gone is a no-op.
-                        ...staged.map((stagedPath) => deleteFile(stagedPath)),
-                        // Anything that DID make it into quarantine is now unreferenced — the request
-                        // is about to fail, so no row will ever name it.
-                        ...results
-                            .filter((result) => result.status === 'fulfilled')
-                            .map((result) => imageStore.removeQuarantined(result.value))
-                    ]).then(() => next(failed.reason));
-                }
+                if (failed)
+                    return cleanupAfterPartialQuarantine(staged, results).then(() =>
+                        next(failed.reason)
+                    );
 
                 const keys = results.map(
                     (result) => (result as PromiseFulfilledResult<string>).value
@@ -318,31 +359,29 @@ export const quarantineUploadedImages: RequestHandler = (request, _response, nex
                 // No broker, or one configured but not currently reachable: the contract promises a
                 // real `thumbnailUrl` regardless, so the digest runs now, inline, before the request
                 // is allowed to proceed — same shape as `enqueueEmail` sending inline rather than
-                // dropping the message. `queueState()`, not `isQueueEnabled()`: a broker that is
-                // configured but down must behave exactly like "no broker" here, not fall through to
-                // `enqueueImageDigest`'s own fallback deeper in the write path — that one exists for a
-                // publish that fails despite the queue looking ready moments earlier, not as the
-                // steady-state path for an outage this middleware could see coming.
+                // dropping the message.
                 //
-                // `queueState()` never dials the broker — cheap on purpose, and nothing here needs to
-                // nudge a reconnect either: `queue.ts`'s amqplib `recovery` option keeps retrying the
-                // connection on its own, in the background, for as long as the process runs. The next
-                // upload after it succeeds simply finds `queueState()` reading `ready` again.
-                // No document exists yet at this point in the request — `digestQuarantinedImage`'s
-                // `owner` salt is the quarantine key itself instead. That key is unique per upload and
-                // never retried, so this loses nothing (there is no duplicate run to converge) while
-                // still keeping this promoted file from ever sharing a name with an unrelated upload.
-                return Promise.all(keys.map((key) => digestQuarantinedImage(key, key)))
-                    .then((digested) => {
-                        request.storedImageUrls = digested.map((result) => result.imageUrl);
-                        request.storedThumbnailUrls = digested.map((result) => result.thumbnailUrl);
-                        next();
-                    })
-                    .catch((error: unknown) =>
-                        Promise.all(keys.map((key) => imageStore.removeQuarantined(key))).then(() =>
-                            next(error)
-                        )
-                    );
+                // Why `queueState()`, not `isQueueEnabled()`:
+                //   a broker configured but down must behave exactly like "no broker" here, not
+                //   fall through to `enqueueImageDigest`'s own fallback deeper in the write path —
+                //   that one exists for a publish that fails despite the queue looking ready
+                //   moments earlier, not as the steady-state path for an outage this middleware
+                //   could see coming.
+                //
+                // Why it's safe to call here:
+                //   `queueState()` never dials the broker — cheap on purpose. Nothing here needs
+                //   to nudge a reconnect either: `queue.ts`'s amqplib `recovery` option keeps
+                //   retrying the connection on its own, in the background, for as long as the
+                //   process runs. The next upload after it succeeds simply finds `queueState()`
+                //   reading `ready` again.
+                //
+                // Why the `owner` salt below is the quarantine key:
+                //   no document exists yet at this point in the request, so
+                //   `digestQuarantinedImage`'s `owner` salt is the quarantine key itself instead.
+                //   That key is unique per upload and never retried, so this loses nothing (there
+                //   is no duplicate run to converge) while still keeping this promoted file from
+                //   ever sharing a name with an unrelated upload.
+                return digestQuarantinedKeysInline(request, keys, next);
             }
             // A rejection from inside the callback above — its own cleanup Promise.all included —
             // must still reach next(): without this, the request hangs rather than answering the 500
