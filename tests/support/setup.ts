@@ -241,7 +241,7 @@ process.env.NODE_SMTP_HOST ??= 'smtp.test.invalid';
 /**
  * WARNING: it's async — and it runs in `setupFiles`, i.e. BEFORE the test file imports anything.
  *
- * That ordering is exactly what hid PROBLEM 01: under Jest, i18next is up by the time a
+ * That ordering is exactly what hid the failure: under Jest, i18next is up by the time a
  * module-scope `t()` runs, so eagerly-resolved Zod messages worked here and only here. Tests that
  * assert on translated messages must therefore not rely on this — see each module's own
  * `validation-messages` spec, which initialises its own instance through `@tests/i18n-boot`.

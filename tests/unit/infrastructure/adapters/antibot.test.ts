@@ -39,7 +39,7 @@ describe('checkEmailPolicy', () => {
         mockedResolveMx.mockReset();
     });
 
-    // Required by the plan: every rung must be provably off by default.
+    // Every rung must be provably off by default.
     it('is off by default — a known disposable domain still passes', async () => {
         delete process.env.NODE_ANTIBOT_EMAIL_POLICY;
 

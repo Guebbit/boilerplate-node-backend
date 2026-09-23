@@ -90,7 +90,7 @@ const mountedStepUps = (): Record<string, string> => {
     return found;
 };
 
-describe('step-up auth is where the plan says it is', () => {
+describe('step-up auth guards exactly the routes it is declared for', () => {
     it('has no stale entry — every listed route is still mounted', () => {
         const mounted = new Set(
             Object.entries(ROUTERS).flatMap(([moduleName, router]) =>

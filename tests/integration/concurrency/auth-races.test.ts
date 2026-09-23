@@ -26,8 +26,8 @@
  * into "this looks like theft". `tokenSupersede` (`users/repository.ts`) lets exactly one
  * concurrent exchange of one token WIN atomically; every other exchange within
  * `NODE_TOKEN_ROTATION_GRACE_MS` of that win is reissued its own sibling token rather than
- * rejected. This is the suite the plan's own "Things that will bite" names as where that has to
- * be proven, not just asserted in a docblock.
+ * rejected. This is the suite where that guarantee has to be proven under real concurrency, not
+ * just asserted in a docblock.
  *
  * Observed hit rates, N=10, 20 consecutive runs on 2026-08-08 (recorded because a race test that
  * never actually races is a green test measuring nothing):

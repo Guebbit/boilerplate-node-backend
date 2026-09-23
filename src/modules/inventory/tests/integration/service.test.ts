@@ -452,7 +452,7 @@ describe('listLevels', () => {
 
         // The two zero-availability rows sort ahead of the plentiful one, and they are
         // distinguishable — which is the whole reason the board shows three numbers. Which of
-        // the two comes first is deliberately unasserted: 1-D1's API-composition board breaks an
+        // the two comes first is deliberately unasserted: the API-composition board breaks an
         // availability tie by `_id`, not by title (no join to sort a title by), so their relative
         // order is an implementation detail, not a contract.
         expect(result.items.map((level) => level.available)).toEqual([0, 0, 100]);

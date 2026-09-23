@@ -3,7 +3,7 @@
  * `account/session/jwt.ts` — the token layer, at the unit level. Asserts the properties that keep
  * it SAFE: the two secrets never cross-verify, a refresh token is only valid while still stored,
  * `jwtid: randomUUID()` keeps two same-second logins from mutually revoking, and the signing ring
- * (item 4) rotates without a mass logout. `@modules/users` is REPLACED rather than driven — see
+ * rotates without a mass logout. `@modules/users` is REPLACED rather than driven — see
  * `tests/support/ports.ts`.
  *
  * Every fixture below signs with `keyid: keyId(secret)`, matching what `jwt.ts` itself stamps —

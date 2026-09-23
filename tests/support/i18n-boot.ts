@@ -1,8 +1,8 @@
 /**
  * Reproduce the import ordering `app.ts` forces: module first, i18next second.
  *
- * This is the machinery behind the tests that could have caught PROBLEM 01 — `t()` called at
- * module scope, before `i18next.init()`, returning `undefined` so Zod quietly used its own English
+ * This is the machinery behind the tests that could have caught `t()` called at module scope,
+ * before `i18next.init()`, returning `undefined` so Zod quietly used its own English
  * defaults. No test saw it, because `tests/support/setup.ts` runs in Jest's `setupFiles` and
  * therefore initialises i18next BEFORE any spec imports anything. Under Jest the eager `t()`
  * worked; in production it did not.

@@ -216,7 +216,7 @@ describe('invoiceDocument — the VAT block', () => {
     });
 
     it('computes grossAmount from netAmount + taxAmount, never from a float multiply of price × quantity', () => {
-        // The exact case the plan named: 19.99 × 5 is 99.94999999999999 in IEEE 754, not 99.95 —
+        // 19.99 × 5 is 99.94999999999999 in IEEE 754, not 99.95 —
         // if this ever re-derives from the price again instead of the already-reconciled pair
         // beside it, a rate where that drift survives rounding would print a wrong total.
         const vat = invoiceDocument('en', VAT_ORDER).vat as InvoiceVatBlock;

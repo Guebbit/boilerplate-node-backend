@@ -148,7 +148,7 @@ describe('create — disposable-email policy', () => {
         else process.env.NODE_ANTIBOT_EMAIL_POLICY = originalPolicy;
     });
 
-    // Required by the plan: every anti-automation rung must be provably off by default.
+    // Every anti-automation rung must be provably off by default.
     it('is off by default — a known disposable domain still notifies as normal', async () => {
         delete process.env.NODE_ANTIBOT_EMAIL_POLICY;
 

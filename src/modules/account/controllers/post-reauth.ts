@@ -18,7 +18,7 @@ import { callerContextOf } from '@infrastructure/http/request';
 
 /**
  * POST /account/reauth — re-proves the caller's password and re-mints their session with a fresh
- * `auth_time`, without ending it. Reuses `issueSession` (1.1's extraction), the same tail
+ * `auth_time`, without ending it. Reuses `issueSession`, the same tail
  * `postLogin` and `postPasswordChange` end with — this is the third caller that proves it was
  * worth pulling out.
  */

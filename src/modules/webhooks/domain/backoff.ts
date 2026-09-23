@@ -12,7 +12,7 @@
  * `WEBHOOK_RETRY_DELAYS_MS[0]` is the wait after attempt 1 fails). Reuses the exact tier values
  * the delayed-message-exchange ladder considered and rejected for it: 5s, 5m,
  * 30m, 2h, 10h — a reasonable spread from "the endpoint blipped" to "come back once whatever broke
- * has had most of a day to get fixed", even though decision (c) delivers it through `nextAttemptAt`
+ * has had most of a day to get fixed", even though this delivers it through `nextAttemptAt`
  * rather than five RabbitMQ queues.
  */
 export const WEBHOOK_RETRY_DELAYS_MS: readonly number[] = [

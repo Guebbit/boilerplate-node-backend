@@ -97,7 +97,7 @@ describe('nodemailer — resolving attachments', () => {
 
 describe('nodemailer — never discards its own attachment', () => {
     it('leaves the spooled file on disk once the send has settled, success or failure', async () => {
-        // The 1.1 regression: a retried job's second attempt resolving a key the first attempt
+        // Guards against a retried job's second attempt resolving a key the first attempt
         // already deleted, and sending without the attachment. `nodemailer()` may be one attempt
         // of several behind a queue's retry chain, so only a caller who knows the job is FINISHED
         // may discard — see `mailer-dispatch.test.ts` and `email.worker.test.ts`.

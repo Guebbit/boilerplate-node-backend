@@ -3,8 +3,8 @@
  * mount for rung 3.
  *
  * Provider selection itself is `antibot-providers/index.test.ts`'s job; this suite owns the HTTP
- * shape around it — which header is read, what a refusal answers with, and the one property the
- * plan requires of every rung: OFF costs nothing, not even a header read.
+ * shape around it — which header is read, what a refusal answers with, and the one property every
+ * rung must hold: OFF costs nothing, not even a header read.
  */
 
 import { asStub } from '@tests/stub';

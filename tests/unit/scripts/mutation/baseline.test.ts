@@ -84,7 +84,7 @@ describe('scoresFromReport', () => {
     });
 
     it('scores an all-survived file as 0 rather than omitting it', () => {
-        // An honest zero on the record is the point — see §5.3 of the plan.
+        // An honest zero on the record is the point.
         expect(scoresFromReport(report([FILE, ['Survived', 'Survived']]))).toEqual(
             scores([FILE, 0])
         );
