@@ -16,6 +16,7 @@ import {
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { TenantCallerContext } from '@types';
 import type { PaginatedResult } from '@infrastructure/persistence/create-repository';
+import { readAll, MAX_CONFIGURED_PAGE_SIZE } from '@infrastructure/persistence/search';
 import { holdsKey } from '@kernel/ability';
 import { findKey } from '@kernel/permissions';
 import type { Caller } from '@types';
@@ -36,6 +37,28 @@ import { apiKeysAuditActions } from '../audit';
  */
 const isMintable = (key: string, caller: Caller): boolean =>
     findKey(key)?.scope === 'tenant' && holdsKey(caller, key);
+
+/**
+ * Every credential this account minted, newest first — for the account's own data export.
+ * Metadata only, never a secret — the same transform the admin list already applies
+ * (`model.ts#applyApiKeyTransform` omits `hash`) drops the secret here too; nothing
+ * module-specific to redact beyond what the wire shape already never carries. Unpaginated on
+ * purpose: an export is a one-time full answer, not a listing a client pages through.
+ *
+ * @param userId - the caller's own id
+ */
+export const findOwnApiKeys = (userId: string): Promise<ApiKey[]> =>
+    readAll(
+        (page) =>
+            apiKeyRepository
+                .search(
+                    { page, pageSize: MAX_CONFIGURED_PAGE_SIZE },
+                    { createdByUserId: userId },
+                    { createdAt: -1 }
+                )
+                .then((result) => result.items),
+        MAX_CONFIGURED_PAGE_SIZE
+    );
 
 /** List this tenant's credentials, newest first. Never returns a secret — see `model.ts`'s transform. */
 export const list = (

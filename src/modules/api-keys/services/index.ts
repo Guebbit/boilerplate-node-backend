@@ -14,3 +14,4 @@ export const apiKeysService = {
 };
 
 export { fromBearerToken as resolveApiKeyCredential } from './resolver';
+export { findOwnApiKeys } from './api-keys';
