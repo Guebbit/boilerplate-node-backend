@@ -188,9 +188,7 @@ describe('POST /users', () => {
 
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
-        expect(
-            await userRepository.findOne({ email: 'breached-create@example.com' })
-        ).toBeNull();
+        expect(await userRepository.findOne({ email: 'breached-create@example.com' })).toBeNull();
     });
 });
 

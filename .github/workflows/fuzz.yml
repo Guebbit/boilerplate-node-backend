@@ -47,17 +47,14 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v4
 
-            - name: Setup Node
-              uses: actions/setup-node@v4
+            - name: Setup
+              uses: ./.github/actions/setup
               with:
                   node-version: ${{ env.NODE_VERSION }}
-                  cache: npm
-                  cache-dependency-path: package-lock.json
+                  setup-mongod: 'true'
 
-            - name: Install dependencies
-              run: npm ci
-
-            # No Mongo service container: the suite uses `mongodb-memory-server`, and the cache
-            # adapter treats an unreachable Redis as a miss — same as the contract suite.
+            # No Mongo service container: the suite uses `mongodb-memory-server` against a
+            # preinstalled `mongod`, and the cache adapter treats an unreachable Redis as a miss —
+            # same as the contract suite.
             - name: Run the fuzzer
               run: npm run test:fuzz
