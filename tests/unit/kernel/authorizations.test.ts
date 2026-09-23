@@ -37,10 +37,26 @@ import type { AuthContext, Caller } from '@types';
 
 // Only the sink is replaced; `buildAuditEvent` and the `coreAuditActions` vocabulary stay real, so an
 // event that stops matching the real builder's shape fails here rather than in production.
-jest.mock('@infrastructure/observability/audit', () => ({
-    ...jest.requireActual('@infrastructure/observability/audit'),
-    emitAuditEvent: jest.fn()
-}));
+jest.mock('@infrastructure/observability/audit', () => {
+    const actual = jest.requireActual<typeof import('@infrastructure/observability/audit')>(
+        '@infrastructure/observability/audit'
+    );
+    const emitAuditEvent = jest.fn();
+    return {
+        ...actual,
+        emitAuditEvent,
+        // `auditRefusal` (`kernel/middlewares/authorizations.ts`) calls `recordAudit`, which
+        // closes over its own module's real `emitAuditEvent` — immune to the override above.
+        // Reroute it through the replacement so this mocked `emitAuditEvent` still sees it.
+        recordAudit: (
+            context: Parameters<typeof actual.recordAudit>[0],
+            fields: Parameters<typeof actual.recordAudit>[1]
+        ) => {
+            if (!context) return;
+            emitAuditEvent(actual.buildAuditEvent(context, fields));
+        }
+    };
+});
 
 /*
  * The guards do not look a user up themselves — they ask `kernel/authentication` for one, and

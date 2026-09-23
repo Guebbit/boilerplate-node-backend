@@ -254,3 +254,20 @@ export const buildAuditEvent = (
     // caller-overridable, so an audit entry cannot misreport where it came from.
     ...extractRequestContext(context)
 });
+
+/**
+ * Build and emit an audit event in one call — the shape every call site in this codebase wants:
+ * build from context, then hand straight to the log/sink. `context` may be absent (a background
+ * job with nobody behind it, e.g. a token sweep nobody requested), in which case this is a no-op
+ * rather than making each call site repeat that guard.
+ * @param context - the caller context built once in the controller, or `undefined` on a path with
+ *   no request behind it
+ * @param fields - action, outcome, and optional overrides — see `buildAuditEvent`
+ */
+export const recordAudit = (
+    context: CallerContext | undefined,
+    fields: Parameters<typeof buildAuditEvent>[1]
+): void => {
+    if (!context) return;
+    emitAuditEvent(buildAuditEvent(context, fields));
+};

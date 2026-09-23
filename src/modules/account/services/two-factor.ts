@@ -26,11 +26,7 @@ import {
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import type { CallerContext } from '@types';
-import {
-    emitAuditEvent,
-    buildAuditEvent,
-    type AuditAction
-} from '@infrastructure/observability/audit';
+import { recordAudit, type AuditAction } from '@infrastructure/observability/audit';
 import type {
     MfaChallenge,
     TwoFactorBackupCodesRegenerated,
@@ -80,13 +76,11 @@ const audited = <T>(
     method: string
 ): Promise<ResponseSuccess<T> | ResponseReject> =>
     outcome.then((result) => {
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action,
-                outcome: result.success ? 'success' : 'failure',
-                metadata: { method }
-            })
-        );
+        recordAudit(context, {
+            action,
+            outcome: result.success ? 'success' : 'failure',
+            metadata: { method }
+        });
         return result;
     });
 
@@ -586,12 +580,10 @@ export const verifyLoginChallenge = (
     // login happened before it has.
     return outcome.then((result) => {
         if (!result.success)
-            emitAuditEvent(
-                buildAuditEvent(context, {
-                    action: accountAuditActions.AUTH_2FA_CHALLENGE_FAILED,
-                    outcome: 'failure'
-                })
-            );
+            recordAudit(context, {
+                action: accountAuditActions.AUTH_2FA_CHALLENGE_FAILED,
+                outcome: 'failure'
+            });
         return result;
     });
 };

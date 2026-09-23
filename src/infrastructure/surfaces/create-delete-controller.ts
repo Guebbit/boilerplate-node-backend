@@ -20,11 +20,7 @@ import {
     rejectValidation,
     type ServiceResult
 } from '@infrastructure/http/controller';
-import {
-    emitAuditEvent,
-    buildAuditEvent,
-    type AuditAction
-} from '@infrastructure/observability/audit';
+import { recordAudit, type AuditAction } from '@infrastructure/observability/audit';
 
 /** What makes one entity's delete different from another's. */
 export interface DeleteControllerSpec {
@@ -85,18 +81,14 @@ export const createDeleteController = ({
                 // Sends the error envelope and stops here if the service refused.
                 if (refused(response, result)) return;
 
-                emitAuditEvent(
-                    buildAuditEvent(callerContextOf(request), {
-                        action:
-                            typeof auditAction === 'function'
-                                ? auditAction(hardDelete)
-                                : auditAction,
-                        outcome: 'success',
-                        target_type: entity,
-                        target_id: id,
-                        metadata: { hardDelete }
-                    })
-                );
+                recordAudit(callerContextOf(request), {
+                    action:
+                        typeof auditAction === 'function' ? auditAction(hardDelete) : auditAction,
+                    outcome: 'success',
+                    target_type: entity,
+                    target_id: id,
+                    metadata: { hardDelete }
+                });
                 successResponse(response, undefined, 200, result.message);
             })
             .catch(catchAsNotFound(response, operation, notFoundKey));

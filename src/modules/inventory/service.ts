@@ -31,7 +31,7 @@ import { stockLevelRepository, stockMovementRepository, reservationRepository } 
 import { RESERVATION_EXPIRED } from './events';
 import type { StockLevelDocument, StockMovementDocument } from './model';
 import type { CallerContext } from '@types';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
 import { inventoryAuditActions } from './audit';
 
@@ -313,22 +313,20 @@ export const commitForOrder = async (orderId: string): Promise<boolean> => {
         `Inventory: commitForOrder found no hold for order ${orderId} (reservation: ${reservationStatus}) — the order is paid but no units were set aside for it`
     );
     // Stryker restore all
-    emitAuditEvent(
-        buildAuditEvent(
-            // No CallerContext exists on this path — the caller is a payment settlement, which may
-            // itself be running from a provider webhook with no human behind it. Same fallback
-            // `orders/services/cancel.ts` uses for its own no-context case.
-            { caller: callerForSubject(SYSTEM_ACTOR, 'Order'), analyticsConsent: false },
-            {
-                action: inventoryAuditActions.ADMIN_COMMIT_ORPHANED,
-                outcome: 'failure',
-                actor_role: 'admin',
-                actor_user_id: 'system',
-                target_type: 'order',
-                target_id: orderId,
-                metadata: { reservationStatus }
-            }
-        )
+    recordAudit(
+        // No CallerContext exists on this path — the caller is a payment settlement, which may
+        // itself be running from a provider webhook with no human behind it. Same fallback
+        // `orders/services/cancel.ts` uses for its own no-context case.
+        { caller: callerForSubject(SYSTEM_ACTOR, 'Order'), analyticsConsent: false },
+        {
+            action: inventoryAuditActions.ADMIN_COMMIT_ORPHANED,
+            outcome: 'failure',
+            actor_role: 'admin',
+            actor_user_id: 'system',
+            target_type: 'order',
+            target_id: orderId,
+            metadata: { reservationStatus }
+        }
     );
 
     return false;
@@ -419,15 +417,12 @@ export const runReservationSweep = async (context?: CallerContext): Promise<numb
     // Stryker disable next-line all
     logger.info(`Reservation sweep: ${expired} of ${stale.length} stale holds expired`);
 
-    if (context)
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: inventoryAuditActions.ADMIN_RESERVATIONS_SWEPT,
-                outcome: 'success',
-                target_type: 'reservation',
-                metadata: { expired }
-            })
-        );
+    recordAudit(context, {
+        action: inventoryAuditActions.ADMIN_RESERVATIONS_SWEPT,
+        outcome: 'success',
+        target_type: 'reservation',
+        metadata: { expired }
+    });
 
     return expired;
 };
@@ -488,16 +483,13 @@ export const receive = async (
     const level = await levelFor(productId);
     if (!level) return generateReject(404, [t('inventory.product-not-found')]);
 
-    if (context)
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: inventoryAuditActions.ADMIN_STOCK_RECEIVED,
-                outcome: 'success',
-                target_type: 'product',
-                target_id: productId,
-                metadata: { quantity, onHand: level.onHand }
-            })
-        );
+    recordAudit(context, {
+        action: inventoryAuditActions.ADMIN_STOCK_RECEIVED,
+        outcome: 'success',
+        target_type: 'product',
+        target_id: productId,
+        metadata: { quantity, onHand: level.onHand }
+    });
 
     return generateSuccess(level, 200, t('inventory.receive-success'));
 };
@@ -549,16 +541,13 @@ export const adjust = async (
     const level = await levelFor(productId);
     if (!level) return generateReject(404, [t('inventory.product-not-found')]);
 
-    if (context)
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: inventoryAuditActions.ADMIN_STOCK_ADJUSTED,
-                outcome: 'success',
-                target_type: 'product',
-                target_id: productId,
-                metadata: { delta, note, onHand: level.onHand }
-            })
-        );
+    recordAudit(context, {
+        action: inventoryAuditActions.ADMIN_STOCK_ADJUSTED,
+        outcome: 'success',
+        target_type: 'product',
+        target_id: productId,
+        metadata: { delta, note, onHand: level.onHand }
+    });
 
     return generateSuccess(level, 200, t('inventory.adjust-success'));
 };

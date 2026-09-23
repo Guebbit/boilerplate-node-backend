@@ -11,7 +11,7 @@ import { getCurrentLocale } from '@infrastructure/i18n';
 import { userService, type UserDocument } from '@modules/users';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import { isUnrestrictedRole } from '@kernel/permissions';
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
@@ -75,15 +75,13 @@ const linkToExistingAccount = (
             // Read fresh from the membership — the document carries no role of its own, same
             // reasoning `postLogin` gives for its own AUTH_LOGIN.
             rolesOf(user.id, DEPLOYMENT_TENANT_ID).then((roles) => {
-                emitAuditEvent(
-                    buildAuditEvent(context, {
-                        action: accountAuditActions.AUTH_OAUTH_LINKED,
-                        actor_user_id: user.id,
-                        actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
-                        outcome: 'success',
-                        metadata: { via: provider }
-                    })
-                );
+                recordAudit(context, {
+                    action: accountAuditActions.AUTH_OAUTH_LINKED,
+                    actor_user_id: user.id,
+                    actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
+                    outcome: 'success',
+                    metadata: { via: provider }
+                });
                 if (!user.twoFactorEnabledAt) {
                     emitAnalyticsEvent({
                         ...buildAnalyticsBase(context),
@@ -133,15 +131,13 @@ const signupFromOAuth = (
             )
         )
         .then((created) => {
-            emitAuditEvent(
-                buildAuditEvent(context, {
-                    action: accountAuditActions.AUTH_SIGNED_UP,
-                    actor_user_id: created.id,
-                    actor_role: 'user',
-                    outcome: 'success',
-                    metadata: { via: provider }
-                })
-            );
+            recordAudit(context, {
+                action: accountAuditActions.AUTH_SIGNED_UP,
+                actor_user_id: created.id,
+                actor_role: 'user',
+                outcome: 'success',
+                metadata: { via: provider }
+            });
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(context),
                 distinctId: created.id,
@@ -230,11 +226,9 @@ export const recordOAuthFailure = (
     provider: string,
     reason: string
 ): void => {
-    emitAuditEvent(
-        buildAuditEvent(context, {
-            action: accountAuditActions.AUTH_OAUTH_FAILED,
-            outcome: 'failure',
-            metadata: { provider, reason }
-        })
-    );
+    recordAudit(context, {
+        action: accountAuditActions.AUTH_OAUTH_FAILED,
+        outcome: 'failure',
+        metadata: { provider, reason }
+    });
 };

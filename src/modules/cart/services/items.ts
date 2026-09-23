@@ -18,7 +18,7 @@ import {
 import { productService } from '@modules/products';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import { cartAnalyticsEvents } from '../analytics';
 import { cartAuditActions } from '../audit';
 import { cartRepository, QUANTITY_LIMIT } from '../repository';
@@ -161,15 +161,13 @@ export const cartItemRemoveById = (
 ): Promise<ResponseSuccess<CartView> | ResponseReject> =>
     cartRepository.removeLine(userId, id).then((cart) => {
         if (!cart) return generateReject(404, []);
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: cartAuditActions.USER_CART_ITEM_REMOVED,
-                actor_role: 'user',
-                outcome: 'success',
-                target_type: 'product',
-                target_id: id
-            })
-        );
+        recordAudit(context, {
+            action: cartAuditActions.USER_CART_ITEM_REMOVED,
+            actor_role: 'user',
+            outcome: 'success',
+            target_type: 'product',
+            target_id: id
+        });
         emitAnalyticsEvent({
             ...buildAnalyticsBase(context),
             event: cartAnalyticsEvents.CART_ITEM_REMOVED,

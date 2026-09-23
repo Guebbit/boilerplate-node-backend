@@ -13,7 +13,7 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import type { TenantCallerContext } from '@types';
 import type { PaginatedResult } from '@infrastructure/persistence/create-repository';
 import { holdsKey } from '@kernel/ability';
@@ -88,15 +88,13 @@ export const mint = (
             expiresAt: body.expiresAt ? new Date(body.expiresAt) : undefined
         } as Partial<ApiKeyDocument>)
         .then((apiKey) => {
-            emitAuditEvent(
-                buildAuditEvent(context, {
-                    action: apiKeysAuditActions.ADMIN_API_KEY_MINTED,
-                    outcome: 'success',
-                    target_type: 'api_key',
-                    target_id: String(apiKey._id),
-                    metadata: { permissions: body.permissions }
-                })
-            );
+            recordAudit(context, {
+                action: apiKeysAuditActions.ADMIN_API_KEY_MINTED,
+                outcome: 'success',
+                target_type: 'api_key',
+                target_id: String(apiKey._id),
+                metadata: { permissions: body.permissions }
+            });
             return generateSuccess(
                 {
                     // `.toJSON()` applies `applyApiKeyTransform`'s `_id` → `id` rename and field
@@ -122,15 +120,13 @@ export const revoke = (
 
         apiKey.revokedAt = new Date();
         return apiKeyRepository.save(apiKey).then(() => {
-            emitAuditEvent(
-                buildAuditEvent(context, {
-                    action: apiKeysAuditActions.ADMIN_API_KEY_REVOKED,
-                    outcome: 'success',
-                    target_type: 'api_key',
-                    target_id: id,
-                    metadata: { credential: displayIdOf(apiKey.publicPrefix) }
-                })
-            );
+            recordAudit(context, {
+                action: apiKeysAuditActions.ADMIN_API_KEY_REVOKED,
+                outcome: 'success',
+                target_type: 'api_key',
+                target_id: id,
+                metadata: { credential: displayIdOf(apiKey.publicPrefix) }
+            });
             return generateSuccess(undefined);
         });
     });

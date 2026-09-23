@@ -29,7 +29,7 @@ import { assertPasswordNotBreached } from '@infrastructure/security/breached-pas
 import { zodUserSchema, userService, TokenType, type UserDocument } from '@modules/users';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
 import { isUnrestrictedRole } from '@kernel/permissions';
@@ -169,14 +169,12 @@ export const passwordResetChange = (
             // turn a successful reset into an error — worst case, this one audit row is missing.
             void rolesOf(String(user._id), DEPLOYMENT_TENANT_ID)
                 .then((roles) => {
-                    emitAuditEvent(
-                        buildAuditEvent(context, {
-                            action: accountAuditActions.AUTH_PASSWORD_RESET_COMPLETED,
-                            actor_user_id: String(user._id),
-                            actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
-                            outcome: 'success'
-                        })
-                    );
+                    recordAudit(context, {
+                        action: accountAuditActions.AUTH_PASSWORD_RESET_COMPLETED,
+                        actor_user_id: String(user._id),
+                        actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
+                        outcome: 'success'
+                    });
                 })
                 .catch((error: unknown) => {
                     // Still just a missing audit row, not a reset failure — see the comment
@@ -231,14 +229,12 @@ export const removeOwnAccount = (
     return rolesOf(String(_id), DEPLOYMENT_TENANT_ID).then((roles) =>
         userService.remove(user, true).then((result) => {
             if (result.success) {
-                emitAuditEvent(
-                    buildAuditEvent(context, {
-                        action: accountAuditActions.AUTH_ACCOUNT_DELETE_COMPLETED,
-                        actor_user_id: String(_id),
-                        actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
-                        outcome: 'success'
-                    })
-                );
+                recordAudit(context, {
+                    action: accountAuditActions.AUTH_ACCOUNT_DELETE_COMPLETED,
+                    actor_user_id: String(_id),
+                    actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
+                    outcome: 'success'
+                });
                 emitAnalyticsEvent({
                     ...buildAnalyticsBase(context),
                     distinctId: String(_id),
@@ -360,12 +356,10 @@ type ProfileFields = z.infer<typeof zodProfileSchema>;
  */
 const notifyEmailChangeRequested = (user: UserDocument, context: CallerContext): Promise<void> =>
     sendEmailChangeMail(user, context).then(() => {
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: accountAuditActions.AUTH_EMAIL_CHANGE_REQUESTED,
-                outcome: 'success'
-            })
-        );
+        recordAudit(context, {
+            action: accountAuditActions.AUTH_EMAIL_CHANGE_REQUESTED,
+            outcome: 'success'
+        });
     });
 
 /**
@@ -424,12 +418,10 @@ export const updateProfile = (
 
     return outcome.then((result) => {
         if (result.success)
-            emitAuditEvent(
-                buildAuditEvent(context, {
-                    action: accountAuditActions.AUTH_PROFILE_UPDATED,
-                    outcome: 'success'
-                })
-            );
+            recordAudit(context, {
+                action: accountAuditActions.AUTH_PROFILE_UPDATED,
+                outcome: 'success'
+            });
         return result;
     });
 };
@@ -477,12 +469,10 @@ export const passwordChangeWithCurrent = (
                   .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 
     return outcome.then((result) => {
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: accountAuditActions.AUTH_PASSWORD_CHANGED,
-                outcome: result.success ? 'success' : 'failure'
-            })
-        );
+        recordAudit(context, {
+            action: accountAuditActions.AUTH_PASSWORD_CHANGED,
+            outcome: result.success ? 'success' : 'failure'
+        });
         return result;
     });
 };

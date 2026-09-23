@@ -22,7 +22,7 @@ import type { ProductDocument } from '@modules/products';
 import type { AuthContext } from '@types';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import { CART_LINE_MAX } from '../model';
 import { cartAnalyticsEvents } from '../analytics';
 import { cartAuditActions } from '../audit';
@@ -138,13 +138,11 @@ export const reorderIntoCart = (
         .catch((error: unknown) => rejectDatabaseEnvelope('cart', error))
         .then((result) => {
             if (result.success) {
-                emitAuditEvent(
-                    buildAuditEvent(context, {
-                        action: cartAuditActions.USER_CART_REORDERED,
-                        outcome: 'success',
-                        metadata: { order_id: orderId }
-                    })
-                );
+                recordAudit(context, {
+                    action: cartAuditActions.USER_CART_REORDERED,
+                    outcome: 'success',
+                    metadata: { order_id: orderId }
+                });
                 emitAnalyticsEvent({
                     ...buildAnalyticsBase(context),
                     event: cartAnalyticsEvents.CART_REORDERED,

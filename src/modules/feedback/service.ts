@@ -34,7 +34,7 @@ import {
 } from '@infrastructure/persistence/search';
 import type { Lean } from '@infrastructure/persistence/create-repository';
 import type { CallerContext } from '@types';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import { feedbackAuditActions } from './audit';
 
 /** Every value the generated `FeedbackRequestStatus` enum declares, for the membership check below. */
@@ -164,13 +164,10 @@ export const search = (
     feedbackRequestRepository
         .search(filters, filters.status ? { status: filters.status } : {})
         .then((result) => {
-            if (context)
-                emitAuditEvent(
-                    buildAuditEvent(context, {
-                        action: feedbackAuditActions.ADMIN_FEEDBACK_VIEWED,
-                        outcome: 'success'
-                    })
-                );
+            recordAudit(context, {
+                action: feedbackAuditActions.ADMIN_FEEDBACK_VIEWED,
+                outcome: 'success'
+            });
             return result;
         });
 
@@ -206,16 +203,14 @@ export const updateStatusById = (
     feedbackRequestRepository.findById(id).then((feedback) => {
         if (!feedback) return generateReject(404, [t('generic.error-not-found')]);
         return updateStatus(feedback, payload).then((result) => {
-            if (context && result.success)
-                emitAuditEvent(
-                    buildAuditEvent(context, {
-                        action: feedbackAuditActions.ADMIN_FEEDBACK_STATUS_UPDATED,
-                        outcome: 'success',
-                        target_type: 'feedback',
-                        target_id: id,
-                        metadata: { status: payload.status }
-                    })
-                );
+            if (result.success)
+                recordAudit(context, {
+                    action: feedbackAuditActions.ADMIN_FEEDBACK_STATUS_UPDATED,
+                    outcome: 'success',
+                    target_type: 'feedback',
+                    target_id: id,
+                    metadata: { status: payload.status }
+                });
             return result;
         });
     });
@@ -236,15 +231,12 @@ export const remove = (
     feedbackRequestRepository.findById(id).then((feedback) => {
         if (!feedback) return generateReject(404, [t('generic.error-not-found')]);
         return feedbackRequestRepository.deleteOne(feedback).then(() => {
-            if (context)
-                emitAuditEvent(
-                    buildAuditEvent(context, {
-                        action: feedbackAuditActions.ADMIN_FEEDBACK_DELETED,
-                        outcome: 'success',
-                        target_type: 'feedback',
-                        target_id: id
-                    })
-                );
+            recordAudit(context, {
+                action: feedbackAuditActions.ADMIN_FEEDBACK_DELETED,
+                outcome: 'success',
+                target_type: 'feedback',
+                target_id: id
+            });
             return generateSuccess(undefined);
         });
     });

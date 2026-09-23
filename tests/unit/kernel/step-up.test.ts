@@ -22,10 +22,25 @@ import { requirePermission } from '@kernel/middlewares/authorizations';
 
 const emitAuditEvent = jest.fn();
 
-jest.mock('@infrastructure/observability/audit', () => ({
-    ...jest.requireActual('@infrastructure/observability/audit'),
-    emitAuditEvent: (...args: unknown[]) => emitAuditEvent(...args)
-}));
+jest.mock('@infrastructure/observability/audit', () => {
+    const actual = jest.requireActual<typeof import('@infrastructure/observability/audit')>(
+        '@infrastructure/observability/audit'
+    );
+    return {
+        ...actual,
+        emitAuditEvent: (...args: unknown[]) => emitAuditEvent(...args),
+        // `requirePermission`'s step-up path calls `recordAudit`, which closes over its own
+        // module's real `emitAuditEvent` — immune to the override above. Reroute it through the
+        // wrapped one so this file's assertions still see it.
+        recordAudit: (
+            context: Parameters<typeof actual.recordAudit>[0],
+            fields: Parameters<typeof actual.recordAudit>[1]
+        ) => {
+            if (!context) return;
+            emitAuditEvent(actual.buildAuditEvent(context, fields));
+        }
+    };
+});
 
 const NOW = () => Math.floor(Date.now() / 1000);
 

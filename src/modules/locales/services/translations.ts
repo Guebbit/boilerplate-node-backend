@@ -16,7 +16,7 @@ import {
 } from '@infrastructure/http/response';
 import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
 import type { CallerContext } from '@types';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import { localeAuditActions } from '../audit';
 import type { TranslationDocument } from '../model';
 import { deriveSourceDigest, localeRepository, translationRepository } from '../repository';
@@ -294,19 +294,16 @@ export const upsertEntityTranslations = async (
 
     await invalidateCacheTagsLogged([target.cacheTag]);
 
-    if (context)
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: localeAuditActions.ADMIN_TRANSLATION_UPDATED,
-                outcome: 'success',
-                target_type: entityType,
-                target_id: entityId,
-                metadata: {
-                    upserted: planned.filter((slot) => slot.kind === 'upsert').map((s) => s.locale),
-                    deleted: planned.filter((slot) => slot.kind === 'delete').map((s) => s.locale)
-                }
-            })
-        );
+    recordAudit(context, {
+        action: localeAuditActions.ADMIN_TRANSLATION_UPDATED,
+        outcome: 'success',
+        target_type: entityType,
+        target_id: entityId,
+        metadata: {
+            upserted: planned.filter((slot) => slot.kind === 'upsert').map((s) => s.locale),
+            deleted: planned.filter((slot) => slot.kind === 'delete').map((s) => s.locale)
+        }
+    });
 
     const rows = await translationRepository.findEntityTranslations(entityType, entityId);
 

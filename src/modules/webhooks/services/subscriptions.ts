@@ -14,7 +14,7 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import type { TenantCallerContext } from '@types';
 import type { PaginatedResult } from '@infrastructure/persistence/create-repository';
 import type { CreateWebhookSubscriptionRequest, UpdateWebhookSubscriptionRequest } from '@types';
@@ -86,14 +86,12 @@ const finalizeCreate = async (
     const rank = await insertionRank(subscription._id, tenant);
     if (rank > getWebhookSubscriptionCap()) return rollbackOverCap(subscription);
 
-    emitAuditEvent(
-        buildAuditEvent(context, {
-            action: webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_CREATED,
-            outcome: 'success',
-            target_type: 'webhook_subscription',
-            target_id: String(subscription._id)
-        })
-    );
+    recordAudit(context, {
+        action: webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_CREATED,
+        outcome: 'success',
+        target_type: 'webhook_subscription',
+        target_id: String(subscription._id)
+    });
     return generateSuccess({ subscription, secret: plaintext }, 201);
 };
 
@@ -186,14 +184,12 @@ export const update = (
         }
 
         return webhookSubscriptionRepository.save(subscription).then((saved) => {
-            emitAuditEvent(
-                buildAuditEvent(context, {
-                    action: webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_UPDATED,
-                    outcome: 'success',
-                    target_type: 'webhook_subscription',
-                    target_id: id
-                })
-            );
+            recordAudit(context, {
+                action: webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_UPDATED,
+                outcome: 'success',
+                target_type: 'webhook_subscription',
+                target_id: id
+            });
             return generateSuccess({ subscription: saved, newSecret });
         });
     });
@@ -208,14 +204,12 @@ export const remove = (
             return generateReject(404, [t('generic.error-not-found')]);
 
         return webhookSubscriptionRepository.deleteOne(subscription).then(() => {
-            emitAuditEvent(
-                buildAuditEvent(context, {
-                    action: webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_DELETED,
-                    outcome: 'success',
-                    target_type: 'webhook_subscription',
-                    target_id: id
-                })
-            );
+            recordAudit(context, {
+                action: webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_DELETED,
+                outcome: 'success',
+                target_type: 'webhook_subscription',
+                target_id: id
+            });
             return generateSuccess(undefined);
         });
     });

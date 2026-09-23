@@ -11,7 +11,7 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import type { TenantCallerContext } from '@types';
 import type { PaginatedResult } from '@infrastructure/persistence/create-repository';
 import {
@@ -99,14 +99,12 @@ export const replay = (
                     return attemptDelivery(claimed, subscription).then((updated) => {
                         if (!updated) return rejectInProgress();
 
-                        emitAuditEvent(
-                            buildAuditEvent(context, {
-                                action: webhooksAuditActions.ADMIN_WEBHOOK_DELIVERY_REPLAYED,
-                                outcome: 'success',
-                                target_type: 'webhook_delivery',
-                                target_id: id
-                            })
-                        );
+                        recordAudit(context, {
+                            action: webhooksAuditActions.ADMIN_WEBHOOK_DELIVERY_REPLAYED,
+                            outcome: 'success',
+                            target_type: 'webhook_delivery',
+                            target_id: id
+                        });
                         return generateSuccess(updated);
                     });
                 });

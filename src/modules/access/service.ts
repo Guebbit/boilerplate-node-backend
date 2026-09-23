@@ -13,7 +13,7 @@
 import type { AuthorizationScope, CallerContext } from '@types';
 import { findRole } from '@kernel/permissions';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import type { AuditAction } from '@infrastructure/observability/audit';
 import { membershipRepository, tenantRepository } from './repository';
 import type { MembershipDocument, TenantDocument } from './model';
@@ -159,15 +159,13 @@ const auditRoleChange = (
     tenantId: string | null,
     scope: AuthorizationScope
 ): void => {
-    emitAuditEvent(
-        buildAuditEvent(context, {
-            action,
-            outcome,
-            target_type: 'user',
-            target_id: userId,
-            metadata: role === undefined ? { tenantId, scope } : { role, tenantId, scope }
-        })
-    );
+    recordAudit(context, {
+        action,
+        outcome,
+        target_type: 'user',
+        target_id: userId,
+        metadata: role === undefined ? { tenantId, scope } : { role, tenantId, scope }
+    });
 };
 
 /**

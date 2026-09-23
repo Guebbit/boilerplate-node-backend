@@ -20,7 +20,7 @@ import { cooldownRemaining, resendTooSoon } from '../cooldown';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
 import type { CallerContext } from '@types';
 import type { EmailVerificationRequested } from '@types';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
 import { isUnrestrictedRole } from '@kernel/permissions';
 import { promoteVerifiedCustomer, rolesOf } from '@modules/access';
@@ -143,12 +143,10 @@ export const requestEmailVerification = (
     context: CallerContext
 ): Promise<void> =>
     sendVerificationEmail(user, context).then(() => {
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: accountAuditActions.AUTH_EMAIL_VERIFY_REQUESTED,
-                outcome: 'success'
-            })
-        );
+        recordAudit(context, {
+            action: accountAuditActions.AUTH_EMAIL_VERIFY_REQUESTED,
+            outcome: 'success'
+        });
     });
 
 /**
@@ -243,14 +241,12 @@ export const completeEmailVerification = (
         // stale `unverified` it replaces.
         promoteVerifiedCustomer(saved.id, DEPLOYMENT_TENANT_ID).then(() =>
             rolesOf(saved.id, DEPLOYMENT_TENANT_ID).then((roles) => {
-                emitAuditEvent(
-                    buildAuditEvent(context, {
-                        action: accountAuditActions.AUTH_EMAIL_VERIFY_COMPLETED,
-                        actor_user_id: saved.id,
-                        actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
-                        outcome: 'success'
-                    })
-                );
+                recordAudit(context, {
+                    action: accountAuditActions.AUTH_EMAIL_VERIFY_COMPLETED,
+                    actor_user_id: saved.id,
+                    actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
+                    outcome: 'success'
+                });
                 return saved;
             })
         )
@@ -290,14 +286,12 @@ export const completeEmailChange = (
                 .catch(() => undefined)
                 .then(() =>
                     rolesOf(saved.id, DEPLOYMENT_TENANT_ID).then((roles) => {
-                        emitAuditEvent(
-                            buildAuditEvent(context, {
-                                action: accountAuditActions.AUTH_EMAIL_CHANGE_COMPLETED,
-                                actor_user_id: saved.id,
-                                actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
-                                outcome: 'success'
-                            })
-                        );
+                        recordAudit(context, {
+                            action: accountAuditActions.AUTH_EMAIL_CHANGE_COMPLETED,
+                            actor_user_id: saved.id,
+                            actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
+                            outcome: 'success'
+                        });
                         return saved;
                     })
                 )

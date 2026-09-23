@@ -31,7 +31,7 @@ import { enqueueIfImagePending } from '@infrastructure/adapters/image.worker';
 import { emitDomainEvent } from '@kernel/events';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import type { AuditAction } from '@infrastructure/observability/audit';
 import { usersAnalyticsEvents } from './analytics';
 import { usersAuditActions } from './audit';
@@ -165,20 +165,18 @@ export const create = (
                 )
             )
             .then((user) => {
-                emitAuditEvent(
-                    buildAuditEvent(context, {
-                        action: usersAuditActions.ADMIN_USER_CREATED,
-                        outcome: 'success',
-                        target_type: 'user',
-                        target_id: String(user._id),
-                        // Recorded here, not by `account`'s domain-event handler: that handler has no
-                        // request to build a `CallerContext` from, only a `userId`, so the admin's
-                        // action is the only point in the flow with someone to attribute it to.
-                        ...(passwordProvided
-                            ? {}
-                            : { metadata: { sendSetupEmail: Boolean(data.sendSetupEmail) } })
-                    })
-                );
+                recordAudit(context, {
+                    action: usersAuditActions.ADMIN_USER_CREATED,
+                    outcome: 'success',
+                    target_type: 'user',
+                    target_id: String(user._id),
+                    // Recorded here, not by `account`'s domain-event handler: that handler has no
+                    // request to build a `CallerContext` from, only a `userId`, so the admin's
+                    // action is the only point in the flow with someone to attribute it to.
+                    ...(passwordProvided
+                        ? {}
+                        : { metadata: { sendSetupEmail: Boolean(data.sendSetupEmail) } })
+                });
                 emitAnalyticsEvent({
                     ...buildAnalyticsBase(context),
                     // The new user, not the admin who created it — the funnel counts who came into
@@ -366,14 +364,12 @@ export const updateById = (
 
         return update(user, data, context).then((result) => {
             if (result.success) {
-                emitAuditEvent(
-                    buildAuditEvent(context, {
-                        action: auditActionForUpdate(wasActive, data.active),
-                        outcome: 'success',
-                        target_type: 'user',
-                        target_id: id
-                    })
-                );
+                recordAudit(context, {
+                    action: auditActionForUpdate(wasActive, data.active),
+                    outcome: 'success',
+                    target_type: 'user',
+                    target_id: id
+                });
                 // Deactivation is a product event as well as an administrative one: it is what a
                 // churn dashboard counts, and it is invisible in a plain "updated" signal.
                 if (data.active === false)
@@ -485,14 +481,12 @@ export const adminDisableTwoFactor = (
         });
 
     return outcome.then((result) => {
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: usersAuditActions.ADMIN_USER_2FA_DISABLED,
-                target_type: 'user',
-                target_id: id,
-                outcome: result.success ? 'success' : 'failure'
-            })
-        );
+        recordAudit(context, {
+            action: usersAuditActions.ADMIN_USER_2FA_DISABLED,
+            target_type: 'user',
+            target_id: id,
+            outcome: result.success ? 'success' : 'failure'
+        });
         return result;
     });
 };

@@ -19,7 +19,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import type { CallerContext } from '@types';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import { t } from '@infrastructure/i18n';
 import { personalDataSections } from './personal-data-registry';
 import { accountAuditActions } from '../audit';
@@ -68,12 +68,10 @@ export const exportOwnData = (
             entries.filter(([, value]) => value !== undefined)
         ) as Record<string, unknown>;
 
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: accountAuditActions.AUTH_DATA_EXPORTED,
-                outcome: 'success'
-            })
-        );
+        recordAudit(context, {
+            action: accountAuditActions.AUTH_DATA_EXPORTED,
+            outcome: 'success'
+        });
 
         return generateSuccess({ ...payload, exportedAt: new Date().toISOString() });
     });

@@ -23,7 +23,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { emitDomainEvent } from '@kernel/events';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import type { OrderDocument, OrderStatusOverride } from '../model';
 import { orderRepository } from '../repository';
 import { ORDER_STATUS_CHANGED } from '../events';
@@ -99,15 +99,13 @@ const applyOverride = (
 
         void emitDomainEvent(ORDER_STATUS_CHANGED, { orderId, from: observedFrom, to });
 
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: ordersAuditActions.ORDER_STATUS_OVERRIDDEN,
-                outcome: 'success',
-                target_type: 'order',
-                target_id: orderId,
-                metadata: { mode, from: observedFrom, to, reason }
-            })
-        );
+        recordAudit(context, {
+            action: ordersAuditActions.ORDER_STATUS_OVERRIDDEN,
+            outcome: 'success',
+            target_type: 'order',
+            target_id: orderId,
+            metadata: { mode, from: observedFrom, to, reason }
+        });
 
         return commit.then(() => updated);
     });

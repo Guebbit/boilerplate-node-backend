@@ -19,7 +19,7 @@ import {
 } from '@infrastructure/http/response';
 import type { PaymentStatus, AuthContext } from '@types';
 import type { CallerContext } from '@types';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import { paymentsAuditActions } from '../audit';
 import { resolvePaymentProvider } from '../providers';
 import { paymentRepository } from '../repository';
@@ -61,15 +61,12 @@ export const performRefund = (
                             `Payment for order ${orderId} marked refunded by hand (${payment.amount} ${payment.currency})`
                         );
                         // Stryker restore all
-                        if (context)
-                            emitAuditEvent(
-                                buildAuditEvent(context, {
-                                    action: paymentsAuditActions.ADMIN_PAYMENT_REFUNDED,
-                                    outcome: 'success',
-                                    target_type: 'order',
-                                    target_id: orderId
-                                })
-                            );
+                        recordAudit(context, {
+                            action: paymentsAuditActions.ADMIN_PAYMENT_REFUNDED,
+                            outcome: 'success',
+                            target_type: 'order',
+                            target_id: orderId
+                        });
                         return updated ?? payment;
                     });
 
@@ -95,15 +92,12 @@ export const performRefund = (
                         `Payment for order ${orderId} refunded (${payment.amount} ${payment.currency})`
                     );
                     // Stryker restore all
-                    if (context)
-                        emitAuditEvent(
-                            buildAuditEvent(context, {
-                                action: paymentsAuditActions.ADMIN_PAYMENT_REFUNDED,
-                                outcome: 'success',
-                                target_type: 'order',
-                                target_id: orderId
-                            })
-                        );
+                    recordAudit(context, {
+                        action: paymentsAuditActions.ADMIN_PAYMENT_REFUNDED,
+                        outcome: 'success',
+                        target_type: 'order',
+                        target_id: orderId
+                    });
                     return payment;
                 });
         });

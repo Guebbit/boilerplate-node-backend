@@ -16,7 +16,7 @@ import {
 } from '@infrastructure/http/response';
 import { PaymentMethod } from '@types';
 import { orderService, orderTotal, isPayable } from '@modules/orders';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import type { CallerContext } from '@types';
 import { defaultCurrency } from '../config';
@@ -105,15 +105,13 @@ export const recordOfflinePayment = (
                                     }
                                 ]);
 
-                            emitAuditEvent(
-                                buildAuditEvent(context, {
-                                    action: paymentsAuditActions.PAYMENT_RECORDED_OFFLINE,
-                                    outcome: 'success',
-                                    target_type: 'order',
-                                    target_id: orderId,
-                                    metadata: { method: input.method, reference: input.reference }
-                                })
-                            );
+                            recordAudit(context, {
+                                action: paymentsAuditActions.PAYMENT_RECORDED_OFFLINE,
+                                outcome: 'success',
+                                target_type: 'order',
+                                target_id: orderId,
+                                metadata: { method: input.method, reference: input.reference }
+                            });
                             emitAnalyticsEvent({
                                 ...buildAnalyticsBase(context),
                                 event: paymentsAnalyticsEvents.PAYMENT_RECORDED_OFFLINE,

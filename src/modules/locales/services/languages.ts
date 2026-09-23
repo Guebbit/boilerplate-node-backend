@@ -19,7 +19,7 @@ import type { LocaleDocument } from '../model';
 import { localeRepository } from '../repository';
 import { isKnownTenant } from '../tenants';
 import type { CallerContext } from '@types';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import { localeAuditActions } from '../audit';
 
 /** Not found, phrased the one way every route in this module phrases it. */
@@ -66,16 +66,13 @@ export const createLanguage = async (
         active: payload.active ?? true
     } as Partial<LocaleDocument>);
 
-    if (context)
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: localeAuditActions.ADMIN_LOCALE_CREATED,
-                outcome: 'success',
-                target_type: 'locale',
-                target_id: tag,
-                metadata: { active: language.active }
-            })
-        );
+    recordAudit(context, {
+        action: localeAuditActions.ADMIN_LOCALE_CREATED,
+        outcome: 'success',
+        target_type: 'locale',
+        target_id: tag,
+        metadata: { active: language.active }
+    });
 
     return generateSuccess(language, 201);
 };
@@ -106,19 +103,16 @@ export const updateLanguage = async (
 
     const saved = await localeRepository.save(language);
 
-    if (context)
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: localeAuditActions.ADMIN_LOCALE_UPDATED,
-                outcome: 'success',
-                target_type: 'locale',
-                target_id: tag,
-                // The visibility flag is the field worth having in the trail on its own: it is
-                // what makes a half-finished translation public, and the only edit here that
-                // changes what an anonymous caller can see.
-                metadata: { active: saved.active }
-            })
-        );
+    recordAudit(context, {
+        action: localeAuditActions.ADMIN_LOCALE_UPDATED,
+        outcome: 'success',
+        target_type: 'locale',
+        target_id: tag,
+        // The visibility flag is the field worth having in the trail on its own: it is
+        // what makes a half-finished translation public, and the only edit here that
+        // changes what an anonymous caller can see.
+        metadata: { active: saved.active }
+    });
 
     return generateSuccess(saved);
 };
@@ -146,16 +140,13 @@ export const deleteLanguage = async (
     const { entries: removedEntries, translations: removedTranslations } =
         await localeRepository.deleteLocaleCascade(language);
 
-    if (context)
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: localeAuditActions.ADMIN_LOCALE_DELETED,
-                outcome: 'success',
-                target_type: 'locale',
-                target_id: tag,
-                metadata: { removedEntries, removedTranslations }
-            })
-        );
+    recordAudit(context, {
+        action: localeAuditActions.ADMIN_LOCALE_DELETED,
+        outcome: 'success',
+        target_type: 'locale',
+        target_id: tag,
+        metadata: { removedEntries, removedTranslations }
+    });
 
     return generateSuccess({ removedEntries, removedTranslations });
 };

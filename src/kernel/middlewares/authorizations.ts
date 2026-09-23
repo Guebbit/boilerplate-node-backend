@@ -38,7 +38,7 @@ import { callerContextOf } from '@infrastructure/http/request';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import { apiKeyLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import {
-    emitAuditEvent,
+    recordAudit,
     coreAuditActions,
     buildAuditEvent
 } from '@infrastructure/observability/audit';
@@ -63,13 +63,11 @@ const auditRefusal = (
     request: Request,
     fields: Omit<Parameters<typeof buildAuditEvent>[1], 'outcome'>
 ): void =>
-    emitAuditEvent(
-        buildAuditEvent(callerContextOf(request), {
-            ...fields,
-            outcome: 'failure',
-            metadata: { route: request.path, method: request.method, ...fields.metadata }
-        })
-    );
+    recordAudit(callerContextOf(request), {
+        ...fields,
+        outcome: 'failure',
+        metadata: { route: request.path, method: request.method, ...fields.metadata }
+    });
 
 /**
  * Pull the bearer token out of the `Authorization` header, if any.

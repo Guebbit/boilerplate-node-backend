@@ -19,11 +19,7 @@ import type { Request, RequestHandler, Response } from 'express';
 import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import type { RateLimitInfo } from 'express-rate-limit';
 import { t } from '@infrastructure/i18n';
-import {
-    emitAuditEvent,
-    buildAuditEvent,
-    coreAuditActions
-} from '@infrastructure/observability/audit';
+import { recordAudit, coreAuditActions } from '@infrastructure/observability/audit';
 import { rateLimitStore } from '@infrastructure/http/middlewares/rate-limit-store';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -76,13 +72,11 @@ const refuse =
     (audit: boolean) =>
     (request: Request, response: Response): Response => {
         if (audit)
-            emitAuditEvent(
-                buildAuditEvent(callerContextOf(request), {
-                    action: coreAuditActions.SECURITY_RATE_LIMIT_HIT,
-                    outcome: 'failure',
-                    metadata: { route: request.path, method: request.method }
-                })
-            );
+            recordAudit(callerContextOf(request), {
+                action: coreAuditActions.SECURITY_RATE_LIMIT_HIT,
+                outcome: 'failure',
+                metadata: { route: request.path, method: request.method }
+            });
 
         /*
          * Every refusal, audited or not — `installSecurity` mounts these limiters before

@@ -17,11 +17,27 @@ setupTestDb();
  * The audit port is REPLACED, not spied on — `jest.spyOn` cannot redefine the non-configurable
  * getter a CommonJS namespace import exposes under swc. See `tests/support/ports.ts`.
  */
-jest.mock('@infrastructure/observability/audit', () => ({
-    __esModule: true,
-    ...jest.requireActual('@infrastructure/observability/audit'),
-    emitAuditEvent: jest.fn()
-}));
+jest.mock('@infrastructure/observability/audit', () => {
+    const actual = jest.requireActual<typeof import('@infrastructure/observability/audit')>(
+        '@infrastructure/observability/audit'
+    );
+    const emitAuditEvent = jest.fn();
+    return {
+        __esModule: true,
+        ...actual,
+        emitAuditEvent,
+        // `recordAudit` closes over its own module's real `emitAuditEvent`, immune to the
+        // override above — reroute it through the replacement so a spy on `emitAuditEvent` still
+        // sees every `recordAudit` call, exactly as it saw every direct one before.
+        recordAudit: (
+            context: Parameters<typeof actual.recordAudit>[0],
+            fields: Parameters<typeof actual.recordAudit>[1]
+        ) => {
+            if (!context) return;
+            emitAuditEvent(actual.buildAuditEvent(context, fields));
+        }
+    };
+});
 
 // Serializes the payload and checks for credential fields/values that must never leave the API.
 const assertNoCredentials = (payload: unknown) => {

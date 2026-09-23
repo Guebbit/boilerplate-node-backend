@@ -21,7 +21,7 @@ import { PAYMENT_SUCCEEDED, PAYMENT_FAILED } from '../events';
 import { inventoryService } from '@modules/inventory';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import { paymentsAnalyticsEvents } from '../analytics';
 import { paymentsAuditActions } from '../audit';
 import {
@@ -223,15 +223,13 @@ const reportAttempt = (
     const settled = result.success && result.data.status === 'succeeded';
     if (!settled && !declined) return result;
 
-    emitAuditEvent(
-        buildAuditEvent(context, {
-            action: settled
-                ? paymentsAuditActions.PAYMENT_CONFIRMED
-                : paymentsAuditActions.PAYMENT_FAILED,
-            outcome: settled ? 'success' : 'failure',
-            metadata: { payment_id: paymentId }
-        })
-    );
+    recordAudit(context, {
+        action: settled
+            ? paymentsAuditActions.PAYMENT_CONFIRMED
+            : paymentsAuditActions.PAYMENT_FAILED,
+        outcome: settled ? 'success' : 'failure',
+        metadata: { payment_id: paymentId }
+    });
     emitAnalyticsEvent({
         ...buildAnalyticsBase(context),
         event: settled

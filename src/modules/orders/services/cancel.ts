@@ -25,7 +25,7 @@ import { userService } from '@modules/users';
 import { emitDomainEvent } from '@kernel/events';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import { ordersAnalyticsEvents } from '../analytics';
 import { ordersAuditActions } from '../audit';
 import { ORDER_CANCELLED } from '../events';
@@ -138,15 +138,13 @@ export const cancelById = (
                     );
                 }
 
-                emitAuditEvent(
-                    buildAuditEvent(emitContext, {
-                        action: ordersAuditActions.ORDER_CANCELLED,
-                        outcome: 'success',
-                        target_type: 'order',
-                        target_id: String(order._id),
-                        ...(isSystemExpiry ? { actor_role: 'admin', actor_user_id: 'system' } : {})
-                    })
-                );
+                recordAudit(emitContext, {
+                    action: ordersAuditActions.ORDER_CANCELLED,
+                    outcome: 'success',
+                    target_type: 'order',
+                    target_id: String(order._id),
+                    ...(isSystemExpiry ? { actor_role: 'admin', actor_user_id: 'system' } : {})
+                });
                 emitAnalyticsEvent({
                     ...buildAnalyticsBase(emitContext),
                     event: isSystemExpiry

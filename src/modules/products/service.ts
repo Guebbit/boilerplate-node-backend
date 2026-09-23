@@ -35,7 +35,7 @@ import { enqueueIfImagePending } from '@infrastructure/adapters/image.worker';
 import { emitDomainEvent } from '@kernel/events';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import { productsAnalyticsEvents } from './analytics';
 import { productsAuditActions } from './audit';
 import { PRODUCT_DELETED, PRODUCT_CREATED, PRODUCT_DEACTIVATED } from './events';
@@ -279,14 +279,12 @@ export const create = (
             // Re-read right after our own create(); absent only if something hard-deleted it
             // within that same tick, which nothing in this flow does.
             const created = product!;
-            emitAuditEvent(
-                buildAuditEvent(context, {
-                    action: productsAuditActions.ADMIN_PRODUCT_CREATED,
-                    outcome: 'success',
-                    target_type: 'product',
-                    target_id: String(created._id)
-                })
-            );
+            recordAudit(context, {
+                action: productsAuditActions.ADMIN_PRODUCT_CREATED,
+                outcome: 'success',
+                target_type: 'product',
+                target_id: String(created._id)
+            });
             return enqueueIfPending(created);
         });
 
@@ -361,14 +359,12 @@ export const updateById = (
         const wasActive = product.active;
 
         return update(product, data).then((updated) => {
-            emitAuditEvent(
-                buildAuditEvent(context, {
-                    action: productsAuditActions.ADMIN_PRODUCT_UPDATED,
-                    outcome: 'success',
-                    target_type: 'product',
-                    target_id: id
-                })
-            );
+            recordAudit(context, {
+                action: productsAuditActions.ADMIN_PRODUCT_UPDATED,
+                outcome: 'success',
+                target_type: 'product',
+                target_id: id
+            });
 
             return (
                 wasActive !== false && updated.active === false

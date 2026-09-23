@@ -48,11 +48,27 @@ jest.mock('@infrastructure/adapters/logger', () => ({
  * getters, which `jest.spyOn` cannot redefine (masked by some transpile paths, not by Stryker's
  * sandbox). Mocking the module gives every consumer a plain, configurable `jest.fn()` instead.
  */
-jest.mock('@infrastructure/observability/audit', () => ({
-    __esModule: true,
-    ...jest.requireActual('@infrastructure/observability/audit'),
-    emitAuditEvent: jest.fn()
-}));
+jest.mock('@infrastructure/observability/audit', () => {
+    const actual = jest.requireActual<typeof import('@infrastructure/observability/audit')>(
+        '@infrastructure/observability/audit'
+    );
+    const emitAuditEvent = jest.fn();
+    return {
+        __esModule: true,
+        ...actual,
+        emitAuditEvent,
+        // `recordAudit` closes over its own module's real `emitAuditEvent`, immune to the
+        // override above — reroute it through the replacement so a spy on `emitAuditEvent` still
+        // sees every `recordAudit` call, exactly as it saw every direct one before.
+        recordAudit: (
+            context: Parameters<typeof actual.recordAudit>[0],
+            fields: Parameters<typeof actual.recordAudit>[1]
+        ) => {
+            if (!context) return;
+            emitAuditEvent(actual.buildAuditEvent(context, fields));
+        }
+    };
+});
 
 const mockTokenRemoveExpired = userService.tokenRemoveExpired as jest.MockedFunction<
     typeof userService.tokenRemoveExpired

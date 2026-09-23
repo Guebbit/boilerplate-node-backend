@@ -22,7 +22,7 @@ import { userService } from '@modules/users';
 import { emitDomainEvent } from '@kernel/events';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import { ordersAnalyticsEvents } from '../analytics';
 import { ordersAuditActions } from '../audit';
 import { ORDER_STATUS_CHANGED } from '../events';
@@ -113,14 +113,12 @@ export const getById = (
  * to call it can no longer also mean `webhooks` never hears about the order at all.
  */
 export const recordCreated = (order: OrderDocument, context: CallerContext): void => {
-    emitAuditEvent(
-        buildAuditEvent(context, {
-            action: ordersAuditActions.ORDER_CREATED,
-            outcome: 'success',
-            target_type: 'order',
-            target_id: String(order._id)
-        })
-    );
+    recordAudit(context, {
+        action: ordersAuditActions.ORDER_CREATED,
+        outcome: 'success',
+        target_type: 'order',
+        target_id: String(order._id)
+    });
     emitAnalyticsEvent({
         ...buildAnalyticsBase(context),
         event: ordersAnalyticsEvents.ORDER_CREATED,
@@ -381,14 +379,12 @@ export const updateById = (
 
         return update(order, data).then((result) => {
             if (result.success)
-                emitAuditEvent(
-                    buildAuditEvent(context, {
-                        action: ordersAuditActions.ORDER_UPDATED,
-                        outcome: 'success',
-                        target_type: 'order',
-                        target_id: id
-                    })
-                );
+                recordAudit(context, {
+                    action: ordersAuditActions.ORDER_UPDATED,
+                    outcome: 'success',
+                    target_type: 'order',
+                    target_id: id
+                });
             return result;
         });
     });

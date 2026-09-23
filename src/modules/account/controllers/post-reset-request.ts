@@ -10,7 +10,7 @@ import { RequestPasswordResetBody } from '@api/schemas.zod';
 import { accountService } from '../services';
 import { successResponse } from '@infrastructure/http/response';
 import type { PasswordResetRequest } from '@types';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
 import { authPasswordResetTotal } from '../metrics';
 import { parseBody } from '@infrastructure/http/controller';
@@ -49,14 +49,12 @@ export const postResetRequest = (
             .then((sent) => {
                 authPasswordResetTotal.inc({ status: sent ? 'success' : 'failure' });
 
-                emitAuditEvent(
-                    buildAuditEvent(context, {
-                        action: accountAuditActions.AUTH_PASSWORD_RESET_REQUESTED,
-                        actor_user_id: 'anonymous',
-                        actor_role: 'anonymous',
-                        outcome: 'success'
-                    })
-                );
+                recordAudit(context, {
+                    action: accountAuditActions.AUTH_PASSWORD_RESET_REQUESTED,
+                    actor_user_id: 'anonymous',
+                    actor_role: 'anonymous',
+                    outcome: 'success'
+                });
 
                 successResponse(response, undefined, 200, t('account.reset.email-sent'));
             })

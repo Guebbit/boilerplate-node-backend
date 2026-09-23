@@ -21,7 +21,7 @@ import {
 } from '@infrastructure/http/response';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import type { CallerContext } from '@types';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import { localeAuditActions } from '../audit';
 import type { LocaleEntryDocument } from '../model';
 import { localeEntryRepository, localeRepository } from '../repository';
@@ -96,16 +96,13 @@ export const createEntry = async (
         value: payload.value
     });
 
-    if (context)
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: localeAuditActions.ADMIN_LOCALE_ENTRY_CREATED,
-                outcome: 'success',
-                target_type: 'locale_entry',
-                target_id: String(entry._id),
-                metadata: { locale: language.tag, tenant: payload.tenant, key: payload.key }
-            })
-        );
+    recordAudit(context, {
+        action: localeAuditActions.ADMIN_LOCALE_ENTRY_CREATED,
+        outcome: 'success',
+        target_type: 'locale_entry',
+        target_id: String(entry._id),
+        metadata: { locale: language.tag, tenant: payload.tenant, key: payload.key }
+    });
 
     return generateSuccess(entry, 201);
 };
@@ -128,19 +125,16 @@ export const updateEntry = async (
 
     const { entry: saved } = await localeEntryRepository.saveEntryValue(entry, payload.value);
 
-    if (context)
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: localeAuditActions.ADMIN_LOCALE_ENTRY_UPDATED,
-                outcome: 'success',
-                target_type: 'locale_entry',
-                target_id: entryId,
-                // The key, not the new text. An audit trail records that the Spanish product
-                // title changed and who changed it; storing the copy itself would make the trail
-                // a second, unmanaged copy of the dictionary.
-                metadata: { locale: tag, key: saved.key }
-            })
-        );
+    recordAudit(context, {
+        action: localeAuditActions.ADMIN_LOCALE_ENTRY_UPDATED,
+        outcome: 'success',
+        target_type: 'locale_entry',
+        target_id: entryId,
+        // The key, not the new text. An audit trail records that the Spanish product
+        // title changed and who changed it; storing the copy itself would make the trail
+        // a second, unmanaged copy of the dictionary.
+        metadata: { locale: tag, key: saved.key }
+    });
 
     return generateSuccess(saved);
 };
@@ -162,16 +156,13 @@ export const deleteEntry = async (
     const { key } = entry;
     await localeEntryRepository.removeEntry(entry);
 
-    if (context)
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: localeAuditActions.ADMIN_LOCALE_ENTRY_DELETED,
-                outcome: 'success',
-                target_type: 'locale_entry',
-                target_id: entryId,
-                metadata: { locale: tag, key }
-            })
-        );
+    recordAudit(context, {
+        action: localeAuditActions.ADMIN_LOCALE_ENTRY_DELETED,
+        outcome: 'success',
+        target_type: 'locale_entry',
+        target_id: entryId,
+        metadata: { locale: tag, key }
+    });
 
     return generateSuccess({ key });
 };
@@ -234,20 +225,17 @@ export const importEntries = async (
         { replace: mode === 'replace' }
     );
 
-    if (context)
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: localeAuditActions.ADMIN_LOCALE_ENTRY_IMPORTED,
-                outcome: 'success',
-                target_type: 'locale',
-                target_id: language.tag,
-                // `mode` is the field that makes this record worth keeping: a replace that
-                // removed three hundred keys and a merge that added two are the same action name
-                // and very different events. `tenant` says whose dictionary it happened to, which
-                // the counts alone cannot.
-                metadata: { mode, tenant, ...counts, revision }
-            })
-        );
+    recordAudit(context, {
+        action: localeAuditActions.ADMIN_LOCALE_ENTRY_IMPORTED,
+        outcome: 'success',
+        target_type: 'locale',
+        target_id: language.tag,
+        // `mode` is the field that makes this record worth keeping: a replace that
+        // removed three hundred keys and a merge that added two are the same action name
+        // and very different events. `tenant` says whose dictionary it happened to, which
+        // the counts alone cannot.
+        metadata: { mode, tenant, ...counts, revision }
+    });
 
     return generateSuccess({ ...counts, revision });
 };

@@ -16,7 +16,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import type { CallerContext } from '@types';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
 import { getReuseDetectionWindowMilliseconds } from '../session/config';
 
@@ -68,12 +68,10 @@ export const adminTokenCleanup = (
     userService
         .tokenRemoveExpired(getReuseDetectionWindowMilliseconds())
         .then((removed) => {
-            emitAuditEvent(
-                buildAuditEvent(context, {
-                    action: accountAuditActions.AUTH_TOKEN_EXPIRED_CLEANUP,
-                    outcome: 'success'
-                })
-            );
+            recordAudit(context, {
+                action: accountAuditActions.AUTH_TOKEN_EXPIRED_CLEANUP,
+                outcome: 'success'
+            });
             return generateSuccess({ removed });
         })
         .catch((error: unknown) => {

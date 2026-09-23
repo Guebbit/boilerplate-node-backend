@@ -18,7 +18,7 @@ import {
 import type { ShippingMethodsResponse, Shipment, AuthContext } from '@types';
 import { OrderStatus } from '@types';
 import type { CallerContext } from '@types';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import { deliveryAuditActions } from './audit';
 import { orderService, canTransition, canOverrideTo } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
@@ -123,30 +123,6 @@ const notifyShipped = (
         logger.info(`Order ${orderId} shipped as ${shipment.trackingCode ?? '(untracked)'}`);
     });
 
-/** The shipped audit entry — {@link recordShipment}'s own audit step. */
-const auditShipped = (context: CallerContext, orderId: string): void => {
-    emitAuditEvent(
-        buildAuditEvent(context, {
-            action: deliveryAuditActions.ADMIN_ORDER_SHIPPED,
-            outcome: 'success',
-            target_type: 'order',
-            target_id: orderId
-        })
-    );
-};
-
-/** The delivered audit entry — {@link recordDelivery}'s own audit step. */
-const auditDelivered = (context: CallerContext, orderId: string): void => {
-    emitAuditEvent(
-        buildAuditEvent(context, {
-            action: deliveryAuditActions.ADMIN_ORDER_DELIVERED,
-            outcome: 'success',
-            target_type: 'order',
-            target_id: orderId
-        })
-    );
-};
-
 /**
  * Record a parcel's handover to the carrier — the shipping door. Writes the parcel FIRST, then
  * asks `orders` to move: an order that cannot legally reach `shipped` refuses before anything is
@@ -204,7 +180,12 @@ export const recordShipment = (
                     ]);
 
                 return notifyShipped(orderId, order, shipment).then(() => {
-                    auditShipped(context, orderId);
+                    recordAudit(context, {
+                        action: deliveryAuditActions.ADMIN_ORDER_SHIPPED,
+                        outcome: 'success',
+                        target_type: 'order',
+                        target_id: orderId
+                    });
                     return generateSuccess(toShipmentResponse(shipment));
                 });
             });
@@ -246,7 +227,12 @@ const moveAndStampDelivered = (
             .then((updated) => {
                 if (!updated) return notShippedReject();
 
-                auditDelivered(context, orderId);
+                recordAudit(context, {
+                    action: deliveryAuditActions.ADMIN_ORDER_DELIVERED,
+                    outcome: 'success',
+                    target_type: 'order',
+                    target_id: orderId
+                });
                 return generateSuccess(toShipmentResponse(updated));
             });
     });

@@ -30,7 +30,7 @@ import { parseFormBoolean } from '@infrastructure/http/request';
 import type { CallerContext } from '@types';
 import { optionalBooleanSchema } from '@infrastructure/http/schemas';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
 import { rotateRefreshToken, TokenReuseError } from '../session/jwt';
@@ -63,13 +63,11 @@ export const tokenAdd = (
  */
 export const requestAccountDeletion = (user: UserDocument, context: CallerContext): Promise<void> =>
     tokenAdd(user, 'delete', 3_600_000).then((token) => {
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: accountAuditActions.AUTH_ACCOUNT_DELETE_REQUESTED,
-                actor_user_id: user.id,
-                outcome: 'success'
-            })
-        );
+        recordAudit(context, {
+            action: accountAuditActions.AUTH_ACCOUNT_DELETE_REQUESTED,
+            actor_user_id: user.id,
+            outcome: 'success'
+        });
 
         /*
          * The recipient's OWN language, the request's only as fallback. What reaches the queue is
@@ -184,7 +182,7 @@ export const requestAccountSetup = (user: UserDocument): Promise<void> =>
 /**
  * Revoke one of the caller's own sessions.
  *
- * `emitAuditEvent` only when a token actually matched — `deleteSession` reports the same 404 as
+ * `recordAudit` only when a token actually matched — `deleteSession` reports the same 404 as
  * an invented id for someone else's session or a stale one, and an audit row would misrepresent a
  * revoke that never happened.
  */
@@ -195,12 +193,10 @@ export const sessionRevoke = (
 ): Promise<{ modifiedCount: number }> =>
     userService.sessionRemove(userId, sessionId).then((result) => {
         if (result.modifiedCount > 0)
-            emitAuditEvent(
-                buildAuditEvent(context, {
-                    action: accountAuditActions.AUTH_SESSION_REVOKED,
-                    outcome: 'success'
-                })
-            );
+            recordAudit(context, {
+                action: accountAuditActions.AUTH_SESSION_REVOKED,
+                outcome: 'success'
+            });
         return result;
     });
 
@@ -215,12 +211,10 @@ export const logoutCurrentSession = (
     context: CallerContext
 ): Promise<void> =>
     (refreshToken ? userService.tokenRemoveByValue(refreshToken) : Promise.resolve()).then(() => {
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: accountAuditActions.AUTH_LOGGED_OUT,
-                outcome: 'success'
-            })
-        );
+        recordAudit(context, {
+            action: accountAuditActions.AUTH_LOGGED_OUT,
+            outcome: 'success'
+        });
         /*
          * This route authenticates by cookie alone, so there is no bearer to resolve and
          * `distinctId` falls back to 'anonymous'. Under Umami the visitor is still separated
@@ -264,41 +258,37 @@ export const refreshAccessToken = (
         : Promise.reject(new MissingRefreshTokenError())
     )
         .then((result) => {
-            emitAuditEvent(
-                buildAuditEvent(context, {
-                    action: accountAuditActions.AUTH_TOKEN_REFRESHED,
-                    outcome: 'success'
-                })
-            );
+            recordAudit(context, {
+                action: accountAuditActions.AUTH_TOKEN_REFRESHED,
+                outcome: 'success'
+            });
             return result;
         })
         .catch((error: unknown) => {
             const reuseDetected = error instanceof TokenReuseError;
 
-            emitAuditEvent(
-                buildAuditEvent(context, {
-                    action: reuseDetected
-                        ? accountAuditActions.AUTH_REFRESH_TOKEN_REUSE_DETECTED
-                        : accountAuditActions.AUTH_TOKEN_REFRESHED,
-                    // The reuse case DOES know whose account this was — carry the id, unlike the
-                    // ordinary failures below, which never got far enough to find out. `actor_role`
-                    // is left to its default (`anonymous`): this request never carried a verified
-                    // access token, so admin status isn't cheaply known, and getting it wrong would
-                    // misreport a fact the id alone already establishes precisely.
-                    actor_user_id: reuseDetected ? error.userId : 'anonymous',
-                    outcome: 'failure',
-                    ...(reuseDetected
-                        ? {}
-                        : {
-                              metadata: {
-                                  reason:
-                                      error instanceof MissingRefreshTokenError
-                                          ? 'missing_token'
-                                          : 'invalid_token'
-                              }
-                          })
-                })
-            );
+            recordAudit(context, {
+                action: reuseDetected
+                    ? accountAuditActions.AUTH_REFRESH_TOKEN_REUSE_DETECTED
+                    : accountAuditActions.AUTH_TOKEN_REFRESHED,
+                // The reuse case DOES know whose account this was — carry the id, unlike the
+                // ordinary failures below, which never got far enough to find out. `actor_role`
+                // is left to its default (`anonymous`): this request never carried a verified
+                // access token, so admin status isn't cheaply known, and getting it wrong would
+                // misreport a fact the id alone already establishes precisely.
+                actor_user_id: reuseDetected ? error.userId : 'anonymous',
+                outcome: 'failure',
+                ...(reuseDetected
+                    ? {}
+                    : {
+                          metadata: {
+                              reason:
+                                  error instanceof MissingRefreshTokenError
+                                      ? 'missing_token'
+                                      : 'invalid_token'
+                          }
+                      })
+            });
             throw error;
         });
 
@@ -494,26 +484,22 @@ export const signup = (
         // one that returns a document never saved — so it reads backwards here: true means NO
         // account was created. https://mongoosejs.com/docs/api/document.html#Document.prototype.isNew
         if (!result.success || result.data.isNew) {
-            emitAuditEvent(
-                buildAuditEvent(callerContext, {
-                    action: accountAuditActions.AUTH_SIGNED_UP,
-                    actor_user_id: 'anonymous',
-                    actor_role: 'anonymous',
-                    outcome: 'failure'
-                })
-            );
+            recordAudit(callerContext, {
+                action: accountAuditActions.AUTH_SIGNED_UP,
+                actor_user_id: 'anonymous',
+                actor_role: 'anonymous',
+                outcome: 'failure'
+            });
             return result;
         }
 
         const newUserId = result.data.id;
-        emitAuditEvent(
-            buildAuditEvent(callerContext, {
-                action: accountAuditActions.AUTH_SIGNED_UP,
-                actor_user_id: newUserId,
-                actor_role: 'user',
-                outcome: 'success'
-            })
-        );
+        recordAudit(callerContext, {
+            action: accountAuditActions.AUTH_SIGNED_UP,
+            actor_user_id: newUserId,
+            actor_role: 'user',
+            outcome: 'success'
+        });
         emitAnalyticsEvent({
             ...buildAnalyticsBase(callerContext),
             distinctId: newUserId,
@@ -594,12 +580,10 @@ export const tokenRemoveAll = (
         )
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error))
         .then((result) => {
-            emitAuditEvent(
-                buildAuditEvent(context, {
-                    action: accountAuditActions.AUTH_LOGGED_OUT_EVERYWHERE,
-                    outcome: 'success'
-                })
-            );
+            recordAudit(context, {
+                action: accountAuditActions.AUTH_LOGGED_OUT_EVERYWHERE,
+                outcome: 'success'
+            });
             // Same name as the single-session logout, told apart by `scope`: one funnel counts
             // logouts, and splitting it across two names would make every rate built on it wrong.
             emitAnalyticsEvent({
@@ -656,12 +640,10 @@ export const reauth = (
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 
     return outcome.then((result) => {
-        emitAuditEvent(
-            buildAuditEvent(context, {
-                action: accountAuditActions.AUTH_REAUTHENTICATED,
-                outcome: result.success ? 'success' : 'failure'
-            })
-        );
+        recordAudit(context, {
+            action: accountAuditActions.AUTH_REAUTHENTICATED,
+            outcome: result.success ? 'success' : 'failure'
+        });
         return result;
     });
 };

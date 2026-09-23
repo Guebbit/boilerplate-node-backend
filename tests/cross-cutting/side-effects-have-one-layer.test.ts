@@ -93,7 +93,7 @@ const label = (file: string): string => path.relative(MODULES_ROOT, file).split(
  */
 const EXPECTED_LAYER: Readonly<Record<string, Layer>> = {
     enqueueEmail: 'service',
-    emitAuditEvent: 'service',
+    recordAudit: 'service',
     emitAnalyticsEvent: 'service',
     emitDomainEvent: 'service'
 };
@@ -102,7 +102,7 @@ const EXPECTED_LAYER: Readonly<Record<string, Layer>> = {
  * The departures, each with the argument that earns it.
  *
  * Keyed `<marker> @ <module>/<path>` so one file cannot inherit another's excuse, and so an
- * exception for `emitAuditEvent` does not silently also permit `enqueueEmail`.
+ * exception for `recordAudit` does not silently also permit `enqueueEmail`.
  *
  * `session/login-observability.ts` carries the argument shared by two controllers
  * (`post-login.ts` and `post-login-2fa.ts`): a failed attempt has no user
@@ -112,11 +112,11 @@ const EXPECTED_LAYER: Readonly<Record<string, Layer>> = {
  * second one needed the identical tail.
  */
 const ALLOWED_ELSEWHERE: Readonly<Record<string, string>> = {
-    'emitAuditEvent @ account/session/login-observability.ts':
+    'recordAudit @ account/session/login-observability.ts':
         'Shared by every controller that completes or fails a login (POST /account/login, POST /account/login/2fa): a failed attempt has no user document to hand a service, and a success record must wait until a session actually exists, which only the controller layer knows.',
     'emitAnalyticsEvent @ account/session/login-observability.ts':
         'Same file, same constraint as the audit record above — the login event is reported for outcomes that never reach a service.',
-    'emitAuditEvent @ account/controllers/post-reset-request.ts':
+    'recordAudit @ account/controllers/post-reset-request.ts':
         'Fires unconditionally, whether or not the address belongs to an account, which is exactly what keeps the 200 identical either way and prevents user enumeration. A service reached only after a user is found cannot reproduce that.',
     'enqueueEmail @ account/two-factor/methods/email.ts':
         'A second-factor handler owns reaching the user through ITS OWN channel — the whole point of the registry is that `services/two-factor.ts` never learns that one method sends mail and another does not. Hoisting the send into the service would put back the `if (method === ...)` the registry exists to delete, and the SMS handler that follows would call a different adapter from the same place.'

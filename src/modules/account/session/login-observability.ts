@@ -9,7 +9,7 @@
  */
 
 import type { Request } from 'express';
-import { emitAuditEvent, buildAuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { callerContextOf } from '@infrastructure/http/request';
 import { accountAuditActions } from '../audit';
@@ -19,14 +19,12 @@ import { authLoginTotal } from '../metrics';
 /** Emit login failure observability (metrics + audit). */
 export const recordLoginFailure = (request: Request): void => {
     authLoginTotal.inc({ status: 'failure' });
-    emitAuditEvent(
-        buildAuditEvent(callerContextOf(request), {
-            action: accountAuditActions.AUTH_LOGIN,
-            actor_user_id: 'anonymous',
-            actor_role: 'anonymous',
-            outcome: 'failure'
-        })
-    );
+    recordAudit(callerContextOf(request), {
+        action: accountAuditActions.AUTH_LOGIN,
+        actor_user_id: 'anonymous',
+        actor_role: 'anonymous',
+        outcome: 'failure'
+    });
 };
 
 /**
@@ -44,15 +42,13 @@ export const recordLoginSuccess = (
     const role = requireUnrestricted ? 'admin' : 'user';
     const context = callerContextOf(request);
     authLoginTotal.inc({ status: 'success' });
-    emitAuditEvent(
-        buildAuditEvent(context, {
-            action: accountAuditActions.AUTH_LOGIN,
-            actor_user_id: userId,
-            actor_role: role,
-            outcome: 'success',
-            ...(metadata ? { metadata } : {})
-        })
-    );
+    recordAudit(context, {
+        action: accountAuditActions.AUTH_LOGIN,
+        actor_user_id: userId,
+        actor_role: role,
+        outcome: 'success',
+        ...(metadata ? { metadata } : {})
+    });
     emitAnalyticsEvent({
         ...buildAnalyticsBase(context),
         distinctId: userId,
