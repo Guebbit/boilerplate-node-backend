@@ -1,14 +1,15 @@
 /**
  * @module
  * The language rows — registering one, editing it, and removing it with everything under it. Also
- * the home of the rules the other files share: a language nobody has registered, and BOTH halves
- * of what an unknown tenant means — refused on a write, dropped on a read.
+ * the home of the rule the other files share: a language nobody has registered, and what an
+ * unknown tenant means on a write — refused, since it would store invisible copy. A read narrowed
+ * by an unknown tenant needs no such rule: filtering by an id nothing was ever written under
+ * already answers an empty page on its own.
  */
 
 import {
     LocaleDirection,
     type CreateLocaleRequest,
-    type LocaleTenant,
     type UpdateLocaleRequest
 } from '@types';
 import { getFallbackLocale, t } from '@infrastructure/i18n';
@@ -44,20 +45,6 @@ export const rejectUnknownTenant = (tenant: string): ResponseReject | undefined 
     isKnownTenant(tenant)
         ? undefined
         : generateReject(422, [t('locales.error-tenant-unknown', { tenant })]);
-
-/**
- * The same question asked by a READ: a tenant filter, with an unrecognised id dropped rather than
- * refused.
- *
- * Writes are strict ({@link rejectUnknownTenant}, 422) because a tenant nobody serves would store
- * invisible copy; reads are lenient because a bad filter should show every tenant, not an empty
- * screen that blames the data.
- *
- * @param tenant - whatever arrived on the query string, unvalidated
- * @returns the tenant to filter by, or `undefined` for "every tenant"
- */
-export const readableTenant = (tenant?: string): LocaleTenant | undefined =>
-    tenant && isKnownTenant(tenant) ? tenant : undefined;
 
 /**
  * Register a language in the dynamic tier.

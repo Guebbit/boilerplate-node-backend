@@ -26,13 +26,15 @@ import { localeAuditActions } from '../audit';
 import type { LocaleEntryDocument } from '../model';
 import { localeEntryRepository, localeRepository } from '../repository';
 import { findBatchCollision, findDuplicateKey, rejectUnusableKey } from './keys';
-import { languageNotFound, readableTenant, rejectUnknownTenant } from './languages';
+import { languageNotFound, rejectUnknownTenant } from './languages';
 
 /**
  * One page of a language's rows, for the editing screen.
  *
- * `tenant` goes through {@link readableTenant}, which drops an unknown id instead of refusing the
- * request — the lenient read half of the strict write policy in `rejectUnknownTenant`.
+ * `tenant` is passed to the repository as given, unresolved against `isKnownTenant` — a tenant
+ * nobody configured simply matches no row, the same empty page an id typo'd any other way would
+ * produce. A 422 here would reveal which tenants exist to a caller who guessed; refusing that is
+ * `rejectUnknownTenant`'s job, on the write path.
  */
 export const searchEntries = async (
     tag: string,
@@ -54,11 +56,7 @@ export const searchEntries = async (
      * already the total order that keeps a row off two pages.
      */
     return generateSuccess(
-        await localeEntryRepository.search(
-            { ...filters, tenant: readableTenant(filters.tenant) },
-            { locale: language.tag },
-            { key: 1 }
-        )
+        await localeEntryRepository.search(filters, { locale: language.tag }, { key: 1 })
     );
 };
 

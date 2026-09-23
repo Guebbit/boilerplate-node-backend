@@ -509,6 +509,32 @@ describe('GET /locales/:locale/entries', () => {
         expect(response.status).toBe(403);
         expect(response).toSatisfyApiSpec();
     });
+
+    it('answers an empty page for a tenant nobody configured, rather than every tenant', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+        await createEntry(bearer, 'pt', 'cart.title', 'Carrinho');
+
+        const response = await api()
+            .get('/locales/pt/entries?tenant=nobody')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items).toEqual([]);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('422s a tenant outside the id pattern, instead of dropping the filter', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+
+        const response = await api()
+            .get('/locales/pt/entries?tenant=Not Valid')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
 });
 
 describe('POST /locales/:locale/entries', () => {
