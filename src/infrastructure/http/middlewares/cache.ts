@@ -293,8 +293,162 @@ const armCacheWrite = (
 };
 
 /**
+ * Set every cache-control header this middleware owns, and decide whether the request is even a
+ * candidate for the Redis lookup {@link serveOrArm} does next.
+ *
+ * Two throws guard against a mounting mistake, not a runtime condition:
+ *   `noStore` already forbade caching. Left unchecked, the `Cache-Control` set below would
+ *     REPLACE that header rather than merge — exactly how `GET /account` once cached a caller's
+ *     profile for an hour behind a router-wide no-store mount.
+ *   `browserRevalidate` on a POST. RFC 9110 makes a POST response browser-cacheable only under
+ *     conditions nothing here meets, so there would be nothing for the browser to revalidate.
+ *
+ * `Cache-Control` itself: a cached POST (`POST /x/search`, keyed same as its GET twin) is a
+ * SERVER-side arrangement only — the wire always says `no-store` for it, since a shared cache
+ * holding a POST response could answer a later POST from it, including a real write on some
+ * other route. A cacheable GET gets `max-age`/`stale-*` (fixed constants — see their
+ * declarations above; a shared cache in front of this server is what absorbs a guest-scope
+ * stampede) or `no-cache` when the route asked for `browserRevalidate` instead.
+ *
+ * The two `Vary` headers: `Authorization`, because `getAuth` derives `authContext` from it alone
+ * — without this, a shared cache could serve one anonymous response back to an admin (same class
+ * of bug `GET /account` had). `Accept-Language`, because `attachLocale` already sets it and a
+ * route reaching this by another path should still declare it.
+ *
+ * @param request - decides GET vs POST framing and public/private scope
+ * @param response - headers are set on this response; `noStore` is read from it too
+ * @param options - the route's declared cache identity — see {@link CacheOptions}
+ * @param ttl - the resolved (possibly dev-clamped) TTL used to build `max-age`
+ * @returns whether this request is a GET — reused by {@link serveOrArm}
+ * @throws {Error} on either mounting mistake described above
+ */
+const applyCacheHeaders = (
+    request: Request,
+    response: Response,
+    options: CacheOptions,
+    ttl: number
+): boolean => {
+    if (response.locals.noStore)
+        throw new Error(
+            'setCache mounted on a route noStore already marked no-store. A route is either ' +
+                'cacheable or it is not — remove one of the two. See the comment on noStore ' +
+                'in this file.'
+        );
+
+    const cacheableRead = request.method === 'GET';
+    if (!cacheableRead && options.browserRevalidate)
+        throw new Error(
+            'browserRevalidate is GET-only: a POST response is not browser-cacheable, so ' +
+                'there is nothing for the browser to revalidate. See the comment in this file.'
+        );
+
+    const scope = request.authContext ? 'private' : 'public';
+    response.set(
+        'Cache-Control',
+        cacheableRead
+            ? options.browserRevalidate
+                ? `${scope}, no-cache`
+                : `${scope}, max-age=${ttl}, stale-while-revalidate=${STALE_WHILE_REVALIDATE_SECONDS}, stale-if-error=${STALE_IF_ERROR_SECONDS}`
+            : 'no-store'
+    );
+    response.vary('Authorization');
+    response.vary('Accept-Language');
+
+    return cacheableRead;
+};
+
+/**
+ * Serve a cached response straight from Redis, or arm this response to write itself in when it's
+ * answered — see {@link armCacheWrite}. The serve-or-arm decision `setCache` exists for.
+ *
+ * POST is served from Redis only when the route declared `keyAs` — the same declaration that
+ * unifies it with its GET twin. Without it a POST would key on `POST:/x/search` and quietly cache
+ * whatever the next POST route to mount `setCache` happened to be, including a write.
+ *
+ * @param request - only used to build the cache key
+ * @param response - served from directly on a HIT/STALE, or armed to write on a MISS/REFRESH
+ * @param next - called once a decision is made, or with the error on a Redis failure — `.catch`
+ *   below turns that into a normal `next(error)` rather than a hung request
+ * @param cacheableRead - from {@link applyCacheHeaders}: whether this is a GET
+ * @param ttl - the resolved TTL; `<= 0` skips Redis entirely
+ * @param sortedKeyParameters - `options.keyParameters`, pre-sorted once at route-registration time
+ * @param options - the route's key parameters, tags and cache identity — see {@link CacheOptions}
+ * @returns the pending Redis lookup, so a caller (a test, chiefly) can await the whole decision;
+ *   `undefined` on the synchronous not-cacheable / ttl<=0 exit
+ */
+const serveOrArm = (
+    request: Request,
+    response: Response,
+    next: NextFunction,
+    cacheableRead: boolean,
+    ttl: number,
+    sortedKeyParameters: readonly string[],
+    options: CacheOptions
+): Promise<void> | undefined => {
+    const servedFromCache = cacheableRead || options.keyAs !== undefined;
+    if (!servedFromCache || ttl <= 0) {
+        next();
+        return undefined;
+    }
+
+    // The grace window clamped to the resolved TTL: outside production `ttl` may already be
+    // clamped to seconds (see resolveCacheTtl), and a fixed 60s grace would hand back most of
+    // what that clamp just took — an out-of-band write could still serve a stale answer for
+    // nearly a minute after it landed.
+    const graceSeconds = Math.min(STALE_WHILE_REVALIDATE_SECONDS, ttl);
+
+    const cacheKey = getCacheKey(request, sortedKeyParameters, options.keyAs);
+    return getCacheValue(cacheKey)
+        .then((raw) => {
+            const cachedResponse = raw === undefined ? undefined : parseCachedResponse(raw);
+
+            // Nothing cached — hard-expired, invalidated, or never written. Same as today.
+            if (!cachedResponse) {
+                response.set('x-cache', 'MISS');
+                cacheRequestsTotal.inc({ result: 'miss' });
+                armCacheWrite(response, cacheKey, ttl, graceSeconds, options.tags);
+                next();
+                return;
+            }
+
+            // Fast path: still within the soft TTL.
+            if (Date.now() < cachedResponse.staleAt) {
+                response.set('x-cache', 'HIT');
+                cacheRequestsTotal.inc({ result: 'hit' });
+                response.status(cachedResponse.status).json(cachedResponse.body);
+                return;
+            }
+
+            // Past the soft TTL: exactly one caller, across every worker and replica, rebuilds —
+            // everyone else reads back their OWN key's stale body rather than wait. Nobody ever
+            // receives the rebuilder's response object, so this cannot leak across callers (see
+            // the trap note on getCacheScope above `armCacheWrite`'s docblock).
+            return claimCacheRefresh(cacheKey, graceSeconds).then((wonClaim) => {
+                if (!wonClaim) {
+                    response.set('x-cache', 'STALE');
+                    cacheRequestsTotal.inc({ result: 'stale' });
+                    response.status(cachedResponse.status).json(cachedResponse.body);
+                    return;
+                }
+
+                response.set('x-cache', 'REFRESH');
+                cacheRequestsTotal.inc({ result: 'refresh' });
+                armCacheWrite(response, cacheKey, ttl, graceSeconds, options.tags);
+                next();
+            });
+        })
+        // A Redis failure here — `getCacheValue` or `claimCacheRefresh` rejecting — must not
+        // hang the request: `next(error)` reaches the global handler exactly as an ordinary
+        // thrown error would, rather than leaving neither a response nor a next() call ever
+        // made.
+        .catch(next);
+};
+
+/**
  * Cache GET responses in Redis: serve a stored envelope on a hit, or run the controller and let
- * {@link armCacheWrite} store what it answers.
+ * {@link armCacheWrite} store what it answers. A thin sequence of the two steps this used to do
+ * inline — {@link applyCacheHeaders}, then {@link serveOrArm} — kept as one export because every
+ * route mounts them together, never one without the other.
  *
  * @param seconds - TTL for this route's entries; 0 (the default) disables caching entirely
  * @param options - the route's key parameters, tags and cache identity — see {@link CacheOptions}
@@ -306,130 +460,12 @@ export const setCache = (seconds = 0, options: CacheOptions) => {
     const sortedKeyParameters = options.keyParameters.toSorted();
 
     return (request: Request, response: Response, next: NextFunction) => {
-        // `noStore` already forbade caching on this response. Left unchecked, `response.set`
-        // below would REPLACE that header rather than merge — exactly how `GET /account` once
-        // cached a caller's profile for an hour behind a router-wide no-store mount. Failing
-        // here means the two middlewares can never again disagree on the wire.
-        if (response.locals.noStore)
-            throw new Error(
-                'setCache mounted on a route noStore already marked no-store. A route is either ' +
-                    'cacheable or it is not — remove one of the two. See the comment on noStore ' +
-                    'in this file.'
-            );
-
         // Outside production the TTL is clamped (see resolveCacheTtl) so writes that bypass the
-        // API cannot leave stale answers around for an hour — resolved before the header so
+        // API cannot leave stale answers around for an hour — resolved before the headers so
         // browsers are told the lifetime the server will actually honour.
         const ttl = resolveCacheTtl(seconds);
-
-        /*
-         * A cached POST is a SERVER-side arrangement only. `POST /x/search` is a read wearing a
-         * write's method, and Redis can key it from the declared allowlist below — but a browser
-         * or proxy cannot: RFC 9110 makes a POST response cacheable only under conditions nothing
-         * here meets, and a shared cache holding one could answer a LATER POST from it, including
-         * a real write on some other route. So the wire says `no-store` while the server caches
-         * anyway. `browserRevalidate` is refused here for the same reason: a route asking for both
-         * has a design error, not a header to tune.
-         */
-        const cacheableRead = request.method === 'GET';
-        if (!cacheableRead && options.browserRevalidate)
-            throw new Error(
-                'browserRevalidate is GET-only: a POST response is not browser-cacheable, so ' +
-                    'there is nothing for the browser to revalidate. See the comment in this file.'
-            );
-
-        // Keep browser/proxy cache headers aligned with the server-side Redis cache policy —
-        // unless the route asked for revalidation, which decouples the two on purpose. The two
-        // `stale-*` directives are advertised as fixed constants (see their declarations above),
-        // not the resolved/clamped `ttl` — a shared cache in front of this server is the one
-        // thing that can absorb a guest-scope stampede before it ever reaches Node.
-        const scope = request.authContext ? 'private' : 'public';
-        response.set(
-            'Cache-Control',
-            cacheableRead
-                ? options.browserRevalidate
-                    ? `${scope}, no-cache`
-                    : `${scope}, max-age=${ttl}, stale-while-revalidate=${STALE_WHILE_REVALIDATE_SECONDS}, stale-if-error=${STALE_IF_ERROR_SECONDS}`
-                : 'no-store'
-        );
-
-        // `Vary: Authorization` is the one header that decides the body: `getAuth` derives
-        // `authContext` from `Authorization` alone, never a cookie, so without this an anonymous
-        // response cached by a shared cache could be served back to an admin requesting the same
-        // URL — same failure as `GET /account` serving one user's profile to the next.
-        // `response.vary` appends, so CORS's `Vary: Origin` survives; an authenticated response
-        // keys on a rotating bearer token and so is effectively uncacheable, which is the point.
-        response.vary('Authorization');
-
-        // Same argument, second header: `attachLocale` already sets `Vary: Accept-Language`, and
-        // it is repeated here so a route reaching `setCache` by another path still declares it.
-        response.vary('Accept-Language');
-
-        /*
-         * POST is served from Redis only when the route declared `keyAs` — the same declaration
-         * that unifies it with its GET twin. Without it a POST would key on `POST:/x/search` and
-         * quietly cache whatever the next POST route to mount `setCache` happened to be,
-         * including a write.
-         */
-        const servedFromCache = cacheableRead || options.keyAs !== undefined;
-        if (!servedFromCache || ttl <= 0) {
-            next();
-            return;
-        }
-
-        // The grace window clamped to the resolved TTL: outside production `ttl` may already be
-        // clamped to seconds (see resolveCacheTtl), and a fixed 60s grace would hand back most of
-        // what that clamp just took — an out-of-band write could still serve a stale answer for
-        // nearly a minute after it landed.
-        const graceSeconds = Math.min(STALE_WHILE_REVALIDATE_SECONDS, ttl);
-
-        const cacheKey = getCacheKey(request, sortedKeyParameters, options.keyAs);
-        return (
-            getCacheValue(cacheKey)
-                .then((raw) => {
-                    const cachedResponse = raw === undefined ? undefined : parseCachedResponse(raw);
-
-                    // Nothing cached — hard-expired, invalidated, or never written. Same as today.
-                    if (!cachedResponse) {
-                        response.set('x-cache', 'MISS');
-                        cacheRequestsTotal.inc({ result: 'miss' });
-                        armCacheWrite(response, cacheKey, ttl, graceSeconds, options.tags);
-                        next();
-                        return;
-                    }
-
-                    // Fast path: still within the soft TTL.
-                    if (Date.now() < cachedResponse.staleAt) {
-                        response.set('x-cache', 'HIT');
-                        cacheRequestsTotal.inc({ result: 'hit' });
-                        response.status(cachedResponse.status).json(cachedResponse.body);
-                        return;
-                    }
-
-                    // Past the soft TTL: exactly one caller, across every worker and replica, rebuilds —
-                    // everyone else reads back their OWN key's stale body rather than wait. Nobody ever
-                    // receives the rebuilder's response object, so this cannot leak across callers (see
-                    // the trap note on getCacheScope above `armCacheWrite`'s docblock).
-                    return claimCacheRefresh(cacheKey, graceSeconds).then((wonClaim) => {
-                        if (!wonClaim) {
-                            response.set('x-cache', 'STALE');
-                            cacheRequestsTotal.inc({ result: 'stale' });
-                            response.status(cachedResponse.status).json(cachedResponse.body);
-                            return;
-                        }
-
-                        response.set('x-cache', 'REFRESH');
-                        cacheRequestsTotal.inc({ result: 'refresh' });
-                        armCacheWrite(response, cacheKey, ttl, graceSeconds, options.tags);
-                        next();
-                    });
-                })
-                // A Redis failure here — `getCacheValue` or `claimCacheRefresh` rejecting — must not
-                // hang the request: `next(error)` reaches the global handler exactly as an ordinary
-                // thrown error would, rather than leaving neither a response nor a next() call ever
-                // made.
-                .catch(next)
-        );
+        const cacheableRead = applyCacheHeaders(request, response, options, ttl);
+        return serveOrArm(request, response, next, cacheableRead, ttl, sortedKeyParameters, options);
     };
 };
 
