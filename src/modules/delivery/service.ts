@@ -124,6 +124,49 @@ const notifyShipped = (
     });
 
 /**
+ * Everything a successful parcel write unlocks: move the order to `shipped` — forced past the
+ * normal gate when `forced` says so — then, only once that move is confirmed, mail the carrier
+ * notification and record the admin action. The move is checked first because the parcel write is
+ * idempotent (unique on `orderId`) while this order move is the actually at-most-once step; a
+ * racing loser must not notify or audit a shipment the order itself never reached.
+ * @param orderId - the order being shipped
+ * @param order - the order read at the top of {@link recordShipment}, for the notification's own use
+ * @param shipment - the parcel just upserted
+ * @param context - the caller, for the audit entry
+ * @param forced - skip the normal `processing`-only gate; requires `orders.any.override` + `reason`
+ * @param reason - required exactly when `forced` is `true`, recorded on the order's override history
+ */
+const afterShipmentRecorded = (
+    orderId: string,
+    order: OrderDocument,
+    shipment: ShipmentDocument,
+    context: CallerContext,
+    forced: boolean | undefined,
+    reason: string | undefined
+): Promise<ResponseSuccess<Shipment> | ResponseReject> => {
+    const moveOrder = forced
+        ? orderService.forceMove(orderId, OrderStatus.shipped, reason!, context)
+        : orderService.markShipped(orderId);
+
+    return moveOrder.then((moved) => {
+        if (!moved)
+            return generateReject(409, [
+                { code: 'ORDER_NOT_PROCESSING', message: t('delivery.not-processing') }
+            ]);
+
+        return notifyShipped(orderId, order, shipment).then(() => {
+            recordAudit(context, {
+                action: deliveryAuditActions.ADMIN_ORDER_SHIPPED,
+                outcome: 'success',
+                target_type: 'order',
+                target_id: orderId
+            });
+            return generateSuccess(toShipmentResponse(shipment));
+        });
+    });
+};
+
+/**
  * Record a parcel's handover to the carrier — the shipping door. Writes the parcel FIRST, then
  * asks `orders` to move: an order that cannot legally reach `shipped` refuses before anything is
  * written, so a stray call never creates a parcel for an order that cannot ship. `forced` widens
@@ -166,30 +209,11 @@ export const recordShipment = (
                 }
             ]);
 
-        return shipmentRepository.upsertForOrder(orderId, trackingCode).then((shipment) => {
-            const moveOrder = forced
-                ? orderService.forceMove(orderId, OrderStatus.shipped, reason!, context)
-                : orderService.markShipped(orderId);
-
-            return moveOrder.then((moved) => {
-                // The parcel write above is idempotent (unique on orderId); this order's own
-                // move is what is actually at-most-once — a racing loser lands here.
-                if (!moved)
-                    return generateReject(409, [
-                        { code: 'ORDER_NOT_PROCESSING', message: t('delivery.not-processing') }
-                    ]);
-
-                return notifyShipped(orderId, order, shipment).then(() => {
-                    recordAudit(context, {
-                        action: deliveryAuditActions.ADMIN_ORDER_SHIPPED,
-                        outcome: 'success',
-                        target_type: 'order',
-                        target_id: orderId
-                    });
-                    return generateSuccess(toShipmentResponse(shipment));
-                });
-            });
-        });
+        return shipmentRepository
+            .upsertForOrder(orderId, trackingCode)
+            .then((shipment) =>
+                afterShipmentRecorded(orderId, order, shipment, context, forced, reason)
+            );
     });
 };
 
