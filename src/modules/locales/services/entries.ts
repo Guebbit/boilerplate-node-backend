@@ -28,6 +28,7 @@ import type { LocaleEntryDocument } from '../model';
 import { localeEntryRepository, localeRepository } from '../repository';
 import { findBatchCollision, findDuplicateKey, rejectUnusableKey } from './keys';
 import { languageNotFound, rejectUnknownTenant } from './languages';
+import { refreshOverlay } from './overlay';
 
 /**
  * One page of a language's rows, for the editing screen.
@@ -103,6 +104,8 @@ export const createEntry = async (
         metadata: { locale: language.tag, tenant: payload.tenant, key: payload.key }
     });
 
+    refreshOverlay();
+
     return generateSuccess(entry, 201);
 };
 
@@ -135,6 +138,8 @@ export const updateEntry = async (
         metadata: { locale: tag, key: saved.key }
     });
 
+    refreshOverlay();
+
     return generateSuccess(saved);
 };
 
@@ -162,6 +167,8 @@ export const deleteEntry = async (
         target_id: entryId,
         metadata: { locale: tag, key }
     });
+
+    refreshOverlay();
 
     return generateSuccess({ key });
 };
@@ -235,6 +242,8 @@ export const importEntries = async (
         // the counts alone cannot.
         metadata: { mode, tenant, ...counts, revision }
     });
+
+    refreshOverlay();
 
     return generateSuccess({ ...counts, revision });
 };

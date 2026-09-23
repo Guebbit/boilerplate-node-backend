@@ -23,19 +23,10 @@ import type {
     ReplaceLocaleEntriesRequest,
     UpdateLocaleEntryRequest
 } from '@types';
-import { refreshLocaleOverrides } from '@infrastructure/i18n';
 import { successResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { localeService } from '../services';
 import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
-
-/**
- * Re-read the API's own overrides after a write that may have changed them.
- * Fire-and-forget: makes the edit visible immediately on the worker that served the write,
- * others catch up on their next scheduled refresh. Called for frontend-tenant writes too,
- * even though those can't affect the overlay — cheaper than threading the tenant through.
- */
-const refreshOverrides = () => void refreshLocaleOverrides();
 
 /**
  * POST /locales/:locale/entries (admin)
@@ -52,8 +43,6 @@ export const createLocaleEntry = (
         .createEntry(request.params.locale, parseResult.data, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-
-            refreshOverrides();
 
             // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform: the
             // document is typed as stored, not as the wire shape `LocaleEntry` promises.
@@ -84,8 +73,6 @@ export const updateLocaleEntry = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            refreshOverrides();
-
             // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform.
             return successResponse<LocaleEntry>(response, result.data.toJSON() as LocaleEntry);
         })
@@ -104,8 +91,6 @@ const importEntries = (
         .importEntries(request.params.locale, tenant, entries, mode, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-
-            refreshOverrides();
 
             return successResponse<LocaleImportResult>(response, result.data);
         })

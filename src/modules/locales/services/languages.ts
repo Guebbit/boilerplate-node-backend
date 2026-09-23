@@ -21,6 +21,7 @@ import { isKnownTenant } from '../tenants';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { localeAuditActions } from '../audit';
+import { refreshOverlay } from './overlay';
 
 /** Not found, phrased the one way every route in this module phrases it. */
 export const languageNotFound = (): ResponseReject =>
@@ -147,6 +148,8 @@ export const deleteLanguage = async (
         target_id: tag,
         metadata: { removedEntries, removedTranslations }
     });
+
+    refreshOverlay();
 
     return generateSuccess({ removedEntries, removedTranslations });
 };
