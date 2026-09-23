@@ -15,6 +15,7 @@ import type { AuditLogDocument } from './model';
 import type { AuditEntryItem } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import { auditSinkFailuresTotal } from './metrics';
+import { readAll, MAX_CONFIGURED_PAGE_SIZE } from '@infrastructure/persistence/search';
 
 /**
  * Store an emitted audit entry. This is the {@link AuditSink} implementation that
@@ -55,10 +56,25 @@ const record = (entry: AuditEntry): void => {
  * Rejections propagate, unlike in {@link record}: this one is answering an admin's explicit
  * request for the data, so a failed read is a failed request rather than something to hide.
  */
-export const search = (
-    filters: AuditLogSearchFilters
-): Promise<PaginatedResult<AuditEntryItem>> =>
+export const search = (filters: AuditLogSearchFilters): Promise<PaginatedResult<AuditEntryItem>> =>
     auditLogRepository.search(filters, auditLogRepository.sinceScope(filters.since), AUDIT_SORT);
+
+/**
+ * Every audit entry recorded against this account, actor-only — for the account's own data
+ * export. An actor's own rows only: an export that read past the caller would be the exact leak
+ * Art. 15 exists to prevent. Unpaginated on purpose: an export is a one-time full answer, not a
+ * listing a client pages through.
+ *
+ * @param userId - the caller's own id
+ */
+export const findOwnAuditEntries = (userId: string): Promise<AuditEntryItem[]> =>
+    readAll(
+        (page) =>
+            search({ actor: userId, page, pageSize: MAX_CONFIGURED_PAGE_SIZE }).then(
+                (result) => result.items
+            ),
+        MAX_CONFIGURED_PAGE_SIZE
+    );
 
 /** The module's barrel export — `record` is registered as the audit sink, `search` serves the dashboard. */
 export const auditLogService = {

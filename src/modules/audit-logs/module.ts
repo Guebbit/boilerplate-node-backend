@@ -17,8 +17,7 @@
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { registerAuditSink } from '@infrastructure/observability/audit';
-import { readAll, MAX_CONFIGURED_PAGE_SIZE } from '@infrastructure/persistence/search';
-import { auditLogService, search } from './service';
+import { auditLogService, findOwnAuditEntries } from './service';
 import { router } from './routes';
 
 // Installs the persistence sink at import time — see the module header for why here, not app.ts.
@@ -33,18 +32,7 @@ export default {
     personalData: [
         {
             section: 'auditLog',
-            // The actor's own rows only — an export that read past the caller would be the exact
-            // leak Art. 15 exists to prevent.
-            collect: (subject) =>
-                readAll(
-                    (page) =>
-                        search({
-                            actor: subject.userId,
-                            page,
-                            pageSize: MAX_CONFIGURED_PAGE_SIZE
-                        }).then((result) => result.items),
-                    MAX_CONFIGURED_PAGE_SIZE
-                )
+            collect: (subject) => findOwnAuditEntries(subject.userId)
         }
     ],
     /**
