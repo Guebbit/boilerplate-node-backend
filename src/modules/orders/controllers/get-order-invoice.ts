@@ -18,8 +18,8 @@ import { catchAs } from '@infrastructure/http/controller';
  * GET /orders/:id/invoice — PDF invoice for the order; non-admin callers see only their own.
  */
 export const getOrderInvoice = (request: Request<{ id?: string }>, response: Response) => {
-    // 404 on an unusable id, and checked before the query for the reason `get-order-item.ts`
-    // spells out: the two role branches raise different error classes for it.
+    // 404 on an unusable id, checked before the query for the reason `get-order-item.ts` spells
+    // out: a malformed id would otherwise reject as a 422, not the 404 a lookup by id should give.
     if (!isValidObjectId(request.params.id)) {
         rejectResponse(response, 404, [t('orders.not-found')]);
         return;
@@ -33,12 +33,7 @@ export const getOrderInvoice = (request: Request<{ id?: string }>, response: Res
                 return undefined;
             }
 
-            /*
-             * `getById` is polymorphic by scope (see `findByIdScoped`): an admin gets a hydrated
-             * `OrderDocument` (`_id`), an owner gets the already-transformed `Order` wire shape
-             * (`id`, no `_id` at all) — `'_id' in order` is what tells the two apart.
-             */
-            const orderId = String('_id' in order ? order._id : order.id);
+            const orderId = String(order._id);
 
             return orderService.renderInvoicePdf(orderId).then((pdf) => {
                 // Hard-deleted between the read above and the render — vanishingly unlikely, but

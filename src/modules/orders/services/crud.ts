@@ -103,27 +103,18 @@ export const findOwnOrders = (userId: string): Promise<Order[]> =>
     );
 
 /**
- * Get a single order by ID.
- * Returns undefined if id is falsy or if not found.
- *
- * Overloaded the same way `orderRepository.findByIdScoped` is: no scope (or an explicitly
- * `undefined` one) always resolves a hydrated `OrderDocument`, since that is the only branch
- * `findByIdScoped` takes without one — a caller that never scopes this read keeps the narrower,
- * document-only type instead of handling a union member it can never actually receive.
+ * Get a single order by ID, restricted to a caller's own rows when `scope` narrows it — always
+ * the hydrated `OrderDocument`, whether or not `scope` is passed. Returns undefined if `id` is
+ * falsy or if not found.
+ * @param scope - optional extra filter (e.g. restrict to a specific userId)
  */
-export function getById(id: string | undefined): Promise<OrderDocument | undefined>;
-/** @param scope - Optional extra filter (e.g. restrict to a specific userId) */
-export function getById(
-    id: string | undefined,
-    scope: Record<string, unknown> | undefined
-): Promise<OrderDocument | Order | undefined>;
-export function getById(
+export const getById = (
     id: string | undefined,
     scope?: Record<string, unknown>
-): Promise<OrderDocument | Order | undefined> {
+): Promise<OrderDocument | undefined> => {
     if (!id) return Promise.resolve(undefined);
     return orderRepository.findByIdScoped(id, scope);
-}
+};
 
 /**
  * Report that an order was created — from the admin route or a customer's checkout

@@ -13,7 +13,7 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import type { Payment, AuthContext, Order } from '@types';
+import type { Payment, AuthContext } from '@types';
 import { orderService, isPayable } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { paymentRepository } from '../repository';
@@ -49,9 +49,7 @@ export const getForOrder = (
  */
 export const withActions = (
     payment: PaymentDocument,
-    // `orderService.getById`'s scoped overload: a hydrated document for an admin, the already
-    // wire-shaped `Order` for an owner — `pay` below only ever reads `.status`, present on both.
-    order: OrderDocument | Order | undefined,
+    order: OrderDocument | undefined,
     authContext?: AuthContext
 ): Payment => ({
     // `.toJSON()` applies the model's `_id` → `id` / date-to-ISO-string transform: the document

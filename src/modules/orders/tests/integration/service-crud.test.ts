@@ -9,7 +9,6 @@
  * the order.
  */
 
-import { asStub } from '@tests/stub';
 import { Types } from 'mongoose';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
@@ -227,31 +226,20 @@ describe('getById', () => {
         const found = await getById(String(order._id), { userId: user._id });
 
         expect(found).toBeDefined();
-        expect(asStub<{ id: string }>(found).id).toBe(String(order._id));
+        expect(String(found?._id)).toBe(String(order._id));
     });
 
-    /**
-     * DIVERGENCE, pinned not endorsed: unscoped `getById` returns a Mongoose document keyed by
-     * `_id`; scoped returns a transformed plain object keyed by `id`. `order.id` works both ways
-     * (a Mongoose virtual), so `_id` is the field that behaves differently depending on who asks.
-     */
-    it('returns a transformed plain object when scoped, and a document when not', async () => {
+    it('returns the same hydrated document whether or not the read is scoped', async () => {
         const { order, user } = await seedOrder();
 
-        const scoped = asStub<Record<string, unknown>>(
-            await getById(String(order._id), {
-                userId: user._id
-            })
-        );
-        const unscoped = asStub<Record<string, unknown>>(await getById(String(order._id)));
+        const scoped = await getById(String(order._id), { userId: user._id });
+        const unscoped = await getById(String(order._id));
 
-        expect(scoped._id).toBeUndefined();
-        expect(scoped.id).toBe(String(order._id));
-
-        expect(unscoped._id).toBeDefined();
-        // `id` is a Mongoose virtual, so it resolves on this branch too — which is why the
-        // divergence is easy to miss.
-        expect(String(unscoped.id)).toBe(String(order._id));
+        // `_id` present on both — a Mongoose document, not a scope-dependent wire shape.
+        expect(String(scoped?._id)).toBe(String(order._id));
+        expect(String(unscoped?._id)).toBe(String(order._id));
+        expect(typeof scoped?.toJSON).toBe('function');
+        expect(typeof unscoped?.toJSON).toBe('function');
     });
 
     it('returns undefined when the scope does NOT match', async () => {
@@ -265,15 +253,19 @@ describe('getById', () => {
         expect(found).toBeUndefined();
     });
 
-    it('includes the computed totals when scoped', async () => {
-        // The scoped path goes through the aggregation, so it must not silently lose the
-        // computed fields the unscoped path provides.
+    it('serializes the same computed totals whether or not the read was scoped', async () => {
+        // `totalItems`/`totalQuantity`/`totalPrice` are derived at `toJSON()` time (never
+        // stored) — a scoped read must serialize to the identical totals an unscoped one does,
+        // now that both resolve the same hydrated document rather than one going through a
+        // separate aggregate-and-normalize path.
         const { order, user } = await seedOrder();
 
-        const found = await getById(String(order._id), { userId: user._id });
+        const scoped = await getById(String(order._id), { userId: user._id });
+        const unscoped = await getById(String(order._id));
 
         // 2 lines, 3 units, 2×25 + 1×10 = 60.
-        expect(found).toMatchObject({ totalItems: 2, totalQuantity: 3, totalPrice: 60 });
+        expect(scoped?.toJSON()).toMatchObject({ totalItems: 2, totalQuantity: 3, totalPrice: 60 });
+        expect(unscoped?.toJSON()).toMatchObject({ totalItems: 2, totalQuantity: 3, totalPrice: 60 });
     });
 });
 

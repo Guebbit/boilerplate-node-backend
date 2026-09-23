@@ -1,13 +1,11 @@
 /**
  * @module
  * `orderRepository` — inserts through the fixture builder, the raw `.aggregate()` passthrough
- * `orderService.search` is built on, and `findByIdScoped`'s two branches (unscoped/admin vs
- * scoped/owner). The aggregate cases pin that the repository does not reshape Mongo's pipeline
- * stages, so `$match`/`$count`/`$addFields`/pagination stay a deliberate design rather than an
- * untested assumption. `findByIdScoped` gets its own block below since its two branches resolve
- * structurally different values, and `id` is the only field both agree on.
+ * `orderService.search` is built on, and `findByIdScoped`. The aggregate cases pin that the
+ * repository does not reshape Mongo's pipeline stages, so `$match`/`$count`/`$addFields`/
+ * pagination stay a deliberate design rather than an untested assumption. `findByIdScoped` gets
+ * its own block below to pin that it always resolves the same hydrated shape, scoped or not.
  */
-import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
@@ -157,13 +155,13 @@ describe('orderRepository', () => {
     });
 
     /**
-     * `findByIdScoped` resolves structurally different values by scope — hydrated document
-     * (unscoped) vs already-transformed aggregate row (scoped) — so `id` is the only field both
-     * guarantee; `_id` type-checks but isn't reliably present. Pinned here because neither
-     * TypeScript nor a response-body assertion can catch the gap before serialization.
+     * `findByIdScoped` always resolves the same hydrated shape, scoped or not — a single
+     * `findOne({ _id, ...scope })`, never the aggregation pipeline `search` uses. Pinned here
+     * because neither TypeScript nor a response-body assertion (both shapes serialize the same
+     * `id`) can catch a regression back to two shapes before it reaches a caller.
      */
     describe('findByIdScoped', () => {
-        it('exposes a usable `id` on both the scoped and the unscoped branch', async () => {
+        it('resolves the same hydrated document whether or not the read is scoped', async () => {
             const user = await createUser();
             const product = await createProduct();
             const order = await createOrder(user, [toOrderItem(product, 1)]);
@@ -175,31 +173,17 @@ describe('orderRepository', () => {
                 orderRepository.ownerScope(String(user._id))
             );
 
-            // Not `toBeDefined()`: the failure this guards against is a value that stringifies
-            // to the literal 'undefined', which is defined enough to pass a laxer assertion.
-            expect(String(asStub<{ id?: unknown }>(asAdmin).id)).toBe(expected);
-            expect(String(asStub<{ id?: unknown }>(scopedToOwner).id)).toBe(expected);
-        });
-
-        it('drops `_id` on the scoped branch, which is why `id` is the field to read', async () => {
-            const user = await createUser();
-            const product = await createProduct();
-            const order = await createOrder(user, [toOrderItem(product, 1)]);
-
-            const scopedToOwner = await orderRepository.findByIdScoped(
-                String(order._id),
-                orderRepository.ownerScope(String(user._id))
-            );
-
-            // The serializer deletes `_id` after writing `id`. Asserted here rather than left
-            // implicit: it is the half of the contract that makes reading `_id` a silent,
-            // role-dependent bug instead of a loud one.
-            expect(scopedToOwner).toBeDefined();
-            expect(asStub<{ _id?: unknown }>(scopedToOwner)._id).toBeUndefined();
+            // `_id` present on both, not just `id` — the property only a hydrated document
+            // carries, and the one a wire-shaped row would have already dropped.
+            expect(asAdmin?._id.toString()).toBe(expected);
+            expect(scopedToOwner?._id.toString()).toBe(expected);
+            // `.toJSON` is a Mongoose document method — proof this is a real document, not a
+            // plain object shaped like one.
+            expect(typeof asAdmin?.toJSON).toBe('function');
+            expect(typeof scopedToOwner?.toJSON).toBe('function');
         });
 
         it('still refuses an order the scope does not cover', async () => {
-            // The polymorphism must not cost the authorization property the scope is there for.
             // Distinct emails, not the factory default: `users.email` is unique.
             const [owner, stranger] = await Promise.all([
                 createUser({ email: 'owner@example.com' }),

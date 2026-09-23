@@ -61,7 +61,7 @@ describe('order serialization', () => {
         expect(raw._id).toBeUndefined();
     });
 
-    it('normalizes a scoped aggregate lookup (getById with scope) the same way', async () => {
+    it('resolves the hydrated document for a scoped getById, same as unscoped', async () => {
         const user = await createUser();
         const product = await createProduct({ title: 'Scoped Product' });
         const order = await createOrder(user, [toOrderItem(product, 1)]);
@@ -69,10 +69,10 @@ describe('order serialization', () => {
         const found = await orderService.getById(order._id.toString(), {
             userId: user._id
         });
-        const raw = asStub<Record<string, unknown>>(found);
 
-        expect(raw.id).toBe(order._id.toString());
-        expect(raw._id).toBeUndefined();
+        expect(found?._id.toString()).toBe(order._id.toString());
+        // A real Mongoose document, not the wire shape `search`'s aggregate rows normalize to.
+        expect(typeof found?.toJSON).toBe('function');
     });
 });
 

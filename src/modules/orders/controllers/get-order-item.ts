@@ -16,10 +16,9 @@ import type { Order } from '@types';
  * GET /orders/:id — single order by path id; non-admin callers see only their own.
  *
  * The id is checked BEFORE the query, unlike other single-item reads that let the query fail and
- * map the error in `.catch`. Here the two role branches raise different error classes for the same
- * malformed id — `findById`'s `CastError` vs the scoped aggregate's `BSONError` (422) — so checking
- * post-query would make the status depend on who asked. Checking first keeps the answer at 404
- * regardless of role.
+ * map the error in `.catch`: a malformed id rejects with a `BSONError`, which `.catch`'s
+ * `databaseErrorInterpreter` reads as 422 — a shape complaint, not the 404 a lookup by id should
+ * give regardless of whether the id merely doesn't exist or was never well-formed to begin with.
  */
 export const getOrderItem = (
     request: Request<{ id?: string }>,

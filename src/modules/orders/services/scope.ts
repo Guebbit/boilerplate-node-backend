@@ -52,26 +52,15 @@ export const actorOf = (authContext?: AuthContext): OrderActor =>
 
 /**
  * The single-order response body: the order as it serializes, plus what this caller may do to
- * it — explicit because the two read branches return different shapes, and `actions` must ride
- * on the wire shape or the schema's transform drops it. `async` for `resolveCurrentImages`'s
- * `$in` lookup — the one thing here that isn't a synchronous transform.
- *
- * Takes `OrderDocument | Order`: an admin read (`findByIdScoped` with no scope) hands back a
- * hydrated document that still needs `.toJSON()`; an owner-scoped read has already gone through
- * `applyOrderTransform` and is `Order` already, with nothing left to call.
+ * it — `actions` must ride on the wire shape or the schema's transform drops it. `async` for
+ * `resolveCurrentImages`'s `$in` lookup — the one thing here that isn't a synchronous transform.
  * @returns the serialized order carrying its `actions` and each line's live `current` picture
  */
-export const withActions = (
-    order: OrderDocument | Order,
-    authContext?: AuthContext
-): Promise<Order> => {
-    /*
-     * One cast: `.toJSON()`'s return type is the schema's own `Document['toJSON']` overload, not
-     * this module's `Order` contract — the same reasoning `products/service.ts`'s `getById` cast
-     * uses. `'toJSON' in order` is what tells the hydrated branch from the already-wire one; only
-     * `OrderDocument` declares the method.
-     */
-    const serialized: Order = 'toJSON' in order ? (order.toJSON() as Order) : order;
+export const withActions = (order: OrderDocument, authContext?: AuthContext): Promise<Order> => {
+    // One cast: `.toJSON()`'s return type is the schema's own `Document['toJSON']` overload, not
+    // this module's `Order` contract — the same reasoning `products/service.ts`'s `getById` cast
+    // uses.
+    const serialized = order.toJSON() as Order;
 
     return resolveCurrentImages([serialized]).then(([resolved]) => ({
         ...resolved,

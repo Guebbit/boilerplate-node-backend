@@ -84,33 +84,23 @@ const search = async (
 };
 
 /**
- * Fetch one order, optionally restricted to a caller's own rows. Goes through the pipeline
- * rather than `findById` so the lookup and the authorization scope apply in the same query —
- * checking ownership after the read is how a scoped find becomes an information leak. The
- * return is polymorphic: unscoped (admin) resolves a hydrated Mongoose document, scoped (owner)
- * resolves the wire shape `applyOrderTransform` already produced — both serialize identically,
- * but only `id` resolves on both. The two overloads below say so: a call with no `scope` answers
- * `OrderDocument` alone, one that might pass a scope answers the honest union, so a caller reads
- * `_id` only where the type says it is actually there.
+ * Fetch one order, restricted to a caller's own rows when `scope` narrows it — one query,
+ * `findOne({ _id, ...scope })`, whether or not there's anything in `scope` to add: an empty
+ * object is a no-op filter addition, so the unscoped (admin) and scoped (owner) calls run the
+ * identical shape of query and always resolve the same hydrated Mongoose document. The scope
+ * rides in the SAME query as the id — checking ownership after the read is how a scoped find
+ * becomes an information leak. `async`, so a malformed `id`'s synchronous `toObjectId` throw
+ * becomes a rejection rather than an exception that bypasses a caller's `.catch()`, the same
+ * reasoning `search` above documents for `buildWhere`.
  */
-function findByIdScoped(id: string): Promise<OrderDocument | undefined>;
-function findByIdScoped(
+const findByIdScoped = async (
     id: string,
-    scope: Record<string, unknown> | undefined
-): Promise<OrderDocument | Order | undefined>;
-function findByIdScoped(
-    id: string,
-    scope?: Record<string, unknown>
-): Promise<OrderDocument | Order | undefined> {
-    if (!scope) return base.findById(id).then((order) => order ?? undefined);
-
-    return aggregate([{ $match: { _id: toObjectId(id), ...scope } }, { $limit: 1 }]).then(
-        (results) => {
-            const result = results.at(0);
-            return result ? base.normalize([result])[0] : undefined;
-        }
-    );
-}
+    scope: Record<string, unknown> = {}
+): Promise<OrderDocument | undefined> =>
+    orderModel
+        .findOne({ _id: toObjectId(id), ...scope })
+        .exec()
+        .then((order) => order ?? undefined);
 
 /**
  * Restrict a query to one user's own orders.
@@ -384,11 +374,10 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
         filters?: object,
         scope?: Record<string, unknown>
     ) => Promise<{ items: Order[]; meta: PaginatedMeta }>;
-    findByIdScoped: ((id: string) => Promise<OrderDocument | undefined>) &
-        ((
-            id: string,
-            scope: Record<string, unknown> | undefined
-        ) => Promise<OrderDocument | Order | undefined>);
+    findByIdScoped: (
+        id: string,
+        scope?: Record<string, unknown>
+    ) => Promise<OrderDocument | undefined>;
     ownerScope: (userId: string) => Record<string, unknown>;
     updateStatusIfIn: (
         id: string,

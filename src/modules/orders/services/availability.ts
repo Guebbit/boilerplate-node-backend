@@ -15,6 +15,7 @@ import { userService } from '@modules/users';
 import { orderRepository } from '../repository';
 import { productUnavailableCancelledEmail } from '../emails';
 import { cancelById } from './cancel';
+import type { OrderDocumentItem } from '../model';
 
 /** One line whose product a buyer could no longer actually get. */
 export interface UnavailableLine {
@@ -23,22 +24,10 @@ export interface UnavailableLine {
 }
 
 /**
- * One order line, read loosely enough to cover both shapes `unavailableLines` is ever handed: a
- * hydrated `OrderDocument`'s embedded `OrderDocumentItem` (`product._id`), or the already-wire
- * `Order` contract's `OrderItem` (`product.id`) — see `productIdOf`. Exported only because
- * `unavailableLines`'s parameter type names it — never meant as a general-purpose type.
+ * The embedded product's id — always the snapshot's own `_id`; `findByIdScoped` hands back a
+ * hydrated document whether or not the read was scoped.
  */
-export interface OrderLineSource {
-    product: { id?: unknown; _id?: unknown; title: string };
-}
-
-/**
- * The embedded product's id, read off whichever spelling this order's shape carries — a hydrated
- * (admin/unscoped) read keeps the raw `_id`, but a SCOPED read (`findByIdScoped`'s aggregate
- * branch) has already gone through `applyOrderTransform`, which rewrites it to `id`. The exact
- * two-shapes trap `cart/services/reorder.ts`'s own docblock names for the same reason.
- */
-const productIdOf = (item: OrderLineSource): string => String(item.product.id ?? item.product._id);
+const productIdOf = (item: OrderDocumentItem): string => String(item.product._id);
 
 /**
  * Which of this order's lines point at a product that is no longer sellable — hard-deleted,
@@ -50,7 +39,7 @@ const productIdOf = (item: OrderLineSource): string => String(item.product.id ??
  * @returns the unavailable lines, empty when every line is still sellable
  */
 export const unavailableLines = (order: {
-    items: readonly OrderLineSource[];
+    items: readonly OrderDocumentItem[];
 }): Promise<UnavailableLine[]> => {
     const productIds = order.items.map((item) => productIdOf(item));
 

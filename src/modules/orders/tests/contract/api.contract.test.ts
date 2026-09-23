@@ -139,8 +139,10 @@ describe('GET /orders', () => {
 });
 
 describe('GET /orders/{id}', () => {
-    // The unscoped path uses findById and the scoped path uses an aggregate — two routes into
-    // the same transform, so both are asserted against the contract.
+    // Both roles resolve through the identical `findByIdScoped` query now (an empty scope for
+    // the unrestricted caller is a no-op filter addition) — asserted against the contract
+    // separately anyway, since the AUTHORIZATION each role gets is still role-specific even
+    // though the query shape isn't.
     it('matches the contract on the unscoped path', async () => {
         const { bearer, user } = await authenticateAs('admin');
         const order = await seedOrderFor(user);
@@ -164,11 +166,11 @@ describe('GET /orders/{id}', () => {
     });
 
     /*
-     * One case per role: the two roles run different queries, and a malformed id can easily answer
-     * differently between them — the unscoped `findById` raises a Mongoose `CastError` mapped to 404,
-     * while the scoped aggregate's own coercion raises a `BSONError`, which the interpreter maps to
-     * 422 unless something upstream of it already turned the id away. Both need their own case, or
-     * a regression on either path alone has nothing to catch it.
+     * One case per role: both now run the identical query, but the controller's own
+     * `isValidObjectId` pre-check is what actually keeps a malformed id at 404 rather than the
+     * 422 `databaseErrorInterpreter` would otherwise give a `BSONError` — see `get-order-item.ts`.
+     * Both roles need their own case, or a regression that skips the pre-check on either route
+     * has nothing to catch it.
      */
     it.each([['admin'], ['user']] as const)(
         '404s on a malformed id for a %s caller',

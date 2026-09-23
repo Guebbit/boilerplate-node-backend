@@ -65,19 +65,10 @@ export const reorderIntoCart = (
         .then<ResponseSuccess<CartView> | ResponseReject>((order) => {
             if (!order) return generateReject(404, [t('cart.reorder.order-not-found')]);
 
-            /*
-             * Scoped reads come back as NORMALIZED aggregate output — the embedded snapshot's
-             * `_id` is already `id` — but the static type is still the document's. Read both
-             * spellings rather than cast to one: this is the exact two-shapes trap
-             * `orderService.getById` is known for, and a reader of either shape stays correct.
-             */
-            const requested = order.items.map((item) => {
-                const snapshot = item.product as { id?: unknown; _id?: unknown };
-                return {
-                    productId: String(snapshot.id ?? snapshot._id),
-                    quantity: item.quantity
-                };
-            });
+            const requested = order.items.map((item) => ({
+                productId: String(item.product._id),
+                quantity: item.quantity
+            }));
 
             return Promise.all(
                 requested.map(
