@@ -8,12 +8,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';
-
-/** One entry in the catalogue — a name a subscription may filter on, and its human description. */
-export interface WebhookEventCatalogueEntry {
-    name: string;
-    description?: string;
-}
+import type { WebhookEventCatalogueEntry } from '@types';
 
 /** The subset of an AsyncAPI document this module reads — just enough to list channel names. */
 interface AsyncApiChannelsDocument {

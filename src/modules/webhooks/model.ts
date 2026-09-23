@@ -12,6 +12,7 @@ import { model, Schema } from 'mongoose';
 import type { Document, Model, Types } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { environmentNumber } from '@infrastructure/runtime/environment';
+import { WebhookDeliveryStatus } from '@types';
 
 /**
  * One secret in a subscription's ring — see `./secrets` for encryption at rest and rotation.
@@ -158,7 +159,10 @@ export const webhookSubscriptionModel = model<
 >('WebhookSubscription', webhookSubscriptionSchema);
 
 /**
- * The states one delivery row moves through. See `./domain/backoff` for the retry ladder.
+ * One event's delivery to one subscription, updated in place across retries. `status` is
+ * `WebhookDeliveryStatus`, generated from `openapi.yaml`'s schema of the same name (`@types`); the
+ * states it moves through, in order, are `pending` → `in-flight` → `succeeded`/`exhausted`. See
+ * `./domain/backoff` for the retry ladder between attempts.
  *
  * `in-flight` is a LEASED claim — `repository.ts`'s `claimPending`/`claimForReplay` make it, with
  * `leaseToken`/`leaseExpiresAt` stamped in the same write, before a worker or a replay actually
@@ -169,9 +173,6 @@ export const webhookSubscriptionModel = model<
  * even under that design a failure belongs on an attempt, not on the delivery row — a future
  * per-attempt log would carry its own outcome enum rather than reviving this one.
  */
-export type WebhookDeliveryStatus = 'pending' | 'in-flight' | 'succeeded' | 'exhausted';
-
-/** One event's delivery to one subscription, updated in place across retries. */
 export interface WebhookDeliveryDocument extends Document {
     tenant: string;
     subscriptionId: Types.ObjectId;
@@ -241,9 +242,9 @@ export const webhookDeliverySchema = new Schema<WebhookDeliveryDocument, Webhook
         },
         status: {
             type: String,
-            enum: ['pending', 'in-flight', 'succeeded', 'exhausted'],
+            enum: Object.values(WebhookDeliveryStatus),
             required: true,
-            default: 'pending'
+            default: WebhookDeliveryStatus.pending
         },
         responseCode: {
             type: Number
