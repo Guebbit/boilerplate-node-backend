@@ -6,8 +6,8 @@
 
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { successResponse } from '@infrastructure/http/response';
+import { refused, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { userService } from '../service';
 
@@ -23,11 +23,8 @@ export const deleteUserTwoFactor = (request: Request<{ id: string }>, response: 
     return userService
         .adminDisableTwoFactor(id, callerContextOf(request))
         .then((result) => {
-            if (!result.success) {
-                rejectResponse(response, result.status, result.errors);
-                return;
-            }
+            if (refused(response, result)) return;
             successResponse(response, undefined, 200, t('users.two-factor-disabled'));
         })
-        .catch((error: unknown) => rejectDatabaseError(response, 'deleteUserTwoFactor', error));
+        .catch(catchAs(response, 'deleteUserTwoFactor'));
 };
