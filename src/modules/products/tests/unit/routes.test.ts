@@ -11,7 +11,8 @@ import {
     routerMiddleware,
     routeSignatures,
     optionsOf,
-    identityGuardIndex
+    identityGuardIndex,
+    chainOf
 } from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
@@ -25,10 +26,6 @@ jest.mock('@infrastructure/http/middlewares/upload', () =>
 );
 
 import { router } from '@modules/products/routes';
-
-/** The middleware chain mounted on one endpoint, by signature. */
-const chainOf = (signature: string) =>
-    routeTable(router).find(({ method, path }) => `${method} ${path}` === signature)!.chain;
 
 /** The catalogue's cache tag, stated once so a rename has one place to fail. */
 const TAG = 'products';
@@ -124,26 +121,26 @@ describe('product routes — caching', () => {
     it('caches the two catalogue listings under one key, keyed by the search parameters', () => {
         // `GET /` and `POST /search` are the same query behind two verbs, so they must share
         // `keyAs` — otherwise the same page is stored twice and invalidated once.
-        const listing = chainOf('GET /').find((entry) => entry.startsWith('setCache'));
-        const search = chainOf('POST /search').find((entry) => entry.startsWith('setCache'));
+        const listing = chainOf(router, 'GET /').find((entry) => entry.startsWith('setCache'));
+        const search = chainOf(router, 'POST /search').find((entry) => entry.startsWith('setCache'));
 
         expect(listing).toBe(search);
         expect(listing).toContain('setCache(3600');
-        expect(optionsOf(chainOf('GET /'), 'setCache')).toMatchObject({
+        expect(optionsOf(chainOf(router, 'GET /'), 'setCache')).toMatchObject({
             tags: [TAG],
             keyAs: `${TAG}:search`
         });
         // A cached listing keyed on nothing serves page 1 to every caller.
-        expect(optionsOf(chainOf('GET /'), 'setCache').keyParameters).not.toHaveLength(0);
+        expect(optionsOf(chainOf(router, 'GET /'), 'setCache').keyParameters).not.toHaveLength(0);
     });
 
     it.each(['GET /categories', 'GET /:id'])(
         '%s is cached under the catalogue tag',
         (signature) => {
-            const entry = chainOf(signature).find((each) => each.startsWith('setCache'));
+            const entry = chainOf(router, signature).find((each) => each.startsWith('setCache'));
 
             expect(entry).toContain('setCache(3600');
-            expect(optionsOf(chainOf(signature), 'setCache')).toMatchObject({ tags: [TAG] });
+            expect(optionsOf(chainOf(router, signature), 'setCache')).toMatchObject({ tags: [TAG] });
         }
     );
 
@@ -152,7 +149,7 @@ describe('product routes — caching', () => {
         (signature) => {
             // The tag has to be the one the readers above set. Asserting the literal rather than
             // a shared constant is deliberate: a rename must fail here, not follow along.
-            expect(chainOf(signature)).toContain(`invalidateCache([${TAG}])`);
+            expect(chainOf(router, signature)).toContain(`invalidateCache([${TAG}])`);
         }
     );
 });
@@ -161,7 +158,7 @@ describe('product routes — uploads and flags', () => {
     it.each(['POST /', 'PATCH /:id'])(
         '%s accepts the imageUpload field and validates what arrives',
         (signature) => {
-            const chain = chainOf(signature);
+            const chain = chainOf(router, signature);
 
             // The field name is a contract with the client: a rename here is a silently ignored
             // upload, since multer drops fields it was not told about.
@@ -176,8 +173,8 @@ describe('product routes — uploads and flags', () => {
     it('reaches the hard delete only through the flag route', () => {
         // `DELETE /:id` soft-deletes; the same handler hard-deletes only with the flag set. If the
         // flag moved onto the plain route, a normal delete would become unrecoverable.
-        expect(chainOf('DELETE /:id/hard')).toContain('routeFlag(hardDelete)');
-        expect(chainOf('DELETE /:id')).not.toContain('routeFlag(hardDelete)');
-        expect(chainOf('DELETE /')).not.toContain('routeFlag(hardDelete)');
+        expect(chainOf(router, 'DELETE /:id/hard')).toContain('routeFlag(hardDelete)');
+        expect(chainOf(router, 'DELETE /:id')).not.toContain('routeFlag(hardDelete)');
+        expect(chainOf(router, 'DELETE /')).not.toContain('routeFlag(hardDelete)');
     });
 });

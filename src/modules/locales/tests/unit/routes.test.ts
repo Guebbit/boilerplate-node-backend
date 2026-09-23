@@ -12,7 +12,8 @@ import {
     routeSignatures,
     guardsOn,
     optionsOf,
-    identityGuardIndex
+    identityGuardIndex,
+    chainOf
 } from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
@@ -20,10 +21,6 @@ jest.mock('@infrastructure/http/middlewares/cache', () =>
 );
 
 import { router } from '@modules/locales/routes';
-
-/** The middleware chain mounted on one endpoint, by signature. */
-const chainOf = (signature: string) =>
-    routeTable(router).find(({ method, path }) => `${method} ${path}` === signature)!.chain;
 
 /** The four reads any visitor may make. */
 const PUBLIC = ['GET /', 'GET /tenants', 'GET /:locale/messages', 'GET /:locale'];
@@ -110,10 +107,10 @@ describe('locale routes — authorization', () => {
 
 describe('locale routes — caching', () => {
     it.each(PUBLIC)('%s uses the one shared public cache', (signature) => {
-        const entry = chainOf(signature).find((each) => each.startsWith('setCache'));
+        const entry = chainOf(router, signature).find((each) => each.startsWith('setCache'));
 
         expect(entry).toContain('setCache(3600');
-        expect(optionsOf(chainOf(signature), 'setCache')).toMatchObject({ tags: ['locales'] });
+        expect(optionsOf(chainOf(router, signature), 'setCache')).toMatchObject({ tags: ['locales'] });
     });
 
     it('tells browsers to revalidate, so a translator sees their own save', () => {
@@ -121,7 +118,7 @@ describe('locale routes — caching', () => {
         // the editor's browser, so they reload and see the old string for up to an hour. That
         // reads as "saving is broken" to the one audience with no other way to tell.
         for (const signature of PUBLIC)
-            expect(optionsOf(chainOf(signature), 'setCache')).toMatchObject({
+            expect(optionsOf(chainOf(router, signature), 'setCache')).toMatchObject({
                 browserRevalidate: true
             });
     });
@@ -129,7 +126,7 @@ describe('locale routes — caching', () => {
     it.each(['GET /:locale/entries', ...TRANSLATIONS])('%s is left uncached', (signature) => {
         // `GET /:locale/entries` feeds the screen the writes are made from, and both translation
         // routes are the same kind of screen — a cached copy would show a stale save.
-        expect(chainOf(signature).some((each) => each.startsWith('setCache'))).toBe(false);
+        expect(chainOf(router, signature).some((each) => each.startsWith('setCache'))).toBe(false);
     });
 
     it.each(
@@ -139,11 +136,11 @@ describe('locale routes — caching', () => {
     )('%s invalidates the locales tag it just changed', (signature) => {
         // Every write changes what every visitor reads, and the tag reaches shared Redis, so
         // one call covers every app instance.
-        expect(chainOf(signature)).toContain('invalidateCache([locales])');
+        expect(chainOf(router, signature)).toContain('invalidateCache([locales])');
     });
 
     it('does not invalidate the locales tag — its own cache tag is registry-declared, cleared inside the service', () => {
         for (const signature of TRANSLATIONS)
-            expect(chainOf(signature)).not.toContain('invalidateCache([locales])');
+            expect(chainOf(router, signature)).not.toContain('invalidateCache([locales])');
     });
 });

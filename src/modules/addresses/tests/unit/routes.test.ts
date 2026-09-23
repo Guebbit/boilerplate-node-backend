@@ -6,17 +6,13 @@
  * ever public or admin-only.
  */
 
-import { routeTable, routeSignatures, routerMiddleware, guardsOn } from '@tests/routes';
+import { routeTable, routeSignatures, routerMiddleware, guardsOn, chainOf } from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
 );
 
 import { router } from '@modules/addresses/routes';
-
-/** The middleware chain mounted on one endpoint, by signature. */
-const chainOf = (signature: string) =>
-    routeTable(router).find(({ method, path }) => `${method} ${path}` === signature)!.chain;
 
 describe('addresses routes — what is mounted', () => {
     it('mounts exactly the documented endpoints, in the documented order', () => {
@@ -57,7 +53,7 @@ describe('addresses routes — authorization', () => {
 describe('addresses routes — no unexpected middleware', () => {
     it('carries no credential rate limiting — the global brake covers this module', () => {
         const limited = routeSignatures(router).filter((signature) =>
-            chainOf(signature).some((entry) => entry.startsWith('credentials-'))
+            chainOf(router, signature).some((entry) => entry.startsWith('credentials-'))
         );
 
         expect(limited).toEqual([]);
@@ -65,7 +61,7 @@ describe('addresses routes — no unexpected middleware', () => {
 
     it('caches nothing anywhere', () => {
         const cached = routeSignatures(router).filter((signature) =>
-            chainOf(signature).some((entry) => entry.startsWith('setCache'))
+            chainOf(router, signature).some((entry) => entry.startsWith('setCache'))
         );
 
         expect(cached).toEqual([]);

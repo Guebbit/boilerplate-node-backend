@@ -430,3 +430,13 @@ export const guardsOn = (router: Router, signature: string): string[] => {
 
     return [...row.applies, ...row.chain];
 };
+
+/**
+ * The middleware chain mounted on one endpoint, by signature.
+ *
+ * @param router - the module's Express router
+ * @param signature - the HTTP method and path, e.g. 'GET /addresses'
+ * @returns the middleware chain array for that endpoint
+ */
+export const chainOf = (router: Router, signature: string): string[] =>
+    routeTable(router).find(({ method, path }) => `${method} ${path}` === signature)!.chain;

@@ -7,7 +7,7 @@
  * the credential.
  */
 
-import { routeTable, routeSignatures, routerMiddleware, guardsOn } from '@tests/routes';
+import { routeTable, routeSignatures, routerMiddleware, guardsOn, chainOf } from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
@@ -20,10 +20,6 @@ jest.mock('@infrastructure/http/middlewares/upload', () =>
 );
 
 import { router } from '@modules/account/routes';
-
-/** The middleware chain mounted on one endpoint, by signature. */
-const chainOf = (signature: string) =>
-    routeTable(router).find(({ method, path }) => `${method} ${path}` === signature)!.chain;
 
 /** Routes whose credential is a token in the URL or a cookie, not an access token. */
 const TOKEN_BEARING = [
@@ -165,7 +161,7 @@ describe('account routes — authorization', () => {
 
 describe('account routes — credential rate limiting', () => {
     it.each(RATE_LIMITED)('%s carries ALL THREE credential budgets', (signature) => {
-        const limiters = chainOf(signature).filter((entry) => entry.startsWith('credentials-'));
+        const limiters = chainOf(router, signature).filter((entry) => entry.startsWith('credentials-'));
 
         // Identity, address AND address-block: each is keyed differently and defends an attack
         // the other two miss. Any one missing reads as protected and is not.
@@ -181,7 +177,7 @@ describe('account routes — credential rate limiting', () => {
         // Reversed, a flood of unauthenticated requests would each do the session work before
         // being refused.
         for (const signature of ['POST /password', 'POST /reauth', 'POST /verify-request']) {
-            const chain = chainOf(signature);
+            const chain = chainOf(router, signature);
 
             expect(chain.indexOf('credentials-identity')).toBeLessThan(chain.indexOf('isAuth'));
         }
@@ -193,7 +189,7 @@ describe('account routes — credential rate limiting', () => {
         const unexpected = routeSignatures(router).filter(
             (signature) =>
                 !RATE_LIMITED.includes(signature) &&
-                chainOf(signature).some((entry) => entry.startsWith('credentials-'))
+                chainOf(router, signature).some((entry) => entry.startsWith('credentials-'))
         );
 
         expect(unexpected).toEqual([]);
@@ -211,7 +207,7 @@ describe('account routes — signup and reset rate limiting', () => {
         ['POST /signup', ['signup-identity', 'signup-address', 'signup-block']],
         ['POST /reset', ['reset-identity', 'reset-address', 'reset-block']]
     ])('%s carries ALL THREE budgets, and no credentialLimiters', (signature, labels) => {
-        const chain = chainOf(signature);
+        const chain = chainOf(router, signature);
         const [prefix] = labels[0].split('-');
 
         expect(chain.filter((entry) => entry.startsWith(`${prefix}-`))).toEqual(labels);
@@ -224,7 +220,7 @@ describe('account routes — human-challenge gate (rung 3)', () => {
         ['POST /signup', 'signup-block'],
         ['POST /reset', 'reset-block']
     ])('%s carries humanChallengeGate, after its own rate-limit budget', (signature, lastLabel) => {
-        const chain = chainOf(signature);
+        const chain = chainOf(router, signature);
 
         expect(chain).toContain('humanChallengeGate');
         // A spent budget should not reach the gate at all — see rate-limits.ts's own reasoning
@@ -237,7 +233,7 @@ describe('account routes — human-challenge gate (rung 3)', () => {
             (signature) =>
                 signature !== 'POST /signup' &&
                 signature !== 'POST /reset' &&
-                chainOf(signature).includes('humanChallengeGate')
+                chainOf(router, signature).includes('humanChallengeGate')
         );
 
         expect(unexpected).toEqual([]);
@@ -256,19 +252,19 @@ describe('account routes — cache invalidation and uploads', () => {
     ])('%s clears both the users and account tags', (signature) => {
         // The same row is served as `/account` to its owner and `/users/:id` to an admin.
         // Clearing one tag leaves the other serving the profile as it was.
-        expect(chainOf(signature)).toContain('invalidateCache([users|account])');
+        expect(chainOf(router, signature)).toContain('invalidateCache([users|account])');
     });
 
     it('clears only the account tag when revoking every session', () => {
         // Sessions are not part of the admin user listing, so widening this would evict the whole
         // user directory on every logout-all.
-        expect(chainOf('POST /logout-all')).toContain('invalidateCache([account])');
+        expect(chainOf(router, 'POST /logout-all')).toContain('invalidateCache([account])');
     });
 
     it.each(['PUT /', 'POST /signup'])(
         '%s accepts the imageUpload field and validates what arrives',
         (signature) => {
-            const chain = chainOf(signature);
+            const chain = chainOf(router, signature);
 
             expect(chain).toContain('upload.single(imageUpload)');
             expect(chain).toContain('validateUploadedImages');
@@ -281,7 +277,7 @@ describe('account routes — cache invalidation and uploads', () => {
         // may mount `setCache`. This is the assertion that would have caught the regression the
         // header describes, at the router rather than at the header.
         const cached = routeSignatures(router).filter((signature) =>
-            chainOf(signature).some((entry) => entry.startsWith('setCache'))
+            chainOf(router, signature).some((entry) => entry.startsWith('setCache'))
         );
 
         expect(cached).toEqual([]);

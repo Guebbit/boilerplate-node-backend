@@ -12,7 +12,8 @@ import {
     routeSignatures,
     guardsOn,
     optionsOf,
-    identityGuardIndex
+    identityGuardIndex,
+    chainOf
 } from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
@@ -26,10 +27,6 @@ jest.mock('@infrastructure/http/middlewares/upload', () =>
 );
 
 import { router } from '@modules/users/routes';
-
-/** The middleware chain mounted on one endpoint, by signature. */
-const chainOf = (signature: string) =>
-    routeTable(router).find(({ method, path }) => `${method} ${path}` === signature)!.chain;
 
 /** Every documented endpoint on this router, in mount order. */
 const ALL = [
@@ -87,20 +84,20 @@ describe('user routes — authorization', () => {
 
 describe('user routes — caching and uploads', () => {
     it('caches the two listings under one shared key', () => {
-        const listing = chainOf('GET /').find((entry) => entry.startsWith('setCache'));
-        const search = chainOf('POST /search').find((entry) => entry.startsWith('setCache'));
+        const listing = chainOf(router, 'GET /').find((entry) => entry.startsWith('setCache'));
+        const search = chainOf(router, 'POST /search').find((entry) => entry.startsWith('setCache'));
 
         expect(listing).toBe(search);
         expect(listing).toContain('setCache(3600');
-        expect(optionsOf(chainOf('GET /'), 'setCache')).toMatchObject({
+        expect(optionsOf(chainOf(router, 'GET /'), 'setCache')).toMatchObject({
             tags: ['users'],
             keyAs: 'users:search'
         });
-        expect(optionsOf(chainOf('GET /'), 'setCache').keyParameters).not.toHaveLength(0);
+        expect(optionsOf(chainOf(router, 'GET /'), 'setCache').keyParameters).not.toHaveLength(0);
     });
 
     it('caches the single read under the users tag', () => {
-        expect(optionsOf(chainOf('GET /:id'), 'setCache')).toMatchObject({ tags: ['users'] });
+        expect(optionsOf(chainOf(router, 'GET /:id'), 'setCache')).toMatchObject({ tags: ['users'] });
     });
 
     it.each([
@@ -114,13 +111,13 @@ describe('user routes — caching and uploads', () => {
     ])('%s clears both the users and account tags', (signature) => {
         // Both, because the same row is served by two modules: `/users/:id` to an admin and
         // `/account` to its owner. Clearing one leaves the other serving the old profile.
-        expect(chainOf(signature)).toContain('invalidateCache([users|account])');
+        expect(chainOf(router, signature)).toContain('invalidateCache([users|account])');
     });
 
     it.each(['POST /', 'PUT /', 'PUT /:id'])(
         '%s accepts the imageUpload field and validates it',
         (signature) => {
-            const chain = chainOf(signature);
+            const chain = chainOf(router, signature);
 
             expect(chain).toContain('upload.single(imageUpload)');
             expect(chain).toContain('validateUploadedImages');
@@ -129,8 +126,8 @@ describe('user routes — caching and uploads', () => {
     );
 
     it('reaches the hard delete only through the flag route', () => {
-        expect(chainOf('DELETE /:id/hard')).toContain('routeFlag(hardDelete)');
-        expect(chainOf('DELETE /:id')).not.toContain('routeFlag(hardDelete)');
-        expect(chainOf('DELETE /')).not.toContain('routeFlag(hardDelete)');
+        expect(chainOf(router, 'DELETE /:id/hard')).toContain('routeFlag(hardDelete)');
+        expect(chainOf(router, 'DELETE /:id')).not.toContain('routeFlag(hardDelete)');
+        expect(chainOf(router, 'DELETE /')).not.toContain('routeFlag(hardDelete)');
     });
 });

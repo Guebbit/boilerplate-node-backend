@@ -13,7 +13,8 @@ import {
     routeSignatures,
     guardsOn,
     optionsOf,
-    identityGuardIndex
+    identityGuardIndex,
+    chainOf
 } from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
@@ -24,10 +25,6 @@ jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
 );
 
 import { router } from '@modules/feedback/routes';
-
-/** The middleware chain mounted on one endpoint, by signature. */
-const chainOf = (signature: string) =>
-    routeTable(router).find(({ method, path }) => `${method} ${path}` === signature)!.chain;
 
 describe('feedback routes — what is mounted', () => {
     it('mounts exactly the documented endpoints, in the documented order', () => {
@@ -82,17 +79,17 @@ describe('feedback routes — the positional guard', () => {
 
 describe('feedback routes — caching', () => {
     it('caches the admin listing and its DTO twin on one key, at the shorter TTL', () => {
-        const listing = chainOf('GET /').find((entry) => entry.startsWith('setCache'));
-        const search = chainOf('POST /search').find((entry) => entry.startsWith('setCache'));
+        const listing = chainOf(router, 'GET /').find((entry) => entry.startsWith('setCache'));
+        const search = chainOf(router, 'POST /search').find((entry) => entry.startsWith('setCache'));
 
         expect(listing).toBe(search);
         // 600, not the 3600 the catalogue uses: an operator queue is read while it changes.
         expect(listing).toContain('setCache(600');
-        expect(optionsOf(chainOf('GET /'), 'setCache')).toMatchObject({
+        expect(optionsOf(chainOf(router, 'GET /'), 'setCache')).toMatchObject({
             tags: ['feedback'],
             keyAs: 'feedback:search'
         });
-        expect(optionsOf(chainOf('GET /'), 'setCache').keyParameters).not.toHaveLength(0);
+        expect(optionsOf(chainOf(router, 'GET /'), 'setCache').keyParameters).not.toHaveLength(0);
     });
 
     it.each(['POST /contact', 'PUT /:id', 'DELETE /:id'])(
@@ -101,7 +98,7 @@ describe('feedback routes — caching', () => {
             // Every write invalidates: a visitor submitting adds a row to the operator's queue, an
             // operator changing a status changes what that queue shows, and deleting a row removes
             // one from it.
-            expect(chainOf(signature)).toContain('invalidateCache([feedback])');
+            expect(chainOf(router, signature)).toContain('invalidateCache([feedback])');
         }
     );
 });
@@ -111,7 +108,7 @@ describe('feedback routes — submission rate limiting', () => {
         // The whole point is that a spent budget costs no cache invalidation and no database
         // write — see `contactLimiters`' own docs for why this is a DIFFERENT set of limiters
         // from `credentialLimiters`. All THREE dimensions — address, identity, address-block.
-        const chain = chainOf('POST /contact');
+        const chain = chainOf(router, 'POST /contact');
         const limiters = chain.filter((entry) => entry.startsWith('submission'));
 
         expect(limiters).toEqual(['submissions', 'submission-identity', 'submission-block']);
@@ -125,7 +122,7 @@ describe('feedback routes — submission rate limiting', () => {
         const unexpected = routeSignatures(router).filter(
             (signature) =>
                 signature !== 'POST /contact' &&
-                chainOf(signature).some((entry) => entry.startsWith('submission'))
+                chainOf(router, signature).some((entry) => entry.startsWith('submission'))
         );
 
         expect(unexpected).toEqual([]);
@@ -134,7 +131,7 @@ describe('feedback routes — submission rate limiting', () => {
 
 describe('feedback routes — human-challenge gate (rung 3)', () => {
     it('carries humanChallengeGate on POST /contact, after contactLimiters', () => {
-        const chain = chainOf('POST /contact');
+        const chain = chainOf(router, 'POST /contact');
 
         expect(chain).toContain('humanChallengeGate');
         expect(chain.indexOf('humanChallengeGate')).toBeGreaterThan(
@@ -145,7 +142,7 @@ describe('feedback routes — human-challenge gate (rung 3)', () => {
     it('mounts the gate on no other route', () => {
         const unexpected = routeSignatures(router).filter(
             (signature) =>
-                signature !== 'POST /contact' && chainOf(signature).includes('humanChallengeGate')
+                signature !== 'POST /contact' && chainOf(router, signature).includes('humanChallengeGate')
         );
 
         expect(unexpected).toEqual([]);

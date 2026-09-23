@@ -7,17 +7,13 @@
  * declared the other way round, `DELETE /cart/all` becomes a product lookup for id "all".
  */
 
-import { routeTable, routeSignatures, guardsOn } from '@tests/routes';
+import { routeTable, routeSignatures, guardsOn, chainOf } from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
 );
 
 import { router } from '@modules/cart/routes';
-
-/** The middleware chain mounted on one endpoint, by signature. */
-const chainOf = (signature: string) =>
-    routeTable(router).find(({ method, path }) => `${method} ${path}` === signature)!.chain;
 
 const ALL = [
     'GET /summary',
@@ -71,14 +67,14 @@ describe('cart routes — caching', () => {
     it('clears orders and products at checkout, where both actually change', () => {
         // Checkout is the one cart route with effects outside the cart: it creates an order and
         // commits reserved stock. Nothing else here changes a cacheable resource.
-        expect(chainOf('POST /checkout')).toContain('invalidateCache([orders|products])');
+        expect(chainOf(router, 'POST /checkout')).toContain('invalidateCache([orders|products])');
     });
 
     it('caches nothing, because a cart is per-caller state', () => {
         // A shared cache keyed without the caller would serve one shopper's cart to another. The
         // absence is the invariant, so it is asserted rather than assumed.
         const cached = ALL.filter((signature) =>
-            chainOf(signature).some((entry) => entry.startsWith('setCache'))
+            chainOf(router, signature).some((entry) => entry.startsWith('setCache'))
         );
 
         expect(cached).toEqual([]);

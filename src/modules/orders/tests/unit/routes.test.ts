@@ -7,7 +7,7 @@
  * the one write they may make; its safety comes from the service's scoped conditional write, not
  * the router.
  */
-import { routeTable, routeSignatures, guardsOn, optionsOf } from '@tests/routes';
+import { routeTable, routeSignatures, guardsOn, optionsOf, chainOf } from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
@@ -20,10 +20,6 @@ jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
 );
 
 import { router } from '@modules/orders/routes';
-
-/** The middleware chain mounted on one endpoint, by signature. */
-const chainOf = (signature: string) =>
-    routeTable(router).find(({ method, path }) => `${method} ${path}` === signature)!.chain;
 
 describe('order routes — what is mounted', () => {
     it('mounts exactly the documented endpoints, in the documented order', () => {
@@ -104,29 +100,29 @@ describe('order routes — authorization', () => {
 
 describe('order routes — caching', () => {
     it('caches the two listings under one shared key', () => {
-        const listing = chainOf('GET /').find((entry) => entry.startsWith('setCache'));
-        const search = chainOf('POST /search').find((entry) => entry.startsWith('setCache'));
+        const listing = chainOf(router, 'GET /').find((entry) => entry.startsWith('setCache'));
+        const search = chainOf(router, 'POST /search').find((entry) => entry.startsWith('setCache'));
 
         expect(listing).toBe(search);
         expect(listing).toContain('setCache(3600');
-        expect(optionsOf(chainOf('GET /'), 'setCache')).toMatchObject({
+        expect(optionsOf(chainOf(router, 'GET /'), 'setCache')).toMatchObject({
             tags: ['orders'],
             keyAs: 'orders:search'
         });
-        expect(optionsOf(chainOf('GET /'), 'setCache').keyParameters).not.toHaveLength(0);
+        expect(optionsOf(chainOf(router, 'GET /'), 'setCache').keyParameters).not.toHaveLength(0);
     });
 
     it('GET /:id is cached under the orders tag', () => {
-        const entry = chainOf('GET /:id').find((each) => each.startsWith('setCache'));
+        const entry = chainOf(router, 'GET /:id').find((each) => each.startsWith('setCache'));
 
         expect(entry).toContain('setCache(3600');
-        expect(optionsOf(chainOf('GET /:id'), 'setCache')).toMatchObject({ tags: ['orders'] });
+        expect(optionsOf(chainOf(router, 'GET /:id'), 'setCache')).toMatchObject({ tags: ['orders'] });
     });
 
     // Not cached — every hit renders fresh, and there is no separate ready/pending status left to
     // invalidate a cache entry over.
     it('GET /:id/invoice carries no setCache', () => {
-        expect(chainOf('GET /:id/invoice').some((entry) => entry.startsWith('setCache'))).toBe(
+        expect(chainOf(router, 'GET /:id/invoice').some((entry) => entry.startsWith('setCache'))).toBe(
             false
         );
     });
@@ -135,8 +131,8 @@ describe('order routes — caching', () => {
         // Creating an order and cancelling one both change availability, so both must clear the
         // catalogue. A plain edit or delete does not touch stock — clearing `products` there
         // would be a needless cache stampede, and the asymmetry is deliberate.
-        expect(chainOf('POST /')).toContain('invalidateCache([orders|products])');
-        expect(chainOf('POST /:id/cancel')).toContain('invalidateCache([orders|products])');
+        expect(chainOf(router, 'POST /')).toContain('invalidateCache([orders|products])');
+        expect(chainOf(router, 'POST /:id/cancel')).toContain('invalidateCache([orders|products])');
 
         for (const signature of [
             'PUT /',
@@ -145,13 +141,13 @@ describe('order routes — caching', () => {
             'DELETE /:id',
             'DELETE /:id/hard'
         ])
-            expect(chainOf(signature)).toContain('invalidateCache([orders])');
+            expect(chainOf(router, signature)).toContain('invalidateCache([orders])');
     });
 
     it('reaches the hard delete only through the flag route', () => {
-        expect(chainOf('DELETE /:id/hard')).toContain('routeFlag(hardDelete)');
-        expect(chainOf('DELETE /:id')).not.toContain('routeFlag(hardDelete)');
-        expect(chainOf('DELETE /')).not.toContain('routeFlag(hardDelete)');
+        expect(chainOf(router, 'DELETE /:id/hard')).toContain('routeFlag(hardDelete)');
+        expect(chainOf(router, 'DELETE /:id')).not.toContain('routeFlag(hardDelete)');
+        expect(chainOf(router, 'DELETE /')).not.toContain('routeFlag(hardDelete)');
     });
 });
 
@@ -161,10 +157,10 @@ describe('order routes — invoice rate limiting', () => {
         // route alone needs a budget the rest of the router does not.
         const unexpected = routeSignatures(router).filter(
             (signature) =>
-                signature !== 'GET /:id/invoice' && chainOf(signature).includes('orders-invoice')
+                signature !== 'GET /:id/invoice' && chainOf(router, signature).includes('orders-invoice')
         );
 
-        expect(chainOf('GET /:id/invoice')).toContain('orders-invoice');
+        expect(chainOf(router, 'GET /:id/invoice')).toContain('orders-invoice');
         expect(unexpected).toEqual([]);
     });
 });
