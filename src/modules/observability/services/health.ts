@@ -1,0 +1,95 @@
+/**
+ * @module
+ * Builds the `GET /observability/health` payload — dependency state, telemetry sinks, process
+ * resources, and every lease-guarded job's last outcome. Kept beside this module's other services
+ * so the payload's shape lives with the readers it assembles, not in the controller that serves it.
+ */
+
+import type { ObservabilityHealth } from '@types';
+import os from 'node:os';
+import { resolveAnalyticsProvider } from '@infrastructure/observability/analytics';
+import { dependencyHealth, overallStatus } from './dependency-health';
+import { jobHealth } from './job-health';
+import { queueHealth } from './parked-jobs';
+import { processSnapshot } from './process-snapshot';
+
+/**
+ * Assembles the full readiness snapshot returned by `GET /observability/health`.
+ *
+ * `status` folds every backing service, so a deployment with Mongo up and Redis down reports
+ * `degraded` rather than `ok`. `telemetry` sits apart from `dependencies` and is NOT part of that
+ * fold: those are sinks this service writes to, and losing one costs visibility rather than
+ * capability — an unreachable Loki does not make a checkout fail. They are also configuration
+ * flags rather than probes, which is what the separate name says out loud.
+ */
+export const buildObservabilityHealth = (): Promise<ObservabilityHealth> =>
+    Promise.all([jobHealth(), queueHealth()]).then(([jobs, queues]) => {
+        const snapshot = processSnapshot();
+        const dependencies = dependencyHealth();
+        const analyticsProvider = resolveAnalyticsProvider();
+
+        return {
+            status: overallStatus(dependencies),
+            environment: process.env.NODE_ENV ?? 'development',
+            service: process.env.NODE_SERVICE_NAME ?? 'boilerplate-node-backend',
+            runtimeVersion: process.version,
+            uptimeSeconds: snapshot.uptimeSeconds,
+            /*
+             * One vocabulary for three unlike services, so the payload reads without a legend.
+             * Objects rather than bare strings: a per-dependency latency or last-error is the
+             * obvious next field, and this way adding one is additive.
+             */
+            dependencies: {
+                database: { status: dependencies.database },
+                cache: { status: dependencies.cache },
+                queue: { status: dependencies.queue }
+            },
+            /*
+             * Which telemetry sinks this deployment is wired to. Booleans read off the
+             * environment, never reachability — `telemetry` rather than `integrations`, since
+             * a name that reads like a health check invites this block to be mistaken for one.
+             */
+            telemetry: {
+                loki: Boolean(process.env.NODE_LOKI_HOST),
+                otel: Boolean(process.env.OTEL_EXPORTER_OTLP_ENDPOINT),
+                /*
+                 * Frontend observability: the origin a browser loads the Umami tracking
+                 * script from, plus the Faro collector. Declarative, and NOT the backend's
+                 * own analytics wiring — that is `analytics` below, which needs a website id
+                 * this origin says nothing about.
+                 */
+                umami: Boolean(process.env.NODE_UMAMI_HOST),
+                faro: Boolean(process.env.NODE_FARO_COLLECTOR_URL),
+                /*
+                 * Which backend receives product events, and whether it can actually deliver
+                 * them.
+                 *
+                 * The name alone is not enough: with three possible providers, `posthog:
+                 * false` cannot distinguish "PostHog is unconfigured" from "this deployment
+                 * uses Umami". `configured` closes that gap: a provider selected without its
+                 * credentials warns once and then discards every event for the life of the
+                 * process, and this endpoint's whole job is saying which part is missing.
+                 */
+                analytics: {
+                    provider: analyticsProvider.name,
+                    configured: analyticsProvider.configured()
+                }
+            },
+            /*
+             * Bytes, not megabytes, and the same four fields the SSE stream publishes — so a
+             * dashboard showing this card beside the live feed is comparing numbers rather
+             * than doing unit arithmetic to find out whether they agree.
+             */
+            memory: snapshot.memory,
+            system: {
+                platform: os.platform(),
+                cpuCount: os.cpus().length,
+                loadAvg: os.loadavg()
+            },
+            // Every lease-guarded job that has ever attempted to run — see `job-health.ts`.
+            jobs,
+            // Every worker queue's current dead-letter depth — see `parked-jobs.ts`.
+            queues,
+            timestamp: new Date().toISOString()
+        };
+    });
