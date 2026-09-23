@@ -21,8 +21,8 @@ import { callerContextOf } from '@infrastructure/http/request';
  * `pendingEmail` into `email`. Public deliberately, like `verify-confirm`: the token in the body
  * is the credential, not a login. Find then spend for the race — same reasoning as
  * `postVerifyConfirm`, see `services/tokens.ts`. A `'verify'` token is refused here — its
- * `EMAIL_VERIFY_TOKEN_TYPE` never matches `findLiveToken`'s `EMAIL_CHANGE_TOKEN_TYPE` filter — the
- * two prove different addresses and must not do each other's work.
+ * `EMAIL_VERIFY_TOKEN_TYPE` never matches `redeemLiveToken`'s `EMAIL_CHANGE_TOKEN_TYPE` filter —
+ * the two prove different addresses and must not do each other's work.
  */
 export const postEmailChangeConfirm = (
     request: Request<unknown, unknown, VerifyEmailConfirmRequest>,
@@ -36,37 +36,18 @@ export const postEmailChangeConfirm = (
 
     const { token } = parseResult.data;
 
-    /** Every refusal answers identically — see the note in `services/tokens.ts`. */
-    const refuse = () => {
-        authEmailChangeConfirmTotal.inc({ status: 'failure' });
-        rejectResponse(response, 422, [t('account.email-change.token-not-found')]);
-    };
-
     return accountService
-        .findLiveToken(EMAIL_CHANGE_TOKEN_TYPE, token)
+        .redeemLiveToken(EMAIL_CHANGE_TOKEN_TYPE, token)
         .then((user) => {
             if (!user) {
-                refuse();
+                authEmailChangeConfirmTotal.inc({ status: 'failure' });
+                rejectResponse(response, 422, [t('account.email-change.token-not-found')]);
                 return;
             }
 
-            return accountService.spendLiveToken(user, token).then((spentByThisRequest) => {
-                if (!spentByThisRequest) {
-                    refuse();
-                    return;
-                }
-
-                return accountService
-                    .completeEmailChange(user, callerContextOf(request))
-                    .then(() => {
-                        authEmailChangeConfirmTotal.inc({ status: 'success' });
-                        successResponse(
-                            response,
-                            undefined,
-                            200,
-                            t('account.email-change.success')
-                        );
-                    });
+            return accountService.completeEmailChange(user, callerContextOf(request)).then(() => {
+                authEmailChangeConfirmTotal.inc({ status: 'success' });
+                successResponse(response, undefined, 200, t('account.email-change.success'));
             });
         })
         .catch((error: unknown) => {

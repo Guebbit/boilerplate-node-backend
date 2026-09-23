@@ -254,6 +254,30 @@ describe('POST /account/reset-confirm', () => {
         expect(messages).toContain(itUsers.users['field-password-min']);
         expect(messages).not.toContain(itShared.validation['too-small-string']);
     });
+
+    /**
+     * The new password is checked BEFORE the token is spent — a typo must not burn the link. A
+     * weak-password attempt followed by a valid one on the SAME token proves the first attempt
+     * never touched it: if it had, the second attempt would see the token gone.
+     */
+    it('does not consume the reset token when the new password fails validation', async () => {
+        const user = await createUser({ email: 'reset-typo@example.com' });
+        await user.tokenAdd(TokenType.PASSWORD_RESET, 60 * 60 * 1000, 'a-fresh-reset-token');
+
+        const weakAttempt = await api().post('/account/reset-confirm').send({
+            token: 'a-fresh-reset-token',
+            password: WEAK_PASSWORD,
+            passwordConfirm: WEAK_PASSWORD
+        });
+        expect(weakAttempt.status).toBe(422);
+
+        const validAttempt = await api().post('/account/reset-confirm').send({
+            token: 'a-fresh-reset-token',
+            password: REPLACEMENT_PASSWORD,
+            passwordConfirm: REPLACEMENT_PASSWORD
+        });
+        expect(validAttempt.status).toBe(200);
+    });
 });
 
 describe('POST /account/password', () => {

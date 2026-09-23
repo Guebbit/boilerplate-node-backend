@@ -33,33 +33,21 @@ export const postVerifyConfirm = (
 
     const { token } = parseResult.data;
 
-    /** Every refusal answers identically — see the note in `services/tokens.ts`. */
-    const refuse = () => {
-        authEmailVerifyTotal.inc({ status: 'failure' });
-        rejectResponse(response, 422, [t('account.verify.token-not-found')]);
-    };
-
     return accountService
-        .findLiveToken(EMAIL_VERIFY_TOKEN_TYPE, token)
+        .redeemLiveToken(EMAIL_VERIFY_TOKEN_TYPE, token)
         .then((user) => {
             if (!user) {
-                refuse();
+                authEmailVerifyTotal.inc({ status: 'failure' });
+                rejectResponse(response, 422, [t('account.verify.token-not-found')]);
                 return;
             }
 
-            return accountService.spendLiveToken(user, token).then((spentByThisRequest) => {
-                if (!spentByThisRequest) {
-                    refuse();
-                    return;
-                }
-
-                return accountService
-                    .completeEmailVerification(user, callerContextOf(request))
-                    .then(() => {
-                        authEmailVerifyTotal.inc({ status: 'success' });
-                        successResponse(response, undefined, 200, t('account.verify.success'));
-                    });
-            });
+            return accountService
+                .completeEmailVerification(user, callerContextOf(request))
+                .then(() => {
+                    authEmailVerifyTotal.inc({ status: 'success' });
+                    successResponse(response, undefined, 200, t('account.verify.success'));
+                });
         })
         .catch((error: unknown) => {
             authEmailVerifyTotal.inc({ status: 'failure' });

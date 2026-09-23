@@ -36,7 +36,7 @@ import * as twoFactor from './two-factor';
  * allowed on purpose, same as the module barrel itself (CLAUDE.md's "Module barrels"): a caller
  * reaching for a name not listed here copies the logic instead of adding the export it needed.
  */
-export { PASSWORD_RESET_TOKEN_TYPE } from './authentication';
+export { PASSWORD_RESET_TOKEN_TYPE, ACCOUNT_DELETE_TOKEN_TYPE } from './authentication';
 export { passwordChangeWithCurrent, updateProfile } from './profile';
 export {
     sendVerificationEmail,
@@ -84,6 +84,7 @@ export const accountService = {
     completeEmailChange: verification.completeEmailChange,
     findLiveToken: tokens.findLiveToken,
     spendLiveToken: tokens.spendLiveToken,
+    redeemLiveToken: tokens.redeemLiveToken,
     sessionsList: tokens.sessionsList,
     runTokenCleanup: tokenCleanup.runTokenCleanup,
     adminTokenCleanup: tokenCleanup.adminTokenCleanup,

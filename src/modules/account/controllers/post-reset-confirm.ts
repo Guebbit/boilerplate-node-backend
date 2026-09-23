@@ -40,53 +40,40 @@ export const postResetConfirm = (
 
     const { token, password, passwordConfirm } = body;
 
-    /** Every refusal answers identically — see the note in `services/tokens.ts`. */
-    const refuseToken = () => {
-        rejectResponse(response, 422, [t('account.reset.token-not-found')]);
-    };
+    /*
+     * Validate the new password BEFORE even looking up the token, so a mistyped password can't
+     * burn the link — this check is pure (no user, no database) and needs neither. The token
+     * itself is still spent atomically inside `redeemLiveToken`: two simultaneous confirms of one
+     * link both find it live, and only the winning `$pull` decides which one actually spent it —
+     * the loser gets the same "token not found" an invented token would.
+     */
+    const errors = accountService.validatePasswordChange(password, passwordConfirm);
+    if (errors.length > 0) {
+        rejectResponse(response, 422, errors);
+        return;
+    }
 
     return accountService
-        .findLiveToken(PASSWORD_RESET_TOKEN_TYPE, token)
+        .redeemLiveToken(PASSWORD_RESET_TOKEN_TYPE, token)
         .then((user) => {
             if (!user) {
-                refuseToken();
+                rejectResponse(response, 422, [t('account.reset.token-not-found')]);
                 return;
             }
 
-            /*
-             * Validate BEFORE spending the token, then let spending decide the race.
-             * The find above is a read: two simultaneous confirms of one link both pass it. Only
-             * the atomic `$pull` in `spendLiveToken` can separate them — it reports whether THIS
-             * request removed the entry, and the loser gets the same "token not found" an
-             * invented token would. Validating first means a mistype can't burn the link; writing
-             * the password last means the race's loser changes nothing.
+            /**
+             * Change password. The confirmation mail is published by the service, which is
+             * where a fact about the account belongs — see `services/profile.ts`.
              */
-            const errors = accountService.validatePasswordChange(password, passwordConfirm);
-            if (errors.length > 0) {
-                rejectResponse(response, 422, errors);
-                return;
-            }
+            return accountService
+                .passwordResetChange(user, password, passwordConfirm, callerContextOf(request))
+                .then((result) => {
+                    if (refused(response, result)) return;
 
-            return accountService.spendLiveToken(user, token).then((spentByThisRequest) => {
-                if (!spentByThisRequest) {
-                    refuseToken();
-                    return;
-                }
-
-                /**
-                 * Change password. The confirmation mail is published by the service, which is
-                 * where a fact about the account belongs — see `services/profile.ts`.
-                 */
-                return accountService
-                    .passwordResetChange(user, password, passwordConfirm, callerContextOf(request))
-                    .then((result) => {
-                        if (refused(response, result)) return;
-
-                        destroyRefreshCookie(response);
-                        destroyLoggedCookie(response);
-                        successResponse(response, undefined, 200, t('account.reset.success'));
-                    });
-            });
+                    destroyRefreshCookie(response);
+                    destroyLoggedCookie(response);
+                    successResponse(response, undefined, 200, t('account.reset.success'));
+                });
         })
         .catch(catchAs(response, 'postResetConfirm'));
 };

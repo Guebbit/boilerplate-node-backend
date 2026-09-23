@@ -28,9 +28,9 @@ jest.mock('@modules/users', () => ({
  */
 jest.mock('@modules/account/services', () => ({
     __esModule: true,
+    ACCOUNT_DELETE_TOKEN_TYPE: 'delete',
     accountService: {
-        findLiveToken: jest.fn(),
-        spendLiveToken: jest.fn(),
+        redeemLiveToken: jest.fn(),
         requestAccountDeletion: jest.fn(),
         removeOwnAccount: jest.fn()
     }
@@ -57,11 +57,8 @@ jest.mock('@modules/account/session/cookies', () => ({
 const mockFindByEmail = userService.findByEmail as jest.MockedFunction<
     typeof userService.findByEmail
 >;
-const mockFindLiveToken = accountService.findLiveToken as jest.MockedFunction<
-    typeof accountService.findLiveToken
->;
-const mockSpendLiveToken = accountService.spendLiveToken as jest.MockedFunction<
-    typeof accountService.spendLiveToken
+const mockRedeemLiveToken = accountService.redeemLiveToken as jest.MockedFunction<
+    typeof accountService.redeemLiveToken
 >;
 const mockRequestAccountDeletion = accountService.requestAccountDeletion as jest.MockedFunction<
     typeof accountService.requestAccountDeletion
@@ -148,8 +145,7 @@ describe('DELETE /account/delete-confirm — deleteAccountConfirm', () => {
     beforeEach(() => jest.clearAllMocks());
 
     it('deletes account and returns 200 for valid token', async () => {
-        mockFindLiveToken.mockResolvedValue(fakeUser as never);
-        mockSpendLiveToken.mockResolvedValue(true);
+        mockRedeemLiveToken.mockResolvedValue(fakeUser as never);
         mockRemoveOwnAccount.mockResolvedValue({
             success: true,
             status: 200,
@@ -162,37 +158,21 @@ describe('DELETE /account/delete-confirm — deleteAccountConfirm', () => {
 
         await deleteAccountConfirm(req as never, res);
 
-        expect(mockFindLiveToken).toHaveBeenCalledWith('delete', 'valid-token');
-        expect(mockSpendLiveToken).toHaveBeenCalledWith(fakeUser, 'valid-token');
+        expect(mockRedeemLiveToken).toHaveBeenCalledWith('delete', 'valid-token');
         expect(mockRemoveOwnAccount).toHaveBeenCalledWith(fakeUser, expect.anything());
         // The goodbye mail is `removeOwnAccount`'s: it is the last layer that can still read the
         // address, since the account is gone once it resolves.
         expect(mockSuccessResponse).toHaveBeenCalled();
     });
 
-    // The loser of two simultaneous confirms: `findLiveToken` still finds the entry (a read), but
-    // `spendLiveToken`'s atomic `$pull` reports it was already taken — same refusal as a dead link.
-    it('returns 422 when the token was already spent by a concurrent request', async () => {
-        mockFindLiveToken.mockResolvedValue(fakeUser as never);
-        mockSpendLiveToken.mockResolvedValue(false);
-
-        const req = { body: { token: 'valid-token' } };
-        const res = makeResponse();
-
-        await deleteAccountConfirm(req as never, res);
-
-        expect(mockRemoveOwnAccount).not.toHaveBeenCalled();
-        expect(mockRejectResponse).toHaveBeenCalledWith(res, 422, expect.any(Array));
-    });
-
     /*
-     * Expiry is no longer visible here, and that is the point: `findLiveToken` refuses an expired
-     * entry by answering `undefined`, exactly as it answers for a token that never existed, so
-     * this controller has one refusal path rather than three. What "live" means is asserted where
-     * it is now decided — `self-service.test.ts`, against a real document.
+     * One refusal path covers three cases the controller cannot tell apart: unknown token,
+     * expired token, and the loser of two simultaneous confirms of one link — `redeemLiveToken`
+     * answers `undefined` for all three. Which one it actually was is `redeemLiveToken`'s own
+     * unit test's claim (`tokens.ts`/`self-service.test.ts`), not this controller's.
      */
     it('returns 422 when the token is not live', async () => {
-        mockFindLiveToken.mockResolvedValue(undefined);
+        mockRedeemLiveToken.mockResolvedValue(undefined);
 
         const req = { body: { token: 'expired-token' } };
         const res = makeResponse();
@@ -204,7 +184,7 @@ describe('DELETE /account/delete-confirm — deleteAccountConfirm', () => {
     });
 
     it('returns 500 for an unrecognized error', async () => {
-        mockFindLiveToken.mockRejectedValue(new Error('db error'));
+        mockRedeemLiveToken.mockRejectedValue(new Error('db error'));
 
         const req = { body: { token: 'any-token' } };
         const res = makeResponse();

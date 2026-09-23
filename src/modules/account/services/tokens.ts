@@ -2,8 +2,9 @@
  * @module
  * The user's `tokens` array, owned in one place: every non-password flow (reset, verification,
  * delete confirmation, refresh sessions) is an entry in it, "live" is defined once here.
- * {@link findLiveToken}/{@link spendLiveToken} stay separate since only the spend's `$pull` is
- * atomic and `post-reset-confirm` validates before spending; a refusal never says why.
+ * {@link findLiveToken}/{@link spendLiveToken} stay separate for `two-factor.ts`, which does other
+ * work between finding a challenge and spending it; {@link redeemLiveToken} composes both for the
+ * four confirm controllers that don't — a refusal never says why.
  */
 
 import type { Session } from '@types';
@@ -68,6 +69,28 @@ export const findLiveToken = (
  */
 export const spendLiveToken = (user: UserDocument, token: string): Promise<boolean> =>
     userService.consumeToken(user, token);
+
+/**
+ * {@link findLiveToken} then {@link spendLiveToken}, for a confirm controller that has no work of
+ * its own to do between the two. `post-reset-confirm` is one of these too: its new-password check
+ * is pure (no user, no database) and runs before this is ever called, so a typo in the password
+ * never touches — and never burns — the link.
+ * @param type - which kind of token the link claims to carry
+ * @param token - the token value from the link the user followed
+ * @returns the holder, once THIS request's spend removed the entry — `undefined` for every kind of
+ *   refusal, including the losing side of a race between two uses of one link
+ */
+export const redeemLiveToken = (
+    type: Token['type'],
+    token: string
+): Promise<UserDocument | undefined> =>
+    findLiveToken(type, token).then((user) => {
+        if (!user) return undefined;
+
+        return spendLiveToken(user, token).then((spentByThisRequest) =>
+            spentByThisRequest ? user : undefined
+        );
+    });
 
 /**
  * Maps one stored refresh token to the wire's `Session`. The token VALUE never leaves this
