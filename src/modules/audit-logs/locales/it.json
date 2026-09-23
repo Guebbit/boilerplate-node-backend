@@ -1,5 +1,3 @@
 {
-    "audit-logs": {
-        "since-invalid": "Il filtro \"since\" deve essere un timestamp ISO-8601 valido."
-    }
+    "audit-logs": {}
 }

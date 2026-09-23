@@ -235,4 +235,26 @@ describe('GET /observability/audit', () => {
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
     });
+
+    it('422s a since filter that is date-only, missing the required time', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .get('/observability/audit?since=2026-01-01')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('422s an outcome outside success/failure instead of matching every row', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .get('/observability/audit?outcome=bogus')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
 });

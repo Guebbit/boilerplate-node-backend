@@ -75,4 +75,33 @@ describe('GET /audit', () => {
         expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
     });
+
+    it('422s a since filter that is date-only, missing the required time', async () => {
+        const { bearer } = await authenticateInRole('moderator');
+
+        const response = await api().get('/audit?since=2026-01-01').set('Authorization', bearer);
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('422s an outcome outside success/failure instead of matching every row', async () => {
+        const { user, bearer } = await authenticateInRole('moderator');
+        await auditLogRepository.create({
+            actor_user_id: String(user._id),
+            actor_role: 'user',
+            actor_role_name: 'moderator',
+            action: 'admin.user.banned',
+            outcome: 'success',
+            timestamp: new Date(),
+            level: 'info'
+        });
+
+        const response = await api()
+            .get('/audit?outcome=bogus')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
 });
