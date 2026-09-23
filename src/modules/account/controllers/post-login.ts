@@ -15,9 +15,7 @@ import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation } from '@infrastructure/http/controller';
 import type { LoginRequest, LoginOutcome } from '@types';
-import { isUnrestrictedRole } from '@kernel/permissions';
-import { rolesOf } from '@modules/access';
-import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import { isUnrestrictedCaller } from '../roles';
 
 /** The "remember me" tiers the contract declares, checked against the enum the cookies use. */
 const rememberSchema = z.object({ remember: z.enum(RefreshTokenExpiryTime).optional() });
@@ -97,8 +95,8 @@ export const postLogin = (
 
             return issueSession(response, userId, remember).then((accessToken) =>
                 // Read fresh from the membership — the document carries no role of its own.
-                rolesOf(userId, DEPLOYMENT_TENANT_ID).then((roles) => {
-                    recordLoginSuccess(request, userId, isUnrestrictedRole(roles.tenant));
+                isUnrestrictedCaller(userId).then((unrestricted) => {
+                    recordLoginSuccess(request, userId, unrestricted);
                     successResponse<LoginOutcome>(
                         response,
                         { token: accessToken },

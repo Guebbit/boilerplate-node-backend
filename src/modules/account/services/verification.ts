@@ -23,8 +23,8 @@ import type { EmailVerificationRequested } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { AuditAction } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
-import { isUnrestrictedRole } from '@kernel/permissions';
-import { promoteVerifiedCustomer, rolesOf } from '@modules/access';
+import { isUnrestrictedCaller } from '../roles';
+import { promoteVerifiedCustomer } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**
@@ -240,11 +240,11 @@ const auditProvenAddress = (
     context: CallerContext,
     action: AuditAction
 ): Promise<UserDocument> =>
-    rolesOf(user.id, DEPLOYMENT_TENANT_ID).then((roles) => {
+    isUnrestrictedCaller(user.id).then((unrestricted) => {
         recordAudit(context, {
             action,
             actor_user_id: user.id,
-            actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
+            actor_role: unrestricted ? 'admin' : 'user',
             outcome: 'success'
         });
         return user;

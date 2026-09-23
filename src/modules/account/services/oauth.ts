@@ -12,11 +12,11 @@ import { userService, type UserDocument } from '@modules/users';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { isUnrestrictedRole } from '@kernel/permissions';
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
+import { isUnrestrictedCaller } from '../roles';
 import type { OAuthIdentity } from '../oauth/providers/port';
-import { assignRole, rolesOf, VERIFIED_CUSTOMER_ROLE } from '@modules/access';
+import { assignRole, VERIFIED_CUSTOMER_ROLE } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 
 /**
@@ -74,11 +74,11 @@ const linkToExistingAccount = (
         .then(() =>
             // Read fresh from the membership — the document carries no role of its own, same
             // reasoning `postLogin` gives for its own AUTH_LOGIN.
-            rolesOf(user.id, DEPLOYMENT_TENANT_ID).then((roles) => {
+            isUnrestrictedCaller(user.id).then((unrestricted) => {
                 recordAudit(context, {
                     action: accountAuditActions.AUTH_OAUTH_LINKED,
                     actor_user_id: user.id,
-                    actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
+                    actor_role: unrestricted ? 'admin' : 'user',
                     outcome: 'success',
                     metadata: { via: provider }
                 });

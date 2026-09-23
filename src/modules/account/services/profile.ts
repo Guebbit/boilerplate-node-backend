@@ -32,9 +32,7 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
-import { isUnrestrictedRole } from '@kernel/permissions';
-import { rolesOf } from '@modules/access';
-import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import { isUnrestrictedCaller } from '../roles';
 
 /**
  * Validate a new-password pair without touching the user.
@@ -167,12 +165,12 @@ export const passwordResetChange = (
             // no role of its own to read synchronously. Same fire-and-forget shape as the
             // mail below: the password change already succeeded, so a lookup hiccup here must not
             // turn a successful reset into an error — worst case, this one audit row is missing.
-            void rolesOf(String(user._id), DEPLOYMENT_TENANT_ID)
-                .then((roles) => {
+            void isUnrestrictedCaller(String(user._id))
+                .then((unrestricted) => {
                     recordAudit(context, {
                         action: accountAuditActions.AUTH_PASSWORD_RESET_COMPLETED,
                         actor_user_id: String(user._id),
-                        actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
+                        actor_role: unrestricted ? 'admin' : 'user',
                         outcome: 'success'
                     });
                 })
@@ -226,13 +224,13 @@ export const removeOwnAccount = (
      */
     const { email, username, locale, _id } = user;
 
-    return rolesOf(String(_id), DEPLOYMENT_TENANT_ID).then((roles) =>
+    return isUnrestrictedCaller(String(_id)).then((unrestricted) =>
         userService.remove(user, true).then((result) => {
             if (result.success) {
                 recordAudit(context, {
                     action: accountAuditActions.AUTH_ACCOUNT_DELETE_COMPLETED,
                     actor_user_id: String(_id),
-                    actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
+                    actor_role: unrestricted ? 'admin' : 'user',
                     outcome: 'success'
                 });
                 emitAnalyticsEvent({

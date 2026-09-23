@@ -17,9 +17,7 @@ import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
-import { isUnrestrictedRole } from '@kernel/permissions';
-import { rolesOf } from '@modules/access';
-import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import { isUnrestrictedCaller } from '../roles';
 import { readMfaChallengeCookie, destroyMfaChallengeCookie } from '../oauth/mfa-redirect';
 
 /**
@@ -62,9 +60,9 @@ export const postLoginTwoFactor = (
 
             return issueSession(response, userId, undefined, [...amr, 'otp']).then((accessToken) =>
                 // Read fresh from the membership — the document carries no role of its own.
-                rolesOf(userId, DEPLOYMENT_TENANT_ID).then((roles) => {
+                isUnrestrictedCaller(userId).then((unrestricted) => {
                     authTwoFactorChallengeTotal.inc({ status: 'success' });
-                    recordLoginSuccess(request, userId, isUnrestrictedRole(roles.tenant));
+                    recordLoginSuccess(request, userId, unrestricted);
                     destroyMfaChallengeCookie(response);
                     successResponse<AuthTokens>(
                         response,

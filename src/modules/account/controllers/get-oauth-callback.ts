@@ -36,9 +36,7 @@ import {
 import { issueSession } from '../session/session';
 import { recordLoginSuccess } from '../session/login-observability';
 import { authOauthTotal } from '../metrics';
-import { isUnrestrictedRole } from '@kernel/permissions';
-import { rolesOf } from '@modules/access';
-import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import { isUnrestrictedCaller } from '../roles';
 
 /**
  * GET /account/oauth/:provider/callback
@@ -122,13 +120,10 @@ export const getOAuthCallback = (request: Request, response: Response) => {
                      */
                     return (
                         outcome === 'login'
-                            ? rolesOf(user.id, DEPLOYMENT_TENANT_ID).then((roles) =>
-                                  recordLoginSuccess(
-                                      request,
-                                      user.id,
-                                      isUnrestrictedRole(roles.tenant),
-                                      { via: provider.name }
-                                  )
+                            ? isUnrestrictedCaller(user.id).then((unrestricted) =>
+                                  recordLoginSuccess(request, user.id, unrestricted, {
+                                      via: provider.name
+                                  })
                               )
                             : Promise.resolve()
                     ).then(() => {
