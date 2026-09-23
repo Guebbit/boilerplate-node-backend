@@ -63,7 +63,7 @@ const FORCED_ABSENT = [
 /**
  * Poll `GET /` until the server answers, the same signal the paired frontend's shard runner waits
  * on (`start-server-and-test http-get://…`). Accurate as a "ready" check specifically because
- * `startServer()` now seeds BEFORE it starts listening — see `src/app.ts` — so a successful
+ * `startServer()` seeds BEFORE it starts listening — see `src/app.ts` — so a successful
  * response here means the database holds the scenario already, not just that a socket is open.
  */
 const waitUntilListening = (port: string): Promise<void> => {

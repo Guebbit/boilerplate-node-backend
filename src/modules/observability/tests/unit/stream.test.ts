@@ -1,8 +1,9 @@
 /**
  * The SSE metrics stream.
  *
- * This was one of two honest zeros in the mutation report: a suite could reach it and
- * none did. Three things here are only observable from outside the module, and each fails silently:
+ * A suite can reach this module without asserting anything true about it — reachability isn't
+ * validation. Three things here are only observable from outside the module, and each fails
+ * silently:
  *
  *   - **The wire format.** `event:`/`data:` and the blank line that ends a frame are
  *     whitespace-significant. Drop the trailing newline and every client buffers forever while the

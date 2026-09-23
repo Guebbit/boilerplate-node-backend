@@ -311,7 +311,7 @@ describe('the umami provider', () => {
 
     it('strips the port from the hostname, which Umami rejects with a 400', () => {
         // `Host` carries a port on every non-default port, so `localhost:3000` — the entire
-        // local development case — was refused outright until this was stripped.
+        // local development case — would be refused outright by Umami without this stripped.
         configureUmami();
         emitAnalyticsEvent({
             analyticsConsent: true,

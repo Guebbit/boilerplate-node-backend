@@ -1,9 +1,9 @@
 /**
  * The HTML → PDF adapter.
  *
- * This was one of two honest zeros in the mutation report: a suite could reach it and
- * none did. What it holds is not rendering — that is Chromium's — but four decisions that are only
- * observable from outside:
+ * A suite can reach this adapter without asserting anything true about it — reachability isn't
+ * validation. What it holds is not rendering — that is Chromium's — but four decisions that are
+ * only observable from outside:
  *
  *   - the browser binary is resolved at CALL time, so an environment set after import still counts;
  *   - the two `--no-sandbox` flags, which are a deliberate risk accepted for our own templates;

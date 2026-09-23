@@ -6,8 +6,8 @@
  * applies, and a test can set a variable without knowing which import order froze it. What is
  * centralised is the COERCION, because a variable is always a string and there are only a few
  * things this app does with one it did not just use verbatim: read it as a whole number, as a
- * decimal, or as a switch. Each was written several ways, and more than one spelling answered
- * `NaN`.
+ * decimal, or as a switch. Each of these has more than one plausible spelling, and a reader that
+ * reimplements its own risks one that silently answers `NaN`.
  */
 
 /** Whole-string, base-10 integers only — no leading/trailing junk, no hex, no unit suffix. */

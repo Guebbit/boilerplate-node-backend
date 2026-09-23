@@ -97,8 +97,8 @@ describe('databaseErrorInterpreter', () => {
         });
 
         it('ignores any number that happens to lead the prose message', () => {
-            // The old branch read the status out of the message text, so a Mongoose message
-            // starting with a number silently became the HTTP status.
+            // Reading the status out of the message text would let a Mongoose message starting
+            // with a number silently become the HTTP status — the behaviour this refuses.
             const castError = asStub<CastError>(
                 Object.assign(new Error('404 not castable'), {
                     kind: 'ObjectId'

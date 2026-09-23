@@ -212,9 +212,9 @@ describe('publishToQueue()', () => {
 
     /**
      * `sendToQueue`'s own return value is amqplib's LOCAL write-buffer signal, not the broker's
-     * answer — `false` here means "wait for drain", never "failed". Before this fix `publishToQueue`
-     * read that boolean directly, so a caller under load ran its inline fallback ALONGSIDE a
-     * publish that was going to succeed anyway (the double-run bug this confirm design closes).
+     * answer — `false` here means "wait for drain", never "failed". Treating that boolean as
+     * success/failure directly would run a caller's inline fallback ALONGSIDE a publish that was
+     * going to succeed anyway — the double-run bug this confirm design closes.
      */
     it('still resolves true on backpressure, once the broker confirms', async () => {
         await ensureConnected();

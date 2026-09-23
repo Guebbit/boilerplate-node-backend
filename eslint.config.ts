@@ -440,7 +440,7 @@ export default tseslint.config(
     /**
      * Exported API carries its own documentation, and the documentation is checked.
      *
-     * Two halves, both of them MUSTs in CLAUDE.md and neither previously guarded:
+     * Two halves, both of them MUSTs in CLAUDE.md, both checked by this one rule:
      *
      * Presence:   an exported function, interface, type or enum has a docblock.
      * Accuracy:   `@param` names match the signature, and tag names are real ones.
