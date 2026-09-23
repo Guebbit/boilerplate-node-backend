@@ -33,6 +33,7 @@ import { claimWebhookEvent, releaseWebhookEvent, paymentRepository } from '../re
 import type { PaymentDocument } from '../model';
 import { callerScope } from './scope';
 import { performRefund } from './refunds';
+import { notPayable } from './errors';
 
 /**
  * The payment statuses the confirm endpoint accepts. `declined` is here because a decline is
@@ -183,16 +184,14 @@ export const settlePayment = (
  * Turn a settled payment into the answer its HTTP caller is owed.
  *
  * Shared by the confirm and the sync, which differ in how they reach the provider and in nothing
- * after it.
+ * after it; exported so `./offline`'s own settlement call can reuse the `orderLost` refusal
+ * rather than rebuild it.
  */
-const settlementResponse = ({
+export const settlementResponse = ({
     payment,
     orderLost
 }: Settlement): ResponseSuccess<PaymentDocument> | ResponseReject => {
-    if (orderLost)
-        return generateReject(409, [
-            { code: 'PAYMENT_ORDER_NOT_PAYABLE', message: t('payments.order-not-payable') }
-        ]);
+    if (orderLost) return notPayable();
 
     if (payment.status === 'declined')
         return generateReject(409, [{ code: 'PAYMENT_DECLINED', message: t('payments.declined') }]);

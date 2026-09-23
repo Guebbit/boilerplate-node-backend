@@ -24,7 +24,8 @@ import { paymentsAuditActions } from '../audit';
 import { paymentsAnalyticsEvents } from '../analytics';
 import type { PaymentDocument } from '../model';
 import { resolvePayerId } from './intent';
-import { settlePayment } from './settlement';
+import { settlePayment, settlementResponse } from './settlement';
+import { notPayable } from './errors';
 
 /** The payment statuses a card charge may be sitting in while still reachable by the provider. */
 const IN_FLIGHT_CARD_STATUSES = new Set(['requires_action', 'processing']);
@@ -48,82 +49,61 @@ export interface OfflinePaymentInput {
  * @param context - the caller context to audit and analyse the attempt against — carries the
  *   admin's own identity, so a second `authContext` parameter would only repeat it
  */
-export const recordOfflinePayment = (
+// Flat `await`s, not a nested `.then()` pyramid, for the same reason `@modules/orders`'
+// `crud.ts#create` uses them: each step below depends on the last one's resolved value.
+export const recordOfflinePayment = async (
     orderId: string,
     input: OfflinePaymentInput,
     context: CallerContext
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> => {
     if (input.receivedAt && new Date(input.receivedAt).getTime() > Date.now())
-        return Promise.resolve(generateReject(422, [t('payments.received-at-future')]));
+        return generateReject(422, [t('payments.received-at-future')]);
 
-    return orderService.getById(orderId).then((order) => {
-        if (!order) return generateReject(404, [t('payments.order-not-found')]);
-        // Asked of the order lifecycle rather than compared against a literal here, so this
-        // module cannot drift from the owner of the rule.
-        if (!isPayable(order.status))
-            return generateReject(409, [
-                { code: 'PAYMENT_ORDER_NOT_PAYABLE', message: t('payments.order-not-payable') }
-            ]);
+    const order = await orderService.getById(orderId);
+    if (!order) return generateReject(404, [t('payments.order-not-found')]);
+    // Asked of the order lifecycle rather than compared against a literal here, so this
+    // module cannot drift from the owner of the rule.
+    if (!isPayable(order.status)) return notPayable();
 
-        return paymentRepository.findByOrderId(orderId).then((existing) => {
-            // A card charge already at the provider: recording money by hand too could charge the
-            // customer twice once that charge resolves on its own.
-            if (existing && IN_FLIGHT_CARD_STATUSES.has(existing.status))
-                return generateReject(409, [
-                    { code: 'PAYMENT_IN_FLIGHT', message: t('payments.in-flight') }
-                ]);
+    const existing = await paymentRepository.findByOrderId(orderId);
+    // A card charge already at the provider: recording money by hand too could charge the
+    // customer twice once that charge resolves on its own.
+    if (existing && IN_FLIGHT_CARD_STATUSES.has(existing.status))
+        return generateReject(409, [{ code: 'PAYMENT_IN_FLIGHT', message: t('payments.in-flight') }]);
 
-            return resolvePayerId(order.userId ? String(order.userId) : undefined)
-                .then((payerId) =>
-                    paymentRepository.upsertOffline(orderId, payerId, {
-                        amount: orderTotal(order),
-                        currency: shopCurrency(),
-                        method: input.method,
-                        reference: input.reference,
-                        receivedAt: input.receivedAt ? new Date(input.receivedAt) : new Date()
-                    })
-                )
-                .then((payment) => {
-                    // Nothing to upsert onto: the order's own money already moved (succeeded or
-                    // refunded), raced past the `pending` check above.
-                    if (!payment)
-                        return generateReject(409, [
-                            {
-                                code: 'PAYMENT_ORDER_NOT_PAYABLE',
-                                message: t('payments.order-not-payable')
-                            }
-                        ]);
-
-                    return settlePayment(payment, { status: 'succeeded' }).then(
-                        ({ payment: settled, orderLost }) => {
-                            if (orderLost)
-                                return generateReject(409, [
-                                    {
-                                        code: 'PAYMENT_ORDER_NOT_PAYABLE',
-                                        message: t('payments.order-not-payable')
-                                    }
-                                ]);
-
-                            recordAudit(context, {
-                                action: paymentsAuditActions.PAYMENT_RECORDED_OFFLINE,
-                                outcome: 'success',
-                                target_type: 'order',
-                                target_id: orderId,
-                                metadata: { method: input.method, reference: input.reference }
-                            });
-                            emitAnalyticsEvent({
-                                ...buildAnalyticsBase(context),
-                                event: paymentsAnalyticsEvents.PAYMENT_RECORDED_OFFLINE,
-                                properties: {
-                                    payment_id: String(settled._id),
-                                    method: input.method
-                                }
-                            });
-
-                            return generateSuccess(settled, 201, t('payments.offline-recorded'));
-                        }
-                    );
-                });
-        });
+    const payerId = await resolvePayerId(order.userId ? String(order.userId) : undefined);
+    const payment = await paymentRepository.upsertOffline(orderId, payerId, {
+        amount: orderTotal(order),
+        currency: shopCurrency(),
+        method: input.method,
+        reference: input.reference,
+        receivedAt: input.receivedAt ? new Date(input.receivedAt) : new Date()
     });
+    // Nothing to upsert onto: the order's own money already moved (succeeded or refunded),
+    // raced past the `pending` check above.
+    if (!payment) return notPayable();
+
+    const settlement = await settlePayment(payment, { status: 'succeeded' });
+    // Same refusal `confirmPayment`/`syncPayment` answer with when their own settlement loses
+    // the order: the money moved but there was no order left to keep it for.
+    if (settlement.orderLost) return settlementResponse(settlement);
+    const { payment: settled } = settlement;
+
+    recordAudit(context, {
+        action: paymentsAuditActions.PAYMENT_RECORDED_OFFLINE,
+        outcome: 'success',
+        target_type: 'order',
+        target_id: orderId,
+        metadata: { method: input.method, reference: input.reference }
+    });
+    emitAnalyticsEvent({
+        ...buildAnalyticsBase(context),
+        event: paymentsAnalyticsEvents.PAYMENT_RECORDED_OFFLINE,
+        properties: {
+            payment_id: String(settled._id),
+            method: input.method
+        }
+    });
+
+    return generateSuccess(settled, 201, t('payments.offline-recorded'));
 };

@@ -23,6 +23,7 @@ import {
 import { userService } from '@modules/users';
 import { resolvePaymentProvider } from '../providers';
 import { paymentRepository } from '../repository';
+import { notPayable } from './errors';
 
 /**
  * Who is paying, resolved against `users` rather than copied off the order — a payment history
@@ -71,71 +72,57 @@ export const resolvePayerId = (orderUserId: string | undefined): Promise<string 
  * @returns the payment on the wire, carrying the `clientSecret` the browser finishes against —
  *   the one response that does, since it is never stored and never read back
  */
-export const createIntent = (
+// Flat `await`s, not a nested `.then()` pyramid, for the same reason `@modules/orders`'
+// `crud.ts#create` uses them: each step below depends on the last one's resolved value.
+export const createIntent = async (
     orderId: string,
     authContext?: AuthContext
-): Promise<ResponseSuccess<Payment> | ResponseReject> =>
-    orderService.getById(orderId, orderService.callerScope(authContext)).then((order) => {
-        if (!order) return generateReject(404, [t('payments.order-not-found')]);
-        // Payable is asked of the order lifecycle rather than compared against a literal here, so
-        // this module cannot drift from the owner of the rule — and, unlike a bare `canTransition`
-        // check, correctly refuses a second intent on an order that is already `paid`.
-        if (!isPayable(order.status))
-            return generateReject(409, [
-                { code: 'PAYMENT_ORDER_NOT_PAYABLE', message: t('payments.order-not-payable') }
-            ]);
+): Promise<ResponseSuccess<Payment> | ResponseReject> => {
+    const order = await orderService.getById(orderId, orderService.callerScope(authContext));
+    if (!order) return generateReject(404, [t('payments.order-not-found')]);
+    // Payable is asked of the order lifecycle rather than compared against a literal here, so
+    // this module cannot drift from the owner of the rule — and, unlike a bare `canTransition`
+    // check, correctly refuses a second intent on an order that is already `paid`.
+    if (!isPayable(order.status)) return notPayable();
 
-        /*
-         * Checked fresh against `products`, never against the order's own frozen snapshot: a
-         * product removed or deactivated AFTER this order was placed must still block the FIRST
-         * payment attempt against it — the auto-cancel `orders`' own listener runs is the normal
-         * door, this is the race backstop for the gap between the event and a payment already in
-         * flight. Named per line, like `CART_INSUFFICIENT_STOCK`'s `details.lines`.
-         */
-        return unavailableLines(order).then((unavailable) => {
-            if (unavailable.length > 0)
-                return generateReject(409, [
-                    {
-                        code: 'ORDER_PRODUCT_UNAVAILABLE',
-                        message: t('payments.order-product-unavailable'),
-                        details: { lines: unavailable }
-                    }
-                ]);
+    /*
+     * Checked fresh against `products`, never against the order's own frozen snapshot: a
+     * product removed or deactivated AFTER this order was placed must still block the FIRST
+     * payment attempt against it — the auto-cancel `orders`' own listener runs is the normal
+     * door, this is the race backstop for the gap between the event and a payment already in
+     * flight. Named per line, like `CART_INSUFFICIENT_STOCK`'s `details.lines`.
+     */
+    const unavailable = await unavailableLines(order);
+    if (unavailable.length > 0)
+        return generateReject(409, [
+            {
+                code: 'ORDER_PRODUCT_UNAVAILABLE',
+                message: t('payments.order-product-unavailable'),
+                details: { lines: unavailable }
+            }
+        ]);
 
-            const provider = resolvePaymentProvider();
-
-            return resolvePayerId(order.userId ? String(order.userId) : undefined)
-                .then((payerId) =>
-                    paymentRepository.upsertIntent(orderId, payerId, {
-                        amount: orderTotal(order),
-                        currency: shopCurrency(),
-                        provider: provider.name
-                    })
-                )
-                .then((payment) => {
-                    if (!payment)
-                        return generateReject(409, [
-                            {
-                                code: 'PAYMENT_ORDER_NOT_PAYABLE',
-                                message: t('payments.order-not-payable')
-                            }
-                        ]);
-
-                    return provider
-                        .prepare(
-                            { amount: payment.amount, currency: payment.currency },
-                            { orderId, paymentId: String(payment._id) }
-                        )
-                        .then(({ providerRef, clientSecret }) =>
-                            paymentRepository
-                                .attachProviderRef(String(payment._id), providerRef)
-                                .then((stored) => ({
-                                    // `.toJSON()` applies the model's `_id` → `id` / date transform.
-                                    ...((stored ?? payment).toJSON() as Payment),
-                                    clientSecret
-                                }))
-                        )
-                        .then((prepared) => generateSuccess(prepared, 201));
-                });
-        });
+    // The provider is asked for an intent only when this payment does not already have one — a
+    // second intent for the same order is a second thing the customer could pay.
+    const provider = resolvePaymentProvider();
+    const payerId = await resolvePayerId(order.userId ? String(order.userId) : undefined);
+    const payment = await paymentRepository.upsertIntent(orderId, payerId, {
+        amount: orderTotal(order),
+        currency: shopCurrency(),
+        provider: provider.name
     });
+    if (!payment) return notPayable();
+
+    const { providerRef, clientSecret } = await provider.prepare(
+        { amount: payment.amount, currency: payment.currency },
+        { orderId, paymentId: String(payment._id) }
+    );
+    const stored = await paymentRepository.attachProviderRef(String(payment._id), providerRef);
+    const prepared = {
+        // `.toJSON()` applies the model's `_id` → `id` / date transform.
+        ...((stored ?? payment).toJSON() as Payment),
+        clientSecret
+    };
+
+    return generateSuccess(prepared, 201);
+};
