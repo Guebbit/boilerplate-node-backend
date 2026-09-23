@@ -40,6 +40,15 @@ import { authOauthTotal } from '../metrics';
 import { isUnrestrictedCaller } from '../roles';
 
 /**
+ * Clears both single-attempt OAuth cookies — called at every outcome of one login attempt,
+ * success or failure, since neither the state nor the verifier is any use past this callback.
+ */
+const clearOAuthCookies = (response: Response): void => {
+    destroyStateCookie(response);
+    destroyVerifierCookie(response);
+};
+
+/**
  * GET /account/oauth/:provider/callback
  * Validates the CSRF `state`, exchanges the code, then finds-or-creates the account and mints a
  * session exactly the way `postLogin`'s success tail does — minus the access token, which the
@@ -57,21 +66,23 @@ export const getOAuthCallback = (request: Request, response: Response) => {
 
     const query = request.query as Record<string, unknown>;
 
-    /** Audit + metric for a failed attempt, then fail towards the FRONTEND with `?error=<reason>`
-     * rather than a JSON body — the browser is mid-navigation by the time any of this runs. */
-    const failToFrontend = (reason: string) => {
+    /** Audit + metric for a failed attempt, then clear both single-attempt cookies — the tail
+     * every failure path shares, whichever response follows. */
+    const recordFailureAndClear = (reason: string) => {
         recordOAuthFailure(context, providerName, reason);
         authOauthTotal.inc({ provider: providerName, status: 'failure' });
-        destroyStateCookie(response);
-        destroyVerifierCookie(response);
+        clearOAuthCookies(response);
+    };
+
+    /** `recordFailureAndClear`, then fail towards the FRONTEND with `?error=<reason>` rather
+     * than a JSON body — the browser is mid-navigation by the time any of this runs. */
+    const failToFrontend = (reason: string) => {
+        recordFailureAndClear(reason);
         response.redirect(302, oauthFrontendCallbackUrl(reason));
     };
 
     if (!stateMatches(cookieOf(request, OAUTH_STATE_COOKIE), query.state)) {
-        recordOAuthFailure(context, providerName, 'invalid_state');
-        authOauthTotal.inc({ provider: providerName, status: 'failure' });
-        destroyStateCookie(response);
-        destroyVerifierCookie(response);
+        recordFailureAndClear('invalid_state');
         rejectResponse(response, 400, [t('account.oauth.invalid-state')]);
         return;
     }
@@ -81,10 +92,7 @@ export const getOAuthCallback = (request: Request, response: Response) => {
     // "no cookie" and "no PKCE" must never share a branch.
     const verifier = cookieOf(request, OAUTH_VERIFIER_COOKIE);
     if (typeof verifier !== 'string' || verifier.length === 0) {
-        recordOAuthFailure(context, providerName, 'invalid_verifier');
-        authOauthTotal.inc({ provider: providerName, status: 'failure' });
-        destroyStateCookie(response);
-        destroyVerifierCookie(response);
+        recordFailureAndClear('invalid_verifier');
         rejectResponse(response, 400, [t('account.oauth.invalid-verifier')]);
         return;
     }
@@ -128,8 +136,7 @@ export const getOAuthCallback = (request: Request, response: Response) => {
                             : Promise.resolve()
                     ).then(() => {
                         authOauthTotal.inc({ provider: providerName, status: 'success' });
-                        destroyStateCookie(response);
-                        destroyVerifierCookie(response);
+                        clearOAuthCookies(response);
                         response.redirect(302, oauthFrontendCallbackUrl());
                     });
                 });
@@ -138,8 +145,7 @@ export const getOAuthCallback = (request: Request, response: Response) => {
             return twoFactorService.buildLoginChallenge(user, [provider.name]).then((challenge) => {
                 createMfaChallengeCookie(response, challenge.challenge, challenge.expiresAt);
                 authOauthTotal.inc({ provider: providerName, status: 'mfa_required' });
-                destroyStateCookie(response);
-                destroyVerifierCookie(response);
+                clearOAuthCookies(response);
                 response.redirect(302, oauthFrontendMfaCallbackUrl(challenge));
             });
         })
