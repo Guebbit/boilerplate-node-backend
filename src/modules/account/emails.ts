@@ -7,9 +7,11 @@
  * subject and render context together.
  */
 
-import type { EmailContent } from '@infrastructure/adapters/mailer';
-import { translator } from '@infrastructure/i18n';
+import { enqueueEmail, type EmailContent } from '@infrastructure/adapters/mailer';
+import type { JobPriority } from '@infrastructure/adapters/queue';
+import { getDefaultLocale, translator } from '@infrastructure/i18n';
 import { frontendLink, type TokenLinkKind } from '@infrastructure/http/frontend-link';
+import type { CallerContext } from '@types';
 
 /**
  * Email verification: the email carrying the one-time confirmation link. Shared by both
@@ -227,3 +229,28 @@ export const inactivityWarningEmail = (
         }
     };
 };
+
+/**
+ * The recipient's OWN language, ahead of the request's — an account mail is read later, often on
+ * another device, so `Accept-Language` says little about who it is for. `context` is the fallback
+ * only when the account itself carries no locale, and is itself optional: a mail sent outside a
+ * request (an admin-created account's setup link) has none to fall back to.
+ * @param locale - the account's own locale, when it has one
+ * @param context - the caller context whose locale is the fallback
+ */
+export const recipientLocale = (locale: string | undefined, context?: CallerContext): string =>
+    locale ?? context?.locale ?? getDefaultLocale();
+
+/**
+ * Queue one of this module's own mails. Defaults to `'high'`: all but two of this module's sends
+ * are a token-bearing link or a code someone is actively waiting on — the two confirmations that
+ * are not (`resetConfirmEmail`, `deleteConfirmEmail`) pass `'normal'` explicitly at their call site.
+ * @param to - the recipient address
+ * @param mail - the finished template + subject + data, from one of this file's builders
+ * @param priority - see `enqueueEmail`'s own doc for what the two levels mean
+ */
+export const sendAccountMail = (
+    to: string,
+    mail: EmailContent,
+    priority: JobPriority = 'high'
+): Promise<void> => enqueueEmail({ to, subject: mail.subject }, mail.template, mail.data, priority);

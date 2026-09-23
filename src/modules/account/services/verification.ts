@@ -9,12 +9,11 @@
  * newest email is the one that works" and a re-send never confuses the user.
  */
 
-import { getDefaultLocale, t } from '@infrastructure/i18n';
+import { t } from '@infrastructure/i18n';
 import { environmentNumber } from '@infrastructure/runtime/environment';
-import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { userService, TokenType, type UserDocument } from '@modules/users';
 import { tokenAdd } from './authentication';
-import { verifyRequestEmail } from '../emails';
+import { verifyRequestEmail, recipientLocale, sendAccountMail } from '../emails';
 import { generateSuccess, generateReject } from '@infrastructure/http/response';
 import { cooldownRemaining, resendTooSoon } from '../cooldown';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
@@ -118,18 +117,13 @@ export const sendVerificationEmail = (
              * locale at all.
              */
             const mail = verifyRequestEmail(
-                user.locale ?? context.locale ?? getDefaultLocale(),
+                recipientLocale(user.locale, context),
                 user.username,
                 token,
                 target.route
             );
             // High priority: a token-bearing link the user is actively waiting on, not a notification.
-            return enqueueEmail(
-                { to: address, subject: mail.subject },
-                mail.template,
-                mail.data,
-                'high'
-            );
+            return sendAccountMail(address, mail);
         });
 };
 

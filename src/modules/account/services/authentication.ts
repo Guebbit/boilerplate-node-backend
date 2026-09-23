@@ -8,14 +8,19 @@
  */
 
 import { z } from 'zod';
-import { getCurrentLocale, getDefaultLocale, t } from '@infrastructure/i18n';
+import { getCurrentLocale, t } from '@infrastructure/i18n';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'node:crypto';
-import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { checkEmailPolicy } from '@infrastructure/adapters/antibot';
 import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
-import { deleteRequestEmail, resetRequestEmail, setupRequestEmail } from '../emails';
+import {
+    deleteRequestEmail,
+    resetRequestEmail,
+    setupRequestEmail,
+    recipientLocale,
+    sendAccountMail
+} from '../emails';
 import { LoginBody } from '@api/schemas.zod';
 import {
     generateSuccess,
@@ -80,18 +85,9 @@ export const requestAccountDeletion = (user: UserDocument, context: CallerContex
          * The recipient's OWN language, the request's only as fallback. What reaches the queue is
          * finished text, so the worker that sends it has no locale to work from and needs none.
          */
-        const mail = deleteRequestEmail(
-            user.locale ?? context.locale ?? getDefaultLocale(),
-            user.username,
-            token
-        );
+        const mail = deleteRequestEmail(recipientLocale(user.locale, context), user.username, token);
         // High priority: a token-bearing link the user is actively waiting on, not a notification.
-        void enqueueEmail(
-            { to: user.email, subject: mail.subject },
-            mail.template,
-            mail.data,
-            'high'
-        );
+        void sendAccountMail(user.email, mail);
     });
 
 /**
@@ -151,17 +147,12 @@ export const requestPasswordReset = (
                  * copy is finished before the job is published, so the worker needs no locale.
                  */
                 const mail = resetRequestEmail(
-                    user.locale ?? context.locale ?? getDefaultLocale(),
+                    recipientLocale(user.locale, context),
                     user.username,
                     token
                 );
                 // High priority: a token-bearing link the user is actively waiting on, not a notification.
-                void enqueueEmail(
-                    { to: user.email, subject: mail.subject },
-                    mail.template,
-                    mail.data,
-                    'high'
-                );
+                void sendAccountMail(user.email, mail);
                 return true;
             }
         );
@@ -176,14 +167,9 @@ export const requestPasswordReset = (
  */
 export const requestAccountSetup = (user: UserDocument): Promise<void> =>
     tokenAdd(user, PASSWORD_RESET_TOKEN_TYPE, PASSWORD_RESET_TOKEN_TTL_MS).then((token) => {
-        const mail = setupRequestEmail(user.locale ?? getDefaultLocale(), user.username, token);
+        const mail = setupRequestEmail(recipientLocale(user.locale), user.username, token);
         // High priority: a token-bearing link the user is actively waiting on, not a notification.
-        void enqueueEmail(
-            { to: user.email, subject: mail.subject },
-            mail.template,
-            mail.data,
-            'high'
-        );
+        void sendAccountMail(user.email, mail);
     });
 
 /**

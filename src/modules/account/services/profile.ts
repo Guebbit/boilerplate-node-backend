@@ -8,11 +8,16 @@
  */
 
 import { z } from 'zod';
-import { getDefaultLocale, t } from '@infrastructure/i18n';
+import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import bcrypt from 'bcrypt';
-import { enqueueEmail } from '@infrastructure/adapters/mailer';
-import { resetConfirmEmail, deleteConfirmEmail, emailChangeNoticeEmail } from '../emails';
+import {
+    resetConfirmEmail,
+    deleteConfirmEmail,
+    emailChangeNoticeEmail,
+    recipientLocale,
+    sendAccountMail
+} from '../emails';
 import { sendVerificationEmail, markVerified, EMAIL_CHANGE_TOKEN_TYPE } from './verification';
 import { UpdateAccountBody } from '@api/schemas.zod';
 import { optionalBooleanSchema } from '@infrastructure/http/schemas';
@@ -193,11 +198,9 @@ export const passwordResetChange = (
              * Fire-and-forget: the password has already changed, and a queue that is briefly
              * unavailable must not turn a successful reset into an error.
              */
-            const mail = resetConfirmEmail(
-                user.locale ?? context.locale ?? getDefaultLocale(),
-                user.username
-            );
-            void enqueueEmail({ to: user.email, subject: mail.subject }, mail.template, mail.data);
+            const mail = resetConfirmEmail(recipientLocale(user.locale, context), user.username);
+            // Normal priority: a confirmation, not a link or code anyone is blocked on.
+            void sendAccountMail(user.email, mail, 'normal');
         }
         return result;
     });
@@ -241,11 +244,9 @@ export const removeOwnAccount = (
 
                 // The recipient's own language first, the request's as fallback — see
                 // {@link passwordResetChange} for why the request is only ever the fallback.
-                const mail = deleteConfirmEmail(
-                    locale ?? context.locale ?? getDefaultLocale(),
-                    username
-                );
-                void enqueueEmail({ to: email, subject: mail.subject }, mail.template, mail.data);
+                const mail = deleteConfirmEmail(recipientLocale(locale, context), username);
+                // Normal priority: a goodbye, not a link or code anyone is blocked on.
+                void sendAccountMail(email, mail, 'normal');
             }
             return result;
         })
@@ -332,14 +333,14 @@ const applyEmailChangeRequest = (
  * with whatever the client does next.
  */
 const sendEmailChangeMail = (user: UserDocument, context: CallerContext): Promise<void> => {
-    const locale = user.locale ?? context.locale ?? getDefaultLocale();
-    const mail = emailChangeNoticeEmail(locale, user.username, user.pendingEmail ?? '');
-    return enqueueEmail(
-        { to: user.email, subject: mail.subject },
-        mail.template,
-        mail.data,
-        'high'
-    ).then(() => sendVerificationEmail(user, context, EMAIL_CHANGE_TOKEN_TYPE));
+    const mail = emailChangeNoticeEmail(
+        recipientLocale(user.locale, context),
+        user.username,
+        user.pendingEmail ?? ''
+    );
+    return sendAccountMail(user.email, mail).then(() =>
+        sendVerificationEmail(user, context, EMAIL_CHANGE_TOKEN_TYPE)
+    );
 };
 
 /**

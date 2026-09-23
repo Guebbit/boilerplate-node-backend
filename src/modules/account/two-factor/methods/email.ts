@@ -6,13 +6,12 @@
  * email.
  */
 
-import { getDefaultLocale, t } from '@infrastructure/i18n';
-import { enqueueEmail } from '@infrastructure/adapters/mailer';
+import { t } from '@infrastructure/i18n';
 import { isDemoMode } from '@infrastructure/runtime/demo-profile';
 import type { CallerContext } from '@types';
 import type { TwoFactorMethodRecord, UserDocument } from '@modules/users';
 import type { TwoFactorDelivery } from '@types';
-import { twoFactorCodeEmail } from '../../emails';
+import { twoFactorCodeEmail, recipientLocale, sendAccountMail } from '../../emails';
 import type { TwoFactorMethodHandler } from '../registry';
 import {
     armDeliveredCode,
@@ -48,19 +47,14 @@ const deliver = (
     // The recipient's OWN language, exactly as the verification and reset mails choose theirs:
     // the copy is finished before the job is published, so the worker needs no locale at all.
     const mail = twoFactorCodeEmail(
-        user.locale ?? context.locale ?? getDefaultLocale(),
+        recipientLocale(user.locale, context),
         user.username,
         code,
         Math.round(DELIVERED_CODE_TTL_MS / 60_000)
     );
 
     // High priority: someone is sitting on a login screen waiting for this, not reading a digest.
-    return enqueueEmail(
-        { to: user.email, subject: mail.subject },
-        mail.template,
-        mail.data,
-        'high'
-    ).then(() => ({
+    return sendAccountMail(user.email, mail).then(() => ({
         method: 'email',
         sentTo: maskEmail(user.email),
         resendAfter: DELIVERED_CODE_RESEND_SECONDS,
