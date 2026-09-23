@@ -8,6 +8,7 @@ import { successResponse } from '@infrastructure/http/response';
 import type { SessionsResponse } from '@types';
 import { accountService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
+import { readRefreshCookie } from '@kernel/cookies';
 
 /**
  * GET /account/sessions — the caller's live refresh tokens, as sessions.
@@ -18,7 +19,7 @@ import { catchAs, refused } from '@infrastructure/http/controller';
 export const getSessions = (request: Request, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */
     const { id } = request.authContext!;
-    const cookieToken = (request.cookies as Record<string, string | undefined>).jwt;
+    const cookieToken = readRefreshCookie(request);
 
     return accountService
         .sessionsList(id, cookieToken)

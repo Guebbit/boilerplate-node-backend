@@ -12,6 +12,7 @@ import { t } from '@infrastructure/i18n';
 import { rejectResponse } from '@infrastructure/http/response';
 import { logger } from '@infrastructure/adapters/logger';
 import { callerContextOf } from '@infrastructure/http/request';
+import { cookieOf } from '@kernel/cookies';
 import { resolveOAuthProvider } from '../oauth/providers';
 import {
     stateMatches,
@@ -54,7 +55,6 @@ export const getOAuthCallback = (request: Request, response: Response) => {
         return;
     }
 
-    const cookies = request.cookies as Record<string, string | undefined>;
     const query = request.query as Record<string, unknown>;
 
     /** Audit + metric for a failed attempt, then fail towards the FRONTEND with `?error=<reason>`
@@ -67,7 +67,7 @@ export const getOAuthCallback = (request: Request, response: Response) => {
         response.redirect(302, oauthFrontendCallbackUrl(reason));
     };
 
-    if (!stateMatches(cookies[OAUTH_STATE_COOKIE], query.state)) {
+    if (!stateMatches(cookieOf(request, OAUTH_STATE_COOKIE), query.state)) {
         recordOAuthFailure(context, providerName, 'invalid_state');
         authOauthTotal.inc({ provider: providerName, status: 'failure' });
         destroyStateCookie(response);
@@ -79,7 +79,7 @@ export const getOAuthCallback = (request: Request, response: Response) => {
     // A missing verifier must fail closed, not silently redeem the code without PKCE: a provider
     // that received no challenge at the start happily accepts an exchange with no verifier, so
     // "no cookie" and "no PKCE" must never share a branch.
-    const verifier = cookies[OAUTH_VERIFIER_COOKIE];
+    const verifier = cookieOf(request, OAUTH_VERIFIER_COOKIE);
     if (typeof verifier !== 'string' || verifier.length === 0) {
         recordOAuthFailure(context, providerName, 'invalid_verifier');
         authOauthTotal.inc({ provider: providerName, status: 'failure' });

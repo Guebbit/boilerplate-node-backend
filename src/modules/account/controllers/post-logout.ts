@@ -10,6 +10,7 @@ import { destroyLoggedCookie, destroyRefreshCookie } from '../session/cookies';
 import { accountService } from '../services';
 import { catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
+import { readRefreshCookie } from '@kernel/cookies';
 
 /**
  * POST /account/logout — logs out the CURRENT session only.
@@ -18,7 +19,7 @@ import { callerContextOf } from '@infrastructure/http/request';
  * Always 200 — a missing or already-revoked cookie just means "not logged in here", not an error.
  */
 export const postLogout = (request: Request, response: Response) => {
-    const refreshToken = (request.cookies as Record<string, string | undefined>).jwt;
+    const refreshToken = readRefreshCookie(request);
 
     return accountService
         .logoutCurrentSession(refreshToken, callerContextOf(request))

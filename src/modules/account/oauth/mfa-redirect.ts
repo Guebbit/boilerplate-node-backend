@@ -11,6 +11,7 @@
  */
 
 import type { Request, Response } from 'express';
+import { cookieOf } from '@kernel/cookies';
 import { secureCookieOptions } from '../session/cookies';
 
 /** The MFA challenge cookie — single-attempt, cleared once the challenge is spent. */
@@ -41,7 +42,5 @@ export const destroyMfaChallengeCookie = (response: Response): void => {
 };
 
 /** The challenge cookie on an incoming request, when one was set. */
-export const readMfaChallengeCookie = (request: Request): string | undefined => {
-    const cookies = request.cookies as Record<string, string | undefined>;
-    return cookies[MFA_CHALLENGE_COOKIE];
-};
+export const readMfaChallengeCookie = (request: Request): string | undefined =>
+    cookieOf(request, MFA_CHALLENGE_COOKIE);

@@ -13,6 +13,7 @@ import { accountService, runTokenCleanup } from '../services';
 import { createRefreshCookie, createLoggedCookie } from '../session/cookies';
 import { authRefreshTotal } from '../metrics';
 import { callerContextOf } from '@infrastructure/http/request';
+import { readRefreshCookie } from '@kernel/cookies';
 
 /**
  * GET /account/refresh — mints a new short-lived access token from the refresh cookie, and also
@@ -22,8 +23,7 @@ import { callerContextOf } from '@infrastructure/http/request';
  * history, proxy logs and `Referer` headers; the `HttpOnly` cookie doesn't leak that way.
  */
 export const getRefreshToken = (request: Request, response: Response) => {
-    // Cookie name 'jwt' is decided in post-login.ts.
-    const refreshToken = (request.cookies as Record<string, string | undefined>).jwt;
+    const refreshToken = readRefreshCookie(request);
 
     /*
      * Cleanup is skipped when there's no cookie: it's a collection-wide sweep, and running it for

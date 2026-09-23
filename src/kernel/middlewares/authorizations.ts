@@ -24,6 +24,7 @@ import {
     API_KEY_TOKEN_PREFIX
 } from '@kernel/authentication';
 import { holdsKey } from '@kernel/ability';
+import { readRefreshCookie } from '@kernel/cookies';
 import {
     assertDeclared,
     callerFor,
@@ -445,7 +446,7 @@ export const requirePermissionViaCookie = (key: string) => {
         response: Response,
         next: NextFunction
     ) {
-        const refreshToken = (request.cookies as Record<string, string | undefined>).jwt;
+        const refreshToken = readRefreshCookie(request);
 
         // No cookie is 401 (who are you); a valid cookie without the key is 403 (not you).
         if (!refreshToken) {
