@@ -63,9 +63,6 @@ const entryBase = createRepository<LocaleEntryDocument>(localeEntryModel, {
 const findByTag = (tag: string): Promise<LocaleDocument | null> =>
     localeBase.findOne({ tag: tag.toLowerCase() });
 
-/** Which languages a visitor may select. Narrows the manifest read; admins pass no scope. */
-const publicScope = (): Record<string, unknown> => ({ active: true });
-
 /**
  * The languages this deployment offers, unpaginated and sorted by tag.
  *
@@ -458,14 +455,12 @@ const updateDerivedColumn = (
 /** The languages. */
 export const localeRepository: Repository<LocaleDocument> & {
     findByTag: (tag: string) => Promise<LocaleDocument | null>;
-    publicScope: () => Record<string, unknown>;
     list: (scope?: Record<string, unknown>) => Promise<LocaleDocument[]>;
     bumpRevision: (tag: string) => Promise<number>;
     deleteLocaleCascade: (locale: LocaleDocument) => Promise<LocaleCascadeCounts>;
 } = {
     ...localeBase,
     findByTag,
-    publicScope,
     list,
     bumpRevision,
     deleteLocaleCascade

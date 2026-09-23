@@ -669,14 +669,14 @@ describe('list', () => {
         for (let index = 0; index < 12; index++)
             await givenLanguage(`l${index}`.padEnd(2, 'x').slice(0, 2) + String(index));
 
-        expect(await localeRepository.list(localeRepository.publicScope())).toHaveLength(12);
+        expect(await localeRepository.list(localeService.callerScope())).toHaveLength(12);
     });
 
     it('omits the inactive ones under the public scope, which keeps a draft out of the manifest', async () => {
         await givenLanguage('es');
         await givenLanguage('fr', {}, { active: false });
 
-        const active = await localeRepository.list(localeRepository.publicScope());
+        const active = await localeRepository.list(localeService.callerScope());
 
         expect(active.map(({ tag }: LocaleDocument) => tag)).toEqual(['es']);
     });
