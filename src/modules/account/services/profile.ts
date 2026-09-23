@@ -10,7 +10,6 @@
 import { z } from 'zod';
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
-import bcrypt from 'bcrypt';
 import {
     resetConfirmEmail,
     deleteConfirmEmail,
@@ -19,6 +18,7 @@ import {
     sendAccountMail
 } from '../emails';
 import { sendVerificationEmail, markVerified, EMAIL_CHANGE_TOKEN_TYPE } from './verification';
+import { verifyOwnPassword } from './authentication';
 import { UpdateAccountBody } from '@api/schemas.zod';
 import { optionalBooleanSchema } from '@infrastructure/http/schemas';
 import {
@@ -444,27 +444,12 @@ export const passwordChangeWithCurrent = (
     const outcome: Promise<ResponseSuccess<UserDocument> | ResponseReject> =
         errors.length > 0
             ? Promise.resolve(generateReject(422, errors))
-            : userService
-                  // `password` is select:false — comparing against it is this flow's whole point.
-                  .findByIdWithCredentials(userId)
-                  .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
-                      // Same rule as `updateProfile`: gone-but-verified is 401, not a 404
-                      // `openapi.yaml` never declares here.
-                      if (!user) return generateReject(401, []);
-
-                      // An OAuth-only account (`account/services/oauth.ts`) holds no password to prove
-                      // against — same 422 as a wrong one, since this flow has no other way in.
-                      if (!user.password)
-                          return generateReject(422, [t('account.password-change.wrong-current')]);
-
-                      return bcrypt.compare(currentPassword, user.password).then((doMatch) => {
-                          if (!doMatch)
-                              return generateReject(422, [
-                                  t('account.password-change.wrong-current')
-                              ]);
-                          return passwordChange(user, password, passwordConfirm);
-                      });
-                  })
+            : verifyOwnPassword(userId, currentPassword, 'account.password-change.wrong-current')
+                  .then((verified) =>
+                      verified.success
+                          ? passwordChange(verified.data, password, passwordConfirm)
+                          : verified
+                  )
                   .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 
     return outcome.then((result) => {

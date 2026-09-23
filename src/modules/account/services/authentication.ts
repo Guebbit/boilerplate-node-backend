@@ -600,19 +600,47 @@ export const tokenRemoveAll = (
         });
 
 /**
+ * Verify the caller's OWN current password against their stored hash. 422 on a miss, never 401 —
+ * a 401 here reads as "session expired" to a client interceptor and would log out a session that
+ * is, in fact, still perfectly valid, in every flow that calls this. An OAuth-only account holds
+ * no password to compare against — same 422 as a wrong one, since there is equally nothing this
+ * step can do.
+ *
+ * @param userId - the caller's own id
+ * @param password - the password to confirm against the stored hash
+ * @param wrongKey - the i18n key each caller's own contract commits to for this rejection
+ * @returns the verified user on a match, or the 401/422 rejection
+ */
+export const verifyOwnPassword = (
+    userId: string,
+    password: string,
+    wrongKey: string
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
+    userService
+        // `password` is select:false — proving identity is this flow's whole point.
+        .findByIdWithCredentials(userId)
+        .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
+            // Gone-but-verified is 401 — same rule `updateProfile` follows, and `openapi.yaml`
+            // declares no 404 here either.
+            if (!user) return generateReject(401, []);
+            if (!user.password) return generateReject(422, [t(wrongKey)]);
+
+            return bcrypt
+                .compare(password, user.password)
+                .then((doMatch) =>
+                    doMatch ? generateSuccess<UserDocument>(user) : generateReject(422, [t(wrongKey)])
+                );
+        });
+
+/**
  * Re-authenticate an already-signed-in caller by password — the verification half of
  * `POST /account/reauth`. Proves the password and audits the attempt; re-minting the session (a
  * fresh `auth_time`) is the CONTROLLER's job via `issueSession`, the same split `passwordChange`
  * keeps from `postPasswordChange`'s own re-mint.
  *
- * Verify:       bcrypt against the caller's own stored hash, same as `passwordChangeWithCurrent` —
- *               422 on a mismatch, not 401.
  * Not `login`'s path: `login`'s 401 and its dummy-compare exist to stop an ANONYMOUS caller telling
  *               "no such account" apart from "wrong password" by timing. There is no such caller
  *               here — the access token already names exactly who is asking.
- * Why not 401:  it reads as "session expired" to a client interceptor and would log out a session
- *               that is, in fact, still perfectly valid — the opposite of what a re-authentication
- *               endpoint exists to do.
  * Not re-checked: the active/deletedAt gate `isAuth` already ran for this request, same reason
  *               `passwordChangeWithCurrent` and `updateProfile` skip it too.
  *
@@ -625,24 +653,9 @@ export const reauth = (
     password: string,
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
-    const outcome: Promise<ResponseSuccess<UserDocument> | ResponseReject> = userService
-        // `password` is select:false — proving identity is this flow's whole point.
-        .findByIdWithCredentials(userId)
-        .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
-            // Gone-but-verified is 401 — same rule `updateProfile`/`passwordChangeWithCurrent`
-            // follow, and `openapi.yaml` declares no 404 here either.
-            if (!user) return generateReject(401, []);
-
-            // An OAuth-only account (`account/services/oauth.ts`) holds no password to compare
-            // against — same 422 as a wrong one, since there is equally nothing this step can do.
-            if (!user.password) return generateReject(422, [t('account.reauth.wrong-password')]);
-
-            return bcrypt.compare(password, user.password).then((doMatch) => {
-                if (!doMatch) return generateReject(422, [t('account.reauth.wrong-password')]);
-                return generateSuccess<UserDocument>(user);
-            });
-        })
-        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
+    const outcome = verifyOwnPassword(userId, password, 'account.reauth.wrong-password').catch(
+        (error: unknown) => rejectDatabaseEnvelope('auth', error)
+    );
 
     return outcome.then((result) => {
         recordAudit(context, {
