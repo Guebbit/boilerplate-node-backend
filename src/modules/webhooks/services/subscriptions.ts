@@ -17,7 +17,11 @@ import {
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { TenantCallerContext } from '@types';
 import type { PaginatedResult } from '@infrastructure/persistence/create-repository';
-import type { CreateWebhookSubscriptionRequest, UpdateWebhookSubscriptionRequest } from '@types';
+import type {
+    CreateWebhookSubscriptionRequest,
+    UpdateWebhookSubscriptionRequest,
+    WebhookSubscription
+} from '@types';
 import type { WebhookSubscriptionDocument } from '../model';
 import { webhookSubscriptionRepository } from '../repository';
 import { mintRingSecret, removeRingSecret } from '../secrets';
@@ -37,7 +41,7 @@ export interface SubscriptionWithMintedSecrets {
 export const list = (
     context: TenantCallerContext,
     filters: { enabled?: boolean; page?: unknown; pageSize?: unknown }
-): Promise<PaginatedResult<WebhookSubscriptionDocument>> => {
+): Promise<PaginatedResult<WebhookSubscription>> => {
     const scope: Record<string, unknown> = { tenant: context.caller.tenantId };
     if (filters.enabled !== undefined) scope.enabled = filters.enabled;
     // No `searchable` spec on this repository (the admin list has no free-text filter — see

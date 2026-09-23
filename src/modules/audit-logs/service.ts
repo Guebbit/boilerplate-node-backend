@@ -12,6 +12,7 @@ import type { AuditLogSearchFilters } from './repository';
 import type { PaginatedResult } from '@infrastructure/persistence/create-repository';
 import type { AuditEntry } from '@infrastructure/observability/audit';
 import type { AuditLogDocument } from './model';
+import type { AuditEntryItem } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import { auditSinkFailuresTotal } from './metrics';
 
@@ -56,7 +57,7 @@ const record = (entry: AuditEntry): void => {
  */
 export const search = (
     filters: AuditLogSearchFilters
-): Promise<PaginatedResult<AuditLogDocument>> =>
+): Promise<PaginatedResult<AuditEntryItem>> =>
     auditLogRepository.search(filters, auditLogRepository.sinceScope(filters.since), AUDIT_SORT);
 
 /** The module's barrel export — `record` is registered as the audit sink, `search` serves the dashboard. */

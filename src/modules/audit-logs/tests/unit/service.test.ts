@@ -13,6 +13,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { type AuditEntry } from '@infrastructure/observability/audit';
 import type { AuditLogDocument } from '@modules/audit-logs/model';
 import { auditSinkFailuresTotal } from '@modules/audit-logs/metrics';
+import type { AuditEntryItem } from '@types';
 
 /**
  * The counter's current value, read back through prom-client rather than from a local tally: the
@@ -149,7 +150,7 @@ describe('auditLogService.record', () => {
 
 describe('auditLogService.search', () => {
     const emptyPage = {
-        items: [] as AuditLogDocument[],
+        items: [] as AuditEntryItem[],
         meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 }
     };
 

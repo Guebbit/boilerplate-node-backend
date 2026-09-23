@@ -5,7 +5,7 @@
 
 import { z } from 'zod';
 import type { Request, Response } from 'express';
-import type { LocaleEntriesResponse, LocaleEntry } from '@types';
+import type { LocaleEntriesResponse } from '@types';
 import { readInput } from '@infrastructure/http/request';
 import { blankToUndefined, pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
 import { ListLocaleEntriesQueryParams } from '@api/schemas.zod';
@@ -49,15 +49,9 @@ export const getLocaleEntries = (
         .searchEntries(request.params.locale, parsed)
         .then((result) => {
             if (refused(response, result)) return;
-            // `search()` already returns normalized (wire-shape) rows — unlike `findById`/`findOne`,
-            // it never hands back a hydrated document, so there is no `.toJSON()` to apply here.
-            // The repository factory's `PaginatedResult<TDocument>` names the pre-normalize type,
-            // which is why `items` needs the cast below.
-            const items: unknown = result.data.items;
-            return successResponse<LocaleEntriesResponse>(response, {
-                items: items as LocaleEntry[],
-                meta: result.data.meta
-            });
+            // `search()`'s `TWire` is `LocaleEntry` itself, so `result.data.items` is already the
+            // wire shape this response needs — no cast, unlike before `createRepository` carried it.
+            return successResponse<LocaleEntriesResponse>(response, result.data);
         })
         .catch(catchAs(response, 'getLocaleEntries'));
 };

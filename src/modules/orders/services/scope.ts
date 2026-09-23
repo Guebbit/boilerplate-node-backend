@@ -55,20 +55,26 @@ export const actorOf = (authContext?: AuthContext): OrderActor =>
  * it — explicit because the two read branches return different shapes, and `actions` must ride
  * on the wire shape or the schema's transform drops it. `async` for `resolveCurrentImages`'s
  * `$in` lookup — the one thing here that isn't a synchronous transform.
+ *
+ * Takes `OrderDocument | Order`: an admin read (`findByIdScoped` with no scope) hands back a
+ * hydrated document that still needs `.toJSON()`; an owner-scoped read has already gone through
+ * `applyOrderTransform` and is `Order` already, with nothing left to call.
  * @returns the serialized order carrying its `actions` and each line's live `current` picture
  */
-export const withActions = (order: OrderDocument, authContext?: AuthContext): Promise<Order> => {
-    // `unknown` first, then one assertion: the scoped branch already hands back a normalized plain
-    // object typed as a document, so neither shape can be spread without saying so once. The
-    // second assertion states what the merge actually produces — the contract's wire shape — which
-    // structural typing can't verify past the first `unknown` step.
-    const serialized: unknown = typeof order.toJSON === 'function' ? order.toJSON() : order;
+export const withActions = (
+    order: OrderDocument | Order,
+    authContext?: AuthContext
+): Promise<Order> => {
+    /*
+     * One cast: `.toJSON()`'s return type is the schema's own `Document['toJSON']` overload, not
+     * this module's `Order` contract — the same reasoning `products/service.ts`'s `getById` cast
+     * uses. `'toJSON' in order` is what tells the hydrated branch from the already-wire one; only
+     * `OrderDocument` declares the method.
+     */
+    const serialized: Order = 'toJSON' in order ? (order.toJSON() as Order) : order;
 
-    return resolveCurrentImages([serialized as Record<string, unknown>]).then(
-        ([resolved]) =>
-            ({
-                ...resolved,
-                actions: orderActionsFor(order.status, actorOf(authContext))
-            }) as Order
-    );
+    return resolveCurrentImages([serialized]).then(([resolved]) => ({
+        ...resolved,
+        actions: orderActionsFor(order.status, actorOf(authContext))
+    }));
 };

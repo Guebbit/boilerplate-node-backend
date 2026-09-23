@@ -7,9 +7,10 @@
 
 import { createRepository, type Repository } from '@infrastructure/persistence/create-repository';
 import { apiKeyModel, applyApiKeyTransform, type ApiKeyDocument } from './model';
+import type { ApiKey } from '@types';
 
 /** The shared factory's CRUD, scoped to `apikeys`. No `searchable`: the admin list has no free-text filter. */
-const base = createRepository<ApiKeyDocument>(apiKeyModel, {
+const base = createRepository<ApiKeyDocument, ApiKey>(apiKeyModel, {
     transform: applyApiKeyTransform
 });
 
@@ -45,7 +46,7 @@ const touchLastUsed = (id: string): Promise<void> =>
         .then(() => undefined);
 
 /** Explicit annotation: same TS7056 reason as every other module's repository — see `webhooks/repository.ts`. */
-export const apiKeyRepository: Repository<ApiKeyDocument> & {
+export const apiKeyRepository: Repository<ApiKeyDocument, ApiKey> & {
     findActiveByPrefix: typeof findActiveByPrefix;
     touchLastUsed: typeof touchLastUsed;
 } = {

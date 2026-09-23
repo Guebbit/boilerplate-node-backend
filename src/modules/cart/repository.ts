@@ -15,7 +15,8 @@ import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import {
     createRepository,
     toObjectId,
-    type Repository
+    type Repository,
+    type Wire
 } from '@infrastructure/persistence/create-repository';
 
 /** How {@link upsertLine} treats a quantity for a line already in the cart. */
@@ -135,7 +136,7 @@ const upsertLine = (
  * by `userId` alone, since `unique: true` on the schema makes that a complete address. Written
  * out explicitly: Mongoose's generics are too large for TS to infer at this export boundary (TS7056).
  */
-export const cartRepository: Repository<CartDocument> & {
+export const cartRepository: Repository<CartDocument, Wire<CartDocument>> & {
     findByUserId: (userId: string) => Promise<CartDocument | null>;
     upsertLine: (
         userId: string,
@@ -149,7 +150,7 @@ export const cartRepository: Repository<CartDocument> & {
     deleteByUserId: (userId: string) => Promise<void>;
     removeProductFromAll: (productId: string) => Promise<UpdateWriteOpResult>;
 } = {
-    ...createRepository<CartDocument>(cartModel, {
+    ...createRepository<CartDocument, Wire<CartDocument>>(cartModel, {
         transform: applyCartTransform
     }),
 

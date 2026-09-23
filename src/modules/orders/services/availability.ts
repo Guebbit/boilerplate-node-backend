@@ -12,7 +12,6 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { SYSTEM_ACTOR } from '@kernel/permissions';
 import { productService } from '@modules/products';
 import { userService } from '@modules/users';
-import type { OrderDocument, OrderDocumentItem } from '../model';
 import { orderRepository } from '../repository';
 import { productUnavailableCancelledEmail } from '../emails';
 import { cancelById } from './cancel';
@@ -24,15 +23,22 @@ export interface UnavailableLine {
 }
 
 /**
+ * One order line, read loosely enough to cover both shapes `unavailableLines` is ever handed: a
+ * hydrated `OrderDocument`'s embedded `OrderDocumentItem` (`product._id`), or the already-wire
+ * `Order` contract's `OrderItem` (`product.id`) — see `productIdOf`. Exported only because
+ * `unavailableLines`'s parameter type names it — never meant as a general-purpose type.
+ */
+export interface OrderLineSource {
+    product: { id?: unknown; _id?: unknown; title: string };
+}
+
+/**
  * The embedded product's id, read off whichever spelling this order's shape carries — a hydrated
  * (admin/unscoped) read keeps the raw `_id`, but a SCOPED read (`findByIdScoped`'s aggregate
  * branch) has already gone through `applyOrderTransform`, which rewrites it to `id`. The exact
  * two-shapes trap `cart/services/reorder.ts`'s own docblock names for the same reason.
  */
-const productIdOf = (item: OrderDocumentItem): string => {
-    const snapshot = item.product as { id?: unknown; _id?: unknown };
-    return String(snapshot.id ?? snapshot._id);
-};
+const productIdOf = (item: OrderLineSource): string => String(item.product.id ?? item.product._id);
 
 /**
  * Which of this order's lines point at a product that is no longer sellable — hard-deleted,
@@ -43,9 +49,9 @@ const productIdOf = (item: OrderDocumentItem): string => {
  * @param order - the order to check; only `items` is read
  * @returns the unavailable lines, empty when every line is still sellable
  */
-export const unavailableLines = (
-    order: Pick<OrderDocument, 'items'>
-): Promise<UnavailableLine[]> => {
+export const unavailableLines = (order: {
+    items: readonly OrderLineSource[];
+}): Promise<UnavailableLine[]> => {
     const productIds = order.items.map((item) => productIdOf(item));
 
     return productService.findManyByIds(productIds).then((found) => {

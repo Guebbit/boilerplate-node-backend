@@ -6,7 +6,7 @@
  * one at an export boundary (TS7056) — the same reason `Repository` exists.
  */
 
-import type { FacetCount } from '@types';
+import type { FacetCount, Product } from '@types';
 import { productModel, applyProductTransform } from './model';
 import type { ProductDocument } from './model';
 import {
@@ -29,7 +29,7 @@ const PUBLIC_SCOPE: Readonly<Record<string, unknown>> = {
 };
 
 /** The catalogue's repository: base CRUD from the factory, extended with scoping, facets, and the stock-cache mirror. */
-export const productRepository: Repository<ProductDocument> & {
+export const productRepository: Repository<ProductDocument, Product> & {
     publicScope: () => Record<string, unknown>;
     findByIdScoped: (
         productId: string,
@@ -43,7 +43,7 @@ export const productRepository: Repository<ProductDocument> & {
     ) => Promise<void>;
     writebackImage: ImageWriteback;
 } = {
-    ...createRepository<ProductDocument>(productModel, {
+    ...createRepository<ProductDocument, Product>(productModel, {
         transform: applyProductTransform,
         searchable: {
             objectIds: { id: '_id' },

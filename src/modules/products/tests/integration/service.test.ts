@@ -53,7 +53,7 @@ const GUEST: Caller | undefined = undefined;
 const LOGGED = asCustomer('507f1f77bcf86cd799439011');
 const ADMIN = asAdmin('507f1f77bcf86cd799439012');
 
-const titlesOf = (items: ProductDocument[]): string[] => items.map(({ title }) => title);
+const titlesOf = (items: { title: string }[]): string[] => items.map(({ title }) => title);
 
 /** A valid fallback-locale entry — every positive-path test spreads this in. */
 const FALLBACK_TRANSLATIONS = { translations: { en: { title: 'A Valid Product' } } };

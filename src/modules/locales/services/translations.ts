@@ -5,7 +5,12 @@
  * collection except through the derived-index-column write the registry names.
  */
 
-import type { TranslationFields, TranslationOrigin, UpsertTranslationsRequest } from '@types';
+import type {
+    Translation,
+    TranslationFields,
+    TranslationOrigin,
+    UpsertTranslationsRequest
+} from '@types';
 import { getFallbackLocale, t } from '@infrastructure/i18n';
 import type { TranslationWritePlan, TranslationWriteSlot } from '@kernel/translation';
 import {
@@ -18,18 +23,17 @@ import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { localeAuditActions } from '../audit';
-import type { TranslationDocument } from '../model';
 import { deriveSourceDigest, localeRepository, translationRepository } from '../repository';
 import { translatableTarget } from './translatables';
 
 /**
- * The GET/PATCH admin shape, still document-typed — `.toJSON()` per row is the controller's job,
- * the same boundary `createEntry`/`updateEntry` in `./entries.ts` draw.
+ * The GET/PATCH admin shape: `translations` is already wire-shaped, `translationRepository`'s
+ * `TWire` — `normalize`'s own transform, not a document, so no controller calls `.toJSON()` on it.
  */
 export interface EntityTranslationsResult {
     entityType: string;
     entityId: string;
-    translations: TranslationDocument[];
+    translations: Translation[];
     /** Every field name the `translatables` registry declares for this `entityType`. */
     fields: readonly string[];
 }

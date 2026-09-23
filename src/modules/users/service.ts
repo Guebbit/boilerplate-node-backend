@@ -24,7 +24,7 @@ import { assertPasswordNotBreached } from '@infrastructure/security/breached-pas
 import { encryptPii } from '@infrastructure/security/pii-encryption';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { zodUserSchema, TokenType, hashToken, toUser } from './model';
-import type { UserDocument, Token } from './model';
+import type { UserDocument, Token, UserWire } from './model';
 import type { CreateUserRequest, SearchUsersRequest, UpdateUserByIdRequest, User } from '@types';
 import { userRepository } from './repository';
 import { enqueueIfImagePending } from '@infrastructure/adapters/image.worker';
@@ -74,7 +74,7 @@ export const validateData = (userData: unknown, requirePassword = true): Respons
 export const search = (
     filters: SearchUsersRequest = {}
 ): Promise<{
-    items: UserDocument[];
+    items: UserWire[];
     meta: PaginatedMeta;
 }> => userRepository.search(filters);
 

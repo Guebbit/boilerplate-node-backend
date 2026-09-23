@@ -10,6 +10,7 @@ import { orderModel, applyOrderTransform, invoiceCounterModel } from './model';
 import type { OrderDocument, OrderPendingEffect, OrderStatusOverride } from './model';
 import type { PipelineStage, QueryFilter } from 'mongoose';
 import { OrderStatus } from '@types';
+import type { Order } from '@types';
 import {
     createRepository,
     toObjectId,
@@ -23,7 +24,7 @@ import {
 } from '@infrastructure/persistence/search';
 
 /** Plain CRUD from the repository factory; `search` below overrides its aggregation-free default. */
-const base = createRepository<OrderDocument>(orderModel, {
+const base = createRepository<OrderDocument, Order>(orderModel, {
     transform: applyOrderTransform,
     searchable: {
         objectIds: {
@@ -55,7 +56,7 @@ const aggregate = <T = OrderDocument>(pipeline: PipelineStage[]): Promise<T[]> =
 const search = async (
     filters: object = {},
     scope: Record<string, unknown> = {}
-): Promise<{ items: OrderDocument[]; meta: PaginatedMeta }> => {
+): Promise<{ items: Order[]; meta: PaginatedMeta }> => {
     const pagination = normalizePagination(filters);
     // Scope merged last: it is the authorization boundary, and no client filter may widen it.
     const match = { ...base.buildWhere(filters), ...scope };
@@ -87,15 +88,20 @@ const search = async (
  * rather than `findById` so the lookup and the authorization scope apply in the same query —
  * checking ownership after the read is how a scoped find becomes an information leak. The
  * return is polymorphic: unscoped (admin) resolves a hydrated Mongoose document, scoped (owner)
- * resolves a plain object already through `applyOrderTransform` — both serialize identically,
- * but only `id` resolves on both. `_id` type-checks on `OrderDocument` yet is `undefined` for
- * non-admins at runtime, silently and unchecked by TypeScript — the invoice filename shipped
- * that bug once already.
+ * resolves the wire shape `applyOrderTransform` already produced — both serialize identically,
+ * but only `id` resolves on both. The two overloads below say so: a call with no `scope` answers
+ * `OrderDocument` alone, one that might pass a scope answers the honest union, so a caller reads
+ * `_id` only where the type says it is actually there.
  */
-const findByIdScoped = (
+function findByIdScoped(id: string): Promise<OrderDocument | undefined>;
+function findByIdScoped(
+    id: string,
+    scope: Record<string, unknown> | undefined
+): Promise<OrderDocument | Order | undefined>;
+function findByIdScoped(
     id: string,
     scope?: Record<string, unknown>
-): Promise<OrderDocument | undefined> => {
+): Promise<OrderDocument | Order | undefined> {
     if (!scope) return base.findById(id).then((order) => order ?? undefined);
 
     return aggregate([{ $match: { _id: toObjectId(id), ...scope } }, { $limit: 1 }]).then(
@@ -104,7 +110,7 @@ const findByIdScoped = (
             return result ? base.normalize([result])[0] : undefined;
         }
     );
-};
+}
 
 /**
  * Restrict a query to one user's own orders.
@@ -372,16 +378,17 @@ const incrementInvoiceCounter = (year: number): Promise<number> =>
  * The type is written out because Mongoose's generics are too large for TypeScript to serialize
  * an inferred one at an export boundary (TS7056).
  */
-export const orderRepository: Omit<Repository<OrderDocument>, 'search'> & {
+export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> & {
     aggregate: <T = OrderDocument>(pipeline: PipelineStage[]) => Promise<T[]>;
     search: (
         filters?: object,
         scope?: Record<string, unknown>
-    ) => Promise<{ items: OrderDocument[]; meta: PaginatedMeta }>;
-    findByIdScoped: (
-        id: string,
-        scope?: Record<string, unknown>
-    ) => Promise<OrderDocument | undefined>;
+    ) => Promise<{ items: Order[]; meta: PaginatedMeta }>;
+    findByIdScoped: ((id: string) => Promise<OrderDocument | undefined>) &
+        ((
+            id: string,
+            scope: Record<string, unknown> | undefined
+        ) => Promise<OrderDocument | Order | undefined>);
     ownerScope: (userId: string) => Record<string, unknown>;
     updateStatusIfIn: (
         id: string,

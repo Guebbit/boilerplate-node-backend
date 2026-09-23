@@ -12,11 +12,12 @@ import type { ShipmentDocument } from './model';
 import {
     createRepository,
     toObjectId,
-    type Repository
+    type Repository,
+    type Wire
 } from '@infrastructure/persistence/create-repository';
 
 /** The shared repository factory's CRUD surface plus the carrier's own lookups. */
-export const shipmentRepository: Repository<ShipmentDocument> & {
+export const shipmentRepository: Repository<ShipmentDocument, Wire<ShipmentDocument>> & {
     findByOrderId: (orderId: string) => Promise<ShipmentDocument | null>;
     findByOrderIds: (orderIds: string[]) => Promise<ShipmentDocument[]>;
     upsertForOrder: (orderId: string, trackingCode?: string) => Promise<ShipmentDocument>;
@@ -27,7 +28,7 @@ export const shipmentRepository: Repository<ShipmentDocument> & {
         extra?: Partial<ShipmentDocument>
     ) => Promise<ShipmentDocument | null>;
 } = {
-    ...createRepository<ShipmentDocument>(shipmentModel, {
+    ...createRepository<ShipmentDocument, Wire<ShipmentDocument>>(shipmentModel, {
         transform: applyShipmentTransform
     }),
 

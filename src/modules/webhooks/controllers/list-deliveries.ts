@@ -7,7 +7,7 @@ import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
 import { ListWebhookDeliveriesQueryParams } from '@api/schemas.zod';
 import { createListController } from '@infrastructure/surfaces/create-list-controller';
 import { tenantCallerContextOf } from '@infrastructure/http/request';
-import type { WebhookDelivery, WebhookDeliveriesResponse } from '@types';
+import type { WebhookDeliveriesResponse } from '@types';
 import { webhooksService } from '../services';
 
 /**
@@ -23,12 +23,6 @@ export const listWebhookDeliveries = createListController({
         page: pageSchema,
         pageSize: pageSizeSchema
     }).partial(),
-    runList: (parsed, request) =>
-        webhooksService.listDeliveries(tenantCallerContextOf(request), parsed).then((result) => {
-            const items: unknown = result.items;
-            return {
-                items: items as WebhookDelivery[],
-                meta: result.meta
-            } satisfies WebhookDeliveriesResponse;
-        })
+    runList: (parsed, request): Promise<WebhookDeliveriesResponse> =>
+        webhooksService.listDeliveries(tenantCallerContextOf(request), parsed)
 });

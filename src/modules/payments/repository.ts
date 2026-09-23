@@ -12,12 +12,19 @@ import type { PaymentDocument } from './model';
 import {
     createRepository,
     toObjectId,
-    type Repository
+    type Repository,
+    type Wire
 } from '@infrastructure/persistence/create-repository';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 
+/**
+ * `providerRef` is the one field `applyPaymentTransform` omits — the provider's own payment-intent
+ * id, never part of the wire contract — so the search wire type drops it too.
+ */
+export type PaymentWire = Omit<Wire<PaymentDocument>, 'providerRef'>;
+
 /** Payment CRUD, ownership scoping, and the intent/status writes the service depends on. */
-export const paymentRepository: Repository<PaymentDocument> & {
+export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
     ownerScope: (userId: string) => Record<string, unknown>;
     findByIdScoped: (
         paymentId: string,
@@ -54,7 +61,7 @@ export const paymentRepository: Repository<PaymentDocument> & {
         extra?: Partial<PaymentDocument>
     ) => Promise<PaymentDocument | null>;
 } = {
-    ...createRepository<PaymentDocument>(paymentModel, {
+    ...createRepository<PaymentDocument, PaymentWire>(paymentModel, {
         transform: applyPaymentTransform
     }),
 

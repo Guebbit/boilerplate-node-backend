@@ -10,6 +10,7 @@
 
 import {
     FeedbackRequestStatus,
+    type FeedbackRequest,
     type SearchFeedbackRequestsRequest,
     type UpdateFeedbackRequestStatusRequest,
     type CreateFeedbackRequest
@@ -156,7 +157,7 @@ export const search = (
     // internal reuse of this as a plain query helper) — no context means no emit.
     context?: CallerContext
 ): Promise<{
-    items: FeedbackRequestDocument[];
+    items: FeedbackRequest[];
     meta: PaginatedMeta;
 }> =>
     // `status` is declared as a scope rather than on the repository's own search spec: it is a

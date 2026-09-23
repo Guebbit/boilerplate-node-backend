@@ -12,6 +12,7 @@
 import { auditLogModel, applyAuditLogTransform } from './model';
 import type { AuditLogDocument } from './model';
 import { createRepository } from '@infrastructure/persistence/create-repository';
+import type { AuditEntryItem } from '@types';
 
 /**
  * What `search` accepts, mirroring the query parameters `GET /observability/audit` and
@@ -30,7 +31,7 @@ export interface AuditLogSearchFilters {
 }
 
 /** The shared repository factory's create/search pair, scoped to the audit collection. */
-const base = createRepository<AuditLogDocument>(auditLogModel, {
+const base = createRepository<AuditLogDocument, AuditEntryItem>(auditLogModel, {
     transform: applyAuditLogTransform,
     searchable: {
         // All four are closed vocabularies or opaque ids — matched verbatim, never as a regex.

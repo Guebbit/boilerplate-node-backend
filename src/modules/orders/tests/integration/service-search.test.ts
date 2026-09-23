@@ -10,32 +10,8 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct, saveProduct, deleteProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import * as orderService from '@modules/orders/services';
-import type { OrderDocument } from '../../model';
 
 setupTestDb();
-
-type OrderWithTotals = OrderDocument & {
-    totalItems: number;
-    totalQuantity: number;
-    totalPrice: number;
-};
-
-/**
- * An order line as `resolveCurrentImages` leaves it — `current` isn't on `OrderDocumentItem`,
- * since nothing stores it; it's attached at the serialization boundary. See
- * `../../services/current`.
- */
-interface ItemWithCurrent {
-    product: { id: string };
-    current: { imageUrl: string; thumbnailUrl?: string } | null;
-}
-
-/**
- * Narrows a search result's item to what `resolveCurrentImages` attached — a single cast from
- * `unknown`, not the double `as unknown as` the field's absence from `OrderDocumentItem` would
- * otherwise force at every call site.
- */
-const currentOf = (item: unknown): ItemWithCurrent['current'] => (item as ItemWithCurrent).current;
 
 /*
  * `totalItems`, `totalQuantity` and `totalPrice` are not stored — `applyOrderTransform` derives
@@ -54,7 +30,7 @@ describe('orderService.search — derived totals', () => {
         await createOrder(user, [toOrderItem(p1, 1), toOrderItem(p2, 3)]);
 
         const { items } = await orderService.search();
-        const [order] = items as OrderWithTotals[];
+        const [order] = items;
 
         // 2 distinct product lines → totalItems = 2
         expect(order.totalItems).toBe(2);
@@ -68,7 +44,7 @@ describe('orderService.search — derived totals', () => {
         await createOrder(user, [toOrderItem(product, 4)]);
 
         const { items } = await orderService.search();
-        const [order] = items as OrderWithTotals[];
+        const [order] = items;
 
         expect(order.totalQuantity).toBe(4);
     });
@@ -80,7 +56,7 @@ describe('orderService.search — derived totals', () => {
         await createOrder(user, [toOrderItem(product, 3)]); // 3 × 15 = $45
 
         const { items } = await orderService.search();
-        const [order] = items as OrderWithTotals[];
+        const [order] = items;
 
         expect(order.totalPrice).toBe(45);
     });
@@ -95,7 +71,7 @@ describe('orderService.search — derived totals', () => {
         await createOrder(user, [toOrderItem(p1, 2), toOrderItem(p2, 4)]);
 
         const { items } = await orderService.search();
-        const [order] = items as OrderWithTotals[];
+        const [order] = items;
 
         expect(order.totalItems).toBe(2); // 2 product lines
         expect(order.totalQuantity).toBe(6); // 2 + 4
@@ -228,7 +204,7 @@ describe('orderService.search', () => {
         await createOrder(user, [toOrderItem(product, 3)]); // 3 × $25 = $75
 
         const result = await orderService.search({});
-        const [order] = result.items as OrderWithTotals[];
+        const [order] = result.items;
 
         expect(order.totalItems).toBe(1);
         expect(order.totalQuantity).toBe(3);
@@ -272,7 +248,7 @@ describe('orderService.search — current (live) image', () => {
 
         const { items } = await orderService.search({});
 
-        expect(currentOf(items[0].items[0])).toEqual({ imageUrl: '/images/original.jpg' });
+        expect(items[0].items[0].current).toEqual({ imageUrl: '/images/original.jpg' });
     });
 
     it('resolves the NEW imageUrl when the product changed since the order was placed', async () => {
@@ -288,7 +264,7 @@ describe('orderService.search — current (live) image', () => {
 
         const { items } = await orderService.search({});
 
-        expect(currentOf(items[0].items[0])).toEqual({ imageUrl: '/images/replaced.jpg' });
+        expect(items[0].items[0].current).toEqual({ imageUrl: '/images/replaced.jpg' });
     });
 
     it('resolves null once the product has been hard-deleted', async () => {
@@ -300,6 +276,6 @@ describe('orderService.search — current (live) image', () => {
 
         const { items } = await orderService.search({});
 
-        expect(currentOf(items[0].items[0])).toBeNull();
+        expect(items[0].items[0].current).toBeNull();
     });
 });

@@ -19,7 +19,7 @@ import type { PaginatedResult } from '@infrastructure/persistence/create-reposit
 import { holdsKey } from '@kernel/ability';
 import { findKey } from '@kernel/permissions';
 import type { Caller } from '@types';
-import type { MintApiKeyRequest, ApiKeyCreated } from '@types';
+import type { MintApiKeyRequest, ApiKeyCreated, ApiKey } from '@types';
 import type { ApiKeyDocument } from '../model';
 import { apiKeyRepository } from '../repository';
 import { mintApiKey, displayIdOf } from '../credentials';
@@ -41,7 +41,7 @@ const isMintable = (key: string, caller: Caller): boolean =>
 export const list = (
     context: TenantCallerContext,
     filters: { page?: unknown; pageSize?: unknown }
-): Promise<PaginatedResult<ApiKeyDocument>> =>
+): Promise<PaginatedResult<ApiKey>> =>
     apiKeyRepository.search(
         filters,
         { tenant: context.caller.tenantId },

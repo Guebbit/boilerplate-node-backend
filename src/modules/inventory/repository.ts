@@ -25,10 +25,12 @@ import {
     createRepository,
     toObjectId,
     type Lean,
-    type Repository
+    type Repository,
+    type Wire
 } from '@infrastructure/persistence/create-repository';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import type { CounterDelta } from './domain';
+import type { StockMovement } from '@types';
 
 /**
  * One row of the stock board — this module's own counters ONLY, no product fields. The title a
@@ -62,7 +64,7 @@ const toReservationItems = (
  * `reserved`/`available`. Every write is conditional; the service layer owns the per-transition
  * condition, this file only applies it and keeps `available` in step.
  */
-export const stockLevelRepository: Repository<StockLevelDocument> & {
+export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLevelDocument>> & {
     ensure: (productId: string) => Promise<StockLevelDocument>;
     findByProductId: (productId: string) => Promise<StockLevelDocument | null>;
     deleteByProductId: (productId: string) => Promise<void>;
@@ -79,7 +81,7 @@ export const stockLevelRepository: Repository<StockLevelDocument> & {
     lowAvailabilityProductIds: (threshold: number) => Promise<string[]>;
     sumReserved: () => Promise<number>;
 } = {
-    ...createRepository<StockLevelDocument>(stockLevelModel, {
+    ...createRepository<StockLevelDocument, Wire<StockLevelDocument>>(stockLevelModel, {
         transform: applyStockLevelTransform
     }),
 
@@ -221,8 +223,8 @@ export const stockLevelRepository: Repository<StockLevelDocument> & {
  * The ledger. Append-only: `create` and `search` are the whole surface — there is deliberately
  * no update or delete, because a trail the application can edit is not a trail.
  */
-export const stockMovementRepository: Repository<StockMovementDocument> =
-    createRepository<StockMovementDocument>(stockMovementModel, {
+export const stockMovementRepository: Repository<StockMovementDocument, StockMovement> =
+    createRepository<StockMovementDocument, StockMovement>(stockMovementModel, {
         transform: applyStockMovementTransform,
         searchable: {
             objectIds: { productId: 'productId' },
@@ -236,7 +238,7 @@ export const stockMovementRepository: Repository<StockMovementDocument> =
  * The hold. The generic CRUD surface plus the four lifecycle primitives the service drives every
  * transition through — each documented at its own definition below.
  */
-export const reservationRepository: Repository<ReservationDocument> & {
+export const reservationRepository: Repository<ReservationDocument, Wire<ReservationDocument>> & {
     insertHold: (
         orderId: string,
         items: readonly { productId: string; quantity: number }[],
@@ -250,7 +252,7 @@ export const reservationRepository: Repository<ReservationDocument> & {
     ) => Promise<ReservationDocument | null>;
     findExpired: (now: Date, limit: number) => Promise<ReservationDocument[]>;
 } = {
-    ...createRepository<ReservationDocument>(reservationModel, {
+    ...createRepository<ReservationDocument, Wire<ReservationDocument>>(reservationModel, {
         transform: applyReservationTransform
     }),
 

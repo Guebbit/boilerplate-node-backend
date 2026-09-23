@@ -109,7 +109,7 @@ export const search = async (
     filters: SearchProductsRequest = {},
     scope?: Record<string, unknown>
 ): Promise<{
-    items: ProductDocument[];
+    items: Product[];
     meta: PaginatedMeta;
 }> => {
     const pattern = toSearchPattern(filters.text ?? filters.title);
@@ -139,7 +139,7 @@ const searchWithTranslatedText = async (
     filters: SearchProductsRequest,
     scope: Record<string, unknown> | undefined,
     pattern: string
-): Promise<{ items: ProductDocument[]; meta: PaginatedMeta }> => {
+): Promise<{ items: Product[]; meta: PaginatedMeta }> => {
     const { text, title, ...rest } = filters;
     const ownMatch = productRepository.buildWhere({ text, title });
 
@@ -170,7 +170,7 @@ export const searchViewed = (
     filters: SearchProductsRequest,
     scope: Record<string, unknown> | undefined,
     context: CallerContext
-): Promise<{ items: ProductDocument[]; meta: PaginatedMeta }> =>
+): Promise<{ items: Product[]; meta: PaginatedMeta }> =>
     search(filters, scope).then((result) => {
         emitAnalyticsEvent({
             ...buildAnalyticsBase(context),

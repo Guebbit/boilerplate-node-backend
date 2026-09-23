@@ -704,6 +704,23 @@ userSchema.methods.tokenRemoveAll = function (this: UserDocument, type: Token['t
 };
 
 /**
+ * What `search()` actually hands back: {@link UserRecord}, minus the same secrets and
+ * document-only bookkeeping {@link applyUserTransform}'s `omit` strips. Real `Date`s, not the
+ * ISO strings the `User` contract carries — `toUser` is what narrows those, and it accepts this
+ * shape (or a hydrated {@link UserDocument}, a superset of it) rather than the document alone.
+ */
+export type UserWire = Omit<
+    UserRecord,
+    | 'password'
+    | 'tokens'
+    | 'pendingImageKey'
+    | 'inactivityWarnedAt'
+    | 'twoFactorMethods'
+    | 'twoFactorBackupCodes'
+    | 'oauthAccounts'
+>;
+
+/**
  * Normalizes a serialized user into the OpenAPI `User` contract: `id` from `_id`, `_id`/`__v`
  * stripped, plus `password` and `tokens` — credentials that must never leave the server. Both are
  * also `select: false` on the schema; this is defense in depth, not the only guard. Exported so
@@ -731,17 +748,17 @@ export const applyUserTransform = applySerialization(userSchema, {
 });
 
 /**
- * Maps a document straight onto the `User` contract, ISO-stringifying the four fields
- * {@link UserRecord} redeclares as `Date`. A controller that calls `successResponse<User>` with
- * the document itself compiles fine ONLY by luck of those fields being optional and missing —
- * `Date` is not a `string`, so any populated record fails the check; this is the honest fix rather
- * than a wider `UserDocument` generic argument.
+ * Maps a loaded account straight onto the `User` contract, ISO-stringifying the four fields
+ * {@link UserRecord} redeclares as `Date`. Takes {@link UserWire} rather than {@link UserDocument}:
+ * a hydrated document satisfies it too (a superset), and `search()`'s already-normalized rows
+ * — which never carry `password`/`tokens`/2FA credential material to begin with — need no
+ * document methods this only ever reads plain fields off anyway.
  *
  * @param role - the caller's CURRENT tenant role, read from the membership store by whoever calls
  *   this — never off the document, which holds no role of its own. `null` prints as absent, the
  *   same as every other optional field below.
  */
-export const toUser = (document: UserDocument, role: string | null): User => ({
+export const toUser = (document: UserWire, role: string | null): User => ({
     id: document.id,
     email: document.email,
     username: document.username,

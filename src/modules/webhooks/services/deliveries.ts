@@ -19,6 +19,7 @@ import {
     webhookSubscriptionRepository,
     WEBHOOK_DELIVERY_SORT
 } from '../repository';
+import type { WebhookDelivery } from '@types';
 import type { WebhookDeliveryDocument } from '../model';
 import { attemptDelivery } from './attempt';
 import { webhooksAuditActions } from '../audit';
@@ -42,7 +43,7 @@ export interface DeliveryListFilters {
 export const list = (
     context: TenantCallerContext,
     filters: DeliveryListFilters
-): Promise<PaginatedResult<WebhookDeliveryDocument>> =>
+): Promise<PaginatedResult<WebhookDelivery>> =>
     webhookDeliveryRepository.search(
         {
             subscription: filters.subscriptionId,

@@ -34,11 +34,11 @@ export const getOrderInvoice = (request: Request<{ id?: string }>, response: Res
             }
 
             /*
-             * `id`, not `_id`. `getById` is polymorphic by scope (see `findByIdScoped`): an admin
-             * gets a hydrated document, an owner gets a transformed plain object whose `_id` the
-             * serializer deleted. `id` is the half that resolves on both.
+             * `getById` is polymorphic by scope (see `findByIdScoped`): an admin gets a hydrated
+             * `OrderDocument` (`_id`), an owner gets the already-transformed `Order` wire shape
+             * (`id`, no `_id` at all) — `'_id' in order` is what tells the two apart.
              */
-            const orderId = String((order as typeof order & { id?: string }).id ?? order._id);
+            const orderId = String('_id' in order ? order._id : order.id);
 
             return orderService.renderInvoicePdf(orderId).then((pdf) => {
                 // Hard-deleted between the read above and the render — vanishingly unlikely, but

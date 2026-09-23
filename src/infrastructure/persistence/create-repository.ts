@@ -35,6 +35,15 @@ export type Lean<TDocument extends Document> = Omit<TDocument, keyof Document | 
     Pick<TDocument, '_id'>;
 
 /**
+ * The wire shape a repository's `transform` produces when it does nothing beyond the shared
+ * `_id` → `id` rename — {@link Lean}, minus `_id`, plus a string `id`. A repository whose
+ * `transform` also omits a field (a secret, document-only bookkeeping) or derives one (a computed
+ * total, a stringified date) composes its own narrower or wider `TWire` instead of using this
+ * directly — see `createRepository`'s own `TWire` parameter.
+ */
+export type Wire<TDocument extends Document> = Omit<Lean<TDocument>, '_id'> & { id: string };
+
+/**
  * The ceiling `findAll` applies when a caller names no limit. A backstop against an unbounded
  * collection scan, not a page size — paging goes through `search`.
  */
@@ -159,9 +168,9 @@ const buildWhere = (filters: object, spec: SearchSpec): Record<string, unknown> 
     return where;
 };
 
-/** A page of already-normalized results plus its pagination meta. */
-export interface PaginatedResult<TDocument> {
-    items: TDocument[];
+/** A page of already-normalized, wire-shaped results plus its pagination meta. */
+export interface PaginatedResult<TWire> {
+    items: TWire[];
     meta: PaginatedMeta;
 }
 
@@ -184,7 +193,7 @@ export interface RepositoryOptions {
  * inferred shape at an export boundary (TS7056) once it is spread into a repository object.
  * Naming the contract fixes that, and doubles as the one place to read what a repository can do.
  */
-export interface Repository<TDocument extends Document> {
+export interface Repository<TDocument extends Document, TWire> {
     /**
      * Fetch one document by `_id`, as a hydrated document.
      *
@@ -222,14 +231,14 @@ export interface Repository<TDocument extends Document> {
     build: (data: Partial<TDocument>) => TDocument;
     /** Remove a single document. */
     deleteOne: (document: TDocument) => Promise<void>;
-    /** Filter → count → page → normalize, per the declared search spec. */
+    /** Filter → count → page → normalize, per the declared search spec. Answers wire rows, not documents. */
     search: (
         filters?: object,
         scope?: Record<string, unknown>,
         sort?: Record<string, 1 | -1>
-    ) => Promise<PaginatedResult<TDocument>>;
-    /** Apply the model's transform to lean/aggregate output. */
-    normalize: (items: unknown[]) => TDocument[];
+    ) => Promise<PaginatedResult<TWire>>;
+    /** Apply the model's transform to lean/aggregate output, producing this collection's wire shape. */
+    normalize: (items: unknown[]) => TWire[];
     /** Build a Mongo filter from a filter bag, per the declared search spec. */
     buildWhere: (filters: object) => Record<string, unknown>;
 }
@@ -241,23 +250,26 @@ export interface Repository<TDocument extends Document> {
  * mapping, filter-bag → query) and is consumed by SPREAD, not `extends` — so a module that can't
  * honour part of the contract narrows its own type instead of inheriting a method it must break.
  */
-export function createRepository<TDocument extends Document>(
+export function createRepository<TDocument extends Document, TWire>(
     mongooseModel: Model<TDocument>,
     options: RepositoryOptions
-): Repository<TDocument> {
+): Repository<TDocument, TWire> {
     const { transform, searchable = {} } = options;
 
     /**
      * Normalize a batch of lean/aggregate results.
      *
-     * `.lean()` returns plain objects; the transform rewrites their keys and the app types the
-     * result as the document. Confined to this one function, so there's one place to get it wrong.
+     * `.lean()` returns plain objects; the transform rewrites their keys in place. `transform`
+     * itself stays `Record<string, unknown> -> Record<string, unknown>` — one function serves
+     * every model — so this is the one place that states the shape a GIVEN model's transform
+     * actually produces. The single cast this factory makes: everywhere downstream reads the
+     * result as `TWire`, never `unknown` again.
      */
-    const normalize = (items: unknown[]): TDocument[] => {
+    const normalize = (items: unknown[]): TWire[] => {
         const transformed: unknown[] = items.map((item) =>
             transform(item as Record<string, unknown>)
         );
-        return transformed as TDocument[];
+        return transformed as TWire[];
     };
 
     /** Hydrated — callers may mutate and `save()` the result. */
@@ -327,7 +339,7 @@ export function createRepository<TDocument extends Document>(
         // Total sort by default: `count` and `findAll` are separate queries, so a tie can put
         // one document on two pages — see `DEFAULT_SORT`.
         sort: Record<string, 1 | -1> = DEFAULT_SORT
-    ): Promise<PaginatedResult<TDocument>> => {
+    ): Promise<PaginatedResult<TWire>> => {
         const pagination = normalizePagination(filters as PaginationInput);
         // `scope` merged last and wins: it is the caller's authorization boundary (own rows,
         // publicly visible rows), which no client-supplied filter may widen.

@@ -19,7 +19,14 @@ import {
 } from './model';
 import type { LocaleDocument, LocaleEntryDocument, TranslationDocument } from './model';
 import { createRepository, type Repository } from '@infrastructure/persistence/create-repository';
-import type { LocaleTenant, TranslationFields, TranslationOrigin } from '@types';
+import type {
+    Language,
+    LocaleEntry,
+    LocaleTenant,
+    Translation,
+    TranslationFields,
+    TranslationOrigin
+} from '@types';
 import { frontendTenantIds } from './tenants';
 
 /** One key and its translation, as a write supplies them. */
@@ -36,7 +43,7 @@ export interface ImportCounts {
 }
 
 /** Base CRUD/search repository over the languages collection. */
-const localeBase = createRepository<LocaleDocument>(localeModel, {
+const localeBase = createRepository<LocaleDocument, Language>(localeModel, {
     transform: applyLocaleTransform,
     searchable: {
         exact: { tag: 'tag' },
@@ -45,7 +52,7 @@ const localeBase = createRepository<LocaleDocument>(localeModel, {
 });
 
 /** Base CRUD/search repository over the entries collection. */
-const entryBase = createRepository<LocaleEntryDocument>(localeEntryModel, {
+const entryBase = createRepository<LocaleEntryDocument, LocaleEntry>(localeEntryModel, {
     transform: applyLocaleEntryTransform,
     searchable: {
         /*
@@ -257,7 +264,7 @@ const deleteLocaleCascade = async (locale: LocaleDocument): Promise<LocaleCascad
 };
 
 /** Base CRUD repository over the translations collection. No `searchable`: never listed by filter. */
-const translationBase = createRepository<TranslationDocument>(translationModel, {
+const translationBase = createRepository<TranslationDocument, Translation>(translationModel, {
     transform: applyTranslationTransform
 });
 
@@ -453,7 +460,7 @@ const updateDerivedColumn = (
  */
 
 /** The languages. */
-export const localeRepository: Repository<LocaleDocument> & {
+export const localeRepository: Repository<LocaleDocument, Language> & {
     findByTag: (tag: string) => Promise<LocaleDocument | null>;
     list: (scope?: Record<string, unknown>) => Promise<LocaleDocument[]>;
     bumpRevision: (tag: string) => Promise<number>;
@@ -467,7 +474,7 @@ export const localeRepository: Repository<LocaleDocument> & {
 };
 
 /** The words. */
-export const localeEntryRepository: Repository<LocaleEntryDocument> & {
+export const localeEntryRepository: Repository<LocaleEntryDocument, LocaleEntry> & {
     countEntriesByLocale: () => Promise<Map<string, number>>;
     listEntries: (locale: string, tenant: LocaleTenant) => Promise<LocaleEntryDocument[]>;
     listEntriesByTenant: (tenant: LocaleTenant) => Promise<LocaleEntryDocument[]>;
@@ -501,7 +508,7 @@ export const localeEntryRepository: Repository<LocaleEntryDocument> & {
 };
 
 /** User-authored content, one row per (entityType, entityId, locale). */
-export const translationRepository: Repository<TranslationDocument> & {
+export const translationRepository: Repository<TranslationDocument, Translation> & {
     findEntityTranslations: (
         entityType: string,
         entityId: string

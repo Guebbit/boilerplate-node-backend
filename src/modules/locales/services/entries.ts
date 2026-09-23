@@ -7,6 +7,7 @@
 
 import type {
     CreateLocaleEntryRequest,
+    LocaleEntry,
     LocaleEntryInput,
     LocaleImportResult,
     LocaleTenant,
@@ -44,9 +45,7 @@ export const searchEntries = async (
         text?: string;
         tenant?: LocaleTenant;
     } = {}
-): Promise<
-    ResponseSuccess<{ items: LocaleEntryDocument[]; meta: PaginatedMeta }> | ResponseReject
-> => {
+): Promise<ResponseSuccess<{ items: LocaleEntry[]; meta: PaginatedMeta }> | ResponseReject> => {
     const language = await localeRepository.findByTag(tag);
     if (!language) return languageNotFound();
 

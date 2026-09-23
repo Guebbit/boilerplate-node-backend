@@ -7,7 +7,7 @@
  */
 
 import { userModel, applyUserTransform, TokenType, hashToken } from './model';
-import type { UserDocument, Token, OAuthAccount } from './model';
+import type { UserDocument, Token, OAuthAccount, UserWire } from './model';
 import type { UpdateQuery, QueryFilter, UpdateWriteOpResult } from 'mongoose';
 import {
     createRepository,
@@ -51,7 +51,7 @@ const LAST_ACTIVE_EXPR = {
  * type is written out because Mongoose's generics are too large for TypeScript to serialize an
  * inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
  */
-export const userRepository: Repository<UserDocument> & {
+export const userRepository: Repository<UserDocument, UserWire> & {
     updateMany: (
         filter: QueryFilter<UserDocument>,
         update: UpdateQuery<UserDocument>
@@ -75,7 +75,7 @@ export const userRepository: Repository<UserDocument> & {
     findWarnedStillInactive: (cutoff: Date) => Promise<UserDocument[]>;
     findReaperSoftDeletedPastGrace: (cutoff: Date) => Promise<UserDocument[]>;
 } = {
-    ...createRepository<UserDocument>(userModel, {
+    ...createRepository<UserDocument, UserWire>(userModel, {
         transform: applyUserTransform,
         searchable: {
             objectIds: { id: '_id' },

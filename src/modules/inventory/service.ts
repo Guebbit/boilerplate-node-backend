@@ -18,7 +18,7 @@ import {
 } from '@infrastructure/http/response';
 import { emitDomainEvent } from '@kernel/events';
 import { productService } from '@modules/products';
-import { StockMovementReason, type InventoryLevel } from '@types';
+import { StockMovementReason, type InventoryLevel, type StockMovement } from '@types';
 import {
     normalizePagination,
     buildPaginatedMeta,
@@ -29,7 +29,7 @@ import { counterDeltaFor } from './domain';
 import { reservationTtlMinutes, lowStockThreshold } from './config';
 import { stockLevelRepository, stockMovementRepository, reservationRepository } from './repository';
 import { RESERVATION_EXPIRED } from './events';
-import type { StockLevelDocument, StockMovementDocument } from './model';
+import type { StockLevelDocument } from './model';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
@@ -607,7 +607,7 @@ export const lowStockCount = (): Promise<number> =>
  */
 export const listMovements = (
     filters: MovementFilters = {}
-): Promise<{ items: StockMovementDocument[]; meta: PaginatedMeta }> =>
+): Promise<{ items: StockMovement[]; meta: PaginatedMeta }> =>
     // No sort argument: `search`'s default is `DEFAULT_SORT`, which is this exact order and
     // the only one that makes a paged ledger stable.
     stockMovementRepository.search(filters);

@@ -5,7 +5,7 @@
  * `orders` share. See docs/modules/feedback.md.
  */
 
-import type { FeedbackRequest, FeedbackRequestsResponse } from '@types';
+import type { FeedbackRequestsResponse } from '@types';
 import { SearchFeedbackRequestsBody } from '@api/schemas.zod';
 import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -37,15 +37,5 @@ export const getFeedback = createSearchController({
     entity: 'feedback',
     schema: searchFeedbackQuerySchema,
     runSearch: (parsed, request): Promise<FeedbackRequestsResponse> =>
-        feedbackRequestService.search(parsed, callerContextOf(request)).then((result) => {
-            // `search()` already returns normalized (wire-shape) rows — unlike `findById`/`findOne`,
-            // it never hands back a hydrated document, so there is no `.toJSON()` to apply here.
-            // The repository factory's `PaginatedResult<TDocument>` names the pre-normalize type,
-            // which is why `items` needs the cast below.
-            const items: unknown = result.items;
-            return {
-                items: items as FeedbackRequest[],
-                meta: result.meta
-            };
-        })
+        feedbackRequestService.search(parsed, callerContextOf(request))
 });

@@ -10,7 +10,8 @@ import type { AddressInput, UpdateAddressRequest } from '@types';
 import {
     createRepository,
     toObjectId,
-    type Repository
+    type Repository,
+    type Wire
 } from '@infrastructure/persistence/create-repository';
 import { encryptPii } from '@infrastructure/security/pii-encryption';
 import { decryptAddressItem } from './pii';
@@ -39,7 +40,7 @@ const decryptBook = (book: AddressBookDocument): AddressBookDocument => {
  * The type is written out because Mongoose's generics are too large for TS to serialize an
  * inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
  */
-export const addressBookRepository: Repository<AddressBookDocument> & {
+export const addressBookRepository: Repository<AddressBookDocument, Wire<AddressBookDocument>> & {
     findByUserId: (userId: string) => Promise<AddressBookDocument | null>;
     addEntry: (userId: string, entry: AddressInput) => Promise<AddressBookDocument>;
     updateEntry: (
@@ -50,7 +51,7 @@ export const addressBookRepository: Repository<AddressBookDocument> & {
     removeEntry: (userId: string, addressId: string) => Promise<AddressBookDocument | null>;
     deleteByUserId: (userId: string) => Promise<void>;
 } = {
-    ...createRepository<AddressBookDocument>(addressBookModel, {
+    ...createRepository<AddressBookDocument, Wire<AddressBookDocument>>(addressBookModel, {
         transform: applyAddressBookTransform
     }),
 

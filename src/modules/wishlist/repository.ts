@@ -13,7 +13,8 @@ import type { WishlistDocument } from './model';
 import {
     createRepository,
     toObjectId,
-    type Repository
+    type Repository,
+    type Wire
 } from '@infrastructure/persistence/create-repository';
 
 /**
@@ -28,14 +29,14 @@ import {
  * Every method is `async` because each assembles its filter with `toObjectId`, which throws on a
  * malformed id — see `create-repository.ts` for why that decides between a 4xx and a 500.
  */
-export const wishlistRepository: Repository<WishlistDocument> & {
+export const wishlistRepository: Repository<WishlistDocument, Wire<WishlistDocument>> & {
     findByUserId: (userId: string) => Promise<WishlistDocument | null>;
     addLine: (userId: string, productId: string) => Promise<WishlistDocument>;
     removeLine: (userId: string, productId: string) => Promise<WishlistDocument | null>;
     deleteByUserId: (userId: string) => Promise<void>;
     removeProductFromAll: (productId: string) => Promise<UpdateWriteOpResult>;
 } = {
-    ...createRepository<WishlistDocument>(wishlistModel, {
+    ...createRepository<WishlistDocument, Wire<WishlistDocument>>(wishlistModel, {
         transform: applyWishlistTransform
     }),
 

@@ -19,11 +19,15 @@ import {
     type WebhookSubscriptionDocument,
     type WebhookDeliveryDocument
 } from './model';
+import type { WebhookSubscription, WebhookDelivery } from '@types';
 
 /** The shared factory's CRUD, scoped to `webhooksubscriptions`. No `searchable`: the admin list has no filters. */
-const subscriptionBase = createRepository<WebhookSubscriptionDocument>(webhookSubscriptionModel, {
-    transform: applyWebhookSubscriptionTransform
-});
+const subscriptionBase = createRepository<WebhookSubscriptionDocument, WebhookSubscription>(
+    webhookSubscriptionModel,
+    {
+        transform: applyWebhookSubscriptionTransform
+    }
+);
 
 /**
  * Every ENABLED subscription — the whole small table, read once per published event and matched
@@ -97,10 +101,13 @@ const disable = (subscriptionId: string): Promise<WebhookSubscriptionDocument | 
 /*
  * Explicit annotation, not inferred: Mongoose's `Query` generics are large enough that TypeScript
  * refuses to serialize the inferred shape at this export boundary (TS7056) once the factory result
- * is spread into a repository object — see `create-repository.ts`'s own `Repository<TDocument>`
+ * is spread into a repository object — see `create-repository.ts`'s own `Repository<TDocument, TWire>`
  * docblock for why naming the contract is what fixes it.
  */
-export const webhookSubscriptionRepository: Repository<WebhookSubscriptionDocument> & {
+export const webhookSubscriptionRepository: Repository<
+    WebhookSubscriptionDocument,
+    WebhookSubscription
+> & {
     findEnabled: typeof findEnabled;
     recordOutcome: typeof recordOutcome;
     disable: typeof disable;
@@ -112,7 +119,7 @@ export const webhookSubscriptionRepository: Repository<WebhookSubscriptionDocume
 };
 
 /** The shared factory's CRUD, scoped to `webhookdeliveries`. */
-const deliveryBase = createRepository<WebhookDeliveryDocument>(webhookDeliveryModel, {
+const deliveryBase = createRepository<WebhookDeliveryDocument, WebhookDelivery>(webhookDeliveryModel, {
     transform: applyWebhookDeliveryTransform,
     searchable: {
         objectIds: { subscription: 'subscriptionId' },
@@ -242,7 +249,7 @@ const findDue = (limit: number): Promise<WebhookDeliveryDocument[]> =>
         .exec();
 
 /** Explicit annotation for the same TS7056 reason as {@link webhookSubscriptionRepository}. */
-export const webhookDeliveryRepository: Repository<WebhookDeliveryDocument> & {
+export const webhookDeliveryRepository: Repository<WebhookDeliveryDocument, WebhookDelivery> & {
     claimPending: typeof claimPending;
     claimForReplay: typeof claimForReplay;
     applyOutcome: typeof applyOutcome;

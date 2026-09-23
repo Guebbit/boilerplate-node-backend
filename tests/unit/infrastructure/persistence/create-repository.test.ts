@@ -10,7 +10,11 @@
  */
 import { Types } from 'mongoose';
 import type { Model, Document } from 'mongoose';
-import { createRepository, type SearchSpec } from '@infrastructure/persistence/create-repository';
+import {
+    createRepository,
+    type SearchSpec,
+    type Wire
+} from '@infrastructure/persistence/create-repository';
 
 interface FixtureDocument extends Document {
     name: string;
@@ -20,7 +24,7 @@ const stubModel = {} as Model<FixtureDocument>;
 const identityTransform = (item: Record<string, unknown>): Record<string, unknown> => item;
 
 const buildWhereFor = (searchable: SearchSpec) =>
-    createRepository<FixtureDocument>(stubModel, {
+    createRepository<FixtureDocument, Wire<FixtureDocument>>(stubModel, {
         transform: identityTransform,
         searchable
     }).buildWhere;

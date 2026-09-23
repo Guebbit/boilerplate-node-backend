@@ -8,7 +8,7 @@
 
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { OrderStatus } from '@types';
-import type { SearchOrdersRequest, CartItem, UpdateOrderByIdRequest } from '@types';
+import type { SearchOrdersRequest, CartItem, UpdateOrderByIdRequest, Order } from '@types';
 import type { OrderDocument } from '../model';
 import {
     generateReject,
@@ -54,7 +54,7 @@ export const search = (
     scope?: Record<string, unknown>,
     context?: CallerContext
 ): Promise<{
-    items: OrderDocument[];
+    items: Order[];
     meta: PaginatedMeta;
 }> =>
     orderRepository.search(search, scope).then((result) =>
@@ -73,8 +73,7 @@ export const search = (
  * Every order id belonging to `userId` — the narrow read a sibling module needing only ids (not
  * full order documents, and none of `search`'s image resolution or analytics emit) asks for,
  * paged internally with `readAll` so an account with more orders than one page still gets every
- * id. `.search()`'s items are typed as `OrderDocument` but arrive already transformed — `_id` is
- * `id` by the time this reads it — so the fallback below covers a document `.search()` didn't.
+ * id. `.search()`'s items are the wire shape (`Order`, carrying `id`), not `OrderDocument`.
  * @param userId - the account whose own orders these are
  */
 export const ownOrderIds = (userId: string): Promise<string[]> =>
@@ -84,23 +83,30 @@ export const ownOrderIds = (userId: string): Promise<string[]> =>
                 .search({ page, pageSize: MAX_CONFIGURED_PAGE_SIZE }, ownerScope(userId))
                 .then((result) => result.items),
         MAX_CONFIGURED_PAGE_SIZE
-    ).then((orders) =>
-        orders.map((order) => String((order as typeof order & { id?: string }).id ?? order._id))
-    );
+    ).then((orders) => orders.map((order) => order.id));
 
 /**
  * Get a single order by ID.
  * Returns undefined if id is falsy or if not found.
  *
- * @param scope - Optional extra filter (e.g. restrict to a specific userId)
+ * Overloaded the same way `orderRepository.findByIdScoped` is: no scope (or an explicitly
+ * `undefined` one) always resolves a hydrated `OrderDocument`, since that is the only branch
+ * `findByIdScoped` takes without one — a caller that never scopes this read keeps the narrower,
+ * document-only type instead of handling a union member it can never actually receive.
  */
-export const getById = (
+export function getById(id: string | undefined): Promise<OrderDocument | undefined>;
+/** @param scope - Optional extra filter (e.g. restrict to a specific userId) */
+export function getById(
+    id: string | undefined,
+    scope: Record<string, unknown> | undefined
+): Promise<OrderDocument | Order | undefined>;
+export function getById(
     id: string | undefined,
     scope?: Record<string, unknown>
-): Promise<OrderDocument | undefined> => {
-    if (!id) return Promise.resolve<OrderDocument | undefined>(undefined);
+): Promise<OrderDocument | Order | undefined> {
+    if (!id) return Promise.resolve(undefined);
     return orderRepository.findByIdScoped(id, scope);
-};
+}
 
 /**
  * Report that an order was created — from the admin route or a customer's checkout
