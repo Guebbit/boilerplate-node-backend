@@ -15,7 +15,7 @@ import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { logger } from '@infrastructure/adapters/logger';
 import { registerCredentialResolver, type ResolvedCredential } from '@kernel/authentication';
-import { keysInScope, isUnrestricted } from '@kernel/permissions';
+import { keysInScope, assembleCaller } from '@kernel/permissions';
 import { holdsKey } from '@kernel/ability';
 import { readAll, MAX_CONFIGURED_PAGE_SIZE } from '@infrastructure/persistence/search';
 import { rolesOf } from '@modules/access';
@@ -49,13 +49,7 @@ const currentCallerOf = (apiKey: ApiKeyDocument): Promise<Caller | undefined> =>
         return rolesOf(apiKey.createdByUserId, apiKey.tenant).then((roles) => {
             const permissions = keysInScope(roles.tenant, 'tenant');
 
-            return {
-                id: apiKey.createdByUserId,
-                tenantId: apiKey.tenant,
-                scope: 'tenant' as const,
-                permissions,
-                unrestricted: isUnrestricted({ scope: 'tenant', permissions })
-            };
+            return assembleCaller(apiKey.createdByUserId, apiKey.tenant, 'tenant', permissions);
         });
     });
 
@@ -90,13 +84,12 @@ const fromBearerToken = (token: string): Promise<ResolvedCredential | undefined>
                 : [];
 
             return {
-                caller: {
-                    id: apiKey.createdByUserId,
-                    tenantId: apiKey.tenant,
-                    scope: 'tenant' as const,
-                    permissions,
-                    unrestricted: isUnrestricted({ scope: 'tenant', permissions })
-                },
+                caller: assembleCaller(
+                    apiKey.createdByUserId,
+                    apiKey.tenant,
+                    'tenant',
+                    permissions
+                ),
                 credentialId: displayIdOf(apiKey.publicPrefix)
             };
         });

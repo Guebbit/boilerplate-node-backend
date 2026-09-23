@@ -377,6 +377,34 @@ export const keysInScope = (
 };
 
 /**
+ * Assemble a `Caller` from its raw fields, `unrestricted` computed rather than trusted —
+ * the one shape `callerInScope`'s two branches below, and `api-keys/module.ts`'s two
+ * credential-resolution paths (the mint-time floor, then every check afterwards), each built
+ * separately before this.
+ *
+ * @param id - who they are, `null`/`undefined` for a stranger
+ * @param tenantId - the shop this caller acts in, or `null` for a platform caller
+ * @param scope - which of the two worlds this caller acts in
+ * @param permissions - every key this caller currently holds in `scope`
+ */
+export const assembleCaller = (
+    id: string | null | undefined,
+    tenantId: string | null,
+    scope: AuthorizationScope,
+    permissions: readonly string[]
+): Caller =>
+    // `tenantId` and `scope` are correlated by every caller of this function (`null` only ever
+    // paired with 'platform', a shop id only ever paired with 'tenant') — a correlation runtime
+    // code guarantees but the type checker cannot see across four independent parameters.
+    ({
+        id,
+        tenantId,
+        scope,
+        permissions,
+        unrestricted: holdsEveryDeclaredKey(scope, permissions)
+    }) as Caller;
+
+/**
  * The `Caller` an `AuthContext` becomes in a named scope — the primitive {@link callerFor} and
  * {@link callerForSubject} both resolve to.
  *
@@ -391,27 +419,14 @@ export function callerInScope(context: AuthContext, scope: 'tenant'): TenantCall
 export function callerInScope(context: AuthContext, scope: 'platform'): PlatformCaller;
 export function callerInScope(context: AuthContext, scope: AuthorizationScope): Caller;
 export function callerInScope(context: AuthContext, scope: AuthorizationScope): Caller {
-    if (scope === 'platform') {
-        const permissions = keysInScope(context.roles.platform, scope);
-        return {
-            id: context.id,
-            // Platform scope is tenant-less by definition; carrying a tenantId here would let a
-            // platform rule be narrowed by a shop it does not belong to.
-            tenantId: null,
-            scope,
-            permissions,
-            unrestricted: holdsEveryDeclaredKey(scope, permissions)
-        };
-    }
-
-    const permissions = keysInScope(context.roles.tenant, scope);
-    return {
-        id: context.id,
-        tenantId: context.tenantId,
-        scope,
-        permissions,
-        unrestricted: holdsEveryDeclaredKey(scope, permissions)
-    };
+    // Platform scope is tenant-less by definition; carrying a tenantId here would let a platform
+    // rule be narrowed by a shop it does not belong to.
+    const tenantId = scope === 'platform' ? null : context.tenantId;
+    const permissions = keysInScope(
+        scope === 'platform' ? context.roles.platform : context.roles.tenant,
+        scope
+    );
+    return assembleCaller(context.id, tenantId, scope, permissions);
 }
 
 /**
