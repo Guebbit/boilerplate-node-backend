@@ -80,34 +80,30 @@ const rejectInProgress = (): ResponseReject =>
  * @returns a 404 outside this tenant's log, or when the subscription itself no longer exists; a
  *   409 when a live worker (or another replay) already holds the row's lease
  */
-export const replay = (
+export const replay = async (
     id: string,
     context: TenantCallerContext
-): Promise<ResponseSuccess<WebhookDeliveryDocument> | ResponseReject> =>
-    webhookDeliveryRepository.findById(id).then((delivery) => {
-        if (delivery?.tenant !== context.caller.tenantId)
-            return generateReject(404, [t('generic.error-not-found')]);
+): Promise<ResponseSuccess<WebhookDeliveryDocument> | ResponseReject> => {
+    const delivery = await webhookDeliveryRepository.findById(id);
+    if (delivery?.tenant !== context.caller.tenantId)
+        return generateReject(404, [t('generic.error-not-found')]);
 
-        return webhookSubscriptionRepository
-            .findById(String(delivery.subscriptionId))
-            .then((subscription) => {
-                if (!subscription)
-                    return generateReject(404, [t('webhooks.subscription-not-found')]);
+    const subscription = await webhookSubscriptionRepository.findById(
+        String(delivery.subscriptionId)
+    );
+    if (!subscription) return generateReject(404, [t('webhooks.subscription-not-found')]);
 
-                return webhookDeliveryRepository.claimForReplay(id).then((claimed) => {
-                    if (!claimed) return rejectInProgress();
+    const claimed = await webhookDeliveryRepository.claimForReplay(id);
+    if (!claimed) return rejectInProgress();
 
-                    return attemptDelivery(claimed, subscription).then((updated) => {
-                        if (!updated) return rejectInProgress();
+    const updated = await attemptDelivery(claimed, subscription);
+    if (!updated) return rejectInProgress();
 
-                        recordAudit(context, {
-                            action: webhooksAuditActions.ADMIN_WEBHOOK_DELIVERY_REPLAYED,
-                            outcome: 'success',
-                            target_type: 'webhook_delivery',
-                            target_id: id
-                        });
-                        return generateSuccess(updated);
-                    });
-                });
-            });
+    recordAudit(context, {
+        action: webhooksAuditActions.ADMIN_WEBHOOK_DELIVERY_REPLAYED,
+        outcome: 'success',
+        target_type: 'webhook_delivery',
+        target_id: id
     });
+    return generateSuccess(updated);
+};

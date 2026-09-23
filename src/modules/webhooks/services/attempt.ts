@@ -133,35 +133,19 @@ const recordSuccess = (
 };
 
 /**
- * Record a failed attempt: schedule the next retry if the backoff ladder has one left, otherwise
- * mark the chain `exhausted` and count it against the subscription's consecutive-failure streak —
- * auto-disabling once {@link shouldAutoDisable} says the streak is long enough.
+ * Mark a delivery's retry chain `exhausted` — the backoff ladder has nothing left — and count it
+ * against the subscription's consecutive-failure streak, auto-disabling once
+ * {@link shouldAutoDisable} says the streak is long enough.
+ * @param leaseToken - the lease {@link recordFailure} already claimed, reused for this write
  */
-const recordFailure = (
+const recordExhaustion = (
     delivery: WebhookDeliveryDocument,
+    leaseToken: string,
     responseCode: number | undefined,
     durationMs: number,
     error: string | undefined
 ): Promise<WebhookDeliveryDocument | null> => {
-    webhookDeliveryAttemptsTotal.inc({ outcome: 'failure' });
-
     const subscriptionId = String(delivery.subscriptionId);
-    const retryAt = nextAttemptAt(delivery.attempt);
-    const leaseToken = requireLeaseToken(delivery);
-
-    if (retryAt) {
-        // Left as `pending` for the sweep (or a fast retry, if one ever exists) to pick up —
-        // no subscription write here: only a whole EXHAUSTED chain counts as a failure, per
-        // reading of "sustained failure" as a whole chain giving up, not a single failed attempt.
-        return webhookDeliveryRepository.applyOutcome(String(delivery._id), leaseToken, {
-            status: 'pending',
-            attempt: delivery.attempt + 1,
-            responseCode,
-            durationMs,
-            error,
-            nextAttemptAt: retryAt
-        });
-    }
 
     return webhookDeliveryRepository
         .applyOutcome(String(delivery._id), leaseToken, {
@@ -189,6 +173,38 @@ const recordFailure = (
                     return saved;
                 });
         });
+};
+
+/**
+ * Record a failed attempt: schedule the next retry if the backoff ladder has one left, otherwise
+ * hand off to {@link recordExhaustion}.
+ */
+const recordFailure = (
+    delivery: WebhookDeliveryDocument,
+    responseCode: number | undefined,
+    durationMs: number,
+    error: string | undefined
+): Promise<WebhookDeliveryDocument | null> => {
+    webhookDeliveryAttemptsTotal.inc({ outcome: 'failure' });
+
+    const retryAt = nextAttemptAt(delivery.attempt);
+    const leaseToken = requireLeaseToken(delivery);
+
+    if (retryAt) {
+        // Left as `pending` for the sweep (or a fast retry, if one ever exists) to pick up —
+        // no subscription write here: only a whole EXHAUSTED chain counts as a failure, per
+        // reading of "sustained failure" as a whole chain giving up, not a single failed attempt.
+        return webhookDeliveryRepository.applyOutcome(String(delivery._id), leaseToken, {
+            status: 'pending',
+            attempt: delivery.attempt + 1,
+            responseCode,
+            durationMs,
+            error,
+            nextAttemptAt: retryAt
+        });
+    }
+
+    return recordExhaustion(delivery, leaseToken, responseCode, durationMs, error);
 };
 
 /**
