@@ -82,6 +82,8 @@ export const mint = (
             publicPrefix,
             hash,
             permissions: body.permissions,
+            // `router.use(getAuth, isAuth)` demands a live session before any route here is
+            // reached, so `id` is never the stranger case `Caller` otherwise allows for.
             createdByUserId: context.caller.id!,
             expiresAt: body.expiresAt ? new Date(body.expiresAt) : undefined
         } as Partial<ApiKeyDocument>)
@@ -97,6 +99,8 @@ export const mint = (
             );
             return generateSuccess(
                 {
+                    // `.toJSON()` applies `applyApiKeyTransform`'s `_id` → `id` rename and field
+                    // omission: the document is typed as stored, not as the wire shape it produces.
                     ...(apiKey.toJSON() as ApiKeyCreated),
                     secret: plaintext
                 },

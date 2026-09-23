@@ -30,6 +30,8 @@ export const tenantRepository = {
                 },
                 { returnDocument: 'after', upsert: true }
             )
+            // `upsert: true` + `returnDocument: 'after'` guarantee a document — found or just
+            // created — so this can never resolve `null` the way a plain `findOneAndUpdate` can.
             .exec() as Promise<TenantDocument>
 };
 
@@ -60,6 +62,8 @@ export const membershipRepository = {
                 { $set: { role } },
                 { returnDocument: 'after', upsert: true }
             )
+            // `upsert: true` + `returnDocument: 'after'` guarantee a document — found or just
+            // created — so this can never resolve `null` the way a plain `findOneAndUpdate` can.
             .exec() as Promise<MembershipDocument>,
 
     /** Remove one row by its own id. */
