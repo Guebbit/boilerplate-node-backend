@@ -62,6 +62,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     emailOrPendingEmailTaken: (email: string, excludingId: string) => Promise<boolean>;
     findByToken: (token: string, type: Token['type']) => Promise<UserDocument | null>;
     findAuthenticatableById: (id: string) => Promise<UserDocument | null>;
+    findAuthenticatableByEmail: (email: string) => Promise<UserDocument | null>;
     tokenRemove: (id: string, token: string) => Promise<UpdateWriteOpResult>;
     tokenRemoveByValue: (token: string) => Promise<UpdateWriteOpResult>;
     tokenRemoveExpired: (supersededRetentionMs: number) => Promise<number>;
@@ -164,6 +165,18 @@ export const userRepository: Repository<UserDocument, UserWire> & {
      */
     findAuthenticatableById: (id: string) =>
         userModel.findOne({ _id: toObjectId(id), ...AUTHENTICATABLE_FILTER }).exec(),
+
+    /**
+     * Fetch a user by email, but only if the account may still authenticate — same
+     * `AUTHENTICATABLE_FILTER` as `findAuthenticatableById`. WITH credential fields
+     * (`select: false`), since the caller is always about to compare a password hash.
+     * `login` (`account/services/authentication.ts`) is the only caller.
+     */
+    findAuthenticatableByEmail: (email: string) =>
+        userModel
+            .findOne({ email, ...AUTHENTICATABLE_FILTER })
+            .select(CREDENTIAL_FIELDS)
+            .exec(),
 
     /**
      * Spend one token by value, atomically via `$pull` rather than loading `tokens` and calling

@@ -534,7 +534,9 @@ export const login = (
     return (
         userService
             // `password` is select:false — this is one of the few flows that legitimately needs it.
-            .findForLogin(email)
+            // `parseResult.data.email`, not the raw `email` param: the parse above is what proves
+            // it's actually a string, which the outer `email?: string` signature can't itself tell TS.
+            .findForLogin(parseResult.data.email)
             .then((user) => {
                 // Compare against DUMMY_PASSWORD_HASH on a miss, so an
                 // unknown email costs the same as a wrong password — an unconditional `return`

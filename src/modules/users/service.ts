@@ -521,12 +521,10 @@ const findByIdWithCredentials = (id: string) => userRepository.findByIdWithCrede
 
 /**
  * The credentialed account attempting an email/password login, `select: false` fields (the
- * password hash) included. `active: { $ne: false }` — not `true`, since a pre-migration row has
- * no field at all — blocks a deactivated account at the front door, same clause
- * `findAuthenticatableById` uses.
+ * password hash) included. Deactivated or soft-deleted accounts are already excluded by
+ * `findAuthenticatableByEmail`'s own query, same clause `findAuthenticatableById` uses.
  */
-const findForLogin = (email: string | undefined) =>
-    userRepository.findOneWithCredentials({ email, active: { $ne: false }, deletedAt: undefined });
+const findForLogin = (email: string) => userRepository.findAuthenticatableByEmail(email);
 
 /**
  * The credentialed account already linked to this federated identity, if any — `select: false`
