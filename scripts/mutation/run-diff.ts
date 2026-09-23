@@ -41,7 +41,8 @@
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { REPO_ROOT, runStryker } from './stryker-run';
+import { runStryker } from './stryker-run';
+import { REPO_ROOT, mergeBase } from '../git-base';
 
 /** What a changed file must look like to be worth mutating: production TypeScript, not a spec. */
 const MUTABLE = /^src\/.+\.ts$/;
@@ -50,24 +51,8 @@ const NOT_MUTABLE = /\.d\.ts$|\/tests\/|\.test\.ts$|^src\/types\//;
 const baseArgument = process.argv.find((a) => a.startsWith('--base='));
 const base = baseArgument ? baseArgument.slice('--base='.length) : 'origin/main';
 
-/** The merge-base, so a stale local `main` does not widen the diff to everything since. */
-const mergeBase = (): string => {
-    try {
-        return execFileSync('git', ['merge-base', 'HEAD', base], {
-            cwd: REPO_ROOT,
-            encoding: 'utf8'
-        }).trim();
-    } catch {
-        console.error(
-            `[mutation-diff] cannot resolve '${base}'. In CI, fetch it first ` +
-                `(actions/checkout with fetch-depth: 0), or pass --base=<ref>.`
-        );
-        process.exit(2);
-    }
-};
-
 const changedFiles = (): string[] =>
-    execFileSync('git', ['diff', '--name-only', '--diff-filter=ACMR', `${mergeBase()}...HEAD`], {
+    execFileSync('git', ['diff', '--name-only', '--diff-filter=ACMR', `${mergeBase(base, 'mutation-diff')}...HEAD`], {
         cwd: REPO_ROOT,
         encoding: 'utf8'
     })

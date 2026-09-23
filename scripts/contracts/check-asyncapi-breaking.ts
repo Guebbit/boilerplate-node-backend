@@ -20,31 +20,13 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { diff, type DiffOutputItem } from '@asyncapi/diff';
 import { Parser } from '@asyncapi/parser';
-
-/** The repo root — every git call below runs from here, not from the caller's cwd. */
-const REPO_ROOT = path.join(__dirname, '..', '..');
+import { REPO_ROOT, mergeBase } from '../git-base';
 
 /** The only bundle this gate cares about: the one a webhook subscriber actually reads. */
 const BUNDLE = 'asyncapi.public.yaml';
 
 const baseArgument = process.argv.find((argument) => argument.startsWith('--base='));
 const base = baseArgument ? baseArgument.slice('--base='.length) : 'origin/main';
-
-/** The merge-base, so a stale local `main` does not compare against history this branch never shipped. */
-const mergeBase = (): string => {
-    try {
-        return execFileSync('git', ['merge-base', 'HEAD', base], {
-            cwd: REPO_ROOT,
-            encoding: 'utf8'
-        }).trim();
-    } catch {
-        console.error(
-            `[asyncapi-breaking] cannot resolve '${base}'. In CI, fetch it first ` +
-                `(actions/checkout with fetch-depth: 0), or pass --base=<ref>.`
-        );
-        process.exit(2);
-    }
-};
 
 /** `BUNDLE` as it stood at `ref`, or undefined when the ref predates the file. */
 const bundleAt = (ref: string): string | undefined => {
@@ -65,7 +47,7 @@ const describe = (change: DiffOutputItem): string =>
 /** The leading `MAJOR` segment of an AsyncAPI version string. */
 const majorVersion = (version: string): string => version.split('.')[0] ?? version;
 
-const before = bundleAt(mergeBase());
+const before = bundleAt(mergeBase(base, 'asyncapi-breaking'));
 const after = readFileSync(path.join(REPO_ROOT, BUNDLE), 'utf8');
 
 if (before === undefined) {
