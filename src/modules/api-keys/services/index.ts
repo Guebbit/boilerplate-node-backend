@@ -1,6 +1,7 @@
 /**
  * @module
- * This module's `services/` barrel — one file, `api-keys.ts`, since the module has one resource.
+ * This module's `services/` barrel — `api-keys.ts` for the CRUD resource, `resolver.ts` for the
+ * `CredentialResolver` `module.ts` installs into the kernel.
  */
 
 import * as apiKeys from './api-keys';
@@ -11,3 +12,5 @@ export const apiKeysService = {
     mintApiKey: apiKeys.mint,
     revokeApiKey: apiKeys.revoke
 };
+
+export { fromBearerToken as resolveApiKeyCredential } from './resolver';
