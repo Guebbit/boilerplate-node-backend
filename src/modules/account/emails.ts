@@ -14,6 +14,40 @@ import { frontendLink, type TokenLinkKind } from '@infrastructure/http/frontend-
 import type { CallerContext } from '@types';
 
 /**
+ * The shape every token-bearing link email shares: a greeting, an intro, one link, an ignore-me
+ * line and the shared footer. `templateSuffix` names both the render template
+ * (`account.<templateSuffix>`) and the translation key prefix (`account.email.<templateSuffix>.`)
+ * — the two always agree, so a builder can't point at one email's template while borrowing
+ * another's copy.
+ * @param templateSuffix - shared by the template name and every translation key this email uses
+ * @param kind - which {@link frontendLink} path the link resolves to
+ */
+const linkEmail = (
+    templateSuffix: string,
+    kind: TokenLinkKind,
+    locale: string,
+    name: string,
+    token: string
+): EmailContent => {
+    const t = translator(locale);
+    return {
+        template: `account.${templateSuffix}`,
+        subject: t(`account.email.${templateSuffix}.subject`),
+        data: {
+            locale,
+            pageMetaTitle: t(`account.email.${templateSuffix}.meta-title`),
+            pageMetaLinks: [],
+            greeting: t(`account.email.${templateSuffix}.greeting`, { name }),
+            intro: t(`account.email.${templateSuffix}.intro`),
+            linkLabel: t(`account.email.${templateSuffix}.link-label`),
+            linkUrl: frontendLink(kind, { locale, token }),
+            ignore: t(`account.email.${templateSuffix}.ignore`),
+            footer: t('email.footer')
+        }
+    };
+};
+
+/**
  * Email verification: the email carrying the one-time confirmation link. Shared by both
  * verification tokens (`account/services/verification.ts`) — only `kind` differs, so a
  * signup/re-send link lands on the frontend's verify-email page and an email-change link on its
@@ -25,24 +59,7 @@ export const verifyRequestEmail = (
     name: string,
     token: string,
     kind: Extract<TokenLinkKind, 'verify' | 'email-change'> = 'verify'
-): EmailContent => {
-    const t = translator(locale);
-    return {
-        template: 'account.verify-request',
-        subject: t('account.email.verify-request.subject'),
-        data: {
-            locale,
-            pageMetaTitle: t('account.email.verify-request.meta-title'),
-            pageMetaLinks: [],
-            greeting: t('account.email.verify-request.greeting', { name }),
-            intro: t('account.email.verify-request.intro'),
-            linkLabel: t('account.email.verify-request.link-label'),
-            linkUrl: frontendLink(kind, { locale, token }),
-            ignore: t('account.email.verify-request.ignore'),
-            footer: t('email.footer')
-        }
-    };
-};
+): EmailContent => linkEmail('verify-request', kind, locale, name, token);
 
 /**
  * Email-change notice: sent to the OLD address the moment a change is REQUESTED, not when it
@@ -71,24 +88,8 @@ export const emailChangeNoticeEmail = (
 };
 
 /** Password reset: the email carrying the one-time link. */
-export const resetRequestEmail = (locale: string, name: string, token: string): EmailContent => {
-    const t = translator(locale);
-    return {
-        template: 'account.reset-request',
-        subject: t('account.email.reset-request.subject'),
-        data: {
-            locale,
-            pageMetaTitle: t('account.email.reset-request.meta-title'),
-            pageMetaLinks: [],
-            greeting: t('account.email.reset-request.greeting', { name }),
-            intro: t('account.email.reset-request.intro'),
-            linkLabel: t('account.email.reset-request.link-label'),
-            linkUrl: frontendLink('reset', { locale, token }),
-            ignore: t('account.email.reset-request.ignore'),
-            footer: t('email.footer')
-        }
-    };
-};
+export const resetRequestEmail = (locale: string, name: string, token: string): EmailContent =>
+    linkEmail('reset-request', 'reset', locale, name, token);
 
 /**
  * Account setup: an admin created this account with no password, and asked to have the user set
@@ -96,24 +97,8 @@ export const resetRequestEmail = (locale: string, name: string, token: string): 
  * `authentication.ts`'s `requestAccountSetup` — only the copy differs: the recipient did not lose a
  * password, they never had one.
  */
-export const setupRequestEmail = (locale: string, name: string, token: string): EmailContent => {
-    const t = translator(locale);
-    return {
-        template: 'account.setup-request',
-        subject: t('account.email.setup-request.subject'),
-        data: {
-            locale,
-            pageMetaTitle: t('account.email.setup-request.meta-title'),
-            pageMetaLinks: [],
-            greeting: t('account.email.setup-request.greeting', { name }),
-            intro: t('account.email.setup-request.intro'),
-            linkLabel: t('account.email.setup-request.link-label'),
-            linkUrl: frontendLink('reset', { locale, token }),
-            ignore: t('account.email.setup-request.ignore'),
-            footer: t('email.footer')
-        }
-    };
-};
+export const setupRequestEmail = (locale: string, name: string, token: string): EmailContent =>
+    linkEmail('setup-request', 'reset', locale, name, token);
 
 /**
  * Two-factor login code: the six digits themselves, not a link.
@@ -169,24 +154,8 @@ export const resetConfirmEmail = (locale: string, name: string): EmailContent =>
 };
 
 /** Account deletion: the email carrying the one-time confirmation link. */
-export const deleteRequestEmail = (locale: string, name: string, token: string): EmailContent => {
-    const t = translator(locale);
-    return {
-        template: 'account.delete-request',
-        subject: t('account.email.delete-request.subject'),
-        data: {
-            locale,
-            pageMetaTitle: t('account.email.delete-request.meta-title'),
-            pageMetaLinks: [],
-            greeting: t('account.email.delete-request.greeting', { name }),
-            intro: t('account.email.delete-request.intro'),
-            linkLabel: t('account.email.delete-request.link-label'),
-            linkUrl: frontendLink('delete', { locale, token }),
-            ignore: t('account.email.delete-request.ignore'),
-            footer: t('email.footer')
-        }
-    };
-};
+export const deleteRequestEmail = (locale: string, name: string, token: string): EmailContent =>
+    linkEmail('delete-request', 'delete', locale, name, token);
 
 /** Account deletion: the goodbye, sent after the row is gone. */
 export const deleteConfirmEmail = (locale: string, name: string): EmailContent => {
