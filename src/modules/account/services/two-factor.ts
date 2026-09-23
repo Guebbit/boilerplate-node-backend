@@ -59,13 +59,6 @@ import {
 const RESEND_TOO_SOON_CODE = 'TWO_FACTOR_RESEND_TOO_SOON';
 
 /**
- * Persist a document whose method array was mutated in place — see
- * `users/service.ts#persistTwoFactorMethods` for why `markModified` matters here.
- */
-const saveMethods = (user: UserDocument): Promise<UserDocument> =>
-    userService.persistTwoFactorMethods(user);
-
-/**
  * Record one method-scoped 2FA action and pass the outcome through untouched. Both halves are
  * kept: a failed enrollment or disable is exactly what a stolen session looks like from here.
  */
@@ -90,7 +83,9 @@ const audited = <T>(
  * becomes no ceiling at all.
  */
 const rejectWrongCode = (user: UserDocument): Promise<ResponseReject> =>
-    saveMethods(user).then(() => generateReject(422, [t('account.two-factor.wrong-code')]));
+    userService
+        .persistTwoFactorMethods(user)
+        .then(() => generateReject(422, [t('account.two-factor.wrong-code')]));
 
 /** The account's armed factors, in the registry's own order rather than enrollment order. */
 const armedEntries = (user: UserDocument) =>
@@ -144,6 +139,38 @@ const verifyAnyFactor = (user: UserDocument, code: string): Promise<boolean> =>
     verifyInOrder(user, code, armedEntries(user)).then(
         (matched) => matched || consumeBackupCode(user, code)
     );
+
+/**
+ * Load the caller, run a caller-specific `precondition` against them, then verify `code` against
+ * any armed factor. `precondition` returns a rejection to short-circuit before spending a verify
+ * attempt, or `undefined` to proceed; `onMatch` runs only once `code` actually verifies. The
+ * three 2FA actions gated on the caller's OWN code — remove a method, disable the whole feature,
+ * regenerate backup codes — share exactly this shape; only the guard and the mutation differ.
+ *
+ * @param userId - the caller
+ * @param code - a code from any armed method, or an unused backup code
+ * @param precondition - a check specific to the caller, run before spending a verify attempt
+ * @param onMatch - the mutation to run once `code` verifies
+ */
+const withVerifiedCode = <T>(
+    userId: string,
+    code: string,
+    precondition: (user: UserDocument) => ResponseReject | undefined,
+    onMatch: (user: UserDocument) => Promise<ResponseSuccess<T> | ResponseReject>
+): Promise<ResponseSuccess<T> | ResponseReject> =>
+    userService
+        .findByIdWithCredentials(userId)
+        .then<ResponseSuccess<T> | ResponseReject>((user) => {
+            if (!user) return generateReject(401, []);
+
+            const rejection = precondition(user);
+            if (rejection) return rejection;
+
+            return verifyAnyFactor(user, code).then((matched) =>
+                matched ? onMatch(user) : rejectWrongCode(user)
+            );
+        })
+        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 
 /**
  * Re-derive the account-level flag from the entries, after any change to them.
@@ -311,7 +338,7 @@ export const setupTwoFactorMethod = (
 
             return handler.setup(user, entry, context).then((payload) => {
                 syncArmedState(user);
-                return saveMethods(user).then(() => generateSuccess(payload));
+                return userService.persistTwoFactorMethods(user).then(() => generateSuccess(payload));
             });
         })
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
@@ -378,7 +405,7 @@ const armMethod = (
     if (backupCodes) user.twoFactorBackupCodes = backupCodes.map((code) => hashBackupCode(code));
     syncArmedState(user);
 
-    return saveMethods(user).then(() =>
+    return userService.persistTwoFactorMethods(user).then(() =>
         generateSuccess({
             method: entry.method,
             ...(backupCodes && { backupCodes }),
@@ -401,25 +428,27 @@ export const removeTwoFactorMethod = (
     code: string,
     context: CallerContext
 ): Promise<ResponseSuccess<undefined> | ResponseReject> => {
-    const outcome = userService
-        .findByIdWithCredentials(userId)
-        .then<ResponseSuccess<undefined> | ResponseReject>((user) => {
-            if (!user) return generateReject(401, []);
+    // Set by the precondition, consumed by onMatch: withVerifiedCode always runs the precondition
+    // to completion before onMatch, so this is never read before it is written.
+    let enrolledIndex = -1;
 
-            const index = user.twoFactorMethods.findIndex(
+    const outcome = withVerifiedCode(
+        userId,
+        code,
+        (user) => {
+            enrolledIndex = user.twoFactorMethods.findIndex(
                 (candidate) => candidate.method === method && candidate.enrolledAt
             );
-            if (index === -1) return generateReject(422, [t('account.two-factor.not-enabled')]);
-
-            return verifyAnyFactor(user, code).then((matched) => {
-                if (!matched) return rejectWrongCode(user);
-
-                user.twoFactorMethods.splice(index, 1);
-                discardIfDisarmed(user);
-                return saveMethods(user).then(() => generateSuccess(undefined));
-            });
-        })
-        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
+            return enrolledIndex === -1
+                ? generateReject(422, [t('account.two-factor.not-enabled')])
+                : undefined;
+        },
+        (user) => {
+            user.twoFactorMethods.splice(enrolledIndex, 1);
+            discardIfDisarmed(user);
+            return userService.persistTwoFactorMethods(user).then(() => generateSuccess(undefined));
+        }
+    );
 
     return audited(outcome, context, accountAuditActions.AUTH_2FA_DISABLED, method);
 };
@@ -437,22 +466,19 @@ export const disableTwoFactor = (
     code: string,
     context: CallerContext
 ): Promise<ResponseSuccess<undefined> | ResponseReject> => {
-    const outcome = userService
-        .findByIdWithCredentials(userId)
-        .then<ResponseSuccess<undefined> | ResponseReject>((user) => {
-            if (!user) return generateReject(401, []);
-            if (!user.twoFactorEnabledAt)
-                return generateReject(422, [t('account.two-factor.not-enabled')]);
-
-            return verifyAnyFactor(user, code).then((matched) => {
-                if (!matched) return rejectWrongCode(user);
-
-                user.twoFactorMethods = [];
-                discardIfDisarmed(user);
-                return saveMethods(user).then(() => generateSuccess(undefined));
-            });
-        })
-        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
+    const outcome = withVerifiedCode(
+        userId,
+        code,
+        (user) =>
+            user.twoFactorEnabledAt
+                ? undefined
+                : generateReject(422, [t('account.two-factor.not-enabled')]),
+        (user) => {
+            user.twoFactorMethods = [];
+            discardIfDisarmed(user);
+            return userService.persistTwoFactorMethods(user).then(() => generateSuccess(undefined));
+        }
+    );
 
     return audited(outcome, context, accountAuditActions.AUTH_2FA_DISABLED, 'all');
 };
@@ -471,29 +497,24 @@ export const regenerateBackupCodes = (
     code: string,
     context: CallerContext
 ): Promise<ResponseSuccess<TwoFactorBackupCodesRegenerated> | ResponseReject> => {
-    const outcome = userService
-        .findByIdWithCredentials(userId)
-        .then<ResponseSuccess<TwoFactorBackupCodesRegenerated> | ResponseReject>((user) => {
-            if (!user) return generateReject(401, []);
-            if (!user.twoFactorEnabledAt)
-                return generateReject(422, [t('account.two-factor.not-enabled')]);
-
-            return verifyAnyFactor(user, code).then((matched) => {
-                if (!matched) return rejectWrongCode(user);
-
-                const backupCodes = generateBackupCodes();
-                user.twoFactorBackupCodes = backupCodes.map((freshCode) =>
-                    hashBackupCode(freshCode)
-                );
-                return saveMethods(user).then(() =>
-                    generateSuccess({
-                        backupCodes,
-                        backupCodesRemaining: user.twoFactorBackupCodes.length
-                    })
-                );
-            });
-        })
-        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
+    const outcome = withVerifiedCode(
+        userId,
+        code,
+        (user) =>
+            user.twoFactorEnabledAt
+                ? undefined
+                : generateReject(422, [t('account.two-factor.not-enabled')]),
+        (user) => {
+            const backupCodes = generateBackupCodes();
+            user.twoFactorBackupCodes = backupCodes.map((freshCode) => hashBackupCode(freshCode));
+            return userService.persistTwoFactorMethods(user).then(() =>
+                generateSuccess({
+                    backupCodes,
+                    backupCodesRemaining: user.twoFactorBackupCodes.length
+                })
+            );
+        }
+    );
 
     return audited(outcome, context, accountAuditActions.AUTH_2FA_BACKUP_CODES_REGENERATED, 'all');
 };
@@ -528,7 +549,9 @@ export const sendLoginCode = (
 
             return armed.handler
                 .send(user, armed.entry, context)
-                .then((delivery) => saveMethods(user).then(() => generateSuccess(delivery)));
+                .then((delivery) =>
+                    userService.persistTwoFactorMethods(user).then(() => generateSuccess(delivery))
+                );
         })
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 
@@ -567,7 +590,7 @@ export const verifyLoginChallenge = (
                 // Right code: spend the challenge before minting anything. A wrong code leaves
                 // it live — `mfaChallengeLimiter` is what bounds how many times it can be tried.
                 return spendLiveToken(user, challenge).then(() =>
-                    saveMethods(user).then((saved) =>
+                    userService.persistTwoFactorMethods(user).then((saved) =>
                         generateSuccess({ user: saved, amr: entry.amr ?? ['pwd'] })
                     )
                 );
