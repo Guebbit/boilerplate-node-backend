@@ -115,7 +115,10 @@ export const readUploadedImage = (
     const bodyImageUrl = bodyRecordOf(request).imageUrl;
 
     return {
-        imageUrl: typeof bodyImageUrl === 'string' ? bodyImageUrl : undefined,
+        // Non-string values (number, bool, …) must reach the validator untouched so zod can
+        // reject them with the correct i18n message. Silently coercing to `undefined` would
+        // trigger the controller's `= ''` default and mask the type error (200 instead of 422).
+        imageUrl: bodyImageUrl as string | undefined,
         thumbnailUrl: undefined,
         pendingImageKey: undefined,
         deleteUpload: () => Promise.resolve(false)
