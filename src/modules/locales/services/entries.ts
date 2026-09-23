@@ -24,11 +24,28 @@ import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { localeAuditActions } from '../audit';
-import type { LocaleEntryDocument } from '../model';
+import { normalizeTag, type LocaleEntryDocument } from '../model';
 import { localeEntryRepository, localeRepository } from '../repository';
 import { findBatchCollision, findDuplicateKey, rejectUnusableKey } from './keys';
 import { languageNotFound, rejectUnknownTenant } from './languages';
 import { refreshOverlay } from './overlay';
+
+/** Not found, phrased the one way {@link findEntryInLanguage} and its two callers all mean it. */
+const entryNotFound = (): ResponseReject => generateReject(404, [t('locales.error-entry-not-found')]);
+
+/**
+ * The entry named in the path, scoped to the language also named in the path.
+ *
+ * Looked up by id, then CHECKED against `tag` — so `PUT /locales/it/entries/<a spanish entry>`
+ * 404s rather than silently cross-editing.
+ */
+const findEntryInLanguage = async (
+    entryId: string,
+    tag: string
+): Promise<LocaleEntryDocument | null> => {
+    const entry = await localeEntryRepository.findById(entryId);
+    return entry?.locale === normalizeTag(tag) ? entry : null;
+};
 
 /**
  * One page of a language's rows, for the editing screen.
@@ -109,21 +126,15 @@ export const createEntry = async (
     return generateSuccess(entry, 201);
 };
 
-/**
- * Change one entry's text.
- *
- * Looked up by id, then CHECKED against the language in the path — so
- * `PUT /locales/it/entries/<a spanish entry>` 404s rather than silently cross-editing.
- */
+/** Change one entry's text. */
 export const updateEntry = async (
     tag: string,
     entryId: string,
     payload: UpdateLocaleEntryRequest,
     context?: CallerContext
 ): Promise<ResponseSuccess<LocaleEntryDocument> | ResponseReject> => {
-    const entry = await localeEntryRepository.findById(entryId);
-    if (entry?.locale !== tag.trim().toLowerCase())
-        return generateReject(404, [t('locales.error-entry-not-found')]);
+    const entry = await findEntryInLanguage(entryId, tag);
+    if (!entry) return entryNotFound();
 
     const { entry: saved } = await localeEntryRepository.saveEntryValue(entry, payload.value);
 
@@ -153,9 +164,8 @@ export const deleteEntry = async (
     entryId: string,
     context?: CallerContext
 ): Promise<ResponseSuccess<{ key: string }> | ResponseReject> => {
-    const entry = await localeEntryRepository.findById(entryId);
-    if (entry?.locale !== tag.trim().toLowerCase())
-        return generateReject(404, [t('locales.error-entry-not-found')]);
+    const entry = await findEntryInLanguage(entryId, tag);
+    if (!entry) return entryNotFound();
 
     const { key } = entry;
     await localeEntryRepository.removeEntry(entry);

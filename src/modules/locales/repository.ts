@@ -15,7 +15,8 @@ import {
     translationModel,
     applyLocaleTransform,
     applyLocaleEntryTransform,
-    applyTranslationTransform
+    applyTranslationTransform,
+    normalizeTag
 } from './model';
 import type { LocaleDocument, LocaleEntryDocument, TranslationDocument } from './model';
 import { createRepository, type Repository } from '@infrastructure/persistence/create-repository';
@@ -68,7 +69,7 @@ const entryBase = createRepository<LocaleEntryDocument, LocaleEntry>(localeEntry
 
 /** One language by its tag — the lookup every route in this module starts with. */
 const findByTag = (tag: string): Promise<LocaleDocument | null> =>
-    localeBase.findOne({ tag: tag.toLowerCase() });
+    localeBase.findOne({ tag: normalizeTag(tag) });
 
 /**
  * The languages this deployment offers, unpaginated and sorted by tag.

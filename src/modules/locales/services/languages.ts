@@ -15,7 +15,7 @@ import {
     type ResponseReject,
     type ResponseSuccess
 } from '@infrastructure/http/response';
-import type { LocaleDocument } from '../model';
+import { normalizeTag, type LocaleDocument } from '../model';
 import { localeRepository } from '../repository';
 import { isKnownTenant } from '../tenants';
 import type { CallerContext } from '@types';
@@ -52,7 +52,7 @@ export const createLanguage = async (
     payload: CreateLocaleRequest,
     context?: CallerContext
 ): Promise<ResponseSuccess<LocaleDocument> | ResponseReject> => {
-    const tag = payload.tag.trim().toLowerCase();
+    const tag = normalizeTag(payload.tag);
 
     // Checked here for the message, and by a unique index for the race — a concurrent creation of
     // the same tag reaches E11000, which the shared interpreter answers 409 for anyway.

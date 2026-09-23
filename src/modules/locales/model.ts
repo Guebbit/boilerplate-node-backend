@@ -14,14 +14,22 @@ import type { Language, LocaleEntry, Translation } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 
 /**
+ * A BCP 47 tag the way every lookup and write in this module compares it: trimmed, lowercased.
+ * The one place that decision is made, so a caller reading a stray space or a mismatched case as
+ * "unknown language" is a bug in the caller, not a second definition of "normalized" to keep in
+ * sync with this one.
+ */
+export const normalizeTag = (tag: string): string => tag.trim().toLowerCase();
+
+/**
  * The ISO 639-1 primary subtag of a BCP 47 tag: `pt-BR` → `pt`, `es` → `es`.
  *
- * Lowercased here as well as by the schema, because the seeds call it directly and do not go
+ * Normalized here as well as by the schema, because the seeds call it directly and do not go
  * through a Mongoose setter.
  */
 export const deriveBaseLanguage = (tag: string): string =>
     // `split` always yields at least one element, so index 0 needs no fallback arm.
-    tag.split('-')[0].trim().toLowerCase();
+    normalizeTag(tag.split('-')[0]);
 
 /** Mongoose document type for a registered language. Overrides the generated `Language`'s dates. */
 export interface LocaleDocument extends Omit<Language, 'id' | 'createdAt' | 'updatedAt'>, Document {
