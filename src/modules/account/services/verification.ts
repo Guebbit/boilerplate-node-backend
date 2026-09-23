@@ -21,6 +21,7 @@ import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/respo
 import type { CallerContext } from '@types';
 import type { EmailVerificationRequested } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
+import type { AuditAction } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
 import { isUnrestrictedRole } from '@kernel/permissions';
 import { promoteVerifiedCustomer, rolesOf } from '@modules/access';
@@ -226,6 +227,30 @@ export const markVerified = (user: UserDocument): Promise<void> => {
 };
 
 /**
+ * Records that `user`'s address has been proven — signup verification or an email change, whoever
+ * calls this. Reads roles fresh rather than trusting a value computed before this request's own
+ * promotion, so `actor_role` reflects what just happened, not the stale role it replaced.
+ * @param user - the account whose address was just proven
+ * @param context - the caller context, for the audit record
+ * @param action - which flow this proof completes
+ * @returns `user`, unchanged — so callers can keep chaining on it
+ */
+const auditProvenAddress = (
+    user: UserDocument,
+    context: CallerContext,
+    action: AuditAction
+): Promise<UserDocument> =>
+    rolesOf(user.id, DEPLOYMENT_TENANT_ID).then((roles) => {
+        recordAudit(context, {
+            action,
+            actor_user_id: user.id,
+            actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
+            outcome: 'success'
+        });
+        return user;
+    });
+
+/**
  * Spend a verification token and mark the account verified.
  * `postVerifyConfirm` already found and spent the token — the race is settled by the atomic
  * `$pull` in `spendLiveToken` — so this is deliberately just the write and its emit, not a
@@ -234,24 +259,18 @@ export const markVerified = (user: UserDocument): Promise<void> => {
 export const completeEmailVerification = (
     user: UserDocument,
     context: CallerContext
-): Promise<UserDocument> => {
-    return userService.markEmailVerified(user).then((saved) =>
-        // The one promotion self-service verification may make on its own — before the role
-        // read just below, so the audit entry reflects the promotion that just happened, not the
-        // stale `unverified` it replaces.
-        promoteVerifiedCustomer(saved.id, DEPLOYMENT_TENANT_ID).then(() =>
-            rolesOf(saved.id, DEPLOYMENT_TENANT_ID).then((roles) => {
-                recordAudit(context, {
-                    action: accountAuditActions.AUTH_EMAIL_VERIFY_COMPLETED,
-                    actor_user_id: saved.id,
-                    actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
-                    outcome: 'success'
-                });
-                return saved;
-            })
+): Promise<UserDocument> =>
+    userService
+        .markEmailVerified(user)
+        .then((saved) =>
+            // The one promotion self-service verification may make on its own — before the audit
+            // below, so the entry reflects the promotion that just happened, not the stale
+            // `unverified` it replaces.
+            promoteVerifiedCustomer(saved.id, DEPLOYMENT_TENANT_ID).then(() => saved)
         )
-    );
-};
+        .then((saved) =>
+            auditProvenAddress(saved, context, accountAuditActions.AUTH_EMAIL_VERIFY_COMPLETED)
+        );
 
 /**
  * Spend an `email-change` token: swap `pendingEmail` into `email`, mark the account verified —
@@ -276,25 +295,21 @@ export const completeEmailChange = (
     // one always sets `pendingEmail` first — this is unreachable outside a caller bug.
     if (!newEmail) return Promise.resolve(user);
 
-    return userService.applyEmailChange(user, newEmail).then((saved) =>
-        // Same `unverified` → `customer` promotion as `completeEmailVerification`, since an email
-        // change can be the first proof an `unverified` signup ever completes — before the role
-        // read below, for the same reason.
-        promoteVerifiedCustomer(saved.id, DEPLOYMENT_TENANT_ID).then(() =>
+    return userService
+        .applyEmailChange(user, newEmail)
+        .then((saved) =>
+            // Same `unverified` → `customer` promotion as `completeEmailVerification`, since an
+            // email change can be the first proof an `unverified` signup ever completes — before
+            // the audit below, for the same reason.
+            promoteVerifiedCustomer(saved.id, DEPLOYMENT_TENANT_ID).then(() => saved)
+        )
+        .then((saved) =>
             userService
                 .tokenRemoveAll(saved, TokenType.REFRESH)
                 .catch(() => undefined)
-                .then(() =>
-                    rolesOf(saved.id, DEPLOYMENT_TENANT_ID).then((roles) => {
-                        recordAudit(context, {
-                            action: accountAuditActions.AUTH_EMAIL_CHANGE_COMPLETED,
-                            actor_user_id: saved.id,
-                            actor_role: isUnrestrictedRole(roles.tenant) ? 'admin' : 'user',
-                            outcome: 'success'
-                        });
-                        return saved;
-                    })
-                )
+                .then(() => saved)
         )
-    );
+        .then((saved) =>
+            auditProvenAddress(saved, context, accountAuditActions.AUTH_EMAIL_CHANGE_COMPLETED)
+        );
 };
