@@ -8,6 +8,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import { readAll, MAX_CONFIGURED_PAGE_SIZE } from '@infrastructure/persistence/search';
 import type { Lean } from '@infrastructure/persistence/create-repository';
+import type { ExportPayment } from '@types';
 import { paymentRepository } from '../repository';
 import type { PaymentDocument } from '../model';
 
@@ -44,6 +45,33 @@ export const findOwnPayments = (userId: string): Promise<Lean<PaymentDocument>[]
             }),
         MAX_CONFIGURED_PAGE_SIZE
     );
+
+/**
+ * {@link ExportPayment}, built from the real document — minus `userId`: already scoped to the
+ * caller by the query that found it, so naming their own id back to them adds nothing. A real
+ * plain object, not a type-level `Omit` on the Mongoose document — `applyPaymentTransform` carries
+ * no such omission, so returning the document itself would still serialize `userId`.
+ */
+const toExportPayment = (payment: Lean<PaymentDocument>): ExportPayment => ({
+    id: String(payment._id),
+    orderId: String(payment.orderId),
+    amount: payment.amount,
+    currency: payment.currency,
+    status: payment.status,
+    provider: payment.provider,
+    ...(payment.cardLast4 === undefined ? {} : { cardLast4: payment.cardLast4 }),
+    ...(payment.createdAt ? { createdAt: payment.createdAt.toISOString() } : {}),
+    ...(payment.updatedAt ? { updatedAt: payment.updatedAt.toISOString() } : {})
+});
+
+/**
+ * {@link findOwnPayments}, shaped for the account data export — the field mapping `module.ts`
+ * used to carry inline, moved beside the read it maps.
+ *
+ * @param userId - the caller's own id
+ */
+export const findOwnPaymentsForExport = (userId: string): Promise<ExportPayment[]> =>
+    findOwnPayments(userId).then((payments) => payments.map((payment) => toExportPayment(payment)));
 
 /**
  * `scripts/ops/reap-payments.ts`'s sweep. Deletes payment attempts that never reached `succeeded` or

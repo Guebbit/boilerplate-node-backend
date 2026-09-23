@@ -449,9 +449,9 @@ describe('POST /account/export', () => {
         };
         expect(data.profile.email).toBe(user.email);
         expect(data.orders.map((each) => each.id)).toContain(String(order._id));
-        // `paymentService.findOwnPayments` (payments/services/retention.ts) is the only path
-        // this hits — nothing else exercises its pagination read, so a broken page-walk (or the
-        // whole read swallowed) would only ever surface here.
+        // `paymentService.findOwnPaymentsForExport` (payments/services/retention.ts) is the only
+        // path this hits — nothing else exercises its pagination read, so a broken page-walk (or
+        // the whole read swallowed) would only ever surface here.
         expect(data.payments.map((each) => each.id)).toContain(payment.id);
         expect(data.payments.find((each) => each.id === payment.id)?.orderId).toBe(
             String(order._id)

@@ -28,7 +28,12 @@ import {
 import { refundByOrder, refundForOrder } from './refunds';
 import { recordOfflinePayment } from './offline';
 import { getForOrder } from './view';
-import { detachUserId, findOwnPayments, reapAbandonedPayments } from './retention';
+import {
+    detachUserId,
+    findOwnPayments,
+    findOwnPaymentsForExport,
+    reapAbandonedPayments
+} from './retention';
 import { getOrderByReference } from './lookup';
 import { listPaymentMethods } from '../config';
 
@@ -49,7 +54,12 @@ export {
 export { performRefund, refundByOrder, refundForOrder, REFUNDABLE_PAYMENT_STATUS } from './refunds';
 export { recordOfflinePayment, type OfflinePaymentInput } from './offline';
 export { getForOrder, withActions } from './view';
-export { detachUserId, findOwnPayments, reapAbandonedPayments } from './retention';
+export {
+    detachUserId,
+    findOwnPayments,
+    findOwnPaymentsForExport,
+    reapAbandonedPayments
+} from './retention';
 export { callerScope } from './scope';
 export { getOrderByReference } from './lookup';
 export { listPaymentMethods, type PaymentMethodInfo } from '../config';
@@ -68,6 +78,7 @@ export const paymentService = {
     getOrderByReference,
     detachUserId,
     findOwnPayments,
+    findOwnPaymentsForExport,
     reapAbandonedPayments,
     listPaymentMethods
 };

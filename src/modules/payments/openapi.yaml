@@ -628,7 +628,7 @@ components:
         # Used by `POST /account/export` (`shared/contracts/openapi.root.yaml`) — minus `userId`
         # and `actions`: `userId` is redundant (an export already scopes every payment to the
         # caller) and `actions` is computed PER CALLER by `paymentService`'s own read path, which
-        # this endpoint's bulk read (`paymentService.findOwnPayments`) deliberately bypasses.
+        # this endpoint's bulk read (`paymentService.findOwnPaymentsForExport`) deliberately bypasses.
         ExportPayment:
             type: object
             additionalProperties: false

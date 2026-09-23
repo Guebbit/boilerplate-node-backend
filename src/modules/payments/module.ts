@@ -11,38 +11,17 @@
 
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
-import type { ExportPayment } from '@types';
 import { onDomainEvent } from '@kernel/events';
 import { ORDER_CANCELLED } from '@modules/orders';
 import { USER_DELETED } from '@modules/users';
 import { router } from './routes';
-import { refundForOrder, detachUserId, findOwnPayments } from './services';
+import { refundForOrder, detachUserId, findOwnPaymentsForExport } from './services';
 import { validateBankTransferConfig } from './config';
 import { paymentsRateLimits } from './rate-limits';
 import { checkSelector } from '@kernel/required-config';
 import { resolvePaymentProvider } from './providers';
 // Installs this module's event declarations (PAYMENT_SUCCEEDED, PAYMENT_FAILED).
 import './events';
-
-/**
- * {@link ExportPayment}, built from the real document — minus `userId`: already scoped to the
- * caller by the query that found it, so naming their own id back to them adds nothing. A real
- * plain object, not a type-level `Omit` on the Mongoose document — `applyPaymentTransform` carries
- * no such omission, so returning the document itself would still serialize `userId`.
- */
-const toExportPayment = (
-    payment: Awaited<ReturnType<typeof findOwnPayments>>[number]
-): ExportPayment => ({
-    id: String(payment._id),
-    orderId: String(payment.orderId),
-    amount: payment.amount,
-    currency: payment.currency,
-    status: payment.status,
-    provider: payment.provider,
-    ...(payment.cardLast4 === undefined ? {} : { cardLast4: payment.cardLast4 }),
-    ...(payment.createdAt ? { createdAt: payment.createdAt.toISOString() } : {}),
-    ...(payment.updatedAt ? { updatedAt: payment.updatedAt.toISOString() } : {})
-});
 
 /** This module's manifest entry: routes, the cancel-refund subscription, and locales. */
 export default {
@@ -87,10 +66,7 @@ export default {
     personalData: [
         {
             section: 'payments',
-            collect: (subject) =>
-                findOwnPayments(subject.userId).then((payments) =>
-                    payments.map((payment) => toExportPayment(payment))
-                )
+            collect: (subject) => findOwnPaymentsForExport(subject.userId)
         }
     ],
     subscribe: () => {
