@@ -44,10 +44,12 @@ const readCounter = async (name: string): Promise<MetricSample[]> => {
 };
 
 /**
- * Sum values for a specific label across a prom-client metric result.
+ * Sum values matching every label in `filter` across a prom-client metric result.
  */
-const sumByLabel = (values: MetricSample[], labelKey: string, labelValue: string): number =>
-    values.filter((v) => v.labels[labelKey] === labelValue).reduce((sum, v) => sum + v.value, 0);
+const sumByLabels = (values: MetricSample[], filter: Record<string, string>): number =>
+    values
+        .filter((v) => Object.entries(filter).every(([key, value]) => v.labels[key] === value))
+        .reduce((sum, v) => sum + v.value, 0);
 
 /**
  * GET /observability/metrics/overview
@@ -95,12 +97,12 @@ export const getObservabilityMetricsOverview = (_request: Request, response: Res
                         latencyMs: { p50: latency.p50, p95: latency.p95 }
                     },
                     auth: {
-                        loginSuccess: sumByLabel(loginValues, 'status', 'success'),
-                        loginFailure: sumByLabel(loginValues, 'status', 'failure'),
-                        signupSuccess: sumByLabel(signupValues, 'status', 'success')
+                        loginSuccess: sumByLabels(loginValues, { status: 'success' }),
+                        loginFailure: sumByLabels(loginValues, { status: 'failure' }),
+                        signupSuccess: sumByLabels(signupValues, { status: 'success' })
                     },
                     business: {
-                        checkoutSuccess: sumByLabel(checkoutValues, 'status', 'success'),
+                        checkoutSuccess: sumByLabels(checkoutValues, { status: 'success' }),
                         ordersCreated: sumMetricValues(orderValues),
                         lowStockProducts: sumMetricValues(lowStockValues),
                         reservedUnits: sumMetricValues(reservedValues)
