@@ -334,6 +334,7 @@ describe('POST /account/password', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data).toBeUndefined();
+        expect(response).toSatisfyApiSpec();
         expect(loggedWarn).toHaveBeenCalled();
         jest.restoreAllMocks();
     });

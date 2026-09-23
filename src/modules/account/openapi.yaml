@@ -116,11 +116,15 @@ paths:
                             $ref: '#/components/schemas/ChangePasswordRequest'
             responses:
                 '200':
-                    description: Password changed; a fresh access token for this session
+                    description: |
+                        Password changed. `data` normally carries a fresh access token for this
+                        session, but is ABSENT on the rare degraded success where the re-mint
+                        itself fails after the password write already committed — see B23 on
+                        `ChangePasswordResponseEnvelope`.
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AuthTokensEnvelope'
+                                $ref: '#/components/schemas/ChangePasswordResponseEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # A wrong current password is a 422 with a translated message, NOT a 401: a 401
                 # here would read as "your token expired" to every client interceptor and log
@@ -801,6 +805,25 @@ components:
             type: object
             additionalProperties: false
             required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/AuthTokens'
+
+        # B23: `POST /account/password` alone can degrade to 200 with `data` absent — the
+        # password write and the session revoke already committed by the time the re-mint runs,
+        # so a 500 would misreport a change that DID succeed. `reauth` and `loginTwoFactor` never
+        # degrade this way (see their controllers), so they keep the stricter AuthTokensEnvelope;
+        # only this operation's 200 uses this schema.
+        ChangePasswordResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message]
             properties:
                 success:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
