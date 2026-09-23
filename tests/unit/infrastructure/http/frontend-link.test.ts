@@ -13,7 +13,9 @@ const ORDER_ID = 'order-1';
 
 /** Restores whichever env vars a test overrode, and drops the locale-list cache they may affect. */
 const withEnv = (overrides: Record<string, string | undefined>, run: () => void): void => {
-    const originals = Object.fromEntries(Object.keys(overrides).map((key) => [key, process.env[key]]));
+    const originals = Object.fromEntries(
+        Object.keys(overrides).map((key) => [key, process.env[key]])
+    );
     for (const [key, value] of Object.entries(overrides)) {
         if (value === undefined) delete process.env[key];
         else process.env[key] = value;
@@ -32,7 +34,7 @@ const withEnv = (overrides: Record<string, string | undefined>, run: () => void)
 };
 
 describe('frontendLink — the default template per kind', () => {
-    it('builds the verify link: locale, then the frontend\'s verify-email page, token as a query param', () => {
+    it("builds the verify link: locale, then the frontend's verify-email page, token as a query param", () => {
         expect(frontendLink('verify', { locale: 'en', token: TOKEN })).toBe(
             `http://localhost:8080/en/verify-email/confirm?token=${TOKEN}`
         );
@@ -91,7 +93,7 @@ describe('frontendLink — the locale segment', () => {
 });
 
 describe('frontendLink — configuration', () => {
-    it('falls back to the frontend\'s own local dev origin when NODE_FRONTEND_URL is unset', () => {
+    it("falls back to the frontend's own local dev origin when NODE_FRONTEND_URL is unset", () => {
         withEnv({ NODE_FRONTEND_URL: undefined }, () => {
             expect(frontendLink('verify', { locale: 'en', token: TOKEN })).toBe(
                 `http://localhost:8080/en/verify-email/confirm?token=${TOKEN}`
@@ -107,7 +109,7 @@ describe('frontendLink — configuration', () => {
         });
     });
 
-    it('lets a deployment override one kind\'s template without touching the others', () => {
+    it("lets a deployment override one kind's template without touching the others", () => {
         withEnv({ NODE_FRONTEND_LINK_RESET: 'change-password?t={token}' }, () => {
             expect(frontendLink('reset', { locale: 'en', token: TOKEN })).toBe(
                 `http://localhost:8080/en/change-password?t=${TOKEN}`
