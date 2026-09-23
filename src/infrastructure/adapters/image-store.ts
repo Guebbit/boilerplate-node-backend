@@ -250,3 +250,45 @@ export const filesystemImageStore: ImageStore = {
  * working.
  */
 export const imageStore: ImageStore = filesystemImageStore;
+
+/**
+ * The three fields an editable image occupies on a document. `users` and `products` each carry
+ * one of these, and all three always change together — never independently, and never by any
+ * writer but the one below.
+ */
+export interface ImageWritebackFields {
+    imageUrl?: string;
+    thumbnailUrl?: string;
+    pendingImageKey?: string;
+}
+
+/**
+ * Applies an image replacement onto a document in place — the one gate `users` and `products`
+ * both need on their `update`, so neither hand-rolls it.
+ *
+ * A replacement counts only when the incoming url is non-blank AND different from what's already
+ * stored. That guards a JSON-only edit: the controller always sends a string for `imageUrl`
+ * (`''` when nothing was uploaded, since the validation schema requires one), so without this
+ * gate an edit with no upload would overwrite a real image with that empty placeholder.
+ *
+ * @param target - the document to mutate. `imageUrl`, `thumbnailUrl` and `pendingImageKey` are
+ *   set together, all produced by the same `readUploadedImage` call on the controller
+ * @param incoming - the same three fields off the incoming request
+ * @returns the url the image held before this call, when a replacement happened, so the caller
+ *   can pass it to {@link ImageStore.remove} — but only once the save has actually landed, since
+ *   deleting bytes ahead of a write that might still fail would leave a row pointing at a 404.
+ *   `undefined` when nothing changed, which `remove` already treats as a no-op.
+ */
+export const applyImageWriteback = (
+    target: ImageWritebackFields,
+    incoming: ImageWritebackFields
+): string | undefined => {
+    const oldImageUrl = target.imageUrl;
+    const newImageUrl = incoming.imageUrl ?? '';
+    if (!newImageUrl || oldImageUrl === newImageUrl) return undefined;
+
+    target.imageUrl = newImageUrl;
+    target.thumbnailUrl = incoming.thumbnailUrl;
+    target.pendingImageKey = incoming.pendingImageKey;
+    return oldImageUrl;
+};

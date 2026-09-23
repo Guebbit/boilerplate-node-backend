@@ -30,7 +30,7 @@ import {
     validationErrors
 } from '@infrastructure/http/response';
 import type { FacetCount } from '@types';
-import { imageStore } from '@infrastructure/adapters/image-store';
+import { imageStore, applyImageWriteback } from '@infrastructure/adapters/image-store';
 import { enqueueIfImagePending } from '@infrastructure/adapters/image.worker';
 import { emitDomainEvent } from '@kernel/events';
 import type { CallerContext } from '@types';
@@ -320,21 +320,14 @@ export const update = (
     if (data.taxClass !== undefined) product.taxClass = data.taxClass;
     if (data.requiresShipping !== undefined) product.requiresShipping = data.requiresShipping;
 
-    // If a new image was uploaded, update the url, thumbnail and pending key together — the three
-    // travel as one unit, all produced by the same `readUploadedImage` call on the controller.
-    const oldImageUrl = product.imageUrl;
-    const newImageUrl = data.imageUrl ?? '';
-    const imageReplaced = Boolean(newImageUrl) && oldImageUrl !== newImageUrl;
-    if (imageReplaced) {
-        product.imageUrl = newImageUrl;
-        product.thumbnailUrl = data.thumbnailUrl;
-        product.pendingImageKey = data.pendingImageKey;
-    }
+    // If a new image was uploaded, update the url, thumbnail and pending key together — see
+    // `applyImageWriteback`'s own docblock for the gate shared with `users`' own `update`.
+    const oldImageUrl = applyImageWriteback(product, data);
 
     // Persist the updated document
     return productRepository.save(product).then((updatedProduct) => {
-        // After saving the new image path, delete the old image file (and its thumbnail)
-        return (imageReplaced ? imageStore.remove(oldImageUrl) : Promise.resolve()).then(() =>
+        // After saving the new image path, delete the old image file (and its thumbnail).
+        return (oldImageUrl ? imageStore.remove(oldImageUrl) : Promise.resolve()).then(() =>
             enqueueIfPending(updatedProduct)
         );
     });

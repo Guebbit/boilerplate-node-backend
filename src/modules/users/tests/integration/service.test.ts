@@ -51,6 +51,9 @@ jest.mock('@infrastructure/observability/audit', () => {
  * *stored-image handle* (`imageUrl`).
  */
 jest.mock('@infrastructure/adapters/image-store', () => ({
+    // `applyImageWriteback` is a pure mutation the tests below rely on for real — only the
+    // filesystem-touching `remove` half needs stubbing.
+    ...jest.requireActual('@infrastructure/adapters/image-store'),
     imageStore: { remove: jest.fn().mockResolvedValue(true) }
 }));
 

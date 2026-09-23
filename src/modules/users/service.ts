@@ -22,7 +22,7 @@ import {
 } from '@infrastructure/http/response';
 import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
 import { encryptPii } from '@infrastructure/security/pii-encryption';
-import { imageStore } from '@infrastructure/adapters/image-store';
+import { imageStore, applyImageWriteback } from '@infrastructure/adapters/image-store';
 import { zodUserSchema, TokenType, hashToken, toUser } from './model';
 import type { UserDocument, Token, UserWire } from './model';
 import type { CreateUserRequest, SearchUsersRequest, UpdateUserByIdRequest, User } from '@types';
@@ -241,20 +241,10 @@ export const update = (
             // `role` is not written here — there is no column, only the membership,
             // written below in `updateSavedUser` once the rest of the document has saved.
             if (data.active !== undefined) user.active = data.active;
-            // The three travel as one unit, all produced by the same `readUploadedImage` call on
-            // the controller — set together whenever a new upload replaces the image. The old url
-            // is captured before the overwrite so `updateSavedUser` can delete it once the new one
-            // is durably saved — mirrors `products/service.ts`'s `update`. Gated on `imageReplaced`,
-            // not on `data.imageUrl !== undefined`: the controller always sends a string (`''` when
-            // nothing was uploaded, since the validation schema requires one), so a JSON edit with
-            // no upload must not overwrite a real avatar with that empty placeholder.
-            const oldImageUrl = user.imageUrl;
-            const imageReplaced = Boolean(data.imageUrl) && oldImageUrl !== data.imageUrl;
-            if (imageReplaced) {
-                user.imageUrl = data.imageUrl;
-                user.thumbnailUrl = data.thumbnailUrl;
-                user.pendingImageKey = data.pendingImageKey;
-            }
+            // The old url is captured before the overwrite so `updateSavedUser` can delete it once
+            // the new one is durably saved — see `applyImageWriteback`'s own docblock for the gate
+            // shared with `products/service.ts`'s own `update`.
+            const oldImageUrl = applyImageWriteback(user, data);
             // The preference that outlives the request — see the `locale` field on the user schema.
             if (data.locale !== undefined) user.locale = data.locale;
             if (data.phone !== undefined) user.phone = encryptPii(data.phone);
@@ -264,7 +254,7 @@ export const update = (
             if (data.analyticsConsent !== undefined) user.analyticsConsent = data.analyticsConsent;
             if (password) user.password = password;
 
-            return updateSavedUser(user, data, context, imageReplaced ? oldImageUrl : undefined);
+            return updateSavedUser(user, data, context, oldImageUrl);
         }
     );
 };
