@@ -35,7 +35,7 @@ export const countKnob = (name: string, fallback: number, minimum: number): numb
 /**
  * Requests the fuzz suite throws at EACH operation — `TEST_FUZZ_RUNS`.
  *
- * Deliberately small: 55 operations × this × a real in-memory Mongo, against auth limiters that
+ * Deliberately small: 132 operations × this × a real in-memory Mongo, against auth limiters that
  * are raised but finite (`tests/support/setup.ts`). Raise it when hunting, not as a default.
  */
 export const FUZZ_RUNS_PER_OPERATION = countKnob('TEST_FUZZ_RUNS', 12, 1);

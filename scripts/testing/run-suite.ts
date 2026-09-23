@@ -7,8 +7,9 @@
  *
  * ── WHY SHARDS AND NOT JUST A BIGGER HEAP ────────────────────────────────────────────────────────
  * Jest gives every test file a fresh module registry but the PROCESS keeps what that registry
- * allocated — ~70 MB per file, measured. Over the integration layer's 75 files that is ~5 GB of
- * retention in one process, and the run dies on Node's heap ceiling long before the last file.
+ * allocated — ~70 MB per file, measured. Multiplied across the integration layer's own file
+ * count, that is several GB of retention in one process, and the run dies on Node's heap
+ * ceiling long before the last file.
  * `--max-old-space-size` only moves the ceiling; it does not stop the climb. A process that exits
  * every N files does, and `--shard` is jest's own way to say which N.
  *

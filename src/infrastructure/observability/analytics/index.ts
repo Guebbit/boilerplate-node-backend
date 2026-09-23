@@ -172,8 +172,8 @@ export const buildAnalyticsBase = (
     clientIp: context.ip,
     userAgent: context.userAgent,
     hostname: context.host,
-    // Carried through so `emitAnalyticsEvent` can gate on it without every call site (this
-    // function's ~20 callers) changing.
+    // Carried through so `emitAnalyticsEvent` can gate on it without every call site of this
+    // function changing.
     analyticsConsent: context.analyticsConsent
 });
 
