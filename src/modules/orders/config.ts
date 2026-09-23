@@ -19,6 +19,7 @@
 import path from 'node:path';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import { isDemoMode } from '@infrastructure/runtime/demo-profile';
+import type { OrderTransferInstructions } from '@types';
 
 /**
  * The shop's own country — the ONLY jurisdiction VAT is ever charged at: no destination lookup,
@@ -120,6 +121,27 @@ export const bankTransferMaxOpenPerAccount = (): number =>
  */
 export const bankTransferEnabled = (): boolean =>
     Boolean(bankTransferBeneficiary() && bankTransferIban());
+
+/**
+ * The bank-transfer instructions block for one order's own reference — read live off current
+ * config rather than anything frozen at checkout, same reasoning as `applyTransferInstructions`'s
+ * docblock in `model.ts`. Pure construction only: whether transfer is still offered, whether the
+ * order is still payable, and whether it even has a reference are each caller's own guard, run
+ * before this is ever called.
+ * @param reference - the order's own RF reference, minted at checkout by `buildReference`
+ * @returns the instructions block — `bic` present only when configured
+ */
+export const transferInstructionsFor = (reference: string): OrderTransferInstructions => {
+    const bic = bankTransferBic();
+    return {
+        // Both proven present by the caller's own guard (beneficiary/IBAN configured) before this
+        // ever runs — the `!` narrows what that guard already checked, not what this can't see.
+        beneficiary: bankTransferBeneficiary()!,
+        iban: bankTransferIbanFriendly()!,
+        ...(bic ? { bic } : {}),
+        reference
+    };
+};
 
 /**
  * Where a rendered invoice may be cached, resolved against the WORKING DIRECTORY when relative —

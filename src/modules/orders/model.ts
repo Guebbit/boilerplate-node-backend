@@ -19,7 +19,7 @@ import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import type { ProductSnapshot } from '@modules/products';
 import { applySerialization } from '@infrastructure/persistence/serialize';
-import { bankTransferBeneficiary, bankTransferBic, bankTransferIbanFriendly } from './config';
+import { bankTransferBeneficiary, bankTransferIbanFriendly, transferInstructionsFor } from './config';
 import { sumLineItems, orderTotal, type LineItem } from './domain/totals';
 import { orderTaxBreakdown, type TaxableLineItem } from './domain/tax';
 import { isPayable } from './domain/lifecycle';
@@ -509,17 +509,9 @@ const applyTransferInstructions = (serialized: Record<string, unknown>) => {
     )
         return;
 
-    const beneficiary = bankTransferBeneficiary();
-    const iban = bankTransferIbanFriendly();
-    if (!beneficiary || !iban) return;
+    if (!bankTransferBeneficiary() || !bankTransferIbanFriendly()) return;
 
-    const bic = bankTransferBic();
-    serialized.transferInstructions = {
-        beneficiary,
-        iban,
-        ...(bic ? { bic } : {}),
-        reference
-    };
+    serialized.transferInstructions = transferInstructionsFor(reference);
 };
 
 /**

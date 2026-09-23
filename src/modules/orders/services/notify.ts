@@ -10,7 +10,7 @@
 import { logger } from '@infrastructure/adapters/logger';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { spoolAttachment } from '@infrastructure/adapters/mail-spool';
-import { bankTransferBeneficiary, bankTransferBic, bankTransferIbanFriendly } from '../config';
+import { bankTransferBeneficiary, bankTransferIbanFriendly, transferInstructionsFor } from '../config';
 import { orderConfirmEmail, bankTransferInstructionsEmail } from '../emails';
 import { renderInvoicePdf } from './invoice';
 import type { OrderDocument } from '../model';
@@ -76,26 +76,18 @@ export const sendOrderPlacedEmail = (
     recipientEmail: string
 ): void => {
     const orderId = String(order._id);
-    const beneficiary = bankTransferBeneficiary();
-    const iban = bankTransferIbanFriendly();
-    const bic = bankTransferBic();
 
     const mail =
         order.paymentMethod === 'bank_transfer' &&
-        beneficiary &&
-        iban &&
+        bankTransferBeneficiary() &&
+        bankTransferIbanFriendly() &&
         order.payBy &&
         order.transferReference
             ? bankTransferInstructionsEmail(
                   locale,
                   name,
                   order,
-                  {
-                      beneficiary,
-                      iban,
-                      ...(bic ? { bic } : {}),
-                      reference: order.transferReference
-                  },
+                  transferInstructionsFor(order.transferReference),
                   order.payBy,
                   orderId
               )
