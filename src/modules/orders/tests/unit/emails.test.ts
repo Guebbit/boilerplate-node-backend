@@ -210,7 +210,7 @@ const VAT_ORDER = {
     id: 'vat-order-1'
 };
 
-/** Matches `invoiceCurrency()`'s default (`.env-example`'s `NODE_DEFAULT_CURRENCY`, unset here). */
+/** Matches `shopCurrency()`'s default (`.env-example`'s `NODE_DEFAULT_CURRENCY`, unset here). */
 const eur = new Intl.NumberFormat('en', { style: 'currency', currency: 'EUR' });
 
 describe('invoiceDocument — the VAT block', () => {

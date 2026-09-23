@@ -15,11 +15,10 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { PaymentMethod } from '@types';
-import { orderService, orderTotal, isPayable } from '@modules/orders';
+import { orderService, orderTotal, isPayable, shopCurrency } from '@modules/orders';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import type { CallerContext } from '@types';
-import { defaultCurrency } from '../config';
 import { paymentRepository } from '../repository';
 import { paymentsAuditActions } from '../audit';
 import { paymentsAnalyticsEvents } from '../analytics';
@@ -78,7 +77,7 @@ export const recordOfflinePayment = (
                 .then((payerId) =>
                     paymentRepository.upsertOffline(orderId, payerId, {
                         amount: orderTotal(order),
-                        currency: defaultCurrency(),
+                        currency: shopCurrency(),
                         method: input.method,
                         reference: input.reference,
                         receivedAt: input.receivedAt ? new Date(input.receivedAt) : new Date()

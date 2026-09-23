@@ -11,7 +11,7 @@ import type { TFunction } from 'i18next';
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
 import { frontendLink } from '@infrastructure/http/frontend-link';
-import { invoiceCurrency, shopCountry, shopLegalName, shopVatNumber } from './config';
+import { shopCurrency, shopCountry, shopLegalName, shopVatNumber } from './config';
 import { orderTotal, orderTaxBreakdown, type TaxRateSummary } from './domain';
 import type { OrderTransferInstructions } from '@types';
 
@@ -308,7 +308,7 @@ export interface InvoiceVatBlock {
  * hand this an untransformed document, so nothing here may assume a derived field was already
  * computed.
  * @param locale - the document's language, for `Intl.NumberFormat` — every amount below goes
- *   through it, in `invoiceCurrency()`'s configured currency
+ *   through it, in `shopCurrency()`'s configured currency
  * @param t - this document's translator, already fixed to `locale`
  * @param order - the order the invoice is for
  * @returns the VAT block
@@ -319,7 +319,7 @@ const buildVatBlock = (locale: string, t: TFunction, order: InvoiceOrder): Invoi
     // One instance, reused for every amount on the invoice — this is a real allocation
     // (constructing a Collator/PluralRules under the hood), not worth paying once per cell.
     // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/NumberFormat
-    const money = new Intl.NumberFormat(locale, { style: 'currency', currency: invoiceCurrency() });
+    const money = new Intl.NumberFormat(locale, { style: 'currency', currency: shopCurrency() });
     // A decimal rate (`0.055`) as the invoice prints it (`"5.5%"`) — a naive `Math.round(rate *
     // 100)` would floor a fractional VAT rate to the nearest whole point, printing 5.5% as "6%"
     // on a legal document.

@@ -13,9 +13,14 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import type { Payment, AuthContext } from '@types';
-import { orderService, orderTotal, isPayable, unavailableLines } from '@modules/orders';
+import {
+    orderService,
+    orderTotal,
+    isPayable,
+    unavailableLines,
+    shopCurrency
+} from '@modules/orders';
 import { userService } from '@modules/users';
-import { defaultCurrency } from '../config';
 import { resolvePaymentProvider } from '../providers';
 import { paymentRepository } from '../repository';
 
@@ -103,7 +108,7 @@ export const createIntent = (
                 .then((payerId) =>
                     paymentRepository.upsertIntent(orderId, payerId, {
                         amount: orderTotal(order),
-                        currency: defaultCurrency(),
+                        currency: shopCurrency(),
                         provider: provider.name
                     })
                 )

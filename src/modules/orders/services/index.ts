@@ -73,7 +73,8 @@ export {
     bankTransferHoldHours,
     bankTransferIban,
     bankTransferIbanFriendly,
-    bankTransferMaxOpenPerAccount
+    bankTransferMaxOpenPerAccount,
+    shopCurrency
 } from '../config';
 
 /** The service's public surface — every controller and cross-module caller goes through this. */

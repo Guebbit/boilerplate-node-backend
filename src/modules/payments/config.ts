@@ -4,11 +4,13 @@
  * `@modules/inventory`'s `config.ts`: read per call so a change takes effect on the next intent,
  * not the next restart, and so a second reader doesn't transcribe its own copy of the fallback.
  *
- * The bank-transfer VALUES themselves (`bankTransferBeneficiary`/`Iban`/`Bic`) are `@modules/orders`'
- * own config — `orders` renders `transferInstructions` and enforces the open-transfer cap, so it
- * owns the business rule; this module already depends on `orders` for `markPaid`. This file owns
- * the one thing that IS this module's alone: validating the configured values with `ibantools` at
- * boot, and listing the methods `GET /payments/methods` answers.
+ * The bank-transfer VALUES themselves (`bankTransferBeneficiary`/`Iban`/`Bic`) and `shopCurrency`
+ * are `@modules/orders`' own config — `orders` renders `transferInstructions` and enforces the
+ * open-transfer cap, so it owns the bank-transfer business rule, and it already owns the shop's
+ * one currency for the invoice this module's payments settle; this module already depends on
+ * `orders` for `markPaid`. This file owns the one thing that IS this module's alone: validating
+ * the configured values with `ibantools` at boot, and listing the methods `GET /payments/methods`
+ * answers.
  */
 
 import { electronicFormatIBAN, isValidBIC, isValidIBAN } from 'ibantools';
@@ -19,14 +21,6 @@ import {
     bankTransferHoldHours,
     bankTransferIban
 } from '@modules/orders';
-
-/**
- * The currency every payment is denominated in — ISO-4217, one per deployment. Stamped onto each
- * payment at intent time, so a later config change never relabels money already taken.
- *
- * @returns the ISO-4217 code to stamp on new payments; `EUR` if unset
- */
-export const defaultCurrency = (): string => process.env.NODE_DEFAULT_CURRENCY ?? 'EUR';
 
 /**
  * One payment method `GET /payments/methods` and checkout may offer.
