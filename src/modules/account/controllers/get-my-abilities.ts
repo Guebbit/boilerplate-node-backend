@@ -56,10 +56,10 @@ const rulesFor = (caller: Parameters<typeof buildAbility>[0]) =>
  *
  * Both, because a request acts in one scope and a CLIENT renders from two: the shop's screens read
  * tenant keys, the health dashboard reads `platform.observability.any.read`, and they share one
- * navigation. Publishing tenant rules alone left the platform screens with nothing to grey out,
- * so they were gated on a tenant key that merely correlated — the guess this endpoint abolishes
- * everywhere else. The two lists stay apart, because the model refuses to let either satisfy the
- * other.
+ * navigation. Publishing tenant rules alone would leave the platform screens with nothing to grey
+ * out, forcing them to gate on a tenant key that merely correlates — the guess this endpoint
+ * abolishes everywhere else. The two lists stay apart, because the model refuses to let either
+ * satisfy the other.
  */
 export const getMyAbilities = (request: Request, response: Response) => {
     const context: AuthContext | undefined = request.authContext;

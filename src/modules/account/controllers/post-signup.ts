@@ -117,9 +117,9 @@ export const postSignup = (
             void sendVerificationEmail(data, callerContextOf(request));
 
             /*
-             * Signed in from here, as `unverified`: the role model says an unproven address
-             * browses freely and is stopped at `cart.self.checkout`, so making the new account log in
-             * again to reach that state was the old verification-as-a-gate model, not this one.
+             * Signed in from here, as `unverified`: the role model already lets an unproven
+             * address browse freely and stops it only at `cart.self.checkout`, so a second login
+             * before reaching that state would be friction with no security benefit.
              *
              * Cookies only, and the body stays `User` — the frontend's `GET /account/refresh`
              * bootstrap mints the access token, exactly as it does after the OAuth callback. That
