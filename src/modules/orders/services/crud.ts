@@ -86,6 +86,23 @@ export const ownOrderIds = (userId: string): Promise<string[]> =>
     ).then((orders) => orders.map((order) => order.id));
 
 /**
+ * Every order this account placed, in wire shape — for the account's own data export. Goes
+ * through {@link search} (not `orderRepository.search` directly, unlike {@link ownOrderIds}), so
+ * each order's current-image resolution runs the same way a listing's would. No `context`, so the
+ * `orders_viewed` analytics emit stays off — an export is not a view.
+ *
+ * @param userId - the caller's own id
+ */
+export const findOwnOrders = (userId: string): Promise<Order[]> =>
+    readAll(
+        (page) =>
+            search({ page, pageSize: MAX_CONFIGURED_PAGE_SIZE }, ownerScope(userId)).then(
+                (result) => result.items
+            ),
+        MAX_CONFIGURED_PAGE_SIZE
+    );
+
+/**
  * Get a single order by ID.
  * Returns undefined if id is falsy or if not found.
  *

@@ -22,15 +22,8 @@ import { onDomainEvent } from '@kernel/events';
 import { RESERVATION_EXPIRED } from '@modules/inventory';
 import { USER_DELETED } from '@modules/users';
 import { PRODUCT_DELETED, PRODUCT_DEACTIVATED } from '@modules/products';
-import { readAll, MAX_CONFIGURED_PAGE_SIZE } from '@infrastructure/persistence/search';
 import { router } from './routes';
-import {
-    cancelById,
-    cancelPendingOrdersHolding,
-    detachUserId,
-    search,
-    ownerScope
-} from './services';
+import { cancelById, cancelPendingOrdersHolding, detachUserId, findOwnOrders } from './services';
 import { ordersRateLimits } from './rate-limits';
 // Side-effect only: registers this module's event declarations (ORDER_CANCELLED, ORDER_CREATED,
 // ORDER_STATUS_CHANGED) into the kernel's `DomainEventMap`. Nothing here listens to its own
@@ -61,15 +54,7 @@ export default {
     personalData: [
         {
             section: 'orders',
-            collect: (subject) =>
-                readAll(
-                    (page) =>
-                        search(
-                            { page, pageSize: MAX_CONFIGURED_PAGE_SIZE },
-                            ownerScope(subject.userId)
-                        ).then((result) => result.items),
-                    MAX_CONFIGURED_PAGE_SIZE
-                )
+            collect: (subject) => findOwnOrders(subject.userId)
         }
     ],
     /*
