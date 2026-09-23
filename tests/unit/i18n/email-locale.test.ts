@@ -16,8 +16,8 @@ import itAccount from '@modules/account/locales/it.json';
  * really does resolve (and in the right language), and that the worker really does not care what
  * locale surrounds it.
  *
- * SMTP is mocked out; `nodemailer` here is this repo's own render-and-send wrapper, not the
- * package. What is asserted is the rendered HTML and the subject, which is the copy.
+ * SMTP is mocked out via the `nodemailer` package itself, not this repo's `sendTemplatedEmail`
+ * wrapper. What is asserted is the rendered HTML and the subject, which is the copy.
  */
 
 const sendMailMock = jest.fn().mockResolvedValue({ messageId: 'test' });

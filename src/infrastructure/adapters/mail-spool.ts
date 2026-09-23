@@ -2,9 +2,9 @@
  * @module
  * The mail spool — the Claim Check pattern for an email attachment: the bytes go here, durably,
  * and the queue message carries only the ticket. `EmailJobPayload.request.attachments` is
- * `{ filename, key }[]`, never bytes and never a path — `mailer.ts#nodemailer` is the one place a
- * key becomes a path, resolved inside the spool root, so nothing a producer writes into a queue
- * message can ever name a file outside it.
+ * `{ filename, key }[]`, never bytes and never a path — `mailer.ts#resolveAttachments` is the one
+ * place a key becomes a path, resolved inside the spool root, so nothing a producer writes into a
+ * queue message can ever name a file outside it.
  *
  * Durable, so a job still queued when the process restarts finds its attachment intact — unlike
  * ephemeral upload staging, this must survive past one request. OUTSIDE `NODE_PUBLIC_PATH`, same
@@ -65,8 +65,8 @@ export const resolveSpooled = (key: string): string | undefined =>
 /**
  * Deletes a spooled attachment. Never rejects, matching `services/invoice.ts#deleteCachedInvoice`:
  * called only once a caller knows a job is finished with it — `mailer.ts#sendInline` and
- * `email.worker.ts#discardJobAttachments`, never `nodemailer()` itself — and a failed cleanup
- * must not become a second, different failure on top of whatever the send already was.
+ * `email.worker.ts#discardJobAttachments`, never `sendTemplatedEmail()` itself — and a failed
+ * cleanup must not become a second, different failure on top of whatever the send already was.
  *
  * @param key - a value {@link spoolAttachment} returned
  */

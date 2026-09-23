@@ -22,7 +22,7 @@ jest.mock('nodemailer', () => ({
 }));
 
 import {
-    nodemailer,
+    sendTemplatedEmail,
     resetTransporter,
     resolveMailTransport
 } from '@infrastructure/adapters/mailer';
@@ -50,7 +50,7 @@ const transportOptions = async (
     }
 
     // Any send builds the transport; the envelope itself is irrelevant here.
-    await nodemailer({ to: 'ada@example.com' }, 'orders.order-confirm', {
+    await sendTemplatedEmail({ to: 'ada@example.com' }, 'orders.order-confirm', {
         locale: 'en',
         pageMetaTitle: '',
         pageMetaLinks: [],

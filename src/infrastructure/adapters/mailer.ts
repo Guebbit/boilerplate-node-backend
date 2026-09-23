@@ -10,8 +10,14 @@ import path from 'node:path';
 // variables interpolated into a template (`<%= user.name %>`).
 import ejs, { type Data } from 'ejs';
 // nodemailer: `createTransport` builds a reusable SMTP sender; `SentMessageInfo` is the server's
-// reply (messageId, accepted/rejected recipients).
-import { createTransport, type SentMessageInfo, type Transporter } from 'nodemailer';
+// reply (messageId, accepted/rejected recipients); `SendMailOptions` is `sendMail`'s own envelope
+// shape — https://nodemailer.com/message/
+import {
+    createTransport,
+    type SendMailOptions,
+    type SentMessageInfo,
+    type Transporter
+} from 'nodemailer';
 // OTel semantic-convention keys for messaging spans — using the standard names lets tracing
 // backends render this as a messaging operation instead of an opaque span. Still incubating,
 // hence the `/incubating` subpath: the older `SEMATTRS_*` aliases are deprecated, and
@@ -187,6 +193,42 @@ interface ResolvedAttachment {
 }
 
 /**
+ * Resolves a request's `{ filename, key }` attachments off the mail spool into nodemailer's own
+ * `{ filename, path }` shape.
+ *
+ * Each key is resolved inside the spool root — one that fails to resolve (malformed; should not
+ * happen, since only `spoolAttachment` ever mints one) is logged and dropped rather than handed to
+ * nodemailer as a broken path.
+ *
+ * @param attachments - a request's own `attachments`, absent for one that names none
+ */
+const resolveAttachments = (
+    attachments: EmailJobPayload['request']['attachments'] = []
+): ResolvedAttachment[] =>
+    attachments.flatMap(({ filename, key }) => {
+        const target = resolveSpooled(key);
+        if (target) return [{ filename, path: target }];
+        // Stryker disable all
+        logger.warn({
+            message: 'Email attachment named an unresolvable spool key, skipping it.',
+            key
+        });
+        // Stryker restore all
+        return [];
+    });
+
+/**
+ * nodemailer: hands the transporter one fully-built message and returns its `sendMail` promise —
+ * the ONE call site this module routes every outbound message through.
+ * https://nodemailer.com/message/
+ *
+ * @param message - the complete envelope to send as-is; {@link sendTemplatedEmail} is what fills
+ *   in the defaults (`from`, `html`, resolved `attachments`) before reaching here.
+ */
+const send = (message: SendMailOptions): Promise<SentMessageInfo> =>
+    getTransporter().sendMail(message);
+
+/**
  * Send an email via SMTP for the requested template and options.
  *
  * Sends synchronously — the caller's promise doesn't settle until the mail server accepts the
@@ -203,97 +245,78 @@ interface ResolvedAttachment {
  * @param templateName - the outbox name, without extension — see {@link EmailContent.template}
  * @param data - variables interpolated into the EJS template
  */
-export const nodemailer = (
+export const sendTemplatedEmail = (
     request: EmailJobPayload['request'],
     templateName: string,
     data: Data
 ): Promise<SentMessageInfo> => {
     const { attachments = [], ...envelope } = request;
 
-    const send = (): Promise<SentMessageInfo> => {
-        // The outbox keeps the message where `GET /__test/emails` can read it, and renders nothing:
-        // the paired suite asserts on the template NAME and the data, never on the HTML.
-        if (resolveMailTransport() === 'outbox') {
-            recordDemoEmail(request, templateName, data);
-            return Promise.resolve({ messageId: 'demo-outbox' });
-        }
+    // The outbox keeps the message where `GET /__test/emails` can read it, and renders nothing:
+    // the paired suite asserts on the template NAME and the data, never on the HTML.
+    if (resolveMailTransport() === 'outbox') {
+        recordDemoEmail(request, templateName, data);
+        return Promise.resolve({ messageId: 'demo-outbox' });
+    }
 
-        // Wrap the entire email operation in an OTel span to track latency and failures.
-        return withSpan('email.send', (span) => {
-            // Span attributes = searchable/filterable dimensions on the trace. These let you ask
-            // "which template is slowest?" or "which recipients failed?" in the tracing backend.
-            span.setAttributes({
-                // `messaging.system` — the transport being used. Standard key, so backends group
-                // this alongside other messaging spans.
-                [ATTR_MESSAGING_SYSTEM]: 'smtp',
-                // `messaging.destination.name` — the recipient. `to` is a plain required string
-                // on the contract's own `request` shape, unlike nodemailer's own wider type.
-                [ATTR_MESSAGING_DESTINATION_NAME]: envelope.to,
-                // Custom attribute: email template used to render the body.
-                'email.template': templateName
-            });
-
-            // Each key resolved inside the spool root — a key that fails to resolve (malformed;
-            // should not happen, since only `spoolAttachment` ever mints one) is logged and
-            // dropped rather than handed to nodemailer as a broken path.
-            const resolvedAttachments: ResolvedAttachment[] = attachments.flatMap(
-                ({ filename, key }) => {
-                    const target = resolveSpooled(key);
-                    if (target) return [{ filename, path: target }];
-                    // Stryker disable all
-                    logger.warn({
-                        message: 'Email attachment named an unresolvable spool key, skipping it.',
-                        key
-                    });
-                    // Stryker restore all
-                    return [];
-                }
-            );
-
-            return (
-                ejs
-                    // `renderFile` reads the template from disk and returns the interpolated HTML.
-                    // EJS caches compiled templates internally, so repeat sends skip recompilation.
-                    /*
-                     * `data` is the WHOLE render context — no `t`, no locale lookup, nothing
-                     * ambient. Every string a template prints was translated by the producer while
-                     * the request that asked for the email was still alive, so this function (and
-                     * the worker that calls it, possibly in another process, hours later) does not
-                     * need to know what a locale is.
-                     */
-                    .renderFile(templateFile(templateName), { ...data })
-                    .then((html) =>
-                        getTransporter().sendMail({
-                            // Default sender; spread below lets a caller override it.
-                            from: process.env.NODE_SMTP_SENDER,
-                            // The rendered template becomes the HTML body.
-                            html,
-                            // Spread last, so caller-supplied fields (to/subject, and even
-                            // `from`/`html`) take precedence over the defaults above.
-                            ...envelope,
-                            // Resolved separately, after the spread: nothing in `envelope` ever
-                            // carries a raw `attachments` field (destructured out above), and a
-                            // caller must never be able to hand nodemailer anything but a path this
-                            // adapter resolved itself.
-                            ...(resolvedAttachments.length > 0
-                                ? { attachments: resolvedAttachments }
-                                : {})
-                        })
-                    )
-                    .then((info: { messageId: string }) => {
-                        // `messageId` is the SMTP server's identifier — the handle you need to trace
-                        // a specific email through mail-server logs or a provider dashboard.
-                        // Stryker disable next-line all
-                        logger.info('Message sent: %s', info.messageId);
-                        return info;
-                    })
-                // No .catch(): a rejection propagates so `withSpan` can mark the span as errored
-                // and the caller (or the queue worker's nack path) can react.
-            );
+    // Wrap the entire email operation in an OTel span to track latency and failures.
+    return withSpan('email.send', (span) => {
+        // Span attributes = searchable/filterable dimensions on the trace. These let you ask
+        // "which template is slowest?" or "which recipients failed?" in the tracing backend.
+        span.setAttributes({
+            // `messaging.system` — the transport being used. Standard key, so backends group
+            // this alongside other messaging spans.
+            [ATTR_MESSAGING_SYSTEM]: 'smtp',
+            // `messaging.destination.name` — the recipient. `to` is a plain required string
+            // on the contract's own `request` shape, unlike nodemailer's own wider type.
+            [ATTR_MESSAGING_DESTINATION_NAME]: envelope.to,
+            // Custom attribute: email template used to render the body.
+            'email.template': templateName
         });
-    };
 
-    return send();
+        const resolvedAttachments = resolveAttachments(attachments);
+
+        return (
+            ejs
+                // `renderFile` reads the template from disk and returns the interpolated HTML.
+                // EJS caches compiled templates internally, so repeat sends skip recompilation.
+                /*
+                 * `data` is the WHOLE render context — no `t`, no locale lookup, nothing
+                 * ambient. Every string a template prints was translated by the producer while
+                 * the request that asked for the email was still alive, so this function (and
+                 * the worker that calls it, possibly in another process, hours later) does not
+                 * need to know what a locale is.
+                 */
+                .renderFile(templateFile(templateName), { ...data })
+                .then((html) =>
+                    send({
+                        // Default sender; spread below lets a caller override it.
+                        from: process.env.NODE_SMTP_SENDER,
+                        // The rendered template becomes the HTML body.
+                        html,
+                        // Spread last, so caller-supplied fields (to/subject, and even
+                        // `from`/`html`) take precedence over the defaults above.
+                        ...envelope,
+                        // Resolved separately, after the spread: nothing in `envelope` ever
+                        // carries a raw `attachments` field (destructured out above), and a
+                        // caller must never be able to hand nodemailer anything but a path this
+                        // adapter resolved itself.
+                        ...(resolvedAttachments.length > 0
+                            ? { attachments: resolvedAttachments }
+                            : {})
+                    })
+                )
+                .then((info: { messageId: string }) => {
+                    // `messageId` is the SMTP server's identifier — the handle you need to trace
+                    // a specific email through mail-server logs or a provider dashboard.
+                    // Stryker disable next-line all
+                    logger.info('Message sent: %s', info.messageId);
+                    return info;
+                })
+            // No .catch(): a rejection propagates so `withSpan` can mark the span as errored
+            // and the caller (or the queue worker's nack path) can react.
+        );
+    });
 };
 
 /**
@@ -317,17 +340,17 @@ export interface EmailContent {
 }
 
 /**
- * Sends via `nodemailer()`, then discards every spooled attachment once the send settles —
- * success or failure. Safe here, unlike inside `nodemailer()` itself: this is `enqueueEmail`'s
- * inline path, with no retry chain behind it either way, so there is no later attempt that would
- * find the attachment already gone.
+ * Sends via `sendTemplatedEmail()`, then discards every spooled attachment once the send settles —
+ * success or failure. Safe here, unlike inside `sendTemplatedEmail()` itself: this is
+ * `enqueueEmail`'s inline path, with no retry chain behind it either way, so there is no later
+ * attempt that would find the attachment already gone.
  */
 const sendInline = (
     request: EmailJobPayload['request'],
     templateName: string,
     data: Data
 ): Promise<void> =>
-    nodemailer(request, templateName, data)
+    sendTemplatedEmail(request, templateName, data)
         .then(() => undefined)
         .finally(() =>
             Promise.all((request.attachments ?? []).map(({ key }) => discardSpooled(key))).then(
@@ -349,7 +372,7 @@ const sendInline = (
  *   the same call. Nodemailer's full `SendMailOptions` does not: `attachments: [{ content: Buffer }]`
  *   arrives as `{"type":"Buffer","data":[…]}`, so a wider type would work in dev (broker off) and
  *   silently corrupt in production. `request.attachments` carries a storage key instead —
- *   `{ filename, key }`, resolved against the mail spool by `nodemailer()`, never bytes.
+ *   `{ filename, key }`, resolved against the mail spool by `resolveAttachments()`, never bytes.
  * @param priority - `'high'` for a mail someone is actively blocked on (a token-bearing link with
  *   a TTL); left at the `'normal'` default for everything informational. See `queue.ts`'s
  *   `JobPriority` for why there are only two levels. Meaningless on the inline fallback — priority

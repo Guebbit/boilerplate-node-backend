@@ -20,21 +20,21 @@
 
 import { logger } from '@infrastructure/adapters/logger';
 
-jest.mock('@infrastructure/adapters/mailer', () => ({ nodemailer: jest.fn() }));
+jest.mock('@infrastructure/adapters/mailer', () => ({ sendTemplatedEmail: jest.fn() }));
 
 const discardSpooledMock = jest.fn().mockResolvedValue(undefined);
 jest.mock('@infrastructure/adapters/mail-spool', () => ({
     discardSpooled: (key: string) => discardSpooledMock(key)
 }));
 
-import { nodemailer } from '@infrastructure/adapters/mailer';
+import { sendTemplatedEmail } from '@infrastructure/adapters/mailer';
 import { EMAIL_QUEUE } from '@infrastructure/adapters/queue';
 import {
     handleEmailJob,
     EMAIL_QUEUE as workerEmailQueue
 } from '@infrastructure/adapters/email.worker';
 
-const mockedMailer = nodemailer as jest.MockedFunction<typeof nodemailer>;
+const mockedMailer = sendTemplatedEmail as jest.MockedFunction<typeof sendTemplatedEmail>;
 
 beforeEach(() => {
     jest.clearAllMocks();
@@ -115,8 +115,9 @@ describe('handleEmailJob', () => {
     });
 
     /*
-     * `nodemailer()` itself never discards any more — a retried attempt needs its attachment
-     * intact. These pin the two outcomes this worker treats as final, and the one it does not.
+     * `sendTemplatedEmail()` itself never discards any more — a retried attempt needs its
+     * attachment intact. These pin the two outcomes this worker treats as final, and the one it
+     * does not.
      */
     describe('discarding the spooled attachment', () => {
         const withAttachment = {

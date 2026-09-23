@@ -48,8 +48,8 @@ flowchart LR
 
 All controllers that send emails use `enqueueEmail()` from `src/infrastructure/adapters/mailer.ts`:
 
-- **Queue enabled** → the email job is published to the `worker.email.send` queue. The `email.worker.ts` consumer picks it up and calls `nodemailer()` in the background.
-- **Queue disabled** → falls back to calling `nodemailer()` directly (same behavior as before).
+- **Queue enabled** → the email job is published to the `worker.email.send` queue. The `email.worker.ts` consumer picks it up and calls `sendTemplatedEmail()` in the background.
+- **Queue disabled** → falls back to calling `sendTemplatedEmail()` directly (same behavior as before).
 
 Controllers using it:
 

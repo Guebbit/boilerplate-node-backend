@@ -268,9 +268,9 @@ describe('enqueueEmail — the paths are mutually exclusive', () => {
 
 /*
  * `sendInline` — every path above that actually sends now discards through it, since neither has
- * a retry chain behind it: no broker, or a publish that already failed. `nodemailer()` itself
- * never discards any more — see `mailer-attachments.test.ts` and `email.worker.test.ts` for the
- * queued path, which has one.
+ * a retry chain behind it: no broker, or a publish that already failed. `sendTemplatedEmail()`
+ * itself never discards any more — see `mailer-attachments.test.ts` and `email.worker.test.ts` for
+ * the queued path, which has one.
  */
 describe('enqueueEmail — the inline paths discard their own attachment', () => {
     it('discards it once a no-broker send settles', async () => {

@@ -9,7 +9,7 @@
  */
 
 import type { EmailJobPayload } from '@types';
-import { nodemailer } from '@infrastructure/adapters/mailer';
+import { sendTemplatedEmail } from '@infrastructure/adapters/mailer';
 import { discardSpooled } from '@infrastructure/adapters/mail-spool';
 import { logger } from '@infrastructure/adapters/logger';
 
@@ -54,7 +54,7 @@ export const handleEmailJob = (job: Partial<EmailJobPayload>): Promise<boolean> 
      * string before publishing — `job.data` is finished copy — so this only interpolates and sends.
      */
     return (
-        nodemailer(job.request, job.templateName, job.data ?? {})
+        sendTemplatedEmail(job.request, job.templateName, job.data ?? {})
             // `!`: proven present by the guard above, which the compiler cannot follow into this closure.
             .then(() => discardJobAttachments(job.request!.attachments).then(() => true))
             .catch((error: unknown) => {
