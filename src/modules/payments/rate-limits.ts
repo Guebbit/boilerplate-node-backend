@@ -16,6 +16,7 @@ import type { RateLimitBudget } from '@types';
 import {
     buildRateLimiter,
     rateLimitInfoOf,
+    accountIdOf,
     KEYED_BY_ADDRESS,
     KEYED_BY_AUTHENTICATED_ACCOUNT
 } from '@infrastructure/http/middlewares/rate-limit';
@@ -49,15 +50,6 @@ export const webhookLimiter: RequestHandler = buildRateLimiter(WEBHOOK_BUDGET);
 
 /** Window, in ms, for both payment-velocity budgets — fixed at one hour: the duration is part of what the budget means, not an artefact of the shared browsing window. */
 const PAYMENT_VELOCITY_WINDOW_MS = 60 * 60 * 1000;
-
-/**
- * Who a payment-velocity budget is keyed on: the authenticated account. `identityOf` (the
- * credential budgets' key) reads the request BODY, the wrong place here — the account confirming
- * a payment is in `authContext`, resolved by `getAuth` before either limiter below runs
- * (`payments/routes.ts` mounts them after `router.use(getAuth, isAuth)`), so the `!` is a fact
- * `isAuth` already proved, not a suppression.
- */
-const accountIdOf = (request: Request): string => request.authContext!.id;
 
 /**
  * Confirm attempts allowed per ACCOUNT per hour — the blunt cap on the whole intent→confirm loop:

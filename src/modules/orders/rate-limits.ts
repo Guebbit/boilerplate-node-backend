@@ -8,19 +8,13 @@
  * See: docs/tools/security.md#the-rate-limit-budgets
  */
 
-import type { Request, RequestHandler } from 'express';
+import type { RequestHandler } from 'express';
 import type { RateLimitBudget } from '@types';
 import {
     buildRateLimiter,
+    accountIdOf,
     KEYED_BY_AUTHENTICATED_ACCOUNT
 } from '@infrastructure/http/middlewares/rate-limit';
-
-/**
- * Who the invoice budget is keyed on: the authenticated account, resolved by `getAuth` before this
- * ever runs — `routes.ts` mounts every route (this one included) after `router.use(getAuth,
- * isAuth)` — so the `!` is a fact already proved, not a suppression.
- */
-const accountIdOf = (request: Request): string => request.authContext!.id;
 
 /**
  * Invoice renders allowed per window, per ACCOUNT.

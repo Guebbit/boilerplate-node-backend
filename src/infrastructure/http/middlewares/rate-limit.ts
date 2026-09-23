@@ -140,6 +140,13 @@ export const KEYED_BY_SUBMITTED_EMAIL = 'the submitted email, normalised and has
 /** `keyedBy` label for a budget bucketed on the caller's authenticated account. */
 export const KEYED_BY_AUTHENTICATED_ACCOUNT = 'the authenticated account';
 
+/**
+ * The account-keyed budget's `keyGenerator`: the caller's account, resolved by `getAuth` before
+ * any route that mounts such a budget runs — so `authContext` is always present and the `!` is a
+ * fact `isAuth` already proved, not a suppression.
+ */
+export const accountIdOf = (request: Request): string => request.authContext!.id;
+
 /** `keyedBy` label for a budget bucketed on a hashed challenge string, falling back to the address block. */
 export const KEYED_BY_CHALLENGE =
     'the challenge string, hashed (falls back to address block when absent)';
