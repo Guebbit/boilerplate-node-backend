@@ -1,8 +1,8 @@
 /**
  * @module
  * Integration tests for the feedback request service. Pins three behaviours: create normalises
- * (lowercased email, trimmed fields, blank `name` → `undefined`); `toFeedbackStatus` accepts only
- * generated `FeedbackRequestStatus` values; and `respondedAt` stamps once, so re-resolving an
+ * (lowercased email, trimmed fields, blank `name` → `undefined`); a write's `status` narrows onto
+ * `FeedbackRequestStatus` via `toFeedbackStatus`; and `respondedAt` stamps once, so re-resolving an
  * already-resolved item never moves it. Also covers the honeypot disposition and `remove`.
  */
 
@@ -227,30 +227,6 @@ describe('search', () => {
         expect(meta).toMatchObject({ page: 1, pageSize: 2, totalItems: 3, totalPages: 2 });
     });
 
-    it('matches nothing for an unknown status rather than widening the search', async () => {
-        // An unrecognised status is truthy, so `where.status` is set, but `toFeedbackStatus`
-        // maps it to `undefined`. The important property is the *direction* of the failure: an
-        // unparseable filter must narrow to nothing, never fall through to "return everything".
-        await seed();
-
-        const { items } = await search({ status: 'NOT_A_STATUS' });
-
-        expect(items).toHaveLength(0);
-    });
-
-    it('does not honour the uppercase status aliases the contract removed', async () => {
-        // The generated status values are lowercase-only, matching openapi.yaml's enum. 'NEW' is
-        // therefore not a status at all — it must not quietly behave like `new`.
-        await seed();
-
-        const { items } = await search({ status: 'NEW' });
-
-        expect(items).toHaveLength(0);
-        // Contrast with the lowercase form, which does filter — proving the assertion above is
-        // about the alias and not about the filter being broken outright.
-        const lowercase = await search({ status: 'new' });
-        expect(lowercase.items).toHaveLength(2);
-    });
 });
 
 describe('updateStatus', () => {

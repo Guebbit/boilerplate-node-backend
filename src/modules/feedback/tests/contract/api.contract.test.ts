@@ -120,6 +120,18 @@ describe('GET /feedback', () => {
             expect(response).toSatisfyApiSpec();
         }
     );
+
+    it('422s a status outside the enum instead of matching every row', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createFeedbackRequest();
+
+        const response = await api()
+            .get('/feedback?status=archived')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
 });
 
 /*
@@ -170,6 +182,19 @@ describe('POST /feedback/search', () => {
             expect(response).toSatisfyApiSpec();
         }
     );
+
+    it('422s a status outside the enum, exactly as the query form does', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createFeedbackRequest();
+
+        const response = await api()
+            .post('/feedback/search')
+            .set('Authorization', bearer)
+            .send({ status: 'archived' });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
 });
 
 describe('PUT /feedback/{id}', () => {

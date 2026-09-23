@@ -1,9 +1,9 @@
 /**
  * @module
  * Feedback request service — creation (with the operator notification), search, and status
- * triage. `toFeedbackStatus` is the one piece of domain logic worth naming: a filter value outside
- * the closed status enum narrows a READ to nothing, but is unreachable on a WRITE, which the
- * generated Zod enum already rejects with a 422.
+ * triage. `toFeedbackStatus` is the one piece of domain logic worth naming: a write's `status`
+ * is unreachable outside the closed enum, since the generated Zod enum already rejects it with a
+ * 422 before this runs — the mapping only ever narrows a value the type already guarantees.
  *
  * See: docs/modules/feedback.md
  */
@@ -41,17 +41,10 @@ import { feedbackAuditActions } from './audit';
 const FEEDBACK_STATUS_VALUES = Object.values(FeedbackRequestStatus) as string[];
 
 /**
- * DISPOSITION — a value outside the closed set.
- *
- *   absent           → the filter is not applied at all
- *   present, invalid → READ:  narrows to nothing. `search` still sets the scope key, and
- *                             `{ status: undefined }` matches no document.
- *                      WRITE: unreachable — the generated Zod enum answers 422 before this runs
- *                             (`put-feedback-status.ts`).
- *
- * The direction is the point: a filter the server could not parse must narrow to nothing, never
- * fall through to "return everything". A write does not get that treatment, because there is no
- * safe narrowing of an invalid value to write — only a rejection.
+ * A write's `status` narrowed onto the closed set — unreachable with an invalid value, since the
+ * generated Zod enum already answers 422 before this runs (`put-feedback-status.ts`). Exists so
+ * `updateStatus` holds a real `FeedbackRequestStatus` rather than trusting the generated type
+ * alone against a caller that bypasses the HTTP layer.
  */
 const toFeedbackStatus = (status?: string): FeedbackRequestStatus | undefined =>
     status && FEEDBACK_STATUS_VALUES.includes(status)
@@ -153,10 +146,9 @@ export const create = (payload: CreateFeedbackRequest): Promise<FeedbackRequestD
  */
 export const search = (
     // `page`/`pageSize` are widened to accept strings: they arrive from a query string, and
-    // `normalizePagination` is what coerces and bounds them. `status` stays a raw string until
-    // `toFeedbackStatus` maps it onto the closed enum.
-    filters: Omit<SearchFeedbackRequestsRequest, 'status' | 'page' | 'pageSize'> & {
-        status?: string;
+    // `normalizePagination` is what coerces and bounds them. `status` is already the closed enum
+    // by the time it reaches here — the generated Zod schema validates it at the controller.
+    filters: Omit<SearchFeedbackRequestsRequest, 'page' | 'pageSize'> & {
         page?: string | number;
         pageSize?: string | number;
     } = {},
@@ -167,11 +159,10 @@ export const search = (
     items: FeedbackRequestDocument[];
     meta: PaginatedMeta;
 }> =>
-    // `status` is mapped here rather than declared on the repository: turning a raw string into
-    // a member of the closed `FeedbackRequestStatus` enum is a domain rule, so it is passed down
-    // as a scope once resolved.
+    // `status` is declared as a scope rather than on the repository's own search spec: it is a
+    // closed enum with its own collection-wide meaning, not a per-field text/exact match.
     feedbackRequestRepository
-        .search(filters, filters.status ? { status: toFeedbackStatus(filters.status) } : {})
+        .search(filters, filters.status ? { status: filters.status } : {})
         .then((result) => {
             if (context)
                 emitAuditEvent(
