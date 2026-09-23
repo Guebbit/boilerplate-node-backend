@@ -10,14 +10,16 @@
  *   - nothing a module declares is also declared in `INFRASTRUCTURE_RATE_LIMITS` — ownership is
  *     exactly one place, or a docs/test reader sees a budget twice and a change to one silently
  *     leaves the other stale;
- *   - every budget's env var is raised in `tests/support/setup.ts`, unless it carries a
- *     `testExemption` — see `RateLimitBudget` in `src/types/rate-limit-budget.ts` for what that
- *     means and why it is a decision recorded on the budget rather than a name typed here.
+ *   - every budget's env var is raised in `tests/support/setup.ts` AND in
+ *     `scenarios/rate-limits.ts`, unless it carries a `testExemption` — see `RateLimitBudget` in
+ *     `src/types/rate-limit-budget.ts` for what that means and why it is a decision recorded on
+ *     the budget rather than a name typed here.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { enabledModules } from '../../src/modules';
 import { INFRASTRUCTURE_RATE_LIMITS } from '@infrastructure/http/middlewares/rate-limit';
+import { RAISED_RATE_LIMIT_ENV_VARS } from '../../scenarios/rate-limits';
 import type { RateLimitBudget } from '@types';
 
 /** Every module-declared budget, tagged with the module that owns it. */
@@ -87,5 +89,18 @@ describe('rate-limit budgets, as a set', () => {
         const blank = allBudgets.filter((budget) => budget.testExemption?.trim() === '');
 
         expect(blank).toEqual([]);
+    });
+
+    it('raises every budget without a testExemption in scenarios/rate-limits.ts too', () => {
+        // A scripted driver (`apply.ts`, `run-server.ts`) hits the app just as hard as this
+        // suite does, from its own list — `tests/support/setup.ts`'s own completeness above
+        // does not cover it, so a budget added to a module here silently missed the other side.
+        const raised = new Set(RAISED_RATE_LIMIT_ENV_VARS);
+        const missing = allBudgets
+            .filter((budget) => budget.testExemption === undefined)
+            .filter((budget) => !raised.has(budget.environmentVariable))
+            .map((budget) => `${budget.owner}: ${budget.environmentVariable}`);
+
+        expect(missing).toEqual([]);
     });
 });

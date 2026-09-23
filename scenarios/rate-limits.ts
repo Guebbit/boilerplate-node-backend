@@ -40,8 +40,13 @@ const SCRIPTED_MAX = '100000';
  */
 const PRIVATE_COUNTERS = { NODE_RATE_LIMIT_REDIS_ENABLED: '0' };
 
-/** Every rate-limit variable a scripted driver trips. */
-const RAISED = [
+/**
+ * Every rate-limit variable a scripted driver trips — every budget in the app
+ * (`tests/cross-cutting/rate-limit-budgets.test.ts` asserts this list stays that complete),
+ * except `NODE_MFA_CHALLENGE_MAX`: sized to a live challenge's own lifetime, not to request
+ * volume, and no scripted driver holds a challenge open long enough to trip it.
+ */
+export const RAISED_RATE_LIMIT_ENV_VARS = [
     'NODE_RATE_LIMIT_MAX',
     'NODE_AUTH_RATE_LIMIT_MAX',
     'NODE_AUTH_RATE_LIMIT_ADDRESS_MAX',
@@ -56,16 +61,21 @@ const RAISED = [
     'NODE_SUBMISSION_RATE_LIMIT_EMAIL_MAX',
     'NODE_SUBMISSION_RATE_LIMIT_BLOCK_MAX',
     'NODE_UPLOAD_RATE_LIMIT_MAX',
+    'NODE_PAYMENT_WEBHOOK_RATE_LIMIT_MAX',
     // `shop-history.ts` runs the `customer` account through a dozen `checkoutAndPay`s in one
     // process — well past the human-sized 5-per-hour confirm budget — and one declined card on
     // top of it. Without these two, the flow throws on its own retried-card case every run.
     'NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX',
-    'NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX'
+    'NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX',
+    'NODE_INVOICE_RATE_LIMIT_MAX',
+    'NODE_API_KEY_RATE_LIMIT_MAX',
+    'NODE_PASSWORD_CHECK_RATE_LIMIT_MAX',
+    'NODE_MFA_SEND_MAX'
 ];
 
 /** Every budget raised to {@link SCRIPTED_MAX}, plus {@link PRIVATE_COUNTERS}. */
 export const SCRIPTED_RATE_LIMITS: Readonly<Record<string, string>> = {
-    ...Object.fromEntries(RAISED.map((key) => [key, SCRIPTED_MAX])),
+    ...Object.fromEntries(RAISED_RATE_LIMIT_ENV_VARS.map((key) => [key, SCRIPTED_MAX])),
     ...PRIVATE_COUNTERS
 };
 
