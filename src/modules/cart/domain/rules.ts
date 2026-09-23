@@ -15,15 +15,14 @@ export interface CartLineCandidate {
     productId?: string;
     quantity?: number;
     /**
-     * The joined product, narrowed to what a refusal needs. Both counters are optional and both
-     * default to zero — not because a row is expected to lack them (the schema defaults both) but
-     * because "nothing to sell" is the safe direction to be wrong in for a rule whose job is to
-     * refuse.
+     * The joined product, narrowed to what a refusal needs. `available` is computed by the
+     * caller — `@modules/products`'s `availableStock` — since the domain layer may not import a
+     * sibling module to compute it itself; absent reads as zero, "nothing to sell" being the safe
+     * direction to be wrong in for a rule whose job is to refuse.
      */
     product?: {
         title?: string;
-        onHand?: number;
-        reserved?: number;
+        available?: number;
         active?: boolean;
         deletedAt?: Date;
     } | null;
@@ -43,17 +42,6 @@ export interface CheckoutShortfall {
     requested: number;
     available: number;
 }
-
-/**
- * What this line's product has left to sell.
- * Deliberately duplicates `inventory`'s `availabilityOf` — the domain layer may import no
- * sibling module. `domain-rules.test.ts` asserts the two agree; `inventory` is the authority.
- *
- * @param product - the joined product, or nothing
- * @returns units a customer may still buy
- */
-const availableUnits = (product?: { onHand?: number; reserved?: number } | null): number =>
-    Math.max(0, (product?.onHand ?? 0) - (product?.reserved ?? 0));
 
 /** A cart line as {@link basketWeight} sees it — only the fields it actually sums or filters on. */
 export interface WeighedCartLine {
@@ -129,12 +117,12 @@ export const evaluateCheckout = (lines: readonly CartLineCandidate[]): CheckoutV
      * again on the next is being made to binary-search their own basket.
      */
     const shortfalls = lines
-        .filter(({ product, quantity }) => (quantity ?? 0) > availableUnits(product))
+        .filter(({ product, quantity }) => (quantity ?? 0) > (product?.available ?? 0))
         .map(({ productId, product, quantity }) => ({
             productId: productId ?? '',
             title: product?.title ?? '',
             requested: quantity ?? 0,
-            available: availableUnits(product)
+            available: product?.available ?? 0
         }));
     if (shortfalls.length > 0) return { ok: false, reason: 'insufficient-stock', shortfalls };
 

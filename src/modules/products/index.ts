@@ -20,4 +20,6 @@ export * from './events';
 export { resolveTaxRate } from './tax';
 export type { TaxClass } from './tax';
 
+export * from './domain';
+
 export type * from './model';

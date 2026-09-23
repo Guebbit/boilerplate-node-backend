@@ -10,6 +10,7 @@ import { productModel } from '../model';
 import { productRepository } from '../repository';
 import { makeProduct } from '../factories';
 import type { ProductOverrides } from '../factories';
+import { availableStock } from '../domain/stock';
 
 export { makeProduct, type ProductOverrides } from '../factories';
 
@@ -23,7 +24,7 @@ export { makeProduct, type ProductOverrides } from '../factories';
  * actually sources from. Written through the raw collection, by name, never a model import —
  * the same collection-by-string reach `@modules/inventory`'s own `$lookup`s use in the other
  * direction, and the only way a `products`-owned file can touch `stocklevels` at all without
- * importing a sibling module — `available` below duplicates `availabilityOf` for the same reason.
+ * importing a sibling module.
  */
 const seedStockLevel = (product: ProductDocument): Promise<unknown> =>
     productModel.db.collection('stocklevels').updateOne(
@@ -32,7 +33,7 @@ const seedStockLevel = (product: ProductDocument): Promise<unknown> =>
             $setOnInsert: {
                 onHand: product.onHand ?? 0,
                 reserved: product.reserved ?? 0,
-                available: Math.max(0, (product.onHand ?? 0) - (product.reserved ?? 0))
+                available: availableStock(product.onHand, product.reserved)
             }
         },
         { upsert: true }

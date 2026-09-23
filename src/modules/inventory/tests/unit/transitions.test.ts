@@ -8,7 +8,7 @@
  */
 
 import { StockMovementReason } from '@types';
-import { counterDeltaFor, availabilityOf } from '../../domain';
+import { counterDeltaFor } from '../../domain';
 
 const EVERY_REASON = Object.values(StockMovementReason);
 
@@ -93,26 +93,5 @@ describe('counterDeltaFor', () => {
             onHandDelta: 3,
             reservedDelta: 0
         });
-    });
-});
-
-describe('availabilityOf', () => {
-    it.each([
-        [{ onHand: 10, reserved: 0 }, 10],
-        [{ onHand: 10, reserved: 4 }, 6],
-        [{ onHand: 10, reserved: 10 }, 0],
-        // Absent counters read as nothing to sell, not as unlimited — the safe direction for a
-        // number that decides whether to take someone's money.
-        [{}, 0],
-        [{ onHand: 5 }, 5],
-        [{ reserved: 5 }, 0]
-    ])('reads %j as %i', (counters, expected) => {
-        expect(availabilityOf(counters)).toBe(expected);
-    });
-
-    it('clamps a would-be negative at zero', () => {
-        // Should be unreachable — every transition guards against it — but a negative count must
-        // never reach a screen, so the clamp is asserted rather than assumed.
-        expect(availabilityOf({ onHand: 3, reserved: 8 })).toBe(0);
     });
 });

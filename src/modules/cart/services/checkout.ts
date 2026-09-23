@@ -24,7 +24,7 @@ import {
     sumLineItems,
     type OrderDocument
 } from '@modules/orders';
-import type { ProductDocument } from '@modules/products';
+import { availableStock, type ProductDocument } from '@modules/products';
 import { userService } from '@modules/users';
 import { addressForCheckout, type AddressItem } from '@modules/addresses';
 import { findShippingMethod, methodFitsWeight, priceShipping } from '@modules/delivery';
@@ -152,11 +152,24 @@ const runCheckout = async (
     /*
      * The rule is in `../domain`; what a refusal looks like on the wire is here.
      *
+     * `available` is computed here, not by the rule itself: the domain layer may not import
+     * `@modules/products` to reach `availableStock`, so this is the door it comes through.
+     *
      * Explicit `code`s rather than bare strings: the checkout-failure analytics
      * event reports this code, so it must stay stable and locale-independent
      * while `message` is translated for the user.
      */
-    const verdict = evaluateCheckout(lines);
+    const verdict = evaluateCheckout(
+        lines.map((line) => ({
+            ...line,
+            product: line.product && {
+                title: line.product.title,
+                active: line.product.active,
+                deletedAt: line.product.deletedAt,
+                available: availableStock(line.product.onHand, line.product.reserved)
+            }
+        }))
+    );
     if (!verdict.ok) {
         if (verdict.reason === 'empty')
             return generateReject(409, [{ code: 'CART_EMPTY', message: t('cart.empty') }]);

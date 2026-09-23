@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { getFallbackLocale, t } from '@infrastructure/i18n';
 import { CreateProductBody, UpdateProductByIdBody } from '@api/schemas.zod';
 import { applySerialization } from '@infrastructure/persistence/serialize';
+import { availableStock } from './domain/stock';
 import type { Product } from '@types';
 
 /**
@@ -266,25 +267,11 @@ productSchema.index({ createdAt: -1 }, { name: 'products_createdAt' });
 /* Storefront filters: active + not soft-deleted (`publicScope` in `./repository`). */
 productSchema.index({ active: 1, deletedAt: 1 }, { name: 'products_active_deletedAt' });
 
-/**
- * `available` — what a customer may buy — from the two stored counters. The one formula this
- * file needs twice, at {@link applyProductAvailability} and {@link toProduct}.
- *
- * Deliberately duplicates `@modules/inventory`'s `availabilityOf` rather than importing it:
- * `inventory/service.ts` already imports `productService`, so the reverse edge is a real cycle
- * (confirmed with `depcruise src/modules --config .dependency-cruiser.modules.cjs`), the same
- * constraint `cart/domain/rules.ts`'s own copy documents. Clamped at zero: `reserved > onHand`
- * should be unreachable via `@modules/inventory`'s conditional transitions, but "should be
- * unreachable" isn't a reason to serve a negative count.
- */
-const productAvailability = (onHand?: number, reserved?: number): number =>
-    Math.max(0, (onHand ?? 0) - (reserved ?? 0));
-
 /** Derives `available`, at the single serialization point every product response passes through — listing, detail, both write paths and an order's embedded snapshots all agree. */
 const applyProductAvailability = (serialized: Record<string, unknown>) => {
     const onHand = typeof serialized.onHand === 'number' ? serialized.onHand : 0;
     const reserved = typeof serialized.reserved === 'number' ? serialized.reserved : 0;
-    serialized.available = productAvailability(onHand, reserved);
+    serialized.available = availableStock(onHand, reserved);
 };
 
 /**
@@ -313,7 +300,7 @@ export const toProduct = (document: ProductDocument): Product => {
         id: document.id,
         title: document.title,
         price: document.price,
-        available: productAvailability(onHand, reserved),
+        available: availableStock(onHand, reserved),
         ...(document.taxClass === undefined ? {} : { taxClass: document.taxClass }),
         ...(document.onHand === undefined ? {} : { onHand: document.onHand }),
         ...(document.reserved === undefined ? {} : { reserved: document.reserved }),

@@ -2,10 +2,10 @@
  * @module
  * Inventory rules. Pure: data in, verdict out — no status codes, no i18n, no database. A product
  * carries two counters, `onHand` (units that exist) and `reserved` (units an open order has
- * claimed); what a customer may buy is the difference, and `availabilityOf` is the only
- * definition of it in the codebase. Six transitions move those counters, and this file is the one
- * place that says what each does — a seventh is one entry here plus one enum value in
- * `openapi.yaml`.
+ * claimed). Six transitions move those counters, and this file is the one place that says what
+ * each does — a seventh is one entry here plus one enum value in `openapi.yaml`. What a customer
+ * may actually buy from those two counters is `@modules/products`'s `availableStock`
+ * (`src/modules/products/domain/stock.ts`), not this module's own concern.
  *
  * See: docs/theory/domain-layer.md
  */
@@ -66,12 +66,3 @@ export const counterDeltaFor = (reason: StockMovementReason, quantity: number): 
         }
     }
 };
-
-/**
- * Availability, in the one place it is defined. Clamped at zero: `reserved > onHand` should be
- * unreachable, but a negative count must never reach a screen.
- * @param counters - a product's two counters; either may be absent
- * @returns units a customer may buy, never below zero
- */
-export const availabilityOf = (counters: { onHand?: number; reserved?: number }): number =>
-    Math.max(0, (counters.onHand ?? 0) - (counters.reserved ?? 0));

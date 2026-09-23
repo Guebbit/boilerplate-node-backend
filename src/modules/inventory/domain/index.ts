@@ -8,5 +8,5 @@
  * See: docs/theory/domain-layer.md
  */
 
-export { counterDeltaFor, availabilityOf } from './transitions';
+export { counterDeltaFor } from './transitions';
 export type { CounterDelta } from './transitions';
