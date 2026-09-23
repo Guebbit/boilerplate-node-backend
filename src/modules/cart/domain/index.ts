@@ -5,3 +5,5 @@
  */
 
 export { evaluateCheckout, basketWeight } from './rules';
+
+export type { CheckoutShortfall, UnavailableCartLine } from './rules';

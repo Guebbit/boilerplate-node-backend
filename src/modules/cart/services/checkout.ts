@@ -28,12 +28,17 @@ import { availableStock, type ProductDocument } from '@modules/products';
 import { userService } from '@modules/users';
 import { addressForCheckout, type AddressItem } from '@modules/addresses';
 import { findShippingMethod, methodFitsWeight, priceShipping } from '@modules/delivery';
-import { paymentService } from '@modules/payments';
-import type { CallerContext } from '@types';
+import { paymentService, type PaymentMethodInfo } from '@modules/payments';
+import type { CallerContext, ShippingMethod } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { cartAnalyticsEvents } from '../analytics';
 import { cartRepository } from '../repository';
-import { evaluateCheckout, basketWeight } from '../domain';
+import {
+    evaluateCheckout,
+    basketWeight,
+    type CheckoutShortfall,
+    type UnavailableCartLine
+} from '../domain';
 import { isJoined, readCartLines } from './view';
 
 /**
@@ -48,6 +53,138 @@ const toShippingAddress = (address: AddressItem) => ({
     country: address.country,
     ...(address.phone === undefined ? {} : { phone: address.phone })
 });
+
+/** Either half of a pre-flight step: what {@link runCheckout} needs to proceed, or why not. */
+type PreflightOutcome<T> = ({ ok: true } & T) | { ok: false; reject: ResponseReject };
+
+/**
+ * Which payment method this checkout uses, resolved before any stock moves: an unoffered method
+ * refuses the checkout while nothing has been written yet. `GET /payments/methods`' own list is
+ * asked rather than re-checked here, so the two can never disagree about what this deployment
+ * offers.
+ *
+ * The open-transfer cap is checked here too: a week-long `bank_transfer` hold is otherwise free
+ * to take, so this is what stops one account hoarding stock across many uncompleted orders.
+ *
+ * @param userId - the caller's id, for the bank-transfer open-hold count
+ * @param paymentMethod - the chosen payment method's id, or `undefined` for `card`
+ */
+const resolvePaymentMethod = async (
+    userId: string,
+    // Default, not `?? 'card'`: `paymentMethod` is this function's last parameter, so a caller
+    // passing `undefined` (the checkout route's own "none chosen" spelling) gets 'card' for free.
+    paymentMethod = 'card'
+): Promise<PreflightOutcome<{ requestedMethod: string; methodInfo: PaymentMethodInfo }>> => {
+    const methodInfo = paymentService
+        .listPaymentMethods()
+        .find((method) => method.id === paymentMethod);
+    if (!methodInfo)
+        return {
+            ok: false,
+            reject: generateReject(409, [
+                {
+                    code: 'CART_PAYMENT_METHOD_NOT_AVAILABLE',
+                    message: t('cart.payment-method-not-available')
+                }
+            ])
+        };
+
+    if (paymentMethod === 'bank_transfer') {
+        const openTransfers = await orderService.countOpenBankTransfers(userId);
+        if (openTransfers >= bankTransferMaxOpenPerAccount())
+            return {
+                ok: false,
+                reject: generateReject(409, [
+                    { code: 'CART_BANK_TRANSFER_LIMIT', message: t('cart.bank-transfer-limit') }
+                ])
+            };
+    }
+
+    return { ok: true, requestedMethod: paymentMethod, methodInfo };
+};
+
+/**
+ * Which method and address this checkout ships to, resolved before any stock moves: a named
+ * method or address entry that does not resolve refuses the checkout while nothing has been
+ * written yet. Both are optional — `undefined` for either is fine, since neither a method nor an
+ * address is required to buy. Shipping cost, and whether the method fits the basket, are decided
+ * later, once the joined lines total — this only resolves WHICH method and address, not whether
+ * they still apply to what ends up in the basket.
+ *
+ * @param userId - the caller's id, whose address book `addressId` is looked up against
+ * @param addressId - the shipping address's entry id, or `undefined` for the default/no address
+ * @param shippingMethodId - the chosen shipping method's id, or `undefined` for none
+ */
+const resolveShipping = async (
+    userId: string,
+    addressId: string | undefined,
+    shippingMethodId: string | undefined
+): Promise<
+    PreflightOutcome<{ shippingMethod: ShippingMethod | undefined; address: AddressItem | undefined }>
+> => {
+    const shippingMethod =
+        shippingMethodId === undefined ? undefined : findShippingMethod(shippingMethodId);
+    if (shippingMethodId !== undefined && !shippingMethod)
+        return {
+            ok: false,
+            reject: generateReject(404, [
+                {
+                    code: 'CART_SHIPPING_METHOD_NOT_FOUND',
+                    message: t('cart.shipping-method-not-found')
+                }
+            ])
+        };
+
+    const address = await addressForCheckout(userId, addressId);
+    if (address === null)
+        return {
+            ok: false,
+            reject: generateReject(404, [
+                {
+                    code: 'CART_ADDRESS_NOT_FOUND',
+                    message: t('cart.address-not-found')
+                }
+            ])
+        };
+
+    return { ok: true, shippingMethod, address };
+};
+
+/**
+ * The refusal for a shortfall in what the basket can actually buy — one shape whether
+ * `evaluateCheckout`'s pre-flight verdict caught it or `placeOrder`'s write did, so a customer
+ * sees identical wording regardless of which check refused.
+ *
+ * `unavailable`'s status differs by caller: 404 pre-flight, since nothing has been written yet
+ * and `lines` names every offending line; 409 once `placeOrder` has already run and refused for a
+ * reason other than stock, with no lines to name — both existing behaviours, preserved as-is.
+ */
+type StockRefusal =
+    | { type: 'insufficient-stock'; shortfalls: readonly CheckoutShortfall[] }
+    | { type: 'unavailable'; status: 404 | 409; lines?: readonly UnavailableCartLine[] };
+
+/** Builds the wire-level reject for a {@link StockRefusal}. */
+const buildStockRefusal = (refusal: StockRefusal): ResponseReject => {
+    if (refusal.type === 'insufficient-stock')
+        return generateReject(409, [
+            {
+                code: 'CART_INSUFFICIENT_STOCK',
+                message: t('cart.insufficient-stock'),
+                // Every short line, so the customer fixes the basket in one pass instead of one
+                // refusal per line.
+                details: { lines: refusal.shortfalls }
+            }
+        ]);
+    return generateReject(refusal.status, [
+        {
+            code: 'CART_PRODUCT_UNAVAILABLE',
+            message: t('cart.product-unavailable'),
+            // Absent for the placeOrder-side refusal: only the pre-flight verdict has per-line
+            // detail to report.
+            ...(refusal.lines ? { details: { lines: refusal.lines } } : {})
+        }
+    ]);
+};
 
 /**
  * The checkout body proper, split out of {@link orderConfirm} for its `.catch` envelope and
@@ -81,65 +218,16 @@ const runCheckout = async (
     // further down, the confirmation email — decided once so the two cannot disagree.
     const buyerLocale = user.locale ?? getDefaultLocale();
 
-    /*
-     * Resolved before any stock moves, same as the shipping method below: an unoffered method
-     * refuses the checkout while nothing has been written yet. `GET /payments/methods`'
-     * own list is asked rather than re-checked here, so the two can never disagree about what
-     * this deployment offers.
-     */
-    const requestedMethod = paymentMethod ?? 'card';
-    const methodInfo = paymentService
-        .listPaymentMethods()
-        .find((method) => method.id === requestedMethod);
-    if (!methodInfo)
-        return generateReject(409, [
-            {
-                code: 'CART_PAYMENT_METHOD_NOT_AVAILABLE',
-                message: t('cart.payment-method-not-available')
-            }
-        ]);
+    // Both pre-flight steps run before anything is written — an unoffered payment method, an
+    // over-the-cap bank transfer, an unmatched shipping method or an address that isn't the
+    // caller's all refuse the checkout while nothing has moved yet.
+    const paymentResolution = await resolvePaymentMethod(userId, paymentMethod);
+    if (!paymentResolution.ok) return paymentResolution.reject;
+    const { requestedMethod, methodInfo } = paymentResolution;
 
-    /*
-     * The open-transfer cap: a week-long hold is otherwise free to take, so this is what stops
-     * one account hoarding stock across many uncompleted orders. Checked here, before anything
-     * is written, for the same reason every other pre-flight check in this function is.
-     */
-    if (requestedMethod === 'bank_transfer') {
-        const openTransfers = await orderService.countOpenBankTransfers(userId);
-        if (openTransfers >= bankTransferMaxOpenPerAccount())
-            return generateReject(409, [
-                { code: 'CART_BANK_TRANSFER_LIMIT', message: t('cart.bank-transfer-limit') }
-            ]);
-    }
-
-    /*
-     * Resolved before any stock moves: an unmatched name refuses the checkout while
-     * nothing has been written yet. `undefined` (no method named) is fine — shipping
-     * isn't required to buy. Cost is priced later, once the joined lines total.
-     */
-    const shippingMethod =
-        shippingMethodId === undefined ? undefined : findShippingMethod(shippingMethodId);
-    if (shippingMethodId !== undefined && !shippingMethod)
-        return generateReject(404, [
-            {
-                code: 'CART_SHIPPING_METHOD_NOT_FOUND',
-                message: t('cart.shipping-method-not-found')
-            }
-        ]);
-
-    /*
-     * Which address ships. Resolved BEFORE any stock moves: a named entry that is not
-     * the caller's refuses the checkout while nothing has been written yet. `undefined`
-     * — no entry named, none default — is fine; an address is not required to buy.
-     */
-    const address = await addressForCheckout(userId, addressId);
-    if (address === null)
-        return generateReject(404, [
-            {
-                code: 'CART_ADDRESS_NOT_FOUND',
-                message: t('cart.address-not-found')
-            }
-        ]);
+    const shippingResolution = await resolveShipping(userId, addressId, shippingMethodId);
+    if (!shippingResolution.ok) return shippingResolution.reject;
+    const { shippingMethod, address } = shippingResolution;
 
     const cart = await cartRepository.findByUserId(userId);
     // The version the lines below are read at, and the condition the cart is emptied
@@ -174,26 +262,8 @@ const runCheckout = async (
         if (verdict.reason === 'empty')
             return generateReject(409, [{ code: 'CART_EMPTY', message: t('cart.empty') }]);
         if (verdict.reason === 'insufficient-stock')
-            return generateReject(409, [
-                {
-                    code: 'CART_INSUFFICIENT_STOCK',
-                    message: t('cart.insufficient-stock'),
-                    // Every short line, so the customer fixes the basket in one
-                    // pass instead of one refusal per line.
-                    details: { lines: verdict.shortfalls }
-                }
-            ]);
-        return generateReject(404, [
-            {
-                code: 'CART_PRODUCT_UNAVAILABLE',
-                message: t('cart.product-unavailable'),
-                // Every unavailable line, the same reasoning `CART_INSUFFICIENT_STOCK` above
-                // already follows — a customer fixes the basket in one pass, not one refusal per
-                // line. `title` is absent for a hard-deleted product: there is nothing left to
-                // read one off.
-                details: { lines: verdict.lines }
-            }
-        ]);
+            return buildStockRefusal({ type: 'insufficient-stock', shortfalls: verdict.shortfalls });
+        return buildStockRefusal({ type: 'unavailable', status: 404, lines: verdict.lines });
     }
 
     const joined = lines.filter((line) => isJoined(line));
@@ -274,18 +344,8 @@ const runCheckout = async (
         // `no-lines`/`product-missing` should not occur here — `evaluateCheckout` above already
         // proved the basket good — but map them defensively rather than assume the invariant.
         if (outcome.reason !== 'insufficient-stock')
-            return generateReject(409, [
-                { code: 'CART_PRODUCT_UNAVAILABLE', message: t('cart.product-unavailable') }
-            ]);
-        return generateReject(409, [
-            {
-                code: 'CART_INSUFFICIENT_STOCK',
-                message: t('cart.insufficient-stock'),
-                // What actually blocked it, read at the moment it refused. Without this the
-                // customer is editing a cart by trial and error.
-                details: { lines: outcome.shortfalls }
-            }
-        ]);
+            return buildStockRefusal({ type: 'unavailable', status: 409 });
+        return buildStockRefusal({ type: 'insufficient-stock', shortfalls: outcome.shortfalls });
     }
     const { order } = outcome;
 
