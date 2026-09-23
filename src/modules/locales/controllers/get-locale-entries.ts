@@ -7,9 +7,9 @@ import type { Request, Response } from 'express';
 import type { LocaleEntriesResponse, LocaleEntry } from '@types';
 import { readInput } from '@infrastructure/http/request';
 import { paginationSchema } from '@infrastructure/http/schemas';
-import { rejectResponse, successResponse } from '@infrastructure/http/response';
+import { successResponse } from '@infrastructure/http/response';
 import { localeService } from '../services';
-import { catchAs, rejectValidation } from '@infrastructure/http/controller';
+import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
 
 /**
  * GET /locales/:locale/entries (admin)
@@ -38,7 +38,7 @@ export const getLocaleEntries = (
     return localeService
         .searchEntries(request.params.locale, { ...parseResult.data, text, tenant })
         .then((result) => {
-            if (!result.success) return rejectResponse(response, result.status, result.errors);
+            if (refused(response, result)) return;
             // `search()` already returns normalized (wire-shape) rows — unlike `findById`/`findOne`,
             // it never hands back a hydrated document, so there is no `.toJSON()` to apply here.
             // The repository factory's `PaginatedResult<TDocument>` names the pre-normalize type,

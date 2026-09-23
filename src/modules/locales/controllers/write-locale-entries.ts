@@ -25,7 +25,6 @@ import type {
 } from '@types';
 import { refreshLocaleOverrides } from '@infrastructure/i18n';
 import { successResponse } from '@infrastructure/http/response';
-import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { callerContextOf } from '@infrastructure/http/request';
 import { localeService } from '../services';
 import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
@@ -110,7 +109,7 @@ const importEntries = (
 
             return successResponse<LocaleImportResult>(response, result.data);
         })
-        .catch((error: unknown) => rejectDatabaseError(response, `${mode}LocaleEntries`, error));
+        .catch(catchAs(response, `${mode}LocaleEntries`));
 
 /**
  * PUT /locales/:locale/entries (admin)

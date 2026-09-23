@@ -5,9 +5,9 @@
 
 import type { Request, Response } from 'express';
 import type { LocaleMessages } from '@types';
-import { rejectResponse, successResponse } from '@infrastructure/http/response';
+import { successResponse } from '@infrastructure/http/response';
 import { localeService } from '../services';
-import { catchAs } from '@infrastructure/http/controller';
+import { catchAs, refused } from '@infrastructure/http/controller';
 
 /**
  * GET /locales/:locale/messages
@@ -23,7 +23,7 @@ export const getLocaleMessages = (
         // `?tenant=` names which frontend's copy; omitted, the deployment's default one.
         .readMessages(request.params.locale, request.query.tenant?.trim() || undefined)
         .then((result) => {
-            if (!result.success) return rejectResponse(response, result.status, result.errors);
+            if (refused(response, result)) return;
             return successResponse<LocaleMessages>(response, result.data);
         })
         .catch(catchAs(response, 'getLocaleMessages'));
