@@ -103,6 +103,14 @@ export const enqueueIfPending = (user: UserDocument): Promise<UserDocument> =>
     enqueueIfImagePending(user, 'users', userRepository.writebackImage);
 
 /**
+ * Whether an incoming password field is actually usable — present, and not just whitespace.
+ * Shared by `create` (falls back to a random value when this is false) and `update` (leaves the
+ * stored hash alone when it is), so the same rule isn't spelled out twice.
+ */
+const nonBlankPassword = (password?: string): boolean =>
+    Boolean(password && password.trim().length > 0);
+
+/**
  * Create a new user document, with no email confirmation step — the self-service path is
  * `accountService.signup`. `verifiedAt` is hardcoded `now` — an operator typing the address in is
  * the vouching (`shared/authorization-roles.yaml`'s "no unverified manager" rule). `password` is
@@ -120,7 +128,7 @@ export const create = (
     },
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
-    const passwordProvided = Boolean(data.password && data.password.trim().length > 0);
+    const passwordProvided = nonBlankPassword(data.password);
 
     // Checked before anything is written — same rule `update` follows. Only ever run against an
     // OPERATOR-SUPPLIED password: the generated fallback just below is 32 random bytes, and
@@ -228,7 +236,7 @@ export const update = (
      */
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
-    const password = data.password && data.password.trim().length > 0 ? data.password : undefined;
+    const password = nonBlankPassword(data.password) ? data.password : undefined;
 
     // Checked before any field is assigned: a breached password fails the whole update, and
     // nothing else here is worth mutating first.
