@@ -42,6 +42,80 @@ const PENDING_REFUND = Object.freeze(['refund'] as const);
 const SWEEP_BATCH_SIZE = 200;
 
 /**
+ * Everything a successful cancel unlocks: give back the hold, announce it, discharge the refund
+ * marker once every listener heard it — then the audit row, the analytics event, and — only for a
+ * sweep-driven bank-transfer timeout — the customer's own explanation by mail.
+ * @param context - the caller's context; absent for the reservation-sweep's own expiry, still
+ *   audited as a system actor and reported under its own analytics name
+ */
+const afterCancel = async (
+    order: OrderDocument,
+    refund: boolean,
+    context?: CallerContext
+): Promise<ResponseSuccess<OrderDocument>> => {
+    /*
+     * The hold is given back after the status write, deliberately: the conditional
+     * move guarantees this runs at most once per order — a second cancel loses the
+     * `$in: ['pending']` match. Belt AND braces, since `releaseForOrder` claims the
+     * reservation's status conditionally too — both guards exist because the two
+     * callers (a customer cancelling, the sweep's deadline) can race, and exactly
+     * one moves the counters. Unchecked here: a hold already expired is an ordinary
+     * sequence, the units are already back.
+     */
+    await inventoryService.releaseForOrder(String(order._id));
+
+    // Whoever has to compensate hears it from here; `refund` says whether the money
+    // is part of that. The fact is announced either way.
+    const settled = await emitDomainEvent(ORDER_CANCELLED, {
+        orderId: String(order._id),
+        refund
+    });
+
+    // Discharged only once every listener actually returned. A marker left standing
+    // is the sweep's whole input, so a refund that threw must not clear it here.
+    if (refund && settled) await orderRepository.clearPendingEffect(String(order._id), 'refund');
+
+    // No context: the reservation-sweep expiry, not a request. Audited as a system
+    // actor rather than skipped — see the docblock above — and reported under its own
+    // analytics name so a timeout is never counted as a customer's choice to cancel.
+    const isSystemExpiry = !context;
+    const emitContext = context ?? {
+        caller: callerForSubject(SYSTEM_ACTOR, 'Order'),
+        analyticsConsent: false
+    };
+
+    /*
+     * The customer's answer to "what happened to my order" — sent only for the
+     * sweep's own expiry, and only for a transfer: a `card` hold is thirty minutes,
+     * over before anyone has read a confirmation email, and a customer's own cancel
+     * needs no explanation of itself.
+     */
+    if (isSystemExpiry && order.paymentMethod === 'bank_transfer') {
+        const buyer = order.userId ? await userService.getById(String(order.userId)) : null;
+        const locale = buyer?.locale ?? getDefaultLocale();
+        const mail = bankTransferExpiredEmail(locale, order);
+        void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
+    }
+
+    recordAudit(emitContext, {
+        action: ordersAuditActions.ORDER_CANCELLED,
+        outcome: 'success',
+        target_type: 'order',
+        target_id: String(order._id),
+        ...(isSystemExpiry ? { actor_role: 'admin', actor_user_id: 'system' } : {})
+    });
+    emitAnalyticsEvent({
+        ...buildAnalyticsBase(emitContext),
+        event: isSystemExpiry
+            ? ordersAnalyticsEvents.ORDER_RESERVATION_EXPIRED
+            : ordersAnalyticsEvents.ORDER_CANCELLED,
+        properties: { order_id: String(order._id) }
+    });
+
+    return generateSuccess(order, 200, t('orders.cancel.success'));
+};
+
+/**
  * Cancel an order — the one write a customer may make, or the system makes when a reservation
  * times out unpaid. A conditional status move, not read-check-write: the filter carries the
  * caller's scope AND the `pending` requirement, so a racing admin "shipped" (or a double-click)
@@ -85,90 +159,22 @@ export const cancelById = (
              */
             refund ? PENDING_REFUND : undefined
         )
-        .then(async (order) => {
-            if (order) {
-                /*
-                 * The hold is given back after the status write, deliberately: the conditional
-                 * move guarantees this runs at most once per order — a second cancel loses the
-                 * `$in: ['pending']` match. Belt AND braces, since `releaseForOrder` claims the
-                 * reservation's status conditionally too — both guards exist because the two
-                 * callers (a customer cancelling, the sweep's deadline) can race, and exactly
-                 * one moves the counters. Unchecked here: a hold already expired is an ordinary
-                 * sequence, the units are already back.
-                 */
-                await inventoryService.releaseForOrder(String(order._id));
-
-                // Whoever has to compensate hears it from here; `refund` says whether the money
-                // is part of that. The fact is announced either way.
-                const settled = await emitDomainEvent(ORDER_CANCELLED, {
-                    orderId: String(order._id),
-                    refund
-                });
-
-                // Discharged only once every listener actually returned. A marker left standing
-                // is the sweep's whole input, so a refund that threw must not clear it here.
-                if (refund && settled)
-                    await orderRepository.clearPendingEffect(String(order._id), 'refund');
-
-                // No context: the reservation-sweep expiry, not a request. Audited as a system
-                // actor rather than skipped — see the docblock above — and reported under its own
-                // analytics name so a timeout is never counted as a customer's choice to cancel.
-                const isSystemExpiry = !context;
-                const emitContext = context ?? {
-                    caller: callerForSubject(SYSTEM_ACTOR, 'Order'),
-                    analyticsConsent: false
-                };
-
-                /*
-                 * The customer's answer to "what happened to my order" — sent only for the
-                 * sweep's own expiry, and only for a transfer: a `card` hold is thirty minutes,
-                 * over before anyone has read a confirmation email, and a customer's own cancel
-                 * needs no explanation of itself.
-                 */
-                if (isSystemExpiry && order.paymentMethod === 'bank_transfer') {
-                    const buyer = order.userId
-                        ? await userService.getById(String(order.userId))
-                        : null;
-                    const locale = buyer?.locale ?? getDefaultLocale();
-                    const mail = bankTransferExpiredEmail(locale, order);
-                    void enqueueEmail(
-                        { to: order.email, subject: mail.subject },
-                        mail.template,
-                        mail.data
-                    );
-                }
-
-                recordAudit(emitContext, {
-                    action: ordersAuditActions.ORDER_CANCELLED,
-                    outcome: 'success',
-                    target_type: 'order',
-                    target_id: String(order._id),
-                    ...(isSystemExpiry ? { actor_role: 'admin', actor_user_id: 'system' } : {})
-                });
-                emitAnalyticsEvent({
-                    ...buildAnalyticsBase(emitContext),
-                    event: isSystemExpiry
-                        ? ordersAnalyticsEvents.ORDER_RESERVATION_EXPIRED
-                        : ordersAnalyticsEvents.ORDER_CANCELLED,
-                    properties: { order_id: String(order._id) }
-                });
-
-                return generateSuccess(order, 200, t('orders.cancel.success'));
-            }
-
-            // Which refusal was it? This read only informs the message — the write above
-            // already decided nothing changes.
-            return getById(id, callerScope(authContext)).then((existing) =>
-                existing
-                    ? generateReject(409, [
-                          {
-                              code: 'ORDER_NOT_CANCELLABLE',
-                              message: t('orders.cancel.not-cancellable')
-                          }
-                      ])
-                    : generateReject(404, [t('orders.not-found')])
-            );
-        });
+        .then((order) =>
+            order
+                ? afterCancel(order, refund, context)
+                : // Which refusal was it? This read only informs the message — the write above
+                  // already decided nothing changes.
+                  getById(id, callerScope(authContext)).then((existing) =>
+                      existing
+                          ? generateReject(409, [
+                                {
+                                    code: 'ORDER_NOT_CANCELLABLE',
+                                    message: t('orders.cancel.not-cancellable')
+                                }
+                            ])
+                          : generateReject(404, [t('orders.not-found')])
+                  )
+        );
 };
 
 /**
