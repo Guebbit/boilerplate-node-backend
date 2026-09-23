@@ -153,59 +153,59 @@ export const update = (
     body: UpdateWebhookSubscriptionRequest,
     context: TenantCallerContext
 ): Promise<ResponseSuccess<SubscriptionWithMintedSecrets> | ResponseReject> =>
-    webhookSubscriptionRepository.findById(id).then((subscription) => {
-        if (subscription?.tenant !== context.caller.tenantId)
-            return generateReject(404, [t('generic.error-not-found')]);
+    webhookSubscriptionRepository
+        .findByIdInTenant(id, context.caller.tenantId)
+        .then((subscription) => {
+            if (!subscription) return generateReject(404, [t('generic.error-not-found')]);
 
-        if (body.url !== undefined) subscription.url = body.url;
-        if (body.description !== undefined) subscription.description = body.description;
-        if (body.eventTypes !== undefined) subscription.eventTypes = body.eventTypes;
-        if (body.enabled !== undefined) {
-            subscription.enabled = body.enabled;
-            // Re-arming clears the auto-disable marker and the streak that triggered it — an
-            // operator who just re-enabled a subscription should not watch it auto-disable again
-            // on the very next failure because of a count from before they looked at it.
-            if (body.enabled) {
-                subscription.disabledAt = undefined;
-                subscription.consecutiveFailures = 0;
+            if (body.url !== undefined) subscription.url = body.url;
+            if (body.description !== undefined) subscription.description = body.description;
+            if (body.eventTypes !== undefined) subscription.eventTypes = body.eventTypes;
+            if (body.enabled !== undefined) {
+                subscription.enabled = body.enabled;
+                // Re-arming clears the auto-disable marker and the streak that triggered it — an
+                // operator who just re-enabled a subscription should not watch it auto-disable
+                // again on the very next failure because of a count from before they looked at it.
+                if (body.enabled) {
+                    subscription.disabledAt = undefined;
+                    subscription.consecutiveFailures = 0;
+                }
             }
-        }
 
-        let newSecret: string | undefined;
-        if (body.rotateSecret) {
-            const minted = mintRingSecret();
-            subscription.secrets.push(minted.entry);
-            newSecret = minted.plaintext;
-        }
-        if (body.removeSecretId) {
-            const remaining = removeRingSecret(subscription.secrets, body.removeSecretId);
-            // Never let a rotation empty the ring — a subscription with no secret can never sign
-            // a delivery. The schema's own `validate` (`../model.ts`) is the second guard; this is
-            // the one that answers 422 instead of a save-time throw.
-            if (remaining.length === 0)
-                return generateReject(422, [t('webhooks.ring-cannot-be-empty')]);
-            subscription.secrets = remaining;
-        }
+            let newSecret: string | undefined;
+            if (body.rotateSecret) {
+                const minted = mintRingSecret();
+                subscription.secrets.push(minted.entry);
+                newSecret = minted.plaintext;
+            }
+            if (body.removeSecretId) {
+                const remaining = removeRingSecret(subscription.secrets, body.removeSecretId);
+                // Never let a rotation empty the ring — a subscription with no secret can never
+                // sign a delivery. The schema's own `validate` (`../model.ts`) is the second guard;
+                // this is the one that answers 422 instead of a save-time throw.
+                if (remaining.length === 0)
+                    return generateReject(422, [t('webhooks.ring-cannot-be-empty')]);
+                subscription.secrets = remaining;
+            }
 
-        return webhookSubscriptionRepository.save(subscription).then((saved) => {
-            recordAudit(context, {
-                action: webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_UPDATED,
-                outcome: 'success',
-                target_type: 'webhook_subscription',
-                target_id: id
+            return webhookSubscriptionRepository.save(subscription).then((saved) => {
+                recordAudit(context, {
+                    action: webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_UPDATED,
+                    outcome: 'success',
+                    target_type: 'webhook_subscription',
+                    target_id: id
+                });
+                return generateSuccess({ subscription: saved, newSecret });
             });
-            return generateSuccess({ subscription: saved, newSecret });
         });
-    });
 
 /** Permanently remove a subscription. Its delivery log is left in place — see `openapi.yaml`. */
 export const remove = (
     id: string,
     context: TenantCallerContext
 ): Promise<ResponseSuccess<undefined> | ResponseReject> =>
-    webhookSubscriptionRepository.findById(id).then((subscription) => {
-        if (subscription?.tenant !== context.caller.tenantId)
-            return generateReject(404, [t('generic.error-not-found')]);
+    webhookSubscriptionRepository.findByIdInTenant(id, context.caller.tenantId).then((subscription) => {
+        if (!subscription) return generateReject(404, [t('generic.error-not-found')]);
 
         return webhookSubscriptionRepository.deleteOne(subscription).then(() => {
             recordAudit(context, {

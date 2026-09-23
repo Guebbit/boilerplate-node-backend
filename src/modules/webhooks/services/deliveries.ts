@@ -84,9 +84,8 @@ export const replay = async (
     id: string,
     context: TenantCallerContext
 ): Promise<ResponseSuccess<WebhookDeliveryDocument> | ResponseReject> => {
-    const delivery = await webhookDeliveryRepository.findById(id);
-    if (delivery?.tenant !== context.caller.tenantId)
-        return generateReject(404, [t('generic.error-not-found')]);
+    const delivery = await webhookDeliveryRepository.findByIdInTenant(id, context.caller.tenantId);
+    if (!delivery) return generateReject(404, [t('generic.error-not-found')]);
 
     const subscription = await webhookSubscriptionRepository.findById(
         String(delivery.subscriptionId)

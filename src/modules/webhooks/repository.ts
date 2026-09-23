@@ -39,6 +39,17 @@ const findEnabled = (): Promise<WebhookSubscriptionDocument[]> =>
     webhookSubscriptionModel.find({ enabled: true }).exec();
 
 /**
+ * One subscription by id, narrowed to `tenant` at the query itself — a wrong-tenant id and an
+ * unknown id both come back `null`, so `services/subscriptions.ts` cannot tell them apart and has
+ * nothing to leak either way.
+ */
+const findSubscriptionByIdInTenant = (
+    id: string,
+    tenant: string
+): Promise<WebhookSubscriptionDocument | null> =>
+    webhookSubscriptionModel.findOne({ _id: toObjectId(id), tenant }).exec();
+
+/**
  * Record a chain's failure: `$inc` the streak (atomic, so two events finalizing for the same
  * subscription in the same instant cannot lose one another's count, the way a read-then-write
  * would), plus a SEPARATE write that stamps `failingSince` only the first time — the filter's
@@ -109,11 +120,13 @@ export const webhookSubscriptionRepository: Repository<
     WebhookSubscription
 > & {
     findEnabled: typeof findEnabled;
+    findByIdInTenant: typeof findSubscriptionByIdInTenant;
     recordOutcome: typeof recordOutcome;
     disable: typeof disable;
 } = {
     ...subscriptionBase,
     findEnabled,
+    findByIdInTenant: findSubscriptionByIdInTenant,
     recordOutcome,
     disable
 };
@@ -129,6 +142,16 @@ const deliveryBase = createRepository<WebhookDeliveryDocument, WebhookDelivery>(
 
 /** Newest first, `_id` breaking ties — same reasoning as `AUDIT_SORT`. */
 export const WEBHOOK_DELIVERY_SORT: Record<string, 1 | -1> = { createdAt: -1, _id: -1 };
+
+/**
+ * One delivery by id, narrowed to `tenant` at the query itself — same reasoning as
+ * {@link findSubscriptionByIdInTenant}.
+ */
+const findDeliveryByIdInTenant = (
+    id: string,
+    tenant: string
+): Promise<WebhookDeliveryDocument | null> =>
+    webhookDeliveryModel.findOne({ _id: toObjectId(id), tenant }).exec();
 
 /**
  * Well above `transport/webhook-delivery.ts#DEFAULT_TIMEOUT_MS` (10s) — enough slack for the DB
@@ -254,10 +277,12 @@ export const webhookDeliveryRepository: Repository<WebhookDeliveryDocument, Webh
     claimForReplay: typeof claimForReplay;
     applyOutcome: typeof applyOutcome;
     findDue: typeof findDue;
+    findByIdInTenant: typeof findDeliveryByIdInTenant;
 } = {
     ...deliveryBase,
     claimPending,
     claimForReplay,
     applyOutcome,
-    findDue
+    findDue,
+    findByIdInTenant: findDeliveryByIdInTenant
 };

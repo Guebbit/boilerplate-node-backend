@@ -14,29 +14,11 @@
  */
 
 import { logger } from '@infrastructure/adapters/logger';
-import { publishToQueue } from '@infrastructure/adapters/queue';
-import { WORKER_CHANNELS } from '@types';
-import type { WebhookDeliverJobPayload } from '@types';
 import { webhookDeliveryRepository } from '../repository';
-import type { WebhookDeliveryDocument } from '../model';
+import { enqueueDeliveryAttempt } from './enqueue';
 
 /** The ceiling one sweep run enqueues, so a very late sweep cannot burst-publish an unbounded batch. */
 const SWEEP_BATCH_LIMIT = 200;
-
-/**
- * Publish one due row's next attempt. Never claims — see the module docblock. Claim Check (EIP):
- * the message carries only the row's id — see `../asyncapi.internal.yaml`'s own schema docblock.
- * A stamped `attempt`/`eventType` in the message would go stale on a replay anyway; the row's own
- * `attempt` is what `attemptDelivery` actually reads.
- */
-const enqueue = (due: WebhookDeliveryDocument): Promise<void> => {
-    const payload: WebhookDeliverJobPayload = { deliveryId: String(due._id) };
-
-    return publishToQueue<WebhookDeliverJobPayload>({
-        queue: WORKER_CHANNELS.WEBHOOK_DELIVER,
-        payload
-    }).then(() => undefined);
-};
 
 /**
  * Enqueue every delivery due for a retry right now, plus every stranded lease — see
@@ -47,5 +29,7 @@ export const sweepDueWebhookDeliveries = (): Promise<void> =>
     webhookDeliveryRepository.findDue(SWEEP_BATCH_LIMIT).then((due) => {
         // Stryker disable next-line all
         logger.info({ message: 'webhooks: sweeping due retries', count: due.length });
-        return Promise.all(due.map((delivery) => enqueue(delivery))).then(() => undefined);
+        return Promise.all(due.map((delivery) => enqueueDeliveryAttempt(delivery))).then(
+            () => undefined
+        );
     });

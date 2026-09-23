@@ -17,13 +17,11 @@ import { randomUUID } from 'node:crypto';
 import { onDomainEvent } from '@kernel/events';
 import { ORDER_CREATED, ORDER_STATUS_CHANGED, ORDER_CANCELLED } from '@modules/orders';
 import { PAYMENT_SUCCEEDED, PAYMENT_FAILED } from '@modules/payments';
-import { publishToQueue } from '@infrastructure/adapters/queue';
 import { logger } from '@infrastructure/adapters/logger';
-import { WORKER_CHANNELS } from '@types';
-import type { WebhookDeliverJobPayload } from '@types';
 import { webhookSubscriptionRepository, webhookDeliveryRepository } from '../repository';
 import { matchesEventFilter } from '../domain';
 import type { WebhookDeliveryDocument, WebhookSubscriptionDocument } from '../model';
+import { enqueueDeliveryAttempt } from './enqueue';
 
 /** One public event, ready to fan out — the shape every domain-event listener below builds. */
 interface PublicEvent {
@@ -48,20 +46,6 @@ const createDeliveryRow = (
         nextAttemptAt: new Date()
     });
 
-/**
- * Enqueue the fast-path delivery attempt for a just-created row — Claim Check (EIP): the message
- * carries only the row's id, since the row itself (already written, `pending`) is the source of
- * truth for everything an attempt needs. See `../asyncapi.internal.yaml`'s own schema docblock.
- */
-const enqueueAttempt = (delivery: WebhookDeliveryDocument): Promise<void> => {
-    const payload: WebhookDeliverJobPayload = { deliveryId: String(delivery._id) };
-
-    return publishToQueue<WebhookDeliverJobPayload>({
-        queue: WORKER_CHANNELS.WEBHOOK_DELIVER,
-        payload
-    }).then(() => undefined);
-};
-
 /** Write the delivery row and enqueue its first attempt, for one matching subscription. */
 const deliverToOne = (
     subscription: WebhookSubscriptionDocument,
@@ -69,7 +53,7 @@ const deliverToOne = (
     eventId: string
 ): Promise<void> =>
     createDeliveryRow(subscription, event, eventId)
-        .then((delivery) => enqueueAttempt(delivery))
+        .then((delivery) => enqueueDeliveryAttempt(delivery))
         .catch((error: unknown) => {
             // One subscription's write failing must not stop the others matching the same event —
             // caught per subscription, same reasoning as `emitDomainEvent`'s own per-handler catch.
