@@ -212,6 +212,24 @@ describe('PUT /users/{id}', () => {
         assertNoCredentials(response.body);
     });
 
+    it('leaves an existing avatar untouched on a JSON edit that uploads no new image', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const target = await createUser({
+            username: 'editkeepsimage',
+            email: 'editkeepsimage@example.com',
+            imageUrl: 'https://cdn.example.com/avatars/original.png'
+        });
+
+        const response = await api()
+            .put(`/users/${String(target._id)}`)
+            .set('Authorization', bearer)
+            .send({ email: target.email, username: 'editednocredential2' });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.imageUrl).toBe('https://cdn.example.com/avatars/original.png');
+        expect(response).toSatisfyApiSpec();
+    });
+
     // B25: this path already ran the breach check inside `userService.update` — no behaviour
     // change here, only the missing contract-level coverage the box asks for.
     it('refuses a breached password', async () => {

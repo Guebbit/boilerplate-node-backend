@@ -246,10 +246,13 @@ export const update = (
             // The three travel as one unit, all produced by the same `readUploadedImage` call on
             // the controller — set together whenever a new upload replaces the image. The old url
             // is captured before the overwrite so `updateSavedUser` can delete it once the new one
-            // is durably saved — mirrors `products/service.ts`'s `update`.
+            // is durably saved — mirrors `products/service.ts`'s `update`. Gated on `imageReplaced`,
+            // not on `data.imageUrl !== undefined`: the controller always sends a string (`''` when
+            // nothing was uploaded, since the validation schema requires one), so a JSON edit with
+            // no upload must not overwrite a real avatar with that empty placeholder.
             const oldImageUrl = user.imageUrl;
             const imageReplaced = Boolean(data.imageUrl) && oldImageUrl !== data.imageUrl;
-            if (data.imageUrl !== undefined) {
+            if (imageReplaced) {
                 user.imageUrl = data.imageUrl;
                 user.thumbnailUrl = data.thumbnailUrl;
                 user.pendingImageKey = data.pendingImageKey;

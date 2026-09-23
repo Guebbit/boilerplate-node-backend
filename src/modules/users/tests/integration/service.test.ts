@@ -573,6 +573,25 @@ describe('userService.updateById', () => {
         expect((result as { data: UserDocument }).data.imageUrl).toBe('/images/keep-avatar.jpg');
     });
 
+    /*
+     * B21: the controller always sends a STRING `imageUrl` — `''` when nothing was uploaded, since
+     * the validation schema requires one (`write-users.ts`'s `imageUrl = ''` default) — so
+     * `data.imageUrl !== undefined` is never a safe "was a new image uploaded" check on this path.
+     */
+    it('keeps the avatar when an update carries an empty-string imageUrl, same as the controller sends', async () => {
+        const user = await createUser({ imageUrl: '/images/keep-avatar.jpg' });
+        const id = user._id.toString();
+
+        const result = await userService.updateById(
+            id,
+            { username: 'renamed-empty-image', imageUrl: '' },
+            testCallerContext
+        );
+
+        expect(imageStore.remove).not.toHaveBeenCalled();
+        expect((result as { data: UserDocument }).data.imageUrl).toBe('/images/keep-avatar.jpg');
+    });
+
     /* Re-submitting the same url is not a replacement — deleting here would delete the live avatar. */
     it('keeps the avatar when the update repeats the current imageUrl', async () => {
         const user = await createUser({ imageUrl: '/images/same-avatar.jpg' });
