@@ -265,6 +265,58 @@ const reissueRotated = (
     });
 
 /**
+ * The losing side of a rotation race: `tokenSupersede` already gave the swap to someone else, so
+ * work out what the presented token actually is — a benign two-tabs race, an ordinary dead
+ * credential, or theft — and answer accordingly. Split out of `rotateRefreshToken` purely so that
+ * function reads as one decision (won the race, or didn't); the revoke-then-throw at the bottom
+ * stays sequential, unchanged, since the throw must never be a lie about the account's state.
+ *
+ * @param id - the token's own `id` claim
+ * @param oldToken - the refresh JWT the caller presented
+ * @param remainingMs - the losing token's remaining lifetime, carried forward on a reissue
+ * @param authTime - the OLD token's `auth_time`, copied forward on a reissue
+ * @param amr - the OLD token's `amr`, copied forward on a reissue
+ * @throws {Error} when the token is genuinely absent, or {@link TokenReuseError} on detected reuse
+ */
+const resolveLostRotation = (
+    id: string,
+    oldToken: string,
+    remainingMs: number,
+    authTime: number,
+    amr: string[]
+): Promise<{ accessToken: string; refreshToken: string; refreshMaxAgeMs: number }> =>
+    userService.findByTokenValue(oldToken).then((user) => {
+        const digest = hashToken(oldToken);
+        const entry = user?.tokens.find((tk) => tk.token === digest);
+
+        // Genuinely absent — revoked by logout/password-change/deactivation while this
+        // JWT's signature still verified, or already cleaned up. An ordinary dead
+        // credential, same as it always was: NOT reuse, and nothing to revoke that isn't
+        // already gone. `verifyRefreshToken` answers this identically for the non-rotating
+        // callers that still use it.
+        if (!entry) throw new Error('Forbidden');
+
+        // Still live (no `supersededAt`) despite losing the claim: only reachable through
+        // a race tighter than `tokenSupersede` itself allows for. Treat it as live — the
+        // credential is exactly as valid as the caller believes it is.
+        if (!entry.supersededAt) return reissueRotated(id, remainingMs, authTime, amr);
+
+        const supersededMsAgo = Date.now() - entry.supersededAt.getTime();
+        if (supersededMsAgo <= getRotationGraceMilliseconds())
+            // The benign race: someone else's rotation of this SAME token already won,
+            // moments ago. Reissue rather than reject — see the module doc above.
+            return reissueRotated(id, remainingMs, authTime, amr);
+
+        // Superseded well outside the grace window: THIS is the signal that distinguishes
+        // reuse from an ordinary dead credential — a token this account rotated away, on
+        // purpose, being replayed long after. Revoke first, so the throw below is never a
+        // lie about what state the account is left in.
+        return revokeAllRefreshTokens(id).then(() => {
+            throw new TokenReuseError(id);
+        });
+    });
+
+/**
  * Exchange a refresh token for a NEW refresh token and a fresh access token, ROTATING the
  * refresh token's value on every exchange — unlike `createAccessToken`, which re-signs off a
  * refresh token that stays valid indefinitely. The full mechanism (why rotation detects theft, the
@@ -287,39 +339,12 @@ export const rotateRefreshToken = (
             // which `jsonwebtoken` treats as "no expiry" — the opposite of what's intended here.
             const remainingMs = Math.max(exp * 1000 - Date.now(), 1000);
 
-            return userService.tokenSupersede(oldToken).then((won) => {
-                if (won) return reissueRotated(id, remainingMs, authTime, amr);
-
-                return userService.findByTokenValue(oldToken).then((user) => {
-                    const digest = hashToken(oldToken);
-                    const entry = user?.tokens.find((tk) => tk.token === digest);
-
-                    // Genuinely absent — revoked by logout/password-change/deactivation while this
-                    // JWT's signature still verified, or already cleaned up. An ordinary dead
-                    // credential, same as it always was: NOT reuse, and nothing to revoke that isn't
-                    // already gone. `verifyRefreshToken` answers this identically for the non-rotating
-                    // callers that still use it.
-                    if (!entry) throw new Error('Forbidden');
-
-                    // Still live (no `supersededAt`) despite losing the claim: only reachable through
-                    // a race tighter than `tokenSupersede` itself allows for. Treat it as live — the
-                    // credential is exactly as valid as the caller believes it is.
-                    if (!entry.supersededAt) return reissueRotated(id, remainingMs, authTime, amr);
-
-                    const supersededMsAgo = Date.now() - entry.supersededAt.getTime();
-                    if (supersededMsAgo <= getRotationGraceMilliseconds())
-                        // The benign race: someone else's rotation of this SAME token already won,
-                        // moments ago. Reissue rather than reject — see the module doc above.
-                        return reissueRotated(id, remainingMs, authTime, amr);
-
-                    // Superseded well outside the grace window: THIS is the signal that distinguishes
-                    // reuse from an ordinary dead credential — a token this account rotated away, on
-                    // purpose, being replayed long after. Revoke first, so the throw below is never a
-                    // lie about what state the account is left in.
-                    return revokeAllRefreshTokens(id).then(() => {
-                        throw new TokenReuseError(id);
-                    });
-                });
-            });
+            return userService
+                .tokenSupersede(oldToken)
+                .then((won) =>
+                    won
+                        ? reissueRotated(id, remainingMs, authTime, amr)
+                        : resolveLostRotation(id, oldToken, remainingMs, authTime, amr)
+                );
         }
     );
