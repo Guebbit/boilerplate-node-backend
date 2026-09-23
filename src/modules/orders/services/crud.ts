@@ -161,6 +161,24 @@ export const getByTransferReference = (reference: string): Promise<OrderDocument
     orderRepository.findOne({ transferReference: reference });
 
 /**
+ * Looks up each line's product by id — the read `create` and `rewriteItems` both need before they
+ * can freeze a snapshot, kept in one place so the two writers can't drift on how a line's product
+ * is resolved.
+ * @param items - `{ productId, quantity }` pairs
+ * @returns each item paired with its product, or `null` when the id no longer resolves
+ */
+const resolveItemProducts = (
+    items: CartItem[]
+): Promise<
+    { item: CartItem; product: Awaited<ReturnType<typeof productService.findByIdRaw>> }[]
+> =>
+    Promise.all(
+        items.map((item) =>
+            productService.findByIdRaw(item.productId).then((product) => ({ item, product }))
+        )
+    );
+
+/**
  * Create a new order from `{ productId, quantity }` items — looks up each product and stores a
  * full snapshot.
  * @param items - `{ productId, quantity }` pairs
@@ -185,11 +203,7 @@ export const create = async (
     const buyerLocale = buyer?.locale ?? getDefaultLocale();
 
     // `Promise.all([])` settles without a query, so an empty basket still costs no round trip.
-    const resolvedItems = await Promise.all(
-        items.map((item) =>
-            productService.findByIdRaw(item.productId).then((product) => ({ item, product }))
-        )
-    );
+    const resolvedItems = await resolveItemProducts(items);
 
     // The admin path sells the same shelf the storefront does — the same write, freeze, invoice
     // allocation and stock hold `placeOrder` runs for `@modules/cart`'s checkout, with no
@@ -228,25 +242,22 @@ export const create = async (
 };
 
 /**
- * Update an existing order document (admin), only the fields provided. The only pure-status move
- * reachable here is to `processing`; `shipped`/`delivered` are `delivery`'s own doors and
- * cancellation lives in `cancelById` — `canTransition` refuses both below.
+ * Whether an admin's requested status move is refused before anything is written — either the
+ * table doesn't allow this move at all, or it does but this endpoint is the wrong door for it
+ * (cancellation has its own release/refund sequence, so `POST /orders/{id}/cancel` is where it
+ * runs instead). The controller's Zod schema already validated the VALUE against the generated
+ * enum; what is decided here is whether the MOVE exists. See `docs/theory/tactical-ddd.md` §1.
+ * @param previousStatus - the order's current status
+ * @param nextStatus - the requested status, or `undefined` when this update doesn't touch status
+ * @returns the rejection to return, or `undefined` when the move (or lack of one) is fine
  */
-// `async` for the same reason the repositories are: `toObjectId(data.userId)` below throws on a
-// malformed id, and a function typed `Promise<T>` must reject rather than throw synchronously.
-export const update = async (
-    order: OrderDocument,
-    data: UpdateOrderByIdRequest
-): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
-    const previousStatus = order.status;
+const transitionRefused = (
+    previousStatus: OrderStatus,
+    nextStatus: OrderStatus | undefined
+): ResponseReject | undefined => {
+    if (nextStatus === undefined) return undefined;
 
-    /*
-     * Asked before anything is assigned, so a refusal is never a partial write. The controller's
-     * Zod schema already validated the VALUE against the generated enum; what is decided here is
-     * whether the MOVE exists. See `docs/theory/tactical-ddd.md` §1.
-     */
-    const nextStatus = data.status;
-    if (nextStatus !== undefined && !canTransition(previousStatus, nextStatus, 'admin'))
+    if (!canTransition(previousStatus, nextStatus, 'admin'))
         return generateReject(409, [
             {
                 code: 'ORDER_TRANSITION_NOT_ALLOWED',
@@ -259,11 +270,6 @@ export const update = async (
             }
         ]);
 
-    /*
-     * The lifecycle allows an admin this edge; executing it here does not. A cancellation is a
-     * sequence — release the hold, announce `ORDER_CANCELLED` so `payments` refunds — and
-     * `POST /orders/{id}/cancel` is where it runs.
-     */
     if (nextStatus === OrderStatus.cancelled)
         return generateReject(409, [
             {
@@ -273,57 +279,122 @@ export const update = async (
             }
         ]);
 
+    return undefined;
+};
+
+/**
+ * Rewrites an order's line items in place — refused outright while the shelf is still holding this
+ * order's reservation (the reservation froze its own copy of the basket, and a later
+ * `commitForOrder` would decrement products the order no longer contains; `inventory` owns the
+ * question), otherwise re-resolves and re-freezes the replacement lines onto `order.items`.
+ * @param order - the order being edited; `order.items` is mutated in place on success
+ * @param requestedItems - the caller's replacement `{ productId, quantity }` lines
+ * @returns a rejection if refused, `undefined` once `order.items` has been rewritten
+ */
+const rewriteItems = (
+    order: OrderDocument,
+    requestedItems: CartItem[]
+): Promise<ResponseReject | undefined> =>
+    inventoryService.isStockBoundToOrder(String(order._id)).then((bound) => {
+        if (bound)
+            return generateReject(409, [
+                {
+                    code: 'ORDER_ITEMS_HELD',
+                    message: t('orders.items-held')
+                }
+            ]);
+
+        return resolveItemProducts(requestedItems).then((resolvedItems) => {
+            const missingProduct = resolvedItems.some(({ product }) => !product);
+            if (missingProduct) return generateReject(404, [t('products.not-found')]);
+
+            /*
+             * No fresh buyer context on an admin PATCH — `update()` takes no `CallerContext`.
+             * Reuse whatever language the order's own lines are already frozen in, so an admin
+             * editing line items doesn't silently switch the order to a different language
+             * mid-flight.
+             */
+            const lineLocale = order.items[0]?.locale ?? getDefaultLocale();
+            return freezeOrderLines(
+                lineLocale,
+                resolvedItems.map(({ product }) => product!),
+                resolvedItems.map(({ item }) => item.quantity)
+            ).then((lines) => {
+                order.items = lines;
+                return undefined;
+            });
+        });
+    });
+
+/**
+ * Applies an admin's already-validated status move: a conditional write, not the blind
+ * `order.status = next; save()` this replaces — a customer cancel landing between the read at the
+ * top of `update` and this write must not be silently overwritten by a stale `next`.
+ * `statusesLeadingTo` is the same "from" set `markSystemMove` (`./status.ts`) uses for a system
+ * report, applied here to an admin's request instead. Announces `ORDER_STATUS_CHANGED` only after
+ * the write lands: a status is only "changed" once it is on disk, and the listeners (the shipment,
+ * one day a notification) compensate for facts, not plans.
+ * @param saved - the order as just read back from `orderRepository.save`
+ * @param previousStatus - the status this update originally read the order at
+ * @param nextStatus - the status being moved to
+ */
+const applyStatusMove = (
+    saved: OrderDocument,
+    previousStatus: OrderStatus,
+    nextStatus: OrderStatus
+): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
+    orderRepository
+        .updateStatusIfIn(String(saved._id), statusesLeadingTo(nextStatus, 'admin'), nextStatus)
+        .then((moved) => {
+            if (!moved)
+                return generateReject(409, [
+                    {
+                        code: 'ORDER_TRANSITION_NOT_ALLOWED',
+                        message: t('orders.transition.not-allowed'),
+                        details: {
+                            from: previousStatus,
+                            to: nextStatus,
+                            allowed: statusesReachableFrom(previousStatus, 'admin')
+                        }
+                    }
+                ]);
+
+            return emitDomainEvent(ORDER_STATUS_CHANGED, {
+                orderId: String(moved._id),
+                from: previousStatus,
+                to: nextStatus
+            }).then(() => generateSuccess(moved));
+        });
+
+/**
+ * Update an existing order document (admin), only the fields provided. The only pure-status move
+ * reachable here is to `processing`; `shipped`/`delivered` are `delivery`'s own doors and
+ * cancellation lives in `cancelById` — `transitionRefused` refuses both below.
+ */
+// `async` for the same reason the repositories are: `toObjectId(data.userId)` below throws on a
+// malformed id, and a function typed `Promise<T>` must reject rather than throw synchronously.
+export const update = async (
+    order: OrderDocument,
+    data: UpdateOrderByIdRequest
+): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
+    const previousStatus = order.status;
+    const nextStatus = data.status;
+
+    // Asked before anything is assigned, so a refusal is never a partial write.
+    const refusal = transitionRefused(previousStatus, nextStatus);
+    if (refusal) return refusal;
+
     // `order.status` is deliberately NOT assigned here — see below, where the status
     // half of this write goes through a conditional `findOneAndUpdate` instead of riding along
     // on this document's blind `save()`.
     if (data.email !== undefined) order.email = data.email;
     if (data.userId !== undefined) order.userId = toObjectId(data.userId);
 
-    /*
-     * Rewriting the lines is refused while the shelf is holding them: the reservation froze its own
-     * copy of the basket, and a later `commitForOrder` would decrement products the order no longer
-     * contains. `inventory` owns the question.
-     */
     const requestedItems = data.items;
     const itemsRewritten = Boolean(requestedItems && requestedItems.length > 0);
     const updateItemsPromise =
         requestedItems && requestedItems.length > 0
-            ? inventoryService.isStockBoundToOrder(String(order._id)).then((bound) => {
-                  if (bound)
-                      return generateReject(409, [
-                          {
-                              code: 'ORDER_ITEMS_HELD',
-                              message: t('orders.items-held')
-                          }
-                      ]);
-
-                  return Promise.all(
-                      requestedItems.map((item) =>
-                          productService
-                              .findByIdRaw(item.productId)
-                              .then((product) => ({ item, product }))
-                      )
-                  ).then((resolvedItems) => {
-                      const missingProduct = resolvedItems.some(({ product }) => !product);
-                      if (missingProduct) return generateReject(404, [t('products.not-found')]);
-
-                      /*
-                       * No fresh buyer context on an admin PATCH — `update()` takes no
-                       * `CallerContext`. Reuse whatever language the order's own lines are
-                       * already frozen in, so an admin editing line items doesn't silently
-                       * switch the order to a different language mid-flight.
-                       */
-                      const lineLocale = order.items[0]?.locale ?? getDefaultLocale();
-                      return freezeOrderLines(
-                          lineLocale,
-                          resolvedItems.map(({ product }) => product!),
-                          resolvedItems.map(({ item }) => item.quantity)
-                      ).then((lines) => {
-                          order.items = lines;
-                          return undefined;
-                      });
-                  });
-              })
+            ? rewriteItems(order, requestedItems)
             : Promise.resolve();
 
     return updateItemsPromise.then((earlyResult) => {
@@ -337,42 +408,7 @@ export const update = async (
             if (nextStatus === undefined || nextStatus === previousStatus)
                 return generateSuccess(saved);
 
-            /*
-             * A conditional write, not the blind `order.status = next; save()` this replaces: a
-             * customer cancel landing between the read at the top of this function and this write
-             * must not be silently overwritten by a stale `next` — `statusesLeadingTo` is the same
-             * "from" set `markSystemMove` (`./status.ts`) uses for a system report, applied here to
-             * an admin's request instead.
-             */
-            return orderRepository
-                .updateStatusIfIn(
-                    String(saved._id),
-                    statusesLeadingTo(nextStatus, 'admin'),
-                    nextStatus
-                )
-                .then((moved) => {
-                    if (!moved)
-                        return generateReject(409, [
-                            {
-                                code: 'ORDER_TRANSITION_NOT_ALLOWED',
-                                message: t('orders.transition.not-allowed'),
-                                details: {
-                                    from: previousStatus,
-                                    to: nextStatus,
-                                    allowed: statusesReachableFrom(previousStatus, 'admin')
-                                }
-                            }
-                        ]);
-
-                    // Announced after the write: a status is only "changed" once it is on disk,
-                    // and the listeners (the shipment, one day a notification) compensate for
-                    // facts, not plans.
-                    return emitDomainEvent(ORDER_STATUS_CHANGED, {
-                        orderId: String(moved._id),
-                        from: previousStatus,
-                        to: nextStatus
-                    }).then(() => generateSuccess(moved));
-                });
+            return applyStatusMove(saved, previousStatus, nextStatus);
         });
     });
 };
