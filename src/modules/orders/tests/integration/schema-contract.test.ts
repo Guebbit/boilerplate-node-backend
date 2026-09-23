@@ -10,6 +10,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { orderRepository } from '../../repository';
 import { createProduct } from '@modules/products/tests/factories';
+import { resolveTaxRate } from '@modules/products';
 import { createUser } from '@modules/users/tests/factories';
 
 setupTestDb();
@@ -17,17 +18,25 @@ setupTestDb();
 /**
  * A complete, valid order payload: a real buyer and a real product snapshot.
  * `items[].product` embeds `orderLineProductSchema`, not a reference, since an order is a
- * snapshot — a bare ObjectId fails validation here because title and price are required on the
- * embedded copy. The live product's `onHand`/`reserved` ride along on `product.toObject()` here
- * but are dropped on write: the embedded schema declares no path for either.
+ * snapshot — a bare ObjectId fails validation here because title, price and taxRate are required
+ * on the embedded copy. The live product's `onHand`/`reserved` ride along on `product.toObject()`
+ * here but are dropped on write: the embedded schema declares no path for either. `taxClass` is
+ * replaced by the `taxRate` it resolves to, same as `freezeOrderLines` itself.
  */
 const makeOrderPayload = async () => {
     const user = await createUser({ email: 'buyer@example.com' });
     const product = await createProduct({ title: 'Bought', price: 12.5 });
+    const { taxClass, ...snapshot } = product.toObject();
     return {
         userId: user._id,
         email: user.email,
-        items: [{ product: product.toObject(), quantity: 2, locale: 'en' }]
+        items: [
+            {
+                product: { ...snapshot, taxRate: resolveTaxRate(taxClass) },
+                quantity: 2,
+                locale: 'en'
+            }
+        ]
     };
 };
 

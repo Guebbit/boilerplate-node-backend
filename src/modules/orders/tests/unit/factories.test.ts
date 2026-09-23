@@ -14,7 +14,7 @@ const HEX = '65dc8a99604c307b702b5ccc';
 const PRODUCT = '65dcdec2b18ad5e4bd597f0f';
 
 /** The minimum a snapshot override must state, per `OrderSnapshotInput`. */
-const DOG_FOOD = { id: PRODUCT, title: 'Grain-Free Dog Food', price: 100 };
+const DOG_FOOD = { id: PRODUCT, title: 'Grain-Free Dog Food', price: 100, taxRate: 0.22 };
 
 describe('makeOrder — identity and defaults', () => {
     it('builds a complete order with no overrides at all', () => {
@@ -139,7 +139,12 @@ describe('makeOrder — the embedded product snapshot', () => {
     });
 
     it('builds one snapshot per line, in order', () => {
-        const other = { id: '65dc9be92f2794d1c16741e1', title: 'Memory Foam Dog Bed', price: 7.5 };
+        const other = {
+            id: '65dc9be92f2794d1c16741e1',
+            title: 'Memory Foam Dog Bed',
+            price: 7.5,
+            taxRate: 0.22
+        };
         const order = makeOrder({
             items: [
                 { product: DOG_FOOD, quantity: 1 },

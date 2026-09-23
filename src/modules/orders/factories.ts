@@ -32,8 +32,8 @@ import type { FrozenOrderLineProduct, OrderDocument } from './model';
  */
 export type OrderSnapshotInput = Omit<OverridesFor<Product>, 'onHand' | 'reserved' | 'taxClass'> &
     Required<Pick<Product, 'id' | 'title' | 'price'>> & {
-        /** The decimal VAT rate this line was actually charged. Absent means a pre-VAT fixture. */
-        taxRate?: number;
+        /** The decimal VAT rate this line was actually charged. */
+        taxRate: number;
     };
 
 /**
@@ -41,12 +41,16 @@ export type OrderSnapshotInput = Omit<OverridesFor<Product>, 'onHand' | 'reserve
  *
  * `locale` is optional here, unlike the contract's `OrderItem`: a fixture usually doesn't care
  * which language a snapshot claims to be resolved into, so `makeOrder` defaults it to
- * `getDefaultLocale()` rather than making every caller state it. `current` is dropped for the
- * same reason the totals are dropped from `OrderOverrides` below: present on the wire, but
- * resolved live at read time — `orderLineProductSchema` has nowhere to store it, so a fixture
- * that pinned one would silently lose it on write.
+ * `getDefaultLocale()` rather than making every caller state it. `current`, `taxAmount` and
+ * `netAmount` are dropped for the same reason the totals are dropped from `OrderOverrides` below:
+ * present on the wire, but derived at serialization time (`current` live from the catalogue,
+ * `taxAmount`/`netAmount` from the frozen `taxRate` by `orderTaxBreakdown`) rather than stored, so
+ * a fixture that pinned one would silently lose it on write.
  */
-export type OrderLineInput = Omit<OrderItem, 'product' | 'locale' | 'current'> & {
+export type OrderLineInput = Omit<
+    OrderItem,
+    'product' | 'locale' | 'current' | 'taxAmount' | 'netAmount'
+> & {
     product: OrderSnapshotInput;
     locale?: string;
 };

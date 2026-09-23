@@ -10,7 +10,7 @@
 import { OrderStatus } from '@types';
 import type { OrderDocument } from '../model';
 import type { UserDocument } from '@modules/users';
-import type { ProductDocument } from '@modules/products';
+import { resolveTaxRate, type ProductDocument } from '@modules/products';
 import { orderRepository } from '../repository';
 import {
     makeOrder as buildOrder,
@@ -24,8 +24,10 @@ type OrderExtras = Omit<OrderOverrides, 'userId' | 'email' | 'items'>;
 
 /**
  * Convert a persisted product document into an order line ready to embed.
- * Copies the whole document, minus Mongo's `_id`/`__v`, so a newly added column isn't silently
- * missed the way naming fields individually did. `toObject()` keeps `Date`s as `Date`s.
+ * Copies the whole document, minus Mongo's `_id`/`__v`/`taxClass`, so a newly added column isn't
+ * silently missed the way naming fields individually did. `toObject()` keeps `Date`s as `Date`s.
+ * `taxClass` is replaced by the `taxRate` it resolves to, same as `freezeOrderLines` itself — an
+ * order line freezes the RESOLVED rate, never the class it came from.
  *
  * @param locale - which locale the line claims its snapshot is resolved into; defaults (via
  *   `makeOrder`) to `getDefaultLocale()` when omitted, same as an untranslated order would freeze
@@ -35,8 +37,12 @@ export const toOrderItem = (
     quantity = 1,
     locale?: string
 ): OrderLineInput => {
-    const { _id, __v, ...snapshot } = product.toObject();
-    return { product: { ...snapshot, id: String(_id) }, quantity, locale };
+    const { _id, __v, taxClass, ...snapshot } = product.toObject();
+    return {
+        product: { ...snapshot, id: String(_id), taxRate: resolveTaxRate(taxClass) },
+        quantity,
+        locale
+    };
 };
 
 /**

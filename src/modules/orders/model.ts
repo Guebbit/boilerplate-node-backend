@@ -33,7 +33,7 @@ import type { Order } from '@types';
  */
 export type FrozenOrderLineProduct = Omit<ProductSnapshot, 'taxClass'> & {
     /** The decimal VAT rate this line was actually charged — see the schema field's own comment. */
-    taxRate?: number;
+    taxRate: number;
 };
 
 /**
@@ -217,9 +217,9 @@ const orderLineProductSchema = new Schema(
         /*
          * The decimal rate this line was actually charged, resolved from the product's `taxClass`
          * at freeze time (`services/snapshot.ts`) — never the class itself, and never re-resolved
-         * from the product's CURRENT class. Absent on an order placed before VAT existed.
+         * from the product's CURRENT class.
          */
-        taxRate: { type: Number, min: 0, max: 1 }
+        taxRate: { type: Number, required: true, min: 0, max: 1 }
     },
     { timestamps: true }
 );
@@ -461,8 +461,7 @@ const applyOrderTotals = (serialized: Record<string, unknown>) => {
 /**
  * Derives each line's `taxAmount`/`netAmount`, the order's `netTotal`/`taxTotal`, shipping's own
  * `shippingNetAmount`/`shippingTaxAmount` split, and the per-rate `taxSummary` from the lines'
- * frozen `taxRate` — added onto the already-normalized items `applyOrderItems` produced. Adds
- * nothing at all on a pre-VAT order (any line missing `taxRate`): see `orderTaxBreakdown`.
+ * frozen `taxRate` — added onto the already-normalized items `applyOrderItems` produced.
  */
 const applyOrderTax = (serialized: Record<string, unknown>) => {
     const items = Array.isArray(serialized.items) ? serialized.items : [];
@@ -472,7 +471,6 @@ const applyOrderTax = (serialized: Record<string, unknown>) => {
         items: items as TaxableLineItem[],
         shippingCost: serialized.shippingCost
     });
-    if (!breakdown) return;
 
     for (const [index, item] of (items as Record<string, unknown>[]).entries()) {
         item.taxAmount = breakdown.lines[index].taxAmount;

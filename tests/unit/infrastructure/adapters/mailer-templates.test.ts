@@ -161,7 +161,7 @@ describe('email templates render in every supported locale', () => {
             path.resolve('shared', 'templates', 'documents', 'orders.invoice.ejs'),
             invoiceDocument(locale, {
                 id: 'an-order-id',
-                items: [{ product: { title: 'A product', price: 10 }, quantity: 2 }]
+                items: [{ product: { title: 'A product', price: 10, taxRate: 0.22 }, quantity: 2 }]
             })
         );
 

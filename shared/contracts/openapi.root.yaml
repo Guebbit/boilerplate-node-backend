@@ -869,7 +869,7 @@ components:
         OrderLineProduct:
             type: object
             additionalProperties: false
-            required: [id, title, price]
+            required: [id, title, price, taxRate]
             properties:
                 id:
                     $ref: '#/components/schemas/Id'
@@ -913,9 +913,8 @@ components:
                     format: date-time
                 # The decimal rate this line was actually taxed at, resolved from the product's
                 # `taxClass` and frozen here at checkout — a rate change in config must not
-                # re-state what a past order was charged. Absent on an order placed before VAT
-                # existed; never backfilled, and never re-resolved from the product's CURRENT
-                # tax class.
+                # re-state what a past order was charged, and never re-resolved from the
+                # product's CURRENT tax class.
                 taxRate:
                     type: number
                     format: double
@@ -923,8 +922,7 @@ components:
                     maximum: 1
                     description: >-
                         The VAT rate this line was actually charged, as a decimal (0.22 for 22%).
-                        Frozen at checkout, same reasoning as `price`. Absent on an order placed
-                        before VAT existed.
+                        Frozen at checkout, same reasoning as `price`.
 
         # The picture, resolved LIVE from the catalogue product `OrderItem.product.id` still
         # names — never frozen, so a hard-deleted or replaced image can never leak through order
@@ -943,7 +941,7 @@ components:
         OrderItem:
             type: object
             additionalProperties: false
-            required: [product, quantity, locale, current]
+            required: [product, quantity, locale, current, taxAmount, netAmount]
             properties:
                 product:
                     $ref: '#/components/schemas/OrderLineProduct'
@@ -965,9 +963,7 @@ components:
                         (`product.id`) has been hard-deleted. Never the terms of the sale, so it
                         is never frozen; see `OrderLineCurrent`.
                 # Both derived at serialization from `product.price`/`quantity`/`product.taxRate`
-                # — never stored — and both absent together with `product.taxRate`: a pre-VAT
-                # order renders no tax breakdown at all rather than implying a rate it never
-                # charged. See `src/modules/orders/domain/tax.ts`.
+                # — never stored. See `src/modules/orders/domain/tax.ts`.
                 taxAmount:
                     type: number
                     format: double
@@ -1059,7 +1055,21 @@ components:
         Order:
             type: object
             additionalProperties: false
-            required: [id, email, items, totalItems, totalQuantity, totalPrice, status]
+            required:
+                [
+                    id,
+                    email,
+                    items,
+                    totalItems,
+                    totalQuantity,
+                    totalPrice,
+                    status,
+                    netTotal,
+                    taxTotal,
+                    shippingNetAmount,
+                    shippingTaxAmount,
+                    taxSummary
+                ]
             properties:
                 id:
                     $ref: '#/components/schemas/Id'
@@ -1092,10 +1102,8 @@ components:
                     minimum: 0
                     description: Sum of `product.price × quantity` across every line item, plus `shippingCost` when the checkout chose a method.
                     example: 149.97
-                # Both derived at serialization from the lines' frozen `taxRate` — never stored —
-                # and both absent together on a pre-VAT order (any line missing `taxRate`), rather
-                # than rendering a partial or implied breakdown. See
-                # `src/modules/orders/domain/tax.ts`.
+                # Both derived at serialization from the lines' frozen `taxRate` — never stored.
+                # See `src/modules/orders/domain/tax.ts`.
                 netTotal:
                     type: number
                     format: double
@@ -1104,7 +1112,6 @@ components:
                     description: >-
                         Sum of every line's `netAmount` — the goods total excluding VAT, GOODS
                         ONLY. Shipping's own net amount is `shippingNetAmount`, not folded in here.
-                        Absent on a pre-VAT order.
                 taxTotal:
                     type: number
                     format: double
@@ -1114,7 +1121,7 @@ components:
                         Every VAT collected on this order: the lines' own `taxAmount`, plus the VAT
                         on `shippingCost` — apportioned pro-rata across the lines by value and
                         taxed at each line's own rate, since delivery is taxed as ancillary to what
-                        it delivers. Absent on a pre-VAT order.
+                        it delivers.
                 shippingNetAmount:
                     type: number
                     format: double
@@ -1122,8 +1129,8 @@ components:
                     readOnly: true
                     description: >-
                         Shipping's own net amount, summed across every line it was apportioned
-                        onto — `netTotal` stays goods-only, this is the rest of the split. Absent
-                        on a pre-VAT order.
+                        onto — `netTotal` stays goods-only, this is the rest of the split. Zero on
+                        an order with no delivery method or free shipping.
                 shippingTaxAmount:
                     type: number
                     format: double
@@ -1132,7 +1139,8 @@ components:
                     description: >-
                         Shipping's own tax amount, summed across every line it was apportioned
                         onto — already folded into `taxTotal`, published separately so an invoice
-                        can print it as its own line. Absent on a pre-VAT order.
+                        can print it as its own line. Zero on an order with no delivery method or
+                        free shipping.
                 taxSummary:
                     type: array
                     readOnly: true
@@ -1142,7 +1150,7 @@ components:
                         One row per distinct VAT rate charged on this order, sorted ascending.
                         Reconciles exactly: summed `netAmount` is `netTotal` + `shippingNetAmount`,
                         summed `taxAmount` is `taxTotal`, and summed `grossAmount` is `totalPrice`.
-                        Absent on a pre-VAT order.
+                        Empty on an order with no lines.
                 notes:
                     type: string
                     description: Optional order notes

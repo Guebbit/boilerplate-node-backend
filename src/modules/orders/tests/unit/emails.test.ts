@@ -9,6 +9,7 @@ import {
     orderConfirmEmail,
     invoiceDocument,
     type OrderLines,
+    type InvoiceOrder,
     type InvoiceVatBlock
 } from '@modules/orders/emails';
 import { orderTotal, orderTaxBreakdown } from '@modules/orders/domain';
@@ -17,11 +18,15 @@ import { frontendLink } from '@infrastructure/http/frontend-link';
 const NAME = 'Ada Lovelace';
 const ORDER_ID = 'order-1';
 
-/** Two lines with different titles, quantities and prices, so no field can stand in for another. */
-const ORDER: OrderLines = {
+/**
+ * Two lines with different titles, quantities and prices, so no field can stand in for another.
+ * Typed `InvoiceOrder` (a `taxRate` on each line) rather than the looser `OrderLines`, since this
+ * fixture is reused by both the confirmation-email tests below and the invoice tests further down.
+ */
+const ORDER: InvoiceOrder = {
     items: [
-        { quantity: 2, product: { title: 'Grain-Free Dog Food', price: 100 } },
-        { quantity: 3, product: { title: 'Memory Foam Dog Bed', price: 7.5 } }
+        { quantity: 2, product: { title: 'Grain-Free Dog Food', price: 100, taxRate: 0.22 } },
+        { quantity: 3, product: { title: 'Memory Foam Dog Bed', price: 7.5, taxRate: 0.22 } }
     ],
     shippingCost: 4.25
 };
@@ -187,7 +192,7 @@ describe('invoiceDocument', () => {
     it("never re-resolves a line's title through `t()`, even one that collides with a real key", () => {
         const collidingTitle = 'orders.invoice.title';
         const order = {
-            items: [{ quantity: 1, product: { title: collidingTitle, price: 1 } }],
+            items: [{ quantity: 1, product: { title: collidingTitle, price: 1, taxRate: 0.22 } }],
             id: 'x'
         };
 
@@ -209,18 +214,12 @@ const VAT_ORDER = {
 const eur = new Intl.NumberFormat('en', { style: 'currency', currency: 'EUR' });
 
 describe('invoiceDocument — the VAT block', () => {
-    it('is absent on a pre-VAT order — no taxRate on any line', () => {
-        const { vat } = invoiceDocument('en', { ...ORDER, id: 'x' });
-
-        expect(vat).toBeUndefined();
-    });
-
     it('computes grossAmount from netAmount + taxAmount, never from a float multiply of price × quantity', () => {
         // 19.99 × 5 is 99.94999999999999 in IEEE 754, not 99.95 —
         // if this ever re-derives from the price again instead of the already-reconciled pair
         // beside it, a rate where that drift survives rounding would print a wrong total.
         const vat = invoiceDocument('en', VAT_ORDER).vat as InvoiceVatBlock;
-        const breakdown = orderTaxBreakdown(VAT_ORDER)!;
+        const breakdown = orderTaxBreakdown(VAT_ORDER);
 
         expect(vat.rows[0].grossAmount).toBe(
             eur.format(breakdown.lines[0].netAmount + breakdown.lines[0].taxAmount)

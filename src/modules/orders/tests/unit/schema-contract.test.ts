@@ -103,10 +103,10 @@ describe('orderSchema — the embedded snapshots', () => {
         expect(indexSpecs(orderSchema).filter((spec) => spec.includes('items.'))).toEqual([]);
     });
 
-    it('leaves the frozen tax rate optional, in [0, 1] — absent means a pre-VAT order', () => {
+    it('requires the frozen tax rate, in [0, 1]', () => {
         const product = subSchema(subSchema(orderSchema, 'items'), 'product');
 
-        expect(requiredPaths(product)).not.toContain('taxRate');
+        expect(requiredPaths(product)).toContain('taxRate');
         expect(pathOptions(product, 'taxRate').min).toBe(0);
         expect(pathOptions(product, 'taxRate').max).toBe(1);
     });

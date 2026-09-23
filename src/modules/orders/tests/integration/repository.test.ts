@@ -12,7 +12,6 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, makeOrder, toOrderItem } from '@modules/orders/tests/factories';
-import type { ProductDocument } from '@modules/products';
 import { orderRepository } from '../../repository';
 import { DEFAULT_SORT } from '@infrastructure/persistence/search';
 
@@ -47,8 +46,9 @@ describe('orderRepository', () => {
             });
             const order = await createOrder(user, [toOrderItem(product, 1)]);
 
-            // The product object is embedded, not referenced by ObjectId
-            const snapshot = order.items[0].product as ProductDocument;
+            // The product object is embedded, not referenced by ObjectId — already typed as the
+            // frozen snapshot, so no cast is needed to read its plain fields.
+            const snapshot = order.items[0].product;
             expect(snapshot.title).toBe('Snapshot Test');
             expect(snapshot.price).toBe(29.99);
         });

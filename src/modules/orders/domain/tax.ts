@@ -108,9 +108,15 @@ export interface OrderTaxInput {
 const extractTax = (gross: Money, rate: number): Money =>
     rate <= 0 ? NO_MONEY : scaleMoneyByRate(gross, rate / (1 + rate));
 
-/** The rate a line was actually frozen at, or `undefined` on a line that predates VAT. */
-const frozenRate = (item: TaxableLineItem): number | undefined =>
-    typeof item.product?.taxRate === 'number' ? item.product.taxRate : undefined;
+/**
+ * The rate a line was actually frozen at, coerced from raw aggregate output — same defensive
+ * coercion `wholeCount`/`toMinorUnits` already apply to `quantity`/`price`, defaulting to 0 for
+ * anything that isn't a usable number rather than trusting the aggregation pipeline blindly.
+ */
+const frozenRate = (item: TaxableLineItem): number => {
+    const rate = Number(item.product?.taxRate);
+    return Number.isFinite(rate) ? rate : 0;
+};
 
 /**
  * Folds one line's (net, tax) pair into its rate's running total in `byRate` — goods and
@@ -132,18 +138,12 @@ const foldIntoRate = (
 
 /**
  * Every VAT figure an order's response and invoice need, derived from each line's FROZEN price,
- * quantity and rate, plus shipping's own apportioned share. A single line missing `taxRate` makes
- * the WHOLE order pre-VAT — `undefined`, rather than a partial breakdown that would imply a rate
- * that was never actually charged.
+ * quantity and rate, plus shipping's own apportioned share.
  * @param order - the order's lines and its frozen shipping cost
- * @returns the full breakdown, or `undefined` for a pre-VAT order
+ * @returns the full breakdown
  */
-export const orderTaxBreakdown = ({
-    items,
-    shippingCost
-}: OrderTaxInput): OrderTaxBreakdown | undefined => {
+export const orderTaxBreakdown = ({ items, shippingCost }: OrderTaxInput): OrderTaxBreakdown => {
     const rates = items.map((item) => frozenRate(item));
-    if (rates.includes(undefined)) return undefined;
 
     const grossAmounts = items.map((item) =>
         scaleMoney(toMinorUnits(item.product?.price), wholeCount(item.quantity))
@@ -158,8 +158,7 @@ export const orderTaxBreakdown = ({
     const shippingByRateMap = new Map<number, { net: Money; tax: Money }>();
 
     const lines = items.map((item, index) => {
-        // Every rate was checked present just above — proven, not merely assumed, so `!` applies.
-        const rate = rates[index]!;
+        const rate = rates[index];
         const gross = grossAmounts[index];
         const tax = extractTax(gross, rate);
         const net = subtractMoney(gross, tax);

@@ -187,7 +187,7 @@ export interface InvoiceOrder extends OrderLines {
     id?: unknown;
     items: {
         quantity: number;
-        product: { title: string; price: number; taxRate?: number };
+        product: { title: string; price: number; taxRate: number };
     }[];
     /** Absent on an order that predates sequential invoice numbering. */
     invoiceNumber?: string;
@@ -261,10 +261,9 @@ export interface InvoiceTaxSummaryRow {
 }
 
 /**
- * The invoice's VAT table and the shop's own legal identity — present only on an order that
- * actually carries VAT figures. `undefined` renders no block at all, rather than one implying a
- * rate that was never charged. Every amount is ALREADY formatted for `locale` — the template only
- * interpolates, same rule as `taxRateLabel`'s own comment always held for the rate column alone.
+ * The invoice's VAT table and the shop's own legal identity. Every amount is ALREADY formatted
+ * for `locale` — the template only interpolates, same rule as `taxRateLabel`'s own comment always
+ * held for the rate column alone.
  */
 export interface InvoiceVatBlock {
     columns: {
@@ -307,20 +306,15 @@ export interface InvoiceVatBlock {
  * Builds the invoice's VAT table, recomputing the breakdown fresh from the order's frozen lines —
  * same reasoning `orderTotal` already applies to the grand total in this file: the controller may
  * hand this an untransformed document, so nothing here may assume a derived field was already
- * computed. `undefined` on a pre-VAT order, which is the caller's signal to render no VAT block.
+ * computed.
  * @param locale - the document's language, for `Intl.NumberFormat` — every amount below goes
  *   through it, in `invoiceCurrency()`'s configured currency
  * @param t - this document's translator, already fixed to `locale`
  * @param order - the order the invoice is for
- * @returns the VAT block, or `undefined` when the order carries no VAT figures
+ * @returns the VAT block
  */
-const buildVatBlock = (
-    locale: string,
-    t: TFunction,
-    order: InvoiceOrder
-): InvoiceVatBlock | undefined => {
+const buildVatBlock = (locale: string, t: TFunction, order: InvoiceOrder): InvoiceVatBlock => {
     const breakdown = orderTaxBreakdown(order);
-    if (!breakdown) return undefined;
 
     // One instance, reused for every amount on the invoice — this is a real allocation
     // (constructing a Collator/PluralRules under the hood), not worth paying once per cell.
@@ -348,7 +342,7 @@ const buildVatBlock = (
         quantity: item.quantity,
         unitPrice: money.format(item.product.price),
         netAmount: money.format(breakdown.lines[index].netAmount),
-        taxRateLabel: percentFormat.format(item.product.taxRate ?? 0),
+        taxRateLabel: percentFormat.format(item.product.taxRate),
         taxAmount: money.format(breakdown.lines[index].taxAmount),
         grossAmount: money.format(breakdown.lines[index].grossAmount)
     }));
