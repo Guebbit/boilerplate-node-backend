@@ -13,7 +13,8 @@ import {
     type FeedbackRequest,
     type SearchFeedbackRequestsRequest,
     type UpdateFeedbackRequestStatusRequest,
-    type CreateFeedbackRequest
+    type CreateFeedbackRequest,
+    type ExportFeedbackTicket
 } from '@types';
 import type { FeedbackRequestDocument } from './model';
 import { feedbackRequestRepository } from './repository';
@@ -261,6 +262,35 @@ export const findOwnTickets = (email: string): Promise<Lean<FeedbackRequestDocum
         MAX_CONFIGURED_PAGE_SIZE
     );
 
+/**
+ * {@link ExportFeedbackTicket}, built from the real document — the one place `adminNotes` is
+ * dropped: that field is staff's internal assessment of the ticket, not the submitter's data, and
+ * Art. 15(4) protects the rights of others (whoever wrote the note) the same way it protects the
+ * submitter's own. A REAL plain object, not a type-level `Omit` on the Mongoose document: the
+ * document's own `toJSON()` carries no such omission, so returning the document itself would
+ * still serialize `adminNotes` regardless of what a narrower TypeScript type here claimed.
+ */
+const toExportFeedback = (ticket: Lean<FeedbackRequestDocument>): ExportFeedbackTicket => ({
+    id: String(ticket._id),
+    ...(ticket.name === undefined ? {} : { name: ticket.name }),
+    email: ticket.email,
+    subject: ticket.subject,
+    message: ticket.message,
+    status: ticket.status,
+    ...(ticket.respondedAt ? { respondedAt: ticket.respondedAt.toISOString() } : {}),
+    ...(ticket.createdAt ? { createdAt: ticket.createdAt.toISOString() } : {})
+});
+
+/**
+ * {@link findOwnTickets}, shaped for the account data export — the field mapping `module.ts` used
+ * to carry inline, moved beside the read it maps. The `NODE_EXPORT_INCLUDE_FEEDBACK` gate stays in
+ * `module.ts`: whether to call this at all is a wiring decision, not this function's to make.
+ *
+ * @param email - the caller's own email, matched exactly
+ */
+export const findOwnTicketsForExport = (email: string): Promise<ExportFeedbackTicket[]> =>
+    findOwnTickets(email).then((tickets) => tickets.map((ticket) => toExportFeedback(ticket)));
+
 /** The module's barrel export — used by the controllers in `./controllers`. */
 export const feedbackRequestService = {
     create,
@@ -268,5 +298,6 @@ export const feedbackRequestService = {
     updateStatus,
     updateStatusById,
     remove,
-    findOwnTickets
+    findOwnTickets,
+    findOwnTicketsForExport
 };
