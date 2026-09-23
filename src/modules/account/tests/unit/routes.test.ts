@@ -7,7 +7,7 @@
  * the credential.
  */
 
-import { routeTable, routeSignatures, routerMiddleware, guardsOn, chainOf } from '@tests/routes';
+import { routeSignatures, routerMiddleware, guardsOn, chainOf } from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
