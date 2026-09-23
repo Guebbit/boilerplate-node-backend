@@ -17,9 +17,9 @@ import type { Payment, AuthContext } from '@types';
 import { orderService, isPayable } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { paymentRepository } from '../repository';
+import { CONFIRMABLE_PAYMENT_STATUSES } from '../model';
 import type { PaymentDocument } from '../model';
 import { callerScope } from './scope';
-import { CONFIRMABLE_PAYMENT_STATUSES } from './settlement';
 import { REFUNDABLE_PAYMENT_STATUS } from './refunds';
 
 /**

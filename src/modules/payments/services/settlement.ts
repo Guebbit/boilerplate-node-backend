@@ -30,25 +30,11 @@ import {
     type ProviderWebhookEvent
 } from '../providers';
 import { claimWebhookEvent, releaseWebhookEvent, paymentRepository } from '../repository';
+import { CONFIRMABLE_PAYMENT_STATUSES } from '../model';
 import type { PaymentDocument } from '../model';
 import { callerScope } from './scope';
 import { performRefund } from './refunds';
 import { notPayable } from './errors';
-
-/**
- * The payment statuses the confirm endpoint accepts. `declined` is here because a decline is
- * retryable with another method — the one place this lifecycle goes backwards. `requires_action`
- * and `processing` are NOT: a payment already in flight at the provider is resolved by re-reading
- * it ({@link syncPayment}), never by attaching a second method to it.
- *
- * An ARRAY, not a `Set`: this rule is read both as a membership test and as the `$in` of the
- * conditional writes that re-assert it while mongod holds the document, and a `Set` would need
- * re-spreading for the second.
- */
-export const CONFIRMABLE_PAYMENT_STATUSES: readonly PaymentStatus[] = [
-    'requires_confirmation',
-    'declined'
-];
 
 /**
  * The statuses a settlement may move a payment away from — every non-terminal one. `succeeded` and

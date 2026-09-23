@@ -6,7 +6,12 @@
  * because Mongoose's generics are too large for TypeScript to infer at an export boundary (TS7056).
  */
 
-import { paymentModel, paymentWebhookEventModel, applyPaymentTransform } from './model';
+import {
+    paymentModel,
+    paymentWebhookEventModel,
+    applyPaymentTransform,
+    CONFIRMABLE_PAYMENT_STATUSES
+} from './model';
 import { PaymentStatus, PaymentMethod } from '@types';
 import type { PaymentDocument } from './model';
 import {
@@ -22,6 +27,44 @@ import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
  * id, never part of the wire contract — so the search wire type drops it too.
  */
 export type PaymentWire = Omit<Wire<PaymentDocument>, 'providerRef'>;
+
+/**
+ * The mechanics {@link paymentRepository.upsertIntent} and {@link paymentRepository.upsertOffline}
+ * share: the same filter — an order's row still sitting at a status nobody has paid past — the same
+ * upsert options, and the same duplicate-key collision mapped to `null` rather than thrown, since
+ * that collision IS the answer "this order's money already moved". Callers differ only in what they
+ * `$set`/`$unset` and whose id lands on an insert.
+ * @param orderId - the order the payment belongs to
+ * @param userId - the payer to attach on INSERT only; absent writes no `userId` at all — an intent
+ *   or offline record against an order whose account is already erased pays for real, with no
+ *   payer to record
+ * @param set - this caller's own `$set` fields
+ * @param unset - this caller's own `$unset` fields, when it has any
+ */
+const upsertConfirmable = (
+    orderId: string,
+    userId: string | undefined,
+    set: Record<string, unknown>,
+    unset?: Record<string, 1>
+): Promise<PaymentDocument | null> =>
+    paymentModel
+        .findOneAndUpdate(
+            {
+                orderId: toObjectId(orderId),
+                status: { $in: [...CONFIRMABLE_PAYMENT_STATUSES] }
+            },
+            {
+                $set: set,
+                ...(unset ? { $unset: unset } : {}),
+                $setOnInsert: userId === undefined ? {} : { userId: toObjectId(userId) }
+            },
+            { upsert: true, returnDocument: 'after' }
+        )
+        .exec()
+        .catch((error: unknown) => {
+            if (isDuplicateKey(error)) return null;
+            throw error;
+        });
 
 /** Payment CRUD, ownership scoping, and the intent/status writes the service depends on. */
 export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
@@ -134,25 +177,11 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * moved", surfaced as `null` rather than an exception.
      */
     upsertIntent: (orderId, userId, data) =>
-        paymentModel
-            .findOneAndUpdate(
-                {
-                    orderId: toObjectId(orderId),
-                    status: { $in: ['requires_confirmation', 'declined'] }
-                },
-                {
-                    $set: { ...data, method: PaymentMethod.card, status: 'requires_confirmation' },
-                    // Absent rather than `toObjectId(undefined)`: an intent against an order
-                    // whose account is already erased pays for real, with no payer to record.
-                    $setOnInsert: userId === undefined ? {} : { userId: toObjectId(userId) }
-                },
-                { upsert: true, returnDocument: 'after' }
-            )
-            .exec()
-            .catch((error: unknown) => {
-                if (isDuplicateKey(error)) return null;
-                throw error;
-            }),
+        upsertConfirmable(orderId, userId, {
+            ...data,
+            method: PaymentMethod.card,
+            status: 'requires_confirmation'
+        }),
 
     /**
      * Create or refresh the payment record for an order paid by hand — same filter as
@@ -162,24 +191,12 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * order to `paid`, so this record never invents its own copy of that move.
      */
     upsertOffline: (orderId, userId, data) =>
-        paymentModel
-            .findOneAndUpdate(
-                {
-                    orderId: toObjectId(orderId),
-                    status: { $in: ['requires_confirmation', 'declined'] }
-                },
-                {
-                    $set: { ...data, provider: 'manual', status: 'requires_confirmation' },
-                    $unset: { providerRef: 1, cardLast4: 1 },
-                    $setOnInsert: userId === undefined ? {} : { userId: toObjectId(userId) }
-                },
-                { upsert: true, returnDocument: 'after' }
-            )
-            .exec()
-            .catch((error: unknown) => {
-                if (isDuplicateKey(error)) return null;
-                throw error;
-            }),
+        upsertConfirmable(
+            orderId,
+            userId,
+            { ...data, provider: 'manual', status: 'requires_confirmation' },
+            { providerRef: 1, cardLast4: 1 }
+        ),
 
     /**
      * The status-machine primitive, same shape as the order repository's: the `$in` rides in

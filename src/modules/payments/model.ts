@@ -147,6 +147,26 @@ export const applyPaymentTransform = applySerialization(paymentSchema, {
  */
 export const paymentModel = model<PaymentDocument, PaymentModel>('Payment', paymentSchema);
 
+/**
+ * The payment statuses the confirm endpoint accepts, and the one filter `./repository`'s upsert
+ * writes race against. `declined` is here because a decline is retryable with another method — the
+ * one place this lifecycle goes backwards. `requires_action` and `processing` are NOT: a payment
+ * already in flight at the provider is resolved by re-reading it (`syncPayment`), never by
+ * attaching a second method to it.
+ *
+ * Lives here, not in `./services/settlement.ts` where it once did: `./repository` needs it too, for
+ * the exact same filter, and `./services/settlement.ts` already imports `paymentRepository` — a
+ * repository import back the other way would be a cycle. `model.ts` sits below both.
+ *
+ * An ARRAY, not a `Set`: this rule is read both as a membership test and as the `$in` of the
+ * conditional writes that re-assert it while mongod holds the document, and a `Set` would need
+ * re-spreading for the second.
+ */
+export const CONFIRMABLE_PAYMENT_STATUSES: readonly PaymentStatus[] = [
+    'requires_confirmation',
+    'declined'
+];
+
 /** How long a processed webhook event id is remembered. Past any provider's retry window. */
 const WEBHOOK_EVENT_RETENTION_DAYS = 30;
 
