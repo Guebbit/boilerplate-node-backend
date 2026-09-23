@@ -19,6 +19,7 @@ import path from 'node:path';
 import YAML from 'yaml';
 import { sampleForPattern, usesLookaround } from './pattern-samples';
 
+/** The HTTP methods this walk enumerates — every verb the spec can declare an operation under. */
 export type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
 
 const METHODS: HttpMethod[] = ['get', 'post', 'put', 'patch', 'delete'];
@@ -46,6 +47,7 @@ export interface SchemaNode {
     $ref?: string;
 }
 
+/** One endpoint the spec declares, resolved down to what the fuzzer needs to call it. */
 export interface Operation {
     /** Templated path exactly as the spec declares it, e.g. `/products/{id}`. */
     path: string;

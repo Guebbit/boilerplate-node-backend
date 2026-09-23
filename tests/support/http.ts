@@ -16,6 +16,7 @@ import { app } from '../../src/app';
 import { createUser, createAdminUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import type { UserDocument } from '@modules/users';
 
+/** A fresh supertest agent against the app, for one request. */
 export const api = () => request(app);
 
 /** What every `authenticateAs*` helper resolves to — the account and its bearer token. */

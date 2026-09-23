@@ -51,6 +51,7 @@ const numericStringFor = (value: string): string =>
 // eslint-disable-next-line unicorn/prefer-bigint-literals -- a literal needs ES2020; tsconfig targets ES6
 const MOD97_DIVISOR = BigInt(97);
 
+/** The MOD 97-10 remainder of a payload plus its check digits, per {@link MOD97_DIVISOR}. */
 const remainder97 = (payload: string, checkDigits: string): bigint =>
     BigInt(numericStringFor(`${payload}RF${checkDigits}`)) % MOD97_DIVISOR;
 

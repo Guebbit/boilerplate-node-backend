@@ -54,6 +54,7 @@ export interface MembershipDocument extends Document {
     updatedAt?: Date;
 }
 
+/** The shop schema backing {@link TenantDocument}. */
 const tenantSchema = new Schema<TenantDocument>(
     {
         slug: { type: String, required: true, unique: true, lowercase: true, trim: true },
@@ -62,6 +63,7 @@ const tenantSchema = new Schema<TenantDocument>(
     { timestamps: true }
 );
 
+/** The membership schema backing {@link MembershipDocument}. */
 const membershipSchema = new Schema<MembershipDocument>(
     {
         userId: { type: String, required: true },

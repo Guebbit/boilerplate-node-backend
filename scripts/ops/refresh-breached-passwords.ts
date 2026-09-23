@@ -65,6 +65,7 @@ const downloadCorpus = async (): Promise<string[]> => {
     return text.split('\n').map((line) => line.trimEnd());
 };
 
+/** Downloads the corpus, filters it to the contract's password shape, and writes the sorted survivors. */
 const main = async (): Promise<void> => {
     const pattern = passwordPatternFromContract();
     logger.info({ message: 'Downloading breach corpus.', url: SOURCE_URL });

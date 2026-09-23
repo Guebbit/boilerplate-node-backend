@@ -358,6 +358,10 @@ export const userRepository: Repository<UserDocument> & {
             .exec()
             .then(({ matchedCount }) => matchedCount > 0),
 
+    /**
+     * Every account inactive past the warning threshold, never yet warned —
+     * `scripts/ops/reap-inactive-accounts.ts`'s first stage.
+     */
     findInactiveUnwarned: (cutoff: Date) =>
         userModel
             .find({
@@ -368,6 +372,10 @@ export const userRepository: Repository<UserDocument> & {
             })
             .exec(),
 
+    /**
+     * Every account warned, and still inactive past the grace window — the reaper's soft-delete
+     * stage.
+     */
     findWarnedStillInactive: (cutoff: Date) =>
         userModel
             .find({
@@ -377,6 +385,7 @@ export const userRepository: Repository<UserDocument> & {
             })
             .exec(),
 
+    /** Every account soft-deleted by the reaper past ITS OWN grace window — the hard-delete stage. */
     findReaperSoftDeletedPastGrace: (cutoff: Date) =>
         userModel
             .find({

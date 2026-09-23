@@ -25,11 +25,13 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { resolveFrontendPath, DEFAULT_FRONTEND_PATH } from './pairing/paired-frontend-path';
 
+/** The repo root — every step below runs from here, not from the caller's cwd. */
 const REPO_ROOT = path.resolve(__dirname, '..');
 
 /** `--no-sync` regenerates without touching the paired repo. */
 const skipSync = process.argv.includes('--no-sync');
 
+/** One entry in the {@link STEPS} chain. */
 interface Step {
     /** The npm script to run. */
     script: string;

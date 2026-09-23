@@ -94,6 +94,7 @@ const bootAppInProcess = () =>
         return imported.bootInfrastructure().then(() => imported.app);
     });
 
+/** Boots the app, refuses the unsafe cases, then builds and applies the named scenario. */
 async function seed() {
     /* A boot-time seeder that can drop or overwrite a production database is a footgun. */
     if (process.env.NODE_ENV === 'production') {
