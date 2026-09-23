@@ -11,6 +11,7 @@
 
 import { randomBytes, createHash } from 'node:crypto';
 import type { Response } from 'express';
+import { secureCookieOptions } from '../session/cookies';
 
 /** The CSRF cookie — cleared by both a successful and a failed callback. */
 export const OAUTH_STATE_COOKIE = 'oauth_state';
@@ -40,17 +41,11 @@ export const codeChallengeOf = (verifier: string): string =>
     createHash('sha256').update(verifier).digest('base64url');
 
 /**
- * Flags shared by both OAuth cookies, `httpOnly`/`sameSite: 'lax'` mirroring
- * `createRefreshCookie`'s — `secure` only in production, so local http development still works.
- * A function, not a constant, so each call reads `NODE_ENV` fresh rather than freezing it at
- * import time.
+ * Flags shared by both OAuth cookies — `secureCookieOptions()` plus this attempt's own TTL.
  */
 const oauthCookieOptions = () => ({
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax' as const,
-    maxAge: OAUTH_COOKIE_TTL_MS,
-    path: '/'
+    ...secureCookieOptions(),
+    maxAge: OAUTH_COOKIE_TTL_MS
 });
 
 /** Set the state cookie for one login attempt. */

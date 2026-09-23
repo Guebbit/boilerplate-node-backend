@@ -11,21 +11,10 @@
  */
 
 import type { Request, Response } from 'express';
+import { secureCookieOptions } from '../session/cookies';
 
 /** The MFA challenge cookie — single-attempt, cleared once the challenge is spent. */
 export const MFA_CHALLENGE_COOKIE = 'oauth_mfa_challenge';
-
-/**
- * Flags shared by every write to {@link MFA_CHALLENGE_COOKIE} — `httpOnly`/`sameSite: 'lax'`
- * mirroring `oauth/state.ts`'s cookies. A function, not a constant, so each call reads `NODE_ENV`
- * fresh rather than freezing it at import time.
- */
-const mfaChallengeCookieOptions = () => ({
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax' as const,
-    path: '/'
-});
 
 /**
  * Set the challenge cookie for one OAuth 2FA continuation. Its lifetime tracks the challenge's
@@ -43,12 +32,12 @@ export const createMfaChallengeCookie = (
     expiresAt: string
 ): void => {
     const maxAge = Math.max(0, new Date(expiresAt).getTime() - Date.now());
-    response.cookie(MFA_CHALLENGE_COOKIE, challenge, { ...mfaChallengeCookieOptions(), maxAge });
+    response.cookie(MFA_CHALLENGE_COOKIE, challenge, { ...secureCookieOptions(), maxAge });
 };
 
 /** Clear the challenge cookie — called once it has been spent, success or failure. */
 export const destroyMfaChallengeCookie = (response: Response): void => {
-    response.clearCookie(MFA_CHALLENGE_COOKIE, mfaChallengeCookieOptions());
+    response.clearCookie(MFA_CHALLENGE_COOKIE, secureCookieOptions());
 };
 
 /** The challenge cookie on an incoming request, when one was set. */

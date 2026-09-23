@@ -10,6 +10,22 @@ import type { Response } from 'express';
 import { type RefreshTokenExpiryTime, getExpiryTimeMilliseconds } from './config';
 
 /**
+ * Flags shared by every cookie this module treats as a credential — `createRefreshCookie`,
+ * `destroyRefreshCookie`, and (via `../oauth/state.ts` and `../oauth/mfa-redirect.ts`) the
+ * OAuth state/verifier/MFA-challenge cookies: unreadable from script (`httpOnly`), HTTPS-only
+ * once in production (`secure`), confined to same-site navigation (`sameSite: 'lax'`), and sent
+ * on every path this app serves (`path: '/'`) since the endpoint that sets one is rarely the
+ * endpoint that reads or clears it. A function, not a constant, so each call reads `NODE_ENV`
+ * fresh rather than freezing it at import time.
+ */
+export const secureCookieOptions = () => ({
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax' as const,
+    path: '/'
+});
+
+/**
  * Set a secure httpOnly cookie containing the refresh token.
  *
  * @param remember - a tier (looked up against env), OR a raw `maxAge` in milliseconds — a
@@ -22,31 +38,18 @@ export const createRefreshCookie = (
     remember?: RefreshTokenExpiryTime | number
 ) => {
     response.cookie('jwt', token, {
-        // Unreadable from script: the refresh token is the long-lived credential.
-        httpOnly: true,
-        // Only over HTTPS in production, so local http development still works.
-        secure: process.env.NODE_ENV === 'production',
-        // Survives a top-level navigation back into the app; refuses cross-site form posts.
-        sameSite: 'lax',
+        ...secureCookieOptions(),
         // Expires when the token does, rather than outliving it.
-        maxAge: typeof remember === 'number' ? remember : getExpiryTimeMilliseconds(remember),
-        // The refresh and logout endpoints are on different paths — send it everywhere.
-        path: '/'
+        maxAge: typeof remember === 'number' ? remember : getExpiryTimeMilliseconds(remember)
     });
 };
 
 /**
- * Destroy the refresh token cookie.
+ * Destroy the refresh token cookie. Must match the flags `createRefreshCookie` set — a browser
+ * matches a clear by path/domain/attributes, not by name alone.
  */
 export const destroyRefreshCookie = (response: Response) => {
-    response.clearCookie('jwt', {
-        // Must match the flags `createRefreshCookie` set — a browser matches a clear by
-        // path/domain/attributes, not by name alone.
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/'
-    });
+    response.clearCookie('jwt', secureCookieOptions());
 };
 
 /**
