@@ -12,6 +12,7 @@ import type {
     UpsertTranslationsRequest
 } from '@types';
 import { getFallbackLocale, t } from '@infrastructure/i18n';
+import type { TranslatableTarget } from '@kernel/registry';
 import type { TranslationWritePlan, TranslationWriteSlot } from '@kernel/translation';
 import {
     generateReject,
@@ -43,6 +44,24 @@ const entityTypeUnknown = (entityType: string): ResponseReject =>
     generateReject(422, [t('locales.error-entity-type-unknown', { entityType })]);
 
 /**
+ * One `VALIDATION_ERROR` rejection for a single locale slot — the shape every {@link planSlot}
+ * refusal shares, differing only in the message key, its interpolation params, and which
+ * `details.field` path names the offending part of the payload.
+ */
+const slotRejection = (
+    messageKey: string,
+    parameters: Record<string, string> | undefined,
+    field: string
+): ResponseReject =>
+    generateReject(422, [
+        {
+            code: 'VALIDATION_ERROR',
+            message: t(messageKey, parameters),
+            details: { field }
+        }
+    ]);
+
+/**
  * One locale slot's outcome, before any write happens — the whole batch validates before anything
  * writes, so a rejected slot never leaves a partial edit behind.
  */
@@ -63,55 +82,30 @@ const planSlot = async (
 ): Promise<PlannedWrite | ResponseReject> => {
     if (value === null) {
         if (locale === fallbackLocale)
-            return generateReject(422, [
-                {
-                    code: 'VALIDATION_ERROR',
-                    message: t('locales.error-translation-fallback-required', { locale }),
-                    details: { field: locale }
-                }
-            ]);
+            return slotRejection(
+                'locales.error-translation-fallback-required',
+                { locale },
+                locale
+            );
         return { locale, kind: 'delete' };
     }
 
     const language = await localeRepository.findByTag(locale);
     if (!language)
-        return generateReject(422, [
-            {
-                code: 'VALIDATION_ERROR',
-                message: t('locales.error-translation-locale-unknown', { locale }),
-                details: { field: locale }
-            }
-        ]);
+        return slotRejection('locales.error-translation-locale-unknown', { locale }, locale);
     if (!language.active)
-        return generateReject(422, [
-            {
-                code: 'VALIDATION_ERROR',
-                message: t('locales.error-translation-locale-inactive', { locale }),
-                details: { field: locale }
-            }
-        ]);
+        return slotRejection('locales.error-translation-locale-inactive', { locale }, locale);
 
     if (Object.keys(value.fields).length === 0)
-        return generateReject(422, [
-            {
-                code: 'VALIDATION_ERROR',
-                message: t('locales.error-translation-fields-empty'),
-                details: { field: locale }
-            }
-        ]);
+        return slotRejection('locales.error-translation-fields-empty', undefined, locale);
 
     const unknownField = Object.keys(value.fields).find((field) => !fields.includes(field));
     if (unknownField !== undefined)
-        return generateReject(422, [
-            {
-                code: 'VALIDATION_ERROR',
-                message: t('locales.error-translation-field-unknown', {
-                    field: unknownField,
-                    entityType
-                }),
-                details: { field: `${locale}.${unknownField}` }
-            }
-        ]);
+        return slotRejection(
+            'locales.error-translation-field-unknown',
+            { field: unknownField, entityType },
+            `${locale}.${unknownField}`
+        );
 
     return { locale, kind: 'upsert', fields: value.fields, origin: value.origin ?? 'human' };
 };
@@ -127,12 +121,19 @@ const isRejection = (value: unknown): value is ResponseReject =>
  * this runs the same whether the entity already exists or is still being created in the same
  * request (`productService.write`'s `POST /products`, notably).
  *
+ * Returns the resolved `target` alongside the plan, so a caller that needs it afterwards — its
+ * cache tag, its collection — looks it up here once rather than repeating the same
+ * {@link translatableTarget} call itself.
+ *
  * @returns the plan, or the first rejection encountered
  */
 const planTranslationWrites = async (
     entityType: string,
     payload: UpsertTranslationsRequest
-): Promise<{ fallbackLocale: string; planned: PlannedWrite[] } | ResponseReject> => {
+): Promise<
+    | { target: TranslatableTarget; fallbackLocale: string; planned: PlannedWrite[] }
+    | ResponseReject
+> => {
     const target = translatableTarget(entityType);
     if (!target) return entityTypeUnknown(entityType);
 
@@ -145,7 +146,7 @@ const planTranslationWrites = async (
         planned.push(result);
     }
 
-    return { fallbackLocale, planned };
+    return { target, fallbackLocale, planned };
 };
 
 /**
@@ -254,24 +255,6 @@ export const writeForPort = (
         translatedBy
     );
 
-/** Every locale row an entity has, in the admin shape. */
-export const getEntityTranslations = async (
-    entityType: string,
-    entityId: string
-): Promise<ResponseSuccess<EntityTranslationsResult> | ResponseReject> => {
-    const target = translatableTarget(entityType);
-    if (!target) return entityTypeUnknown(entityType);
-
-    const rows = await translationRepository.findEntityTranslations(entityType, entityId);
-
-    return generateSuccess({
-        entityType,
-        entityId,
-        translations: translationRepository.normalize(rows),
-        fields: target.fields
-    });
-};
-
 /**
  * Merge a PATCH into an entity's translations: upsert what is an object, delete what is `null`,
  * leave alone what is absent.
@@ -285,12 +268,9 @@ export const upsertEntityTranslations = async (
     payload: UpsertTranslationsRequest,
     context?: CallerContext
 ): Promise<ResponseSuccess<EntityTranslationsResult> | ResponseReject> => {
-    const target = translatableTarget(entityType);
-    if (!target) return entityTypeUnknown(entityType);
-
     const plan = await planTranslationWrites(entityType, payload);
     if (isRejection(plan)) return plan;
-    const { fallbackLocale, planned } = plan;
+    const { target, fallbackLocale, planned } = plan;
 
     const translatedBy = context?.caller.id ?? undefined;
     // Writes the rows AND the derived index column — see `writePlannedTranslations`'s docblock.
@@ -308,6 +288,17 @@ export const upsertEntityTranslations = async (
             deleted: planned.filter((slot) => slot.kind === 'delete').map((s) => s.locale)
         }
     });
+
+    return getEntityTranslations(entityType, entityId);
+};
+
+/** Every locale row an entity has, in the admin shape. */
+export const getEntityTranslations = async (
+    entityType: string,
+    entityId: string
+): Promise<ResponseSuccess<EntityTranslationsResult> | ResponseReject> => {
+    const target = translatableTarget(entityType);
+    if (!target) return entityTypeUnknown(entityType);
 
     const rows = await translationRepository.findEntityTranslations(entityType, entityId);
 
