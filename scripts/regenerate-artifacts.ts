@@ -76,6 +76,11 @@ const STEPS: readonly Step[] = [
             "docs/tools/security.md's rate-limit budget table, read off every module's own manifest"
     },
     {
+        script: 'docs:audit-actions',
+        because:
+            "docs/tools/winston.md's audit action table, read off every module's audit.ts and its call sites' target types"
+    },
+    {
         script: 'docker:dockerignore',
         because: 'docker/Dockerfile.dockerignore, from the root .dockerignore (.git kept IN)'
     }

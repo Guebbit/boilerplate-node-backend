@@ -72,6 +72,98 @@ you delete a module, and `infrastructure` never names one. `tests/cross-cutting/
 what keeps two modules from claiming the same string, or inventing one that breaks the dotted
 convention log backends filter on.
 
+### Every action
+
+`npm run docs:audit-actions`, checked by `npm run check:docs-audit-actions`. Every action this
+build can emit, its owning module, and — where a call site names one — the `target_type` it
+audits. `—` means no call site attaches a target; `(varies)` means the action is fired against more
+than one, from a generic helper that takes the target as a runtime parameter.
+
+<!-- audit-actions:start -->
+
+| Module           | Action                                      | Value                                       | Target type            |
+| ---------------- | ------------------------------------------- | ------------------------------------------- | ---------------------- |
+| `access`         | `ROLE_ASSIGNED`                             | `access.role.assigned`                      | —                      |
+| `access`         | `ROLE_REVOKED`                              | `access.role.revoked`                       | —                      |
+| `account`        | `AUTH_2FA_BACKUP_CODES_REGENERATED`         | `auth.two_factor.backup_codes_regenerated`  | —                      |
+| `account`        | `AUTH_2FA_CHALLENGE_FAILED`                 | `auth.two_factor.challenge_failed`          | —                      |
+| `account`        | `AUTH_2FA_CODE_SENT`                        | `auth.two_factor.code_sent`                 | —                      |
+| `account`        | `AUTH_2FA_DISABLED`                         | `auth.two_factor.disabled`                  | —                      |
+| `account`        | `AUTH_2FA_ENROLLED`                         | `auth.two_factor.enrolled`                  | —                      |
+| `account`        | `AUTH_ACCOUNT_DELETE_COMPLETED`             | `auth.account_delete.completed`             | —                      |
+| `account`        | `AUTH_ACCOUNT_DELETE_REQUESTED`             | `auth.account_delete.requested`             | —                      |
+| `account`        | `AUTH_DATA_EXPORTED`                        | `auth.data_export.completed`                | —                      |
+| `account`        | `AUTH_EMAIL_CHANGE_COMPLETED`               | `auth.email_change.completed`               | —                      |
+| `account`        | `AUTH_EMAIL_CHANGE_REQUESTED`               | `auth.email_change.requested`               | —                      |
+| `account`        | `AUTH_EMAIL_VERIFY_COMPLETED`               | `auth.email_verify.completed`               | —                      |
+| `account`        | `AUTH_EMAIL_VERIFY_REQUESTED`               | `auth.email_verify.requested`               | —                      |
+| `account`        | `AUTH_LOGGED_OUT`                           | `auth.logout`                               | —                      |
+| `account`        | `AUTH_LOGGED_OUT_EVERYWHERE`                | `auth.logout_all`                           | —                      |
+| `account`        | `AUTH_LOGIN`                                | `auth.login`                                | —                      |
+| `account`        | `AUTH_OAUTH_FAILED`                         | `auth.oauth.failed`                         | —                      |
+| `account`        | `AUTH_OAUTH_LINKED`                         | `auth.oauth.linked`                         | —                      |
+| `account`        | `AUTH_PASSWORD_CHANGED`                     | `auth.password.changed`                     | —                      |
+| `account`        | `AUTH_PASSWORD_RESET_COMPLETED`             | `auth.password_reset.completed`             | —                      |
+| `account`        | `AUTH_PASSWORD_RESET_REQUESTED`             | `auth.password_reset.requested`             | —                      |
+| `account`        | `AUTH_PROFILE_UPDATED`                      | `auth.profile.updated`                      | —                      |
+| `account`        | `AUTH_REAUTHENTICATED`                      | `auth.reauth`                               | —                      |
+| `account`        | `AUTH_REFRESH_TOKEN_REUSE_DETECTED`         | `auth.refresh_token.reuse_detected`         | —                      |
+| `account`        | `AUTH_SESSION_REVOKED`                      | `auth.session.revoked`                      | —                      |
+| `account`        | `AUTH_SIGNED_UP`                            | `auth.signup`                               | —                      |
+| `account`        | `AUTH_TOKEN_EXPIRED_CLEANUP`                | `auth.token.expired_cleanup`                | —                      |
+| `account`        | `AUTH_TOKEN_REFRESHED`                      | `auth.token.refreshed`                      | —                      |
+| `api-keys`       | `ADMIN_API_KEY_MINTED`                      | `admin.api_key.minted`                      | `api_key`              |
+| `api-keys`       | `ADMIN_API_KEY_REVOKED`                     | `admin.api_key.revoked`                     | `api_key`              |
+| `cart`           | `USER_CART_ITEM_REMOVED`                    | `user.cart.item_removed`                    | `product`              |
+| `cart`           | `USER_CART_REORDERED`                       | `user.cart.reordered`                       | —                      |
+| `delivery`       | `ADMIN_ORDER_DELIVERED`                     | `admin.order.delivered`                     | —                      |
+| `delivery`       | `ADMIN_ORDER_SHIPPED`                       | `admin.order.shipped`                       | —                      |
+| `feedback`       | `ADMIN_FEEDBACK_DELETED`                    | `admin.feedback.deleted`                    | `feedback`             |
+| `feedback`       | `ADMIN_FEEDBACK_STATUS_UPDATED`             | `admin.feedback.status_updated`             | `feedback`             |
+| `feedback`       | `ADMIN_FEEDBACK_VIEWED`                     | `admin.feedback.viewed`                     | —                      |
+| `infrastructure` | `SECURITY_FORBIDDEN`                        | `security.forbidden`                        | —                      |
+| `infrastructure` | `SECURITY_RATE_LIMIT_HIT`                   | `security.rate_limit_hit`                   | —                      |
+| `infrastructure` | `SECURITY_REAUTH_REQUIRED`                  | `security.reauth_required`                  | —                      |
+| `infrastructure` | `SECURITY_UNAUTHORIZED`                     | `security.unauthorized`                     | —                      |
+| `inventory`      | `ADMIN_COMMIT_ORPHANED`                     | `admin.commit.orphaned`                     | `order`                |
+| `inventory`      | `ADMIN_RESERVATIONS_SWEPT`                  | `admin.reservations.swept`                  | `reservation`          |
+| `inventory`      | `ADMIN_STOCK_ADJUSTED`                      | `admin.stock.adjusted`                      | —                      |
+| `inventory`      | `ADMIN_STOCK_RECEIVED`                      | `admin.stock.received`                      | —                      |
+| `locales`        | `ADMIN_LOCALE_CREATED`                      | `admin.locale.created`                      | `locale`               |
+| `locales`        | `ADMIN_LOCALE_DELETED`                      | `admin.locale.deleted`                      | `locale`               |
+| `locales`        | `ADMIN_LOCALE_ENTRY_CREATED`                | `admin.locale_entry.created`                | `locale_entry`         |
+| `locales`        | `ADMIN_LOCALE_ENTRY_DELETED`                | `admin.locale_entry.deleted`                | `locale_entry`         |
+| `locales`        | `ADMIN_LOCALE_ENTRY_IMPORTED`               | `admin.locale_entry.imported`               | `locale`               |
+| `locales`        | `ADMIN_LOCALE_ENTRY_UPDATED`                | `admin.locale_entry.updated`                | `locale_entry`         |
+| `locales`        | `ADMIN_LOCALE_UPDATED`                      | `admin.locale.updated`                      | `locale`               |
+| `locales`        | `ADMIN_TRANSLATION_UPDATED`                 | `admin.translation.updated`                 | —                      |
+| `orders`         | `ORDER_CANCELLED`                           | `order.cancelled`                           | `order`                |
+| `orders`         | `ORDER_CREATED`                             | `order.created`                             | `order`                |
+| `orders`         | `ORDER_DELETED`                             | `order.deleted`                             | `order`                |
+| `orders`         | `ORDER_STATUS_OVERRIDDEN`                   | `order.status_overridden`                   | `order`                |
+| `orders`         | `ORDER_UPDATED`                             | `order.updated`                             | `order`                |
+| `payments`       | `ADMIN_PAYMENT_REFUNDED`                    | `admin.payment.refunded`                    | `order`                |
+| `payments`       | `PAYMENT_CONFIRMED`                         | `payment.confirmed`                         | —                      |
+| `payments`       | `PAYMENT_FAILED`                            | `payment.failed`                            | —                      |
+| `payments`       | `PAYMENT_RECORDED_OFFLINE`                  | `payment.recorded_offline`                  | `order`                |
+| `products`       | `ADMIN_PRODUCT_CREATED`                     | `admin.product.created`                     | `product`              |
+| `products`       | `ADMIN_PRODUCT_DELETED`                     | `admin.product.deleted`                     | `product`              |
+| `products`       | `ADMIN_PRODUCT_UPDATED`                     | `admin.product.updated`                     | `product`              |
+| `users`          | `ADMIN_USER_2FA_DISABLED`                   | `admin.user.two_factor_disabled`            | `user`                 |
+| `users`          | `ADMIN_USER_BANNED`                         | `admin.user.banned`                         | —                      |
+| `users`          | `ADMIN_USER_CREATED`                        | `admin.user.created`                        | `user`                 |
+| `users`          | `ADMIN_USER_ERASED`                         | `admin.user.erased`                         | `user`                 |
+| `users`          | `ADMIN_USER_SOFT_DELETED`                   | `admin.user.soft_deleted`                   | `user`                 |
+| `users`          | `ADMIN_USER_UNBANNED`                       | `admin.user.unbanned`                       | —                      |
+| `users`          | `ADMIN_USER_UPDATED`                        | `admin.user.updated`                        | —                      |
+| `webhooks`       | `ADMIN_WEBHOOK_DELIVERY_REPLAYED`           | `admin.webhook_delivery.replayed`           | `webhook_delivery`     |
+| `webhooks`       | `ADMIN_WEBHOOK_SUBSCRIPTION_CREATED`        | `admin.webhook_subscription.created`        | `webhook_subscription` |
+| `webhooks`       | `ADMIN_WEBHOOK_SUBSCRIPTION_DELETED`        | `admin.webhook_subscription.deleted`        | `webhook_subscription` |
+| `webhooks`       | `ADMIN_WEBHOOK_SUBSCRIPTION_UPDATED`        | `admin.webhook_subscription.updated`        | `webhook_subscription` |
+| `webhooks`       | `SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED` | `system.webhook_subscription.auto_disabled` | `webhook_subscription` |
+
+<!-- audit-actions:end -->
+
 ### Where an audit entry ends up
 
 Two destinations, from the single `emitAuditEvent` call:
