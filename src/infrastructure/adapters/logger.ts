@@ -19,8 +19,9 @@ import { environmentChoice } from '../runtime/environment';
 /**
  * Field names that must never be logged in clear text.
  *
- * A `Set`, not an array, so the recursive walk below is O(1) per key. Keys are stored and
- * compared lowercase, catching `Authorization`/`AUTHORIZATION`/`authorization` with one entry.
+ * A `Set`, not an array, so the recursive walk below is O(1) per key. Compared after
+ * {@link normalizeKey}, so one entry catches every spelling of it: `Authorization`,
+ * `new_password`/`newPassword`/`new-password`, `x-api-key`/`xApiKey`.
  *
  * Exported so `tests/unit/infrastructure/adapters/logger.test.ts` can assert every entry
  * individually rather than sampling — a redaction list is a security policy, and the entries
@@ -32,11 +33,15 @@ export const SENSITIVE_FIELDS = new Set([
     'confirm_password',
     'new_password',
     'old_password',
+    'current_password',
     'token',
     'access_token',
     'refresh_token',
     'authorization',
     'cookie',
+    'set-cookie',
+    'x-api-key',
+    'otp',
     'jwt',
     'secret',
     'api_key',
@@ -49,8 +54,23 @@ export const SENSITIVE_FIELDS = new Set([
     'ssn'
 ]);
 
+/**
+ * A key as the redaction lists compare it: lowercase, with `_` and `-` dropped. The codebase
+ * writes camelCase (`refreshToken`), HTTP writes kebab-case (`x-api-key`), and a list spelled one
+ * way must not miss the others. Still an exact match after that — `tokenCount` is not `token`.
+ *
+ * @param key - the key as the caller wrote it
+ */
+const normalizeKey = (key: string): string => key.toLowerCase().replaceAll(/[_-]/g, '');
+
+/** {@link SENSITIVE_FIELDS}, normalised once for the lookup. */
+const SENSITIVE_KEYS = new Set([...SENSITIVE_FIELDS].map((field) => normalizeKey(field)));
+
 /** Replacement marker. A fixed string (rather than deletion) keeps log shape stable for parsers. */
 const REDACTED = '[REDACTED]';
+
+/** Marker for a value already on the path being walked — a cycle, which would recurse forever. */
+const CIRCULAR = '[Circular]';
 
 /**
  * Personal-data field names. A DIFFERENT policy from
@@ -114,32 +134,58 @@ const applyPersonalFieldMode = (value: string): string => {
  * Exported for direct unit testing. Note it returns *copies* rather than mutating: the caller
  * usually passes live request/domain objects, and mutating them would corrupt the actual request.
  */
-export const redactSensitiveFields = (input: unknown): unknown => {
+export const redactSensitiveFields = (
+    input: unknown,
+    ancestors: WeakSet<object> = new WeakSet()
+): unknown => {
+    // An Error's fields are non-enumerable, so the walk below would turn one into `{}`: nested
+    // anywhere (`{ cause: error }`, `{ errors: [...] }`), it is serialised first.
+    if (input instanceof Error) return redactSensitiveFields(serializeError(input), ancestors);
+
+    if (input === null || typeof input !== 'object') return input;
+
+    // A caller may hand in a graph with a cycle (a request, a Mongoose document); without this,
+    // the walk overflows the stack inside the log call and takes the caller down with it.
+    if (ancestors.has(input)) return CIRCULAR;
+    ancestors.add(input);
+
     // Arrays first: `typeof [] === 'object'`, so without this branch an array would be
     // rebuilt as an object with numeric string keys.
-    if (Array.isArray(input)) return input.map((item) => redactSensitiveFields(item));
+    const result = Array.isArray(input)
+        ? input.map((item) => redactSensitiveFields(item, ancestors))
+        : redactEntries(input as Record<string, unknown>, ancestors);
 
-    // `typeof null === 'object'` in JS, hence the explicit null guard.
-    if (input !== null && typeof input === 'object') {
-        const result: Record<string, unknown> = {};
-        for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-            const lowerKey = key.toLowerCase();
-            // Credential first — SENSITIVE_FIELDS always wins if a name were ever on both lists.
-            // Personal-data fields only get the mode treatment when the value is itself a string;
-            // a nested object under a personal-sounding key (unlikely, but not impossible) still
-            // gets walked normally rather than silently skipped.
-            if (SENSITIVE_FIELDS.has(lowerKey)) result[key] = REDACTED;
-            else if (PERSONAL_FIELDS.has(lowerKey) && typeof value === 'string')
-                result[key] = applyPersonalFieldMode(value);
-            // Otherwise recurse so nested secrets (`{ user: { credentials: { password } } }`) and
-            // nested personal data are caught too.
-            else result[key] = redactSensitiveFields(value);
-        }
-        return result;
+    // Only the current path counts: the same object reached twice by different routes is
+    // shared, not circular.
+    ancestors.delete(input);
+    return result;
+};
+
+/**
+ * One object's entries, each redacted, hashed or walked — see {@link redactSensitiveFields}.
+ *
+ * @param input - the object to copy
+ * @param ancestors - the objects on the path to this one
+ */
+const redactEntries = (
+    input: Record<string, unknown>,
+    ancestors: WeakSet<object>
+): Record<string, unknown> => {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(input)) {
+        const normalized = normalizeKey(key);
+        // Credential first — SENSITIVE_FIELDS always wins if a name were ever on both lists.
+        // Personal-data fields only get the mode treatment when the value is itself a string;
+        // a nested object under a personal-sounding key (unlikely, but not impossible) still
+        // gets walked normally rather than silently skipped.
+        if (SENSITIVE_KEYS.has(normalized)) result[key] = REDACTED;
+        else if (PERSONAL_FIELDS.has(normalized) && typeof value === 'string')
+            result[key] = applyPersonalFieldMode(value);
+        // Otherwise recurse so nested secrets (`{ user: { credentials: { password } } }`) and
+        // nested personal data are caught too.
+        else result[key] = redactSensitiveFields(value, ancestors);
     }
-
-    // Primitives (string/number/boolean/null/undefined) pass through untouched.
-    return input;
+    return result;
 };
 
 /**
@@ -156,7 +202,9 @@ export const serializeError = (error: unknown): Record<string, unknown> => {
             message: error.message,
             // Stack traces expose absolute paths and dependency internals — useful locally,
             // an information leak in aggregated production logs.
-            ...(process.env.NODE_ENV !== 'production' && { stack: error.stack })
+            ...(process.env.NODE_ENV !== 'production' && { stack: error.stack }),
+            // The wrapped error is usually the one that explains the failure.
+            ...(error.cause !== undefined && { cause: error.cause })
         };
     }
     // `throw 'string'` and `throw { code: 1 }` are legal JS; keep *something* readable.

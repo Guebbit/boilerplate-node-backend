@@ -68,6 +68,43 @@ describe('redactSensitiveFields', () => {
         });
     });
 
+    it('redacts every spelling of a sensitive key — camelCase and kebab-case too', () => {
+        const redacted = redactSensitiveFields({
+            refreshToken: 'a',
+            newPassword: 'b',
+            'x-api-key': 'c',
+            xApiKey: 'd'
+        });
+
+        expect(redacted).toEqual({
+            refreshToken: '[REDACTED]',
+            newPassword: '[REDACTED]',
+            'x-api-key': '[REDACTED]',
+            xApiKey: '[REDACTED]'
+        });
+    });
+
+    it('marks a cycle instead of recursing until the stack overflows', () => {
+        const input: Record<string, unknown> = { name: 'carol' };
+        input.self = input;
+
+        expect(redactSensitiveFields(input)).toEqual({ name: 'carol', self: '[Circular]' });
+    });
+
+    it('keeps an object reached twice by different routes, which is shared rather than circular', () => {
+        const shared = { name: 'carol' };
+
+        expect(redactSensitiveFields({ a: shared, b: shared })).toEqual({ a: shared, b: shared });
+    });
+
+    it('serialises an Error nested anywhere, instead of logging it as {}', () => {
+        const redacted = redactSensitiveFields({ failures: [new Error('first')] }) as {
+            failures: Record<string, unknown>[];
+        };
+
+        expect(redacted.failures[0]).toMatchObject({ name: 'Error', message: 'first' });
+    });
+
     it('redacts inside arrays', () => {
         const input = [{ password: 'a' }, { password: 'b', name: 'carol' }];
         expect(redactSensitiveFields(input)).toEqual([
@@ -78,6 +115,12 @@ describe('redactSensitiveFields', () => {
 });
 
 describe('serializeError', () => {
+    it('keeps the wrapped cause, which usually explains the failure', () => {
+        const cause = new Error('connection refused');
+
+        expect(serializeError(new Error('save failed', { cause }))).toMatchObject({ cause });
+    });
+
     it('extracts name and message from an Error instance', () => {
         const result = serializeError(new Error('something went wrong'));
         expect(result.name).toBe('Error');
