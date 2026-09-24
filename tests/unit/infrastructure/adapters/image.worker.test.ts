@@ -97,7 +97,7 @@ beforeEach(() => {
 afterAll(() => jest.restoreAllMocks());
 
 describe('digestQuarantinedImage', () => {
-    it('reads, identifies, digests and thumbnails, promotes both, then clears the quarantine file', async () => {
+    it('reads, identifies, digests and thumbnails, then promotes both', async () => {
         primeSuccessfulDigest();
 
         await expect(digestQuarantinedImage('abc123.png', 'doc1')).resolves.toEqual({
@@ -111,7 +111,8 @@ describe('digestQuarantinedImage', () => {
         const stem = contentStemOf('doc1', Buffer.from('digested'));
         expect(mockedPromote).toHaveBeenCalledWith(stem, Buffer.from('digested'), 'image/png');
         expect(mockedPutDerivative).toHaveBeenCalledWith(stem, Buffer.from('thumbnail'));
-        expect(mockedRemoveQuarantined).toHaveBeenCalledWith('abc123.png');
+        // The caller clears quarantine, once the result is written back.
+        expect(mockedRemoveQuarantined).not.toHaveBeenCalled();
     });
 
     /* A magic-byte check already ran at upload time, but a payload smuggled past it, or bytes
@@ -150,6 +151,28 @@ describe('handleImageDigestJob', () => {
             thumbnailUrl: '/images/thumbs/v1/abc123.webp'
         });
         expect(mockedRemove).not.toHaveBeenCalled();
+    });
+
+    it('clears the quarantine file once the writeback has landed', async () => {
+        primeSuccessfulDigest();
+        writeback.mockResolvedValue(true);
+
+        await handleImageDigestJob(job);
+
+        expect(mockedRemoveQuarantined).toHaveBeenCalledWith('abc123.png');
+    });
+
+    /*
+     * The writeback's own database call failing is transient: the retry must still find the
+     * quarantined bytes, or every retry fails on a missing file and the upload is lost.
+     */
+    it('keeps the quarantine file when the writeback itself fails', async () => {
+        primeSuccessfulDigest();
+        writeback.mockRejectedValue(new Error('mongo unavailable'));
+
+        await expect(handleImageDigestJob(job)).rejects.toThrow('mongo unavailable');
+
+        expect(mockedRemoveQuarantined).not.toHaveBeenCalled();
     });
 
     /**

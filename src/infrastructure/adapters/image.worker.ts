@@ -81,7 +81,10 @@ export interface DigestedImageUrls {
  * declared here rather than imported from `kernel/registry.ts`'s `ImageTarget`. Kept structurally
  * identical to it on purpose: the two describe the same function.
  *
- * @returns whether a document actually matched `documentId` AND `key` and was updated
+ * @returns whether the document now holds `urls`: it matched `documentId` AND `key` and was
+ *   updated, or a duplicate run of this same job already wrote them. `false` makes the caller
+ *   delete the promoted files, so a duplicate run must answer `true` — its files are the winner's
+ *   (same owner, same bytes, same name), and deleting them takes the live image down.
  */
 export type ImageWriteback = (
     documentId: string,
@@ -109,9 +112,12 @@ export const registerImageWritebackResolver = (
 };
 
 /**
- * Run the whole digest pipeline for one quarantined upload: read, identify, digest, thumbnail,
- * promote both, then clear the quarantine file. Shared by the queued worker and the no-broker
- * inline fallback, so both run exactly one pipeline rather than two that could drift apart.
+ * Run the digest pipeline for one quarantined upload: read, identify, digest, thumbnail, promote
+ * both. Shared by the queued worker and the no-broker inline fallback, so both run exactly one
+ * pipeline rather than two that could drift apart.
+ *
+ * Leaves the quarantine file in place. The caller removes it once the result is durably written
+ * back: a writeback that fails is retried, and the retry has to read that file again.
  *
  * @param key - the quarantine key {@link imageStore.quarantine} returned
  * @param owner - salts the promoted stem — see {@link contentStem}. Pass the target document's
@@ -137,11 +143,7 @@ export const digestQuarantinedImage = (key: string, owner: string): Promise<Dige
                     imageStore.putDerivative(stem, thumbnail)
                 ]);
             })
-            .then(([imageUrl, thumbnailUrl]) =>
-                // Best-effort: the promoted files are what matters, and a leftover quarantine file
-                // is cleaned up later by `scripts/ops/reap-quarantine.ts` regardless.
-                imageStore.removeQuarantined(key).then(() => ({ imageUrl, thumbnailUrl }))
-            );
+            .then(([imageUrl, thumbnailUrl]) => ({ imageUrl, thumbnailUrl }));
     });
 
 /**
@@ -172,6 +174,9 @@ const settleWriteback = (
     collection: string
 ): Promise<void> =>
     writeback(documentId, key, urls).then((matched) => {
+        // Only now: the urls are durably on the document, so no retry will need these bytes.
+        // Best-effort — a leftover is swept by `scripts/ops/reap-quarantine.ts` regardless.
+        const clearQuarantine = imageStore.removeQuarantined(key);
         if (!matched) {
             // Stale job or deleted document: nobody will ever read these urls, so they are
             // unlinked rather than left as orphans nothing can find again.
@@ -183,10 +188,12 @@ const settleWriteback = (
                 key
             });
             // Stryker restore all
-            return imageStore.remove(urls.imageUrl).then(() => undefined);
+            return clearQuarantine
+                .then(() => imageStore.remove(urls.imageUrl))
+                .then(() => undefined);
         }
 
-        return invalidateCacheTagsLogged([collection]);
+        return clearQuarantine.then(() => invalidateCacheTagsLogged([collection]));
     });
 
 /**

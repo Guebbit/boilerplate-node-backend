@@ -320,7 +320,11 @@ const digestQuarantinedKeysInline = (
         .then((digested) => {
             request.storedImageUrls = digested.map((result) => result.imageUrl);
             request.storedThumbnailUrls = digested.map((result) => result.thumbnailUrl);
-            next();
+            // No writeback on this path — the urls ride the request into the write itself — so
+            // the quarantine files are done with as soon as the digest is.
+            return Promise.all(keys.map((key) => imageStore.removeQuarantined(key))).then(() =>
+                next()
+            );
         })
         .catch((error: unknown) =>
             Promise.all(keys.map((key) => imageStore.removeQuarantined(key))).then(() =>
