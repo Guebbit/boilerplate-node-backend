@@ -1,0 +1,34 @@
+{
+  "generated_at": "2026-09-23T20:41:31.897545+00:00",
+  "head": "ad8d8602b934caf7a98522006c1979366f243ac4",
+  "threshold": 5,
+  "layers": {
+    "execution": {
+      "artifact": ".2brain/EXECUTION.md"
+    },
+    "memory": {
+      "artifact": ".2brain/repo-memory.json",
+      "report": ".2brain/REPO_MEMORY.md",
+      "synced_entries": 0,
+      "count": 0,
+      "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "index": {
+      "artifact": ".2brain/repo-index.json",
+      "revision": "108dc8e1b2c67f13d4e3f994e910d3d22643201bf28cc35218cd2109147a1fe3",
+      "chunk_count": 5434,
+      "artifact_count": 1046,
+      "artifact_digest": "15ed3406d6c504509909ff226a0263377e01282d7d8162cf30285515c95c591c"
+    },
+    "context": {
+      "artifact": ".2brain/REPO_CONTEXT.md",
+      "injected": [
+        "/target-repo/CLAUDE.md"
+      ],
+      "ai_target": "claude",
+      "provider": "ollama",
+      "model": "qwen3.8:27b",
+      "mode": "wiki"
+    }
+  }
+}

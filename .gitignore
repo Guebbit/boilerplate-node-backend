@@ -78,3 +78,16 @@ src/types/asyncapi.generated.ts
 /*.md
 !/README.md
 !/CLAUDE.md
+
+# 2brain:start — regenerate with: 2brain <repo-path>
+.2brain/graphify-out/cache/
+.2brain/graphify-out/graph.json
+.2brain/graphify-out/manifest.json
+.2brain/graphify-out/.graphify_analysis.json
+.2brain/graphify-out/.graphify_labels.json*
+.2brain/graphify-out/graph.html
+.2brain/graphify-out/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/
+.2brain/modules/.modules-cache.json
+.2brain/repo-index.json
+.codeboarding/
+# 2brain:end
