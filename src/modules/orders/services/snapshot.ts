@@ -15,19 +15,19 @@ import type { OrderDocumentItem } from '../model';
  * Resolves each product's translatable fields (`title`/`description`) into `locale`, ready to
  * freeze into an order line snapshot.
  *
- * Takes plain objects, not hydrated documents: `{ ...plain, ...fields }` below only overlays the
- * translated fields correctly on real own properties, which a Mongoose document does not expose
- * the way a plain object does. `productService.findByIdRaw`'s `Lean<ProductDocument>` already
- * satisfies this; a caller holding a hydrated document (e.g. from `populate()`) must call
- * `.toObject()` — never `.toJSON()`, which turns `_id` into a string `id` and would make Mongoose
- * mint a FRESH `_id` when the result is assigned into `orderLineProductSchema`'s embedded path,
- * silently breaking `orderRepository.search`'s `productId` filter (`items.product._id`, see
- * `../repository.ts`) — before calling this.
- *
- * Binds `locale` explicitly with `runWithLocale` rather than reading the ambient one: order
- * creation resolves the BUYER's stored or requested locale, which can differ from whatever the
- * current request negotiated — out-of-band work must bind, not read ambient context. See
- * `docs/tools/i18n.md`.
+ * Plain objects: not hydrated documents. `{ ...plain, ...fields }` below only overlays the
+ *                translated fields correctly on real own properties, which a Mongoose document
+ *                does not expose the way a plain object does. `productService.findByIdRaw`'s
+ *                `Lean<ProductDocument>` already satisfies this; a caller holding a hydrated
+ *                document (e.g. from `populate()`) must call `.toObject()` before calling this —
+ *                never `.toJSON()`, which turns `_id` into a string `id` and would make Mongoose
+ *                mint a FRESH `_id` when the result is assigned into `orderLineProductSchema`'s
+ *                embedded path, silently breaking `orderRepository.search`'s `productId` filter
+ *                (`items.product._id`, see `../repository.ts`).
+ * Locale bind:   `runWithLocale` binds `locale` explicitly rather than reading the ambient one:
+ *                order creation resolves the BUYER's stored or requested locale, which can differ
+ *                from whatever the current request negotiated — out-of-band work must bind, not
+ *                read ambient context. See `docs/tools/i18n.md`.
  *
  * @param locale - the language to resolve into, already known by the caller
  * @param products - the catalogue rows about to be embedded as order lines, already plain

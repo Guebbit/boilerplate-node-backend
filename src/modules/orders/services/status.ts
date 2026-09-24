@@ -17,14 +17,18 @@ import { statusesLeadingTo } from '../domain';
 
 /**
  * Move an order to `to`, from whichever status `ORDER_LIFECYCLE` says a `system` report may
- * follow it from — read off the table itself via `statusesLeadingTo`, rather than a literal
- * restated here, so this can never fall out of sync with the table the way a hand-copied `from`
- * could. `ORDER_LIFECYCLE` permits exactly one `system` edge into each status this file moves to
- * (see the table's own comments on `paid`/`shipped`/`delivered`), which is what makes `[0]` below
- * sound rather than a guess — announces the move once it lands, the shape every move in this file
- * shares, since each is `system` reporting a fact another module already recorded, never a
- * request a human made. Conditional: two callers racing the same fact (a redelivered webhook, a
- * retried delivery scan) land, and announce, it exactly once.
+ * follow it from, and announce the move once it lands — the shape every move in this file shares,
+ * since each is `system` reporting a fact another module already recorded, never a request a
+ * human made.
+ *
+ * `from`:      read off the table itself via `statusesLeadingTo`, rather than a literal restated
+ *              here, so this can never fall out of sync with the table the way a hand-copied
+ *              `from` could. `ORDER_LIFECYCLE` permits exactly one `system` edge into each status
+ *              this file moves to (see the table's own comments on `paid`/`shipped`/`delivered`),
+ *              which is what makes `[0]` below sound rather than a guess.
+ * Conditional: two callers racing the same fact (a redelivered webhook, a retried delivery scan)
+ *              land, and announce, it exactly once.
+ *
  * @param orderId - the order to move
  * @param to - the status being written
  * @returns the order as it now stands, or `null` if this call did not move it

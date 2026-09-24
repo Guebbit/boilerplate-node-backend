@@ -1,17 +1,19 @@
 /**
  * @module
  * The order Mongoose schema and the serialization transform that derives its wire-only totals.
- * An order embeds the product SNAPSHOT it was bought against (`orderLineProductSchema`, no `ref`,
- * and NOT `productSchema` — see the note there) rather than referencing the live catalogue row,
- * since a later product edit must not rewrite purchase history. `totalItems`, `totalQuantity` and
- * `totalPrice` are never stored — `applyOrderTransform` derives them from `items` at the single
- * serialization point every response passes through, letting the contract mark them required.
  *
- * The snapshot is not just a copy of the product row: `title`/`description` are that product's
- * text as resolved into the buyer's language at order-creation time, then frozen — each item
- * carries the `locale` that resolution happened in, so a later read reproduces what was actually
- * bought rather than re-resolving against whoever happens to be reading it. See
- * `./services/snapshot`.
+ * Snapshot: an order embeds the product SNAPSHOT it was bought against
+ *           (`orderLineProductSchema`, no `ref`, and NOT `productSchema` — see the note there)
+ *           rather than referencing the live catalogue row, since a later product edit must not
+ *           rewrite purchase history. It is not just a copy of the product row: `title`/
+ *           `description` are that product's text as resolved into the buyer's language at
+ *           order-creation time, then frozen — each item carries the `locale` that resolution
+ *           happened in, so a later read reproduces what was actually bought rather than
+ *           re-resolving against whoever happens to be reading it. See `./services/snapshot`.
+ * Totals:   `totalItems`, `totalQuantity` and `totalPrice` are never stored — `applyOrderTransform`
+ *           derives them from `items` at the single serialization point every response passes
+ *           through, letting the contract mark them required.
+ *
  * See: docs/modules/orders.md
  */
 
@@ -138,15 +140,17 @@ export interface OrderDocument
     pendingEffects?: OrderPendingEffect[];
     /**
      * The RF creditor reference this order's `bank_transfer` checkout minted
-     * (`src/modules/orders/domain/transfer-reference.ts`'s `buildReference`), from the SAME id this write
-     * creates — never recomputed afterwards. Absent on a `card` order, and on a `bank_transfer`
-     * order that predates this field — `applyTransferInstructions` then shows no
-     * `transferInstructions` block at all rather than a fabricated reference, and
-     * `GET /payments/order-by-reference` simply cannot reach that order (its admin finds it by id
-     * through the normal order search instead). Not part of the `Order` contract —
-     * `applyOrderTransform` omits it from the wire, the same treatment as
-     * `anonymizeAfter`/`pendingEffects` below, and it is surfaced only through
-     * `transferInstructions.reference`.
+     * (`src/modules/orders/domain/transfer-reference.ts`'s `buildReference`), from the SAME id
+     * this write creates — never recomputed afterwards.
+     *
+     * Absent:  on a `card` order, and on a `bank_transfer` order that predates this field —
+     *          `applyTransferInstructions` then shows no `transferInstructions` block at all
+     *          rather than a fabricated reference, and `GET /payments/order-by-reference` simply
+     *          cannot reach that order (its admin finds it by id through the normal order search
+     *          instead).
+     * On wire: not part of the `Order` contract — `applyOrderTransform` omits it, the same
+     *          treatment as `anonymizeAfter`/`pendingEffects` below, and it is surfaced only
+     *          through `transferInstructions.reference`.
      */
     transferReference?: string;
     /**
@@ -187,20 +191,20 @@ export type OrderModel = Model<OrderDocument>;
 
 /**
  * Schema for the product snapshot embedded on an order line — `openapi.root.yaml`'s
- * `OrderLineProduct`, not `Product`: no `onHand`, no `reserved`, and therefore nothing for a
- * response to derive `available` FROM. Deliberately its own schema rather than `productSchema`
- * reused: the two counters describe the warehouse right now, and an order line must not be ABLE
- * to store them, not merely choose not to.
+ * `OrderLineProduct`, not `Product`.
  *
- * No `imageUrl`/`thumbnailUrl` either — the picture is not a term of the sale, and freezing a
- * url rather than the bytes never made it durable: the file it names can be replaced or
- * unlinked at any time. `./current` resolves it LIVE instead, from the catalogue id this schema
- * still carries.
- *
- * `{ timestamps: true }`, matching `productSchema`: a subdocument stamps its own `createdAt`/
- * `updatedAt` on insert regardless of the parent's timestamps option, which is why
- * `orders/factories.ts` carries the catalogue row's own dates in explicitly rather than leaving
- * them to default.
+ * No counters: no `onHand`, no `reserved`, and therefore nothing for a response to derive
+ *              `available` FROM. Deliberately its own schema rather than `productSchema` reused:
+ *              the two counters describe the warehouse right now, and an order line must not be
+ *              ABLE to store them, not merely choose not to.
+ * No picture:  no `imageUrl`/`thumbnailUrl` either — the picture is not a term of the sale, and
+ *              freezing a url rather than the bytes never made it durable: the file it names can
+ *              be replaced or unlinked at any time. `./current` resolves it LIVE instead, from
+ *              the catalogue id this schema still carries.
+ * Timestamps:  `{ timestamps: true }`, matching `productSchema` — a subdocument stamps its own
+ *              `createdAt`/`updatedAt` on insert regardless of the parent's timestamps option,
+ *              which is why `orders/factories.ts` carries the catalogue row's own dates in
+ *              explicitly rather than leaving them to default.
  */
 const orderLineProductSchema = new Schema(
     {
