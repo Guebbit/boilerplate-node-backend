@@ -11,8 +11,8 @@ import { testCallerContext } from '@tests/callers';
 import { createProduct } from '@modules/products/tests/factories';
 import { productService } from '@modules/products';
 import type { ProductDocument } from '@modules/products';
-import { translationRepository, localeRepository } from '@modules/locales/repository';
-import { makeLocale } from '@modules/locales/factories';
+import { translationRepository } from '@modules/locales/repository';
+import { givenLocale } from '@modules/locales/tests/factories';
 import { localeService } from '@modules/locales/services';
 import { enabledModules } from '../../src/modules';
 
@@ -33,9 +33,6 @@ afterAll(() => {
 
 /** `en` is the fallback locale in every environment this suite runs in — see `.env-example`. */
 const FALLBACK = 'en';
-
-const givenLocale = (tag: string, overrides: { active?: boolean } = {}) =>
-    localeRepository.create(makeLocale({ tag, name: tag, nativeName: tag, ...overrides }));
 
 // Every case below writes the fallback locale at least once — see the same note in
 // `locales/tests/integration/translations.test.ts`.

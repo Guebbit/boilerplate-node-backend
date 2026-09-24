@@ -14,16 +14,13 @@ import { createProduct } from '@modules/products/tests/factories';
 import { orderService } from '@modules/orders';
 import { cartService } from '@modules/cart';
 import { asSuccess } from '@tests/response';
-import { localeRepository, translationRepository } from '@modules/locales/repository';
-import { makeLocale } from '@modules/locales/factories';
+import { translationRepository } from '@modules/locales/repository';
+import { givenLocale } from '@modules/locales/tests/factories';
 
 setupTestDb();
 
 /** `en` is the fallback locale in every environment this suite runs in — see `.env-example`. */
 const FALLBACK = 'en';
-
-const givenLocale = (tag: string) =>
-    localeRepository.create(makeLocale({ tag, name: tag, nativeName: tag }));
 
 const givenTranslation = (
     productId: string,

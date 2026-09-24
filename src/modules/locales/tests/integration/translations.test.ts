@@ -8,8 +8,8 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct, readProduct } from '@modules/products/tests/factories';
-import { makeLocale } from '@modules/locales/factories';
-import { localeRepository, translationRepository } from '@modules/locales/repository';
+import { translationRepository } from '@modules/locales/repository';
+import { givenLocale } from '@modules/locales/tests/factories';
 import { localeService } from '@modules/locales/services';
 
 setupTestDb();
@@ -26,9 +26,6 @@ afterAll(() => {
 
 /** `en` is the fallback locale in every environment this suite runs in — see `.env-example`. */
 const FALLBACK = 'en';
-
-const givenLocale = (tag: string, overrides: { active?: boolean } = {}) =>
-    localeRepository.create(makeLocale({ tag, name: tag, nativeName: tag, ...overrides }));
 
 // Every case below writes the fallback locale at least once — it is a row like any other, no
 // special case, so the write path checks it exists and is active exactly as it would any other.
