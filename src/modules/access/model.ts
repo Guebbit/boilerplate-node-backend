@@ -3,19 +3,20 @@
  * The two collections the authorization model is stored in: who the shops are, and who holds
  * which role where.
  *
- * ITS OWN MODULE, ROUTELESS ON PURPOSE. Tenants and memberships are an identity-and-access domain
- * with real write invariants (see `./service.ts`), consumed by `account`, `api-keys` and `users`
- * plus `db` scripts and `scenarios` — several unrelated modules sharing one domain is reason
- * enough for its own module, the same reasoning `addresses` is split out of `account` for. It
- * answers to no route of its own: `permissions.ts`, `ability.ts` and `access/query.ts` stay in
- * the kernel, because the route guard is kernel code and they are what it asks — this module is
- * the domain those files ask about, not the asking itself.
- *
- * ROLES ARE DATA, PERMISSIONS ARE CODE — but the DATA half lives in `shared/authorization-roles.yaml`
- * alone now, not in this database: a role's permissions are the same for every deployment, and a
- * Mongo row editable at runtime was a second definition of the same fact, silently out of sync with
- * the file the PHP twin reads byte-for-byte. `memberships` is the part that genuinely is per-database
- * data — WHO holds a role, never WHAT a role holds.
+ * Own module: ROUTELESS ON PURPOSE. Tenants and memberships are an identity-and-access domain with
+ *             real write invariants (see `./service.ts`), consumed by `account`, `api-keys` and
+ *             `users` plus `db` scripts and `scenarios` — several unrelated modules sharing one
+ *             domain is reason enough for its own module, the same reasoning `addresses` is split
+ *             out of `account` for. It answers to no route of its own: `permissions.ts`,
+ *             `ability.ts` and `access/query.ts` stay in the kernel, because the route guard is
+ *             kernel code and they are what it asks — this module is the domain those files ask
+ *             about, not the asking itself.
+ * Roles data: ROLES ARE DATA, PERMISSIONS ARE CODE — but the DATA half lives in
+ *             `shared/authorization-roles.yaml`, not in this database: a role's permissions are
+ *             the same for every deployment, and a Mongo row editable at runtime would be a
+ *             second definition of the same fact, at risk of drifting silently out of sync with
+ *             the file the PHP twin reads byte-for-byte. `memberships` is the part that genuinely
+ *             is per-database data — WHO holds a role, never WHAT a role holds.
  *
  * See: docs/theory/authorization.md
  */

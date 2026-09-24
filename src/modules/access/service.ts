@@ -141,10 +141,10 @@ export const assertCanGrant = (
 };
 
 /**
- * One audit row for a role grant or revoke, success or failure — {@link assignRole}/
- * {@link revokeRole} each had four near-identical `emitAuditEvent`/`buildAuditEvent` blocks
- * before this, and it was exactly that duplication that let one of them (revoke's failure branch)
- * quietly drop `role` from its metadata while the other three kept it.
+ * One audit row for a role grant or revoke, success or failure — a single shared block instead of
+ * {@link assignRole}/{@link revokeRole} each emitting their own near-identical `emitAuditEvent`/
+ * `buildAuditEvent` call. Four separate, near-identical blocks are exactly the shape that lets one
+ * of them (revoke's failure branch) quietly drop `role` from its metadata while the others keep it.
  *
  * @param role - `undefined` when nothing was there to name (an assign's `roleName` is always
  *   known; a revoke with no membership found, or whose role wasn't yet resolved when it failed,
