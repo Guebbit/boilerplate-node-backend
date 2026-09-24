@@ -178,11 +178,15 @@ export const search = (
  *
  * `respondedAt` is stamped once, the first time a ticket reaches `resolved` — re-resolving an
  * already-resolved ticket must not move the timestamp.
+ *
+ * Always succeeds once called — there is no validation branch here, only a write. A failed
+ * `save` rejects the promise rather than resolving a `ResponseReject`, which is why the return
+ * type carries no reject case; `updateStatusById` is what can still answer 404, before this runs.
  */
 export const updateStatus = (
     feedback: FeedbackRequestDocument,
     payload: UpdateFeedbackRequestStatusRequest
-): Promise<ResponseSuccess<FeedbackRequestDocument> | ResponseReject> => {
+): Promise<ResponseSuccess<FeedbackRequestDocument>> => {
     const nextStatus = toFeedbackStatus(payload.status);
     if (nextStatus !== undefined) feedback.status = nextStatus;
     if (payload.adminNotes !== undefined) feedback.adminNotes = payload.adminNotes;
@@ -205,14 +209,13 @@ export const updateStatusById = (
     feedbackRequestRepository.findById(id).then((feedback) => {
         if (!feedback) return generateReject(404, [t('generic.error-not-found')]);
         return updateStatus(feedback, payload).then((result) => {
-            if (result.success)
-                recordAudit(context, {
-                    action: feedbackAuditActions.ADMIN_FEEDBACK_STATUS_UPDATED,
-                    outcome: 'success',
-                    target_type: 'feedback',
-                    target_id: id,
-                    metadata: { status: payload.status }
-                });
+            recordAudit(context, {
+                action: feedbackAuditActions.ADMIN_FEEDBACK_STATUS_UPDATED,
+                outcome: 'success',
+                target_type: 'feedback',
+                target_id: id,
+                metadata: { status: payload.status }
+            });
             return result;
         });
     });
