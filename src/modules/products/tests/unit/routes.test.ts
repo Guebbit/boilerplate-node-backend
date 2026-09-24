@@ -166,7 +166,7 @@ describe('product routes — uploads and flags', () => {
 
             // The field name is a contract with the client: a rename here is a silently ignored
             // upload, since multer drops fields it was not told about.
-            expect(chain).toContain('upload.single(imageUpload)');
+            expect(chain).toContain('upload.image');
             // Behind the label, the real chain — a route that accepts a file and never checks it
             // is how a disguised payload reaches storage.
             expect(chain).toContain('validateUploadedImages');

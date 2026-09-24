@@ -450,11 +450,11 @@ const runMiddleware = async (middleware: unknown, request: Request) =>
     });
 
 /**
- * `upload.single` wraps multer so the request's locale survives the stream being consumed (see
+ * `upload.image()` wraps multer so the request's locale survives the stream being consumed (see
  * `infrastructure/http/middlewares/upload.ts`). Asserted at the unit level too, distinct from the
  * integration suite's coverage of the mounted route.
  */
-describe('upload.single restores the locale', () => {
+describe('upload.image restores the locale', () => {
     /**
      * Returns the whole pipeline — locale-restoring wrapper, content check, then image-store
      * commit. Asserted rather than assumed: mounting only the first would accept non-image bytes,
@@ -462,14 +462,14 @@ describe('upload.single restores the locale', () => {
      */
     it('returns the full guard chain', async () => {
         const { upload } = await import('@infrastructure/http/middlewares/upload');
-        const handlers = upload.single('imageUpload');
+        const handlers = upload.image();
 
         expect(handlers).toHaveLength(3);
     });
 
     it('re-enters the request locale', async () => {
         const { upload } = await import('@infrastructure/http/middlewares/upload');
-        const [localeAware] = upload.single('imageUpload');
+        const [localeAware] = upload.image();
 
         const observed = await runMiddleware(
             localeAware,
@@ -484,7 +484,7 @@ describe('upload.single restores the locale', () => {
 
     it('leaves the chain alone when no locale was negotiated', async () => {
         const { upload } = await import('@infrastructure/http/middlewares/upload');
-        const [localeAware] = upload.single('imageUpload');
+        const [localeAware] = upload.image();
 
         const observed = await runMiddleware(localeAware, asStub<Request>({ headers: {} }));
 

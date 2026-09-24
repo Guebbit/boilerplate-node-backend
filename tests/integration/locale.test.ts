@@ -75,7 +75,7 @@ describe('Accept-Language negotiation', () => {
     /**
      * The multipart path, which lost the locale entirely and said nothing about it.
      *
-     * `upload.single()` consumes the request stream, so the rest of the chain resumes from a
+     * `upload.image()` consumes the request stream, so the rest of the chain resumes from a
      * socket read callback whose async context predates `attachLocale` — the ALS store is gone
      * and the Zod thunks silently resolve against the boot language. The response still carried
      * `Content-Language: it`, because the header is set by the middleware, which does run. The

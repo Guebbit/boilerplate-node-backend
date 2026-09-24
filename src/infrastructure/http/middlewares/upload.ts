@@ -49,6 +49,12 @@ export const uploadStagingPath = () =>
     process.env.NODE_UPLOAD_STAGING_PATH ?? path.join(tmpdir(), 'node-api-uploads');
 
 /**
+ * The one field name every image upload route accepts — every mount point wants the same field,
+ * so it lives here once rather than as a repeated literal at each of the 7 call sites.
+ */
+const IMAGE_UPLOAD_FIELD = 'imageUpload';
+
+/**
  * Write an uploaded file into the staging directory.
  *
  * Routes by `fieldname`, rejecting anything unrecognised rather than defaulting to a shared dump.
@@ -66,7 +72,7 @@ export const resolveUploadDestination = (
 ): void => {
     // Unknown field → reject. Whitelist rather than blacklist: an unexpected field name is
     // more likely an attack or a client bug than a legitimate upload.
-    if (file.fieldname !== 'imageUpload') {
+    if (file.fieldname !== IMAGE_UPLOAD_FIELD) {
         callback(new Error(`Unsupported upload field: ${file.fieldname}`), '');
         return;
     }
@@ -406,9 +412,11 @@ const wrapUpload = (middleware: RequestHandler): RequestHandler[] => [
 /**
  * The public surface this module exposes to routes.
  *
- * `upload.single(fieldName)` returns the full middleware chain for one route: multer's own
- * upload (locale-restored), the content check, and quarantine/digest — see {@link wrapUpload}.
+ * `upload.image()` returns the full middleware chain for one route: multer's own upload
+ * (locale-restored, fixed to {@link IMAGE_UPLOAD_FIELD}), the content check, and quarantine/digest
+ * — see {@link wrapUpload}. Every route wants the same field, so there is nothing left for a
+ * caller to pass.
  */
 export const upload = {
-    single: (fieldName: string) => wrapUpload(rawUpload().single(fieldName))
+    image: (): RequestHandler[] => wrapUpload(rawUpload().single(IMAGE_UPLOAD_FIELD))
 };

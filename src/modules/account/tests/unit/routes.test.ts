@@ -268,7 +268,7 @@ describe('account routes — cache invalidation and uploads', () => {
         (signature) => {
             const chain = chainOf(router, signature);
 
-            expect(chain).toContain('upload.single(imageUpload)');
+            expect(chain).toContain('upload.image');
             expect(chain).toContain('validateUploadedImages');
             expect(chain).toContain('quarantineUploadedImages');
         }

@@ -16,15 +16,14 @@
  * ── WHY THE MIDDLEWARE FACTORIES ARE MOCKED ─────────────────────────────────────────────────────
  * Express keeps the mounted FUNCTION, not the call that produced it. `isAuth` and `requirePermission` are
  * declared functions, so they arrive with their names intact and need nothing. `setCache(3600,
- * {...})`, `invalidateCache([...])`, `routeFlag('hardDelete')` and `upload.single('imageUpload')`
- * are factories: what reaches the stack is an anonymous closure, and the arguments — the cache
- * tags, the TTL, the upload's field name — are captured inside it where no assertion can see them.
- * Those arguments are most of what a route file actually says.
+ * {...})`, `invalidateCache([...])` and `routeFlag('hardDelete')` are factories: what reaches the
+ * stack is an anonymous closure, and the arguments — the cache tags, the TTL — are captured inside
+ * it where no assertion can see them. Those arguments are most of what a route file actually says.
  *
  * {@link cacheMock} and friends replace each factory with one that records its arguments onto the
  * middleware it returns, as {@link ROUTE_LABEL}. `routeTable` reads that back. The replacements are
  * *labelling* wrappers rather than stubs wherever the real chain has names worth keeping —
- * `storageMock` calls through to the real `upload.single`, so `validateUploadedImages` and
+ * `storageMock` calls through to the real `upload.image()`, so `validateUploadedImages` and
  * `quarantineUploadedImages` still show up behind the label.
  *
  * A test file must declare these itself: `jest.mock` is hoisted per module registry and cannot be
@@ -243,10 +242,10 @@ export const authGuardsMock = () => {
 /**
  * Replacement for `@infrastructure/http/middlewares/upload`'s `upload`.
  *
- * Calls THROUGH to the real `upload.single` and prepends the label, so the field name becomes
- * assertable without hiding `validateUploadedImages` / `quarantineUploadedImages` behind a stub — those
- * are part of what an upload route promises, and a test that could not see them would pass with
- * them removed.
+ * Calls THROUGH to the real `upload.image()` and prepends the label, so the middleware is
+ * assertable without hiding `validateUploadedImages` / `quarantineUploadedImages` behind a stub —
+ * those are part of what an upload route promises, and a test that could not see them would pass
+ * with them removed.
  */
 export const storageMock = () => {
     const actual = jest.requireActual<typeof import('@infrastructure/http/middlewares/upload')>(
@@ -257,10 +256,7 @@ export const storageMock = () => {
         __esModule: true,
         upload: {
             ...actual.upload,
-            single: (fieldName: string) => [
-                labelled(`upload.single(${fieldName})`),
-                ...[actual.upload.single(fieldName)].flat()
-            ]
+            image: () => [labelled('upload.image'), ...actual.upload.image()]
         }
     };
 };

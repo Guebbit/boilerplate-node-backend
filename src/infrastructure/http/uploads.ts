@@ -11,31 +11,17 @@ import { imageStore } from '@infrastructure/adapters/image-store';
 import { bodyRecordOf } from '@infrastructure/http/request';
 
 /**
- * Extract uploaded file paths from a multer-processed request, from whichever of the three shapes
- * multer populates (`.single()` → `request.file`; `.array()`/`.fields()` → `request.files`), so
- * controllers don't have to care which middleware variant a route used.
+ * Extract the uploaded file's path from a multer-processed request, wrapped in an array so
+ * callers get a uniform shape regardless of whether anything was uploaded.
+ *
+ * Every route mounts `upload.image()`, which is `multer.single()` under a fixed field name — so
+ * `request.file` is the only shape multer ever populates here; `request.files` (`.array()` /
+ * `.fields()`) is a different multer mode this codebase never mounts.
  *
  * @param request - Express request already processed by a multer middleware
  */
 export function getFormFiles(request: Request): string[] | undefined {
-    // Single file upload (multer.single()). Wrapped in an array so the return type is uniform.
-    if (request.file) return [request.file.path];
-
-    // Multiple file upload (multer.array() or multer.fields())
-    if (request.files) {
-        // `.array()` is already a flat list; `.fields()` is an object keyed by field name, each
-        // value an array — flattened across fields, since callers want paths, not structure.
-        // Collected rather than returned per-branch so the empty-array normalization below
-        // applies uniformly to both shapes.
-        const paths: string[] = Array.isArray(request.files)
-            ? request.files.map((file) => file.path)
-            : Object.values(request.files).flatMap((files) => files.map((file) => file.path));
-
-        // Normalize "present but empty" to undefined so callers have one falsy case to check.
-        return paths.length > 0 ? paths : undefined;
-    }
-
-    return undefined;
+    return request.file ? [request.file.path] : undefined;
 }
 
 /** What a write controller needs from the image half of its request. */

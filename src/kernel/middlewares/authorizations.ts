@@ -577,7 +577,7 @@ export const requireFreshAuth =
  * prompt that protects nothing.
  *
  * **Mount order matters when `predicate` reads `request.body`.** `PUT /account` accepts
- * `multipart/form-data`, so `request.body` does not exist until `upload.single(...)` has run — a
+ * `multipart/form-data`, so `request.body` does not exist until `upload.image()` has run — a
  * predicate guard mounted before it reads an empty object and gates nothing. Mount this AFTER
  * whatever populates the body the predicate reads.
  *

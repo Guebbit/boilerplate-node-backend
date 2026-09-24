@@ -65,20 +65,6 @@ describe('quarantineUploadedImages — broker ready', () => {
         expect(digestQuarantinedImage).not.toHaveBeenCalled();
     });
 
-    /* multer's three shapes again: `.array()` and `.fields()` both arrive as `request.files`. */
-    it('commits every file of a multi-file upload, in order', async () => {
-        imageStore.quarantine.mockImplementation((staged: string) =>
-            Promise.resolve(staged.split('/').pop())
-        );
-        const request: Partial<Request> = {
-            files: [uploaded('/staging/a.png'), uploaded('/staging/b.png')]
-        };
-
-        await run(request);
-
-        expect(request.quarantinedImageKeys).toEqual(['a.png', 'b.png']);
-    });
-
     it('passes straight through when the request carried no file', async () => {
         await expect(run({})).resolves.toBeUndefined();
 
@@ -89,42 +75,15 @@ describe('quarantineUploadedImages — broker ready', () => {
      * A failed commit fails the request. The alternative — carry on with no image — writes a
      * product whose picture silently never existed, and does it on the happy path.
      */
-    it('fails the request when the store rejects', async () => {
+    it('fails the request when the store rejects, and deletes the staged file', async () => {
         const failure = new Error('disk full');
         imageStore.quarantine.mockRejectedValue(failure);
 
         await expect(run({ file: uploaded('/staging/a.png') })).resolves.toBe(failure);
-    });
 
-    it('deletes the staged files when the store rejects', async () => {
-        imageStore.quarantine.mockRejectedValue(new Error('disk full'));
-
-        await run({ files: [uploaded('/staging/a.png'), uploaded('/staging/b.png')] });
-
-        // Nobody owns them now: the request is over and no key was recorded. Left behind, they are
-        // a slow disk leak in a directory nobody looks at.
+        // Nobody owns it now: the request is over and no key was recorded. Left behind, it is a
+        // slow disk leak in a directory nobody looks at.
         expect(deleteFile).toHaveBeenCalledWith('/staging/a.png');
-        expect(deleteFile).toHaveBeenCalledWith('/staging/b.png');
-    });
-
-    /**
-     * The nastiest case: one file made it into quarantine and the other did not. The request
-     * fails, so no row will ever name the one that succeeded — it has to be removed, or it is an
-     * orphan nothing can ever find again.
-     */
-    it('removes what it managed to quarantine when a sibling upload fails', async () => {
-        imageStore.quarantine
-            .mockResolvedValueOnce('a.png')
-            .mockRejectedValueOnce(new Error('disk full'));
-        const request: Partial<Request> = {
-            files: [uploaded('/staging/a.png'), uploaded('/staging/b.png')]
-        };
-
-        await expect(run(request)).resolves.toBeInstanceOf(Error);
-
-        expect(request.quarantinedImageKeys).toBeUndefined();
-        expect(imageStore.removeQuarantined).toHaveBeenCalledWith('a.png');
-        expect(deleteFile).toHaveBeenCalledTimes(2);
     });
 
     /*
@@ -132,16 +91,11 @@ describe('quarantineUploadedImages — broker ready', () => {
      * the middleware's own outer chain, a rejection here never reaches `next()` and the request
      * just hangs, rather than answering the 500 an ordinary thrown error would.
      */
-    it('still reaches next() when the sibling-failure cleanup itself rejects', async () => {
-        imageStore.quarantine
-            .mockResolvedValueOnce('a.png')
-            .mockRejectedValueOnce(new Error('disk full'));
-        imageStore.removeQuarantined.mockRejectedValueOnce(new Error('cleanup also failed'));
-        const request: Partial<Request> = {
-            files: [uploaded('/staging/a.png'), uploaded('/staging/b.png')]
-        };
+    it('still reaches next() when the cleanup itself rejects', async () => {
+        imageStore.quarantine.mockRejectedValue(new Error('disk full'));
+        deleteFile.mockRejectedValueOnce(new Error('cleanup also failed'));
 
-        await expect(run(request)).resolves.toBeInstanceOf(Error);
+        await expect(run({ file: uploaded('/staging/a.png') })).resolves.toBeInstanceOf(Error);
     });
 });
 
@@ -193,29 +147,6 @@ describe('quarantineUploadedImages — no broker ready', () => {
             expect(request.quarantinedImageKeys).toBeUndefined();
         }
     );
-
-    it('digests every file of a multi-file upload inline, in order', async () => {
-        imageStore.quarantine.mockImplementation((staged: string) =>
-            Promise.resolve(staged.split('/').pop())
-        );
-        digestQuarantinedImage.mockImplementation((key: string) =>
-            Promise.resolve({
-                imageUrl: `/images/${key}`,
-                thumbnailUrl: `/images/thumbs/v1/${key}`
-            })
-        );
-        const request: Partial<Request> = {
-            files: [uploaded('/staging/a.png'), uploaded('/staging/b.png')]
-        };
-
-        await run(request);
-
-        expect(request.storedImageUrls).toEqual(['/images/a.png', '/images/b.png']);
-        expect(request.storedThumbnailUrls).toEqual([
-            '/images/thumbs/v1/a.png',
-            '/images/thumbs/v1/b.png'
-        ]);
-    });
 
     /**
      * A bad decode fails the request exactly as a rejected quarantine does — the quarantine file

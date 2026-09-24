@@ -54,7 +54,7 @@ router.post(
     requirePermission('products.any.create'),
     requirePermission('translations.any.update'),
     invalidateCache(['products']),
-    upload.single('imageUpload'),
+    upload.image(),
     createProduct
 );
 
@@ -86,7 +86,7 @@ router.patch(
     requirePermission('products.any.update'),
     requirePermission('translations.any.update'),
     invalidateCache(['products']),
-    upload.single('imageUpload'),
+    upload.image(),
     updateProduct
 );
 

@@ -73,7 +73,7 @@ import { getMyAbilities } from './controllers/get-my-abilities';
  * (`email !== undefined && email !== currentEmail`), so the guard and the controller can never
  * disagree about what counts as an email change.
  *
- * MUST run after `upload.single('imageUpload')`: `PUT /account` accepts `multipart/form-data`,
+ * MUST run after `upload.image()`: `PUT /account` accepts `multipart/form-data`,
  * so `request.body` does not exist until multer has parsed it — a predicate mounted earlier reads
  * an empty object, concludes "no email change", and gates nothing.
  */
@@ -102,7 +102,7 @@ router.use(noStore);
 router.get('/', isAuth, getAccount);
 
 // PUT /account — update own profile (requires auth). The upload mirrors signup's.
-// requireFreshAuthWhen AFTER upload.single: see isChangingEmail's own doc for why the order is
+// requireFreshAuthWhen AFTER upload.image(): see isChangingEmail's own doc for why the order is
 // load-bearing. Sensitive tier, not critical: an unconditional gate here would ask for a
 // password on every avatar upload — this route is the takeover path specifically BECAUSE of
 // the email field, not the write in general.
@@ -111,7 +111,7 @@ router.put(
     uploadLimiter,
     isAuth,
     invalidateCache(['users', 'account']),
-    upload.single('imageUpload'),
+    upload.image(),
     requireFreshAuthWhen(isChangingEmail, REAUTH_TIME_SENSITIVE),
     putAccount
 );
@@ -131,7 +131,7 @@ router.post('/login', credentialLimiters, loginChallengeGate, postLogin);
 // abuse here (a Sybil account) gets a 201, which `credentialLimiters`' skipSuccessfulRequests
 // would spend nothing on — see rate-limits.ts. `humanChallengeGate` (rung 3, off by default) sits
 // ahead of the upload parse, so a request that fails it never pays for a file read.
-// `idempotencyKey` comes AFTER `upload.single`, not before: its fingerprint reads `request.body`,
+// `idempotencyKey` comes AFTER `upload.image()`, not before: its fingerprint reads `request.body`,
 // which multer only populates once it has parsed a multipart request — any earlier and every
 // multipart signup would fingerprint as the same empty body, defeating the mismatch check.
 router.post(
@@ -140,7 +140,7 @@ router.post(
     uploadLimiter,
     humanChallengeGate,
     invalidateCache(['users', 'account']),
-    upload.single('imageUpload'),
+    upload.image(),
     idempotencyKey,
     postSignup
 );

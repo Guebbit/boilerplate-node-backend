@@ -52,7 +52,7 @@ router.post(
     requirePermission('users.any.create'),
     uploadLimiter,
     invalidateUsers,
-    upload.single('imageUpload'),
+    upload.image(),
     writeUsers
 );
 
@@ -62,7 +62,7 @@ router.put(
     requirePermission('users.any.update'),
     uploadLimiter,
     invalidateUsers,
-    upload.single('imageUpload'),
+    upload.image(),
     writeUsers
 );
 
@@ -83,7 +83,7 @@ router.put(
     requirePermission('users.any.update'),
     uploadLimiter,
     invalidateUsers,
-    upload.single('imageUpload'),
+    upload.image(),
     writeUsers
 );
 
