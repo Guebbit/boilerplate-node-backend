@@ -1,9 +1,10 @@
 /**
  * @module
  * Route table for feedback/contact. One public route — the visitor contact form — mounted above a
- * single `router.use(getAuth, isAuth)` gate; everything below it is the operator's view of what
- * visitors sent, each mount stating the one key its own action needs. The gate is positional: a
- * route appended in the wrong half is public or admin-only purely by where it was typed.
+ * single `router.use(getAuth, isAuthOrCredential)` gate; everything below it is the operator's
+ * view of what visitors sent, each mount stating the one key its own action needs. The gate is
+ * positional: a route appended in the wrong half is public or admin-only purely by where it was
+ * typed.
  *
  * See: docs/modules/feedback.md
  */

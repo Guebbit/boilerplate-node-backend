@@ -3,10 +3,10 @@
  * Languages: which ones this deployment speaks, and the dictionaries a client downloads. Two
  * tiers that never merge — deployed files loaded into i18next at boot, and runtime overrides this
  * module owns, one row per (language, tenant, key) — and neither is ever awaited on the request
- * path, so a database outage costs only a stale overlay. No `index.ts`: no sibling module reaches
- * in, and everything else reaches i18n through `@infrastructure/i18n` — the one exception is the
- * `app` tier, which alone may see which modules exist, handing this file the `translatables`
- * lookup it cannot collect itself.
+ * path, so a database outage costs only a stale overlay. `./index.ts` publishes `localeService`
+ * and the model types, but nothing outside this module imports them: everything else reaches
+ * i18n through `@infrastructure/i18n` — the one exception is the `app` tier, which alone may see
+ * which modules exist, handing this file the `translatables` lookup it cannot collect itself.
  *
  * See: docs/modules/locales.md
  */

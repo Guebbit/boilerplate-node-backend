@@ -55,8 +55,9 @@ export {
 
 /**
  * Core account functions: login, signup, profile, verification, session tokens, the
- * token-cleanup job, data export, OAuth. Everything except two-factor and the address book, which
- * get their own namespace below.
+ * token-cleanup job, OAuth. Two-factor gets its own namespace below. The address book is
+ * `@modules/addresses`, a separate module entirely; data export is `./export`, deliberately not
+ * part of this object — see this file's own docblock above.
  */
 export const accountService = {
     tokenAdd: authentication.tokenAdd,

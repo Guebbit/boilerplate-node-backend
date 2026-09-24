@@ -7,8 +7,9 @@
  * nothing else imports them — only the Prometheus registry and the HTTP counters it reads by name
  * stay in `infrastructure/observability`,
  * since every module registers onto that same registry. Every route is authenticated, but not
- * with the same style — see `routes.ts`. The barrel is empty: this module owns URLs, not data, so
- * it has nothing to promise a sibling.
+ * with the same style — see `routes.ts`. The barrel (`./index.ts`) republishes `./services` —
+ * health, job/dependency health, the process reader, the SSE stream — for a sibling that ends up
+ * needing one; nothing does today.
  *
  * Not in the import graph: reads every domain's counters BY STRING off the shared registry
  *   (`metricsRegistry.getSingleMetric('auth_login_total')`), never by import. That is deliberate —
