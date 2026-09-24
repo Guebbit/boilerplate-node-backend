@@ -15,8 +15,8 @@ Integration test verifying that the order-creation audit trail always reflects t
 
 - **`contextAs(role, id?)`** – local helper that builds a `CallerContext` (caller, `actorRoleName`, `analyticsConsent`) representing a resolved HTTP request with a specific tenant role.
 - **`describe("create — the audit row records the real caller…")`** – two cases:
-  - Moderator places an order → audit row must carry `actor_role_name: 'moderator'`.
-  - Admin places an order → audit row must carry `actor_role_name: 'admin'` (explicitly *not* "customer").
+    - Moderator places an order → audit row must carry `actor_role_name: 'moderator'`.
+    - Admin places an order → audit row must carry `actor_role_name: 'admin'` (explicitly _not_ "customer").
 - **`jest.mock('@infrastructure/observability/audit', …)`** – full module replacement (not a spy) of the audit port. Overrides `emitAuditEvent` with a `jest.fn()` and re-wraps `recordAudit` so it routes through the replacement, because `recordAudit` closes over its own module-scoped `emitAuditEvent` reference.
 - **`jest.mock('@infrastructure/observability/analytics', …)`** – stubs `emitAnalyticsEvent` to a no-op to prevent side-effects.
 - **`setupTestDb()`** – initialises the in-memory test database at module scope.
@@ -38,5 +38,5 @@ Integration test verifying that the order-creation audit trail always reflects t
 
 - **Why replace instead of spy?** `jest.spyOn` cannot redefine the non-configurable getter that a CommonJS namespace import (`import * as auditPort`) exposes. The comment in the file cross-references `cancel.test.ts` for the full rationale.
 - **`recordAudit` override is non-obvious:** Even after replacing `emitAuditEvent` in the module namespace, the real `recordAudit` still calls its own closure-captured reference. The mock re-wraps `recordAudit` to call `buildAuditEvent` + the replacement `emitAuditEvent`, ensuring the spy sees every audit call.
-- **No negative "customer" assertion:** The suite deliberately does *not* test that a plain customer is labelled "customer." It only asserts that elevated roles are never downgraded, keeping the test focused on the regression it guards.
+- **No negative "customer" assertion:** The suite deliberately does _not_ test that a plain customer is labelled "customer." It only asserts that elevated roles are never downgraded, keeping the test focused on the regression it guards.
 - **`analyticsConsent` is always `false`** in the test contexts to suppress analytics side-effects.

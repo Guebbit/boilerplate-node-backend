@@ -18,7 +18,7 @@ Unit tests for the shared logger adapter (`src/infrastructure/adapters/logger.ts
 - **`describe('serializeError — the production stack guard')`** — Confirms the `stack` property is present when `NODE_ENV !== 'production'` and **absent** in production; name/message are always preserved.
 - **Property-based invariants (fast-check)** — Six `fc.assert` blocks covering: (1) input is never mutated, (2) idempotency, (3) no sensitive string value survives at any nesting depth, (4) arrays stay arrays, (5) array length and non-sensitive primitives are preserved, (6) the function never throws for any input.
 - **`describe('the sensitive-field policy, entry by entry')`** — Table-driven tests over the real `SENSITIVE_FIELDS` set (auto-covers added fields); a size-floor guard (`≥ 20`) catches silent removals; exact-match (not substring) is verified so `passwordPolicy` is **not** redacted.
-- **`stringValuesOf`** (local helper) — Recursively collects all string *values* (ignoring keys) for leak assertions.
+- **`stringValuesOf`** (local helper) — Recursively collects all string _values_ (ignoring keys) for leak assertions.
 - **`metadata()`** (local helper) — fast-check arbitrary generating dictionaries with a mix of sensitive and random keys.
 - **`RUN`** — Fixed seed (`20_260_809`), 200 runs, `endOnFailure` for reproducible property tests.
 - **Truncated section** — The file continues with tests for `redactFormat`, `resolveLogLevel`, `resolveConsoleFormat`, and `resolvePersonalFieldMode` (personal-field hashing mode since G6).
@@ -32,7 +32,7 @@ Unit tests for the shared logger adapter (`src/infrastructure/adapters/logger.ts
 
 - **Fixed seed** (`20_260_809`): property tests are deterministic; if a counterexample is found, the seed is sufficient to reproduce it.
 - **Size floor, not exact count:** the `SENSITIVE_FIELDS.size ≥ 20` assertion is deliberately a floor so adding a field never breaks CI, but removing one does.
-- **Value-vs-key distinction:** leak assertions check string *values* only. The docblock explains a naive `JSON.stringify` check would false-positive when a secret string is short (e.g. `"p"`) and also appears as a substring of a *key* name like `"password"`.
+- **Value-vs-key distinction:** leak assertions check string _values_ only. The docblock explains a naive `JSON.stringify` check would false-positive when a secret string is short (e.g. `"p"`) and also appears as a substring of a _key_ name like `"password"`.
 - **Mutation-test provenance:** the file header records which specific mutants survived (production stack guard, `redactFormat` pipeline wiring, the two "INVARIANT" claims) and the tests were written to kill them.
 - **NODE_ENV save/restore:** the production-stack-guard block saves `process.env.NODE_ENV` in a module-level constant and restores it in `afterEach`, including handling the `undefined` case.
 - **Personal fields vs. sensitive fields:** `email` is in `PERSONAL_FIELDS` (hashed since G6), not `SENSITIVE_FIELDS` (redacted to `[REDACTED]`). Tests must not conflate the two.

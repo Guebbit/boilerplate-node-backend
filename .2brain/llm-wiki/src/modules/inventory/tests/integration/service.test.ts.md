@@ -41,6 +41,6 @@ Integration tests for the inventory module's own service guarantees: exactly-onc
 
 - The audit mock **replaces** the module rather than using `jest.spyOn`, because a CommonJS namespace import exposes a non-configurable getter that `spyOn` cannot redefine. The `recordAudit` shim is necessary because the real function closes over its own `emitAuditEvent` reference.
 - `countersOf` reads the **products mirror**, while `levelOf` reads **stocklevels** (the actual inventory row). Tests that verify the idempotent-hold path assert both, since a cache agreeing with itself is not proof the underlying write landed.
-- The non-duplicate-error test exists because a mutation (replacing the `code === 11000` check with `true`) would silently swallow *any* DB error as "already held," causing an order to ship with no stock. Only MongoDB duplicate-key (11000) may be mapped to a no-op.
+- The non-duplicate-error test exists because a mutation (replacing the `code === 11000` check with `true`) would silently swallow _any_ DB error as "already held," causing an order to ship with no stock. Only MongoDB duplicate-key (11000) may be mapped to a no-op.
 - `withoutWindow` is intentionally at module scope (not inside a `describe`) so the zero TTL does not leak into unrelated tests in the file.
 - `afterEach(() => jest.restoreAllMocks())` is the cleanup mechanism; individual tests that call `jest.spyOn` directly (e.g., the error-propagation test) also call `mockRestore()` inline.

@@ -21,7 +21,7 @@ OpenAPI 3.0.3 contract for the **audit-logs** module. It declares the single `GE
 
 ## Relationships
 
-- **→ `shared/contracts/openapi.root.yaml`** — `$ref`s for `PageParam`, `PageSizeParam`, all error responses (`401/403/422/500`), `PaginationMeta`, and the `Envelope*` sub-schemas. This is the *only* external contract this file references.
+- **→ `shared/contracts/openapi.root.yaml`** — `$ref`s for `PageParam`, `PageSizeParam`, all error responses (`401/403/422/500`), `PaginationMeta`, and the `Envelope*` sub-schemas. This is the _only_ external contract this file references.
 - **← `shared/contracts/openapi.root.yaml`** (`POST /account/export`) — references `ExportAuditEntry` defined here.
 - **~ `observability/openapi.yaml`** (sibling module) — Its `AuditEventItem` mirrors `AuditEntryItem` by hand, not by `$ref`. Both endpoints are served from the same collection via `auditLogRepository.search`.
 
@@ -30,5 +30,5 @@ OpenAPI 3.0.3 contract for the **audit-logs** module. It declares the single `GE
 - **Module isolation rule:** This spec never `$ref`s into a sibling module's contract (e.g. observability). Cross-module sharing goes only through `shared/contracts/openapi.root.yaml`. Rationale documented in `docs/theory/module-lifecycle.md`.
 - **`AuditEntryItem` vs `ExportAuditEntry`:** Deliberately duplicated, not `$ref`'d to each other. If the shapes drift, fix both.
 - **`ip` / `user_agent` are raw.** Hashing seen elsewhere (`adapters/logger.ts`) applies to Winston log lines, not to this queryable collection.
-- **`since` is exclusive** — returns entries strictly *after* the given timestamp.
+- **`since` is exclusive** — returns entries strictly _after_ the given timestamp.
 - **`actor_scope` and `actor_role_name`** are absent on rows recorded before those fields existed; consumers must treat them as optional.

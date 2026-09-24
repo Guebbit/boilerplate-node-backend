@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides the resolved, locale-specific email content for delivery notifications. It exists to separate *what text is sent* from *how it is rendered*: the function returns a fully-translated `EmailContent` object, and whatever email template engine consumes it later performs no further resolution. This follows the same convention as `src/modules/account/emails.ts`.
+Provides the resolved, locale-specific email content for delivery notifications. It exists to separate _what text is sent_ from _how it is rendered_: the function returns a fully-translated `EmailContent` object, and whatever email template engine consumes it later performs no further resolution. This follows the same convention as `src/modules/account/emails.ts`.
 
 ## Key elements
 

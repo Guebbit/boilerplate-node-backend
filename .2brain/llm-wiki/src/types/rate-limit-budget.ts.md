@@ -14,16 +14,16 @@ Defines the `RateLimitBudget` interface — the declarative data shape every mod
 ## Key elements
 
 - **`RateLimitBudget`** (interface, sole export) — one budget's full declaration:
-  - `name`, `keyedBy`, `bounds` — human-readable metadata for the generated `docs/tools/security.md` table.
-  - `namespace` — Redis/memory key prefix for the counter store.
-  - `environmentVariable` / `defaultMax` — the env-var override and its fallback limit.
-  - `windowMs: number | 'shared'` — `'shared'` means "read `NODE_RATE_LIMIT_WINDOW_MS`"; a literal number is used for non-standard windows (e.g. MFA challenge budgets sized to the challenge lifetime).
-  - `keyGenerator?` — custom bucketing key; absent means the caller's IP address.
-  - `skipSuccessfulRequests?` — only a failed request spends the budget (credential limiters).
-  - `requestWasSuccessful?` — custom success predicate instead of the response status (payments decline budget).
-  - `requestPropertyName?` — where `express-rate-limit` stores the counter on `request` so a downstream gate can read it.
-  - `audited` — whether a 429 refusal emits an audit event.
-  - `testExemption?` — reason the env var is deliberately *not* raised in test setup; absent means the cross-cutting test requires it raised.
+    - `name`, `keyedBy`, `bounds` — human-readable metadata for the generated `docs/tools/security.md` table.
+    - `namespace` — Redis/memory key prefix for the counter store.
+    - `environmentVariable` / `defaultMax` — the env-var override and its fallback limit.
+    - `windowMs: number | 'shared'` — `'shared'` means "read `NODE_RATE_LIMIT_WINDOW_MS`"; a literal number is used for non-standard windows (e.g. MFA challenge budgets sized to the challenge lifetime).
+    - `keyGenerator?` — custom bucketing key; absent means the caller's IP address.
+    - `skipSuccessfulRequests?` — only a failed request spends the budget (credential limiters).
+    - `requestWasSuccessful?` — custom success predicate instead of the response status (payments decline budget).
+    - `requestPropertyName?` — where `express-rate-limit` stores the counter on `request` so a downstream gate can read it.
+    - `audited` — whether a 429 refusal emits an audit event.
+    - `testExemption?` — reason the env var is deliberately _not_ raised in test setup; absent means the cross-cutting test requires it raised.
 
 ## Relationships
 
@@ -37,7 +37,7 @@ Defines the `RateLimitBudget` interface — the declarative data shape every mod
 
 ## Notes
 
-- **Dependency direction is deliberate.** The file lives in `types/` because infrastructure may import *down* into types but not up into kernel. Moving it next to `AppModule` would break that wall.
+- **Dependency direction is deliberate.** The file lives in `types/` because infrastructure may import _down_ into types but not up into kernel. Moving it next to `AppModule` would break that wall.
 - **`windowMs: 'shared'` is a string sentinel, not a number.** Consumers must branch on it before doing arithmetic; it does not mean "infinite" or "default" in a numeric sense.
-- **`testExemption` inverts the default.** A *missing* field is the stricter case (test requires the env var raised); a *present* field is the escape hatch. The test prints the string on failure to explain why the exemption exists.
-- **`skipSuccessfulRequests` and `requestWasSuccessful` are mutually exclusive in intent.** The first changes *when* the budget is consumed; the second changes *what counts as success* for that determination. The payments module's decline budget uses the latter to distinguish a genuine 409 decline from the confirm route's other 409.
+- **`testExemption` inverts the default.** A _missing_ field is the stricter case (test requires the env var raised); a _present_ field is the escape hatch. The test prints the string on failure to explain why the exemption exists.
+- **`skipSuccessfulRequests` and `requestWasSuccessful` are mutually exclusive in intent.** The first changes _when_ the budget is consumed; the second changes _what counts as success_ for that determination. The payments module's decline budget uses the latter to distinguish a genuine 409 decline from the confirm route's other 409.

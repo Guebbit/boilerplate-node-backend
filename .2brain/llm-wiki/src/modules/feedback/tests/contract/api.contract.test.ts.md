@@ -31,7 +31,7 @@ Contract tests for every `/feedback` route, asserting that each response satisfi
 
 ## Notes
 
-- No fixture builder exists for feedback; the public `POST /feedback/contact` endpoint *is* the data-factory. Tests that need a record call `createFeedbackRequest()` rather than inserting directly.
+- No fixture builder exists for feedback; the public `POST /feedback/contact` endpoint _is_ the data-factory. Tests that need a record call `createFeedbackRequest()` rather than inserting directly.
 - The `maxLength: 5000` enforcement on `message` was moved from a controller-level zod override into `openapi.yaml` itself (see D2 comment). The 5001-char test exists to pin that the generated schema still enforces it end-to-end.
 - Pagination bounds (`pageSize ≤ 100`, `page ≥ 1`) are asserted identically for the GET query-string form and the POST body form because they share one validation schema; the test guards against a future divergence.
-- The honeypot test verifies both the public-facing contract (201, no `website` in response body) *and* the admin-visible side effect (status persisted as `"spam"`), in a single test to keep the two assertions together.
+- The honeypot test verifies both the public-facing contract (201, no `website` in response body) _and_ the admin-visible side effect (status persisted as `"spam"`), in a single test to keep the two assertions together.

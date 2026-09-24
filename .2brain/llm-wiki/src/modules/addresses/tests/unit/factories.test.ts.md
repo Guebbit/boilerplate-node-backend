@@ -16,12 +16,12 @@ Unit tests for the `makeAddressBook` fixture builder. Verifies that the factory 
 - **`USER`** / **`ADDRESS`** – Hardcoded hex strings used as source ObjectIds for the owner and a single entry.
 - **`DELIVERABLE`** – Object listing the required address fields (`fullName`, `street`, `city`, `zip`, `country`, `default`), spread into each test item.
 - **`describe('makeAddressBook')`** – Six assertions covering:
-  - `userId` is stored as a real `Types.ObjectId` instance.
-  - `items` key is entirely absent when no items are passed.
-  - Each entry's input `id` becomes an `_id` of type `Types.ObjectId` in the output.
-  - Deliverable fields pass through unchanged.
-  - `label` and `phone` are **absent** (not `undefined`) when not supplied.
-  - `label` and `phone` are preserved when supplied.
+    - `userId` is stored as a real `Types.ObjectId` instance.
+    - `items` key is entirely absent when no items are passed.
+    - Each entry's input `id` becomes an `_id` of type `Types.ObjectId` in the output.
+    - Deliverable fields pass through unchanged.
+    - `label` and `phone` are **absent** (not `undefined`) when not supplied.
+    - `label` and `phone` are preserved when supplied.
 
 ## Relationships
 
@@ -30,6 +30,6 @@ Unit tests for the `makeAddressBook` fixture builder. Verifies that the factory 
 
 ## Notes
 
-- The module docblock explains *why* this factory differs from the cart/wishlist builders: address-book entries are targeted by their own `_id` in routes like `PUT /account/addresses/:addressId`, so a fixture lacking one would seed entries that cannot be edited or deleted.
+- The module docblock explains _why_ this factory differs from the cart/wishlist builders: address-book entries are targeted by their own `_id` in routes like `PUT /account/addresses/:addressId`, so a fixture lacking one would seed entries that cannot be edited or deleted.
 - Absence vs. `undefined` is tested deliberately with `Object.hasOwn`, because Mongoose treats a key set to `undefined` differently from a key that is not present in the document.
 - Input items use an `id` field; the factory maps it to `_id` in the output. Tests confirm both the type (`ObjectId`) and the value match the source string.

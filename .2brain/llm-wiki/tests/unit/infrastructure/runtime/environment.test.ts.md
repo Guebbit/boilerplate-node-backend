@@ -25,6 +25,6 @@ Exhaustive unit test suite for the three environment-variable coercion helpers i
 
 ## Notes
 
-- Tests are deliberately exhaustive on *unusable* inputs. The inline comments document the specific production bugs each case guards against (e.g., `parseInt` reading `'5mb'` as 5; `!== '0'` kill-switch vs. `=== 'true'` opt-in inconsistency; `NaN` minutes becoming an `Invalid Date`).
+- Tests are deliberately exhaustive on _unusable_ inputs. The inline comments document the specific production bugs each case guards against (e.g., `parseInt` reading `'5mb'` as 5; `!== '0'` kill-switch vs. `=== 'true'` opt-in inconsistency; `NaN` minutes becoming an `Invalid Date`).
 - The `withValue` helper is a test-local concern; it does not export or mutate any shared state beyond `process.env[CANARY]`.
 - `environmentDecimal` intentionally accepts `0` and negative values, deferring range validation to the caller—do not add a minimum-clamp test here without a corresponding change in the implementation.

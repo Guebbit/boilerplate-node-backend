@@ -14,14 +14,14 @@ Unit tests for `accessibleFilter` (from `@kernel/access/query`), the compiled ac
 ## Key elements
 
 - **`describe('accessibleFilter', …)`** — single test suite covering eight scenarios:
-  - **Admin / unrestricted** → returns `{}`; explicitly asserts `{}` (not `undefined`) so callers spreading the filter into a query cannot conflate "no conditions" with "no rules."
-  - **Customer reading `Product`** → `{ active: true, deletedAt: null }`.
-  - **Customer (owner-scope) reading `Order`** → `{ userId: Types.ObjectId(…), deletedAt: null }`; verifies the filter carries an `ObjectId`, not the raw hex string.
-  - **Operator with no rule for the subject** → `{ $expr: { $eq: [0, 1] } }` (CASL `EMPTY_RESULT_QUERY`).
-  - **Anonymous (`undefined`) caller reading `Order`** → same empty-result sentinel.
-  - **Anonymous caller reading `Product`** → still gets the public `{ active: true, deletedAt: null }` catalogue filter.
-  - **Manager reading `Product`** → asserts `tenantId` is *absent* from the serialized filter.
-  - **Write action (`'update'`)** → same rules engine; manager gets `{}`, customer gets the empty-result sentinel.
+    - **Admin / unrestricted** → returns `{}`; explicitly asserts `{}` (not `undefined`) so callers spreading the filter into a query cannot conflate "no conditions" with "no rules."
+    - **Customer reading `Product`** → `{ active: true, deletedAt: null }`.
+    - **Customer (owner-scope) reading `Order`** → `{ userId: Types.ObjectId(…), deletedAt: null }`; verifies the filter carries an `ObjectId`, not the raw hex string.
+    - **Operator with no rule for the subject** → `{ $expr: { $eq: [0, 1] } }` (CASL `EMPTY_RESULT_QUERY`).
+    - **Anonymous (`undefined`) caller reading `Order`** → same empty-result sentinel.
+    - **Anonymous caller reading `Product`** → still gets the public `{ active: true, deletedAt: null }` catalogue filter.
+    - **Manager reading `Product`** → asserts `tenantId` is _absent_ from the serialized filter.
+    - **Write action (`'update'`)** → same rules engine; manager gets `{}`, customer gets the empty-result sentinel.
 
 ## Relationships
 
@@ -32,5 +32,5 @@ Unit tests for `accessibleFilter` (from `@kernel/access/query`), the compiled ac
 
 - `{}` and `{ $expr: { $eq: [0, 1] } }` are **semantically opposite** to a Mongoose query (match-all vs. match-none) but look similarly "empty." The tests exist precisely to keep those two outcomes from being swapped.
 - Owner-scope filtering requires a `Types.ObjectId` in the filter; passing the caller's hex string instead would silently match zero rows. The test asserts the concrete `ObjectId` instance.
-- The `tenantId` absence check uses `JSON.stringify(…).not.toContain('tenantId')` rather than a structural assertion, because the field must not appear *at all*—an explicit `tenantId: undefined` would serialize to `{}` and pass a naive `toEqual` check while still being semantically wrong.
+- The `tenantId` absence check uses `JSON.stringify(…).not.toContain('tenantId')` rather than a structural assertion, because the field must not appear _at all_—an explicit `tenantId: undefined` would serialize to `{}` and pass a naive `toEqual` check while still being semantically wrong.
 - The write-action test (`'update'`) confirms `accessibleFilter` is action-aware and that a single rules artefact drives both read and write paths without separate filter logic.

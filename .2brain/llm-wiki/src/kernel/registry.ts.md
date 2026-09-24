@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the manifest interfaces that turn the explicit module list in `src/modules.ts` into a running application. Each module declares—through these typed contracts—everything it needs the app tier to do *for* it (mount routes, drain queues, write back image digests, collect personal data, register translatable collections, validate required env vars). The design enforces a one-directional boundary: infrastructure and kernel code never import `src/modules/*`; instead, modules register declarations here and the app tier resolves them by string key.
+Defines the manifest interfaces that turn the explicit module list in `src/modules.ts` into a running application. Each module declares—through these typed contracts—everything it needs the app tier to do _for_ it (mount routes, drain queues, write back image digests, collect personal data, register translatable collections, validate required env vars). The design enforces a one-directional boundary: infrastructure and kernel code never import `src/modules/*`; instead, modules register declarations here and the app tier resolves them by string key.
 
 ## Key elements
 

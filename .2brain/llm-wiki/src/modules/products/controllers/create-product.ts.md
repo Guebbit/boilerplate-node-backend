@@ -29,7 +29,7 @@ Admin-facing HTTP handler for `POST /products`. It decodes the request body (JSO
 
 ## Notes
 
-- **Multipart `translations`:** In a multipart request, `translations` arrives as a JSON-encoded *string* (multipart parts cannot carry nested objects). `readInput` decodes it via the `jsonFields` mechanism, just as it decodes `numbers` and `stringArrays`. Callers must `JSON.stringify` the translations object before putting it in the multipart part.
+- **Multipart `translations`:** In a multipart request, `translations` arrives as a JSON-encoded _string_ (multipart parts cannot carry nested objects). `readInput` decodes it via the `jsonFields` mechanism, just as it decodes `numbers` and `stringArrays`. Callers must `JSON.stringify` the translations object before putting it in the multipart part.
 - **`imageUrl` default:** When no image is uploaded, `imageUrl` is set to `''` (empty string), not `null`/`undefined`. This matches the `zodProductCreateSchema` expectation.
-- **Cleanup on every failure path:** `deleteUpload()` is called in both the business-logic rejection branch *and* the unexpected-error `.catch`, each with a `.catch(() => undefined)` so a failed cleanup doesn't mask the original error.
-- **Body spread ordering:** `{ ...request.body, price, active, … }` places the decoded (typed) values *after* the raw body spread, so the decoded values always win over any same-named raw fields.
+- **Cleanup on every failure path:** `deleteUpload()` is called in both the business-logic rejection branch _and_ the unexpected-error `.catch`, each with a `.catch(() => undefined)` so a failed cleanup doesn't mask the original error.
+- **Body spread ordering:** `{ ...request.body, price, active, … }` places the decoded (typed) values _after_ the raw body spread, so the decoded values always win over any same-named raw fields.

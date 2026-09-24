@@ -17,9 +17,9 @@ Single, canonical registry of every permission key in the system. It is the only
 - **`actions`** — closed list of verbs a key may use: `read`, `create`, `update`, `delete`, `checkout`, `sweep`, `override`. `write` and `manage` are deliberately absent.
 - **`scopes`** — the two mutually exclusive caller scopes: `tenant` (bare keys) and `platform` (`platform.`-prefixed keys). A caller resolves to exactly one.
 - **`keys`** — the array of permission definitions. Each entry carries `key` (dot-shaped ID), `module`, `subject` (CASL type), `action`, `scope`, `description`, and optionally:
-  - `conditions` — ABAC filter fragment (e.g. `active: true`, `deletedAt: null`, `userId: $caller.id`) compiled into the read query; no expression language, only `$caller.<field>` substitution.
-  - `stepUp` — `critical` or `sensitive`; forces a re-authentication window before the action is permitted.
-  - `deniedCode` — i18n code used in the 403 response body instead of the generic message.
+    - `conditions` — ABAC filter fragment (e.g. `active: true`, `deletedAt: null`, `userId: $caller.id`) compiled into the read query; no expression language, only `$caller.<field>` substitution.
+    - `stepUp` — `critical` or `sensitive`; forces a re-authentication window before the action is permitted.
+    - `deniedCode` — i18n code used in the 403 response body instead of the generic message.
 
 ## Relationships
 

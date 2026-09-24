@@ -14,9 +14,9 @@ CLI entry point for the per-file mutation-score ratchet. It reads a pre-generate
 ## Key elements
 
 - **Three invocation modes** (selected via `process.argv` flags, no external arg-parsing library):
-  - *Bare check* (`npm run mutation:check`) — compare current report to baseline, report regressions, write nothing.
-  - `--update` — same comparison, but also records the run as the new baseline (keeping the higher score per file, so regressed files stay failing).
-  - `--merge --merge-dir=<dir>` — fold multiple sharded-sweep reports (every `mutation.json` under the given directory) into the baseline, leaving files no shard measured untouched.
+    - _Bare check_ (`npm run mutation:check`) — compare current report to baseline, report regressions, write nothing.
+    - `--update` — same comparison, but also records the run as the new baseline (keeping the higher score per file, so regressed files stay failing).
+    - `--merge --merge-dir=<dir>` — fold multiple sharded-sweep reports (every `mutation.json` under the given directory) into the baseline, leaving files no shard measured untouched.
 - **Partial-report guard** — before `--update` writes, `missingFromReport` checks whether the report covers fewer files than the baseline knows about; if so, the write is refused with an explanatory message (exit 1).
 - **No-baseline handling** — a bare check with no baseline file is a no-op (exit 0); `--update` or `--merge` with no baseline records the first one.
 - **Exit codes** — `0` pass, `1` one or more files regressed (or partial-report refusal), `2` report missing or bad arguments.

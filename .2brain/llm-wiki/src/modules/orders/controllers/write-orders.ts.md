@@ -14,24 +14,24 @@ Admin-side create/update controller for orders. A single exported handler covers
 ## Key elements
 
 - **`writeOrders`** (exported) — The sole handler. Reads an optional `id` via `readInput`, then:
-  - *No id (POST):* Validates body against `CreateOrderBody`, calls `orderService.create`, increments `orderCreatedTotal`, enriches the result with `orderService.withActions`, and responds **201**.
-  - *No id (PUT):* Immediately returns **422** with an i18n "missing data" error.
-  - *Id present (PUT):* Chooses between `UpdateOrderByIdBody` (id from path) and `UpdateOrderBody` (id in body) based on `request.params.id`, validates, calls `orderService.updateById`, enriches with `withActions`, and responds **200**.
+    - _No id (POST):_ Validates body against `CreateOrderBody`, calls `orderService.create`, increments `orderCreatedTotal`, enriches the result with `orderService.withActions`, and responds **201**.
+    - _No id (PUT):_ Immediately returns **422** with an i18n "missing data" error.
+    - _Id present (PUT):_ Chooses between `UpdateOrderByIdBody` (id from path) and `UpdateOrderBody` (id in body) based on `request.params.id`, validates, calls `orderService.updateById`, enriches with `withActions`, and responds **200**.
 - **Validation** — All parsing uses Zod `safeParse`; failures short-circuit through `rejectValidation`.
 - **Error handling** — `.catch(catchAs(response, …))` on both paths; `refused(response, result)` guards against service-level rejections before responding.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/orders/routes.ts` | Registers `writeOrders` as the handler for the POST and PUT order routes. |
-| `src/modules/orders/services/index.ts` | Calls `orderService.create`, `orderService.updateById`, and `orderService.withActions`. |
-| `src/infrastructure/http/request.ts` | Uses `readInput` to extract the optional path id and `callerContextOf` to build the caller/locale context passed to the service. |
-| `src/infrastructure/http/response.ts` | Emits `successResponse` (200/201) and `rejectResponse` (422). |
-| `src/infrastructure/http/controller.ts` | Uses `catchAs` for error mapping, `refused` for service rejection checks, and `rejectValidation` for Zod failures. |
-| `src/infrastructure/i18n/index.ts` | Imports `t` to localise the 422 error message. |
-| `src/modules/orders/metrics.ts` | Increments the `orderCreatedTotal` Prometheus counter on successful creation. |
-| `src/types/index.ts` | Imports request-body types (`CreateOrderRequest`, `UpdateOrderRequest`, `UpdateOrderByIdRequest`) and the `Order` response type. |
+| Neighbor                                | Interaction                                                                                                                      |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `src/modules/orders/routes.ts`          | Registers `writeOrders` as the handler for the POST and PUT order routes.                                                        |
+| `src/modules/orders/services/index.ts`  | Calls `orderService.create`, `orderService.updateById`, and `orderService.withActions`.                                          |
+| `src/infrastructure/http/request.ts`    | Uses `readInput` to extract the optional path id and `callerContextOf` to build the caller/locale context passed to the service. |
+| `src/infrastructure/http/response.ts`   | Emits `successResponse` (200/201) and `rejectResponse` (422).                                                                    |
+| `src/infrastructure/http/controller.ts` | Uses `catchAs` for error mapping, `refused` for service rejection checks, and `rejectValidation` for Zod failures.               |
+| `src/infrastructure/i18n/index.ts`      | Imports `t` to localise the 422 error message.                                                                                   |
+| `src/modules/orders/metrics.ts`         | Increments the `orderCreatedTotal` Prometheus counter on successful creation.                                                    |
+| `src/types/index.ts`                    | Imports request-body types (`CreateOrderRequest`, `UpdateOrderRequest`, `UpdateOrderByIdRequest`) and the `Order` response type. |
 
 ## Notes
 

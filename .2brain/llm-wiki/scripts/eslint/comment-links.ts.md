@@ -15,7 +15,7 @@ ESLint rule that flags `.ts`/`.tsx` file references inside comments which no lon
 
 - **`commentLinks`** (exported rule) — The ESLint rule object. On `Program` it iterates every comment via `sourceCode.getAllComments()`, blanks out URL-like strings, extracts `.ts`/`.tsx` references with `TS_REFERENCE`, and reports a `stale` message for any that fail resolution.
 - **`resolvesTsReference(reference, filename)`** (exported) — Decides whether a single reference is valid. `<placeholder>` segments short-circuit to true; `./`/`../` paths are resolved against the file containing the comment via `existsSync`; all other paths are suffix-matched against the cached set of tracked files, with `ALLOWED` exceptions honoured.
-- **`TS_REFERENCE` / `TS_SEGMENT`** — Regexes that capture a full path ending in `.ts`/`.tsx`, where each path segment may be a word or a `<placeholder>`. Built so a placeholder is consumed *inside* the match (avoids leaving a dangling suffix).
+- **`TS_REFERENCE` / `TS_SEGMENT`** — Regexes that capture a full path ending in `.ts`/`.tsx`, where each path segment may be a word or a `<placeholder>`. Built so a placeholder is consumed _inside_ the match (avoids leaving a dangling suffix).
 - **`URL_LIKE`** — Regex blanked before scanning so external links are never treated as local path references.
 - **`targetsCache` / `targets()`** — Module-level lazy singleton that calls `trackedTargets(ROOT)` once per lint run, returning `{ targets, roots }` sets.
 - **`Options`, `MessageIds`** — Type parameters: no rule options, single `stale` message.

@@ -15,13 +15,13 @@ Module manifest that registers the **users** module with the kernel: wires the r
 
 - **`ownSessions(tokens)`** — Filters `Token[]` down to live refresh sessions and maps them to the `ExportSession` shape (id, type, optional expiration/lastUsedAt). Used only by the `sessions` personal-data section.
 - **`default` export** — An object `satisfies AppModule` with:
-  - `name` / `basePath` — `'users'` / `'/users'`.
-  - `permissions` — Four `users.any.*` keys; deletion of the module must also delete these keys (enforced by a cross-cutting test).
-  - `routes` — Re-exports `router` from `./routes`.
-  - `locales` — Path to `locales/` alongside this file.
-  - `imageTargets` — Registers `userRepository.writebackImage` as the writeback target for the `users` image slot.
-  - `personalData` — Two independent `collect` sections (`profile`, `sessions`), each calling `userService.findByIdWithCredentials`.
-  - `requiredConfig` — Declares `NODE_PII_ENCRYPTION_KEY` (min 16 chars, placeholder detected).
+    - `name` / `basePath` — `'users'` / `'/users'`.
+    - `permissions` — Four `users.any.*` keys; deletion of the module must also delete these keys (enforced by a cross-cutting test).
+    - `routes` — Re-exports `router` from `./routes`.
+    - `locales` — Path to `locales/` alongside this file.
+    - `imageTargets` — Registers `userRepository.writebackImage` as the writeback target for the `users` image slot.
+    - `personalData` — Two independent `collect` sections (`profile`, `sessions`), each calling `userService.findByIdWithCredentials`.
+    - `requiredConfig` — Declares `NODE_PII_ENCRYPTION_KEY` (min 16 chars, placeholder detected).
 
 ## Relationships
 
@@ -35,7 +35,7 @@ Module manifest that registers the **users** module with the kernel: wires the r
 
 ## Notes
 
-- **Shared document with `account`.** The `account` module (authentication) writes to the *same* user document via this module's `userRepository`; there is no separate collection. The module docblock calls this the "shared kernel."
+- **Shared document with `account`.** The `account` module (authentication) writes to the _same_ user document via this module's `userRepository`; there is no separate collection. The module docblock calls this the "shared kernel."
 - **`personalData` sections are independent by design.** Both `collect` callbacks call `findByIdWithCredentials` separately rather than sharing one query — intentional per `kernel/registry.ts` conventions, and a data export is not a hot path.
 - **`profile` section returns `undefined` when the subject's row is deleted.** The `account` module's assembly layer answers 404 for this specific section; other sections would be meaningless without it.
 - **`NODE_PII_ENCRYPTION_KEY` is co-declared with `addresses`.** The key guards phone-number encryption; it is never optional without this module (per `addresses`' `dependsOn`), so declaring it here covers both modules.

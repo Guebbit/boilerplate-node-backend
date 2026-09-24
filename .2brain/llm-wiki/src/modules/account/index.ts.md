@@ -28,5 +28,5 @@ No types, models, or other declarations are defined here; the file is purely a r
 ## Notes
 
 - This module **publishes no model of its own** because it owns no database collection. The address-book model lives in `@modules/addresses`.
-- `session/` tokens are intentionally *not* re-exported; every request authenticates through `kernel/authentication.ts` instead.
+- `session/` tokens are intentionally _not_ re-exported; every request authenticates through `kernel/authentication.ts` instead.
 - `oauth/` and `two-factor/` sub-modules are also hidden behind the service objects rather than exposed as separate imports.

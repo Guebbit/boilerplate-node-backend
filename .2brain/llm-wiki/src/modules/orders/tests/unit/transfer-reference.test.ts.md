@@ -15,16 +15,16 @@ Unit tests for the transfer-reference domain logic. Verifies that `buildReferenc
 
 - **`ORDER_ID`** — a 24-character hex fixture (a real-shaped ObjectId) used as the canonical input throughout.
 - **`describe('buildReference')`** — asserts three properties:
-  - Output matches `/^RF\d{2}[\dA-Z]{19}$/` (prefix `RF`, 2 digits, 19 mixed alphanumerics).
-  - Determinism: same order ID → identical reference.
-  - Uniqueness: different order IDs → different references.
+    - Output matches `/^RF\d{2}[\dA-Z]{19}$/` (prefix `RF`, 2 digits, 19 mixed alphanumerics).
+    - Determinism: same order ID → identical reference.
+    - Uniqueness: different order IDs → different references.
 - **`describe('parseReference — the RF branch')`** — asserts:
-  - Round-trip: `parseReference(buildReference(id)) === buildReference(id)`.
-  - Forgiveness: grouped (4-char spaces) + lowercased input still parses correctly.
-  - Single-character typo in the last position → `null` (no silent match).
-  - Structured-but-wrong-length string → `null`.
-  - Raw ObjectId (plain or space-grouped) → `null` (pre-reference orders are not reachable).
-  - Arbitrary non-reference strings and empty string → `null`.
+    - Round-trip: `parseReference(buildReference(id)) === buildReference(id)`.
+    - Forgiveness: grouped (4-char spaces) + lowercased input still parses correctly.
+    - Single-character typo in the last position → `null` (no silent match).
+    - Structured-but-wrong-length string → `null`.
+    - Raw ObjectId (plain or space-grouped) → `null` (pre-reference orders are not reachable).
+    - Arbitrary non-reference strings and empty string → `null`.
 
 ## Relationships
 

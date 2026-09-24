@@ -20,7 +20,7 @@ Grafana provisioning file that tells Grafana where to find dashboard JSON files 
 
 ## Relationships
 
-- **`docker/observability/grafana.datasources.yaml`** — sibling provisioning file loaded by Grafana in the same startup phase. Both live under the same Grafana provisioning path (`/etc/grafana/provisioning/...`) and are applied independently: datasources define *where data comes from*, this file defines *where dashboards come from*. They do not reference each other directly but are typically deployed and versioned together as part of the observability stack.
+- **`docker/observability/grafana.datasources.yaml`** — sibling provisioning file loaded by Grafana in the same startup phase. Both live under the same Grafana provisioning path (`/etc/grafana/provisioning/...`) and are applied independently: datasources define _where data comes from_, this file defines _where dashboards come from_. They do not reference each other directly but are typically deployed and versioned together as part of the observability stack.
 
 ## Notes
 

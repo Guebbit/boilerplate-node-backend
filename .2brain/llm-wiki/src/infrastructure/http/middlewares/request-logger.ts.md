@@ -14,9 +14,9 @@ Express access-log middleware that emits exactly one structured log line per com
 ## Key elements
 
 - **`requestLogger`** (exported function) — The sole export. An Express `(req, res, next)` middleware that:
-  - Records a start timestamp before calling `next()`.
-  - Attaches a one-time `finish` listener on the response.
-  - On finish, computes duration, resolves the route label, maps status → level (`≥500` → `error`, `≥400` → `warn`, else `info`), and calls `logger.log` with a structured metadata object (`request_id`, `trace_id`, `method`, `route`, `status_code`, `duration_ms`).
+    - Records a start timestamp before calling `next()`.
+    - Attaches a one-time `finish` listener on the response.
+    - On finish, computes duration, resolves the route label, maps status → level (`≥500` → `error`, `≥400` → `warn`, else `info`), and calls `logger.log` with a structured metadata object (`request_id`, `trace_id`, `method`, `route`, `status_code`, `duration_ms`).
 
 ## Relationships
 

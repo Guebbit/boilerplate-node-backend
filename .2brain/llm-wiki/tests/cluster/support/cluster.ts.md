@@ -17,7 +17,7 @@ Boots the production cluster entry point (`src/cluster.ts`) as a real child proc
 - **`startCluster({ workers, env, bootTimeoutMs })`** — the main entry point. Creates an ephemeral Mongo under `tmp/test/cluster-mongo/<uuid>`, picks a free port, spawns `npx tsx src/cluster.ts` with `detached: true`, wires output capture, and returns a `Cluster` handle.
 - **`freePort()`** — binds to port `0`, reads back the OS-assigned port, closes the probe. Avoids `EADDRINUSE` races between concurrent runs.
 - **`waitForListening(port, timeoutMs)`** — polls TCP-connect until something accepts on the port. Proves at least one worker is up.
-- **`waitForWorkers(workers, timeoutMs, countReady)`** — polls a live counter until *all* N workers have logged their ready marker. Needed because `waitForListening` alone lets a burst hit a still-single-worker cluster.
+- **`waitForWorkers(workers, timeoutMs, countReady)`** — polls a live counter until _all_ N workers have logged their ready marker. Needed because `waitForListening` alone lets a burst hit a still-single-worker cluster.
 - **`WORKER_READY_MARKER`** (`'Server listening on port'`) — the log line `src/app.ts` emits after `.listen()` is acknowledged; the only per-worker ready signal observable from outside the process.
 - **`capture(chunk)`** — accumulates stdout/stderr into a bounded ring (`MAX_CAPTURED_CHUNKS = 40`) and counts `WORKER_READY_MARKER` occurrences across chunk boundaries via a `readyTail` carry.
 - **`signalGroup(signal)`** — sends a signal to the entire process group (`process.kill(-child.pid, …)`) so `npx → tsx → primary → workers` all die together, regardless of whether intermediate layers forward signals.

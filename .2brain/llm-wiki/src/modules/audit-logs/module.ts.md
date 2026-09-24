@@ -15,9 +15,9 @@ Module manifest and import-time wiring for the audit-logs module. It registers t
 
 - **`registerAuditSink(auditLogService.record)`** — top-level side effect executed at import time; connects the observability audit emitter to this module's `record` method. Removing this file simply stops persistence (fire-and-forget).
 - **`export default { … } satisfies AppModule`** — the module manifest:
-  - `name: 'audit-logs'`, `basePath: '/audit'`, `routes: router`, `locales` path.
-  - `personalData[].collect` — paginated Art. 15 export scoped to `actor: subject.userId` only; uses `readAll` + `search` with `MAX_CONFIGURED_PAGE_SIZE`.
-  - `permissions: ['audit.any.read']` — the single read-only permission this module introduces; no write permission is declared by design.
+    - `name: 'audit-logs'`, `basePath: '/audit'`, `routes: router`, `locales` path.
+    - `personalData[].collect` — paginated Art. 15 export scoped to `actor: subject.userId` only; uses `readAll` + `search` with `MAX_CONFIGURED_PAGE_SIZE`.
+    - `permissions: ['audit.any.read']` — the single read-only permission this module introduces; no write permission is declared by design.
 
 ## Relationships
 

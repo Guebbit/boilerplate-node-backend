@@ -13,7 +13,7 @@ Controller for `POST /account/login`. Verifies credentials, mints a session (ref
 
 ## Key elements
 
-- **`postLogin`** (exported) — The Express handler. Destructures `email`/`password` from `request.body`, validates the `remember` tier, runs `runTokenCleanup`, delegates to `accountService.login`, then either short-circuits into the 2FA challenge path or calls `issueSession` to set cookies and return an access token. All errors in the promise chain are funneled to `rejectDatabaseError` and intentionally *not* recorded as login failures.
+- **`postLogin`** (exported) — The Express handler. Destructures `email`/`password` from `request.body`, validates the `remember` tier, runs `runTokenCleanup`, delegates to `accountService.login`, then either short-circuits into the 2FA challenge path or calls `issueSession` to set cookies and return an access token. All errors in the promise chain are funneled to `rejectDatabaseError` and intentionally _not_ recorded as login failures.
 - **`rememberSchema`** (module-local) — A Zod schema that coerces `request.body.remember` into the `RefreshTokenExpiryTime` enum; rejects unknown tiers with a 422 before any credential work occurs.
 - **2FA branch** — If `data.twoFactorEnabledAt` is set, the handler calls `twoFactorService.buildLoginChallenge` and returns a challenge object instead of a session; `postLoginTwoFactor` (not in this file) completes the login.
 
@@ -36,6 +36,6 @@ Controller for `POST /account/login`. Verifies credentials, mints a session (ref
 ## Notes
 
 - **Express 5 body semantics:** `request.body` is `undefined` (not `{}`) when no body parser matched the content-type. The `?? {}` guard on the destructure converts that into an empty body so `accountService.login` reaches its own 422 rather than throwing a synchronous `TypeError`. The type signature explicitly types the body as `LoginRequest | undefined` to keep the guard honest.
-- **Observability placement is deliberate:** Validation failures for `remember` (422) occur *before* any `recordLoginFailure` call, so they never pollute the login-failure metric. In contrast, a 422 raised *inside* `accountService.login` arrives after the failure-recording hook and is still captured.
-- **Error semantics in the catch chain:** A database or infrastructure failure after a correct password is *not* a rejected login. The `.catch` block routes everything to `rejectDatabaseError` without calling `recordLoginFailure`.
+- **Observability placement is deliberate:** Validation failures for `remember` (422) occur _before_ any `recordLoginFailure` call, so they never pollute the login-failure metric. In contrast, a 422 raised _inside_ `accountService.login` arrives after the failure-recording hook and is still captured.
+- **Error semantics in the catch chain:** A database or infrastructure failure after a correct password is _not_ a rejected login. The `.catch` block routes everything to `rejectDatabaseError` without calling `recordLoginFailure`.
 - **Roles are fetched post-session:** The user document does not carry its own role; `rolesOf(userId, DEPLOYMENT_TENANT_ID)` is called after `issueSession` resolves to read the membership row fresh.

@@ -25,4 +25,4 @@ Barrel entry point for the cart domain layer. It re-exports the pure business ru
 ## Notes
 
 - The domain layer is enforced as framework-free by lint rules (see `docs/theory/domain-layer.md`). Avoid importing React, Node, or other runtime dependencies through this path.
-- Because this file is a pure re-export, adding a new rule means updating both `rules.ts` *and* this barrel's export list.
+- Because this file is a pure re-export, adding a new rule means updating both `rules.ts` _and_ this barrel's export list.

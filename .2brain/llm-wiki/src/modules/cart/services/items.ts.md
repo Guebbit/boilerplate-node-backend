@@ -16,7 +16,7 @@ Cart item read/write service. Provides the operations to read a user's cart line
 - **`cartGet`** — Reads cart lines joined with product data. No analytics, no envelope.
 - **`cartGetForBadge`** — Alias for `cartViewOf`. Returns a `CartView` (count + totals) without emitting `CART_VIEWED`. Intended for the header badge poll.
 - **`cartGetForView`** — Same read as badge but emits `CART_VIEWED` analytics. The "person opening their basket" path.
-- **`upsertCartItem`** *(private)* — Shared write path for add/set. Validates the product exists and is public via `productService.findPublicById`, then delegates to `cartRepository.upsertLine`. Returns 404 for unknown products, 422 (`CART_QUANTITY_LIMIT`) when the `add` mode exceeds `QUANTITY_LIMIT`.
+- **`upsertCartItem`** _(private)_ — Shared write path for add/set. Validates the product exists and is public via `productService.findPublicById`, then delegates to `cartRepository.upsertLine`. Returns 404 for unknown products, 422 (`CART_QUANTITY_LIMIT`) when the `add` mode exceeds `QUANTITY_LIMIT`.
 - **`cartItemSetById`** — Calls `upsertCartItem` in `'set'` mode. No analytics; the caller decides what to emit.
 - **`cartItemAdd`** — Wraps `cartItemSetById` and emits `CART_ITEM_ADDED` on success. Requires `CallerContext`.
 - **`cartItemUpdateQuantity`** — Wraps `cartItemSetById` and emits `CART_ITEM_UPDATED` on success. Requires `CallerContext`.

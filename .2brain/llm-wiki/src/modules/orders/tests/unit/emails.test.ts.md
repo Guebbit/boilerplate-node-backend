@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the two customer-facing money renderers — `orderConfirmEmail` and `invoiceDocument` — that must agree with the charge the customer actually sees. The file asserts that these builders *delegate* totals to `orderTotal`, render one line per item with correct per-item fields, respect locale, and never re-resolve product titles through the i18n `t()` function. It deliberately does not re-test arithmetic (that lives in `totals.property.test.ts`).
+Unit tests for the two customer-facing money renderers — `orderConfirmEmail` and `invoiceDocument` — that must agree with the charge the customer actually sees. The file asserts that these builders _delegate_ totals to `orderTotal`, render one line per item with correct per-item fields, respect locale, and never re-resolve product titles through the i18n `t()` function. It deliberately does not re-test arithmetic (that lives in `totals.property.test.ts`).
 
 ## Key elements
 
@@ -23,8 +23,8 @@ Unit tests for the two customer-facing money renderers — `orderConfirmEmail` a
 ## Relationships
 
 - **`src/modules/orders/emails.ts`** — under test; provides `orderConfirmEmail`, `invoiceDocument`, and the types `OrderLines`, `InvoiceOrder`, `InvoiceVatBlock`.
-- **`src/modules/orders/domain/index.ts`** — re-exports `orderTotal` and `orderTaxBreakdown`, which the tests import to compute *expected* values, ensuring the builders delegate rather than recompute.
-- **`src/modules/orders/domain/totals.ts`** — source of the `orderTotal` / `orderTaxBreakdown` implementations; this file only asserts the builders *use* those, not that they are correct.
+- **`src/modules/orders/domain/index.ts`** — re-exports `orderTotal` and `orderTaxBreakdown`, which the tests import to compute _expected_ values, ensuring the builders delegate rather than recompute.
+- **`src/modules/orders/domain/totals.ts`** — source of the `orderTotal` / `orderTaxBreakdown` implementations; this file only asserts the builders _use_ those, not that they are correct.
 - **`src/infrastructure/http/frontend-link.ts`** — `frontendLink` is the expected value for the email's `linkUrl`; the test asserts the builder passes the order id and locale through unchanged.
 
 ## Notes

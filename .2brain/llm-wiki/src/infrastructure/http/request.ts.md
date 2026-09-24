@@ -17,11 +17,11 @@ Owns the rules for reading a route's input from multiple sources (route params, 
 - **`RequestInputDeclaration<TId>`** — Interface a controller passes to `readInput`. Declares the `surface` (which governs source precedence), plus optional field lists for `booleans`, `numbers`, `stringArrays`, `jsonFields`, `anyTrue`, and `ids`.
 - **`RequestSurface`** — Closed union: `'search' | 'list' | 'write' | 'create' | 'delete' | 'path'`. Each surface maps to a fixed, ordered source list (e.g. `search` → body then query; `list` → query only; `delete` → params, query, body).
 - **`RequestInputSource`** — Union `'params' | 'body' | 'query'`; the three physical locations a value can arrive from.
-- **`parseFormBoolean(value)`** *(exported)* — Decodes a string to `boolean` via `parseBooleanWord`; returns the value untouched if it isn't a recognisable boolean word. Exported for `schemas.ts` multipart boolean schemas.
-- **`parseFormJson(value)`** *(exported)* — Decodes a JSON-encoded string to its parsed value; returns the original string on failure. Uses `=== undefined` (not `??`) so valid JSON `null`/`0`/`''` are preserved.
-- **`bodyRecordOf(request)`** *(exported)* — Safely narrows `request.body` to `Record<string, unknown>`, collapsing arrays, scalars, and `undefined` to `{}`. Typed against `Pick<Request, 'body'>` so callers like `uploads.ts` that only carry the body field can pass it.
-- **`parseFormNumber(value)`** *(module-private)* — Decodes a non-empty string to a finite number; leaves empty strings and non-numeric strings untouched.
-- **`SURFACE_SOURCES`** *(module-private)* — The closed precedence map from surface → ordered source array.
+- **`parseFormBoolean(value)`** _(exported)_ — Decodes a string to `boolean` via `parseBooleanWord`; returns the value untouched if it isn't a recognisable boolean word. Exported for `schemas.ts` multipart boolean schemas.
+- **`parseFormJson(value)`** _(exported)_ — Decodes a JSON-encoded string to its parsed value; returns the original string on failure. Uses `=== undefined` (not `??`) so valid JSON `null`/`0`/`''` are preserved.
+- **`bodyRecordOf(request)`** _(exported)_ — Safely narrows `request.body` to `Record<string, unknown>`, collapsing arrays, scalars, and `undefined` to `{}`. Typed against `Pick<Request, 'body'>` so callers like `uploads.ts` that only carry the body field can pass it.
+- **`parseFormNumber(value)`** _(module-private)_ — Decodes a non-empty string to a finite number; leaves empty strings and non-numeric strings untouched.
+- **`SURFACE_SOURCES`** _(module-private)_ — The closed precedence map from surface → ordered source array.
 
 ## Relationships
 

@@ -19,7 +19,7 @@ Barrel (re-export) entry point for the request-scoped i18n subsystem. It exists 
 
 ## Relationships
 
-- **`src/infrastructure/http/middlewares/locale.ts`** — `attachLocale` (in that middleware) resolves the client's `Accept-Language` via `request.acceptsLanguages` and then calls into this module's context to set the active locale for the request. This file deliberately does *not* re-implement language negotiation.
+- **`src/infrastructure/http/middlewares/locale.ts`** — `attachLocale` (in that middleware) resolves the client's `Accept-Language` via `request.acceptsLanguages` and then calls into this module's context to set the active locale for the request. This file deliberately does _not_ re-implement language negotiation.
 - **`src/infrastructure/http/validation-messages.ts`**, **`src/app/error-handling.ts`**, **`src/infrastructure/http/middlewares/{human-challenge,idempotency,rate-limit,upload}.ts`**, **`src/infrastructure/http/controller.ts`**, **`src/infrastructure/http/request.ts`** — consumer sites that import `t` (or `getLocaleContext`) from this barrel to obtain translated user-facing strings.
 - **`src/app.ts`** / **`src/app/demo.ts`** — application bootstrap; expected to call `registerLocaleDirectories` and/or `startLocaleOverrideRefresh` during startup.
 - **`scenarios/locales.ts`** / **`scenarios/products.ts`** — test/scenario fixtures that exercise locale resolution and translated product data.
@@ -28,6 +28,6 @@ Barrel (re-export) entry point for the request-scoped i18n subsystem. It exists 
 ## Notes
 
 - Import path is always the alias `@infrastructure/i18n` (i.e., this file). Do not deep-import `./catalog`, `./context`, etc. from outside the directory.
-- Two concerns are explicitly **outside** this module: `Accept-Language` parsing (owned by `http/middlewares/locale.ts`) and the translation *port* abstraction (owned by `kernel/translation.ts`). Don't add logic here for either.
+- Two concerns are explicitly **outside** this module: `Accept-Language` parsing (owned by `http/middlewares/locale.ts`) and the translation _port_ abstraction (owned by `kernel/translation.ts`). Don't add logic here for either.
 - `localeCandidatesFor` is a pure function (no side effects) and is the only catalog export intended for use outside the server runtime.
 - The override refresh timer (`startLocaleOverrideRefresh` / `stopLocaleOverrideRefresh`) is a process-wide singleton; call `stop` before `reset` in teardown paths to avoid dangling intervals.

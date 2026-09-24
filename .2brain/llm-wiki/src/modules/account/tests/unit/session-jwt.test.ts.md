@@ -34,6 +34,6 @@ Unit test suite for the JWT token layer (`session/jwt.ts`). Asserts the security
 
 - **`jest.resetAllMocks()` in `beforeEach`**, not `clearAllMocks`. Resetting wipes the resolved/rejected value assigned per test, preventing a rejection set in one case from leaking into the next.
 - **Environment vars are set in `beforeEach`** (`NODE_TOKEN_ACCESS`, `NODE_TOKEN_REFRESH`, etc.). Ring-rotation tests overwrite `NODE_TOKEN_REFRESH` mid-suite with a comma-separated list to simulate a prepended key.
-- **Partial mock convention**: the comment block above the `jest.mock` call explains that this file exercises the *service* layer (`userService.findByTokenValue`, `.findByIdWithCredentials`, `.tokenTouch`), not raw Mongoose queries. Query-shape assertions live in `users/tests/integration/repository.test.ts`.
+- **Partial mock convention**: the comment block above the `jest.mock` call explains that this file exercises the _service_ layer (`userService.findByTokenValue`, `.findByIdWithCredentials`, `.tokenTouch`), not raw Mongoose queries. Query-shape assertions live in `users/tests/integration/repository.test.ts`.
 - **Hand-built `alg: none` tokens** are a deliberate workaround: `jsonwebtoken`'s own `sign()` will not emit them, so the test constructs the three base64url segments manually.
 - **`createRefreshToken` tests** (truncated in the listing) drive `user.tokenAdd` to capture the stored token and inspect its decoded `kid` header via `decode(token, { complete: true })`.

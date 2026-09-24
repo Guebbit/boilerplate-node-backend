@@ -39,7 +39,7 @@ Business-logic layer for all wishlist operations. It translates repository reads
 
 - **Response is ids only.** The contract suite rejects any response that ships product objects per line. `toWishlistView` is the single serialization point.
 - **Idempotent add.** `wishlistRepository.addLine` uses `$addToSet`; a double-click returns the same 200, not a 409.
-- **Move-to-cart ordering is deliberate.** Cart write happens *before* wishlist removal. If the cart write fails, the line remains saved (retryable). The reverse order risks losing the line with no cart entry.
-- **404 vs. pass-through in move-to-cart.** A cart rejection that is *not* `CART_QUANTITY_LIMIT` is re-wrapped as a wishlist 404 (`product-not-found`). The `CART_QUANTITY_LIMIT` reject passes through unchanged so the shopper sees the cart's own message.
+- **Move-to-cart ordering is deliberate.** Cart write happens _before_ wishlist removal. If the cart write fails, the line remains saved (retryable). The reverse order risks losing the line with no cart entry.
+- **404 vs. pass-through in move-to-cart.** A cart rejection that is _not_ `CART_QUANTITY_LIMIT` is re-wrapped as a wishlist 404 (`product-not-found`). The `CART_QUANTITY_LIMIT` reject passes through unchanged so the shopper sees the cart's own message.
 - **`wishlistGet` never 404s.** Absence and emptiness are indistinguishable to the caller; the view is simply `{ items: [] }`.
 - **The two bulk-removal exports** (`wishlistDeleteByUserId`, `productRemoveFromWishlistsById`) are not exposed to controllers; they exist for `module.ts` event subscriptions only.

@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A Zod-schema-driven payload generator that walks a `ZodType` and produces request bodies that either satisfy the schema (`validPayload`) or violate exactly one constraint (`invalidPayloads`). It exists to let the contract test suite answer "does the API honour its contract for *any* legal input?" as a complement to the hand-written scenario factories in each module's `tests/factories.ts`.
+A Zod-schema-driven payload generator that walks a `ZodType` and produces request bodies that either satisfy the schema (`validPayload`) or violate exactly one constraint (`invalidPayloads`). It exists to let the contract test suite answer "does the API honour its contract for _any_ legal input?" as a complement to the hand-written scenario factories in each module's `tests/factories.ts`.
 
 ## Key elements
 

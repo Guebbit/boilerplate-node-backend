@@ -17,7 +17,7 @@ Defines the handler contract for two-factor authentication methods and registers
 - **`MethodEligibility`** (interface) — `{ enrollable, reason? }` returned by `eligibility()` to gate per-account enrollment.
 - **`HANDLERS`** (module-private constant) — ordered array `[totpMethod, emailMethod]`. Order is the order a client should offer methods (cheapest/round-trip-free first); the first armed method becomes `defaultMethod` on a login challenge.
 - **`availableTwoFactorMethods()`** — filters `HANDLERS` to those whose `available()` returns true.
-- **`twoFactorMethod(name)`** — looks up a single handler by wire name among available handlers; returns `undefined` for both unknown *and* unavailable names (deliberate: no information leak about disabled channels).
+- **`twoFactorMethod(name)`** — looks up a single handler by wire name among available handlers; returns `undefined` for both unknown _and_ unavailable names (deliberate: no information leak about disabled channels).
 - **`orderedEntries(entries)`** — re-orders a user's stored `TwoFactorMethodRecord[]` to match `HANDLERS` order, pairing each with its handler and dropping entries with no matching handler.
 
 ## Relationships

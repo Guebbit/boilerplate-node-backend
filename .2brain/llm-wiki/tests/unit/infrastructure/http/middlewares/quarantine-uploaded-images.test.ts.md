@@ -25,7 +25,7 @@ Unit tests for the `quarantineUploadedImages` Express middleware. They verify th
 
 ## Notes
 
-- Errors are asserted as the *resolved value* of `run(...)`, not as rejections. The middleware is expected to call `next(err)` rather than throw; a test that did `await expect(...).rejects` would be testing the wrong contract.
+- Errors are asserted as the _resolved value_ of `run(...)`, not as rejections. The middleware is expected to call `next(err)` rather than throw; a test that did `await expect(...).rejects` would be testing the wrong contract.
 - The "cleanup itself rejects" test exists specifically because the cleanup is a promise chain with no local `.catch`; without the middleware's outer catch, a rejection there would leave the request hanging silently.
 - `publishToQueue` is mocked but never directly asserted upon in these tests—the "ready" path only verifies that `quarantine` was called and keys were recorded; the actual queue publish is presumably covered elsewhere or is a fire-and-forget side effect.
 - Multi-file tests assert **order** of keys/URLs, which pins the implementation to a sequential loop rather than a `Promise.all` over unordered results.

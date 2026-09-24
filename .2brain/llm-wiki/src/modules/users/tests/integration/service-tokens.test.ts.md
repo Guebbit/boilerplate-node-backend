@@ -29,4 +29,4 @@ Integration tests covering the two token-facing lookups on the users service —
 
 - The fixture writes `tokens` directly onto the document (not via `tokenAdd`), so it must store the `hashToken` output — plaintext would never match the hashed lookup inside `consumeToken`.
 - `findByEmail` is tested through `findOneWithCredentials` specifically because the default `select: false` on the `tokens` relation would leave the array `undefined`; both downstream callers (`reset-request`, `delete-request`) push onto that array, so an `undefined` would throw a `TypeError` one layer away.
-- The doc comment references a separate concurrency suite that races `consumeToken`; this file asserts the one-time-use *property* (token absent after consumption) rather than the race itself.
+- The doc comment references a separate concurrency suite that races `consumeToken`; this file asserts the one-time-use _property_ (token absent after consumption) rather than the race itself.

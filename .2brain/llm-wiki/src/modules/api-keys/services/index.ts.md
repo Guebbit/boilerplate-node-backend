@@ -14,9 +14,9 @@ Barrel (re-export) file for the `api-keys` module's `services/` directory. It ex
 ## Key elements
 
 - **`apiKeysService`** – The sole export. An object with three keys that alias functions from `./api-keys`:
-  - `listApiKeys` → `apiKeys.list`
-  - `mintApiKey` → `apiKeys.mint`
-  - `revokeApiKey` → `apiKeys.revoke`
+    - `listApiKeys` → `apiKeys.list`
+    - `mintApiKey` → `apiKeys.mint`
+    - `revokeApiKey` → `apiKeys.revoke`
 
 ## Relationships
 

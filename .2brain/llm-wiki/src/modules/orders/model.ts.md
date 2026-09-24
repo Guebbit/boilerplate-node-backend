@@ -22,7 +22,7 @@ Defines the Mongoose schema and TypeScript document interface for order records,
 - **`orderLineProductSchema`** — embedded sub-document schema for the snapshot; no `onHand`/`reserved`, no image URLs; carries `taxRate` instead of `taxClass`. `{ timestamps: true }`.
 - **`applyOrderLineProductTransform`** — `applySerialization(orderLineProductSchema)`; maps `_id`→`id`, drops `__v`; no `available` derivation (no stock fields to compute from).
 - **`orderItemSchema`** — embedded item schema (`_id: false`); composes `orderLineProductSchema` + `quantity` + `locale`.
-- **`orderSchema`** *(truncated)* — top-level Mongoose schema for the order collection; its companion transform uses `sumLineItems`/`orderTotal`/`orderTaxBreakdown`/`bankTransfer*` config to derive the wire fields.
+- **`orderSchema`** _(truncated)_ — top-level Mongoose schema for the order collection; its companion transform uses `sumLineItems`/`orderTotal`/`orderTaxBreakdown`/`bankTransfer*` config to derive the wire fields.
 
 ## Relationships
 
@@ -46,5 +46,5 @@ Defines the Mongoose schema and TypeScript document interface for order records,
 - **`transferReference` is intentionally omitted from the wire** by `applyOrderTransform`; it is surfaced only inside `transferInstructions.reference`.
 - **`anonymizeAfter` / `pendingEffects` / `transferReference` / `statusOverrides`** are all omitted from the contract `Order` type and from the wire transform — they are operational metadata, not part of the API.
 - **`statusOverrides` is absent (not `[]`) until first written.** Same "owes nothing vs. never asked" convention as `pendingEffects`.
-- **`userId` is optional** on the document: an erased account leaves a dangling ref that is *intended* (Art. 17(3)(b)/(e) invoice survival), not a bug.
+- **`userId` is optional** on the document: an erased account leaves a dangling ref that is _intended_ (Art. 17(3)(b)/(e) invoice survival), not a bug.
 - **`_id: false` on `orderItemSchema`** — the OpenAPI `OrderItem` contract is `{product, quantity}` with `additionalProperties: false`, so items carry no internal id.

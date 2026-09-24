@@ -8,9 +8,11 @@ model: ollama:qwen3.8:27b
 # src/modules/audit-logs/tests/integration/repository.test.ts
 
 ## Purpose
+
 Integration tests for `auditLogRepository` against an in-memory MongoDB. Verifies create/search semantics, filter combinations, pagination metadata, response shape, and guards against a regression where a capped read (max 200 rows) silently hid entries beyond row 200.
 
 ## Key elements
+
 - **`makeEntry(overrides)`** – factory returning a fully-shaped `Partial<AuditLogDocument>` using only `coreAuditActions` values, so fixtures never depend on an optional domain module.
 - **`search(filters, since?)`** – thin wrapper that calls `auditLogRepository.search` with the service-layer policy args (`sinceScope(since)`, `AUDIT_SORT`) explicitly, mirroring how the service layer invokes the base repository method.
 - **`describe('create')`** – asserts all optional context fields round-trip; rejects entries missing required fields.
@@ -18,6 +20,7 @@ Integration tests for `auditLogRepository` against an in-memory MongoDB. Verifie
 - **`describe('deep paging')`** – regression suite (205 entries): verifies page 21 of 10 returns the five oldest rows with correct `meta`, and that three 100-row pages partition the set without duplicates (relies on `_id` tiebreak in `AUDIT_SORT`).
 
 ## Relationships
+
 - **`src/modules/audit-logs/repository.ts`** – system under test; imports `auditLogRepository` (create, search, sinceScope) and `AUDIT_SORT`.
 - **`src/modules/audit-logs/model.ts`** – provides the `AuditLogDocument` type used by `makeEntry`.
 - **`src/infrastructure/observability/audit.ts`** – provides `coreAuditActions` enum values used exclusively as fixture data and the `AuditEntry` type.
@@ -25,6 +28,7 @@ Integration tests for `auditLogRepository` against an in-memory MongoDB. Verifie
 - **`tests/support/stub.ts`** – `asStub` lets assertions inspect otherwise-typed-away fields (`_id`, `__v`) on returned items.
 
 ## Notes
+
 - Fixtures use **only** `coreAuditActions` (the three security actions) so the spec compiles regardless of which domain modules are enabled; reaching for a domain action would create a compile-time dependency on an optional module.
 - `since` must stay a `Date` — the repository's generic range spec coerces bounds with `Number()`, which would break Mongo comparison; passing it through `sinceScope` preserves the `Date` type.
 - `AUDIT_SORT` includes `_id` as a tiebreaker; without it, bulk-written entries sharing a timestamp could produce non-deterministic page boundaries.

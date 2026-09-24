@@ -15,7 +15,7 @@ Unit test that pins the inventory module's route table to a documented set of fi
 
 - **`describe('inventory routes')`** — single test suite; no setup/teardown hooks.
 - **`it('mounts exactly the documented endpoints, in the documented order')`** — asserts `routeSignatures(router)` returns the five known signatures in order: `GET /levels`, `GET /movements`, `POST /receipts`, `POST /adjustments`, `POST /reservations/sweep`.
-- **`it.each([...])('%s is reachable only by an authenticated admin')`** — for each signature, pulls the guard chain via `guardsOn`, asserts `getAuth` is present, finds the identity guard's index with `identityGuardIndex`, and verifies `requirePermissionGuard` appears *after* that index.
+- **`it.each([...])('%s is reachable only by an authenticated admin')`** — for each signature, pulls the guard chain via `guardsOn`, asserts `getAuth` is present, finds the identity guard's index with `identityGuardIndex`, and verifies `requirePermissionGuard` appears _after_ that index.
 - **`it('has no public endpoint at all')`** — filters all signatures for ones whose guard list lacks `requirePermissionGuard`; expects an empty array. Comment marks this as the "positional" guard against routes mounted above the gate.
 
 ## Relationships
@@ -26,5 +26,5 @@ Unit test that pins the inventory module's route table to a documented set of fi
 ## Notes
 
 - The module doc comment states the customer-facing "is stock available?" question is intentionally **not** a route in this module — it lives on the product page via an `available` field. Any route added here is staff-only by design.
-- The `identityGuardIndex` / ordering assertion is specific: it checks that the permission guard sits *after* the identity guard, not merely that both are present. A reversed order would be a bug this test catches.
+- The `identityGuardIndex` / ordering assertion is specific: it checks that the permission guard sits _after_ the identity guard, not merely that both are present. A reversed order would be a bug this test catches.
 - All three tests are purely structural (they inspect the router's mount table and middleware arrays); they do not issue HTTP requests or mock downstream handlers.

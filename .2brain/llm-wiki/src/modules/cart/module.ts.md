@@ -18,8 +18,8 @@ Module manifest for the shopping cart. Registers the cart's routes, domain-event
 - **`routes`** – Re-exports the `router` from `./routes` under `basePath: '/cart'`.
 - **`personalData.collect`** – Retrieves cart lines via `cartGet(userId)` and maps each to `{ productId, quantity }` only, deliberately omitting product name/price (catalogue data, not user data) to satisfy the shared `CartItem` contract's `additionalProperties: false`.
 - **`subscribe()`** – Wires two domain-event handlers:
-  - `PRODUCT_DELETED` → `productRemoveFromCartsById(productId)`
-  - `USER_DELETED` → `cartDeleteByUserId(userId)`
+    - `PRODUCT_DELETED` → `productRemoveFromCartsById(productId)`
+    - `USER_DELETED` → `cartDeleteByUserId(userId)`
 - **`locales`** – Points to a `locales` directory alongside this file.
 
 ## Relationships
@@ -33,7 +33,7 @@ Module manifest for the shopping cart. Registers the cart's routes, domain-event
 
 ## Notes
 
-- The module reaches *back* to products and users only via **outbound** domain events (`PRODUCT_DELETED`, `USER_DELETED`), never by importing their services, to keep the import graph acyclic (stated in the file's docblock).
+- The module reaches _back_ to products and users only via **outbound** domain events (`PRODUCT_DELETED`, `USER_DELETED`), never by importing their services, to keep the import graph acyclic (stated in the file's docblock).
 - `personalData.collect` intentionally strips product-derived fields; adding them would violate the `CartItem` OpenAPI contract (`additionalProperties: false`).
 - The permission key `cart.self.checkout` is cross-checked by `tests/cross-cutting/module-permissions.test.ts` against `shared/authorization-keys.yaml`; a mismatch (key present in one file but not the other, or attributed to a missing module) causes that test to fail.
 - The docblock references `docs/modules/cart.md` for longer narrative.

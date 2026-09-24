@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Express route table for the inventory module. It wires five staff-facing endpoints (stock levels, movement ledger, receipts, adjustments, and the reservation-sweep cron) to their respective controllers, applying the module's permission tier (`read` / `create` / `sweep`) and allowing both session auth and `sk_…` API keys. The customer-facing half of inventory is intentionally *not* routed here.
+Defines the Express route table for the inventory module. It wires five staff-facing endpoints (stock levels, movement ledger, receipts, adjustments, and the reservation-sweep cron) to their respective controllers, applying the module's permission tier (`read` / `create` / `sweep`) and allowing both session auth and `sk_…` API keys. The customer-facing half of inventory is intentionally _not_ routed here.
 
 ## Key elements
 
@@ -33,4 +33,4 @@ Defines the Express route table for the inventory module. It wires five staff-fa
 
 - The permission split is deliberate: `read` is a lower tier than `create`, so a `manager` role can view levels without the ability to move stock. The `sweep` verb exists specifically for the cron tick and is intentionally absent from any preset role (see `shared/authorization-keys.yaml`).
 - `isAuthOrCredential` is used instead of `isAuth` because warehouse/ERP systems authenticate with `sk_…` API keys; only this module is designed for that M2M surface.
-- The module-level JSDoc (`@module`) and inline comments document the *why* behind each permission choice; treat them as the authoritative intent for any future route additions.
+- The module-level JSDoc (`@module`) and inline comments document the _why_ behind each permission choice; treat them as the authoritative intent for any future route additions.

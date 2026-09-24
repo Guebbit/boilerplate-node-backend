@@ -14,11 +14,11 @@ Controller handler for `PATCH /webhooks/subscriptions/:id`. Accepts a partial-up
 ## Key elements
 
 - **`updateWebhookSubscription`** (exported function) — The sole export and the only route handler in this file. Steps:
-  1. Extracts and validates the `:id` param via `extractAndValidateId`.
-  2. Parses `request.body` against the `UpdateWebhookSubscriptionBody` Zod schema (`parseBody`).
-  3. Calls `webhooksService.updateSubscription(id, body, tenantCallerContextOf(request))`.
-  4. On success, maps `result.data.subscription.toJSON()` plus `result.data.newSecret` into a `successResponse<WebhookSubscriptionCreated>`.
-  5. On rejection (`refused`) or error, short-circuits or delegates to `catchAs`.
+    1. Extracts and validates the `:id` param via `extractAndValidateId`.
+    2. Parses `request.body` against the `UpdateWebhookSubscriptionBody` Zod schema (`parseBody`).
+    3. Calls `webhooksService.updateSubscription(id, body, tenantCallerContextOf(request))`.
+    4. On success, maps `result.data.subscription.toJSON()` plus `result.data.newSecret` into a `successResponse<WebhookSubscriptionCreated>`.
+    5. On rejection (`refused`) or error, short-circuits or delegates to `catchAs`.
 
 ## Relationships
 

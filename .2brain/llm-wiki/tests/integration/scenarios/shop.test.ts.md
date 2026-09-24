@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test that builds the full `shop` scenario through the application's own HTTP endpoints (checkout, payment, shipping, refund, admin) into a live database, then verifies four guarantee classes: (1) every module's `scenario.shop` subjects resolve with no orphans, (2) each subject id names an existing row, (3) each row carries the property its name claims *where the consumer reads it*, and (4) a produced row is valid input to the contract's own response schema. It is the only suite in the repo that builds once and reads that single state across all cases.
+Integration test that builds the full `shop` scenario through the application's own HTTP endpoints (checkout, payment, shipping, refund, admin) into a live database, then verifies four guarantee classes: (1) every module's `scenario.shop` subjects resolve with no orphans, (2) each subject id names an existing row, (3) each row carries the property its name claims _where the consumer reads it_, and (4) a produced row is valid input to the contract's own response schema. It is the only suite in the repo that builds once and reads that single state across all cases.
 
 ## Key elements
 
@@ -41,7 +41,7 @@ Integration test that builds the full `shop` scenario through the application's 
 
 ## Notes
 
-- **No `setupTestDb`.** The database *is* the subject; rebuilding per-test would destroy it. One build, many reads.
+- **No `setupTestDb`.** The database _is_ the subject; rebuilding per-test would destroy it. One build, many reads.
 - **`outOfStock` ≠ `onHand === 0`.** The storefront badge reads the derived `available` counter; a fully-reserved product can have `onHand > 0` but `available === 0`. The test asserts via `toProduct(product).available`.
 - **`order.softDeleted` is owned by the non-admin seed user.** An admin-owned row could never exercise the "owner sees 404 on their own deleted order" path.
 - **Locales are intentionally excluded from schema checks.** No endpoint serves a raw locale row; the locale tier-merge builds the response. Validating a stored row against a response schema would be a false guardrail.

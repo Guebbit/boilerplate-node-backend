@@ -16,9 +16,9 @@ Guards against schema drift between `WebhookSubscription` and `WebhookSubscripti
 - **`CREATED_ONLY_FIELDS`** – A `Set` of the two fields (`secret`, `newSecret`) that `WebhookSubscriptionCreated` legitimately adds beyond `WebhookSubscription`. Used to whitelist those extras in the "no unexpected properties" check.
 - **`spec`** – Loaded at module scope via `readFileSync` + `yaml.parse` from `../../openapi.yaml` (the module-local fragment, not a generated root bundle). Typed as `{ components: { schemas: Record<string, ObjectSchema> } }`.
 - **`describe('WebhookSubscriptionCreated mirrors WebhookSubscription')`** – Contains three tests:
-  - *carries every WebhookSubscription property* – every key in `subscription.properties` must exist in `created.properties`.
-  - *adds no property beyond the known secret-reveal fields* – every key in `created.properties` must either be in `subscription.properties` or in `CREATED_ONLY_FIELDS`.
-  - *requires the same fields as WebhookSubscription* – the `required` arrays (compared as `Set`s) must be identical.
+    - _carries every WebhookSubscription property_ – every key in `subscription.properties` must exist in `created.properties`.
+    - _adds no property beyond the known secret-reveal fields_ – every key in `created.properties` must either be in `subscription.properties` or in `CREATED_ONLY_FIELDS`.
+    - _requires the same fields as WebhookSubscription_ – the `required` arrays (compared as `Set`s) must be identical.
 
 ## Relationships
 

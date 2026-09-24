@@ -34,6 +34,6 @@ Implements the one-way hashing half of the API-key credential lifecycle: minting
 ## Notes
 
 - **Parsing is positional, not split-based.** Base64url's alphabet legally includes `_`, so `token.split('_')` would misalign the prefix. The 8-character prefix length is fixed by construction (6 bytes ÷ 6 bits/char, no padding), making `slice(prefixStart, prefixEnd)` exact.
-- **The prefix is public by design.** It is stored, indexed, and displayed in the UI. Only the hash of the full plaintext is secret. The `_id` in the database is explicitly *not* the identifier shown to operators.
+- **The prefix is public by design.** It is stored, indexed, and displayed in the UI. Only the hash of the full plaintext is secret. The `_id` in the database is explicitly _not_ the identifier shown to operators.
 - **Verification always hashes first**, then compares fixed-length digests. This means a length mismatch on the presented token is never observable to the caller, eliminating a trivial oracle.
 - **`plaintext` is returned once** from `mintApiKey` and never persisted. Any code path that logs or stores the `MintedApiKey` object after the initial response must redact `plaintext`.

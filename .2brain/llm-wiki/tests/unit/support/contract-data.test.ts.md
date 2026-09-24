@@ -24,5 +24,5 @@ Regression test that pins the `format: email` behavior of the payload generator 
 
 ## Notes
 
-- The regex patterns in the assertions are intentionally *looser* than `z.email()` (e.g. `[a-z]{8,}$` for TLD) so the test validates shape coverage rather than re-implementing the validator.
+- The regex patterns in the assertions are intentionally _looser_ than `z.email()` (e.g. `[a-z]{8,}$` for TLD) so the test validates shape coverage rather than re-implementing the validator.
 - The second test calls `validPayload` 200 separate times inside a loop (rather than building an array first) so each assertion failure identifies the specific draw index via the `index` counter.

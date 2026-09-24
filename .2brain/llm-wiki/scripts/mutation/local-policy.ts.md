@@ -15,11 +15,11 @@ Pure selection logic for a local mutation-testing sweep: given the full shard li
 
 - **`ShardSelection` (interface)** — the return shape: `run` (shards to execute this evening) and `done` (shards already covered by a prior report).
 - **`selectShards` (function)** — the sole logic export. Accepts the full `Shard[]` plus an options bag:
-  - `completed` – shard names that already have a report on disk.
-  - `only` – optional explicit whitelist of shard names (empty = all outstanding).
-  - `limit` – optional cap on how many shards to run; `undefined` means no cap.
-  - `force` – when `true`, ignores `completed` entirely (full re-measurement).
-  Returns a `ShardSelection` with `run` and `done` partitioned by those rules.
+    - `completed` – shard names that already have a report on disk.
+    - `only` – optional explicit whitelist of shard names (empty = all outstanding).
+    - `limit` – optional cap on how many shards to run; `undefined` means no cap.
+    - `force` – when `true`, ignores `completed` entirely (full re-measurement).
+      Returns a `ShardSelection` with `run` and `done` partitioned by those rules.
 
 ## Relationships
 

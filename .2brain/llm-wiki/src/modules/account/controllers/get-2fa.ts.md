@@ -25,6 +25,6 @@ Thin HTTP adapter that exposes a `GET /account/2fa` endpoint, returning the call
 
 ## Notes
 
-- Auth level is intentionally `isAuth` only (basic session), *not* step-up: reading your own 2FA status is considered non-sensitive, so no MFA challenge is required.
+- Auth level is intentionally `isAuth` only (basic session), _not_ step-up: reading your own 2FA status is considered non-sensitive, so no MFA challenge is required.
 - The `request.authContext!` non-null assertion means the route **must** be behind the auth middleware; calling it without auth will throw at runtime rather than returning a clean 401.
 - The `.then` / `.catch` chain (not `async/await`) is the established pattern in this controller layer; the `.catch` handler swallows all non-service errors into a uniform database-error shape, so callers never see a raw stack.

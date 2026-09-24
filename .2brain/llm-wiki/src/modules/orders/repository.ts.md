@@ -50,4 +50,4 @@ Data-access layer for orders. Because an order embeds a product snapshot (filter
 - **Sort tie-breaking.** `DEFAULT_SORT` (not a bare `createdAt`) is used so that the separate `$count` and `$skip/$limit` pipelines agree on ordering; orders arrive in bursts and equal timestamps are the norm.
 - **Scope is an authorization boundary, merged last.** Client-supplied `filters` can never widen `scope`; the spread order in `search` and the filter composition in `updateStatusIfIn` enforce this.
 - **`findByIdScoped` return type is a union.** Only `_id` (the virtual) is guaranteed on both branches; `.id` works on both, `.userId` etc. only on the unscoped `OrderDocument`. Callers that may receive a scoped result should treat the value as `Order`-shaped.
-- **`clearPendingEffect` sets `timestamps: false`.** Bumping `updatedAt` on a drain would push *other* pending effects past the sweep cutoff, silently delaying their retry.
+- **`clearPendingEffect` sets `timestamps: false`.** Bumping `updatedAt` on a drain would push _other_ pending effects past the sweep cutoff, silently delaying their retry.

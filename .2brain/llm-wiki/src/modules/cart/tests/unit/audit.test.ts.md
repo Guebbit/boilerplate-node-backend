@@ -14,7 +14,7 @@ Guards the cart audit action strings as a **wire contract**. These values are co
 ## Key elements
 
 - **`describe('the cart audit vocabulary', …)`** — single suite scoping the contract to `cartAuditActions`.
-- **`it('spells every action exactly as the log tooling expects', …)`** — asserts `toEqual` against the exact literal object `{ USER_CART_ITEM_REMOVED: 'user.cart.item_removed', USER_CART_REORDERED: 'user.cart.reordered' }`, so both key names *and* string values must match, and no extra keys may exist.
+- **`it('spells every action exactly as the log tooling expects', …)`** — asserts `toEqual` against the exact literal object `{ USER_CART_ITEM_REMOVED: 'user.cart.item_removed', USER_CART_REORDERED: 'user.cart.reordered' }`, so both key names _and_ string values must match, and no extra keys may exist.
 
 ## Relationships
 

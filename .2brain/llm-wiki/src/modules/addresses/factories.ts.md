@@ -28,6 +28,6 @@ Builds address-book fixtures (the row shape passed to `addressBookRepository.cre
 
 ## Notes
 
-- **Book vs. entry identity:** A *book* is addressed solely by `userId` (unique, no book-level `_id` reaches the wire), so `makeAddressBook` takes no `_id` override. An *entry* (item) keeps its own `_id` because two entries can be identical in every field yet still be distinct. This asymmetry is the reason the factory's signature looks the way it does.
+- **Book vs. entry identity:** A _book_ is addressed solely by `userId` (unique, no book-level `_id` reaches the wire), so `makeAddressBook` takes no `_id` override. An _entry_ (item) keeps its own `_id` because two entries can be identical in every field yet still be distinct. This asymmetry is the reason the factory's signature looks the way it does.
 - **`userId` is required, not optional:** The type enforces this (`Pick<AddressBookDocument, 'userId'>`) so the "must have an owner" invariant lives in the type rather than as a runtime assertion at the call site.
 - **`items === undefined` vs. `items = []`:** Passing `items: []` explicitly sets the key to an empty array; omitting `items` leaves the key absent so the Mongoose schema default applies. Both yield an empty book, but the wire shape differs.

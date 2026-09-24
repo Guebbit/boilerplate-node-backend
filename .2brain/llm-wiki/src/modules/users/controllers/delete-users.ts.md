@@ -14,10 +14,10 @@ Thin controller that wires the `DELETE /users` and `DELETE /users/:id` admin end
 ## Key elements
 
 - **`deleteUsers`** (exported const) — the controller object produced by `createDeleteController`. Configures:
-  - `entity: 'user'`
-  - `remove(id, hardDelete)` — calls `userService.removeById(id, hardDelete)`
-  - `auditAction(hardDelete)` — returns `usersAuditActions.ADMIN_USER_ERASED` or `usersAuditActions.ADMIN_USER_SOFT_DELETED`
-  - `notFoundKey: 'users.not-found'` (i18n key for 404 responses)
+    - `entity: 'user'`
+    - `remove(id, hardDelete)` — calls `userService.removeById(id, hardDelete)`
+    - `auditAction(hardDelete)` — returns `usersAuditActions.ADMIN_USER_ERASED` or `usersAuditActions.ADMIN_USER_SOFT_DELETED`
+    - `notFoundKey: 'users.not-found'` (i18n key for 404 responses)
 
 ## Relationships
 

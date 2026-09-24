@@ -15,10 +15,10 @@ Integration tests for `userService.findByOAuthIdentity`, the first lookup `accou
 
 - **`linkIdentity(userId)`** — local helper that writes a fixed Google identity (`provider: 'google'`, `providerId: 'subject-1'`) onto a user via `userRepository.linkOAuthAccount`, mirroring the shape a real callback's `linkOAuthAccount` call produces.
 - **`describe('userService.findByOAuthIdentity')`** — four integration cases:
-  - Resolves the correct user for a valid provider + providerId pair.
-  - Returns falsy for a user with `active: false`.
-  - Returns falsy for a user with `deletedAt` set (soft-deleted).
-  - Returns falsy for an identity no account holds.
+    - Resolves the correct user for a valid provider + providerId pair.
+    - Returns falsy for a user with `active: false`.
+    - Returns falsy for a user with `deletedAt` set (soft-deleted).
+    - Returns falsy for an identity no account holds.
 
 ## Relationships
 

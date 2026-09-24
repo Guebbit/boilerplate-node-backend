@@ -1,8 +1,8 @@
 ---
 tags:
-  - 2brain
-  - 2brain/module
-  - project/boilerplate-node-backend
+    - 2brain
+    - 2brain/module
+    - project/boilerplate-node-backend
 type: module
 module: src/modules/locales/
 files: 38
@@ -35,10 +35,11 @@ The `locales` module owns all internationalization (i18n) management for the pla
 
 ## Where to start
 
-1. **`openapi.yaml`** — Read this first. It is the authoritative description of every endpoint, the two-tier locale model, and the data shapes. It tells you *what* the module does before you need to know *how*.
+1. **`openapi.yaml`** — Read this first. It is the authoritative description of every endpoint, the two-tier locale model, and the data shapes. It tells you _what_ the module does before you need to know _how_.
 2. **`module.ts`** — Shows how the service, repository, and routes are wired into the app and how the locale-override provider is handed to `@infrastructure/i18n`. Reading it gives you the dependency direction and the single public surface of the module.
 
 ## Connected modules
+
 ```mermaid
 flowchart LR
     m_src_modules_locales["src/modules/locales/"]
@@ -68,6 +69,7 @@ flowchart LR
 [[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_products|src/modules/products/]] · [[boilerplate-node-backend_tests_cross-cutting|tests/cross-cutting/]] · [[boilerplate-node-backend_tests_integration|tests/integration/]] · [[boilerplate-node-backend_tests_support|tests/support/]]
 
 ## Files
+
 - `src/modules/locales/audit.ts` — Declares the set of audit-action identifiers that the locales module emits when an admin performs a write operation (create, update, delete, import). These strings are the sole historical record of locale/translation changes—reads are deliberately not audited. The file also augments the app-wide `AuditActionMap` so TypeScript recognizes these values as valid audit actions.
 - `src/modules/locales/controllers/delete-locale-entry.ts` — Thin HTTP adapter for the `DELETE /locales/:locale/entries/:entryId` admin endpoint. It extracts route params, delegates all business logic to `localeService.deleteEntry`, and handles the HTTP response lifecycle (success, refusal, error). It exists to keep the service layer transport-agnostic.
 - `src/modules/locales/controllers/delete-locale.ts` — Thin HTTP adapter for the `DELETE /locales/:locale` admin endpoint. It translates the Express request into a `localeService.deleteLanguage` call, handles the 409 refusal (active language) via a shared guard, and fires a locale-override refresh on success. All business logic and the "still active" check live in the service layer.
@@ -100,7 +102,7 @@ flowchart LR
 - `src/modules/locales/tests/integration/repository.test.ts` — Integration tests for the locales module's write paths, executed against a real MongoDB instance. Despite requiring a database, they are classified as unit tests in this repo because they skip HTTP and auth. The suite targets properties an in-memory fake would satisfy by construction: revision-counter movement, cross-collection cascades, and import side-effects on rows the caller did not supply.
 - `src/modules/locales/tests/integration/translations.test.ts` — Integration tests for `localeService.getEntityTranslations` and `localeService.upsertEntityTranslations` — the two methods a translator uses to read and write per-locale content. Every case runs against a real Mongo database (not mocks) to exercise the full write path: registry validation, locale-existence checks, derived-index-column writes on `products`, and the `sourceDigest` stamping between sibling rows.
 - `src/modules/locales/tests/unit/audit.test.ts` — Unit test that pins the exact string values of the locales audit-action vocabulary. Because these strings are a wire contract consumed by external log queries, dashboards, and alert rules, this file acts as the owner-level assertion: if a value is renamed, this test breaks before the string ships.
-- `src/modules/locales/tests/unit/routes.test.ts` — Asserts the structural contract of the locales Express router: which endpoints exist and in what order, which guards each route carries, and how caching is configured. The assertions are written as *pinned decisions*—public reads are intentionally unguarded, and admin routes self-declare their guard chain—so that "refactoring" either convention fails the suite rather than silently changing behavior.
+- `src/modules/locales/tests/unit/routes.test.ts` — Asserts the structural contract of the locales Express router: which endpoints exist and in what order, which guards each route carries, and how caching is configured. The assertions are written as _pinned decisions_—public reads are intentionally unguarded, and admin routes self-declare their guard chain—so that "refactoring" either convention fails the suite rather than silently changing behavior.
 - `src/modules/locales/tests/unit/schema-contract.test.ts` — Unit tests that lock down the schema contracts for the locales collections — required paths, unique indexes, field normalisation, defaults, and the `deriveBaseLanguage` helper. They exist to make database-level invariants (e.g. "one row per tag", "one value per locale+tenant+key") explicit, regression-guarded facts rather than implicit assumptions.
 - `src/modules/locales/tests/unit/service.test.ts` — Unit tests for the pure decision logic in `localeService`: the message-tree builder, key-collision detection, batch validation, unsafe-segment guarding, capability merging, RTL detection, and language naming. These functions fail silently (dropped keys, phantom capabilities) rather than throwing at the DB layer, so they are asserted here in isolation; the write paths that call them are covered by `repository.test.ts` and the HTTP contract suite.
 - `src/modules/locales/tests/unit/tenants.fixture.ts` — Test fixture that supplies the two demo tenant IDs used by unit and integration test suites. The IDs are read live from the locale registry (`tenants.ts`) rather than hardcoded, so a test can never drift from the values the service actually accepts.
@@ -108,4 +110,5 @@ flowchart LR
 - `src/modules/locales/tests/unit/translations.test.ts` — Unit tests for the pure function `deriveSourceDigest`, which computes a deterministic fingerprint of a translation's source fields. This file isolates the digest logic from any database or registry interaction; those concerns live in the sibling integration test.
 
 ---
+
 [[boilerplate-node-backend_INDEX|← boilerplate-node-backend index]]

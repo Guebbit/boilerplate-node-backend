@@ -20,7 +20,7 @@ Unit test suite for the SSE metrics stream service (`streamObservabilityMetrics`
 - **`describe('the open-connection count')`** — verifies the Set grows per open stream and shrinks on disconnect.
 - **`describe('opening a stream')`** — checks 200 status, SSE headers, immediate `flushHeaders`, initial snapshot frame, correct `\n\n` termination, and single-line `data:` payload.
 - **`describe('the two timers')`** — confirms the 5 s update interval and the independent 15 s heartbeat interval fire at the right cadence (and not before).
-- **`describe('the permission recheck')`** — verifies the 30 s reverify cadence, that a failed recheck calls `end` once and stops *all* timers, not just the recheck interval.
+- **`describe('the permission recheck')`** — verifies the 30 s reverify cadence, that a failed recheck calls `end` once and stops _all_ timers, not just the recheck interval.
 - **`afterEach`** — disconnects every opened stream and resets fake timers, ensuring the module-level connection Set is empty between tests.
 
 ## Relationships
@@ -31,8 +31,8 @@ Unit test suite for the SSE metrics stream service (`streamObservabilityMetrics`
 
 ## Notes
 
-- The module-level connection Set is *not* reset by the SUT on test teardown; the suite handles this by disconnecting every opened stream in `afterEach`. Forgetting this leaks count between tests.
-- `getHttpRequestCounters` is mocked via `jest.mock('../../http-readback', …)` with a `jest.fn` defined *outside* the factory to avoid the "out-of-scope variable" restriction.
+- The module-level connection Set is _not_ reset by the SUT on test teardown; the suite handles this by disconnecting every opened stream in `afterEach`. Forgetting this leaks count between tests.
+- `getHttpRequestCounters` is mocked via `jest.mock('../../http-readback', …)` with a `jest.fn` defined _outside_ the factory to avoid the "out-of-scope variable" restriction.
 - The SSE terminator assertion (`endsWith('\n\n')` and `terminator` deep-equal to `['', '']`) is the single most important wire-format check: without the blank line, every downstream SSE client buffers forever.
 - The uptime test documents an intentional design choice: floor (not round) to whole seconds, shared with `modules/observability/services/process-snapshot.ts`, so that concurrent dashboard endpoints never report uptimes a second apart.
 - The file was truncated in the provided content; the last visible test (`'stops every timer once a recheck fails, not just the recheck itself'`) is cut mid-assertion. The full suite likely also covers the error-absorption cases (rejected metrics read, write to closed socket) described in the header comment.

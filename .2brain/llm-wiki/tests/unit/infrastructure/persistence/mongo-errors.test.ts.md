@@ -15,15 +15,15 @@ Unit tests for the two predicate helpers (`isDuplicateKey`, `isBadObjectId`) exp
 
 - **`makeDuplicateKeyError()`** – local helper that builds a realistic driver error: an `Error` with `code: 11000` and the typical `E11000` message.
 - **`describe('isDuplicateKey')`** – four cases:
-  - recognises a real code-11000 error.
-  - rejects an error whose *message* says "E11000" but has no `code` property (guards against message-string matching).
-  - returns `false` for unrelated errors and `undefined`.
-  - rejects a near-miss code (`11001`).
+    - recognises a real code-11000 error.
+    - rejects an error whose _message_ says "E11000" but has no `code` property (guards against message-string matching).
+    - returns `false` for unrelated errors and `undefined`.
+    - rejects a near-miss code (`11001`).
 - **`describe('isBadObjectId')`** – four cases:
-  - accepts a real `mongoose.Error.CastError` on an `ObjectId` path.
-  - rejects a `CastError` on a non-ObjectId path (e.g. `Number` on `quantity`).
-  - returns `false` for unrelated errors and `undefined`.
-  - rejects a plain object that merely has `name: 'CastError'` and `kind: 'ObjectId'` — confirms the implementation uses `instanceof`, not duck-typing.
+    - accepts a real `mongoose.Error.CastError` on an `ObjectId` path.
+    - rejects a `CastError` on a non-ObjectId path (e.g. `Number` on `quantity`).
+    - returns `false` for unrelated errors and `undefined`.
+    - rejects a plain object that merely has `name: 'CastError'` and `kind: 'ObjectId'` — confirms the implementation uses `instanceof`, not duck-typing.
 
 ## Relationships
 
@@ -32,6 +32,6 @@ Unit tests for the two predicate helpers (`isDuplicateKey`, `isBadObjectId`) exp
 
 ## Notes
 
-- The tests intentionally distinguish *structural* checks (`.code === 11000`, `instanceof CastError`) from superficial ones (message text, property presence). If you refactor `mongo-errors.ts` to, say, match on a message regex or a `.name` field, these tests will fail by design.
+- The tests intentionally distinguish _structural_ checks (`.code === 11000`, `instanceof CastError`) from superficial ones (message text, property presence). If you refactor `mongo-errors.ts` to, say, match on a message regex or a `.name` field, these tests will fail by design.
 - Both predicates must be total functions safe on `undefined` — every `describe` block includes an explicit `undefined` assertion.
-- The `instanceof` requirement for `isBadObjectId` is called out in the inline comment as the motivating reason the helper exists: a hand-built rejection in a `catch (e: unknown)` block must *not* slip through as a bad-OID error.
+- The `instanceof` requirement for `isBadObjectId` is called out in the inline comment as the motivating reason the helper exists: a hand-built rejection in a `catch (e: unknown)` block must _not_ slip through as a bad-OID error.

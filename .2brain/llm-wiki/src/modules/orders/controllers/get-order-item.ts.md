@@ -14,11 +14,11 @@ Handler for `GET /orders/:id`. Returns a single order scoped to the caller's rol
 ## Key elements
 
 - **`getOrderItem`** (exported controller function) — Receives Express `Request<{ id?: string }>` and `Response`.
-  1. Calls `isValidObjectId(request.params.id)`; on failure responds **404** immediately.
-  2. Delegates to `orderService.getById(id, orderService.callerScope(authContext))`.
-  3. If the order is `null`, responds **404**.
-  4. Otherwise calls `orderService.withActions(order, authContext)` to attach role-specific actions, then sends via `successResponse<Order>`.
-  5. Catches any thrown error with `catchAs(response, 'getOrderItem')`.
+    1. Calls `isValidObjectId(request.params.id)`; on failure responds **404** immediately.
+    2. Delegates to `orderService.getById(id, orderService.callerScope(authContext))`.
+    3. If the order is `null`, responds **404**.
+    4. Otherwise calls `orderService.withActions(order, authContext)` to attach role-specific actions, then sends via `successResponse<Order>`.
+    5. Catches any thrown error with `catchAs(response, 'getOrderItem')`.
 
 ## Relationships
 
@@ -34,5 +34,5 @@ Handler for `GET /orders/:id`. Returns a single order scoped to the caller's rol
 ## Notes
 
 - **Why the id is validated before the query:** The admin branch (`findById`) throws a Mongoose `CastError` while the scoped branch (aggregate with `$expr`) throws a `BSONError` (mapped to **422**) for the same malformed id. Validating first guarantees a **404** in both cases. Other single-item reads in the codebase skip this and let the query fail, mapping the error in `.catch` — this file deliberately does not.
-- **Action-aware payload:** The response body is not the raw order document; it is the result of `withActions`, which embeds the set of operations the *current* caller may perform. Clients should render UI controls from this field rather than duplicating lifecycle logic client-side.
+- **Action-aware payload:** The response body is not the raw order document; it is the result of `withActions`, which embeds the set of operations the _current_ caller may perform. Clients should render UI controls from this field rather than duplicating lifecycle logic client-side.
 - **Synchronous early-return:** When the id is invalid the function returns `void` (not a `Promise`), which is safe because Express does not await the return value, but it means the return type is `Promise<void> | void`.

@@ -15,11 +15,11 @@ Unit tests for `selectShards`, the pure decision function that determines which 
 
 - **`shards(...names)`** — local helper that fabricates `Shard` objects from names alone (hardcodes `mutate` and `lines`), keeping the test free of any file-system or mutation-state dependencies.
 - **`describe('selectShards')`** — single suite containing five test cases:
-  - Filters out shards already recorded as `completed`.
-  - Caps the run list to `limit`, leaving the remainder unprocessed.
-  - Narrows the candidate set to those named in `only`.
-  - With `force: true`, re-runs every shard and reports an empty `done` list.
-  - Combines `only` with `completed`: a shard that matches both is treated as done, not run.
+    - Filters out shards already recorded as `completed`.
+    - Caps the run list to `limit`, leaving the remainder unprocessed.
+    - Narrows the candidate set to those named in `only`.
+    - With `force: true`, re-runs every shard and reports an empty `done` list.
+    - Combines `only` with `completed`: a shard that matches both is treated as done, not run.
 
 ## Relationships
 
@@ -29,4 +29,4 @@ Unit tests for `selectShards`, the pure decision function that determines which 
 ## Notes
 
 - The test is deliberately "pure input/output" (per the file header): it never touches disk, calls `mutate`, or reads real shard metadata. This mirrors the convention in the neighboring `sharding.test.ts`.
-- `run-shards.ts` is explicitly *not* tested here; it is a thin CLI wrapper by design.
+- `run-shards.ts` is explicitly _not_ tested here; it is a thin CLI wrapper by design.

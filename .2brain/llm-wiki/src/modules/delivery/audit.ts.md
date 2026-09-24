@@ -14,8 +14,8 @@ Declares the delivery module's audit action identifiers and registers them into 
 ## Key elements
 
 - **`deliveryAuditActions`** (exported const object) — The two audit action strings this module can emit:
-  - `ADMIN_ORDER_SHIPPED` → `'admin.order.shipped'`
-  - `ADMIN_ORDER_DELIVERED` → `'admin.order.delivered'`
+    - `ADMIN_ORDER_SHIPPED` → `'admin.order.shipped'`
+    - `ADMIN_ORDER_DELIVERED` → `'admin.order.delivered'`
 - **Module augmentation** (`declare module '@infrastructure/observability/audit'`) — Adds a `delivery` key to the global `AuditActionMap` interface, scoped to the union of `deliveryAuditActions` values.
 
 ## Relationships

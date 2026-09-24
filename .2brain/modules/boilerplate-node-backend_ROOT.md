@@ -1,8 +1,8 @@
 ---
 tags:
-  - 2brain
-  - 2brain/module
-  - project/boilerplate-node-backend
+    - 2brain
+    - 2brain/module
+    - project/boilerplate-node-backend
 type: module
 module: / (repository root)
 files: 64
@@ -39,6 +39,7 @@ The repository root is the orchestration layer for a contract-first, modular Exp
 From there, open `openapi.yaml` to see the full API surface, then follow one module (e.g. `src/modules/orders/`) to watch how a leaf fragment flows into the bundled spec.
 
 ## Connected modules
+
 ```mermaid
 flowchart LR
     m_root["/ (repository root)"]
@@ -78,6 +79,7 @@ flowchart LR
 [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_scripts|scripts/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules|src/modules/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_delivery|src/modules/delivery/]] · [[boilerplate-node-backend_src_modules_feedback|src/modules/feedback/]] · [[boilerplate-node-backend_src_modules_inventory|src/modules/inventory/]] · [[boilerplate-node-backend_src_modules_locales|src/modules/locales/]] · [[boilerplate-node-backend_src_modules_observability|src/modules/observability/]] · [[boilerplate-node-backend_src_modules_orders|src/modules/orders/]] · … and 8 more
 
 ## Files
+
 - `CLAUDE.md` — Contracts are edited at the leaves and generated everywhere else. The order is not optional:
 - `README.md` — > Express 5 + TypeScript + Mongoose REST API. Contract-first, modular, observable.
 - `asyncapi.public.yaml` — A **generated, read-only** AsyncAPI 3.0.0 contract document that describes all real-time/event-driven channels (SSE observability streams and outbound webhook deliveries) exposed by this backend. It is produced by `npm run contracts:bundle` from the three source YAML files listed in its header. It exists so external consumers, Spectral rules, and CI breaking-change gates have a single canonical artifact to validate against, without needing to resolve cross-file `$ref`s themselves.
@@ -106,7 +108,7 @@ flowchart LR
 - `docs/api/regenerating.md` — The cheat sheet for "I edited a fragment — now what?".
 - `docs/modules/webhooks.md` — ::: tip At a glance
 - `docs/reference/tests.md` — Every file here is a distinct guarantee, which is why this page names them one at a time: knowing
-- `docs/theory/strategic-ddd.md` — The part of Domain-Driven Design that pays for itself in a starter kit** — bounded contexts,
+- `docs/theory/strategic-ddd.md` — The part of Domain-Driven Design that pays for itself in a starter kit\*\* — bounded contexts,
 - `docs/tools/mutation-testing.md` — Every other layer on this site answers "does the code do the right thing?" This one answers a different question: **do the _tests_ actually notice when it doesn't?** Line coverage can be satisfied by executing a line without asserting anything about its result; mutation testing can't — it edits the source thousands of times (`>` to `>=`, `&&` to `||`, a function body emptied out) and reports every edit the suite failed to catch. A **surviving mutant** is a bug the tests are structurally blind to.
 - `eslint.config.ts` — Flat ESLint configuration for the project. It wires together TypeScript, Unicorn, Boundaries, JSDoc, Jest, Prettier, and custom local rules into a single typed config, enforcing project-specific bans (double casts, production try/catch, factories imports) on top of strict type-checked linting.
 - `jest.config.cluster.js` — Dedicated Jest config for the cluster integration suite (`npm run test:cluster`). It exists as a separate file rather than a sub-directory of the main config because every default in `jest.config.js` is unsuitable here: the global setup, timeout, worker count, and coverage semantics all differ for tests that spawn child processes and measure rate-limiting under real TCP connections.
@@ -144,4 +146,5 @@ flowchart LR
 - `tsconfig.json` — Root TypeScript compiler configuration for the project. Defines compilation targets, path aliases, strictness settings, and the set of files included in type-checking. It is consumed by the TypeScript compiler, IDEs, and any tooling that resolves project types.
 
 ---
+
 [[boilerplate-node-backend_INDEX|← boilerplate-node-backend index]]

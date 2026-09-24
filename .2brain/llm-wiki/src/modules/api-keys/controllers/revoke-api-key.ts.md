@@ -25,6 +25,6 @@ Controller handler for `DELETE /api-keys/:id`. It performs a **revoke** — a so
 
 ## Notes
 
-- **Hand-written, not factory-generated.** The module docblock explicitly states this controller is *not* built on `createDeleteController` because revoke is a state change without a hard-delete counterpart. Do not expect the same shape or helpers as other delete endpoints.
+- **Hand-written, not factory-generated.** The module docblock explicitly states this controller is _not_ built on `createDeleteController` because revoke is a state change without a hard-delete counterpart. Do not expect the same shape or helpers as other delete endpoints.
 - **ID validation precedes the service call.** `extractAndValidateId` guarantees the `id` is a well-formed ObjectId before `apiKeysService.revokeApiKey` is invoked, so the service's `catchAs` handler will never see a `CastError`.
 - **Idempotent by design.** Revoking an already-revoked key still resolves to 200; there is no 404/409 branch for the "already revoked" case.

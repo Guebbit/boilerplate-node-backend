@@ -14,11 +14,11 @@ Module manifest (entry point) for the delivery module. It declares the module's 
 ## Key elements
 
 - **`default` export** — An `AppModule` object satisfying the kernel's manifest shape.
-  - `name` / `basePath` — `'delivery'` / `'/delivery'`; used for routing and module identification.
-  - `permissions` — `['delivery.any.read', 'delivery.any.update']`. Tied to module lifecycle: removing this module removes these keys (enforced by `tests/cross-cutting/module-permissions.test.ts`).
-  - `routes` — The Hono/router instance re-exported from `./routes`.
-  - `personalData` — Declares a `shipments` section whose `collect` callback resolves the subject's own order IDs via `ownOrderIds` (from `@modules/orders`), then fetches matching shipments via `findShipmentsForOrders` (from `./service`).
-  - `locales` — Resolves to the `./locales` directory.
+    - `name` / `basePath` — `'delivery'` / `'/delivery'`; used for routing and module identification.
+    - `permissions` — `['delivery.any.read', 'delivery.any.update']`. Tied to module lifecycle: removing this module removes these keys (enforced by `tests/cross-cutting/module-permissions.test.ts`).
+    - `routes` — The Hono/router instance re-exported from `./routes`.
+    - `personalData` — Declares a `shipments` section whose `collect` callback resolves the subject's own order IDs via `ownOrderIds` (from `@modules/orders`), then fetches matching shipments via `findShipmentsForOrders` (from `./service`).
+    - `locales` — Resolves to the `./locales` directory.
 
 ## Relationships
 

@@ -13,7 +13,7 @@ Manages the MongoDB connection lifecycle (connect, retry, disconnect) for the en
 
 ## Key elements
 
-- **`getDatabaseUri()`** — Resolves the MongoDB connection string from env vars. A full `NODE_DB_URI` takes precedence; otherwise it assembles `mongodb://host:port/db` from `NODE_MONGODB_HOST`, `NODE_MONGODB_PORT`, and `NODE_MONGODB_NAME` (defaulting to `boilerplate-node-backend`). An *empty* `NODE_DB_URI` intentionally falls through to fragments (enables the `npm run host` pattern).
+- **`getDatabaseUri()`** — Resolves the MongoDB connection string from env vars. A full `NODE_DB_URI` takes precedence; otherwise it assembles `mongodb://host:port/db` from `NODE_MONGODB_HOST`, `NODE_MONGODB_PORT`, and `NODE_MONGODB_NAME` (defaulting to `boilerplate-node-backend`). An _empty_ `NODE_DB_URI` intentionally falls through to fragments (enables the `npm run host` pattern).
 - **`start()`** — Connects via `mongoose.connect()` with up to 10 retries and exponential backoff (1 s → 2 s → …, clamped at 30 s). Throws after the final attempt so the boot sequence aborts. Uses explicit promise chains (no `async`/`await`). Does **not** set `autoIndex`; callers configure that before calling `start()`.
 - **`stopDatabase()`** — Calls `mongoose.disconnect()` to release pooled sockets. Logs and absorbs any rejection so it never aborts the remaining shutdown chain.
 - **`connection`** — Re-exports `mongoose.connection` for readiness probes and diagnostics (`readyState` 0–3). The object exists at import time; it is populated once `start()` resolves.
@@ -27,7 +27,7 @@ Manages the MongoDB connection lifecycle (connect, retry, disconnect) for the en
 - **`scripts/db/bootstrap-access.ts`, `scripts/db/grant-access.ts`** — Operational scripts that call `start()` / `stopDatabase()` around their work.
 - **`scripts/ops/reap-*.ts`, `scripts/ops/sweep-*.ts`** — Maintenance scripts that acquire the connection via `start()` and release it via `stopDatabase()`.
 - **`src/infrastructure/runtime/server-lifecycle.ts`** — Orchestrates process lifecycle; invokes `stopDatabase()` during the shutdown sequence.
-- **`src/infrastructure/runtime/database-snapshot.ts`** — Explicitly a *separate* concern (demo-profile snapshot: empty / capture / restore). Not imported here; two callers use it independently.
+- **`src/infrastructure/runtime/database-snapshot.ts`** — Explicitly a _separate_ concern (demo-profile snapshot: empty / capture / restore). Not imported here; two callers use it independently.
 - **`src/modules/account/module.ts`, `src/modules/account/services/two-factor.ts`** — Consume Mongoose models that operate over the connection established by `start()`.
 
 ## Notes

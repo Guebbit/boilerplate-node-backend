@@ -20,7 +20,7 @@ Shared pagination and text-search helpers for Mongoose-based repositories. Centr
 - **`buildPaginatedMeta(pagination, totalItems)`** – Computes `totalPages` and assembles the response meta object.
 - **`readAll<TItem>(fetchPage, pageSize)`** – Recursively pages until a short page signals the end; returns every collected item. Used by personal-data export paths where a truncated answer is unacceptable.
 - **`escapeRegex(value)`** – Escapes all regex metacharacters so user text is matched literally (prevents ReDoS against public search endpoints).
-- **`toSearchPattern(value)`** – Strips C0 control chars + DEL (a NUL would cause a 500 on a public endpoint), trims, escapes, and returns `undefined` when nothing searchable remains (an empty `$regex` would match *everything*).
+- **`toSearchPattern(value)`** – Strips C0 control chars + DEL (a NUL would cause a 500 on a public endpoint), trims, escapes, and returns `undefined` when nothing searchable remains (an empty `$regex` would match _everything_).
 - **`addTextFilter(where, text, fields)`** – Mutates a Mongoose filter with a case-insensitive `$or` across the given fields.
 - **`addRegexFilter(where, field, value)`** – Mutates a Mongoose filter with a case-insensitive single-field `$regex`.
 - **`DEFAULT_SORT`** – `{ createdAt: -1, _id: -1 }`. The `_id` tie-breaker makes pagination stable when concurrent creates share a `createdAt` millisecond, since count and page are separate queries.

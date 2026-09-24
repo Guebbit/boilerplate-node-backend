@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Backdates every order produced by the boot-time demo flows (and all records the application wrote in response) so the shop has realistic date spread for analytics charts, "last 30 days" filters, and period-sensitive dashboards. Operates strictly per order—never a blanket shift—so the order, its payment, shipment, reservation, stock movements, and audit rows remain mutually consistent about *when* events occurred.
+Backdates every order produced by the boot-time demo flows (and all records the application wrote in response) so the shop has realistic date spread for analytics charts, "last 30 days" filters, and period-sensitive dashboards. Operates strictly per order—never a blanket shift—so the order, its payment, shipment, reservation, stock movements, and audit rows remain mutually consistent about _when_ events occurred.
 
 ## Key elements
 
@@ -18,7 +18,7 @@ Backdates every order produced by the boot-time demo flows (and all records the 
 - **`shiftStage`** – Builds the `$set` stage: each named field gets `$ifNull: [$dateSubtract(...), '$$REMOVE']`, so absent fields (e.g. `deletedAt` on a live order) stay absent rather than being written as `null`.
 - **`backdateOrder(orderId, days)`** – Applies all six trail movers for one order concurrently; short-circuits to a resolved promise when `days <= 0`.
 - **`settleAuditTrail()`** – Polls `auditLogModel.countDocuments()` at 50 ms intervals until two consecutive reads match (max 20 rounds), waiting for fire-and-forget audit writes to land before backdating.
-- **`backdateHistory(ages)`** *(exported)* – Public entry point: awaits `settleAuditTrail`, then runs `backdateOrder` for every order in the `Record<string, number>` map concurrently.
+- **`backdateHistory(ages)`** _(exported)_ – Public entry point: awaits `settleAuditTrail`, then runs `backdateOrder` for every order in the `Record<string, number>` map concurrently.
 
 ## Relationships
 

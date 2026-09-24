@@ -24,5 +24,5 @@ Centralizes two deployment-tunable numbers (reservation TTL and low-stock thresh
 ## Notes
 
 - Both functions are **call-time readers**, not module-level constants. This is intentional: an operator changing the env var affects the very next request, and tests can vary values case-by-case without re-importing.
-- The docstring explicitly warns that the two `lowStockThreshold` readers (board vs. gauge) will produce *different* numbers because they filter different product sets; this is expected, not a bug.
+- The docstring explicitly warns that the two `lowStockThreshold` readers (board vs. gauge) will produce _different_ numbers because they filter different product sets; this is expected, not a bug.
 - `environmentNumber` is called with a floor of `0` on both, so a misconfigured negative value is silently clamped rather than rejected.

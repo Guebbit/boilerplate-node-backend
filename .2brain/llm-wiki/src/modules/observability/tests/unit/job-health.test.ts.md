@@ -15,10 +15,10 @@ Unit tests for the `jobHealth` service that back the jobs half of `GET /observab
 
 - **`listLeaseSummariesMock`** – a `jest.fn()` that replaces `listLeaseSummaries` from `@infrastructure/persistence/lease` via `jest.mock`. Isolates the mapping logic from any Mongo query behaviour.
 - **`describe('jobHealth')`** – four cases:
-  - *ISO-8601 string, not a Date* – asserts `lastSuccessAt` is the string `'2026-09-13T02:15:00.000Z'`, not a `Date` instance.
-  - *lastError passthrough* – verifies a non-null `lastError` string is carried through unmodified.
-  - *Never-succeeded job* – asserts `lastSuccessAt` is `undefined` (not the epoch), guarding against `new Date(undefined)`.
-  - *Empty lease list* – asserts the service returns `[]` rather than a single `null`/`undefined`.
+    - _ISO-8601 string, not a Date_ – asserts `lastSuccessAt` is the string `'2026-09-13T02:15:00.000Z'`, not a `Date` instance.
+    - _lastError passthrough_ – verifies a non-null `lastError` string is carried through unmodified.
+    - _Never-succeeded job_ – asserts `lastSuccessAt` is `undefined` (not the epoch), guarding against `new Date(undefined)`.
+    - _Empty lease list_ – asserts the service returns `[]` rather than a single `null`/`undefined`.
 
 ## Relationships
 

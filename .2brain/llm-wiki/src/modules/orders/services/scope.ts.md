@@ -9,12 +9,12 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The authorization boundary for the orders module. Before any other service reads or mutates an order, this file answers two questions: *which* orders the caller may see (`callerScope`, `ownerScope`) and *what* the caller may do to a specific order (`actorOf`, `withActions`). It centralises the read-filter compilation and the actor/action assignment so that every read path in the module applies the same rules.
+The authorization boundary for the orders module. Before any other service reads or mutates an order, this file answers two questions: _which_ orders the caller may see (`callerScope`, `ownerScope`) and _what_ the caller may do to a specific order (`actorOf`, `withActions`). It centralises the read-filter compilation and the actor/action assignment so that every read path in the module applies the same rules.
 
 ## Key elements
 
 - **`callerScope(context?)`** — Returns the Mongo query fragment that restricts order reads to the caller's visibility (own vs. everyone's, soft-deleted excluded). Delegates to `accessibleFilter`; returns `{}` (not `undefined`) for fully-unrestricted roles.
-- **`ownerScope(userId)`** — Returns a filter for one account's orders *without* the soft-delete exclusion. Intended for flows that already know whose data they are exporting (e.g. account data export). Thin pass-through to `orderRepository.ownerScope`.
+- **`ownerScope(userId)`** — Returns a filter for one account's orders _without_ the soft-delete exclusion. Intended for flows that already know whose data they are exporting (e.g. account data export). Thin pass-through to `orderRepository.ownerScope`.
 - **`actorOf(authContext?)`** — Resolves the lifecycle actor (`'admin'` | `'customer'`) for the current caller by checking whether their permission set holds the `orders.any.update` key. No request may claim the `system` actor.
 - **`withActions(order, authContext?)`** — Serialises a single order (handling both a hydrated `OrderDocument` and an already-transformed `Order`), resolves each line's live `current` images via `resolveCurrentImages`, and attaches the `actions` array computed by `orderActionsFor(status, actor)`. Returns `Promise<Order>`.
 

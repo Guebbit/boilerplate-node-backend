@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Installs the full transport-level security stack (secure headers, strict CORS, body parsing with size limits, cookie parsing, rate limiting) and configures Node server timeouts (slowloris protection). This file is the single place that decides *which* middlewares run and *in what order*, since the sequence (trust-proxy → rate limiter → body parsers) is load-bearing and non-obvious.
+Installs the full transport-level security stack (secure headers, strict CORS, body parsing with size limits, cookie parsing, rate limiting) and configures Node server timeouts (slowloris protection). This file is the single place that decides _which_ middlewares run and _in what order_, since the sequence (trust-proxy → rate limiter → body parsers) is load-bearing and non-obvious.
 
 ## Key elements
 
@@ -33,7 +33,7 @@ Installs the full transport-level security stack (secure headers, strict CORS, b
 ## Notes
 
 - **Order is contractual.** Moving `app.set('trust proxy', …)` after the rate limiter, or the body parsers after a handler that reads `request.body`, silently breaks behaviour. Do not reorder without understanding the comment block at the top.
-- **`trust proxy` must be a hop count (number), never `true`.** `true` makes Express trust the *entire* `X-Forwarded-For` chain, letting any client forge its IP and bypass rate-limit buckets.
+- **`trust proxy` must be a hop count (number), never `true`.** `true` makes Express trust the _entire_ `X-Forwarded-For` chain, letting any client forge its IP and bypass rate-limit buckets.
 - **CORS rejection uses `callback(null, false)`, not an `Error`.** Throwing an error enters Express's error chain and returns a generic 500; `false` simply omits `Access-Control-Allow-Origin` and lets the browser's same-origin policy do the work.
 - **`rawBody` is only attached on specific webhook paths**, not globally. Any code reading `request.rawBody` on an unlisted path will get `undefined`.
 - **`keepAliveTimeout` must exceed the upstream proxy's idle timeout.** If the server closes first, the proxy's next request hits a dead socket and the caller gets a spurious 502.

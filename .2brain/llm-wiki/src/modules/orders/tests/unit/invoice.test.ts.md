@@ -23,7 +23,7 @@ Unit tests for the invoice-rendering service (`services/invoice.ts`). Covers loc
 - **`withCacheRoot()`** — `beforeEach`/`afterEach` pair that creates a `mkdtemp` directory, sets `NODE_INVOICE_CACHE_PATH`, and tears it down. Exposes `root()` and `pathFor(orderId)`.
 - **Describe: "renders in its OWN frozen locale"** — Italian vs English rendering, ambient-locale independence, empty-items fallback, title interpolation, null-order → `undefined`, render rejection propagation, and the TTL-0 no-disk-write guarantee.
 - **Describe: "single-flight"** — Two concurrent misses for the same order produce exactly one render; different orders render independently; a settled render does not block a subsequent call.
-- **Describe: "the TTL cache"** — Fresh hit short-circuits DB + Chromium; miss writes a file; expired (backdated via `utimes`) file is re-rendered; null order writes nothing. *(Further cases truncated.)*
+- **Describe: "the TTL cache"** — Fresh hit short-circuits DB + Chromium; miss writes a file; expired (backdated via `utimes`) file is re-rendered; null order writes nothing. _(Further cases truncated.)_
 
 ## Relationships
 
@@ -35,7 +35,7 @@ Unit tests for the invoice-rendering service (`services/invoice.ts`). Covers loc
 ## Notes
 
 - **TTL mock is load-bearing.** `invoiceCacheTtlMinutes()` is forced to `0` under `NODE_ENV=test` by design (asserted separately in `config.test.ts`). Without the `ttlMinutesMock` override, the cache-specific tests would never exercise the non-zero branch. Every describe block except the TTL one relies on the default `0`.
-- **`invoiceCachePath()` is intentionally *not* mocked.** The cache directory is controlled purely by the `NODE_INVOICE_CACHE_PATH` env var set in `withCacheRoot()`, keeping the path-resolution logic under test.
+- **`invoiceCachePath()` is intentionally _not_ mocked.** The cache directory is controlled purely by the `NODE_INVOICE_CACHE_PATH` env var set in `withCacheRoot()`, keeping the path-resolution logic under test.
 - **Single-flight test runs at TTL 0.** The comment explains: at TTL 0, `renderInvoicePdf` reaches `renderFreshOnce` synchronously with no `readCached` `stat` gap, making two back-to-back calls deterministic rather than racing real filesystem calls.
 - **Dynamic `await import('../../services/invoice')`** inside each test resets the module's in-memory state (single-flight map, etc.) between cases.
 - **EJS escaping.** The `escaped()` helper is not a shortcut — it mirrors the exact `<%= %>` escape set (`&`, `<`, `>`, `"`, `'`). Loosening the template to `<%- %>` is explicitly rejected.

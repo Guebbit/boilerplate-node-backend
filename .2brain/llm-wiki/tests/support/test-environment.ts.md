@@ -30,7 +30,7 @@ Custom Jest environment (extends `jest-environment-node`) that tracks every `set
 ## Notes
 
 - The `Symbol.for` guard means the `observe` patch is installed exactly once per process, even if Jest's module registry loads a second copy of this file. A naive re-import would otherwise stack a second wrapper.
-- `previousObservers` supports a narrow edge case: an environment constructed *inside* a test file (e.g. `new TestEnvironment(...)`) will, at its own teardown, hand the registry slot back to the outer file's set.
-- Timer tracking relies on `NodeJS.Timeout` *objects* in the set; `clearTimeout`/`clearInterval` may also accept a numeric/string id, which the `untracking` wrapper explicitly ignores (only object handles are in the set).
+- `previousObservers` supports a narrow edge case: an environment constructed _inside_ a test file (e.g. `new TestEnvironment(...)`) will, at its own teardown, hand the registry slot back to the outer file's set.
+- Timer tracking relies on `NodeJS.Timeout` _objects_ in the set; `clearTimeout`/`clearInterval` may also accept a numeric/string id, which the `untracking` wrapper explicitly ignores (only object handles are in the set).
 - `perf_hooks` is a Node core module—every file in a process shares one `PerformanceObserver` prototype—so the patch is process-global. Timer globals, by contrast, are per-file in Jest's sandbox, so they are wrapped per-constructor.
 - The file imports types via `ConstructorParameters<typeof NodeEnvironment>` rather than from `@jest/environment`, which is not a declared dependency of this repo.

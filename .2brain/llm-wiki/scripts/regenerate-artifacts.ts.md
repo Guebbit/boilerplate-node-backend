@@ -26,7 +26,7 @@ Rebuilds every generated artifact in the repo in the one correct dependency orde
 ## Notes
 
 - The order is not arbitrary: `gen:api` must precede any step whose output depends on `api/` (e.g. the app's own models import `@api/schemas.zod`). The chain is "the only order that works."
-- `.husky/pre-commit` invokes this script with `--no-sync` and stages its output, so `npm run complete` only *verifies*—it does not regenerate.
+- `.husky/pre-commit` invokes this script with `--no-sync` and stages its output, so `npm run complete` only _verifies_—it does not regenerate.
 - The paired-frontend sync is deliberately lenient (skip, not fail) so a solo clone can regenerate; `sync:frontend` run standalone still fails loudly if the peer is missing.
 - Client collections read `scenarios/subjects.ts` rather than a generated dataset and are intentionally excluded from this chain.
 - See `docs/api/regenerating.md` for the longer narrative on why each step sits where it does.

@@ -25,6 +25,6 @@ Express route handler for `GET /delivery/methods`. Exposes the shop's available 
 
 ## Notes
 
-- **Lenient `weight` handling.** A missing, blank, non-numeric, or negative `weight` all resolve to `undefined` (i.e. "no filter"). This is deliberate: the endpoint is advisory, so a bad value degrades to the unfiltered list rather than returning 422. Contrast with required-scalar handlers in other controllers that *do* branch on parse failure.
+- **Lenient `weight` handling.** A missing, blank, non-numeric, or negative `weight` all resolve to `undefined` (i.e. "no filter"). This is deliberate: the endpoint is advisory, so a bad value degrades to the unfiltered list rather than returning 422. Contrast with required-scalar handlers in other controllers that _do_ branch on parse failure.
 - **No error path in this controller.** All HTTP-error concerns are absorbed by `deliveryService.listMethods`; this file always calls `successResponse`.
 - **Public endpoint.** No authentication middleware is applied here; the route is intentionally accessible to guests.

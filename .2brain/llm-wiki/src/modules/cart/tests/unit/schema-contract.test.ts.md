@@ -15,13 +15,13 @@ Contract test that pins the exact shape, indexes, and options of `cartSchema`. I
 
 - **`RETENTION_SECONDS`** — module-level constant computed from `NODE_CART_RETENTION_DAYS` (default 365). Used to assert the TTL value without hard-coding a literal, so the test and the model stay in lockstep if the env var changes.
 - **`describe('cartSchema')`** — top-level assertions:
-  - Only `userId` is required; `items` defaults to `[]`; `userId` is a `ObjectId` ref to `User`.
-  - Exact index set (`carts_updatedAt_ttl`, `items.productId_1`, `userId_1`) and their options (`expireAfterSeconds`, `unique=true`).
-  - `timestamps: true` on the schema options.
+    - Only `userId` is required; `items` defaults to `[]`; `userId` is a `ObjectId` ref to `User`.
+    - Exact index set (`carts_updatedAt_ttl`, `items.productId_1`, `userId_1`) and their options (`expireAfterSeconds`, `unique=true`).
+    - `timestamps: true` on the schema options.
 - **`describe('cartSchema — a line')`** — sub-schema (`items`) assertions:
-  - Required paths are `productId` + `quantity`; `_id` is disabled; `productId` refs `Product`.
-  - `quantity` has `min: 1` (a zero-quantity line is a logical removal that didn't remove).
-  - `pathNames` is exactly `['productId', 'quantity']`, cementing the cart-vs-wishlist distinction.
+    - Required paths are `productId` + `quantity`; `_id` is disabled; `productId` refs `Product`.
+    - `quantity` has `min: 1` (a zero-quantity line is a logical removal that didn't remove).
+    - `pathNames` is exactly `['productId', 'quantity']`, cementing the cart-vs-wishlist distinction.
 
 ## Relationships
 

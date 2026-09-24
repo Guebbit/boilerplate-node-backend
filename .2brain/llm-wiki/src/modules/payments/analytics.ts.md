@@ -14,8 +14,8 @@ Defines the canonical analytics event names for the payments module and register
 ## Key elements
 
 - **`paymentsAnalyticsEvents`** (`as const`) — the three event-name constants:
-  - `PAYMENT_SUCCEEDED` / `PAYMENT_DECLINED` — the funnel's final gate; their ratio is the card-conversion metric.
-  - `PAYMENT_RECORDED_OFFLINE` — a deliberately *separate* event (not a flagged `PAYMENT_SUCCEEDED`) because the payment never traversed the provider funnel; folding it in would inflate the conversion denominator.
+    - `PAYMENT_SUCCEEDED` / `PAYMENT_DECLINED` — the funnel's final gate; their ratio is the card-conversion metric.
+    - `PAYMENT_RECORDED_OFFLINE` — a deliberately _separate_ event (not a flagged `PAYMENT_SUCCEEDED`) because the payment never traversed the provider funnel; folding it in would inflate the conversion denominator.
 - **`declare module '@infrastructure/observability/analytics'`** — augments `AnalyticsEventMap` with a `payments` key typed to the union of the three constants above. This is what makes the event names part of the shared port's name map (same pattern as `./audit.ts` uses for audit actions).
 
 ## Relationships
@@ -25,5 +25,5 @@ Defines the canonical analytics event names for the payments module and register
 ## Notes
 
 - Event-name strings follow the convention in `docs/tools/analytics.md#naming` (snake_case).
-- The file is imported *directly* by controllers/services rather than via a re-export, so the module augmentation is picked up wherever the file is in the dependency graph.
+- The file is imported _directly_ by controllers/services rather than via a re-export, so the module augmentation is picked up wherever the file is in the dependency graph.
 - Do **not** add a boolean "offline" flag to `PAYMENT_SUCCEEDED` to cover offline recordings — the separation is intentional to keep the conversion metric clean.

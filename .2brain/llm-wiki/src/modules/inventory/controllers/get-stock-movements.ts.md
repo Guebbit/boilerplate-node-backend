@@ -14,10 +14,10 @@ Defines the HTTP controller for `GET /inventory/movements`, which returns a pagi
 ## Key elements
 
 - **`getStockMovements`** (exported const) — the list controller built via `createListController`. It declares:
-  - `entity: 'stockMovements'` — the resource name used for response shaping/logging.
-  - `schema` — `ListStockMovementsQueryParams` extended with `page` / `pageSize` (both made optional via `.partial()`).
-  - `input: { ids: ['productId'] }` — tells the controller harness to treat `productId` as an ID-style parameter (likely validated as an ID rather than a free-text filter).
-  - `runList` — the single async call to `inventoryService.listMovements(parsed)`.
+    - `entity: 'stockMovements'` — the resource name used for response shaping/logging.
+    - `schema` — `ListStockMovementsQueryParams` extended with `page` / `pageSize` (both made optional via `.partial()`).
+    - `input: { ids: ['productId'] }` — tells the controller harness to treat `productId` as an ID-style parameter (likely validated as an ID rather than a free-text filter).
+    - `runList` — the single async call to `inventoryService.listMovements(parsed)`.
 
 ## Relationships
 

@@ -17,11 +17,11 @@ Guards every `imageUrl` in the scenario seed dataset: asserts each value is a fo
 - **`collectImageUrls()`** — Synchronously `require`s every remaining `.ts` data file in `scenarios/`, then recursively walks each exported array to extract every `imageUrl` string, labelling each with its full row path (e.g. `products.products[2]`). Returns `[label, url][]`.
 - **`imageUrls`** — The result of `collectImageUrls()`, evaluated once at module load.
 - **`describe('seed row imageUrls')`** — Five assertions:
-  - *collects a url from every row* — floor check (≥ 5) so a broken walk can't vacuously pass.
-  - *is a URL path, not a filesystem path* — no `\` anywhere.
-  - *is rooted at the static mount* — must start with `/`.
-  - *points at a file that ships* — `existsSync` under `public/`.
-  - *lives under /images/seed/* — excludes runtime uploads that `.gitignore` drops.
+    - _collects a url from every row_ — floor check (≥ 5) so a broken walk can't vacuously pass.
+    - _is a URL path, not a filesystem path_ — no `\` anywhere.
+    - _is rooted at the static mount_ — must start with `/`.
+    - _points at a file that ships_ — `existsSync` under `public/`.
+    - _lives under /images/seed/_ — excludes runtime uploads that `.gitignore` drops.
 
 ## Relationships
 
@@ -30,6 +30,6 @@ Guards every `imageUrl` in the scenario seed dataset: asserts each value is a fo
 ## Notes
 
 - The `require` call is intentionally synchronous and CommonJS (ts-jest runtime). An `import` or dynamic `import()` would return a promise and break the collection step. The ESLint disable is load-bearing, not stylistic.
-- The walk is recursive (not shallow) because an order row embeds a product snapshot that carries its *own* `imageUrl` copy, which can drift independently from the live product's URL.
+- The walk is recursive (not shallow) because an order row embeds a product snapshot that carries its _own_ `imageUrl` copy, which can drift independently from the live product's URL.
 - Offenders are collected into an array and asserted with `toEqual([])` rather than using `it.each` per row; the original defect affected a handful of distinct photos across hundreds of rows, and a single grouped assertion is both clearer and faster to diagnose.
-- `check.ts` is *not* in `RUNNER_FILES` because it only exports pure functions and has no side effect on import; it passes through the ordinary `Array.isArray` filter.
+- `check.ts` is _not_ in `RUNNER_FILES` because it only exports pure functions and has no side effect on import; it passes through the ordinary `Array.isArray` filter.

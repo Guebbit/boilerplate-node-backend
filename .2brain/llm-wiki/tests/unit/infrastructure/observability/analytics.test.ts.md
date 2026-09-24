@@ -17,11 +17,11 @@ Unit tests for the analytics provider port (`src/infrastructure/observability/an
 - **Umami provider block** — asserts POST URL construction (ingest host, trailing-slash tolerance, public-host fallback), body shape (`type`, `payload.website`, `payload.name`), mandatory `User-Agent` header, forwarding of caller `userAgent` / `clientIp` (`X-Forwarded-For`), omission of `X-Forwarded-For` when no IP, `user_id` / `trace_id` in `payload.data`, caller-property merging (and that it cannot overwrite `user_id`), and port stripping from `hostname`.
 - **PostHog provider block** (truncated) — exercises `posthog-node` via a `jest.mock` of the `PostHog` class; asserts `capture` arguments and `shutdown` on `shutdownAnalytics`.
 - **Helpers**
-  - `configureUmami` / `configurePostHog` — set the env vars a provider needs to send.
-  - `clearAnalyticsEnvironment` — removes all analytics env vars and pins `NODE_ANALYTICS_REQUIRE_CONSENT=false` so the consent gate does not short-circuit.
-  - `settle` — one `setImmediate` tick so the fire-and-forget `fetch` chain resolves before assertions run.
-  - `sentRequest` — decodes the single `globalThis.fetch` mock call into `{ url, headers, body }`.
-  - `mockCapture`, `mockShutdown`, `mockedPostHog` — the PostHog spies reachable through Jest's module registry.
+    - `configureUmami` / `configurePostHog` — set the env vars a provider needs to send.
+    - `clearAnalyticsEnvironment` — removes all analytics env vars and pins `NODE_ANALYTICS_REQUIRE_CONSENT=false` so the consent gate does not short-circuit.
+    - `settle` — one `setImmediate` tick so the fire-and-forget `fetch` chain resolves before assertions run.
+    - `sentRequest` — decodes the single `globalThis.fetch` mock call into `{ url, headers, body }`.
+    - `mockCapture`, `mockShutdown`, `mockedPostHog` — the PostHog spies reachable through Jest's module registry.
 
 ## Relationships
 
@@ -32,7 +32,7 @@ Unit tests for the analytics provider port (`src/infrastructure/observability/an
 
 ## Notes
 
-- **Consent is disabled by default in this file.** `clearAnalyticsEnvironment` sets `NODE_ANALYTICS_REQUIRE_CONSENT=false` (not `delete`) because the real default is `true`, and the intent here is to test provider behavior *after* the gate, not the gate itself. Only a dedicated consent-gate `describe` block tests the gate.
+- **Consent is disabled by default in this file.** `clearAnalyticsEnvironment` sets `NODE_ANALYTICS_REQUIRE_CONSENT=false` (not `delete`) because the real default is `true`, and the intent here is to test provider behavior _after_ the gate, not the gate itself. Only a dedicated consent-gate `describe` block tests the gate.
 - **Memoization is intentional.** `resolveAnalyticsProvider` caches on first call; tests must call `resetAnalyticsProvider()` (in `beforeEach`) before changing env vars, or the stale provider is returned.
 - **`settle()` is required after `emitAnalyticsEvent`.** The Umami provider fires `fetch` without awaiting it; asserting on the same tick reads the mock before the `.then` has run.
 - **Umami `User-Agent` requirement** is pinned as a test because it was discovered against a live Umami 2.14 instance and is not documented in Umami's API. The response is still `200` even when the event is discarded.

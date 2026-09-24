@@ -14,10 +14,10 @@ Defines the `GET /webhooks/subscriptions` controller. It returns the calling ten
 ## Key elements
 
 - **`listWebhookSubscriptions`** (export) — The sole export. Built via `createListController` with:
-  - `entity: 'webhookSubscriptions'` — identifies the resource for logging/auditing.
-  - `schema` — `ListWebhookSubscriptionsQueryParams` extended with infra-level `pageSchema` / `pageSizeSchema`, then `.partial()` so all query params remain optional.
-  - `input.booleans: ['enabled']` — tells the infra layer to pre-decode the `enabled` query param to a boolean.
-  - `runList` — delegates to `webhooksService.listSubscriptions`, passing the extracted tenant caller context and the parsed query params.
+    - `entity: 'webhookSubscriptions'` — identifies the resource for logging/auditing.
+    - `schema` — `ListWebhookSubscriptionsQueryParams` extended with infra-level `pageSchema` / `pageSizeSchema`, then `.partial()` so all query params remain optional.
+    - `input.booleans: ['enabled']` — tells the infra layer to pre-decode the `enabled` query param to a boolean.
+    - `runList` — delegates to `webhooksService.listSubscriptions`, passing the extracted tenant caller context and the parsed query params.
 
 ## Relationships
 

@@ -33,5 +33,5 @@ Integration test for `sweepDueWebhookDeliveries` run against a real database, wi
 ## Notes
 
 - The sweep intentionally does **not** claim rows (no `in-flight` transition). The file's docblock and inline comments flag this as deliberate: a duplicate publish is safe without a claim, and the Claim Check (EIP) pattern means the message carries only the row id, not the payload.
-- The queue adapter is the *only* mock in this file; all database access is real. This is what distinguishes it from a pure unit test of the sweep.
+- The queue adapter is the _only_ mock in this file; all database access is real. This is what distinguishes it from a pure unit test of the sweep.
 - `jest.mock('@infrastructure/adapters/queue', …)` is placed at module level, so the mock is active for every test in the file.

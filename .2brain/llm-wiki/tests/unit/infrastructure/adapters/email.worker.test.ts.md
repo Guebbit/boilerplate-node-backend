@@ -18,7 +18,7 @@ Unit tests for `handleEmailJob`, the email queue consumer. The SMTP side-effect 
 - **`discardSpooledMock`** — `discardSpooled` from `mail-spool`, mocked to verify whether a spooled PDF attachment is cleaned up or left for retry.
 - **Queue identity test** — asserts `workerEmailQueue === EMAIL_QUEUE`, pinning that the worker's re-export is literally the same token the registry uses.
 - **`it.each` refusal table** — six malformed payloads (empty `to`, missing `request`, missing `templateName`, empty object, `null`, `undefined`) that must all resolve `false` without touching the mailer.
-- **Spool-discard describe block** — three cases: discard on success, discard on permanent refusal, *do not* discard on transient failure.
+- **Spool-discard describe block** — three cases: discard on success, discard on permanent refusal, _do not_ discard on transient failure.
 
 ## Relationships
 

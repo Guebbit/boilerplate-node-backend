@@ -14,12 +14,12 @@ Registry adapter for the TOTP two-factor method. It translates the raw crypto he
 ## Key elements
 
 - **`totpMethod`** (exported const, type `TwoFactorMethodHandler`)
-  - `name: 'totp'` — registry key.
-  - `delivers: false` — device-bound method; no push/SMS channel.
-  - `available()` / `eligibility()` — always `true`; TOTP has no account or channel prerequisites.
-  - `target()` — returns `undefined` (no delivery target needed).
-  - `setup(user, entry)` — generates a fresh base32 secret via `otplib`, encrypts it into `entry.secret`, clears `entry.lastUsedStep`, and returns `{ secret, otpauthUri }` for the client to scan.
-  - `verify(_user, entry, code)` — decrypts the stored secret, delegates to `verifyTotpCode`, and advances `entry.lastUsedStep` on success to enforce replay protection.
+    - `name: 'totp'` — registry key.
+    - `delivers: false` — device-bound method; no push/SMS channel.
+    - `available()` / `eligibility()` — always `true`; TOTP has no account or channel prerequisites.
+    - `target()` — returns `undefined` (no delivery target needed).
+    - `setup(user, entry)` — generates a fresh base32 secret via `otplib`, encrypts it into `entry.secret`, clears `entry.lastUsedStep`, and returns `{ secret, otpauthUri }` for the client to scan.
+    - `verify(_user, entry, code)` — decrypts the stored secret, delegates to `verifyTotpCode`, and advances `entry.lastUsedStep` on success to enforce replay protection.
 
 ## Relationships
 

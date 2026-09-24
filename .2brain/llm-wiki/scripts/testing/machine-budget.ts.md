@@ -41,4 +41,4 @@ Single source of truth for how hard test runners may push the current machine. I
 - Reads `.env` with `node:util`'s `parseEnv` rather than `process.loadEnvFile()` specifically to avoid polluting `process.env`—the resulting environment is handed to every spawned jest, and merging app-level rate limits before `tests/support/setup.ts` can raise them causes spurious 429s.
 - `/proc/meminfo` is read in a try/catch (not an existence check) because the absence of `/proc` on macOS/Windows is the normal path, not an error.
 - All sizing constants (`PROCESS_BASELINE_MB`, `PER_FILE_RETENTION_MB`) are single-measurement values from 2026-09-15, documented with the exact shard/run that produced them; they are not recalculated at runtime.
-- `MAX_SHARD_PEAK_MB` is a *guard rail*, not a target: a memory-constrained machine should set `JEST_PROCESS_BUDGET_MB` explicitly below it rather than relying on the ceiling. See `docs/tools/weak-machines.md`.
+- `MAX_SHARD_PEAK_MB` is a _guard rail_, not a target: a memory-constrained machine should set `JEST_PROCESS_BUDGET_MB` explicitly below it rather than relying on the ceiling. See `docs/tools/weak-machines.md`.

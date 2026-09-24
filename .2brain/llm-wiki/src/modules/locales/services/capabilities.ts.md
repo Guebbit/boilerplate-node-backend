@@ -37,6 +37,6 @@ Builds the deployment's language manifest — a single list describing every off
 
 - **Graceful degradation by design:** `readDynamicTier` catches all errors and returns empty results. A Mongo outage degrades the response to static-only; it never produces a 500. The catch block carries `Stryker disable/restore` annotations to exclude it from mutation testing.
 - **Tenant semantics are asymmetric:** static languages are backend-tenant only (the API answers in them; no dictionary to download). Dynamic languages are frontend-tenant only (downloadable dictionaries). A merged tag gets both.
-- **`active` field:** For dynamic languages it gates what a *visitor* may select; admins always see all rows. Static languages are unconditionally `active: true`.
+- **`active` field:** For dynamic languages it gates what a _visitor_ may select; admins always see all rows. Static languages are unconditionally `active: true`.
 - **`entryCount`** is always `0` for static languages — there is no dictionary table behind them.
 - The RTL set is intentionally hardcoded rather than derived from `Intl.Locale` to avoid runtime availability differences across Node versions.

@@ -14,8 +14,8 @@ Declares the analytics event names emitted by the products module and registers 
 ## Key elements
 
 - **`productsAnalyticsEvents`** — `as const` object mapping two intents to string literals:
-  - `PRODUCTS_SEARCHED` → `'products_searched'` (catalogue search)
-  - `PRODUCT_VIEWED` → `'product_viewed'` (individual product page view)
+    - `PRODUCTS_SEARCHED` → `'products_searched'` (catalogue search)
+    - `PRODUCT_VIEWED` → `'product_viewed'` (individual product page view)
 - **Module augmentation** (`declare module '@infrastructure/observability/analytics'`) — adds a `products` key to `AnalyticsEventMap` so the port's generic event type now includes these two names, enabling compile-time checking at every call site.
 
 ## Relationships
@@ -25,6 +25,6 @@ Declares the analytics event names emitted by the products module and registers 
 
 ## Notes
 
-- Events are explicitly scoped to **top-of-funnel discovery** (search, view). They are *not* purchase or cart events. The ratio of these to `CART_ITEM_ADDED` is the intended business metric.
+- Events are explicitly scoped to **top-of-funnel discovery** (search, view). They are _not_ purchase or cart events. The ratio of these to `CART_ITEM_ADDED` is the intended business metric.
 - Event name strings must follow the convention in `docs/tools/analytics.md#naming`; the `as const` + augmentation pattern mirrors `./audit.ts`.
 - This file contains no runtime logic beyond exporting the const object. All observable behavior lives in the service that fires the events.

@@ -15,9 +15,9 @@ Unit tests for the antibot provider selection logic. They verify the port's thre
 
 - **`ORIGINAL` / `afterEach`** – Captures and restores `process.env.NODE_ANTIBOT_PROVIDER` so no test leaks its env mutation into another suite.
 - **`describe('resolveHumanChallengeProvider')`** – Three cases:
-  - *default*: no env var → provider named `'none'`, `isHumanChallengeEnabled()` is `false`.
-  - *named*: env var set to `'turnstile'` → provider named `'turnstile'`, enabled is `true`.
-  - *unknown*: env var set to `'recaptcha'` → throws with message containing `'Unknown NODE_ANTIBOT_PROVIDER'`.
+    - _default_: no env var → provider named `'none'`, `isHumanChallengeEnabled()` is `false`.
+    - _named_: env var set to `'turnstile'` → provider named `'turnstile'`, enabled is `true`.
+    - _unknown_: env var set to `'recaptcha'` → throws with message containing `'Unknown NODE_ANTIBOT_PROVIDER'`.
 - **`describe('the `none` provider')`** – Confirms the no-op provider's `publicParameters(url)` returns `{}` and its `verify(token)` resolves to `'ok'` regardless of input.
 
 ## Relationships

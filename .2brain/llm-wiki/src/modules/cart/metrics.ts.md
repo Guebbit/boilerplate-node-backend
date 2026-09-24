@@ -17,10 +17,10 @@ Declares the domain-owned Prometheus counters for the cart module. Metrics live 
 
 ## Relationships
 
-- **`src/infrastructure/observability/metrics-registry.ts`** — Imports the shared `metricsRegistry` instance and passes it via the `registers` option so the counter is exposed on the global metrics endpoint. This file owns *what* is counted; the registry owns *where* it is collected and served.
+- **`src/infrastructure/observability/metrics-registry.ts`** — Imports the shared `metricsRegistry` instance and passes it via the `registers` option so the counter is exposed on the global metrics endpoint. This file owns _what_ is counted; the registry owns _where_ it is collected and served.
 - **`src/modules/cart/controllers/post-checkout.ts`** — The checkout controller increments `cartCheckoutTotal` with the appropriate `status` label after a checkout attempt completes (or fails).
 
 ## Notes
 
 - The `as const` on `labelNames` is load-bearing for type safety: without it, `inc()` would accept any string key and a typo in the label name would go undetected at compile time.
-- The module-level doc block cross-references `modules/account/metrics.ts` for the *why* behind the "metrics live in the module" convention.
+- The module-level doc block cross-references `modules/account/metrics.ts` for the _why_ behind the "metrics live in the module" convention.

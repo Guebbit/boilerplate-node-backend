@@ -33,6 +33,6 @@ Defines the three rate-limit budgets for the payments module (webhook deliveries
 ## Notes
 
 - The two confirm budgets use a **fixed 1-hour window** (`PAYMENT_VELOCITY_WINDOW_MS`), not the shared browsing window; the duration is part of the budget's meaning.
-- `hasAPriorDecline` compares `info.remaining < info.limit - 1` (not `< info.limit`) because express-rate-limit increments the counter *before* the outcome is known; the off-by-one cancels out the current request's provisional count.
+- `hasAPriorDecline` compares `info.remaining < info.limit - 1` (not `< info.limit`) because express-rate-limit increments the counter _before_ the outcome is known; the off-by-one cancels out the current request's provisional count.
 - The webhook budget is keyed by **address**, not account, because the route is unauthenticated and the provider's IP is not an application-level identity.
 - `requestWasSuccessful` on the decline budget is intentionally non-standard — it reads a flag the controller sets (`request.paymentConfirmDeclined`) rather than the default `statusCode < 400` heuristic, to exclude the `PAYMENT_ORDER_NOT_PAYABLE` race from spending the budget.

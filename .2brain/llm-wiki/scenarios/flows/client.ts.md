@@ -15,10 +15,10 @@ A minimal HTTP client that the scenario-flow runner uses to drive the applicatio
 
 - **`Envelope`** (internal) — the two-field shape (`data`, `errors[]`) every API response is expected to carry.
 - **`Method`** — union of `GET | POST | PUT | PATCH | DELETE`.
-- **`Attempt`** *(exported)* — a parsed HTTP outcome: `status`, `data`, `errorCode` (first `errors[].code`), and `errorMessages` (all `errors[].message`).
-- **`ScenarioFlowError`** *(exported)* — the single error type the runner throws when a call expected to succeed does not. Message includes actor, method, path, status, error code, and the error messages (or raw data) for context.
-- **`Caller`** *(exported)* — a signed-in actor object exposing `email`, `call` (throws on non-2xx, returns typed `data`), and `attempt` (always resolves to `Attempt`, no throw).
-- **`signIn`** *(exported)* — logs in via `POST /account/login`, validates the token, and returns a `Caller` with the bearer header pre-attached.
+- **`Attempt`** _(exported)_ — a parsed HTTP outcome: `status`, `data`, `errorCode` (first `errors[].code`), and `errorMessages` (all `errors[].message`).
+- **`ScenarioFlowError`** _(exported)_ — the single error type the runner throws when a call expected to succeed does not. Message includes actor, method, path, status, error code, and the error messages (or raw data) for context.
+- **`Caller`** _(exported)_ — a signed-in actor object exposing `email`, `call` (throws on non-2xx, returns typed `data`), and `attempt` (always resolves to `Attempt`, no throw).
+- **`signIn`** _(exported)_ — logs in via `POST /account/login`, validates the token, and returns a `Caller` with the bearer header pre-attached.
 - **`readAttempt`** (internal) — converts a `Response` into an `Attempt`; handles 204 and non-JSON bodies gracefully.
 - **`send`** (internal) — the single `fetch` call site; joins `baseUrl` + `path`, serialises the body, delegates parsing to `readAttempt`.
 
@@ -31,7 +31,7 @@ A minimal HTTP client that the scenario-flow runner uses to drive the applicatio
 ## Notes
 
 - Deliberately uses global `fetch`, **not** supertest. The file runs during `npm run db:bootstrap → scenario:apply`, a stage where devDependencies are not guaranteed to be installed.
-- `signIn` is the *only* way a `Caller` is created; tokens are never hand-issued. This guarantees the session is fresh, which `requireFreshAuth(REAUTH_TIME_CRITICAL)` on checkout/payment routes requires.
+- `signIn` is the _only_ way a `Caller` is created; tokens are never hand-issued. This guarantees the session is fresh, which `requireFreshAuth(REAUTH_TIME_CRITICAL)` on checkout/payment routes requires.
 - `call` returns `outcome.data as T` — the caller is responsible for typing; there is no runtime shape validation beyond the two-field envelope.
 - `Attempt.data` is `undefined` for 204 responses and for any body that is not valid JSON (the `readAttempt` catch path).
 - `errorMessages` collects **all** error messages, not just the first, but `errorCode` is always the first code only.

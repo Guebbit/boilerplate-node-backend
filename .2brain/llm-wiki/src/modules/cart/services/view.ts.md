@@ -16,7 +16,7 @@ Cart projection layer: turns a stored `CartDocument` into the shapes callers rea
 - **`CartLine`** – `CartItem` plus a joined `product: ProductDocument | null`. `productId` and `product` are separate fields on purpose (see Notes).
 - **`JoinedCartLine`** – `CartLine` narrowed to `product: ProductDocument` (non-null).
 - **`CartView`** – The `CartResponse` shape from `openapi.yaml`: `items` (raw `CartItem[]`) + `summary` (`itemsCount`, `totalQuantity`, `total`). Every cart endpoint returns this.
-- **`PopulatedCart`** *(internal, not exported)* – Types what Mongoose writes into the document after `populate('items.productId')`.
+- **`PopulatedCart`** _(internal, not exported)_ – Types what Mongoose writes into the document after `populate('items.productId')`.
 - **`isJoined(line)`** – Type guard: `CartLine → JoinedCartLine` when `product !== null`.
 - **`readCartLines(cart)`** – Populates product references in one query; returns `CartLine[]` with product docs or `null`. Returns `[]` for a null/absent cart.
 - **`toCartView(cart)`** – Builds the full `CartView` (items + summary) using `sumLineItems`. Drops the joined product from items to match the `additionalProperties: false` contract.
@@ -31,7 +31,7 @@ Cart projection layer: turns a stored `CartDocument` into the shapes callers rea
 
 ## Notes
 
-- **Capture-then-populate:** `readCartLines` snapshots `productId` strings *before* calling `populate`, because Mongoose replaces the ref field with the fetched doc or `null`. The original id is restored from the snapshot array by index.
+- **Capture-then-populate:** `readCartLines` snapshots `productId` strings _before_ calling `populate`, because Mongoose replaces the ref field with the fetched doc or `null`. The original id is restored from the snapshot array by index.
 - **`PopulatedCart` key naming:** Typed as the whole `items` key (not `items.productId`) because `populate<T>` merges `T` over top-level document properties only.
 - **No 404 / no empty-array guard:** A missing cart document is treated as an empty cart. `cart.items` is guaranteed non-null by the Mongoose schema default, so no `|| []` fallback is needed.
 - **`toCartView` strips the product:** The joined `ProductDocument` is used for pricing but removed from the `items` array, keeping the response within the OpenAPI `additionalProperties: false` constraint. Use `readCartLines` directly when the product document is needed.

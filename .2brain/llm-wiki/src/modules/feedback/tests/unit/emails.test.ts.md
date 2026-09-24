@@ -15,12 +15,12 @@ Unit tests for the `contactRequestEmail` function — the notification email sen
 
 - **`REQUEST`** — A single `ContactRequest` fixture (name, email, subject, message, createdAt) reused across all assertions.
 - **`describe('contactRequestEmail')`** — The sole test block. Contains six `it` cases:
-  - *Template name* — asserts the returned `template` is `'feedback.contact'`.
-  - *Subject composition* — asserts the mail subject ends with `": ${REQUEST.subject}"` and is **not** just the raw ticket subject (a translated prefix precedes it).
-  - *Data pass-through* — asserts `data.name`, `data.email`, `data.subject`, `data.message`, `data.createdAt` are identical to the input; no reformatting.
-  - *Name fallback* — asserts both `undefined` and `''` for `name` resolve to the same non-empty, non-raw-key translated string (documents the deliberate use of `||` over `??`).
-  - *Field labels* — asserts `labelName`, `labelEmail`, `labelSubject`, `labelMessage`, `labelCreatedAt` are all non-empty and do not start with `feedback.` (i.e., they are translated, not raw i18n keys).
-  - *Locale pass-through* — asserts `data.locale` matches the argument and that `data.title` differs between `'en'` and `'it'`.
+    - _Template name_ — asserts the returned `template` is `'feedback.contact'`.
+    - _Subject composition_ — asserts the mail subject ends with `": ${REQUEST.subject}"` and is **not** just the raw ticket subject (a translated prefix precedes it).
+    - _Data pass-through_ — asserts `data.name`, `data.email`, `data.subject`, `data.message`, `data.createdAt` are identical to the input; no reformatting.
+    - _Name fallback_ — asserts both `undefined` and `''` for `name` resolve to the same non-empty, non-raw-key translated string (documents the deliberate use of `||` over `??`).
+    - _Field labels_ — asserts `labelName`, `labelEmail`, `labelSubject`, `labelMessage`, `labelCreatedAt` are all non-empty and do not start with `feedback.` (i.e., they are translated, not raw i18n keys).
+    - _Locale pass-through_ — asserts `data.locale` matches the argument and that `data.title` differs between `'en'` and `'it'`.
 
 ## Relationships
 

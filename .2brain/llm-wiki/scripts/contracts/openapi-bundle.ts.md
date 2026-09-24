@@ -36,6 +36,6 @@ Compiles the project's REST OpenAPI contract from per-module standalone YAML doc
 - `compile()` is memoised in a module-level `let compiled`. A single process run (which may call `content` two or three times) triggers `redocly` exactly once.
 - `withAppLevelResponses` never overwrites a status code the operation already declares — it only fills gaps. An operation with its own `429` (e.g. a per-route rate-limit with custom `Retry-After`) is left untouched.
 - `appliesTo: 'requestBody'` checks for the presence of the `requestBody` field on the operation, not the HTTP method. A `DELETE` with a body gets the size-error defaults; a `GET` does not.
-- The "DO NOT EDIT" marker is prepended *after* bundling because `redocly` strips comments from source files during parsing.
+- The "DO NOT EDIT" marker is prepended _after_ bundling because `redocly` strips comments from source files during parsing.
 - `lineWidth: 0` in the YAML re-serialisation prevents unstable line-wrapping from producing noisy diffs on every regeneration.
 - `sectionPaths` for modules uses a regex on raw text rather than YAML parsing — deliberately, since it is called for every path on every collection regeneration and only needs the path-key strings.

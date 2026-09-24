@@ -16,7 +16,7 @@ Public barrel for the `users` module. It is the **only** import surface a siblin
 - **`export * from './service'`** — re-exports the full `userService` API. All cross-module reads and writes (including those made by `account`) must go through this service; the repository is never exposed.
 - **`export * from './events'`** — re-exports user domain events for consumption by other modules.
 - **Named model exports** (`TokenType`, `zodUserSchema`, `hashToken`, `isLiveRefreshSession`) — the token-type enum, the Zod schema, and two pure helpers that travel with the schema. These are the only model values exposed outward.
-- **`export type * from './model'`** — all model *type* definitions (interfaces, type aliases) are re-exported as types only.
+- **`export type * from './model'`** — all model _type_ definitions (interfaces, type aliases) are re-exported as types only.
 - **`userModel`** is deliberately **not** exported; nothing outside this module calls it.
 
 ## Relationships

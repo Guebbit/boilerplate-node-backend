@@ -15,8 +15,8 @@ Integration tests for `productRepository` run against a real MongoDB instance. T
 
 - **`setupTestDb()`** — called at module scope; provisions and resets the test database before any suite runs.
 - **`describe('productRepository')`** — the main suite, subdivided into `create`, `findById`, `findOne`, `findAll`, `count`, `save`, `deleteOne`.
-  - `findAll` tests verify `skip`/`limit` pagination, filter application, and that returned objects are lean (no Mongoose instance methods like `save`).
-  - `create` tests verify insertion round-trip and the schema's `imageUrl` default.
+    - `findAll` tests verify `skip`/`limit` pagination, filter application, and that returned objects are lean (no Mongoose instance methods like `save`).
+    - `create` tests verify insertion round-trip and the schema's `imageUrl` default.
 - **`describe('an empty catalogue')`** — separate suite that wipes the collection in `beforeEach` and asserts `facets()` resolves to `{ categories: [], tags: [] }`, guarding the `.at(0)` absent-row path in calling code.
 
 ## Relationships

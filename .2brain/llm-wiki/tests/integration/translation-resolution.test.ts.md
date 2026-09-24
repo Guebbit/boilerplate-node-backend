@@ -33,5 +33,5 @@ Integration test that verifies the read-side of the translation system: product 
 
 - The file is intentionally **not** nested under `src/modules/…/tests/` — the header comment explains this is cross-module by design.
 - `en` as fallback is an environment assumption (see `.env-example`); if the test environment changes its fallback locale, the `FALLBACK` constant and the `source`-annotation logic in `givenTranslation` must be updated together.
-- Search semantics under test are **union**: a product can appear if it matches on its own column *or* on its translation row, not both. The "unions rather than intersects" test exists specifically to guard against an implementation that accidentally intersects.
+- Search semantics under test are **union**: a product can appear if it matches on its own column _or_ on its translation row, not both. The "unions rather than intersects" test exists specifically to guard against an implementation that accidentally intersects.
 - Every assertion that checks a resolved response also calls `.toSatisfyApiSpec()` (except the two fallback/no-translation tests), tying correctness to the OpenAPI contract.

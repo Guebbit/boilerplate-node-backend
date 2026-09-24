@@ -13,11 +13,11 @@ Pure computation of order totals from a list of priced line items (plus optional
 
 ## Key elements
 
-- **`LineItem`** — Loose input shape for a single priced line (`quantity?: unknown`, `product?.price?: unknown`). Accepts raw aggregate output *and* cart DTOs without a strict type contract.
+- **`LineItem`** — Loose input shape for a single priced line (`quantity?: unknown`, `product?.price?: unknown`). Accepts raw aggregate output _and_ cart DTOs without a strict type contract.
 - **`LineItemTotals`** — Return shape of `sumLineItems`: `{ count, quantity, price }` (line count, total units, decimal price).
 - **`sumLineItems(items: readonly LineItem[]): LineItemTotals`** — Iterates lines, sanitising each via `wholeCount` / `toMinorUnits` so a missing or malformed line contributes zero rather than poisoning the total with `NaN`.
 - **`OrderTotalInput`** — `{ items, shippingCost? }`; shipping is `unknown` because it arrives as raw aggregate output and is optional when no delivery method was chosen.
-- **`orderTotal(order: OrderTotalInput): number`** — Composes `sumLineItems` price with `shippingCost` in minor units, then returns a single decimal amount. This is *the* number published to the outside world.
+- **`orderTotal(order: OrderTotalInput): number`** — Composes `sumLineItems` price with `shippingCost` in minor units, then returns a single decimal amount. This is _the_ number published to the outside world.
 
 ## Relationships
 

@@ -14,14 +14,14 @@ Repository layer for the two webhook MongoDB collections (subscriptions and deli
 ## Key elements
 
 - **`webhookSubscriptionRepository`** (export) — Base CRUD from the factory plus:
-  - `findEnabled()` — returns every subscription with `enabled: true`; called once per published event for in-memory event-type matching.
-  - `recordOutcome(subscriptionId, succeeded)` — On success: single atomic `$set`/`$unset` to reset the streak. On failure: two sequential writes (stamp `failingSince` only-if-absent, then `$inc` `consecutiveFailures`).
-  - `disable(subscriptionId)` — Conditionally flips `enabled` to `false` and stamps `disabledAt`; the `enabled: true` filter prevents a duplicate finalizer from overwriting the timestamp.
+    - `findEnabled()` — returns every subscription with `enabled: true`; called once per published event for in-memory event-type matching.
+    - `recordOutcome(subscriptionId, succeeded)` — On success: single atomic `$set`/`$unset` to reset the streak. On failure: two sequential writes (stamp `failingSince` only-if-absent, then `$inc` `consecutiveFailures`).
+    - `disable(subscriptionId)` — Conditionally flips `enabled` to `false` and stamps `disabledAt`; the `enabled: true` filter prevents a duplicate finalizer from overwriting the timestamp.
 - **`webhookDeliveryRepository`** (export) — Base CRUD (with `searchable` fields) plus:
-  - `claimPending(id)` — Atomically claims a `pending` row or a stranded `in-flight` row whose lease has expired; sets `in-flight` + fresh lease. Returns the row or `null`.
-  - `claimForReplay(id)` — Same exclusive-lease mechanism but also permits claiming rows at a terminal status (`succeeded`, `exhausted`); used by the admin replay path.
-  - `applyOutcome(id, leaseToken, patch)` — Writes an outcome patch only while the caller's `leaseToken` still matches; a superseded claim's write is silently dropped.
-  - `findDue(limit)` — Sweep read: all `pending` rows whose `nextAttemptAt` has passed, plus stranded `in-flight` rows with expired leases, oldest first, capped at `limit`.
+    - `claimPending(id)` — Atomically claims a `pending` row or a stranded `in-flight` row whose lease has expired; sets `in-flight` + fresh lease. Returns the row or `null`.
+    - `claimForReplay(id)` — Same exclusive-lease mechanism but also permits claiming rows at a terminal status (`succeeded`, `exhausted`); used by the admin replay path.
+    - `applyOutcome(id, leaseToken, patch)` — Writes an outcome patch only while the caller's `leaseToken` still matches; a superseded claim's write is silently dropped.
+    - `findDue(limit)` — Sweep read: all `pending` rows whose `nextAttemptAt` has passed, plus stranded `in-flight` rows with expired leases, oldest first, capped at `limit`.
 - **`WEBHOOK_DELIVERY_SORT`** (export) — `{ createdAt: -1, _id: -1 }` sort spec for listing deliveries newest-first.
 - **`lease()`** (internal) — Generates `{ leaseToken: randomUUID(), leaseExpiresAt: now + 60s }`.
 - **`LEASE_DURATION_MS`** (internal) — 60 000 ms; intentionally well above the 10 s transport timeout to tolerate a DB round-trip or GC pause without stranding a live attempt.
@@ -40,6 +40,6 @@ Repository layer for the two webhook MongoDB collections (subscriptions and deli
 
 - The explicit `Repository<…> & { … }` annotations on both exports are required, not stylistic: TypeScript raises TS7056 when it tries to serialize the inferred type of a spread of the factory result without a named target type.
 - `recordFailure` deliberately uses two sequential `findOneAndUpdate` calls instead of a single aggregation-pipeline update; the `failingSince: { $exists: false }` filter makes the "first failure" stamp atomic on its own.
-- `claimForReplay` vs. `claimPending`: the only semantic difference is the filter—replay allows any status except a *live* `in-flight`, whereas the queued/sweep path only accepts `pending` or *expired* `in-flight`.
+- `claimForReplay` vs. `claimPending`: the only semantic difference is the filter—replay allows any status except a _live_ `in-flight`, whereas the queued/sweep path only accepts `pending` or _expired_ `in-flight`.
 - `findDue` is a pure read; it does not claim. A row it returns may already be mid-attempt by the time the queue consumer picks it up, but that is safe because the consumer's own `claimPending` is the gate that decides who performs the HTTP attempt.
 - The subscription repository intentionally has no `searchable` configuration—the admin list view applies no server-side filters.

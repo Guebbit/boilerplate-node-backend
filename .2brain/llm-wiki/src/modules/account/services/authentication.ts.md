@@ -21,7 +21,7 @@ Central service for establishing identity (signup, login) and managing authentic
 - **`requestAccountSetup(user)`** — Same token type/TTL as reset, but sends the `setupRequestEmail` copy. Sole caller is the `users` module's `USER_SETUP_REQUESTED` event.
 - **`sessionRevoke(userId, sessionId, context)`** — Deletes a session by ID; audits only when `modifiedCount > 0`.
 - **`logoutCurrentSession(refreshToken, context)`** — Removes the named refresh token (if present) and records audit + analytics unconditionally.
-- **`refreshAccessToken(refreshToken, context)`** — Rotates the refresh token via `rotateRefreshToken`, returns new access/refresh pair + `refreshMaxAgeMs`. Distinguishes *token reuse* (`TokenReuseError`) from *missing/invalid* in both audit and error responses.
+- **`refreshAccessToken(refreshToken, context)`** — Rotates the refresh token via `rotateRefreshToken`, returns new access/refresh pair + `refreshMaxAgeMs`. Distinguishes _token reuse_ (`TokenReuseError`) from _missing/invalid_ in both audit and error responses.
 - **`MissingRefreshTokenError`** — Internal sentinel so the shared `catch` can differentiate "no cookie" from "invalid token" without the happy path branching twice.
 - **`DUMMY_PASSWORD_HASH`** — Precomputed bcrypt hash (cost 12) used to equalize timing for unknown-email logins (timing-oracle prevention).
 

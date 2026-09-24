@@ -18,12 +18,12 @@ Unit tests for the pure (database-free) layers of the two-factor authentication 
 - **`describe('verifyTotpCode — fixed-clock vectors, never wall time')`** — generates codes with `otplib` at a fixed epoch, pins `jest.useFakeTimers`, and asserts: valid code accepted, wrong code rejected, and replay rejected when `afterTimeStep` names the already-consumed step.
 - **`describe('backup codes')`** — asserts `generateBackupCodes()` yields exactly `BACKUP_CODE_COUNT` distinct codes; `hashBackupCode` is deterministic and collision-free across distinct inputs.
 - **`describe('delivered codes …')`** — the largest block. Tests:
-  - `generateDeliveredCode` always returns 6 zero-padded digits (200 samples to catch padding bugs).
-  - `armDeliveredCode` / `consumeDeliveredCode` accept-then-invalidate semantics.
-  - TTL expiry clears `record.codeHash`.
-  - `DELIVERED_CODE_MAX_ATTEMPTS` wrong guesses burn the code even if the correct one follows.
-  - `deliveryCooldownRemaining` reports `DELIVERED_CODE_RESEND_SECONDS` at arm time and 0 after elapse; 0 before any send.
-  - Stored digest is HMAC under `NODE_TOTP_ENCRYPTION_KEY`, **not** a bare SHA-256.
+    - `generateDeliveredCode` always returns 6 zero-padded digits (200 samples to catch padding bugs).
+    - `armDeliveredCode` / `consumeDeliveredCode` accept-then-invalidate semantics.
+    - TTL expiry clears `record.codeHash`.
+    - `DELIVERED_CODE_MAX_ATTEMPTS` wrong guesses burn the code even if the correct one follows.
+    - `deliveryCooldownRemaining` reports `DELIVERED_CODE_RESEND_SECONDS` at arm time and 0 after elapse; 0 before any send.
+    - Stored digest is HMAC under `NODE_TOTP_ENCRYPTION_KEY`, **not** a bare SHA-256.
 - **`entry()`** — helper returning a minimal `TwoFactorMethodRecord` (`{ method: 'email' }`).
 - **`now`** — fixed `Date('2026-09-04T12:00:00.000Z')` so delivered-code tests are time-independent.
 

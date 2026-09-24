@@ -30,6 +30,6 @@ Integration test suite that guards the order serialization contract: `_id` and `
 ## Notes
 
 - Two tests in the serialization block share the identical name `'normalizes aggregate results (search) the same way'`; they differ in that one calls `search()` and the other `search({})`. If one is removed, the other still covers the same assertion.
-- The doc comment at the top explains *why* `applyOrderTransform` is needed for aggregate output (plain JS objects bypass `toJSON`, same as `.lean()`). This is context for anyone modifying the transform.
-- The index-leak test is a *guard* against future changes to `orderLineProductSchema`, not a regression test for current behavior — it will pass trivially today.
+- The doc comment at the top explains _why_ `applyOrderTransform` is needed for aggregate output (plain JS objects bypass `toJSON`, same as `.lean()`). This is context for anyone modifying the transform.
+- The index-leak test is a _guard_ against future changes to `orderLineProductSchema`, not a regression test for current behavior — it will pass trivially today.
 - `asStub` is used instead of destructuring or type-narrowing because the service likely returns a wrapper/Result type; the test needs the raw object to inspect for `_id`/`__v`.

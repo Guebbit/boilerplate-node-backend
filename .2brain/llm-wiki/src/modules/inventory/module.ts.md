@@ -15,8 +15,8 @@ Module manifest entry for the **inventory** module. It declares the module's ide
 
 - **`default export`** (`satisfies AppModule`) — the manifest object: `name: 'inventory'`, `basePath: '/inventory'`, `routes`, `permissions`, `locales`, `personalData`, and `subscribe`.
 - **`subscribe()`** — registers two `onDomainEvent` handlers:
-  - `PRODUCT_CREATED` → calls `ensureLevel(productId)` unconditionally (so a zero-stock product still appears on the stock board and low-stock gauge), then conditionally `receive(productId, onHand, 'Opening stock')` when `onHand > 0`.
-  - `PRODUCT_DELETED` → calls `removeLevel(productId)` **only** when `hardDelete` is true; soft deletes/restores must leave counters intact.
+    - `PRODUCT_CREATED` → calls `ensureLevel(productId)` unconditionally (so a zero-stock product still appears on the stock board and low-stock gauge), then conditionally `receive(productId, onHand, 'Opening stock')` when `onHand > 0`.
+    - `PRODUCT_DELETED` → calls `removeLevel(productId)` **only** when `hardDelete` is true; soft deletes/restores must leave counters intact.
 - **`permissions`** — `['inventory.any.read', 'inventory.any.create', 'inventory.any.sweep']`. The cross-cutting test `tests/cross-cutting/module-permissions.test.ts` enforces bi-directional attribution between this array and the shared permission file.
 - **Side-effect imports** — `import './events'` and `import './metrics'` register domain-event schemas and the two stock gauges into their respective registries at module load.
 

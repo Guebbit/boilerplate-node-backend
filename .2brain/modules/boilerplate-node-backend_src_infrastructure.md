@@ -1,8 +1,8 @@
 ---
 tags:
-  - 2brain
-  - 2brain/module
-  - project/boilerplate-node-backend
+    - 2brain
+    - 2brain/module
+    - project/boilerplate-node-backend
 type: module
 module: src/infrastructure/
 files: 36
@@ -39,6 +39,7 @@ updated: 2026-09-23T20:34:28.088564+00:00
 2. **`persistence/create-repository.ts`** — The single most-reused factory in the project. Understanding its generic signature and the object-spread (not `extends`) contract it exposes explains why module `repository.ts` files are so thin and gives you the vocabulary to read any domain module.
 
 ## Connected modules
+
 ```mermaid
 flowchart LR
     m_src_infrastructure["src/infrastructure/"]
@@ -78,6 +79,7 @@ flowchart LR
 [[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_scripts|scripts/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules|src/modules/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_account_controllers|src/modules/account/controllers/]] · [[boilerplate-node-backend_src_modules_account_tests|src/modules/account/tests/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_delivery|src/modules/delivery/]] · [[boilerplate-node-backend_src_modules_feedback|src/modules/feedback/]] · [[boilerplate-node-backend_src_modules_inventory|src/modules/inventory/]] · [[boilerplate-node-backend_src_modules_locales|src/modules/locales/]] · … and 14 more
 
 ## Files
+
 - `src/infrastructure/i18n/catalog.ts` — Single source of truth for where translation dictionaries come from and how they are assembled. It discovers supported locales (env var or directory listing), deep-merges the shared dictionary with each registered module's contribution, and produces the `Resource` object handed to `i18next.init()` at boot. A project that relocates its dictionaries edits only this file.
 - `src/infrastructure/i18n/context.ts` — Provides request-scoped translation by binding an `i18next` `t` function to a specific locale via `AsyncLocalStorage`. This prevents concurrent requests in different languages from interleaving on `i18next`'s single global instance, and gives out-of-band code (queues, boot callbacks) a way to opt in explicitly.
 - `src/infrastructure/i18n/index.ts` — Barrel (re-export) entry point for the request-scoped i18n subsystem. It exists so that all ~70 consumer sites import `t` and locale utilities from the `@infrastructure/i18n` alias rather than from `i18next` directly, keeping the global i18next instance out of the per-request code path. It owns no logic; it simply re-exports three submodules (`./catalog`, `./overrides`, `./context`) under one flat namespace.
@@ -88,7 +90,7 @@ flowchart LR
 - `src/infrastructure/observability/analytics/umami.ts` — Implements the `AnalyticsProvider` port as a self-hosted Umami client. Instead of a server SDK, it fires a raw `POST` to Umami's `/api/send` endpoint with the same JSON payload the browser tracking script sends, so server-side events land in the same database and share the same visitor identity (IP + user-agent hash) as browser events.
 - `src/infrastructure/observability/audit.ts` — Provides the structured audit-trail mechanism for the application. It is deliberately separate from application logging: audit entries are a security/compliance artefact written to a dedicated always-on logger with a stable, machine-readable field set. The module defines the event shape, the emit path, and a fire-and-forget persistence sink, so that "who did what to which resource, and did it work" is recorded independently of operational logs.
 - `src/infrastructure/observability/metrics-cache.ts` — Defines the two Prometheus counters for the HTTP cache subsystem. The file exists because the cache is a side-effectful path (invalidations, stale-while-revalidate) where a log line would be the only signal, and log lines are not alertable.
-- `src/infrastructure/observability/metrics-http.ts` — Defines the Prometheus HTTP request metrics (counters, duration histogram, in-flight gauge) and the helper functions that record them. This is the *define-and-record* layer only: the shared `prom-client` registry lives in `metrics-registry.ts`, and the read-back logic that serialises these metrics into the `GET /observability/metrics/overview` JSON lives in `modules/observability/http-readback.ts`.
+- `src/infrastructure/observability/metrics-http.ts` — Defines the Prometheus HTTP request metrics (counters, duration histogram, in-flight gauge) and the helper functions that record them. This is the _define-and-record_ layer only: the shared `prom-client` registry lives in `metrics-registry.ts`, and the read-back logic that serialises these metrics into the `GET /observability/metrics/overview` JSON lives in `modules/observability/http-readback.ts`.
 - `src/infrastructure/observability/metrics-queue.ts` — Defines the sole Prometheus counter for dead-letter queue activity in the system. It exists so that parked jobs (permanent rejections or exhausted retries) are observable as a metric rather than a one-off log line, enabling alerting on a sustained dead-letter rate.
 - `src/infrastructure/observability/metrics-registry.ts` — Holds the single shared `prom-client` registry instance and the process-wide metrics that describe the runtime itself (uptime, heap ceiling, default Node.js collectors). Extracted from `metrics-http.ts` so every module's `metrics.ts` file has a clearly-named import source for the registry they register against, rather than reaching into a file named for HTTP.
 - `src/infrastructure/observability/tracer.ts` — Thin wrapper around the OpenTelemetry API that centralises span creation, error recording, and trace-context retrieval for this service. It lets any part of the codebase open spans, stamp errors, or pull the active trace ID without importing the SDK directly or worrying about no-op behaviour when the provider is not yet registered.
@@ -96,7 +98,7 @@ flowchart LR
 - `src/infrastructure/persistence/factories.ts` — Shared primitives that every module's `factories.ts` would otherwise duplicate: identity-field handling (`_id`, `createdAt`, `updatedAt`), a generic overrides-bag type, and a `stripUndefined` helper. Exists so module factories stay thin and the identity/date/id conventions are defined in exactly one place.
 - `src/infrastructure/persistence/lease.ts` — Provides a Mongo-backed mutual-exclusion lease so that a scaled-out cron container does not run the same periodic job (e.g. `reap:orders`) twice in the same window. The lock lives in the same store as the work it guards, is durable by construction (no eviction policy), and exposes `lastSuccessAt`/`lastError` fields for the observability health probe.
 - `src/infrastructure/persistence/metrics.ts` — Defines Prometheus counters for database activity (total queries, total errors) and a `trackDatabaseQuery` wrapper that instruments repository method calls. Exists so that `createRepository`'s Mongoose calls are observable through the shared metrics endpoint (`GET /observability/metrics/overview`) alongside domain-level counters.
-- `src/infrastructure/persistence/mongo-errors.ts` — Provides two small predicate helpers that let callers determine *what kind* of Mongo driver error they caught, without reaching into the response/HTTP layer. It exists so that repositories and the HTTP error interpreter can share a single, correct definition of "duplicate key" and "bad ObjectId" instead of each re-deriving the check inline.
+- `src/infrastructure/persistence/mongo-errors.ts` — Provides two small predicate helpers that let callers determine _what kind_ of Mongo driver error they caught, without reaching into the response/HTTP layer. It exists so that repositories and the HTTP error interpreter can share a single, correct definition of "duplicate key" and "bad ObjectId" instead of each re-deriving the check inline.
 - `src/infrastructure/persistence/search.ts` — Shared pagination and text-search helpers for Mongoose-based repositories. Centralises the coercion of raw request values into safe `skip`/`limit` pairs, the construction of `$regex`-based filters, and the "read every page" loop so that individual services don't reimplement (and subtly diverge in) the same logic.
 - `src/infrastructure/persistence/serialize.ts` — Centralizes the "stored document → API wire payload" transform so that both Mongoose's `toJSON` path and the `.lean()`/`.aggregate()` raw-BSON path produce identical output: `_id` renamed to `id` (or deleted), `__v` dropped, caller-named keys stripped, and any model-specific post-processing applied.
 - `src/infrastructure/runtime/database-snapshot.ts` — Provides the demo profile's database restore machinery: emptying all collections, capturing the entire database into memory as raw BSON, and replaying that copy back. Split out of `database.ts` because connection lifecycle is a separate concern, and only two call sites (`app/demo.ts`, `scenarios/apply.ts`) need snapshot/replay.
@@ -116,4 +118,5 @@ flowchart LR
 - `src/infrastructure/surfaces/create-search-controller.ts` — Factory that builds a standardised search controller (a single Express handler) shared by the `products`, `users`, and `orders` modules. Each module supplies only its entity name, Zod schema, optional input overlay, and search logic; everything else—input reading, validation, response shaping, error handling—is handled here. The `feedback` module intentionally does **not** use this factory.
 
 ---
+
 [[boilerplate-node-backend_INDEX|← boilerplate-node-backend index]]

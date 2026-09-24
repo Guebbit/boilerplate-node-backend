@@ -30,5 +30,5 @@ Shared primitives that every module's `factories.ts` would otherwise duplicate: 
 
 - `identityOf` reads `createdAt` off `ObjectId.getTimestamp()`, which is **second-granular**. Factories called within the same second will share an identical `createdAt`; any test that sorts or paginates by that date must supply its own values.
 - The module deliberately does **not** validate that `createdAt ≤ updatedAt` or that the three dates are mutually consistent. A test that cares about ordering is responsible for supplying explicit dates.
-- `stripUndefined` is intentionally *not* named `compact` to avoid confusion with lodash's array-only, falsy-dropping `_.compact`.
+- `stripUndefined` is intentionally _not_ named `compact` to avoid confusion with lodash's array-only, falsy-dropping `_.compact`.
 - `deletedAt` is widened to `Date | string` in `OverridesFor` because the wire carries ISO strings while Mongoose stores `Date`s; `toDate` is the expected coercion at the call site.

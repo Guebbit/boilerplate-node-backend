@@ -28,7 +28,7 @@ CLI entry point (`npm run contracts:bundle`) that assembles committed contract b
 
 ## Notes
 
-- **Why selection lives here, not in `package.json`:** npm appends `--` arguments only to the *last* command in a `&&` chain, so putting the flag after a chained script would silently drop it. Keeping the logic in this script sidesteps that.
-- **Generated vs. authored bundles:** Client collections (e.g. Bruno) are opt-in by name, are not committed, and are generated from the *committed* contract file rather than from fragments. `--check` refuses them outright rather than reporting them as perpetually stale, which would create a permanently red CI gate.
+- **Why selection lives here, not in `package.json`:** npm appends `--` arguments only to the _last_ command in a `&&` chain, so putting the flag after a chained script would silently drop it. Keeping the logic in this script sidesteps that.
+- **Generated vs. authored bundles:** Client collections (e.g. Bruno) are opt-in by name, are not committed, and are generated from the _committed_ contract file rather than from fragments. `--check` refuses them outright rather than reporting them as perpetually stale, which would create a permanently red CI gate.
 - **Paired-repo sync:** The `--check` failure message for authored bundles reminds the operator that every authored bundle is byte-identical with a paired repo and must be copied over after rebuilding.
 - **Exit codes:** 0 = success (built or up-to-date), 1 = stale or `--check` violation, 2 = unknown bundle name.

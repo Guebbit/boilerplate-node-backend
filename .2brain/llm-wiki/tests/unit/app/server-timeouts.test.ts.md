@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Verifies that `applyServerTimeouts` (from the security module) sets header, request, and keep-alive timeouts on the HTTP server to values that defend against Slowloris and slow-POST attacks. These values are the *only* defence against that class of denial-of-service (the rate limiter counts requests, not bytes-in-flight), and a silent regression to Node defaults would not be caught by any other suite.
+Verifies that `applyServerTimeouts` (from the security module) sets header, request, and keep-alive timeouts on the HTTP server to values that defend against Slowloris and slow-POST attacks. These values are the _only_ defence against that class of denial-of-service (the rate limiter counts requests, not bytes-in-flight), and a silent regression to Node defaults would not be caught by any other suite.
 
 ## Key elements
 
@@ -27,7 +27,7 @@ Verifies that `applyServerTimeouts` (from the security module) sets header, requ
 
 ## Notes
 
-- The stub intentionally contains *only* the three fields `applyServerTimeouts` writes; if the implementation ever started touching other Server properties the test would not notice, so this is a narrow contract check.
-- `0` is treated as invalid (not as "unset") because in Node it means *no timeout at all*—the one value that must never pass through.
+- The stub intentionally contains _only_ the three fields `applyServerTimeouts` writes; if the implementation ever started touching other Server properties the test would not notice, so this is a narrow contract check.
+- `0` is treated as invalid (not as "unset") because in Node it means _no timeout at all_—the one value that must never pass through.
 - The `keepAliveTimeout` env override exists so a deployment can raise it above an upstream proxy's idle timeout; the test documents that motivation in a comment.
 - All timeout expectations are in **milliseconds** (Node's Server contract), even though the doc comment in the source refers to seconds for readability.

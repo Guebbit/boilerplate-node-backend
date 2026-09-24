@@ -14,21 +14,21 @@ Unit tests for the **invoice-attachment pipeline** inside `sendOrderPlacedEmail`
 ## Key elements
 
 - **Module mocks (top-level `jest.mock` calls):**
-  - `renderInvoicePdf` (`../../services/invoice`) — stubbed via `renderInvoicePdfMock`
-  - `spoolAttachment` (`@infrastructure/adapters/mail-spool`) — stubbed via `spoolAttachmentMock`
-  - `enqueueEmail` (`@infrastructure/adapters/mailer`) — stubbed via `enqueueEmailMock`
-  - `logger` (`@infrastructure/adapters/logger`) — stubbed via `loggerMock` (exposed as a getter to match the real module's lazy export)
+    - `renderInvoicePdf` (`../../services/invoice`) — stubbed via `renderInvoicePdfMock`
+    - `spoolAttachment` (`@infrastructure/adapters/mail-spool`) — stubbed via `spoolAttachmentMock`
+    - `enqueueEmail` (`@infrastructure/adapters/mailer`) — stubbed via `enqueueEmailMock`
+    - `logger` (`@infrastructure/adapters/logger`) — stubbed via `loggerMock` (exposed as a getter to match the real module's lazy export)
 
 - **`orderFixture(overrides?)`** — builds a minimal `OrderDocument` shaped for `sendOrderPlacedEmail`; defaults to a card-payment order with one item. Uses `asStub` from test support.
 
 - **`flush()`** — returns a `Promise` that resolves on `setImmediate`, draining the microtask queue that `sendOrderPlacedEmail`'s internal `.then` chain depends on.
 
 - **Test cases (5):**
-  1. Invoice attached under its invoice number after render + spool.
-  2. Filename falls back to order `_id` when `invoiceNumber` is absent.
-  3. Render rejection → mail still enqueued with empty `attachments`, `logger.error` called with `orderId`.
-  4. `renderInvoicePdf` resolves `undefined` (nothing to render) → no spool call, empty `attachments`.
-  5. Bank-transfer order (requires `NODE_BANK_TRANSFER_*` env vars) → invoice attached to the `orders.order-transfer-instructions` template.
+    1. Invoice attached under its invoice number after render + spool.
+    2. Filename falls back to order `_id` when `invoiceNumber` is absent.
+    3. Render rejection → mail still enqueued with empty `attachments`, `logger.error` called with `orderId`.
+    4. `renderInvoicePdf` resolves `undefined` (nothing to render) → no spool call, empty `attachments`.
+    5. Bank-transfer order (requires `NODE_BANK_TRANSFER_*` env vars) → invoice attached to the `orders.order-transfer-instructions` template.
 
 ## Relationships
 

@@ -25,12 +25,12 @@ Preamble fragment for the AsyncAPI contract bundle. It holds the service-level f
 - **`shared/contracts/asyncapi.workers.yaml`** — sibling section for queues no domain module owns; the bundler merges it alongside this file. Declares its own `rabbitmqLocal` server.
 - **`src/modules/observability/asyncapi.yaml`** — representative module section that the bundler merges in; carries its own `sseLocal` server and channels.
 - **`asyncapi.public.yaml`** — the published bundle produced by the bundler from this file plus the public-facing module sections (workers section excluded, so no internal broker is advertised).
-- **`shared/contracts/spectral.asyncapi.modules.yaml`** — Spectral ruleset that lints *module* documents as standalone AsyncAPI files; this root file is not linted by it because it is not independently valid.
+- **`shared/contracts/spectral.asyncapi.modules.yaml`** — Spectral ruleset that lints _module_ documents as standalone AsyncAPI files; this root file is not linted by it because it is not independently valid.
 - **`CLAUDE.md`** — repository-level AI instructions that reference the contract layout conventions this file establishes.
 
 ## Notes
 
-- **Not a valid document on its own.** A standalone AsyncAPI doc requires `channels`; this file has none until the bundler composes the final artifact. Module documents, by contrast, *are* valid standalone and are linted as such.
+- **Not a valid document on its own.** A standalone AsyncAPI doc requires `channels`; this file has none until the bundler composes the final artifact. Module documents, by contrast, _are_ valid standalone and are linted as such.
 - **`asyncapi` spec version ≠ `info.version`.** The breaking-change gate (`check:asyncapi-breaking`) compares the `asyncapi:` field (currently `3.0.0` everywhere). The `info.version` bump to `2.0.0` is purely human-readable documentation of the Standard Webhooks envelope break; it does not suppress the gate.
 - **Servers are deliberately absent.** A server is only reachable through its bound channels, so each server lives in whichever section declares those channels (e.g. `sseLocal` in the observability module, `rabbitmqLocal` in the workers file). This is what allows the public bundle to omit internal brokers.
 - **Bumping `info.version`** should be done in lockstep with the corresponding change in `openapi.root.yaml`'s version.

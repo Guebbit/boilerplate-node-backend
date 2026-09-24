@@ -16,10 +16,10 @@ Unit tests for the `idempotencyKey` middleware's body-fingerprint (canonicalizat
 - **`makeRequest(key, body)`** — builds a minimal Express `Request` stub (via `asStub`) carrying only the fields `idempotencyKey` reads: `header()`, `method`, `baseUrl`, `path`, `route`, `body`, `ip`.
 - **`flush()`** — resolves on `setImmediate` so pending `.then()` chains inside the middleware settle before assertions run.
 - **`jest.mock` of `idempotencyRecordModel`** — stubs `create`, `updateOne`, and `findOne` with jest fns; tests cast `create`/`findOne` to `jest.Mock` for call inspection.
-- **Fingerprint-invariance tests** — assert identical fingerprint for reordered top-level and nested keys; assert *different* fingerprint when a value changes.
+- **Fingerprint-invariance tests** — assert identical fingerprint for reordered top-level and nested keys; assert _different_ fingerprint when a value changes.
 - **No-key passthrough** — with no `Idempotency-Key` header, `next()` is called immediately and `create` is never invoked.
 - **Invalid-key rejection** — malformed keys trigger a 422 `VALIDATION_ERROR` response without touching the ledger.
-- **`__proto__` rejection tests** (parameterised ×3) — bodies with an *own* `__proto__` key (top-level, nested, inside array) are refused with 422 before any DB call.
+- **`__proto__` rejection tests** (parameterised ×3) — bodies with an _own_ `__proto__` key (top-level, nested, inside array) are refused with 422 before any DB call.
 - **Proto-like key acceptance** — keys such as `protoype` or `__proto_` pass through and produce a fingerprint normally.
 - **Replay-lookup failure test** — after an E11000 collision, if the subsequent `findOne` rejects, the error is forwarded via `next(error)` (not left unhandled).
 - **Vanished-record retry tests** — E11000 → lookup returns `null` → one retry of `create` succeeds; if the retry also gets E11000 and lookup is `null` again, the middleware gives up after exactly one retry and calls `next()` uncaptured.

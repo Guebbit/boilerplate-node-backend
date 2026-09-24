@@ -15,9 +15,9 @@ Defines the Express router for the `/api-keys` admin surface. It wires three CRU
 
 - **`router`** (exported) — the Express `Router` instance that `module.ts` mounts. All three routes are attached here.
 - **Route table**
-  - `GET /` → `listApiKeys` (perm: `apikeys.any.read`)
-  - `POST /` → `mintApiKey` (perm: `apikeys.any.create`)
-  - `DELETE /:id` → `revokeApiKey` (perm: `apikeys.any.delete`)
+    - `GET /` → `listApiKeys` (perm: `apikeys.any.read`)
+    - `POST /` → `mintApiKey` (perm: `apikeys.any.create`)
+    - `DELETE /:id` → `revokeApiKey` (perm: `apikeys.any.delete`)
 - **Auth middleware chain** — `getAuth` + `isAuth` applied router-wide; `requirePermission` applied per-route.
 
 ## Relationships
@@ -32,4 +32,4 @@ Defines the Express router for the `/api-keys` admin surface. It wires three CRU
 ## Notes
 
 - The router deliberately uses `isAuth` (session-only) **not** `isAuthOrCredential`. The inline comment makes explicit this is a security decision, not a mechanical side-effect: a credential that can mint or revoke credentials would eliminate the need to ever rotate it. Issuing and revoking API keys is restricted to human, session-authenticated actors.
-- The API keys produced by `mintApiKey` are intended to be presented to *other* routes in the system; they are never accepted as credentials on this router's own routes.
+- The API keys produced by `mintApiKey` are intended to be presented to _other_ routes in the system; they are never accepted as credentials on this router's own routes.

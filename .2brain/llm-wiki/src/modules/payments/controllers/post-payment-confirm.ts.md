@@ -14,22 +14,22 @@ Handler for `POST /payments/:id/confirm` — the final step where the browser su
 ## Key elements
 
 - **`postPaymentConfirm(request, response)`** — the sole export. Parses the body against `ConfirmPaymentBody` (Zod), delegates to `paymentService.confirmPayment`, then branches on the result:
-  - **Decline detection** — sets `request.paymentConfirmDeclined = true` when the error code is `PAYMENT_DECLINED`; consumed downstream by the decline-budget rate limiter (`requestWasSuccessful` in `rate-limits.ts`).
-  - **Metrics** — increments `paymentConfirmTotal` with one of three labels: `succeeded`, `in_flight` (e.g. `requires_action`, `processing`), or `declined`. Not-found / race rejections are deliberately excluded.
-  - **HTTP response** — `refused()` returns 409 for declines and other refusals; `successResponse()` returns 200 for both true success and in-flight states (a 4xx would tell the browser to stop).
-  - **Error path** — `.catch(catchAs(response, 'postPaymentConfirm'))`.
+    - **Decline detection** — sets `request.paymentConfirmDeclined = true` when the error code is `PAYMENT_DECLINED`; consumed downstream by the decline-budget rate limiter (`requestWasSuccessful` in `rate-limits.ts`).
+    - **Metrics** — increments `paymentConfirmTotal` with one of three labels: `succeeded`, `in_flight` (e.g. `requires_action`, `processing`), or `declined`. Not-found / race rejections are deliberately excluded.
+    - **HTTP response** — `refused()` returns 409 for declines and other refusals; `successResponse()` returns 200 for both true success and in-flight states (a 4xx would tell the browser to stop).
+    - **Error path** — `.catch(catchAs(response, 'postPaymentConfirm'))`.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/infrastructure/http/controller.ts` | Provides `parseBody`, `refused`, `catchAs` — the standard request-validation, refusal, and error-catch helpers. |
-| `src/infrastructure/http/request.ts` | Provides `callerContextOf`, extracted and passed into `confirmPayment` for audit. |
-| `src/infrastructure/http/response.ts` | Provides `successResponse`, used for the 200 path. |
-| `src/modules/payments/metrics.ts` | Exports `paymentConfirmTotal`, the Prometheus counter incremented per outcome. |
-| `src/modules/payments/routes.ts` | Wires this handler onto the `POST /payments/:id/confirm` route (consumes `postPaymentConfirm`). |
-| `src/modules/payments/services/index.ts` | Exports `paymentService.confirmPayment`, the domain logic this controller delegates to. |
-| `src/types/index.ts` | Provides the `Payment` type used for the response payload. |
+| Neighbor                                 | Interaction                                                                                                     |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `src/infrastructure/http/controller.ts`  | Provides `parseBody`, `refused`, `catchAs` — the standard request-validation, refusal, and error-catch helpers. |
+| `src/infrastructure/http/request.ts`     | Provides `callerContextOf`, extracted and passed into `confirmPayment` for audit.                               |
+| `src/infrastructure/http/response.ts`    | Provides `successResponse`, used for the 200 path.                                                              |
+| `src/modules/payments/metrics.ts`        | Exports `paymentConfirmTotal`, the Prometheus counter incremented per outcome.                                  |
+| `src/modules/payments/routes.ts`         | Wires this handler onto the `POST /payments/:id/confirm` route (consumes `postPaymentConfirm`).                 |
+| `src/modules/payments/services/index.ts` | Exports `paymentService.confirmPayment`, the domain logic this controller delegates to.                         |
+| `src/types/index.ts`                     | Provides the `Payment` type used for the response payload.                                                      |
 
 ## Notes
 

@@ -32,6 +32,6 @@ Contract tests for the `/webhooks` admin HTTP surface (subscriptions CRUD, deliv
 ## Notes
 
 - No test in this file triggers an actual webhook delivery; the `example.test` TLD URL guarantees zero external I/O.
-- The "403 for read-only role" case uses the `customer` role (which has *no* webhooks keys) because no preset role holds `webhooks.any.read` in isolation — the comment in the source flags this as a test-suite limitation.
+- The "403 for read-only role" case uses the `customer` role (which has _no_ webhooks keys) because no preset role holds `webhooks.any.read` in isolation — the comment in the source flags this as a test-suite limitation.
 - The subscription-cap test mutates `process.env.NODE_WEBHOOK_SUBSCRIPTION_CAP` and restores it in a `finally` block; running this file in parallel with other suites that read the same variable could interfere.
 - `setupTestDb()` is called once at import time, not per-suite; all suites in this file share that single setup.

@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Sweeps every markdown page under `docs/` for file paths cited in inline code spans and verifies each one resolves to a file (or directory) that actually exists in the repo tree or the paired frontend checkout. It exists because `docs:build` catches dead *links* between pages but nothing else catches a page naming a file that was renamed, moved, or deleted a year ago. Run via `npm run check:docs-references`.
+Sweeps every markdown page under `docs/` for file paths cited in inline code spans and verifies each one resolves to a file (or directory) that actually exists in the repo tree or the paired frontend checkout. It exists because `docs:build` catches dead _links_ between pages but nothing else catches a page naming a file that was renamed, moved, or deleted a year ago. Run via `npm run check:docs-references`.
 
 ## Key elements
 
@@ -32,7 +32,7 @@ Sweeps every markdown page under `docs/` for file paths cited in inline code spa
 
 - **Suffix resolution, not exact match.** A page may write `orders/model.ts` and it will match `src/modules/orders/model.ts`. Pages do not need to spell the full root path.
 - **Cross-repo checks degrade gracefully.** If the paired frontend is not checked out (bare clone, worktree, CI without the sibling), the peer target set is `undefined` and cross-repo tokens are silently skipped rather than failing the build.
-- **Floor values are load-bearing.** `MIN_PAGES` and `MIN_REFERENCES` are deliberately set just below current counts. The comment states they should be raised as docs grow and *never* lowered to make a run pass. A sweep that reads zero pages must fail.
+- **Floor values are load-bearing.** `MIN_PAGES` and `MIN_REFERENCES` are deliberately set just below current counts. The comment states they should be raised as docs grow and _never_ lowered to make a run pass. A sweep that reads zero pages must fail.
 - **`ALLOWED` is the escape hatch.** Paths that genuinely do not exist but must be cited (legacy names, planned files) go in `ALLOWED` with a reason rather than using the line-level ignore marker.
 - **Only tracked files are swept.** Page enumeration uses `git ls-files docs`, so uncommitted or generated `.md` files outside git's index are invisible to this check.
 - **Inline code spans only.** Fenced code blocks are treated as samples and are never scanned, to avoid false positives from example code that does not describe this repo.

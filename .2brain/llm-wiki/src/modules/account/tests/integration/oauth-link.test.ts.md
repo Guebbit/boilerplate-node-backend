@@ -16,9 +16,9 @@ Integration test for `loginOrCreateFromOAuth` (from `services/oauth.ts`), coveri
 - **`identity(overrides?)`** — helper that builds a default verified `OAuthIdentity` (provider `google`, subject `subject-1`, email `oauth-user@example.com`).
 - **`oauthAccountsOf(userId)`** — fetches `oauthAccounts` via `userRepository.findByIdWithCredentials` because the field is `select: false` in the schema and a plain `findById` never returns it.
 - **`describe` blocks (3 cases)** — one per branch:
-  - *Case 1 (login):* resolves an already-linked account; asserts no audit/analytics emission and no new user.
-  - *Case 2 (link):* verified-email match links the identity, audits with the account's real role; 2FA-armed variant still audits but skips analytics; unverified-provider-email and unverified-account refusals (`OAuthEmailUnverifiedError`, `OAuthAccountUnverifiedError`) leave state unchanged.
-  - *Case 3 (signup):* creates a password-less pre-verified account and emits a `USER_SIGNED_UP` analytics event; same `providerId` under different providers yields distinct accounts.
+    - _Case 1 (login):_ resolves an already-linked account; asserts no audit/analytics emission and no new user.
+    - _Case 2 (link):_ verified-email match links the identity, audits with the account's real role; 2FA-armed variant still audits but skips analytics; unverified-provider-email and unverified-account refusals (`OAuthEmailUnverifiedError`, `OAuthAccountUnverifiedError`) leave state unchanged.
+    - _Case 3 (signup):_ creates a password-less pre-verified account and emits a `USER_SIGNED_UP` analytics event; same `providerId` under different providers yields distinct accounts.
 - **`jest.mock` for `@infrastructure/observability/audit`** — replaces `emitAuditEvent` with a spy and reroutes `recordAudit` through that spy (because `recordAudit` closes over its own module's real `emitAuditEvent`).
 - **`jest.mock` for `@infrastructure/observability/analytics`** — replaces `emitAnalyticsEvent` with a spy.
 - **`setupTestDb()`** — one-time real-DB bootstrap; `afterEach` restores all mocks.

@@ -15,13 +15,13 @@ Unit tests for the `makeProduct` fixture builder. They pin down the factory's co
 
 - **`HEX`** — a fixed ObjectId hex string (`65dc8a99604c307b702b5ccc`) reused as a known id across several cases.
 - **`describe('makeProduct')`** — seven assertions:
-  - Bare call yields a valid document with the two schema-required fields (`title`, `price`) and an `ObjectId`.
-  - A supplied `id` is stored verbatim as an `ObjectId`.
-  - Explicit overrides (`title`, `price`) replace schema defaults.
-  - Fields not passed in are **absent** from the object (`Object.hasOwn` is false), confirming `stripUndefined` drops them so Mongoose `default:` can apply.
-  - Falsy overrides (`active: false`, `onHand: 0`) are **retained**, proving compaction keys on `undefined` rather than truthiness.
-  - An ISO-string `deletedAt` is converted to a `Date` instance.
-  - `createdAt` is derived from the embedded timestamp of the supplied ObjectId when no explicit timestamps are given.
+    - Bare call yields a valid document with the two schema-required fields (`title`, `price`) and an `ObjectId`.
+    - A supplied `id` is stored verbatim as an `ObjectId`.
+    - Explicit overrides (`title`, `price`) replace schema defaults.
+    - Fields not passed in are **absent** from the object (`Object.hasOwn` is false), confirming `stripUndefined` drops them so Mongoose `default:` can apply.
+    - Falsy overrides (`active: false`, `onHand: 0`) are **retained**, proving compaction keys on `undefined` rather than truthiness.
+    - An ISO-string `deletedAt` is converted to a `Date` instance.
+    - `createdAt` is derived from the embedded timestamp of the supplied ObjectId when no explicit timestamps are given.
 
 ## Relationships
 

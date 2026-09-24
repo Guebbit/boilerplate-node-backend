@@ -35,4 +35,4 @@ A cross-cutting guard that enforces two invariants for the process-observability
 - The test is deliberately cross-cutting: it greps the entire `src/` tree by raw string match, so a rename of `process.uptime` to an alias or a re-import would still be caught (the string literal appears in the call).
 - The canary test (`>100` files) exists because an empty `sourceFiles` array would make the offender filter pass vacuously.
 - The `at` helper returns `undefined` rather than throwing; every caller is expected to assert `toBeDefined()`, which is why the tests read as readable expectation failures instead of mid-chain `TypeError`s.
-- The gauge exemption is explicitly *not* a candidate for folding into the shared reader: its `collect()` callback fires at Prometheus scrape time, a different instant from payload composition.
+- The gauge exemption is explicitly _not_ a candidate for folding into the shared reader: its `collect()` callback fires at Prometheus scrape time, a different instant from payload composition.

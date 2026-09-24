@@ -27,6 +27,6 @@ Thin HTTP adapter for `POST /account/2fa/methods/{method}/setup`. It validates t
 
 ## Notes
 
-- **Security rationale (from the file doc):** the route requires *fresh* critical authentication because restarting a method disarms a currently-working factor — the exact action an attacker with a stolen long-lived session would take. The controller itself does not enforce this; it relies on the route guard in `routes.ts`.
+- **Security rationale (from the file doc):** the route requires _fresh_ critical authentication because restarting a method disarms a currently-working factor — the exact action an attacker with a stolen long-lived session would take. The controller itself does not enforce this; it relies on the route guard in `routes.ts`.
 - **Non-null assertion on `request.authContext!`:** the handler assumes the auth middleware has already populated `authContext`. If the route guard is ever removed or bypassed, this will throw at runtime rather than returning 401.
 - **Param validation is Zod-based, not Express-based:** `method` arrives as a string path param and is validated against `SetupTwoFactorMethodParams` before touching the service.

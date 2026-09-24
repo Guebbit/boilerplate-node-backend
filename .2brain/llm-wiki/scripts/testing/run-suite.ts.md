@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Wraps a single test-layer jest invocation in a loop of **sequential** jest processes (shards) so that no single process retains more memory than a weak machine can tolerate. It exists because `--max-old-space-size` only raises the heap ceiling without stopping the per-file retention climb (~70 MB/file measured); exiting a process every *N* files is the actual fix. Invoked via `npx tsx scripts/testing/run-suite.ts <suite-name> [jest-flags…]`.
+Wraps a single test-layer jest invocation in a loop of **sequential** jest processes (shards) so that no single process retains more memory than a weak machine can tolerate. It exists because `--max-old-space-size` only raises the heap ceiling without stopping the per-file retention climb (~70 MB/file measured); exiting a process every _N_ files is the actual fix. Invoked via `npx tsx scripts/testing/run-suite.ts <suite-name> [jest-flags…]`.
 
 ## Key elements
 
@@ -29,7 +29,7 @@ Wraps a single test-layer jest invocation in a loop of **sequential** jest proce
 - **Sequential shards are the feature.** The `await` inside the `for` loop in `main()` is deliberate: only one shard's memory is live at a time. Do not "optimise" it to parallel.
 - **Serialized layers never parallelise.** `--runInBand` is used because those suites share a single in-memory mongod; `--workerIdleMemoryLimit` would be inert and is therefore omitted.
 - **`recycleLimitMb` has a 1024 MB floor.** Without it, a small `workerPeakMb` could set a limit below the worker's steady-state baseline, causing a restart after every file (measured as slower than the retention it was meant to fix).
-- **`NODE_OPTIONS` is set per-spawn**, appending `--max-old-space-size` to whatever the parent already has. This overrides Node's default of deriving the ceiling from *total* RAM.
+- **`NODE_OPTIONS` is set per-spawn**, appending `--max-old-space-size` to whatever the parent already has. This overrides Node's default of deriving the ceiling from _total_ RAM.
 - **Unknown suite name → exit 2** with a message listing valid names. An empty `argv[2]` also hits this path.
 - **`passthrough`** (all argv after the suite name) is forwarded verbatim to jest, so `--verbose`, `--testPathPattern=…`, etc. work without modification.
 - **`countTestFiles` returns 0 on spawn failure** (e.g., `npx` not found). This yields a single-shard run rather than a crash, but the jest invocation will still fail with a clearer error.

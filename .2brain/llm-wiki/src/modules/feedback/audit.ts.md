@@ -9,14 +9,14 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the feedback module's audit-action vocabulary and registers it into the app-wide `AuditActionMap` via TypeScript module augmentation. Feedback rows carry a stranger's email address and free text, so *reads* (not just mutations) are audit-relevant here — a data-protection concern that does not apply to, e.g., the public product catalogue.
+Declares the feedback module's audit-action vocabulary and registers it into the app-wide `AuditActionMap` via TypeScript module augmentation. Feedback rows carry a stranger's email address and free text, so _reads_ (not just mutations) are audit-relevant here — a data-protection concern that does not apply to, e.g., the public product catalogue.
 
 ## Key elements
 
 - **`feedbackAuditActions`** — A `const` object with three string-literal actions:
-  - `ADMIN_FEEDBACK_VIEWED` (`'admin.feedback.viewed'`)
-  - `ADMIN_FEEDBACK_STATUS_UPDATED` (`'admin.feedback.status_updated'`)
-  - `ADMIN_FEEDBACK_DELETED` (`'admin.feedback.deleted'`)
+    - `ADMIN_FEEDBACK_VIEWED` (`'admin.feedback.viewed'`)
+    - `ADMIN_FEEDBACK_STATUS_UPDATED` (`'admin.feedback.status_updated'`)
+    - `ADMIN_FEEDBACK_DELETED` (`'admin.feedback.deleted'`)
 - **`declare module '@infrastructure/observability/audit'`** — Augments the shared `AuditActionMap` interface with a `feedback` key whose type is the union of the values above, making all three actions type-safe across the app.
 
 ## Relationships

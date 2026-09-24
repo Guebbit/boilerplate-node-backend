@@ -18,7 +18,7 @@ Integration tests for the three payment-confirm rate limiters (`attempt`, `decli
 - **`limitersWithBudget(attemptLimit, declineLimit)`** — Re-evaluates `@modules/payments/rate-limits` under custom `NODE_PAYMENT_*_RATE_LIMIT_MAX` env vars via `withReloadedRateLimits`, returning a fresh module instance.
 - **`describe` — confirm-attempt budget** — Verifies 429 after budget exhaustion (even on success) and per-account isolation.
 - **`describe` — decline budget** — Verifies only a genuine decline (`paymentConfirmDeclined = true`) spends the budget; lost-order 409s and successes do not.
-- **`describe` — paymentDeclineChallengeGate** — Verifies the gate is inert without `NODE_ANTIBOT_PROVIDER`, passes the first decline through, and returns `401 ANTIBOT_VERIFICATION_FAILED` only when a prior decline exists *and* a provider is configured.
+- **`describe` — paymentDeclineChallengeGate** — Verifies the gate is inert without `NODE_ANTIBOT_PROVIDER`, passes the first decline through, and returns `401 ANTIBOT_VERIFICATION_FAILED` only when a prior decline exists _and_ a provider is configured.
 
 ## Relationships
 

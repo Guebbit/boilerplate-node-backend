@@ -29,8 +29,8 @@ A contract test that statically cross-checks two written claims per operation: w
 
 ## Notes
 
-- **Assertion direction is one-way only:** controller-declared sources ⊆ spec-declared sources. The converse (spec declares a source no controller reads) is intentionally *not* asserted because `readInput` merges all keys it finds.
+- **Assertion direction is one-way only:** controller-declared sources ⊆ spec-declared sources. The converse (spec declares a source no controller reads) is intentionally _not_ asserted because `readInput` merges all keys it finds.
 - **Static, not runtime:** The test reads files with `readFileSync` + regex. Importing `request.ts` at runtime would pull in Express/Mongoose/i18next for a four-line literal table, which the test deliberately avoids.
 - **Inline handlers are exempt:** `GET /`, `GET /observability/events`, `GET /observability/metrics` are one-line responders with no `readInput`; they are counted as mounted but skipped by the sources check.
-- **Enabled-module gate:** A module folder that exists on disk but is absent from the `enabledModules` array is treated as *not mounted* and its routes are excluded — this is the failure mode the test is designed to catch.
+- **Enabled-module gate:** A module folder that exists on disk but is absent from the `enabledModules` array is treated as _not mounted_ and its routes are excluded — this is the failure mode the test is designed to catch.
 - **`extractAndValidateId` counts as a source reader:** Its optional third argument is a surface name; when omitted, it defaults to `'write'`.

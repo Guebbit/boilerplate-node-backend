@@ -14,12 +14,12 @@ Unit test that pins down the structural contract of `shipmentSchema`: which fiel
 ## Key elements
 
 - **`describe('shipmentSchema')`** — single block, six assertions covering:
-  - `requiredPaths` → only `orderId` is required (trackingCode/deliveredAt are intentionally optional).
-  - `indexOptionSpecs` → `orderId` has `unique=true` (DB-level exactly-once guarantee).
-  - `typeOf` / `refOf` → `orderId` is an `ObjectId` referencing the `Order` collection.
-  - `enumOf` / `defaultOf` → `status` matches `ShipmentStatus` values and defaults to `shipped`.
-  - `defaultOf('deliveredAt')` → `undefined` (absence means "in transit").
-  - `optionsOf(...).timestamps` → `true` (Mongoose auto-manages `createdAt`/`updatedAt`).
+    - `requiredPaths` → only `orderId` is required (trackingCode/deliveredAt are intentionally optional).
+    - `indexOptionSpecs` → `orderId` has `unique=true` (DB-level exactly-once guarantee).
+    - `typeOf` / `refOf` → `orderId` is an `ObjectId` referencing the `Order` collection.
+    - `enumOf` / `defaultOf` → `status` matches `ShipmentStatus` values and defaults to `shipped`.
+    - `defaultOf('deliveredAt')` → `undefined` (absence means "in transit").
+    - `optionsOf(...).timestamps` → `true` (Mongoose auto-manages `createdAt`/`updatedAt`).
 
 ## Relationships
 
@@ -29,7 +29,7 @@ Unit test that pins down the structural contract of `shipmentSchema`: which fiel
 
 ## Notes
 
-- The module docblock frames `unique: true` on `orderId` as the *same* exactly-once mechanism the payment schema relies on — a shared invariant across modules, not just a delivery concern.
+- The module docblock frames `unique: true` on `orderId` as the _same_ exactly-once mechanism the payment schema relies on — a shared invariant across modules, not just a delivery concern.
 - `trackingCode` is optional at the schema level; its requirement is a service-level rule keyed on shipping method. Do not "fix" this by making it required in the schema.
 - `deliveredAt` having **no** default is deliberate: its absence is the "in transit" signal. Adding a default (e.g., `null`) would break that semantic.
 - Tests assert on schema metadata (Mongoose options), not on database state, so they run without a live Mongo connection.

@@ -15,7 +15,7 @@ Integration test suite for `userService` covering data validation, search/filter
 
 - **`expectCreated(...)`** — Helper that calls `userService.create`, asserts the envelope is `success: true`, and returns the unwrapped `UserDocument`. Keeps individual tests to one fewer assertion.
 - **`seedActiveAndDeleted()`** — Creates three users whose `active` and `deletedAt` values disagree, backing the `active`-filter tests (deactivated ≠ deleted; deleted-but-active is a distinct case).
-- **`jest.mock('@infrastructure/observability/audit')`** — Replaces `emitAuditEvent` with a `jest.fn()` *and* manually rewires `recordAudit` to call that replacement (because `recordAudit` closes over its own module's original binding, immune to a plain property override).
+- **`jest.mock('@infrastructure/observability/audit')`** — Replaces `emitAuditEvent` with a `jest.fn()` _and_ manually rewires `recordAudit` to call that replacement (because `recordAudit` closes over its own module's original binding, immune to a plain property override).
 - **`jest.mock('@infrastructure/adapters/image-store')`** — Stubs `imageStore.remove` to resolve `true`; the service only needs a handle, not real file I/O.
 - **`describe('userService.validateData')`** — Checks email/username/password rules, role names, `imageUrl` as a relative path, tolerance of undeclared keys, wrong-typed flags, and that error messages are translated (not raw i18n keys).
 - **`describe('userService.search')`** — Covers default pagination, text/email/username filters, `active` vs. soft-delete semantics, phone decryption through `toUser` on a lean document, and empty-collection meta.
@@ -38,8 +38,8 @@ Integration test suite for `userService` covering data validation, search/filter
 
 ## Notes
 
-- The `audit` mock is intentionally over-engineered: `recordAudit` captures its module-local `emitAuditEvent` at definition time, so a simple property swap on the module namespace is invisible to it. The mock re-implements `recordAudit` to route through the *replacement* fn, preserving spy visibility.
+- The `audit` mock is intentionally over-engineered: `recordAudit` captures its module-local `emitAuditEvent` at definition time, so a simple property swap on the module namespace is invisible to it. The mock re-implements `recordAudit` to route through the _replacement_ fn, preserving spy visibility.
 - `search()` internally uses the `.lean()` repository path (plain objects, not hydrated Mongoose docs). The phone-decryption test explicitly calls `toUser` on a lean item to confirm it works on both shapes.
 - The `active` filter and soft-deletion (`deletedAt`) are orthogonal: a deleted account can still be `active: true`, and the `active: true` filter deliberately includes it.
-- Validation tests assert the *shape* of i18n keys (dotted identifier regex) rather than exact message text, so copy changes don't break the suite.
+- Validation tests assert the _shape_ of i18n keys (dotted identifier regex) rather than exact message text, so copy changes don't break the suite.
 - `setupTestDb()` is invoked at module scope (not in `beforeEach`), so the in-memory DB is shared across all tests in this file; tests rely on unique emails/usernames for isolation.

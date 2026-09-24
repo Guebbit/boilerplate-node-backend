@@ -13,7 +13,7 @@ Implements the core webhook delivery attempt: signs the payload, performs the SS
 
 ## Key elements
 
-- **`attemptDelivery`** *(exported)* — Entry point. Takes an already-claimed `delivery` and a caller-supplied `subscription`; signs with active ring secrets, calls `deliverWebhook`, then delegates to `recordSuccess` or `recordFailure`. Returns `null` if the lease was lost mid-attempt.
+- **`attemptDelivery`** _(exported)_ — Entry point. Takes an already-claimed `delivery` and a caller-supplied `subscription`; signs with active ring secrets, calls `deliverWebhook`, then delegates to `recordSuccess` or `recordFailure`. Returns `null` if the lease was lost mid-attempt.
 - **`processDeliveryJob`** — Queue handler (registered via `../module.ts` `consumers` entry). Claims the named row, loads its subscription, and calls `deliverIfPossible` → `attemptDelivery`.
 - **`recordSuccess`** — Marks the delivery `succeeded`, increments the success metric, resets the subscription's failure streak via `recordOutcome(id, true)`.
 - **`recordFailure`** — If the backoff ladder still has a slot, leaves the row `pending` with an incremented attempt counter (no subscription write). If exhausted, marks the row `exhausted`, increments the failure streak, and calls `disable` + `notifyOwnerOfAutoDisable` when `shouldAutoDisable` triggers.

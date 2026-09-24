@@ -14,8 +14,8 @@ Declares the analytics event names for the user module's administrative actions 
 ## Key elements
 
 - **`usersAnalyticsEvents`** (exported const) — a frozen key-value map of the two events this module fires:
-  - `USER_CREATED` (`'user_created'`) — admin/operator creates an account for another user.
-  - `USER_DEACTIVATED` (`'user_deactivated'`) — account deactivated; doubles as the churn-dashboard signal.
+    - `USER_CREATED` (`'user_created'`) — admin/operator creates an account for another user.
+    - `USER_DEACTIVATED` (`'user_deactivated'`) — account deactivated; doubles as the churn-dashboard signal.
 - **Module augmentation** (`declare module '@infrastructure/observability/analytics'`) — adds a `users` key to `AnalyticsEventMap` whose value is the union of the two event-name strings, making them first-class members of the global analytics name type.
 
 ## Relationships

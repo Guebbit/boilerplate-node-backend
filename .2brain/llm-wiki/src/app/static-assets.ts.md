@@ -14,10 +14,10 @@ Wires up Express's built-in static file handler to serve uploaded images and oth
 ## Key elements
 
 - **`installStatic(app: Express): void`** — the sole export. Calls `app.use(express.static(...))` with the directory from `NODE_PUBLIC_PATH` (fallback `"public"`) and a fixed set of options:
-  - `dotfiles: 'ignore'` — dotfiles under the public dir return 404.
-  - `index: false` — disables directory listing.
-  - `maxAge: '1y'` + `immutable: true` — aggressive caching (safe because filenames are 128-bit random).
-  - `setHeaders` — forces `Cross-Origin-Resource-Policy: cross-origin` on every response (overrides helmet's `same-origin` default).
+    - `dotfiles: 'ignore'` — dotfiles under the public dir return 404.
+    - `index: false` — disables directory listing.
+    - `maxAge: '1y'` + `immutable: true` — aggressive caching (safe because filenames are 128-bit random).
+    - `setHeaders` — forces `Cross-Origin-Resource-Policy: cross-origin` on every response (overrides helmet's `same-origin` default).
 
 ## Relationships
 
@@ -26,6 +26,6 @@ Wires up Express's built-in static file handler to serve uploaded images and oth
 
 ## Notes
 
-- Security of serving user uploads through `express.static` rests on an *upstream* guarantee: `resolveUploadFilename` restricts extensions to a closed set and verifies bytes match, so `Content-Type` derivation can never yield `text/html` for an upload path. If that contract changes, the assumptions in this file's comments become invalid.
+- Security of serving user uploads through `express.static` rests on an _upstream_ guarantee: `resolveUploadFilename` restricts extensions to a closed set and verifies bytes match, so `Content-Type` derivation can never yield `text/html` for an upload path. If that contract changes, the assumptions in this file's comments become invalid.
 - The `cross-origin` CORP header is intentional: the paired frontend runs on a different origin/port and loads these images cross-origin. Removing or changing it will break the frontend.
 - `immutable: true` + 1-year max-age means any change to a served file's bytes requires a new filename (which the upload pipeline already guarantees via random names). Do not repurpose this route for mutable content.

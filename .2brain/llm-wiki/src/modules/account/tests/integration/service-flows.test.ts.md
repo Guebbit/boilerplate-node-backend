@@ -23,18 +23,18 @@ Integration tests for the four ordinary flows of `accountService` — signup, lo
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/account/services/index.ts` | Imports `accountService` — the code under test. |
-| `src/modules/users/tests/factories.ts` | Imports `createUser`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD`, and `userRepository` for test data setup and DB assertions. |
-| `src/modules/users/index.ts` | Imports the `UserDocument` type for result casting. |
-| `src/modules/account/session/jwt.ts` | Imports `createRefreshToken` and `verifyAccessToken` for refresh-token flow tests. |
-| `src/infrastructure/http/response.ts` | Imports `ResponseSuccess` / `ResponseReject` types for narrowing service results. |
-| `src/infrastructure/observability/audit.ts` | **Mocked** (module-level `jest.mock`); the replacement re-routes `recordAudit` through the fake `emitAuditEvent`. |
-| `src/modules/account/audit.ts` | Imports `accountAuditActions` (used in the refresh-token section). |
-| `tests/support/setup-test-db.ts` | Provides `setupTestDb`, the real-DB bootstrap. |
-| `tests/support/callers.ts` | Provides `testCallerContext` for the `signup` call. |
-| `tests/support/ports.ts` | Referenced in the mock comment for the full reasoning behind the replacement strategy; `observePort` is imported for audit assertions. |
+| Neighbor                                    | Interaction                                                                                                                            |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/modules/account/services/index.ts`     | Imports `accountService` — the code under test.                                                                                        |
+| `src/modules/users/tests/factories.ts`      | Imports `createUser`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD`, and `userRepository` for test data setup and DB assertions.            |
+| `src/modules/users/index.ts`                | Imports the `UserDocument` type for result casting.                                                                                    |
+| `src/modules/account/session/jwt.ts`        | Imports `createRefreshToken` and `verifyAccessToken` for refresh-token flow tests.                                                     |
+| `src/infrastructure/http/response.ts`       | Imports `ResponseSuccess` / `ResponseReject` types for narrowing service results.                                                      |
+| `src/infrastructure/observability/audit.ts` | **Mocked** (module-level `jest.mock`); the replacement re-routes `recordAudit` through the fake `emitAuditEvent`.                      |
+| `src/modules/account/audit.ts`              | Imports `accountAuditActions` (used in the refresh-token section).                                                                     |
+| `tests/support/setup-test-db.ts`            | Provides `setupTestDb`, the real-DB bootstrap.                                                                                         |
+| `tests/support/callers.ts`                  | Provides `testCallerContext` for the `signup` call.                                                                                    |
+| `tests/support/ports.ts`                    | Referenced in the mock comment for the full reasoning behind the replacement strategy; `observePort` is imported for audit assertions. |
 
 ## Notes
 

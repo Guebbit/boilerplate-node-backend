@@ -33,6 +33,6 @@ A contract-derived authorization sweep that asserts, for every route discovered 
 
 - The test is table-driven (`it.each` over the route list), so adding a new guarded route automatically adds a case — no per-module test file needed.
 - `cart.self.checkout` is explicitly excluded from the generic non-admin 403 block because `customer` holds that key by design; the per-role sweep covers it correctly.
-- "Allowed" does not mean 200: a route may still return 404 or 422 on a placeholder id or empty body. The invariant is only *not* 403.
-- Path params are filled with a nonexistent id on purpose — the guard must short-circuit before any resolution logic, and a route where the id *did* change the 401/403 outcome would be a defect this sweep catches.
+- "Allowed" does not mean 200: a route may still return 404 or 422 on a placeholder id or empty body. The invariant is only _not_ 403.
+- Path params are filled with a nonexistent id on purpose — the guard must short-circuit before any resolution logic, and a route where the id _did_ change the 401/403 outcome would be a defect this sweep catches.
 - This file is the authorization mirror of `request-contract.test.ts` (which sweeps request bodies instead).

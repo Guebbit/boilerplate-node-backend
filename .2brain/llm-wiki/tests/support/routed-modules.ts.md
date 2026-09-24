@@ -19,26 +19,26 @@ Central registry of every Express router mounted under `src/modules/`, exposed a
 
 - **Imported from** test files that need to iterate or reference all module routers in a single lookup (e.g. the "imports one router per module directory" guard test).
 - **Imports from** every graph neighbor listed below, pulling the `router` export from each:
-  - `src/modules/account/routes.ts` → `accountRouter`
-  - `src/modules/addresses/routes.ts` → `addressesRouter`
-  - `src/modules/antibot/routes.ts` → `antibotRouter`
-  - `src/modules/api-keys/routes.ts` → `apiKeysRouter`
-  - `src/modules/audit-logs/routes.ts` → `auditLogsRouter`
-  - `src/modules/cart/routes.ts` → `cartRouter`
-  - `src/modules/delivery/routes.ts` → `deliveryRouter`
-  - `src/modules/feedback/routes.ts` → `feedbackRouter`
-  - `src/modules/inventory/routes.ts` → `inventoryRouter`
-  - `src/modules/locales/routes.ts` → `localesRouter`
-  - `src/modules/observability/routes.ts` → `observabilityRouter`
-  - `src/modules/orders/routes.ts` → `ordersRouter`
-  - `src/modules/payments/routes.ts` → `paymentsRouter`
-  - `src/modules/products/routes.ts` → `productsRouter`
-  - `src/modules/users/routes.ts` → `usersRouter`
+    - `src/modules/account/routes.ts` → `accountRouter`
+    - `src/modules/addresses/routes.ts` → `addressesRouter`
+    - `src/modules/antibot/routes.ts` → `antibotRouter`
+    - `src/modules/api-keys/routes.ts` → `apiKeysRouter`
+    - `src/modules/audit-logs/routes.ts` → `auditLogsRouter`
+    - `src/modules/cart/routes.ts` → `cartRouter`
+    - `src/modules/delivery/routes.ts` → `deliveryRouter`
+    - `src/modules/feedback/routes.ts` → `feedbackRouter`
+    - `src/modules/inventory/routes.ts` → `inventoryRouter`
+    - `src/modules/locales/routes.ts` → `localesRouter`
+    - `src/modules/observability/routes.ts` → `observabilityRouter`
+    - `src/modules/orders/routes.ts` → `ordersRouter`
+    - `src/modules/payments/routes.ts` → `paymentsRouter`
+    - `src/modules/products/routes.ts` → `productsRouter`
+    - `src/modules/users/routes.ts` → `usersRouter`
 - Also imports `webhooks` and `wishlist` routers (not in the graph-neighbor list above but present in the file).
 
 ## Notes
 
 - **Static list, not auto-discovered.** Adding a new module directory under `src/modules/` requires a manual import line and a new key in `ROUTED_MODULES`; omission is caught by a dedicated test, not by the type system.
-- **Consuming tests must still call `jest.mock` for middleware factories *before* importing this file**, exactly as they would when importing any single router directly. The header of `@tests/routes` documents the underlying `jest.mock`/`requireActual` ordering constraint.
+- **Consuming tests must still call `jest.mock` for middleware factories _before_ importing this file**, exactly as they would when importing any single router directly. The header of `@tests/routes` documents the underlying `jest.mock`/`requireActual` ordering constraint.
 - Deliberately **not** routed through `src/modules.ts` (the app-level registry) so that importing this file pulls in only the 18 routers, not the full application wiring.
 - Two routers (`webhooks`, `wishlist`) appear in this file but are **not** among the graph-neighbor list provided here; they are real imports in the source.

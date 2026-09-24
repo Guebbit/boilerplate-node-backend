@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Shared Redis connection utilities for all Redis-backed adapters in this codebase. It centralises URL assembly from environment variables, the node-redis client options (timeout, reconnect policy), and graceful client shutdown. Error-handling and retry logic are intentionally *excluded* because the two consumers (cache vs. rate-limiter) handle them differently.
+Shared Redis connection utilities for all Redis-backed adapters in this codebase. It centralises URL assembly from environment variables, the node-redis client options (timeout, reconnect policy), and graceful client shutdown. Error-handling and retry logic are intentionally _excluded_ because the two consumers (cache vs. rate-limiter) handle them differently.
 
 ## Key elements
 

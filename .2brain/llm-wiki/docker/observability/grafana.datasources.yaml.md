@@ -19,7 +19,7 @@ Grafana datasource provisioning file that auto-registers Tempo, Prometheus, and 
 
 ## Relationships
 
-- **otel-collector.config.yaml** — its `servicegraph` connector produces the Prometheus series that Tempo's `serviceMap` reads; the datasource file only declares *which* Prometheus holds them.
+- **otel-collector.config.yaml** — its `servicegraph` connector produces the Prometheus series that Tempo's `serviceMap` reads; the datasource file only declares _which_ Prometheus holds them.
 - **prometheus.config.yaml / tempo.config.yaml / loki.config.yaml** — these are the actual services the URLs in this file point to; they must be running and reachable by Docker-internal hostname for the datasources to resolve.
 - **grafana.dashboard-providers.yaml** — sibling provisioning file in the same Grafana provisioning path; dashboards it loads reference the `uid` values defined here (`tempo`, `prometheus`, `loki`).
 

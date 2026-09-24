@@ -19,7 +19,7 @@ Service layer for the address book. It translates user-facing operations (get, a
 - **`addressAdd(userId, entry)`** – delegates to `repository.addEntry`; on success wraps the view in a `200` response with a localized message.
 - **`addressUpdate(userId, addressId, changes)`** – delegates to `repository.updateEntry`; a `null` result (not found / not owned) yields a `404` reject.
 - **`addressRemove(userId, addressId)`** – delegates to `repository.removeEntry`; same 404-on-missing semantics as update.
-- **`addressForCheckout(userId, addressId?)`** – resolves the shipping address for the cart module. If `addressId` is provided, returns the matching `AddressItem` or `null` (stale/foreign id). If omitted, returns the default `AddressItem` or `undefined` (no addresses at all). The `null` vs `undefined` distinction is intentional: checkout must *refuse* on `null`, *proceed without a default* on `undefined`.
+- **`addressForCheckout(userId, addressId?)`** – resolves the shipping address for the cart module. If `addressId` is provided, returns the matching `AddressItem` or `null` (stale/foreign id). If omitted, returns the default `AddressItem` or `undefined` (no addresses at all). The `null` vs `undefined` distinction is intentional: checkout must _refuse_ on `null`, _proceed without a default_ on `undefined`.
 - **`addressesDeleteByUserId(userId)`** – hard-delete hook called on account removal; forwards to the repository.
 
 ## Relationships

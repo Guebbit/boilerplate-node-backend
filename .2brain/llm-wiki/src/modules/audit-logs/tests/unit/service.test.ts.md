@@ -17,14 +17,14 @@ Unit tests for `auditLogService` that verify the deliberate fail-open / fail-clo
 - **`makeEntry`** — factory that returns a fully-populated `AuditEntry` with sensible defaults, accepting `Partial<AuditEntry>` overrides.
 - **`describe('auditLogService.record', …)`** — covers: entry forwarded unchanged; return type is `void` (fire-and-forget); rejection swallowed into `logger.warn` with the original `Error` object under `error`; counter incremented on failure; counter untouched on success; no `unhandledRejection` emitted; warning includes the failing `action` name.
 - **`describe('auditLogService.search', …)`** — covers: filters + pagination passed through untouched with `AUDIT_SORT`; `since` routed into the scope argument (not merged into `buildWhere`); rejection propagated to caller (fail-closed).
-- **`jest.mock('@modules/audit-logs/repository', …)`** — stubs `create` and `search`, but ships a *real* `sinceScope` implementation so that scope-building logic is exercised rather than assumed.
+- **`jest.mock('@modules/audit-logs/repository', …)`** — stubs `create` and `search`, but ships a _real_ `sinceScope` implementation so that scope-building logic is exercised rather than assumed.
 - **`jest.mock('@infrastructure/adapters/logger', …)`** — replaces `warn`, `error`, `info` with `jest.fn()` spies.
 
 ## Relationships
 
 - **`src/modules/audit-logs/service.ts`** — the unit under test; both `record` and `search` are called directly via `auditLogService`.
 - **`src/modules/audit-logs/repository.ts`** — fully mocked; `create`, `search`, and `sinceScope` are the interaction surface.
-- **`src/infrastructure/adapters/logger.ts`** — mocked; assertions verify `warn` is called with the correct shape on `record` failures and is *not* called on `search` failures.
+- **`src/infrastructure/adapters/logger.ts`** — mocked; assertions verify `warn` is called with the correct shape on `record` failures and is _not_ called on `search` failures.
 - **`src/modules/audit-logs/metrics.ts`** — `auditSinkFailuresTotal` is read via prom-client to assert increment/reset behavior.
 - **`src/infrastructure/observability/audit.ts`** — source of the `AuditEntry` type used to shape test fixtures.
 - **`src/modules/audit-logs/model.ts`** — source of the `AuditLogDocument` type used as the mocked repository return value.
@@ -34,4 +34,4 @@ Unit tests for `auditLogService` that verify the deliberate fail-open / fail-clo
 - Async assertions after `record` call two microtask ticks (`await Promise.resolve()` ×2) to let the internal `.catch()` settle; `setImmediate` is used instead when asserting on `unhandledRejection`.
 - The `sinceScope` mock is intentionally a real implementation (not a `jest.fn()`) so that a regression in how the service passes `since` would actually change the scope object, rather than passing silently.
 - An `eslint-disable-next-line @typescript-eslint/no-confusing-void-expression` suppresses a lint rule on the `toBeUndefined()` assertion — the suppression is deliberate and documented inline.
-- The counter test reads the value *before* and *after* the failing call to avoid coupling to the absolute counter value (other test runs or parallel suites may have incremented it).
+- The counter test reads the value _before_ and _after_ the failing call to avoid coupling to the absolute counter value (other test runs or parallel suites may have incremented it).

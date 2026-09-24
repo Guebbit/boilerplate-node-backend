@@ -15,8 +15,8 @@ Integration test that enforces the serialization contract for feedback requests:
 
 - **`createFeedback`** – local helper that inserts a feedback record via `feedbackRequestRepository.create` and returns the resulting Mongoose document.
 - **`describe('feedback request serialization')`** – the single test suite containing two cases:
-  - *normalizes a hydrated document via toJSON* – calls `feedback.toJSON()` on a real document and asserts `id` is present while `_id`/`__v` are absent from the JSON string.
-  - *normalizes a lean list via feedbackRequestService.search* – calls the service's `search({})`, grabs the first item, and asserts `id` matches a 24-char hex string while `_id` and `__v` are `undefined`.
+    - _normalizes a hydrated document via toJSON_ – calls `feedback.toJSON()` on a real document and asserts `id` is present while `_id`/`__v` are absent from the JSON string.
+    - _normalizes a lean list via feedbackRequestService.search_ – calls the service's `search({})`, grabs the first item, and asserts `id` matches a 24-char hex string while `_id` and `__v` are `undefined`.
 
 ## Relationships
 

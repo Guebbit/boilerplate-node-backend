@@ -15,11 +15,11 @@ Unit tests for the `makeCart` factory builder. They verify the factory's one cri
 
 - **`USER` / `PRODUCT`** – module-level hex-string constants used as test input IDs.
 - **`describe('makeCart', …)`** – the single test suite containing five `it` blocks:
-  - *stores the owner as a real ObjectId* – asserts `cart.userId` is an `Types.ObjectId` whose `String()` round-trips back to the input.
-  - *omits items entirely when none are given* – asserts the `items` key is **absent** from the object so the schema default governs an empty cart.
-  - *converts each line's product id and keeps its quantity* – asserts `productId` is an `ObjectId` and `quantity` is unchanged.
-  - *keeps an explicitly empty item list distinct from an absent one* – asserts `items: []` is preserved (cart "was emptied") versus the key being missing (cart "unspecified").
-  - *preserves the order of the lines it is given* – asserts the array order of items is not shuffled.
+    - _stores the owner as a real ObjectId_ – asserts `cart.userId` is an `Types.ObjectId` whose `String()` round-trips back to the input.
+    - _omits items entirely when none are given_ – asserts the `items` key is **absent** from the object so the schema default governs an empty cart.
+    - _converts each line's product id and keeps its quantity_ – asserts `productId` is an `ObjectId` and `quantity` is unchanged.
+    - _keeps an explicitly empty item list distinct from an absent one_ – asserts `items: []` is preserved (cart "was emptied") versus the key being missing (cart "unspecified").
+    - _preserves the order of the lines it is given_ – asserts the array order of items is not shuffled.
 
 ## Relationships
 
@@ -29,5 +29,5 @@ Unit tests for the `makeCart` factory builder. They verify the factory's one cri
 ## Notes
 
 - The file deliberately does **not** test the schema/Mongoose model itself; it isolates the factory's transformation logic.
-- The "absent vs. empty" distinction is load-bearing: a fixture that collapses `undefined` and `[]` cannot seed a cart that *exists but holds nothing*, which would break integration tests that read the cart back.
+- The "absent vs. empty" distinction is load-bearing: a fixture that collapses `undefined` and `[]` cannot seed a cart that _exists but holds nothing_, which would break integration tests that read the cart back.
 - All ID constants are 24-char hex strings; if you add new test cases, keep using the same format so the ObjectId conversion path is actually exercised.

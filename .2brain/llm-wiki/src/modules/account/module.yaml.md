@@ -15,8 +15,8 @@ Module manifest that declares the account module's subdomain classification and 
 
 - **`subdomain: supporting`** — tags the account module under the "supporting" subdomain, distinguishing it from core-domain modules in the project's layered architecture.
 - **`dependsOn`** — a list of modules the account module is allowed to import from:
-  - `access` — used for role operations (`rolesOf`, `assignRole`, `assignDefaultRole`, `promoteVerifiedCustomer`).
-  - `users` — the shared `User` document; the repo's single shared kernel for identity.
+    - `access` — used for role operations (`rolesOf`, `assignRole`, `assignDefaultRole`, `promoteVerifiedCustomer`).
+    - `users` — the shared `User` document; the repo's single shared kernel for identity.
 
 ## Relationships
 
@@ -26,5 +26,5 @@ Module manifest that declares the account module's subdomain classification and 
 
 ## Notes
 
-- The `dependsOn` list is the *entire* set of permitted cross-module imports. Any import in `module.ts` that is not listed here will (presumably) be flagged by the compliance audit.
+- The `dependsOn` list is the _entire_ set of permitted cross-module imports. Any import in `module.ts` that is not listed here will (presumably) be flagged by the compliance audit.
 - The inline comments after each dependency name are documentation only; they do not affect resolution.

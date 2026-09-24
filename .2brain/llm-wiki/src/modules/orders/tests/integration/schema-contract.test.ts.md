@@ -15,13 +15,13 @@ Integration test that asserts the Mongoose **schema declarations** for orders �
 
 - **`makeOrderPayload()`** – Async helper that creates a real user and product via factories, then assembles a valid order payload. The product is embedded as a snapshot (not a reference): `taxClass` is replaced with the resolved `taxRate` (via `resolveTaxRate`), and `onHand`/`reserved` are intentionally present in the raw `toObject()` output to prove the schema drops them.
 - **`describe('order schema')`** – Two specs:
-  - *serialises to id, never _id or __v* – Asserts `toJSON()` shape: `id` present, `_id` and `__v` absent.
-  - *drops onHand/reserved* – Asserts the embedded product in a persisted order has no `onHand`, `reserved`, or `available` path, even though the live product document carried them at write time.
+    - _serialises to id, never \_id or \_\_v_ – Asserts `toJSON()` shape: `id` present, `_id` and `__v` absent.
+    - _drops onHand/reserved_ – Asserts the embedded product in a persisted order has no `onHand`, `reserved`, or `available` path, even though the live product document carried them at write time.
 - **Trailing docblock (cart section)** – Documents the intent for a cart-unique-on-`userId` contract; the corresponding tests appear further down in the file.
 
 ## Relationships
 
-- **`src/modules/orders/repository.ts`** – `orderRepository.create()` is the write path under test; the specs verify what the repository persists *as declared by the schema*, not any repository-level mapping.
+- **`src/modules/orders/repository.ts`** – `orderRepository.create()` is the write path under test; the specs verify what the repository persists _as declared by the schema_, not any repository-level mapping.
 - **`src/modules/products/tests/factories.ts`** – `createProduct` supplies a real product document whose `toObject()` output exercises the embedded-snapshot validation (required `title`, `price`, `taxRate`; absence of `onHand`/`reserved` paths).
 - **`src/modules/users/tests/factories.ts`** – `createUser` supplies a real buyer `userId` and `email` for the payload.
 - **`tests/support/setup-test-db.ts`** – `setupTestDb()` boots a real Mongo instance; no mocking of Mongoose behaviour is used or needed.

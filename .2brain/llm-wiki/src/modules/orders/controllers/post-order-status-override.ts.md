@@ -14,16 +14,16 @@ Admin controller for `POST /orders/:id/status-override`. It validates the order 
 ## Key elements
 
 - **`postOrderStatusOverride`** (exported `Request`/`Response` handler) — the sole handler for the route. Sequence:
-  1. Guards `request.params.id` with `isValidObjectId`; 404s on failure.
-  2. Parses the request body against the `OverrideOrderStatusBody` Zod schema via `parseBody`.
-  3. Calls `orderService.overrideStatus(id, body.to, body.reason, callerContextOf(request))`.
-  4. If the service result is refused, short-circuits via `refused`.
-  5. Enriches the order with `orderService.withActions(order, request.authContext)` then responds via `successResponse`.
-  6. Catches any thrown error with `catchAs(response, 'postOrderStatusOverride')`.
+    1. Guards `request.params.id` with `isValidObjectId`; 404s on failure.
+    2. Parses the request body against the `OverrideOrderStatusBody` Zod schema via `parseBody`.
+    3. Calls `orderService.overrideStatus(id, body.to, body.reason, callerContextOf(request))`.
+    4. If the service result is refused, short-circuits via `refused`.
+    5. Enriches the order with `orderService.withActions(order, request.authContext)` then responds via `successResponse`.
+    6. Catches any thrown error with `catchAs(response, 'postOrderStatusOverride')`.
 
 ## Relationships
 
-- **`src/modules/orders/routes.ts`** — registers the `POST /orders/:id/status-override` route and attaches `requirePermission('orders.any.override')` *before* this handler runs.
+- **`src/modules/orders/routes.ts`** — registers the `POST /orders/:id/status-override` route and attaches `requirePermission('orders.any.override')` _before_ this handler runs.
 - **`src/modules/orders/services/index.ts`** — provides `orderService`, whose `overrideStatus` and `withActions` methods do the actual work.
 - **`src/infrastructure/http/controller.ts`** — supplies `catchAs`, `parseBody`, `refused` (shared error/parse helpers).
 - **`src/infrastructure/http/request.ts`** — supplies `callerContextOf` (extracts actor identity) and `isValidObjectId` (param guard).
@@ -34,5 +34,5 @@ Admin controller for `POST /orders/:id/status-override`. It validates the order 
 ## Notes
 
 - The `id` route param is typed `string | undefined` in the handler's generic, so the explicit `isValidObjectId` check is required even though Express will only call the handler when a param is present.
-- Permission enforcement is the *route's* responsibility, not this file's. Do not add auth checks here; the route's `requirePermission` (step-up gated) already ran.
+- Permission enforcement is the _route's_ responsibility, not this file's. Do not add auth checks here; the route's `requirePermission` (step-up gated) already ran.
 - Early-exit paths (404, parse failure) resolve the promise immediately with `return Promise.resolve()` rather than throwing, so the `.catch` chain is never reached.

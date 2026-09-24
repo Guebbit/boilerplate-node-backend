@@ -40,6 +40,6 @@ Declares the Mongoose schema, Zod validation schemas, and TypeScript type layer 
 - **`available` is never persisted.** It is computed at the single serialization point (`applyProductTransform`) so no code path can let it drift from the two counters.
 - **`onHand` / `reserved` are declared here but written exclusively by `@modules/inventory`.** This module owns the collection (hence the column declarations) but performs no stock mutations.
 - **Zod `.extend()` replaces, not merges.** Overriding `price` without restating `.min(0)` silently drops the non-negative constraint — the file explicitly re-declares it to guard against a prior regression.
-- **`pendingImageKey` is document-only.** It exists on `ProductDocument` and in the Mongoose schema but is *not* on `ProductSnapshot`, so it never appears in order-embedded copies.
+- **`pendingImageKey` is document-only.** It exists on `ProductDocument` and in the Mongoose schema but is _not_ on `ProductSnapshot`, so it never appears in order-embedded copies.
 - **Index names are load-bearing.** Mongo matches indexes by name as well as key; renaming an index in code without a corresponding `dropIndex` causes a startup failure rather than a silent no-op.
 - **`active` is independent of `deletedAt`.** A soft-deleted product can still be `active: true`; `publicScope()` in the repository requires both `active` and `deletedAt: null`.

@@ -27,8 +27,8 @@ Global Jest bootstrap (wired via `setupFiles`) that runs **once per worker, befo
 
 ## Notes
 
-- **`??=` everywhere, never `=`**: any individual test (e.g. `breached-passwords/index.test.ts`, rate-limiter unit tests) can still set a lower or different value *after* this file has run.
+- **`??=` everywhere, never `=`**: any individual test (e.g. `breached-passwords/index.test.ts`, rate-limiter unit tests) can still set a lower or different value _after_ this file has run.
 - **Budget values are hard-coded literals**, not imported from `rate-limit.ts`, because importing that module here would evaluate `buildRateLimiter()` before the env var it reads has been set.
-- **`NODE_MFA_CHALLENGE_MAX` is deliberately *not* raised**: `two-factor.test.ts` relies on the tight production default (5) to prove the challenge-kill behaviour; raising it would make that assertion untestable.
+- **`NODE_MFA_CHALLENGE_MAX` is deliberately _not_ raised**: `two-factor.test.ts` relies on the tight production default (5) to prove the challenge-kill behaviour; raising it would make that assertion untestable.
 - **No database setup here**: Mongo is per-suite via `setupTestDb()`, so pure-function suites don't pay the cost of a `mongod`.
 - **File is truncated in the source snapshot**; the visible portion covers all rate-limit, business-config, secret, and feature-flag env vars plus the i18n/validation-message imports.

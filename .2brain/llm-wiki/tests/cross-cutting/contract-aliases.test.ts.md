@@ -18,12 +18,12 @@ Validates the `x-alias-of` OpenAPI extension in `openapi.yaml`, ensuring that ev
 - **`successSchema(operation)`** – returns a JSON string of the `application/json` schema of the first `2xx` response; used to compare parseable payloads across aliases.
 - **`successStatus(operation)`** – returns the first `2xx` status code string (e.g. `"200"` vs `"201"`).
 - **`describe('operation aliases')`** – the test suite; six `it` blocks covering:
-  - Tripwire: spec actually parsed and aliases found.
-  - Referential integrity: every `x-alias-of` target exists by `operationId`.
-  - No alias-of-alias chains.
-  - No self-referential aliases.
-  - Alias and canonical return the same success status code.
-  - Alias and canonical return the same success response schema.
+    - Tripwire: spec actually parsed and aliases found.
+    - Referential integrity: every `x-alias-of` target exists by `operationId`.
+    - No alias-of-alias chains.
+    - No self-referential aliases.
+    - Alias and canonical return the same success status code.
+    - Alias and canonical return the same success response schema.
 
 ## Relationships
 

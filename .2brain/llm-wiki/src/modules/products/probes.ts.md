@@ -14,11 +14,11 @@ Holds hand-written API requests for the products module that a generated contrac
 ## Key elements
 
 - **`probes: Probe[]`** (default-style export) — an array of five `Probe` objects (type from `@guebbit/openapi-runnable-collections`). Each entry carries `name`, `why` (human-readable rationale), `method`, `path`, and optionally `auth`, `body`, or `headers`.
-  - *422 on invalid body* — POST `/products` with an empty `title` and `price: -1` to confirm the validation envelope fires.
-  - *Italian `Accept-Language`* — GET a single product with `Accept-Language: it` to observe i18n on error/status messages.
-  - *All optional filters combined* — GET `/products` with `page`, `pageSize`, `minPrice`, `maxPrice`, `active` simultaneously.
-  - *Soft-deleted, anonymous* — GET `/products/{{seedSoftDeletedProductId}}` without auth; expects 404.
-  - *Inactive, anonymous* — GET `/products/{{seedInactiveProductId}}` without auth; exercises the `active: false` vs. `deletedAt` distinction.
+    - _422 on invalid body_ — POST `/products` with an empty `title` and `price: -1` to confirm the validation envelope fires.
+    - _Italian `Accept-Language`_ — GET a single product with `Accept-Language: it` to observe i18n on error/status messages.
+    - _All optional filters combined_ — GET `/products` with `page`, `pageSize`, `minPrice`, `maxPrice`, `active` simultaneously.
+    - _Soft-deleted, anonymous_ — GET `/products/{{seedSoftDeletedProductId}}` without auth; expects 404.
+    - _Inactive, anonymous_ — GET `/products/{{seedInactiveProductId}}` without auth; exercises the `active: false` vs. `deletedAt` distinction.
 
 ## Relationships
 

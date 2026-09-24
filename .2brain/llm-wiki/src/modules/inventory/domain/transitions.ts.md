@@ -15,11 +15,11 @@ Defines the six inventory stock transitions as pure data-in / verdict-out functi
 
 - **`CounterDelta`** (interface) — the signed pair of counter changes (`onHandDelta`, `reservedDelta`) that a transition implies. Recorded on every ledger row to make the ledger replayable.
 - **`counterDeltaFor(reason, quantity)`** — total map from `StockMovementReason` to `CounterDelta`. Six cases:
-  - `reserve`: +reserved only (hold).
-  - `commit`: −onHand and −reserved together (sale completes; availability unchanged).
-  - `release` / `expire`: −reserved only (hold lifted; identical arithmetic, distinct ledger story).
-  - `receive`: +onHand only (delivery; the only transition that creates units).
-  - `adjust`: signed onHand delta only (quantity is pre-signed; `+n` gains, `−n` shrinkage).
+    - `reserve`: +reserved only (hold).
+    - `commit`: −onHand and −reserved together (sale completes; availability unchanged).
+    - `release` / `expire`: −reserved only (hold lifted; identical arithmetic, distinct ledger story).
+    - `receive`: +onHand only (delivery; the only transition that creates units).
+    - `adjust`: signed onHand delta only (quantity is pre-signed; `+n` gains, `−n` shrinkage).
 - **`availabilityOf(counters)`** — the one definition of customer availability in the codebase: `(onHand − reserved)` clamped at zero. Accepts optional fields.
 
 ## Relationships
@@ -34,6 +34,6 @@ Defines the six inventory stock transitions as pure data-in / verdict-out functi
 ## Notes
 
 - `availabilityOf` clamps at zero deliberately: a negative result (e.g. `reserved > onHand`) is treated as a bug that must never surface to a screen.
-- `release` and `expire` share identical arithmetic but are kept as separate enum values so the ledger can distinguish *who* lifted the hold.
+- `release` and `expire` share identical arithmetic but are kept as separate enum values so the ledger can distinguish _who_ lifted the hold.
 - `adjust` is the only case where `quantity` may be negative; the code intentionally does **not** call `Math.abs`, relying on the caller to pass the correct sign.
 - Adding a seventh transition requires exactly two changes: one `case` in `counterDeltaFor` and one enum value in `openapi.yaml`.

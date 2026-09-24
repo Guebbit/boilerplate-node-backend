@@ -35,4 +35,4 @@ OpenAPI 3.0.3 contract (v2.0.0) for the account module: the single source of tru
 - **`/account/abilities` naming:** The plan originally called this `/me/abilities`. It lives under `/account` because a module mounts at a single `basePath`; a second mount point for one route would split the module's identity.
 - **Rate limiters are external:** `uploadLimiter` (on `PUT /account`) and `credentialLimiters` (on password/reauth routes) are configured in `routes.ts`, not expressed in this spec. They surface as 429 responses.
 - **`ChangePasswordResponseEnvelope.data` is optional:** On a rare degraded-success path (password write committed, re-mint failed) the token field is absent. Clients must handle its absence.
-- **`PUT /account` email semantics:** Setting email to the *current* address cancels any pending change. A 409 is returned if the target address is already held by another account.
+- **`PUT /account` email semantics:** Setting email to the _current_ address cancels any pending change. A 409 is returned if the target address is already held by another account.

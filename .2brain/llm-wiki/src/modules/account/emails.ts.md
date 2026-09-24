@@ -14,7 +14,7 @@ Pure builder functions for every outbound account-lifecycle email. Each function
 ## Key elements
 
 - **`verifyRequestEmail(locale, name, token, kind?)`** – Verification link email. Shared by both signup and email-change flows; the `kind` parameter (`'verify' | 'email-change'`) selects the frontend page the token lands on. Defaults to `'verify'`.
-- **`emailChangeNoticeEmail(locale, name, newEmail)`** – Sent to the *old* address when a change is requested (not confirmed). Contains no token or actionable link—by design, so a "this wasn't me" response routes to password-reset / logout, not to a second confirmation.
+- **`emailChangeNoticeEmail(locale, name, newEmail)`** – Sent to the _old_ address when a change is requested (not confirmed). Contains no token or actionable link—by design, so a "this wasn't me" response routes to password-reset / logout, not to a second confirmation.
 - **`resetRequestEmail(locale, name, token)`** – Password-reset link email.
 - **`setupRequestEmail(locale, name, token)`** – Admin-created account setup. Reuses the `'reset'` link kind and token type from `authentication.ts`; only the copy differs (recipient never had a password).
 - **`twoFactorCodeEmail(locale, name, code, minutes)`** – Delivers a 6-digit login code. Deliberately contains **no link or button** to avoid training a click reflex that phishing pages exploit.

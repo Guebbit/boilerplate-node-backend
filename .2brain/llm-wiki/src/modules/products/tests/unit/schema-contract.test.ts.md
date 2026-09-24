@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests that pin down the product schema's field contract (required fields, defaults, min constraints, indexes, timestamps) and the `applyProductTransform` function that derives an `available` count from the `onHand` / `reserved` stock counters. They exist to make the *intent* behind each default explicit and to prevent regressions that would silently break downstream consumers (cart, facet, storefront).
+Unit tests that pin down the product schema's field contract (required fields, defaults, min constraints, indexes, timestamps) and the `applyProductTransform` function that derives an `available` count from the `onHand` / `reserved` stock counters. They exist to make the _intent_ behind each default explicit and to prevent regressions that would silently break downstream consumers (cart, facet, storefront).
 
 ## Key elements
 
@@ -26,6 +26,6 @@ Unit tests that pin down the product schema's field contract (required fields, d
 ## Notes
 
 - The `imageUrl` default reads `process.env.NODE_DEFAULT_IMAGE_PRODUCT`; tests will pass any string, so the assertion is order-sensitive to the env var's state at test time.
-- Several comments reference external contracts (`openapi.yaml` defaults, the `inventory` module's stock counters, the facet endpoint, the `cart` shipping decision) — these are *rationale* for the assertion, not additional imports.
+- Several comments reference external contracts (`openapi.yaml` defaults, the `inventory` module's stock counters, the facet endpoint, the `cart` shipping decision) — these are _rationale_ for the assertion, not additional imports.
 - The `serialize` helper hardcodes `_id: 'x'`; the transform does not read `_id`, but the document shape mirrors what a real Mongoose doc would look like.
 - The "wrong type" test (`'12'` for `onHand`) documents a deliberate design choice: fail visibly with 0 rather than risk JS numeric coercion producing a plausible-but-wrong availability number.

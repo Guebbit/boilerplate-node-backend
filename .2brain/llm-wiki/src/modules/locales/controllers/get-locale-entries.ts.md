@@ -8,13 +8,16 @@ model: ollama:qwen3.8:27b
 # src/modules/locales/controllers/get-locale-entries.ts
 
 ## Purpose
+
 Thin HTTP adapter for `GET /locales/:locale/entries` (admin). It validates query parameters, delegates to `localeService.searchEntries`, and formats the paginated result into a standard success response. It exists to keep the service layer free of Express concerns while exposing one language's flat dictionary rows for a translation-editing screen.
 
 ## Key elements
+
 - **`listLocaleEntriesQuerySchema`** (module-level const) — Extends the generated `ListLocaleEntriesQueryParams` zod schema: swaps `page`/`pageSize` for the coercing infra pair, wraps `text` in `z.preprocess(blankToUndefined, …)` so an empty `?text=` means "no filter", then calls `.partial()`.
 - **`getLocaleEntries`** (exported handler) — Express-style `(request, response) => Promise<void>`. Reads only the query string (no body), runs it through `parseBody`, calls `localeService.searchEntries(locale, parsed)`, handles `refused` (403/429 paths), and sends `successResponse<LocaleEntriesResponse>`. Catches all downstream errors via `catchAs`.
 
 ## Relationships
+
 - **`../services/index.ts`** — Imports `localeService`; calls its `searchEntries(locale, params)` method.
 - **`@infrastructure/http/controller`** — Uses `parseBody` (schema validation + early-return), `refused` (policy check), and `catchAs` (error → HTTP mapping).
 - **`@infrastructure/http/request`** — Calls `readInput(request, { surface: 'list' })` to extract the validated query payload.
@@ -24,6 +27,7 @@ Thin HTTP adapter for `GET /locales/:locale/entries` (admin). It validates query
 - **`../routes.ts`** — The route module that mounts `getLocaleEntries` on `GET /locales/:locale/entries` (the controller's registration point).
 
 ## Notes
+
 - Deliberately **not cached**: this is the screen a translator is actively typing into; stale data is worse than a slight perf cost.
 - The nested message tree clients render is a **different** endpoint (`GET /locales/:locale/messages`); this one returns flat, editable rows.
 - A malformed `tenant` value (failing `^[a-z0-9][a-z0-9-]*$`) yields a **422** at the schema layer; a well-formed-but-unknown tenant passes through unchanged and simply matches zero rows at the repository.

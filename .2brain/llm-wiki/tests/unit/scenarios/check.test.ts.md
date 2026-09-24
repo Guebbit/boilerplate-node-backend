@@ -26,6 +26,6 @@ Unit tests for the pure-list comparison in `scenarios/check.ts`. They prove that
 ## Notes
 
 - Guarantee names are **never restated** in the test body; they come from `enabledModules`. Adding a new `shop` guarantee to any module automatically extends the assertions here.
-- The "ghost.leftBehind" case is the only one that exercises the *reverse* direction (a subject present but not declared), guarding against a scenario silently offering extra subjects.
+- The "ghost.leftBehind" case is the only one that exercises the _reverse_ direction (a subject present but not declared), guarding against a scenario silently offering extra subjects.
 - The file explicitly does **not** verify that a real, built scenario's `shop` satisfies its own declarations — that concern is delegated to `tests/integration/scenarios/shop.test.ts`.
 - The assertion error message is asserted via a regex (`/[scenario-check] shop guarantees not met/`), so the exact wording after the prefix is free to change.

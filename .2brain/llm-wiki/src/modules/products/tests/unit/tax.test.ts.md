@@ -16,10 +16,10 @@ Unit tests for `resolveTaxRate`, verifying that every product tax class (`undefi
 - **`ORIGINAL`** — captured at module load; stores the initial values of `NODE_VAT_RATE_DEFAULT` and `NODE_VAT_RATE_REDUCED` so `afterEach` can restore them.
 - **`afterEach` hook** — resets both env vars to `ORIGINAL` values, preventing cross-case contamination (especially from the suite-wide fallback set in `tests/support/setup.ts`).
 - **`describe('resolveTaxRate')`** — four test cases:
-  - absent tax class → shop default rate
-  - `"reduced"` → reduced rate (not the default)
-  - `"zero"` → always `0`, independent of env config
-  - exhaustive guard: for all three inputs the return type is `number` (never `undefined`)
+    - absent tax class → shop default rate
+    - `"reduced"` → reduced rate (not the default)
+    - `"zero"` → always `0`, independent of env config
+    - exhaustive guard: for all three inputs the return type is `number` (never `undefined`)
 
 ## Relationships
 
@@ -28,6 +28,6 @@ Unit tests for `resolveTaxRate`, verifying that every product tax class (`undefi
 
 ## Notes
 
-- The env-var cleanup is intentional and non-obvious: without the `afterEach` restore, the suite-wide fallback from `setup.ts` could make later assertions in *other* test files pass or fail unpredictably.
+- The env-var cleanup is intentional and non-obvious: without the `afterEach` restore, the suite-wide fallback from `setup.ts` could make later assertions in _other_ test files pass or fail unpredictably.
 - Test inputs are typed as the literal union `[undefined, 'reduced', 'zero'] as const` in the final case, keeping the "never undefined" guard exhaustive.
 - Rates are expressed as decimals (e.g. `0.22` for 22 %), matching what `resolveTaxRate` returns.

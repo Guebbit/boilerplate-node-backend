@@ -29,7 +29,7 @@ Jest configuration for the unit test run and the base config that other Jest con
 ## Notes
 
 - **Coverage-threshold glob shape matters:** a key that names a directory pools all files beneath it into one aggregate total; a glob (`*`) applies the floor to each matched file individually. A key matching no file is silently ignored by Jest.
-- **Exemptions require two halves:** an extglob negation in one key *plus* the file's own dedicated key. Omit either and the strict check still runs.
+- **Exemptions require two halves:** an extglob negation in one key _plus_ the file's own dedicated key. Omit either and the strict check still runs.
 - **`tests/cross-cutting/coverage-thresholds.test.ts`** is the safety net that turns red if a file falls out of the threshold map entirely (Jest would silently skip it).
 - **`maxWorkers` / `workerIdleMemoryLimit` here are fallbacks only.** The real sizing lives in `scripts/testing/machine-budget.ts` (ESM), which this CommonJS file cannot import. That script passes `--maxWorkers`, `--workerIdleMemoryLimit`, and `--max-old-space-size` on the command line for every npm-run suite, beating these values.
 - **`JEST_WORKERS` in `.env` still wins** over the hardcoded `DEFAULT_MAX_WORKERS = 2` via `fromEnvironment`.

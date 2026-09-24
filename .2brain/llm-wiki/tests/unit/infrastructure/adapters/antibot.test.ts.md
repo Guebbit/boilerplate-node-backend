@@ -27,4 +27,4 @@ Unit tests for `checkEmailPolicy` (the `NODE_ANTIBOT_EMAIL_POLICY` resolver). Ve
 
 - No provider-registry reset is needed here (unlike the payment/analytics adapter tests); the policy is read from `process.env` on each call, so restoring the three env vars is sufficient.
 - The `beforeEach` default of `mockedResolveMx` rejecting is a guard: if a test outside the `mx` block accidentally triggers a DNS lookup, it will surface immediately rather than hanging or hitting a real resolver.
-- The "off by default" test uses a disposable-domain address (`@mailinator.com`) specifically to prove that *no* filtering runs when the policy env var is unset.
+- The "off by default" test uses a disposable-domain address (`@mailinator.com`) specifically to prove that _no_ filtering runs when the policy env var is unset.

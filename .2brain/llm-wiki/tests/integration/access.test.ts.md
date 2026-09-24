@@ -15,9 +15,9 @@ Validates the cross-module authorization invariant of the demo seed: a role is s
 
 - **`seedUsers()`** — local helper; calls `shopModules.users.seed()` to populate user rows before the single-source-of-truth test.
 - **`describe('the seeded model')`** — three test cases:
-  - *root has both jobs* — asserts `SEED_ADMIN_ID` holds exactly two memberships (`platform/operator` + `tenant/admin`) and that customer/editor/moderator each hold one tenant role.
-  - *idempotent re-seed* — calls `seedAccessModel()` twice, asserts no duplicate membership rows appear.
-  - *role lives in membership only* — asserts `membershipIn(...).role` is `'admin'` **and** that `userRepository.findById(SEED_ADMIN_ID)` returns a document whose `role` field is `undefined`.
+    - _root has both jobs_ — asserts `SEED_ADMIN_ID` holds exactly two memberships (`platform/operator` + `tenant/admin`) and that customer/editor/moderator each hold one tenant role.
+    - _idempotent re-seed_ — calls `seedAccessModel()` twice, asserts no duplicate membership rows appear.
+    - _role lives in membership only_ — asserts `membershipIn(...).role` is `'admin'` **and** that `userRepository.findById(SEED_ADMIN_ID)` returns a document whose `role` field is `undefined`.
 
 ## Relationships
 
@@ -33,5 +33,5 @@ Validates the cross-module authorization invariant of the demo seed: a role is s
 
 - This file is explicitly the **leftover** after module-scoped access tests (writer paths, audit trail) were relocated to `src/modules/access/tests/integration/access.test.ts`. Do not add single-module assertions here.
 - `setupTestDb()` runs at **import time**, not inside `beforeAll`; the DB is ready before any `it` block executes.
-- The third test deliberately seeds users *before* the access model to ensure the invariant holds even when both stores already contain data — it is checking absence, not just presence.
+- The third test deliberately seeds users _before_ the access model to ensure the invariant holds even when both stores already contain data — it is checking absence, not just presence.
 - `asStub<{ role?: unknown }>(published).role` is a deliberate type-escape: the users module's public type does not declare `role`, so the cast documents that the field is expected to be **absent** rather than `null`.

@@ -41,7 +41,7 @@ Express middleware guards that gate HTTP routes on authentication state and decl
 
 - **Permission keys, not roles.** Guards accept a key string (e.g. `'cart.read'`). `assertDeclared` ties each key to an owning module at boot, so a typo in a route mount is a startup failure rather than a silently unreachable route.
 - **Idempotent `getAuth`.** Nested Express routers that share a URL prefix will fall through; the guard detects an already-resolved caller and short-circuits, avoiding duplicate JWT verification or a second rate-limit budget charge.
-- **API-key prefix guard.** `sk_` tokens are identified by prefix *before* any JWT parse is attempted, preventing a wasted base64url decode.
-- **`isAuth` is session-only by design.** API-key callers get 401 here on purpose; routes that *do* admit machines mount `isAuthOrCredential` instead. Controllers behind `isAuth` can safely assert `request.authContext!.id`.
+- **API-key prefix guard.** `sk_` tokens are identified by prefix _before_ any JWT parse is attempted, preventing a wasted base64url decode.
+- **`isAuth` is session-only by design.** API-key callers get 401 here on purpose; routes that _do_ admit machines mount `isAuthOrCredential` instead. Controllers behind `isAuth` can safely assert `request.authContext!.id`.
 - **Fail-closed step-up.** A missing or `0` `authTime` (tokens minted before the claim existed) is treated as infinitely old, forcing re-authentication at the first high-risk action.
-- **Audit-before-reject invariant.** Every 401/403 path calls `auditRefusal` (or equivalent) *before* `rejectResponse`, so a denied request always leaves an audit record with route and method.
+- **Audit-before-reject invariant.** Every 401/403 path calls `auditRefusal` (or equivalent) _before_ `rejectResponse`, so a denied request always leaves an audit record with route and method.

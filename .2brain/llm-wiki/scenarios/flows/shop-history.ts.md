@@ -21,28 +21,28 @@ Drives the application through real HTTP endpoints (`POST /cart/checkout`, `POST
 - **`plannedDemand()`** — computes total per-product demand across all orders and carts; named rows are overstated (40 dog-food, 30 dog-bed) to guarantee no checkout fails mid-boot.
 - **`openEveryShelf(owner)`** — calls `POST /inventory/receipts` for every product (except `scratchPostOutOfStock`) at `openingStockFor` + planned demand, before any order is placed.
 - **`signInCustomerBase(baseUrl)`** — concurrent `signIn` for all filler shoppers (bcrypt cost-12 makes serial login the runner's dominant cost).
-- **`driveCatalogueEdits(owner)`** — patches a product price and an Italian locale entry so the audit trail has a realistic operator edit dated *after* the orders.
+- **`driveCatalogueEdits(owner)`** — patches a product price and an Italian locale entry so the audit trail has a realistic operator edit dated _after_ the orders.
 - **`banOneCustomer(owner)`** — reads then `PUT`s `marcus` with `active: false`; must run after all his orders since a banned account can't reuse its session.
 - **`signOutEveryone(callers)`** — `POST /account/logout-all` for every caller so the demo dataset ships zero phantom refresh-token sessions.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `scenarios/accounts.ts` | Imports `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `SEED_USER_EMAIL`, `SEED_USER_PASSWORD` for the admin and `customer` logins. |
-| `scenarios/flows/client.ts` | Imports `signIn` (HTTP sign-in) and the `Caller` type used as the authenticated request handle throughout. |
-| `scenarios/flows/actions.ts` | Imports all action helpers: `checkout`, `checkoutAndPay`, `submitCard`, `openPayment`, `syncPayment`, `recordOfflinePayment`, `advanceOrder`, `shipOrder`, `deliverOrder`, `cancelOrder`, `softDeleteOrder`, `receiveStock`, `hardDeleteProduct`, `replaceProductImage`, and the `CARD` / `Line` types. |
-| `scenarios/products.ts` | Imports `fillerProductId`, `openingStockFor`, and `productFixtures` to compute stock receipts and resolve filler product ids. |
-| `scenarios/subjects.ts` | Imports `SEED_PRODUCT_IDS` for the named catalogue rows (dog food, dog bed, out-of-stock scratch post). |
-| `scenarios/users.ts` | Imports `SEED_CUSTOMER_EMAILS` and `SEED_CUSTOMER_IDS` to drive the filler shopper base and the ban. |
-| `src/modules/users/factories.ts` | Imports `PLAIN_PASSWORD` (the known plaintext used for every seeded user's login). |
-| `scenarios/index.ts` | Consumes this module's exported `ShopHistory` and makes it available to the demo replay. |
+| Neighbor                         | Interaction                                                                                                                                                                                                                                                                                             |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scenarios/accounts.ts`          | Imports `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`, `SEED_USER_EMAIL`, `SEED_USER_PASSWORD` for the admin and `customer` logins.                                                                                                                                                                         |
+| `scenarios/flows/client.ts`      | Imports `signIn` (HTTP sign-in) and the `Caller` type used as the authenticated request handle throughout.                                                                                                                                                                                              |
+| `scenarios/flows/actions.ts`     | Imports all action helpers: `checkout`, `checkoutAndPay`, `submitCard`, `openPayment`, `syncPayment`, `recordOfflinePayment`, `advanceOrder`, `shipOrder`, `deliverOrder`, `cancelOrder`, `softDeleteOrder`, `receiveStock`, `hardDeleteProduct`, `replaceProductImage`, and the `CARD` / `Line` types. |
+| `scenarios/products.ts`          | Imports `fillerProductId`, `openingStockFor`, and `productFixtures` to compute stock receipts and resolve filler product ids.                                                                                                                                                                           |
+| `scenarios/subjects.ts`          | Imports `SEED_PRODUCT_IDS` for the named catalogue rows (dog food, dog bed, out-of-stock scratch post).                                                                                                                                                                                                 |
+| `scenarios/users.ts`             | Imports `SEED_CUSTOMER_EMAILS` and `SEED_CUSTOMER_IDS` to drive the filler shopper base and the ban.                                                                                                                                                                                                    |
+| `src/modules/users/factories.ts` | Imports `PLAIN_PASSWORD` (the known plaintext used for every seeded user's login).                                                                                                                                                                                                                      |
+| `scenarios/index.ts`             | Consumes this module's exported `ShopHistory` and makes it available to the demo replay.                                                                                                                                                                                                                |
 
 ## Notes
 
 - **Run-once semantics.** The module is not idempotent by design; it mutates live state through the API. `src/app/demo.ts` caches the result and replays it, so the flow body executes exactly once per process.
 - **Audit retention boundary.** `OLDEST_DAYS = 80` is chosen to sit inside the 90-day audit TTL. Backdating past 90 would leave orders whose audit rows have already been reaped — a self-contradicting dataset on the one screen meant to explain it.
-- **Out-of-stock product is intentionally unserviced.** `scratchPostOutOfStock` receives no inventory receipt; its existence *is* the fixture.
+- **Out-of-stock product is intentionally unserviced.** `scratchPostOutOfStock` receives no inventory receipt; its existence _is_ the fixture.
 - **Overstated demand for named rows.** `plannedDemand` adds 40 dog-food and 30 dog-bed units as a flat budget rather than summing line-by-line, so a shelf never lands one unit short and a checkout fails three hundred requests into boot.
 - **Cart fill order matters.** Carts are written last in the flow because `POST /cart/checkout` empties the source cart; any cart written before the flows ran would be gone.
 - **`banOneCustomer` reads-then-writes.** `PUT /users/{id}` validates the full identity document, so the row is `GET`-read first — mirroring what the admin UI does before save.

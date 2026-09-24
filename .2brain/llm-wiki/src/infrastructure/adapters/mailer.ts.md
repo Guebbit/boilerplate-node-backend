@@ -43,4 +43,4 @@ Central email-sending adapter: renders EJS templates, delivers via nodemailer (S
 - `secure` is derived from the **numeric** port value, not a string comparison, so `0465` still maps to implicit TLS.
 - `nodemailer()` **never discards** a spooled attachment — that is the caller's responsibility (`enqueueEmail`'s inline path or `email.worker.ts#discardJobAttachments`) to keep retry attempts from resolving a deleted file.
 - Template names (not paths) cross the RabbitMQ boundary; the `.ejs` extension is appended only in `templateFile`, keeping the name portable to another process or frontend assertion.
-- SMTP is **optional by design**: leaving `NODE_SMTP_HOST` unset is valid (the email 2FA factor is gated on it). A host *without* credentials is not — the boot gate rejects that.
+- SMTP is **optional by design**: leaving `NODE_SMTP_HOST` unset is valid (the email 2FA factor is gated on it). A host _without_ credentials is not — the boot gate rejects that.

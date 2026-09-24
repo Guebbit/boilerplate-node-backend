@@ -19,11 +19,11 @@ Public barrel for the `feedback` module. It is the **only** entry point sibling 
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/feedback/service.ts` | Re-exported in full (values + types). This is the primary functional surface of the module. |
-| `src/modules/feedback/emails.ts` | Re-exported in full (values + types). Provides email-related exports. |
-| `src/modules/feedback/model.ts` | Re-exported as **types only** (`export type *`), keeping its runtime footprint out of the public barrel. |
+| Neighbor                          | Interaction                                                                                              |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `src/modules/feedback/service.ts` | Re-exported in full (values + types). This is the primary functional surface of the module.              |
+| `src/modules/feedback/emails.ts`  | Re-exported in full (values + types). Provides email-related exports.                                    |
+| `src/modules/feedback/model.ts`   | Re-exported as **types only** (`export type *`), keeping its runtime footprint out of the public barrel. |
 
 ## Notes
 

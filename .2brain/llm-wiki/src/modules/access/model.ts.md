@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the two Mongoose collections that store the identity-and-access domain: **Tenant** (the single shop) and **Membership** (who holds which role in which scope). This is a routeless domain module — the *data* that kernel files (`permissions.ts`, `ability.ts`, `access/query.ts`) read at request time — not the asking itself. It is shared by `account`, `api-keys`, `users`, `db` scripts, and `scenarios`.
+Defines the two Mongoose collections that store the identity-and-access domain: **Tenant** (the single shop) and **Membership** (who holds which role in which scope). This is a routeless domain module — the _data_ that kernel files (`permissions.ts`, `ability.ts`, `access/query.ts`) read at request time — not the asking itself. It is shared by `account`, `api-keys`, `users`, `db` scripts, and `scenarios`.
 
 ## Key elements
 
@@ -33,6 +33,6 @@ Defines the two Mongoose collections that store the identity-and-access domain: 
 ## Notes
 
 - **Single-tenant by design.** The deployment holds exactly one `Tenant` row; a second client gets a second stack/database, not a second row.
-- **Roles are data, permissions are code.** Role *permissions* live solely in `shared/authorization-roles.yaml` (read byte-for-byte by the PHP twin). The DB stores only *who* holds a role, never *what* a role grants.
+- **Roles are data, permissions are code.** Role _permissions_ live solely in `shared/authorization-roles.yaml` (read byte-for-byte by the PHP twin). The DB stores only _who_ holds a role, never _what_ a role grants.
 - **`tenantId: null` is meaningful.** It denotes a platform-scope membership, matching the `null` the caller carries in its auth context.
-- **Routeless on purpose.** Kernel files that *ask* about access (`permissions.ts`, `ability.ts`, `access/query.ts`) are intentionally kept out of this module so the domain model stays decoupled from the route-guard mechanism.
+- **Routeless on purpose.** Kernel files that _ask_ about access (`permissions.ts`, `ability.ts`, `access/query.ts`) are intentionally kept out of this module so the domain model stays decoupled from the route-guard mechanism.

@@ -15,7 +15,7 @@ Renders pre-built HTML into a PDF byte buffer via a headless Chromium process. E
 
 - **`renderHtmlToPdf(html, pdfOptions?)`** — sole export. Spawns a one-shot Puppeteer browser, writes the HTML via `page.setContent`, waits for `load`, calls `page.pdf()`, and returns the `Uint8Array`. The browser is closed in a `finally` block.
 - **`DEFAULT_PDF_OPTIONS`** — A4 portrait; the fallback when the caller doesn't specify geometry.
-- **`launchOptions()`** — returns `{ executablePath, args }`. Defined as a *function* (not a const) so `process.env.PUPPETEER_EXECUTABLE_PATH` is read at call time, letting tests override the binary path after module import.
+- **`launchOptions()`** — returns `{ executablePath, args }`. Defined as a _function_ (not a const) so `process.env.PUPPETEER_EXECUTABLE_PATH` is read at call time, letting tests override the binary path after module import.
 
 ## Relationships
 

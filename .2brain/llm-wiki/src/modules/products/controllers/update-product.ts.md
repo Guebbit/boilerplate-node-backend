@@ -29,6 +29,6 @@ Admin handler for `PATCH /products/:id`. It decodes a multipart or JSON request 
 ## Notes
 
 - **`translations` is a JSON string, not an object.** In multipart form-data a nested object has no representation, so the client sends a JSON-encoded string under the `translations` part. `readInput`'s `jsonFields: ['translations']` option handles the decode before validation. Don't remove or "fix" this without coordinating with the client.
-- **Upload cleanup is fail-safe.** Every failure path (missing `id`, service rejection, database error) calls `deleteUpload().catch(() => undefined)` *before* sending the HTTP response. The `.catch(() => undefined)` prevents an unhandled promise rejection from corrupting an already-sent response.
+- **Upload cleanup is fail-safe.** Every failure path (missing `id`, service rejection, database error) calls `deleteUpload().catch(() => undefined)` _before_ sending the HTTP response. The `.catch(() => undefined)` prevents an unhandled promise rejection from corrupting an already-sent response.
 - **`request.body` is spread into the payload.** In addition to the individually decoded fields, the raw `request.body` is spread first, so any extra keys present on the body are forwarded to the service. The explicitly decoded fields (`price`, `active`, etc.) override the spread.
 - **No async/await.** The function returns a promise chain (`.then`/`.catch`) rather than using `async`. The early-return path for missing `id` returns the `deleteUpload()` promise directly.

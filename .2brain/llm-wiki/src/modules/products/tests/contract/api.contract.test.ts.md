@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for the `/products` endpoints that validate the **shape** of HTTP responses (status code, headers, body schema including `additionalProperties: false`) against `openapi.yaml`. They do not assert *which* products a role sees (that lives in unit/service suites); their job is to guarantee the wire contract is exercised on every branch—anonymous, admin, empty list, paginated, error, and each filter variant—so a silently added or removed field is caught in CI.
+Contract tests for the `/products` endpoints that validate the **shape** of HTTP responses (status code, headers, body schema including `additionalProperties: false`) against `openapi.yaml`. They do not assert _which_ products a role sees (that lives in unit/service suites); their job is to guarantee the wire contract is exercised on every branch—anonymous, admin, empty list, paginated, error, and each filter variant—so a silently added or removed field is caught in CI.
 
 ## Key elements
 
@@ -24,19 +24,19 @@ Contract tests for the `/products` endpoints that validate the **shape** of HTTP
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `tests/support/contract.ts` | Imported for the `toSatisfyApiSpec()` jest matcher that validates responses against `openapi.yaml`. |
-| `tests/support/http.ts` | Provides `api()` (supertest-style client) and `authenticateAs(role)` used in every request. |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` resets and seeds the test database at module load. |
-| `src/modules/products/tests/factories.ts` | `createProduct()` seeds rows with controlled `title` / `active` values. |
-| `src/modules/products/repository.ts` | `productRepository.findByIdRaw(id)` is used by the local `stored()` helper to verify DB-level effect of DELETE without going through the API. |
+| Neighbor                                  | Interaction                                                                                                                                   |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/support/contract.ts`               | Imported for the `toSatisfyApiSpec()` jest matcher that validates responses against `openapi.yaml`.                                           |
+| `tests/support/http.ts`                   | Provides `api()` (supertest-style client) and `authenticateAs(role)` used in every request.                                                   |
+| `tests/support/setup-test-db.ts`          | `setupTestDb()` resets and seeds the test database at module load.                                                                            |
+| `src/modules/products/tests/factories.ts` | `createProduct()` seeds rows with controlled `title` / `active` values.                                                                       |
+| `src/modules/products/repository.ts`      | `productRepository.findByIdRaw(id)` is used by the local `stored()` helper to verify DB-level effect of DELETE without going through the API. |
 
 ## Notes
 
-- **`hardDelete` presence-vs-value trap:** the comment in the file warns that reading the flag as *presence* (truthy string check) would make `?hardDelete=false` a hard delete. The tests pin the correct behaviour—parse the value, reject non-boolean with 422—so a regression to presence-checking fails CI.
+- **`hardDelete` presence-vs-value trap:** the comment in the file warns that reading the flag as _presence_ (truthy string check) would make `?hardDelete=false` a hard delete. The tests pin the correct behaviour—parse the value, reject non-boolean with 422—so a regression to presence-checking fails CI.
 - **OR, not precedence, for contradictory sources:** when `hardDelete` appears in both query and body with different values, the endpoint must OR them (either `true` wins) rather than letting the higher-priority transport override a legitimate `true`. The tests assert both orderings produce a hard delete.
-- **Invariant over mechanism:** the stranger/`active` test deliberately does not assert *how* inactive rows are excluded (scope-merge-overwrite vs. AND-clause-empty-result), because different backends implement it differently. Changing the implementation is safe; breaking the guarantee is not.
+- **Invariant over mechanism:** the stranger/`active` test deliberately does not assert _how_ inactive rows are excluded (scope-merge-overwrite vs. AND-clause-empty-result), because different backends implement it differently. Changing the implementation is safe; breaking the guarantee is not.
 - **Pagination contract:** out-of-range `page`/`pageSize` must return **422**, not be silently clamped. Blank (`?page=&pageSize=`) is treated as absent (defaults apply), not as invalid.
 - **`id` batch filter:** validated as a widened array schema. One malformed element rejects the entire request (422); more than 100 elements → 422; duplicates collapse to a single row.
 - The file is truncated in the provided content; the final `DELETE` sub-test (`still rejects an undecodable value…`) is cut off mid-assertion. The full file should be consulted for any additional sub-cases beyond what is listed here.

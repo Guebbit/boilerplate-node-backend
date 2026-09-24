@@ -26,6 +26,6 @@ Barrel file for the inventory **domain layer**. It re-exports the pure, tier-fre
 
 ## Notes
 
-- The docstring explicitly scopes what *belongs* vs. *does not belong* in this layer: conditional writes, ledger rows, and HTTP envelopes live in the repository/service tiers, not here.
+- The docstring explicitly scopes what _belongs_ vs. _does not belong_ in this layer: conditional writes, ledger rows, and HTTP envelopes live in the repository/service tiers, not here.
 - A lint rule enforces the absence of Express/Mongoose imports in this directory; adding an I/O dependency here is a violation.
 - Because this file is purely re-exports, any rename in `transitions.ts` must be mirrored here to avoid breaking downstream consumers that import via the barrel.

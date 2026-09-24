@@ -28,6 +28,6 @@ Central registry of every contract bundle this repo produces. It is the single l
 
 ## Notes
 
-- **Authored vs. Generated:** The first three entries (OpenAPI, AsyncAPI, AsyncAPI-public) are *authored* — committed to git and covered by the shared-identity check in `scripts/pairing/spec-identity.ts`. The last four (client collections) are *generated* — listed here only so the CLI can find them by name; they are `.gitignore`d and therefore can never be "stale."
+- **Authored vs. Generated:** The first three entries (OpenAPI, AsyncAPI, AsyncAPI-public) are _authored_ — committed to git and covered by the shared-identity check in `scripts/pairing/spec-identity.ts`. The last four (client collections) are _generated_ — listed here only so the CLI can find them by name; they are `.gitignore`d and therefore can never be "stale."
 - **Subset publishing:** `asyncapiBundle` (full) is consumed by this repo's own types; `asyncapiPublicBundle` (public half) is what the frontend receives. Both live in this list but serve different audiences.
 - **Order matters implicitly** only for test/CLI output ordering; there is no functional dependency between entries.

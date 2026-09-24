@@ -9,15 +9,15 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the kernel-level boot-gate mechanism: `assertRequiredConfig` (collect-and-report required-config violations before the process can start) and `checkSelector` (validate enum-style provider selectors). The file exists to pin down the *mechanism* the kernel owns—placeholder detection, multi-offender reporting, ring validation, environment bypasses, forbidden-in-production, and caller-supplied checks—while deliberately leaving app-tier and module-specific variable names to their own test files.
+Unit tests for the kernel-level boot-gate mechanism: `assertRequiredConfig` (collect-and-report required-config violations before the process can start) and `checkSelector` (validate enum-style provider selectors). The file exists to pin down the _mechanism_ the kernel owns—placeholder detection, multi-offender reporting, ring validation, environment bypasses, forbidden-in-production, and caller-supplied checks—while deliberately leaving app-tier and module-specific variable names to their own test files.
 
 ## Key elements
 
 - **`configure()`** (local helper) — sets `NODE_ENV` to `'development'` so the gate does not short-circuit; every case that expects enforcement calls this first.
 - **`afterEach(() => enableDemoProfile(false))`** — resets the demo-profile flag so one test's bypass cannot leak into the next.
-- **"module-declared variables" group** — asserts placeholder-value detection, that *all* offenders are named in one throw (not just the first), and that comma-separated ring values are validated member-by-member.
+- **"module-declared variables" group** — asserts placeholder-value detection, that _all_ offenders are named in one throw (not just the first), and that comma-separated ring values are validated member-by-member.
 - **"the environments that skip the gate" group** — confirms `NODE_ENV=test` and the demo profile both cause `assertRequiredConfig` to pass unconditionally.
-- **"module-declared forbiddenInProduction" group** — verifies a variable flagged as forbidden is rejected when set *and* `NODE_ENV=production`, but accepted everywhere else.
+- **"module-declared forbiddenInProduction" group** — verifies a variable flagged as forbidden is rejected when set _and_ `NODE_ENV=production`, but accepted everywhere else.
 - **`checkSelector` tests** — empty result on success; the resolver's own error message is preserved verbatim; fallback to the bare key name if a non-`Error` is thrown.
 - **"nonModuleChecks" group** — exercises the second argument (`required` / `customChecks`) that a non-module caller can contribute alongside module checks.
 

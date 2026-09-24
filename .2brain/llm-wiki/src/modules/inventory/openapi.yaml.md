@@ -26,10 +26,10 @@ OpenAPI 3.0.3 contract for the inventory module (v2.0.0). It defines the sole wr
 ## Relationships
 
 - **`shared/contracts/openapi.root.yaml`** — Imported via `$ref` for:
-  - Shared parameters: `PageParam`, `PageSizeParam` (pagination on both GET endpoints).
-  - Shared response objects: `Unauthorized`, `Forbidden`, `InternalError`, `ValidationError`, `NotFound` (used across all five endpoints).
-  - Shared schemas: `Id` (used in `StockMovement` fields and the `productId` filter), `ErrorResponse` (used in the 409 body of `/inventory/adjustments`).
-  - The inventory module is the **sole writer** of `Product.onHand` and `Product.reserved`; the `products` module owns the collection and reads those fields but does not mutate them.
+    - Shared parameters: `PageParam`, `PageSizeParam` (pagination on both GET endpoints).
+    - Shared response objects: `Unauthorized`, `Forbidden`, `InternalError`, `ValidationError`, `NotFound` (used across all five endpoints).
+    - Shared schemas: `Id` (used in `StockMovement` fields and the `productId` filter), `ErrorResponse` (used in the 409 body of `/inventory/adjustments`).
+    - The inventory module is the **sole writer** of `Product.onHand` and `Product.reserved`; the `products` module owns the collection and reads those fields but does not mutate them.
 
 ## Notes
 

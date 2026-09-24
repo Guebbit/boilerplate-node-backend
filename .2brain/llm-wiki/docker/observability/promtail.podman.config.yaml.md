@@ -18,9 +18,9 @@ Promtail scrape configuration for environments using rootless Podman with the `k
 - **`clients`** — Push target: `http://loki:3100/loki/api/v1/push`.
 - **`scrape_configs[0]` (`podman-containers`)** — Tails `/var/log/host-containers/*/userdata/*.log`, the layout produced by Podman's `k8s-file` driver (one `<container-id>.log` per container under `overlay-containers/<id>/userdata/`).
 - **Pipeline stages:**
-  - `cri` — Strips the CRI envelope (`<RFC3339Nano> <stream> <flag> <message>`) to extract timestamp, stream, and body.
-  - `json` — Extracts `level`, `service`, `trace_id` from the Winston JSON payload.
-  - `labels` — Promotes `stream`, `level`, `service` to Loki labels for LogQL filtering.
+    - `cri` — Strips the CRI envelope (`<RFC3339Nano> <stream> <flag> <message>`) to extract timestamp, stream, and body.
+    - `json` — Extracts `level`, `service`, `trace_id` from the Winston JSON payload.
+    - `labels` — Promotes `stream`, `level`, `service` to Loki labels for LogQL filtering.
 
 ## Relationships
 

@@ -16,7 +16,7 @@ Unit tests that pin the **ordering relationships** among the account module's ra
 - **`budget(namespace)`** – thin helper that calls `budgetIn(accountRateLimits, namespace)` so each assertion reads as a named lookup rather than a deep property chain.
 - **`describe('credentialLimiters')`** – asserts identity < address < block ordering, and that the identity budget stays below `DEFAULT_RATE_LIMIT_MAX / 5` (i.e., a small fraction of the global browsing window).
 - **`describe('signupLimiters and resetRequestLimiters')`** – same two invariants (identity ≪ global; block > address) applied to the signup and reset budget triples.
-- **`describe('mfaChallengeLimiter and mfaSendLimiter')`** – asserts the challenge (guess) budget is *larger* than the send (delivery) budget, and that both share an explicit window (not the `'shared'` alias) tied to challenge lifetime.
+- **`describe('mfaChallengeLimiter and mfaSendLimiter')`** – asserts the challenge (guess) budget is _larger_ than the send (delivery) budget, and that both share an explicit window (not the `'shared'` alias) tied to challenge lifetime.
 
 ## Relationships
 

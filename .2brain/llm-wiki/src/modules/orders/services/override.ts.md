@@ -36,8 +36,8 @@ Implements the admin override — the sole mechanism that may move an order to a
 
 ## Notes
 
-- **Tolerated race on `observedFrom`:** The history entry records the `from` seen at read time, but the conditional write guards against *all* legal `from` values. If the order advanced one more step between read and write (still within the allowed set), the write succeeds and the history entry's `from` may be one step stale. This is intentional — admin overrides are not hot-path enough to justify a strict read-your-write transaction.
-- **`null` vs. reject:** A `null` return from `applyOverride` means "lost a race" (order moved past every legal `from`). A missing `caller.id` is a *reject* (invariant violation), not a `null`, so `overrideStatus` reports it as a 500 rather than a 409.
+- **Tolerated race on `observedFrom`:** The history entry records the `from` seen at read time, but the conditional write guards against _all_ legal `from` values. If the order advanced one more step between read and write (still within the allowed set), the write succeeds and the history entry's `from` may be one step stale. This is intentional — admin overrides are not hot-path enough to justify a strict read-your-write transaction.
+- **`null` vs. reject:** A `null` return from `applyOverride` means "lost a race" (order moved past every legal `from`). A missing `caller.id` is a _reject_ (invariant violation), not a `null`, so `overrideStatus` reports it as a 500 rather than a 409.
 - **Inventory commit is idempotent:** `commitForOrder` is only called when `observedFrom === 'pending'`, and it is a no-op if the reservation is already committed — safe under the race described above.
 - **`forceMove` swallows 404/409 into `null`:** Unlike `overrideStatus`, it returns `null` for both "order not found" and "override not legal from current status." The `delivery` caller is expected to inspect and re-wrap as needed.
 - **`orders` remains the sole status writer:** Even when `delivery` initiates the move via `forceMove`, the actual `order.status` write happens here. `delivery` never writes `order.status` directly.

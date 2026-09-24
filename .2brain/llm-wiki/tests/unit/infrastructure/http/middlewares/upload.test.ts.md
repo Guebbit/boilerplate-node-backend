@@ -19,7 +19,7 @@ Unit tests for the five exported helpers in the upload middleware (`maxUploadByt
 - **`maxUploadBytes` block** – Verifies the value is read at call time (not import time) and that invalid env values fall back to 5 MiB.
 - **`resolveUploadDestination` block** – Creates a real temp dir via `mkdtemp`, asserts the resolver creates it, that staging never falls inside the served public path, and that unknown field names are rejected rather than defaulted.
 - **`resolveUploadFilename` block** – Asserts the output is a 32-hex-digit name with a safe extension regardless of client-supplied `originalname`; checks uniqueness across 50 calls; verifies an unrecognised MIME type maps to a `.bin` extension.
-- **`fileFilter` block** – Confirms accepted/rejected MIME types and that a rejected file is *dropped* (callback receives `null` error) rather than surfaced as a request error.
+- **`fileFilter` block** – Confirms accepted/rejected MIME types and that a rejected file is _dropped_ (callback receives `null` error) rather than surfaced as a request error.
 - **`validateUploadedImages` block** (truncated) – Mocks `identifyImageFile`, `deleteFile`, and `logger`; uses `requestWithFile` / `requestWithFiles` fixtures for the `multer.single()` and `multer.array()` shapes; a `runMiddleware` helper resolves on either `next()` or a direct response write.
 - **`jest.mock` calls** – Replace `@infrastructure/adapters/image-signatures`, `@infrastructure/adapters/filesystem`, and `@infrastructure/adapters/logger` with `jest.fn()` stubs.
 
@@ -34,5 +34,5 @@ Unit tests for the five exported helpers in the upload middleware (`maxUploadByt
 - Tests that touch the filesystem (`resolveUploadDestination`) create a real `mkdtemp` directory and remove it in `afterEach`; they do **not** rely on `jest.mock` for `node:fs/promises`.
 - `maxUploadBytes` is tested against `process.env.NODE_MAX_UPLOAD_BYTES`; the original value is saved/restored per test to avoid cross-contamination.
 - The `fileFilter` "dropped, not errored" test is intentional: multer's contract is that a rejected file simply does not appear on `request.file`, and the callback's first argument is `null`. Handlers must treat a missing file as a validation failure.
-- `validateUploadedImages` has **two** rejection axes: (1) bytes are not an image at all, (2) bytes are an image but a *different* type than declared. Both must result in the file being deleted.
+- `validateUploadedImages` has **two** rejection axes: (1) bytes are not an image at all, (2) bytes are an image but a _different_ type than declared. Both must result in the file being deleted.
 - The file is truncated in this snapshot; the `runMiddleware` helper and the full `validateUploadedImages` test cases continue beyond the visible portion.

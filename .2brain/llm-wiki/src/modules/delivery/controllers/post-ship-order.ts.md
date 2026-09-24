@@ -14,21 +14,21 @@ HTTP handler for `POST /delivery/order/:orderId/ship`. It validates the inbound 
 ## Key elements
 
 - **`postShipOrder`** (exported) — The only export. Accepts an Express `Request<{ orderId?: string }>` and `Response`. Steps:
-  1. Validates `request.body` against the `ShipOrderBody` Zod schema via `parseBody`; early-returns on failure.
-  2. Calls `deliveryService.recordShipment(orderId, trackingCode, callerContext, forced, reason)`.
-  3. Responds with `successResponse<Shipment>` on success, or `refused` on a domain-level rejection.
-  4. Catches unexpected errors with `catchAs`.
+    1. Validates `request.body` against the `ShipOrderBody` Zod schema via `parseBody`; early-returns on failure.
+    2. Calls `deliveryService.recordShipment(orderId, trackingCode, callerContext, forced, reason)`.
+    3. Responds with `successResponse<Shipment>` on success, or `refused` on a domain-level rejection.
+    4. Catches unexpected errors with `catchAs`.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/delivery/service.ts` | Calls `deliveryService.recordShipment` — the sole business-logic dependency. |
-| `src/modules/delivery/routes.ts` | Registers `postShipOrder` as the handler for the `POST /delivery/order/:orderId/ship` route. |
-| `src/infrastructure/http/controller.ts` | Provides the `parseBody`, `refused`, and `catchAs` helpers used throughout. |
-| `src/infrastructure/http/request.ts` | Provides `callerContextOf` to extract the authenticated caller's identity for the service call. |
-| `src/infrastructure/http/response.ts` | Provides `successResponse` for the 200/201 reply. |
-| `src/types/index.ts` | Imports the `Shipment` type used as the success payload. |
+| Neighbor                                | Interaction                                                                                     |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `src/modules/delivery/service.ts`       | Calls `deliveryService.recordShipment` — the sole business-logic dependency.                    |
+| `src/modules/delivery/routes.ts`        | Registers `postShipOrder` as the handler for the `POST /delivery/order/:orderId/ship` route.    |
+| `src/infrastructure/http/controller.ts` | Provides the `parseBody`, `refused`, and `catchAs` helpers used throughout.                     |
+| `src/infrastructure/http/request.ts`    | Provides `callerContextOf` to extract the authenticated caller's identity for the service call. |
+| `src/infrastructure/http/response.ts`   | Provides `successResponse` for the 200/201 reply.                                               |
+| `src/types/index.ts`                    | Imports the `Shipment` type used as the success payload.                                        |
 
 ## Notes
 

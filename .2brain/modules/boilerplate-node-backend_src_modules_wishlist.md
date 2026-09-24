@@ -1,8 +1,8 @@
 ---
 tags:
-  - 2brain
-  - 2brain/module
-  - project/boilerplate-node-backend
+    - 2brain
+    - 2brain/module
+    - project/boilerplate-node-backend
 type: module
 module: src/modules/wishlist/
 files: 21
@@ -27,7 +27,7 @@ The wishlist module lets an authenticated user bookmark a set of product IDs wit
 
 ## How it connects
 
-- **`src/modules/cart/`** — The `move-to-cart` operation must write the item into the cart *before* removing it from the wishlist (ordering guarantee). The service also checks cart capacity before allowing the move.
+- **`src/modules/cart/`** — The `move-to-cart` operation must write the item into the cart _before_ removing it from the wishlist (ordering guarantee). The service also checks cart capacity before allowing the move.
 - **`src/modules/products/`** — The service validates that a product is visible before it can be saved. A domain event subscription in `module.ts` removes the product ref from every wishlist when a product is hard-deleted.
 - **`src/modules/users/`** — A domain-event subscription cleans up the user's wishlist document on hard-deletion. The personal-data collector registered in `module.ts` feeds the user's wishlist into account-export payloads.
 - **`src/modules/account/`** — Consumes the wishlist's personal-data collector to include saved items in account data exports.
@@ -40,6 +40,7 @@ The wishlist module lets an authenticated user bookmark a set of product IDs wit
 2. **`service.ts`** — Read the four public methods (`wishlistGet`, `wishlistAdd`, `wishlistRemove`, `wishlistMoveToCart`) to see the business rules, the cross-module checks, and the response shape that the controllers and OpenAPI spec both target.
 
 ## Connected modules
+
 ```mermaid
 flowchart LR
     m_src_modules_wishlist["src/modules/wishlist/"]
@@ -75,6 +76,7 @@ flowchart LR
 [[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_scripts|scripts/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_orders|src/modules/orders/]] · [[boilerplate-node-backend_src_modules_products|src/modules/products/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]] · [[boilerplate-node-backend_tests_integration|tests/integration/]] · [[boilerplate-node-backend_tests_support|tests/support/]]
 
 ## Files
+
 - `src/modules/wishlist/analytics.ts` — Defines the wishlist module's analytics event names and registers them into the app-wide `AnalyticsEventMap` via TypeScript module augmentation. This gives the wishlist a type-safe set of funnel events (save → exit-to-purchase) without the consuming code needing to know the literal strings.
 - `src/modules/wishlist/controllers/delete-wishlist-item.ts` — Thin HTTP adapter for the `DELETE /wishlist/:productId` endpoint. Validates the product ID, extracts the authenticated user, delegates to `wishlistService.wishlistRemove`, and maps the service result (or rejection) onto the HTTP response. Exists to keep route wiring in `routes.ts` declarative and to isolate Express-specific concerns from the service layer.
 - `src/modules/wishlist/controllers/get-wishlist.ts` — Thin HTTP adapter for the `GET /wishlist` endpoint. It extracts the authenticated user's ID from the request, delegates to `wishlistService.wishlistGet`, and formats the result as a standard success/error response. Contains no business logic.
@@ -95,7 +97,8 @@ flowchart LR
 - `src/modules/wishlist/tests/unit/analytics.test.ts` — Guarantees that the wishlist module's analytics event strings are frozen to the exact values Umami dashboards key on, and that those events are properly registered in the app-wide `AnalyticsEventMap` union. It exists to make a silent string rename (or a dropped module augmentation) a compile/test failure rather than a dashboard gap that goes unnoticed.
 - `src/modules/wishlist/tests/unit/factories.test.ts` — Unit tests for the `makeWishlist` factory. Verifies that the factory correctly converts string IDs into Mongoose `ObjectId` instances, that wishlist line items contain **only** a `productId` (no quantity), and that an absent `items` field is kept distinct from an explicitly empty one so schema defaults apply.
 - `src/modules/wishlist/tests/unit/routes.test.ts` — Unit test suite that pins down the wishlist route table: exact endpoint signatures, declaration order, authentication requirements, and the absence of admin guards. It exists to catch regressions where a route is added, reordered, or mis-guarded without updating the documented contract.
-- `src/modules/wishlist/tests/unit/schema-contract.test.ts` — Contract test that pins the structural invariants of `wishlistSchema` — the index, defaults, types, refs, and sub-schema shape that make the "one wishlist per user" and "no per-line identity" design enforceable at the database level. It asserts *what the schema declares*, not *what operations do*, so a silent schema change breaks the build before it breaks a query.
+- `src/modules/wishlist/tests/unit/schema-contract.test.ts` — Contract test that pins the structural invariants of `wishlistSchema` — the index, defaults, types, refs, and sub-schema shape that make the "one wishlist per user" and "no per-line identity" design enforceable at the database level. It asserts _what the schema declares_, not _what operations do_, so a silent schema change breaks the build before it breaks a query.
 
 ---
+
 [[boilerplate-node-backend_INDEX|← boilerplate-node-backend index]]

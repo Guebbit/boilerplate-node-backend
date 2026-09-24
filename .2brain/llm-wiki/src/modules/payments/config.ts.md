@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Centralises the payment-method configuration that belongs to the payments module: the list of methods offered to clients and the boot-time validation of bank-transfer credentials. Values are read per call (not cached at import) so a runtime change to a `NODE_BANK_TRANSFER_*` env var takes effect on the next request without a restart. The actual bank-transfer *values* (beneficiary, IBAN, BIC, hold hours, enabled flag) live in `@modules/orders`; this file only validates them and derives the method list.
+Centralises the payment-method configuration that belongs to the payments module: the list of methods offered to clients and the boot-time validation of bank-transfer credentials. Values are read per call (not cached at import) so a runtime change to a `NODE_BANK_TRANSFER_*` env var takes effect on the next request without a restart. The actual bank-transfer _values_ (beneficiary, IBAN, BIC, hold hours, enabled flag) live in `@modules/orders`; this file only validates them and derives the method list.
 
 ## Key elements
 
@@ -27,6 +27,6 @@ Centralises the payment-method configuration that belongs to the payments module
 
 ## Notes
 
-- The IBAN is normalised (`electronicFormatIBAN`) *before* validation to handle pasted IBANs that contain spaces.
-- `validateBankTransferConfig` only flags `NODE_BANK_TRANSFER_BENEFICIARY` when an IBAN *is* set but the beneficiary is missing; if the entire transfer feature is disabled the function returns `[]` (no false alarms).
+- The IBAN is normalised (`electronicFormatIBAN`) _before_ validation to handle pasted IBANs that contain spaces.
+- `validateBankTransferConfig` only flags `NODE_BANK_TRANSFER_BENEFICIARY` when an IBAN _is_ set but the beneficiary is missing; if the entire transfer feature is disabled the function returns `[]` (no false alarms).
 - The file deliberately does **not** re-export or own the bank-transfer values — that authority stays in `orders` because `orders` renders transfer instructions and enforces the open-transfer cap.

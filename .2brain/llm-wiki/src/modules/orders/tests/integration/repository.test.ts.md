@@ -32,7 +32,7 @@ Integration test suite for `orderRepository` that runs against a real (test) dat
 ## Notes
 
 - **Aggregate is a passthrough by design.** The tests intentionally build full Mongo pipelines and assert results, locking in that the repository never reorders, injects, or strips stages. Any future "convenience" wrapper inside `aggregate` will break these tests.
-- **`findByIdScoped` branches return different shapes.** Unscoped → hydrated Mongoose doc (has `_id` and `id`). Scoped → aggregate row where the serializer writes `id` and then *deletes* `_id`. Reading `_id` on the scoped branch is a silent `undefined`, which is why the tests assert its absence explicitly.
+- **`findByIdScoped` branches return different shapes.** Unscoped → hydrated Mongoose doc (has `_id` and `id`). Scoped → aggregate row where the serializer writes `id` and then _deletes_ `_id`. Reading `_id` on the scoped branch is a silent `undefined`, which is why the tests assert its absence explicitly.
 - **`asStub` is a deliberate escape hatch.** It exists because the two branches have incompatible types; a plain property access would fail at compile time. The tests use it to assert on the runtime value without weakening the module-level type contract.
 - **MongoDB requires ≥ 1 aggregate stage.** The "match all" test uses `[{ $match: {} }]` rather than `[]`; an empty array throws `MongooseError: Aggregate has empty pipeline`.
 - **Pagination requires a total sort before `$skip`.** The test hard-codes `DEFAULT_SORT` as the first stage. Omitting it makes the page boundary nondeterministic.

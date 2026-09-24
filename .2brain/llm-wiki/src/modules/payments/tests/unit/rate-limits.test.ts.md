@@ -9,15 +9,15 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit test that pins the *structural invariants* of the confirm-attempt and confirm-decline rate-limit budgets: their relative strictness, shared window, and skip-successful semantics. It validates configuration shape only—no HTTP requests are made—leaving behavioural verification to the integration suite.
+Unit test that pins the _structural invariants_ of the confirm-attempt and confirm-decline rate-limit budgets: their relative strictness, shared window, and skip-successful semantics. It validates configuration shape only—no HTTP requests are made—leaving behavioural verification to the integration suite.
 
 ## Key elements
 
 - **`budget(namespace)`** — thin wrapper around `budgetIn(paymentsRateLimits, namespace)` that resolves a single budget object by its declared `namespace` key.
 - **`describe('paymentConfirmAttemptLimiter and paymentConfirmDeclineLimiter')`** — three assertions:
-  - Decline `defaultMax` < attempt `defaultMax` (decline is rarer/costlier).
-  - Both budgets share the same `windowMs` value and that value is *not* the string `'shared'` (i.e., windowed to the intent→confirm hour, not the general browsing window).
-  - Decline budget sets `skipSuccessfulRequests: true`; attempt budget does not.
+    - Decline `defaultMax` < attempt `defaultMax` (decline is rarer/costlier).
+    - Both budgets share the same `windowMs` value and that value is _not_ the string `'shared'` (i.e., windowed to the intent→confirm hour, not the general browsing window).
+    - Decline budget sets `skipSuccessfulRequests: true`; attempt budget does not.
 
 ## Relationships
 
@@ -26,5 +26,5 @@ Unit test that pins the *structural invariants* of the confirm-attempt and confi
 
 ## Notes
 
-- The file's header comment makes explicit that *behavioural* testing (a real request through `express-rate-limit` middleware, e.g. the `paymentDeclineChallengeGate` trigger) is deliberately excluded here because `no-restricted-imports` classifies that path as integration. That coverage lives in `../integration/payment-velocity.test.ts`.
-- The window assertion checks that `windowMs` is *not* the literal string `'shared'`—a guard against someone wiring these budgets back to the global browsing window by mistake.
+- The file's header comment makes explicit that _behavioural_ testing (a real request through `express-rate-limit` middleware, e.g. the `paymentDeclineChallengeGate` trigger) is deliberately excluded here because `no-restricted-imports` classifies that path as integration. That coverage lives in `../integration/payment-velocity.test.ts`.
+- The window assertion checks that `windowMs` is _not_ the literal string `'shared'`—a guard against someone wiring these budgets back to the global browsing window by mistake.

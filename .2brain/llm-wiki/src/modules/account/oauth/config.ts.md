@@ -8,6 +8,7 @@ model: ollama:qwen3.8:27b
 # src/modules/account/oauth/config.ts
 
 ## Purpose
+
 Centralized OAuth configuration for the account module: env-var credential access, a shared fetch timeout, and redirect-URI construction. Exists so that `./providers/*` and the OAuth controllers never spell raw `process.env.NODE_OAUTH_*` names or build redirect URLs on their own. Named `config.ts` by convention (cf. `../session/config`): it reads policy, it doesn't hold or mint anything.
 
 ## Key elements
@@ -19,7 +20,7 @@ Centralized OAuth configuration for the account module: env-var credential acces
 - **`oauthRedirectUri(provider)`** — returns the absolute `redirect_uri` (`{NODE_URL}/account/oauth/{provider}/callback`) presented to every provider. Always derived from `NODE_URL`; never from the incoming request.
 - **`oauthFrontendCallbackUrl(errorCode?)`** — the paired frontend's `/oauth/callback` URL, with an optional `?error=` query.
 - **`oauthFrontendMfaCallbackUrl(challenge)`** — frontend callback URL carrying the 2FA metadata (`mfaRequired`, `expiresAt`, `methods`, optional `defaultMethod`) as query params. The challenge **token itself is excluded**; it travels in `MFA_CHALLENGE_COOKIE` (see `oauth/mfa-redirect.ts`).
-- **`backendUrl(path)`** *(internal)* — joins `path` onto `NODE_URL` via `new URL()`, falling back to `http://localhost:3000/` only when `NODE_URL` is unset (test env).
+- **`backendUrl(path)`** _(internal)_ — joins `path` onto `NODE_URL` via `new URL()`, falling back to `http://localhost:3000/` only when `NODE_URL` is unset (test env).
 
 ## Relationships
 

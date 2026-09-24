@@ -16,13 +16,13 @@ The cart domain's repository layer. It wraps the standard CRUD provided by the s
 - **`CartLineMode`** (`'set' | 'add'`) — union type controlling how `upsertLine` treats quantity: overwrite or increment.
 - **`QUANTITY_LIMIT`** — sentinel string returned (not thrown) when an `'add'` would exceed `CART_LINE_MAX`; callers check for this value.
 - **`cartRepository`** — the single exported object. Spreads `createRepository(cartModel, { transform: applyCartTransform })` for standard CRUD, then adds:
-  - `findByUserId` — fetch a cart; `null` means the user has never added anything.
-  - `upsertLine(userId, productId, quantity, mode)` — atomic set-or-increment of one line, creating the cart/line as needed. Handles concurrent-writer races via filter-embedded conditions, duplicate-key retry (max 3 attempts), and the `QUANTITY_LIMIT` sentinel.
-  - `removeLine(userId, productId)` — `$pull` one line; `null` if cart or line absent (lets the service return 404 without a prior read).
-  - `clearLines(userId)` — `$set: { items: [] }`; deliberately does **not** upsert.
-  - `clearLinesIfUnchanged(userId, version)` — checkout's conditional clear: matches on `__v`, clears items, and bumps `__v`. Returns `null` when the cart moved (race lost). Uses `timestamps: false`.
-  - `deleteByUserId(userId)` — hard-delete the cart document (account-deletion cleanup).
-  - `removeProductFromAll(productId)` — `$pull` a product from every cart (product-deletion cleanup).
+    - `findByUserId` — fetch a cart; `null` means the user has never added anything.
+    - `upsertLine(userId, productId, quantity, mode)` — atomic set-or-increment of one line, creating the cart/line as needed. Handles concurrent-writer races via filter-embedded conditions, duplicate-key retry (max 3 attempts), and the `QUANTITY_LIMIT` sentinel.
+    - `removeLine(userId, productId)` — `$pull` one line; `null` if cart or line absent (lets the service return 404 without a prior read).
+    - `clearLines(userId)` — `$set: { items: [] }`; deliberately does **not** upsert.
+    - `clearLinesIfUnchanged(userId, version)` — checkout's conditional clear: matches on `__v`, clears items, and bumps `__v`. Returns `null` when the cart moved (race lost). Uses `timestamps: false`.
+    - `deleteByUserId(userId)` — hard-delete the cart document (account-deletion cleanup).
+    - `removeProductFromAll(productId)` — `$pull` a product from every cart (product-deletion cleanup).
 
 ## Relationships
 
@@ -37,8 +37,8 @@ The cart domain's repository layer. It wraps the standard CRUD provided by the s
 
 ## Notes
 
-- **Concurrency model:** Every write condition lives *inside* the `findOneAndUpdate` filter, so mongod evaluates it under the document lock. A preceding `findOne` would create a TOCTOU window. This is intentional and load-bearing for `upsertLine`.
-- **`$elemMatch` for the positional operator:** The `'add'` match uses `items.$elemMatch` (not two top-level `items.x` conditions) because MongoDB's `$` positional binding only guarantees correct-element matching when conditions are joined with `$elemMatch`. Two separate conditions can each match *different* array elements, silently updating the wrong line.
+- **Concurrency model:** Every write condition lives _inside_ the `findOneAndUpdate` filter, so mongod evaluates it under the document lock. A preceding `findOne` would create a TOCTOU window. This is intentional and load-bearing for `upsertLine`.
+- **`$elemMatch` for the positional operator:** The `'add'` match uses `items.$elemMatch` (not two top-level `items.x` conditions) because MongoDB's `$` positional binding only guarantees correct-element matching when conditions are joined with `$elemMatch`. Two separate conditions can each match _different_ array elements, silently updating the wrong line.
 - **Explicit generic on `.then()`:** In `upsertLine`, the `.then<CartDocument | typeof QUANTITY_LIMIT>(…)` annotation is required; without it TS infers the callback's return from the outer function's declared type and drops the sentinel branch.
 - **`clearLinesIfUnchanged` versioning:** Uses a manual `__v` check + `$inc` rather than Mongoose's built-in optimistic concurrency (which only guards `save()`, not `findOneAndUpdate`). A `MongoMemoryReplSet`-based transaction was considered but rejected to avoid forcing replica-set fixtures on every cart test.
 - **`null` return convention:** `null` from a read/write method means "the document or line does not exist," not an error. Services translate this to 404 or no-op.

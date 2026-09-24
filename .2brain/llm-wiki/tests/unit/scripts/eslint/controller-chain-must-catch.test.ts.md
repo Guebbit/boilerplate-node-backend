@@ -15,8 +15,8 @@ Minimal regression test for the `controller-chain-must-catch` ESLint rule. It ve
 
 - **`tester`** – An ESLint `RuleTester` instance configured with `ecmaVersion: 'latest'` and `sourceType: 'module'`.
 - **`tester.run('controller-chain-must-catch', …)`** – Registers one test suite:
-  - `valid: []` – no passing cases.
-  - `invalid[0]` – an `export const` handler that calls `service.list().then(…)` with no `.catch`; expects a single error with `messageId: 'missing'`.
+    - `valid: []` – no passing cases.
+    - `invalid[0]` – an `export const` handler that calls `service.list().then(…)` with no `.catch`; expects a single error with `messageId: 'missing'`.
 
 ## Relationships
 

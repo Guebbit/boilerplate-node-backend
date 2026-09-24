@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Liveness probe for the `boundaries/dependencies` ESLint policy: verifies that a same-module self-barrel import is actually *evaluated* (and refused) rather than silently skipped. Guards against a regression where `checkInternals` is unset, making the policy a no-op that looks identical to a passing lint run.
+Liveness probe for the `boundaries/dependencies` ESLint policy: verifies that a same-module self-barrel import is actually _evaluated_ (and refused) rather than silently skipped. Guards against a regression where `checkInternals` is unset, making the policy a no-op that looks identical to a passing lint run.
 
 ## Key elements
 
@@ -26,6 +26,6 @@ Liveness probe for the `boundaries/dependencies` ESLint policy: verifies that a 
 
 ## Notes
 
-- A *finding* exits ESLint non-zero; the `execFile` callback deliberately ignores the error object and parses `stdout`. Only a failure to `JSON.parse` the output is treated as a test error.
-- The probe file must live at a **physical** path under `src/` — a virtual or temp-dir path would cause `parserOptions.project` to fail TypeScript program resolution *before* the boundaries rule ever runs, producing a parse error instead of a rule violation.
+- A _finding_ exits ESLint non-zero; the `execFile` callback deliberately ignores the error object and parses `stdout`. Only a failure to `JSON.parse` the output is treated as a test error.
+- The probe file must live at a **physical** path under `src/` — a virtual or temp-dir path would cause `parserOptions.project` to fail TypeScript program resolution _before_ the boundaries rule ever runs, producing a parse error instead of a rule violation.
 - `--no-warn-ignored` suppresses the "file ignored" warning that would otherwise mask the probe if the products module were listed in an `ignores` glob.

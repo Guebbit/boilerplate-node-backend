@@ -33,7 +33,7 @@ Jest `globalSetup` hook that runs once per jest instance before any worker start
 ## Notes
 
 - **Relative imports are intentional.** Jest loads `globalSetup` outside its normal module-resolution pipeline, so `moduleNameMapper` aliases (`@infrastructure`, `@tests`) resolve at `tsc`/`eslint` time but **fail at jest runtime**. This file must keep `../../` relative paths.
-- **Two channels for cross-boundary data.** `process.env` crosses the main-process → worker-process boundary; `globalThis` only works because Jest runs `globalSetup` and `globalTeardown` in the *same* process. Don't add a worker-facing value to `globalThis` expecting workers to see it.
+- **Two channels for cross-boundary data.** `process.env` crosses the main-process → worker-process boundary; `globalThis` only works because Jest runs `globalSetup` and `globalTeardown` in the _same_ process. Don't add a worker-facing value to `globalThis` expecting workers to see it.
 - **`dbPath` must pre-exist.** `mongodb-memory-server` reads the directory before spawning `mongod`; `globalSetup` creates `root/server/` before calling `startEphemeralMongo`.
 - **`NODE_TEST_MONGO_URI` short-circuit.** If already set in the environment (e.g. an external DB), `startEphemeralMongo` skips starting a server entirely. The `dbPath` `mkdir` is harmless but unused in that case.
 - **Sweep is best-effort.** Individual `rm` failures are swallowed (`.catch(() => {})`); a permission error on one dead instance's directory will not block the run.

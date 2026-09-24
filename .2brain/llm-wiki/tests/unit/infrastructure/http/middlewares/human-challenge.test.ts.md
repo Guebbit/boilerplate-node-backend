@@ -17,10 +17,10 @@ Unit tests for the `humanChallengeGate` Express middleware (rung 3 of the anti-b
 - **`afterEach`** — restores the provider env var, deletes `NODE_ANTIBOT_TURNSTILE_SECRET`, and calls `jest.restoreAllMocks()`.
 - **`makeRequest(token?)`** — builds a minimal stub `Request` whose `header()` method returns the supplied token only for `x-antibot-challenge-token`; all other names resolve to `undefined`.
 - **`describe('humanChallengeGate')`** — four cases:
-  - *off by default*: no provider env → `next()` called once, `header` never called.
-  - *no token sent*: provider set → `next` not called, `response.status(401)`.
-  - *valid token*: `fetch` mocked to `{ success: true }` → `next` called (verified after `process.nextTick`).
-  - *provider throws*: `fetch` rejected → `next` not called, `response.status(401)` (fail-closed).
+    - _off by default_: no provider env → `next()` called once, `header` never called.
+    - _no token sent_: provider set → `next` not called, `response.status(401)`.
+    - _valid token_: `fetch` mocked to `{ success: true }` → `next` called (verified after `process.nextTick`).
+    - _provider throws_: `fetch` rejected → `next` not called, `response.status(401)` (fail-closed).
 
 ## Relationships
 

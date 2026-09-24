@@ -15,8 +15,8 @@ A k6 load test that simulates an anonymous visitor browsing the storefront under
 
 - **`options` (exported)** — k6 stage configuration (20 s ramp-up → 40 s hold at 20 VUs → 10 s ramp-down) and three thresholds: `p(95) < 400 ms` response time, `< 1 %` non-2xx/3xx, and `> 99 %` check pass rate.
 - **Default export (test scenario)** — two k6 `group` blocks:
-  - *catalogue*: `GET /products`, then extracts the first item's id and issues `GET /products/:id` to exercise the detail lookup and its cache.
-  - *facets*: `GET /products/categories`.
+    - _catalogue_: `GET /products`, then extracts the first item's id and issues `GET /products/:id` to exercise the detail lookup and its cache.
+    - _facets_: `GET /products/categories`.
 - **`BASE_URL`** — read from `__ENV.BASE_URL`, defaults to `http://localhost:3000`.
 
 ## Relationships

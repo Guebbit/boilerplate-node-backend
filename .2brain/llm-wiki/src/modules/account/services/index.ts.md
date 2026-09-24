@@ -20,11 +20,11 @@ Barrel file for the account services layer. It assembles the sub-modules (`authe
 ## Relationships
 
 - **Controllers (all 15 listed)** import from this file by namespace or by named export:
-  - `accountService.*` — used by `delete-account-confirm`, `delete-account-request`, `delete-expired-tokens`, `delete-session`, `get-account`, `get-oauth-callback`, `get-refresh-token`, `get-sessions`, `post-email-change-confirm`.
-  - `twoFactorService.*` — used by `delete-2fa-method`, `delete-2fa`, `get-2fa`, `post-2fa-backup-codes`, `post-2fa-confirm`, `post-2fa-setup`.
+    - `accountService.*` — used by `delete-account-confirm`, `delete-account-request`, `delete-expired-tokens`, `delete-session`, `get-account`, `get-oauth-callback`, `get-refresh-token`, `get-sessions`, `post-email-change-confirm`.
+    - `twoFactorService.*` — used by `delete-2fa-method`, `delete-2fa`, `get-2fa`, `post-2fa-backup-codes`, `post-2fa-confirm`, `post-2fa-setup`.
 - **Sub-module files** (`./authentication`, `./profile`, `./verification`, `./tokens`, `./token-cleanup`, `./oauth`, `./two-factor`) are the sole import sources; this file adds no logic of its own.
 - **`../index.ts`** (module barrel) re-exports this file wholesale to consumers outside the account module.
-- **`./export`** is intentionally *not* imported here (see Notes).
+- **`./export`** is intentionally _not_ imported here (see Notes).
 
 ## Notes
 

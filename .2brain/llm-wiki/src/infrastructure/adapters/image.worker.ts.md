@@ -13,15 +13,15 @@ Implements the single image-digest pipeline that turns a quarantined upload into
 
 ## Key elements
 
-- **`UnsupportedImageFormatError`** — the sole *permanent* failure type. Thrown when bytes will never decode as PNG/JPEG/WebP. Callers dead-letter the job and remove the quarantine file.
-- **`contentStem(owner, digested)`** *(internal)* — derives the shared file identity (owner + first 24 hex chars of SHA-256 of re-encoded bytes). Owner salting prevents a stale-run cleanup from deleting a different owner's live file.
+- **`UnsupportedImageFormatError`** — the sole _permanent_ failure type. Thrown when bytes will never decode as PNG/JPEG/WebP. Callers dead-letter the job and remove the quarantine file.
+- **`contentStem(owner, digested)`** _(internal)_ — derives the shared file identity (owner + first 24 hex chars of SHA-256 of re-encoded bytes). Owner salting prevents a stale-run cleanup from deleting a different owner's live file.
 - **`DigestedImageUrls`** — interface: `{ imageUrl, thumbnailUrl }`, the two URLs a finished digest produces.
 - **`ImageWriteback`** — type alias for the per-collection writeback function `(documentId, key, urls) => Promise<boolean>`. Structurally identical to `ImageTarget` in the kernel registry but declared here to avoid the upward import.
 - **`registerImageWritebackResolver(resolver)`** — boot-time registration of the collection→writeback lookup. Called once from `app/workers.ts`.
 - **`digestQuarantinedImage(key, owner)`** — the core pipeline: read quarantine → identify mime → re-encode original + thumbnail → promote both under `contentStem` → best-effort remove quarantine file. Returns `DigestedImageUrls`.
-- **`settleWriteback(...)`** *(internal)* — invokes the module writeback; on no-match (stale job / deleted doc) removes the promoted files; on match invalidates the collection's cache tag.
+- **`settleWriteback(...)`** _(internal)_ — invokes the module writeback; on no-match (stale job / deleted doc) removes the promoted files; on match invalidates the collection's cache tag.
 - **`handleImageDigestJob(job)`** — queue worker handler. Validates payload, resolves writeback, runs `digestQuarantinedImage` + `settleWriteback`. Returns `false` for permanent failures (malformed payload, unregistered collection, `UnsupportedImageFormatError`); rethrows transient errors for retry.
-- **`enqueueImageDigest`** *(truncated in source)* — queue-aware dispatch entry point called by module services; falls back to inline `digestQuarantinedImage` when the broker is disabled.
+- **`enqueueImageDigest`** _(truncated in source)_ — queue-aware dispatch entry point called by module services; falls back to inline `digestQuarantinedImage` when the broker is disabled.
 - **`IMAGE_QUEUE`** — re-exported from `queue.ts` for the worker registry in `app/workers.ts`.
 
 ## Relationships
@@ -40,7 +40,7 @@ Implements the single image-digest pipeline that turns a quarantined upload into
 
 ## Notes
 
-- **Permanent vs. transient failure distinction is load-bearing.** `UnsupportedImageFormatError` → dead-letter + quarantine removal. Any other thrown error → rethrown for broker nack/retry, and the quarantine file is intentionally *left in place* so the retry can re-read it. Do not broaden the `catch` in `handleImageDigestJob`.
+- **Permanent vs. transient failure distinction is load-bearing.** `UnsupportedImageFormatError` → dead-letter + quarantine removal. Any other thrown error → rethrown for broker nack/retry, and the quarantine file is intentionally _left in place_ so the retry can re-read it. Do not broaden the `catch` in `handleImageDigestJob`.
 - **Cache invalidation in `settleWriteback` is the only visibility point.** The write that enqueued the job already cleared the tag, but the response that re-warmed it still carries placeholder URLs. Without the second invalidation, a cached response serves stale placeholders for the tag's full TTL.
 - **`resolveWriteback` is `undefined` until boot wiring completes.** Any test that imports this module without calling `registerImageWritebackResolver` will hit the "unregistered collection" branch.
 - **Owner salting semantics differ by call site:** `handleImageDigestJob` passes `documentId`; `upload.ts`'s inline path passes the quarantine `key`. Retries of the same document converge on the same stem (idempotency); the upload path never retries the same key, so uniqueness is safe there.

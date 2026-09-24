@@ -14,11 +14,11 @@ Unit tests for the `matchesEventFilter` function and the `ALL_EVENTS` constant, 
 ## Key elements
 
 - **`describe('matchesEventFilter')`** – Single test block covering five assertions:
-  - Exact-name match returns `true`.
-  - Absent name returns `false`.
-  - Wildcard (`ALL_EVENTS`) matches any event name.
-  - Empty filter array returns `false`.
-  - `ALL_EVENTS` is the literal string `"*"`.
+    - Exact-name match returns `true`.
+    - Absent name returns `false`.
+    - Wildcard (`ALL_EVENTS`) matches any event name.
+    - Empty filter array returns `false`.
+    - `ALL_EVENTS` is the literal string `"*"`.
 
 ## Relationships
 

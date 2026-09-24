@@ -34,4 +34,4 @@ Thin HTTP adapter for `DELETE /account/2fa/methods/{method}`. Validates the path
 - Uses a `.then()/.catch()` promise chain rather than `async/await`; the function signature is synchronous but returns a `Promise`.
 - `request.authContext!` uses a non-null assertion — the route's auth middleware is expected to have already set it.
 - The success response is **200** with a JSON body containing the i18n message, not a 204.
-- On body validation failure the failure metric is still incremented before the early return, so the metric counts *all* attempts, not just service-level rejections.
+- On body validation failure the failure metric is still incremented before the early return, so the metric counts _all_ attempts, not just service-level rejections.

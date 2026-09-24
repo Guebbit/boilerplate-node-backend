@@ -14,7 +14,7 @@ k6 load test that exercises the **write path under concurrency**: login → add 
 ## Key elements
 
 - **`options`** (exported) — k6 stage config (ramp to 10 VUs over 20 s, hold 40 s, ramp down 10 s) and placeholder thresholds (p95 < 800 ms, < 2 % failed, > 95 % checks passed).
-- **`login()`** — POSTs to `/account/login` per iteration (deliberately *not* in `setup()`) and returns the `accessToken`. Placing it in the hot path means the auth endpoint shares the load.
+- **`login()`** — POSTs to `/account/login` per iteration (deliberately _not_ in `setup()`) and returns the `accessToken`. Placing it in the hot path means the auth endpoint shares the load.
 - **`default export`** — the per-iteration script: calls `login()`, then within `group('fill the cart')` fetches the first product and POSTs it to `/cart/items`, then within `group('check out')` POSTs to `/cart/checkout`. A **409 response on checkout is counted as a pass** — it means the reservation logic correctly refused an over-committed order.
 - **`EMAIL` / `PASSWORD`** — defaults to the seeded demo customer (`customer@example.com` / `password`); overridable via `K6_EMAIL` / `K6_PASSWORD` env vars. The canonical copy lives in `scenarios/accounts.ts`.
 - **`BASE_URL`** — read from `__ENV.BASE_URL`, falls back to `http://localhost:3000`.

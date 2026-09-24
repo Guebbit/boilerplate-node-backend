@@ -27,4 +27,4 @@ The `blank` scenario seeds only the minimum harness infrastructure a SPEC needs 
 ## Notes
 
 - The two-phase sequencing (access model → concurrent accounts + locales) is intentional: a shop membership must exist before named accounts can be resolved, but accounts and locales have no interdependency.
-- Despite the name, `blank` is not truly empty—it always provides the four named accounts and at least one active locale. "Blank" means *no shop-shaped data*, not *no data at all*.
+- Despite the name, `blank` is not truly empty—it always provides the four named accounts and at least one active locale. "Blank" means _no shop-shaped data_, not _no data at all_.

@@ -16,11 +16,11 @@ Unit tests for `isMetricsScraper`, the bearer-token credential guard on `GET /ob
 - **`makeRequest(authorization?)`** – local helper that builds a minimal Express `Request` stub (via `asStub`) whose `header()` returns the given `Authorization` value or `undefined`.
 - **`originalToken`** – captures `process.env.NODE_METRICS_TOKEN` before the suite runs so `afterEach` can restore or delete it.
 - **`describe('isMetricsScraper')`** – eight `it` blocks covering:
-  - 503 when `NODE_METRICS_TOKEN` is unset or empty.
-  - `next()` called exactly once for a correct `Bearer <token>` header.
-  - 401 for a bare token (no scheme), a wrong scheme (`Basic`), or a missing header.
-  - No throw + 401 when the supplied token has a different length than the configured one (guards `timingSafeEqual`'s length assertion).
-  - 401 for an equal-length token differing in one byte (proves the comparison actually reaches `timingSafeEqual`).
+    - 503 when `NODE_METRICS_TOKEN` is unset or empty.
+    - `next()` called exactly once for a correct `Bearer <token>` header.
+    - 401 for a bare token (no scheme), a wrong scheme (`Basic`), or a missing header.
+    - No throw + 401 when the supplied token has a different length than the configured one (guards `timingSafeEqual`'s length assertion).
+    - 401 for an equal-length token differing in one byte (proves the comparison actually reaches `timingSafeEqual`).
 
 ## Relationships
 

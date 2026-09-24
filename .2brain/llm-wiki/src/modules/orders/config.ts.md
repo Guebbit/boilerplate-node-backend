@@ -42,5 +42,5 @@ Centralises the shop's invoice identity (legal name, VAT number, country), the b
 - **`bankTransferIbanFriendly` is intentionally a 4-char regex chunk**, not `ibantools`' `friendlyFormatIBAN`. The `ibantools` import stays single-module-owned by `payments`; duplicating it here would break the generated `docs/tools/package-dependencies.md` page.
 - **`invoiceCachePath` must resolve outside `NODE_PUBLIC_PATH`.** Invoices carry PII; they are only served via the authenticated `GET /orders/{id}/invoice` route, never as a static asset.
 - **Cache TTL is hard-zeroed in demo/test** regardless of the env var, so no PII is left on disk in those modes.
-- **VAT *rates* are not here.** They are resolved by `products`' own `config.ts`; this module only freezes the number it is handed.
+- **VAT _rates_ are not here.** They are resolved by `products`' own `config.ts`; this module only freezes the number it is handed.
 - **`shopCountry` is boot-required via the module manifest**, yet read with a `|| undefined` fallback because `NODE_ENV=test` and the demo profile both skip the boot check.

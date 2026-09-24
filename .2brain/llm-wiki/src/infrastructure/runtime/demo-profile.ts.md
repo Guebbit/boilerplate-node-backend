@@ -29,6 +29,6 @@ Holds a single in-process flag (`demoProfileEnabled`) and exposes the two functi
 
 ## Notes
 
-- The flag is **in-memory only** by design. The doc comment explicitly states that a copied `.env` must never be able to activate demo mode; there is no environment-variable check for *enabling*, only for *refusing* (the `NODE_ENV` production guard in `isDemoMode`).
+- The flag is **in-memory only** by design. The doc comment explicitly states that a copied `.env` must never be able to activate demo mode; there is no environment-variable check for _enabling_, only for _refusing_ (the `NODE_ENV` production guard in `isDemoMode`).
 - `scenarios/run-server.ts` **defaults** `NODE_ENV` to `development` but does **not** override a shell-supplied `NODE_ENV=production`. The `isDemoMode` production check is the safety net that catches that case and logs at `error` rather than silently mounting.
 - The import path is deliberately fixed to `@infrastructure/runtime/demo-profile`. The module doc warns against re-exporting it from `app/demo.ts` or any other location.

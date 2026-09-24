@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides two small predicate helpers that let callers determine *what kind* of Mongo driver error they caught, without reaching into the response/HTTP layer. It exists so that repositories and the HTTP error interpreter can share a single, correct definition of "duplicate key" and "bad ObjectId" instead of each re-deriving the check inline.
+Provides two small predicate helpers that let callers determine _what kind_ of Mongo driver error they caught, without reaching into the response/HTTP layer. It exists so that repositories and the HTTP error interpreter can share a single, correct definition of "duplicate key" and "bad ObjectId" instead of each re-deriving the check inline.
 
 ## Key elements
 
@@ -28,4 +28,4 @@ Provides two small predicate helpers that let callers determine *what kind* of M
 
 - Both helpers accept `unknown` (not `Error`) because a `.catch()` callback's argument is typed `unknown` in TS; the narrowing is the whole point.
 - `isDuplicateKey` deliberately checks `code`, not `message`, to avoid coupling to the human-readable index name that Mongo embeds in the E11000 text.
-- The module doc-comment explicitly notes that the list of callers is intentionally *not* maintained here to avoid staleness.
+- The module doc-comment explicitly notes that the list of callers is intentionally _not_ maintained here to avoid staleness.

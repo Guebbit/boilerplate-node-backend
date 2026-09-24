@@ -14,7 +14,7 @@ Contract test that pins the `ordersAuditActions` string vocabulary byte-for-byte
 ## Key elements
 
 - **`ordersAuditActions`** (imported from `../../audit`) — the constant object under test; maps semantic names (`ORDER_CREATED`, etc.) to dotted wire strings (`order.created`, etc.).
-- **`describe('the orders audit vocabulary')` / `it('spells every action…')`** — a single assertion using `toEqual` for whole-object equality, which catches both a changed value *and* an undocumented key added or removed.
+- **`describe('the orders audit vocabulary')` / `it('spells every action…')`** — a single assertion using `toEqual` for whole-object equality, which catches both a changed value _and_ an undocumented key added or removed.
 
 ## Relationships
 
@@ -23,5 +23,5 @@ Contract test that pins the `ordersAuditActions` string vocabulary byte-for-byte
 ## Notes
 
 - `toEqual` (not `toMatchObject` or `toStrictEqual`) is deliberate: it enforces exact key-set equality, so a new action appearing in `audit.ts` without a matching entry here will fail the test.
-- The strings are read by tooling *outside* this repository; treating them as free-form identifiers rather than a contract is the primary risk this test prevents.
+- The strings are read by tooling _outside_ this repository; treating them as free-form identifiers rather than a contract is the primary risk this test prevents.
 - No mocking, fixtures, or test helpers are used — the import is the only external dependency.

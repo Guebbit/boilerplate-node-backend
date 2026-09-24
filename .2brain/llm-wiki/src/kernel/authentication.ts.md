@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Kernel-level port that decouples token *resolution* from token *validation*. It declares two resolver interfaces (user tokens and machine credentials), holds the registered implementations in module-scoped variables, and exposes thin async wrappers that middleware and guards call. Modules (`account`, `api-keys`) install their concrete implementations at import time, so the kernel never imports a module directly.
+Kernel-level port that decouples token _resolution_ from token _validation_. It declares two resolver interfaces (user tokens and machine credentials), holds the registered implementations in module-scoped variables, and exposes thin async wrappers that middleware and guards call. Modules (`account`, `api-keys`) install their concrete implementations at import time, so the kernel never imports a module directly.
 
 ## Key elements
 
@@ -34,7 +34,7 @@ Kernel-level port that decouples token *resolution* from token *validation*. It 
 
 ## Notes
 
-- **401 vs 403 contract.** A *rejected* token (malformed, expired, wrongly signed) and a *resolved-but-user-deleted* token (`undefined`) must stay distinct. Collapsing them would turn a deleted account's 403 into a 401 ("log in again") for an account that can no longer log in.
-- **Asymmetry on unregistered resolvers.** `resolveAccessToken` / `resolveRefreshToken` *throw* when no `AuthResolver` is registered (a build without `account` is broken). `resolveCredential` *returns `undefined`* when no `CredentialResolver` is registered (a build without `api-keys` is perfectly valid). Guards must not special-case the missing-credential path.
+- **401 vs 403 contract.** A _rejected_ token (malformed, expired, wrongly signed) and a _resolved-but-user-deleted_ token (`undefined`) must stay distinct. Collapsing them would turn a deleted account's 403 into a 401 ("log in again") for an account that can no longer log in.
+- **Asymmetry on unregistered resolvers.** `resolveAccessToken` / `resolveRefreshToken` _throw_ when no `AuthResolver` is registered (a build without `account` is broken). `resolveCredential` _returns `undefined`_ when no `CredentialResolver` is registered (a build without `api-keys` is perfectly valid). Guards must not special-case the missing-credential path.
 - **Dispatch by string prefix, not by token shape.** The `sk_` prefix check is a kernel concern and lives here, not in `api-keys`. Do not move it.
 - **Registration is at import time, not boot time.** Both `register*` functions are called during module evaluation (top-level import), so by the time the first request arrives the resolvers are set. There is no runtime re-registration.

@@ -14,13 +14,13 @@ The sole query-shaping layer for the tenant and membership collections. All auth
 ## Key elements
 
 - **`tenantRepository`** – single-method object exposing the tenant collection's only write path.
-  - `upsertBySlug(slug, name, id?)` – `findOneAndUpdate` with `$setOnInsert`; creates a tenant on first sight, returns the existing one on subsequent calls. `id` is honored only at insert time, so reseeding with a fixed ObjectId is idempotent.
+    - `upsertBySlug(slug, name, id?)` – `findOneAndUpdate` with `$setOnInsert`; creates a tenant on first sight, returns the existing one on subsequent calls. `id` is honored only at insert time, so reseeding with a fixed ObjectId is idempotent.
 - **`membershipRepository`** – read/write object for the membership collection.
-  - `findByUserId(userId)` – all roles a person holds, across every scope.
-  - `findOne(userId, tenantId, scope)` – the single membership row for a person in a specific place/scope; returns `null` when absent.
-  - `upsertRole(userId, tenantId, scope, role)` – create-or-overwrite a role assignment; always resolves a document.
-  - `deleteById(id)` – removes one membership row by its `_id`.
-  - `findByUserIds(userIds, tenantId, scope)` – batched version of `findOne`; returns all rows for a set of users in one place.
+    - `findByUserId(userId)` – all roles a person holds, across every scope.
+    - `findOne(userId, tenantId, scope)` – the single membership row for a person in a specific place/scope; returns `null` when absent.
+    - `upsertRole(userId, tenantId, scope, role)` – create-or-overwrite a role assignment; always resolves a document.
+    - `deleteById(id)` – removes one membership row by its `_id`.
+    - `findByUserIds(userIds, tenantId, scope)` – batched version of `findOne`; returns all rows for a set of users in one place.
 
 ## Relationships
 

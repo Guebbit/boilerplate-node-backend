@@ -9,11 +9,11 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin lookup layer that resolves an RF bank-transfer reference to the order it pays. It sits one step in front of the existing `POST /payments/order/{orderId}/offline` settlement endpoint, letting an admin confirm *which* order a pasted reference maps to before settling it. No settlement logic lives here.
+Thin lookup layer that resolves an RF bank-transfer reference to the order it pays. It sits one step in front of the existing `POST /payments/order/{orderId}/offline` settlement endpoint, letting an admin confirm _which_ order a pasted reference maps to before settling it. No settlement logic lives here.
 
 ## Key elements
 
-- **`getOrderByReference(ref: string)`** *(sole export)* — Parses the raw reference string via `parseReference`, queries `orderService.getByTransferReference`, and returns either `ResponseSuccess<OrderDocument>` or a 404 `ResponseReject`. A malformed reference and an unmatched reference both produce the identical 404 payload.
+- **`getOrderByReference(ref: string)`** _(sole export)_ — Parses the raw reference string via `parseReference`, queries `orderService.getByTransferReference`, and returns either `ResponseSuccess<OrderDocument>` or a 404 `ResponseReject`. A malformed reference and an unmatched reference both produce the identical 404 payload.
 
 ## Relationships
 

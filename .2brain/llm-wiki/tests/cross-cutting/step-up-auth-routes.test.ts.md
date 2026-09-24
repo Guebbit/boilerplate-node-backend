@@ -17,10 +17,10 @@ Cross-cutting test that asserts the step-up (re-authentication) guards on money 
 - **`ROUTERS`** — `Record<string, Router>` holding the three routers under test (account, cart, payments), keyed by module name.
 - **`mountedStepUps()`** — Walks every route on every router via `routeSignatures`/`guardsOn`, collects only guards whose label starts with `requireFreshAuth(` or `requireFreshAuthWhen(`, and returns the same key shape as `STEP_UP_ROUTES`.
 - **`describe` block** — Four tests:
-  1. No stale entry (every key in `STEP_UP_ROUTES` is still mounted).
-  2. `it.each` over `STEP_UP_ROUTES` verifies the expected guard label is present on the route.
-  3. `mountedStepUps()` deep-equals `STEP_UP_ROUTES` (no extra mounts, no missing ones, no tier drift).
-  4. `REAUTH_TIME_CRITICAL < REAUTH_TIME_SENSITIVE` sanity check to catch a swapped-constant typo that the structural checks above would not catch.
+    1. No stale entry (every key in `STEP_UP_ROUTES` is still mounted).
+    2. `it.each` over `STEP_UP_ROUTES` verifies the expected guard label is present on the route.
+    3. `mountedStepUps()` deep-equals `STEP_UP_ROUTES` (no extra mounts, no missing ones, no tier drift).
+    4. `REAUTH_TIME_CRITICAL < REAUTH_TIME_SENSITIVE` sanity check to catch a swapped-constant typo that the structural checks above would not catch.
 - **Jest mocks** — Cache, rate-limit, upload, and authorization middlewares are all mocked via factories re-exported from `tests/support/routes.ts` so that importing the routers does not pull in real infrastructure.
 
 ## Relationships

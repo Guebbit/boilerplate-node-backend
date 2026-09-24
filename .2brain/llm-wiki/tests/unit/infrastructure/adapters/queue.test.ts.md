@@ -33,7 +33,7 @@ Unit tests for the RabbitMQ queue adapter (`@infrastructure/adapters/queue`). Ve
 
 ## Notes
 
-- **Confirm vs. boolean return:** The tests explicitly encode that `publishToQueue` must resolve `true`/`false` based on the broker confirm callback, *not* the boolean that `sendToQueue` returns. Treating the boolean as success/failure would cause a double-execution bug (inline fallback runs alongside a publish that was actually accepted). Three distinct test cases pin this behavior.
+- **Confirm vs. boolean return:** The tests explicitly encode that `publishToQueue` must resolve `true`/`false` based on the broker confirm callback, _not_ the boolean that `sendToQueue` returns. Treating the boolean as success/failure would cause a double-execution bug (inline fallback runs alongside a publish that was actually accepted). Three distinct test cases pin this behavior.
 - **Separate plain channel for `parkedCounts`:** `queue.ts` opens its own `model.createChannel()` for checking dead-letter depth. The mock keeps this isolated from the confirm channel so a failure on one cannot be mistaken for the other in assertions.
 - **Reconnect is event-driven, not a second `connect()` call:** The mock resets `modelListeners` on each `mockConnect` invocation; `simulateReconnect` re-runs `setup` then emits `connect`. Tests that depend on the `on('connect')` handler re-creating a channel must use this helper rather than calling `mockConnect` again.
 - **`ensureConnected` must be called before any publish/consume test:** `getChannel()` in `queue.ts` intentionally does not await a connection; this helper bridges that gap for tests.

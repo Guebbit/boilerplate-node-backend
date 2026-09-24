@@ -14,10 +14,10 @@ Single-export controller that handles `GET /audit`, returning a filtered, pagina
 ## Key elements
 
 - **`getAudit`** (exported const) — Built by `createListController`. Configured with:
-  - `entity: 'auditEntries'`
-  - `schema` — `ListAuditEntriesQueryParams` (from `@api/schemas.zod`) extended to swap in the infra `page`/`pageSize` schemas, then `.partial()` so absent pagination fields stay absent for downstream defaulting.
-  - `input` — maps the controller's positional/filter params to the service fields: `actor`, `action`, `outcome`, `target`, `since`.
-  - `runList` — calls `auditLogService.search`, converting `since` from a string to a `Date` when present.
+    - `entity: 'auditEntries'`
+    - `schema` — `ListAuditEntriesQueryParams` (from `@api/schemas.zod`) extended to swap in the infra `page`/`pageSize` schemas, then `.partial()` so absent pagination fields stay absent for downstream defaulting.
+    - `input` — maps the controller's positional/filter params to the service fields: `actor`, `action`, `outcome`, `target`, `since`.
+    - `runList` — calls `auditLogService.search`, converting `since` from a string to a `Date` when present.
 
 ## Relationships
 

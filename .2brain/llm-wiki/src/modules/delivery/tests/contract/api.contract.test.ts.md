@@ -34,6 +34,6 @@ Contract (schema) tests for the four `/delivery` HTTP routes. Each test asserts 
 ## Notes
 
 - The `@tests/contract` import is a **side-effect** import; it registers the `toSatisfyApiSpec` matcher globally. Removing it breaks every `expect(response).toSatisfyApiSpec()` call.
-- The B20 regression (documented in the inline comment) is the reason the forced-deliver test asserts the order status is *still* `processing` after a 409 — it guards against a prior bug where `recordDelivery` mutated status before validating the shipment existed.
+- The B20 regression (documented in the inline comment) is the reason the forced-deliver test asserts the order status is _still_ `processing` after a 409 — it guards against a prior bug where `recordDelivery` mutated status before validating the shipment existed.
 - Weight-filter test uses hardcoded thresholds (express ≤ 5 000 g, standard ≤ 30 000 g). If those limits change in config, this test will fail without any other code changing.
 - The file explicitly scopes itself to contract shape; deeper business-logic assertions (e.g., "which statuses are eligible for ship") belong in the unit/integration suites for the delivery module.

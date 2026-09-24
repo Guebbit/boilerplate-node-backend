@@ -15,15 +15,15 @@ Defines the payment repository: the standard CRUD layer (via the shared factory)
 
 - **`PaymentWire`** – Wire DTO type; `Omit<Wire<PaymentDocument>, 'providerRef'>` because `providerRef` is a provider-internal id, never part of the API contract.
 - **`paymentRepository`** – The main export. Spreads `createRepository(paymentModel, { transform: applyPaymentTransform })` and adds:
-  - `ownerScope(userId)` – returns a filter fragment (`{ userId: ObjectId }`) to spread into a query; `undefined` means admin.
-  - `findByIdScoped` / `findByOrderId` – scoped reads (scope merged into the filter, not checked post-read).
-  - `findByProviderRef` – the only **unscoped** read; called by webhook handlers where no user identity exists.
-  - `attachProviderRef` – conditional `$set` guarded by `providerRef: { $exists: false }`; a losing racer reads back the winner's value.
-  - `upsertIntent` – upsert keyed on `orderId`; filter restricts to `requires_confirmation | declined`; duplicate-key is caught and surfaced as `null` (meaning "money already moved").
-  - `upsertOffline` – same guard shape for manual/offline payments; `$unset` clears `providerRef`/`cardLast4`; leaves status at `requires_confirmation` (settlement is a separate step).
-  - `updateStatusIfIn` – the status-machine primitive; `$in` in the filter makes exactly one of two racing writes match.
-  - `detachUserId` – `$unset: userId` on all rows for an erased account; `{ timestamps: false }` so `updatedAt` is not bumped.
-  - `deleteAbandonedBefore` – retention sweep; deletes rows not in `succeeded|refunded` whose `updatedAt ≤ cutoff`.
+    - `ownerScope(userId)` – returns a filter fragment (`{ userId: ObjectId }`) to spread into a query; `undefined` means admin.
+    - `findByIdScoped` / `findByOrderId` – scoped reads (scope merged into the filter, not checked post-read).
+    - `findByProviderRef` – the only **unscoped** read; called by webhook handlers where no user identity exists.
+    - `attachProviderRef` – conditional `$set` guarded by `providerRef: { $exists: false }`; a losing racer reads back the winner's value.
+    - `upsertIntent` – upsert keyed on `orderId`; filter restricts to `requires_confirmation | declined`; duplicate-key is caught and surfaced as `null` (meaning "money already moved").
+    - `upsertOffline` – same guard shape for manual/offline payments; `$unset` clears `providerRef`/`cardLast4`; leaves status at `requires_confirmation` (settlement is a separate step).
+    - `updateStatusIfIn` – the status-machine primitive; `$in` in the filter makes exactly one of two racing writes match.
+    - `detachUserId` – `$unset: userId` on all rows for an erased account; `{ timestamps: false }` so `updatedAt` is not bumped.
+    - `deleteAbandonedBefore` – retention sweep; deletes rows not in `succeeded|refunded` whose `updatedAt ≤ cutoff`.
 - **`claimWebhookEvent(eventId)`** – insert-into-`paymentWebhookEventModel` as an idempotency check; duplicate-key → `false` (retry, answer 2xx and do nothing).
 - **`releaseWebhookEvent(eventId)`** – compensating delete so a failed settlement's next redelivery is acted on.
 

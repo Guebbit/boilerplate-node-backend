@@ -27,5 +27,5 @@ Resolves the email copy for every notification the webhooks module sends into fi
 ## Notes
 
 - The locale passed in is the **shop's default locale**, not a per-request preference. Auto-disable is a background system event with no incoming request to carry the owner's own language choice.
-- This email is deliberately scoped to *one endpoint the operator created*. The broader "all subscriptions failing" alert (a `QueueJobsParked`-style signal on parked deliveries) is a separate channel and never shares this template.
+- This email is deliberately scoped to _one endpoint the operator created_. The broader "all subscriptions failing" alert (a `QueueJobsParked`-style signal on parked deliveries) is a separate channel and never shares this template.
 - `pageMetaLinks` is hardcoded to `[]` — this notice has no navigation links.

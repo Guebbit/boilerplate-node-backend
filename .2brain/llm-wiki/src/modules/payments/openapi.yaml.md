@@ -25,11 +25,11 @@ OpenAPI 3.0.3 module contract for the payments service. It defines the full HTTP
 ## Relationships
 
 - **`shared/contracts/openapi.root.yaml`** — This spec `$ref`s into that root file for:
-  - Shared error response objects: `InternalError`, `Unauthorized`, `NotFound`, `Conflict`, `ValidationError`, `Forbidden`.
-  - Shared parameter: `IdempotencyKeyHeader`.
-  - Shared schema: `Id` (used for all `orderId` path parameters).
+    - Shared error response objects: `InternalError`, `Unauthorized`, `NotFound`, `Conflict`, `ValidationError`, `Forbidden`.
+    - Shared parameter: `IdempotencyKeyHeader`.
+    - Shared schema: `Id` (used for all `orderId` path parameters).
 
-  The module spec never redefines these; it inherits them by relative path (`../../../shared/contracts/openapi.root.yaml#/…`).
+    The module spec never redefines these; it inherits them by relative path (`../../../shared/contracts/openapi.root.yaml#/…`).
 
 ## Notes
 

@@ -14,8 +14,8 @@ Declares the two domain events the users module emits by augmenting the kernel's
 ## Key elements
 
 - **`DomainEventMap` augmentation** (`declare module '@kernel/events'`): Adds two typed payload entries to the kernel's global event map.
-  - `user.deleted` — `{ userId: string }`. Emitted (and awaited) *before* the hard-delete write so subscribers observe a consistent database.
-  - `user.setup-requested` — `{ userId: string }`. Emitted when an admin creates a password-less user and queues a setup request; the `account` module is the intended subscriber.
+    - `user.deleted` — `{ userId: string }`. Emitted (and awaited) _before_ the hard-delete write so subscribers observe a consistent database.
+    - `user.setup-requested` — `{ userId: string }`. Emitted when an admin creates a password-less user and queues a setup request; the `account` module is the intended subscriber.
 - **`USER_DELETED`** — `const = 'user.deleted'`. Exported barrel constant so the emitter and any listener reference one symbol instead of two independent string literals.
 - **`USER_SETUP_REQUESTED`** — `const = 'user.setup-requested'`. Same pattern; see `DomainEventMap['user.setup-requested']`.
 
@@ -29,6 +29,6 @@ Declares the two domain events the users module emits by augmenting the kernel's
 ## Notes
 
 - **Soft delete is intentionally silent.** Only the irreversible hard-delete emits; a soft delete is reversible, and cleanup on it would make a later restore lossy.
-- **Ordering contract.** `user.deleted` is emitted *and awaited* before the `DELETE` write. Listeners must not assume the row is already gone when they run.
+- **Ordering contract.** `user.deleted` is emitted _and awaited_ before the `DELETE` write. Listeners must not assume the row is already gone when they run.
 - **Cross-module subscription.** `user.setup-requested` is consumed by the `account` module (tokens + outbound email), not by the users module itself—subscribers must be registered where `account` is mounted.
 - **Declaration merging, not a shared file.** Adding a new event here does not require touching `@kernel/events` source; the `interface DomainEventMap` merge is the only coupling point.

@@ -8,9 +8,11 @@ model: ollama:qwen3.8:27b
 # src/modules/locales/controllers/write-locale-entries.ts
 
 ## Purpose
+
 HTTP handler layer for the four write routes on a language's locale entries: single-key create and update, plus bulk replace (PUT) and merge (PATCH). Each handler validates the body with a Zod schema, delegates to `localeService`, and refreshes the i18n override cache on success.
 
 ## Key elements
+
 - **`createLocaleEntry`** — `POST /locales/:locale/entries`. Validates with `CreateLocaleEntryBody`, calls `localeService.createEntry`, returns 201 with the entry.
 - **`updateLocaleEntry`** — `PUT /locales/:locale/entries/:entryId`. Validates with `UpdateLocaleEntryBody`, calls `localeService.updateEntry`. The key is immutable (identity); only the value changes.
 - **`replaceLocaleEntries`** — `PUT /locales/:locale/entries`. Validates with `ReplaceLocaleEntriesBody`, delegates to the shared `importEntries` helper in `'replace'` mode. Anything not in the payload is deleted.
@@ -19,6 +21,7 @@ HTTP handler layer for the four write routes on a language's locale entries: sin
 - **`refreshOverrides`** (private) — Fire-and-forget call to `refreshLocaleOverrides()` so the editing worker sees the change immediately.
 
 ## Relationships
+
 - **`src/modules/locales/services/index.ts`** — All four handlers delegate business logic to `localeService` (create, update, import entries).
 - **`src/infrastructure/http/controller.ts`** — Provides `catchAs`, `refused`, and `rejectValidation` for uniform error and rejection handling.
 - **`src/infrastructure/http/request.ts`** — Provides `callerContextOf(request)` to extract auth/tenant context passed into service calls.
@@ -28,6 +31,7 @@ HTTP handler layer for the four write routes on a language's locale entries: sin
 - **`src/types/index.ts`** — Source of the domain types (`LocaleEntry`, `LocaleEntryInput`, `LocaleImportResult`, request-body types, `LocaleTenant`).
 
 ## Notes
+
 - The bulk routes are two separate methods (PUT/PATCH) rather than one route with a mode flag, so a mis-set boolean can't silently empty a dictionary.
 - `result.data.toJSON()` is required before sending the entry back: the Mongoose model stores `_id` and native `Date`, while the wire type `LocaleEntry` expects `id` and ISO strings.
 - `refreshOverrides` is called for frontend-tenant writes as well, even though those writes cannot affect the API overlay — the cost of the unconditional call is cheaper than threading tenant through.

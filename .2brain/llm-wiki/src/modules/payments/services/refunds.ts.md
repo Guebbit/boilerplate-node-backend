@@ -8,15 +8,16 @@ model: ollama:qwen3.8:27b
 # src/modules/payments/services/refunds.ts
 
 ## Purpose
+
 The single money-out path in the payments module. Provides the operator-initiated refund action (`refundByOrder`) and the `ORDER_CANCELLED` event's compensation (`refundForOrder`), both funneled through one conditional status write (`performRefund`) that guarantees at-most-once semantics. No other file in the module is permitted to move money out.
 
 ## Key elements
 
 - **`REFUNDABLE_PAYMENT_STATUS`** — Constant `'succeeded'`; the only status from which a refund can originate.
 - **`performRefund(orderId, context?)`** — The one conditional write. Atomically moves a payment from `succeeded` to `refunded` via `updateStatusIfIn`; a second call finds nothing and returns `null`. After the move it branches:
-  - `manual` provider → stamps `refundedByHand: true` on the row (no external call).
-  - Real provider → calls `resolvePaymentProvider().refund(...)` with the payment's own `providerRef`, amount, and currency.
-  - Missing `providerRef` on a `succeeded` row → logs a loud error (corrupted row) but still completes the status move to prevent a second attempt.
+    - `manual` provider → stamps `refundedByHand: true` on the row (no external call).
+    - Real provider → calls `resolvePaymentProvider().refund(...)` with the payment's own `providerRef`, amount, and currency.
+    - Missing `providerRef` on a `succeeded` row → logs a loud error (corrupted row) but still completes the status move to prevent a second attempt.
 - **`refundByOrder(orderId, authContext, context)`** — Admin route handler for `POST /payments/order/:orderId/refund`. Calls `performRefund`; on `null` performs a scoped second read to distinguish 404 (no payment) from 409 (payment exists but not in `succeeded`). Returns a `ResponseSuccess` or `ResponseReject` with i18n'd messages.
 - **`refundForOrder(orderId)`** — `ORDER_CANCELLED` event listener. Calls `performRefund` without a caller context; outcome is logged, not audited.
 

@@ -27,5 +27,5 @@ Pure helper module that derives a stable identifier (`kid`) from a signing secre
 ## Notes
 
 - The ring is **ordered newest-first**; `keyForId` relies on that order only for iteration, not for correctness (it scans until a match).
-- `kid` is derived from the *secret value*, not its index. This is a deliberate invariant: appending or removing ring members must never change the `kid` of a surviving secret.
+- `kid` is derived from the _secret value_, not its index. This is a deliberate invariant: appending or removing ring members must never change the `kid` of a surviving secret.
 - The module imports only `node:crypto`; it performs no signing, verification, or network I/O. Keep it that way so it stays trivially unit-testable.

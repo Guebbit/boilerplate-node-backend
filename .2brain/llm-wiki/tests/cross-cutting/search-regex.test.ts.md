@@ -28,4 +28,4 @@ Cross-cutting tests for the user-text → MongoDB `$regex` pipeline. It verifies
 - The catastrophic-backtracking test asserts the **exact escaped string** rather than a wall-clock threshold, so it cannot flake on a loaded CI runner.
 - `toSearchPattern` returns `undefined` (not `''`) when the result is empty; `$regex: ''` would match every document, inverting the filter.
 - NUL is handled by a separate strip step in `toSearchPattern`, not by adding `\0` to the escape list — it is a byte the C-string pattern compiler rejects, not a metacharacter.
-- The file is tagged `cross-cutting`, meaning it tests the *pipeline* (strip → escape → build filter) rather than each function in isolation; individual-function contracts live elsewhere.
+- The file is tagged `cross-cutting`, meaning it tests the _pipeline_ (strip → escape → build filter) rather than each function in isolation; individual-function contracts live elsewhere.

@@ -31,5 +31,5 @@ Resolves Stryker's mutation scope directly from `stryker.json`'s `mutate` globs,
 - Repo root is derived from `__dirname` (`path.join(__dirname, '..', '..')`), never the caller's cwd — safe from any working directory.
 - `mutatePatterns()` re-reads `stryker.json` on every call; this is intentional (short-lived CLI, not a long-lived server) and means the config is never cached.
 - `mutableFiles()` only walks `src/`; a mutable file outside that tree (if `stryker.json` ever globs elsewhere) will be silently omitted.
-- `changedMutable` is deliberately *not* re-applying globs to the diff. It relies on `mutableFiles()` already having walked the tree Stryker sees, so a file deleted on the branch drops out for free (absent from the walk → absent from the intersection).
+- `changedMutable` is deliberately _not_ re-applying globs to the diff. It relies on `mutableFiles()` already having walked the tree Stryker sees, so a file deleted on the branch drops out for free (absent from the walk → absent from the intersection).
 - The `minimatch` import is used to match paths exactly as Stryker does; swapping it for a different glob library could produce scope disagreements with Stryker.

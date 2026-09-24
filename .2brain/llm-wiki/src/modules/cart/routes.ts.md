@@ -31,7 +31,7 @@ Express route table for all cart operations (view, add, update, remove, clear, c
 
 ## Notes
 
-- **Mount order is load-bearing.** `DELETE /all` is registered *before* `DELETE /:productId`. Express matches in registration order, so if `/:productId` came first, the literal string `"all"` would be captured as a product id.
+- **Mount order is load-bearing.** `DELETE /all` is registered _before_ `DELETE /:productId`. Express matches in registration order, so if `/:productId` came first, the literal string `"all"` would be captured as a product id.
 - **`cart.self.checkout`** is the only authorization key this module declares (see `shared/authorization-keys.yaml`). No other cart route requires a permission beyond basic auth.
-- **Cache invalidation is checkout-only.** Adding, removing, or reordering items does *not* invalidate the `orders`/`products` caches; only a completed checkout does.
+- **Cache invalidation is checkout-only.** Adding, removing, or reordering items does _not_ invalidate the `orders`/`products` caches; only a completed checkout does.
 - `REAUTH_TIME_CRITICAL` is a shared constant (not a literal time value); it signals to the auth middleware that this endpoint demands the shortest possible session-freshness window.

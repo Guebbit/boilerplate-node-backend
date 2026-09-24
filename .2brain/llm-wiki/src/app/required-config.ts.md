@@ -15,10 +15,10 @@ Holds boot-time configuration checks that belong to the application itself rathe
 
 - **`APP_REQUIRED_CONFIG`** — `readonly RequiredConfig[]` listing the two env vars that are the app's own business: `NODE_URL` (unconditional) and `NODE_CORS_ORIGIN` (production-only).
 - **`APP_NON_MODULE_CHECKS`** (export) — the single `NonModuleChecks` object consumed by `src/app.ts`. Bundles `required: APP_REQUIRED_CONFIG` with four `customChecks`:
-  - `missingSmtpCompanions` (imported from the mailer adapter)
-  - `checkSelector('NODE_ANALYTICS_PROVIDER', resolveAnalyticsProvider)`
-  - `checkSelector('NODE_MAIL_TRANSPORT', resolveMailTransport)`
-  - `checkSelector('NODE_LOG_PERSONAL_FIELDS', resolvePersonalFieldMode)`
+    - `missingSmtpCompanions` (imported from the mailer adapter)
+    - `checkSelector('NODE_ANALYTICS_PROVIDER', resolveAnalyticsProvider)`
+    - `checkSelector('NODE_MAIL_TRANSPORT', resolveMailTransport)`
+    - `checkSelector('NODE_LOG_PERSONAL_FIELDS', resolvePersonalFieldMode)`
 - **`checkSelector`** (imported from `@kernel/required-config`) — normalises a resolver's throw into the same failure shape every other check produces, so a wrong provider name fails at boot rather than on first use.
 
 ## Relationships
@@ -36,4 +36,4 @@ Holds boot-time configuration checks that belong to the application itself rathe
 - This file is a **wiring layer only**. The actual probe logic for SMTP companions lives in `adapters/mailer.ts`; the selector resolvers live in their respective infrastructure modules. This file just calls them.
 - Do **not** add checks here for `NODE_PAYMENT_PROVIDER` or `NODE_ANTIBOT_PROVIDER` — those are real modules with their own manifests and `customCheck` entries. Adding them here would duplicate the check and violate the kernel's naming rule in the opposite direction.
 - `NODE_CORS_ORIGIN` is `productionOnly: true`; it is intentionally skipped in dev/test where the `http://localhost:8080` fallback in `app/security.ts` is acceptable.
-- The file's header comment documents *why* each check lives here rather than in a module manifest. Preserve that reasoning when adding or moving checks.
+- The file's header comment documents _why_ each check lives here rather than in a module manifest. Preserve that reasoning when adding or moving checks.

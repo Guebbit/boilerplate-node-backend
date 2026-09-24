@@ -17,7 +17,7 @@ A custom ESLint rule that requires promise chains started in exported controller
 - **`chainMethods(call)`** — Walks a call expression inward (outermost → innermost) and returns the array of method names (e.g. `['then','catch']`).
 - **`HANDLER_METHODS`** — `Set(['then','catch','finally'])`; identifies which calls constitute a promise handler callback.
 - **`isPromiseCallbackFunction(node)`** — Type guard: `ArrowFunctionExpression` or `FunctionExpression` that could be a `.then`/`.catch` callback.
-- **`insidePromiseHandler(node, parentOf)`** — Walks ancestors to detect whether the chain is written *inside* another chain's handler (e.g. a cleanup call in `.catch(err => …)`), meaning it already inherits a `.catch`.
+- **`insidePromiseHandler(node, parentOf)`** — Walks ancestors to detect whether the chain is written _inside_ another chain's handler (e.g. a cleanup call in `.catch(err => …)`), meaning it already inherits a `.catch`.
 - **`isEnclosingFunction(node)`** — Type guard covering all three function shapes (arrow, expression, declaration).
 - **`grandparentOf(node, parentOf)`** — Utility: returns the node two levels above `node` (used for `VariableDeclaration` → `ExportNamedDeclaration` lookup).
 - **`insideExportedFunction(node, parentOf)`** — Finds the outermost enclosing function and checks whether its owner is an `ExportNamedDeclaration` or `ExportDefaultDeclaration`; only those are Express handlers.

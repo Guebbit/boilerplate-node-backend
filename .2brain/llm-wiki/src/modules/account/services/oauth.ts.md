@@ -15,7 +15,7 @@ Service layer for OAuth login/signup. Resolves a provider-issued `OAuthIdentity`
 
 - **`loginOrCreateFromOAuth(provider, identity, context)`** — Main entry point. Looks up by `providerId` first (unique identity key), then falls back to email match. Returns `{ user, outcome: OAuthOutcome }`. Throws `OAuthEmailUnverifiedError` or `OAuthAccountUnverifiedError` on security refusal.
 - **`recordOAuthFailure(context, provider, reason)`** — Emits an `AUTH_OAUTH_FAILED` audit for attempts that never resolved to a user (bad state, denied consent, provider error). Called only by the callback controller.
-- **`OAuthOutcome`** (`'login' | 'link' | 'signup'`) — Tells the controller whether *it* still owes an `AUTH_LOGIN` audit/analytics (only for `'login'`); the link and signup branches already record their own events here.
+- **`OAuthOutcome`** (`'login' | 'link' | 'signup'`) — Tells the controller whether _it_ still owes an `AUTH_LOGIN` audit/analytics (only for `'login'`); the link and signup branches already record their own events here.
 - **`OAuthEmailUnverifiedError`** — Thrown when the provider does not vouch for the email; prevents account takeover via a registered OAuth app under a victim's address.
 - **`OAuthAccountUnverifiedError`** — Thrown when the existing account never self-verified its own address; prevents a pre-registered squatter from absorbing the victim's OAuth login.
 - **`linkToExistingAccount`** (internal) — Calls `userService.linkOAuthAccount`, then reads roles fresh via `rolesOf`, records `AUTH_OAUTH_LINKED` audit, and conditionally emits `USER_LOGGED_IN` analytics (suppressed when 2FA is armed, since no session is minted yet).
@@ -39,6 +39,6 @@ Service layer for OAuth login/signup. Resolves a provider-issued `OAuthIdentity`
 ## Notes
 
 - **Case 1 (login) records nothing here.** The `AUTH_LOGIN` audit and analytics are deferred to the controller, which is the only place that knows whether a session actually materialized (vs. a 2FA challenge). Emitting it unconditionally in this file was a prior double-count bug.
-- **Two independent verification gates.** The provider must vouch for the email (`identity.emailVerified`) *and* the account must have self-verified (`verifiedAt`). Either check failing produces a distinct, specific error — never a generic failure — so the frontend can present the correct remediation.
+- **Two independent verification gates.** The provider must vouch for the email (`identity.emailVerified`) _and_ the account must have self-verified (`verifiedAt`). Either check failing produces a distinct, specific error — never a generic failure — so the frontend can present the correct remediation.
 - **Concurrency on signup.** A simultaneous signup for the same identity is resolved by the `users_oauth_identity` unique index; the loser's insert rejects with E11000, which the controller surfaces as `?error=provider_error`. The retry then hits case 1.
 - **`findByOAuthIdentity` is called with credentials** (unlike other lookups in this file) because the controller may need `twoFactorMethods` to build a login challenge.

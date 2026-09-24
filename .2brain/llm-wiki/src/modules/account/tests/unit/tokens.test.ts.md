@@ -30,4 +30,4 @@ Unit tests for the token-configuration module (`session/config.ts`). They verify
 - Tier tests intentionally assign **distinct** numeric values (3600 / 86400 / 2592000) so a swapped map entry would be caught; identical values would mask the bug.
 - The empty-string signing-ring default (`['']`) is asserted explicitly because `jsonwebtoken` throws on `undefined` but accepts `''`—the test pins the documented shape.
 - `Number.parseInt('')` → `NaN` is the specific hazard the "empty variable" test guards against; the same concern applies to the millisecond variant (a `NaN` `maxAge` on a cookie is silently dropped by Express).
-- The `invalidTokenWindows` equal-case test documents *why* strict inequality is required: a token superseded exactly `grace` ms ago is already expired, so no replay can ever be distinguished.
+- The `invalidTokenWindows` equal-case test documents _why_ strict inequality is required: a token superseded exactly `grace` ms ago is already expired, so no replay can ever be distinguished.

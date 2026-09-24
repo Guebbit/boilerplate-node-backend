@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that prove `db:sync` reconciles a database's stored indexes with what the Mongoose schemas declare—both building missing indexes and dropping undeclared ones. It exists because no other test suite can construct a database whose indexes *disagree* with the schemas (they all run against a fresh `mongodb-memory-server` where `autoIndex` builds everything unopposed), so this file is the only place that state is exercised.
+Integration tests that prove `db:sync` reconciles a database's stored indexes with what the Mongoose schemas declare—both building missing indexes and dropping undeclared ones. It exists because no other test suite can construct a database whose indexes _disagree_ with the schemas (they all run against a fresh `mongodb-memory-server` where `autoIndex` builds everything unopposed), so this file is the only place that state is exercised.
 
 ## Key elements
 
@@ -30,6 +30,6 @@ Integration tests that prove `db:sync` reconciles a database's stored indexes wi
 
 - The canary test counts model registrations against the **filesystem** (`fs.readdirSync(MODULES_ROOT)`) rather than a hardcoded literal, so adding a new module directory with a `model.ts` automatically raises the expectation.
 - The header comment explicitly scopes out the "two authors" failure mode (hand-written migration vs. schema): by design `syncIndexes` is the sole index author, so no test simulates conflicting sources.
-- The embedded-schema index leak (Mongoose copying a child schema's indexes onto the parent collection) is caught implicitly by the "EXACTLY what its schema declares" test—an embedded index appears as *stored but declared by nobody*.
+- The embedded-schema index leak (Mongoose copying a child schema's indexes onto the parent collection) is caught implicitly by the "EXACTLY what its schema declares" test—an embedded index appears as _stored but declared by nobody_.
 - Duplicate-scan and unique-index-rejection cases write documents via the raw driver (bypassing Mongoose validation) to simulate pre-existing data that violates a unique constraint the schema still declares.
 - `findBlockingDuplicates` is tested with an explicit scope (single collection) and without, to verify the scope argument actually limits the aggregation rather than being silently ignored.

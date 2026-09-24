@@ -23,5 +23,5 @@ Unit tests for the `percentileFromHistogramBuckets` helper, verifying that it co
 
 ## Notes
 
-- The p95 case (threshold = 9.5) exceeds every bucket's cumulative count (max 9), yet the expected result is the *last* bucket's upperBound (50). This implies the implementation falls back to the final bucket when no bucket reaches the threshold — a behavior that is only visible from the test expectation, not documented in the function signature.
+- The p95 case (threshold = 9.5) exceeds every bucket's cumulative count (max 9), yet the expected result is the _last_ bucket's upperBound (50). This implies the implementation falls back to the final bucket when no bucket reaches the threshold — a behavior that is only visible from the test expectation, not documented in the function signature.
 - The second argument to the function (10) is the total observation count, not the sum of cumulative counts, so callers must supply it explicitly.

@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Property-based tests (via `fast-check`) for the shipping-rate domain module. Where `rates.test.ts` pins three fixed points around the free-shipping threshold, this file checks invariants across *all* valid item totals, using a fixed seed so any counterexample is reproducible and can be promoted back to a concrete example in the fixed-point suite.
+Property-based tests (via `fast-check`) for the shipping-rate domain module. Where `rates.test.ts` pins three fixed points around the free-shipping threshold, this file checks invariants across _all_ valid item totals, using a fixed seed so any counterexample is reproducible and can be promoted back to a concrete example in the fixed-point suite.
 
 ## Key elements
 
@@ -17,9 +17,9 @@ Property-based tests (via `fast-check`) for the shipping-rate domain module. Whe
 - **`itemsTotal()`** – `fc.double` arbitrary: finite, non-negative, capped at 1 000 000. Used as the "any basket value" oracle.
 - **`priceShipping — totality`** block – Two properties: result is never `NaN`/negative, and never exceeds the method's own flat `price`.
 - **`priceShipping — the free-shipping threshold`** block – Three properties:
-  - Free (0) at and above `standard.freeAbove`.
-  - Flat rate at any amount *strictly* below the threshold (guarded by `fc.pre(belowBy > 0)`).
-  - `express` (no `freeAbove`) always charges its flat rate.
+    - Free (0) at and above `standard.freeAbove`.
+    - Flat rate at any amount _strictly_ below the threshold (guarded by `fc.pre(belowBy > 0)`).
+    - `express` (no `freeAbove`) always charges its flat rate.
 - **`methodFitsWeight — the declared range holds both ways`** – Property asserting the boolean result matches `!belowFloor && !aboveCeiling` for every method/weight pair.
 
 ## Relationships

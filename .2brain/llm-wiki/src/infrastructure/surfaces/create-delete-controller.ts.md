@@ -13,7 +13,7 @@ Shared factory that builds the Express handler for a module's `DELETE /:id` and 
 
 ## Key elements
 
-- **`DeleteControllerSpec`** (interface) — the four per-entity knobs: `entity` (singular lower-case name used for logging and audit `target_type`), `remove(id, hardDelete)` (the service call), `auditAction` (fixed string *or* a function of `hardDelete`), and `notFoundKey` (i18n key for 404).
+- **`DeleteControllerSpec`** (interface) — the four per-entity knobs: `entity` (singular lower-case name used for logging and audit `target_type`), `remove(id, hardDelete)` (the service call), `auditAction` (fixed string _or_ a function of `hardDelete`), and `notFoundKey` (i18n key for 404).
 - **`createDeleteController(spec)`** (function, default export of the module) — returns an Express handler wrapped in `namedHandler` so the handler is visible as `delete<entity>` (e.g. `deleteOrder`) in stack traces and log lines.
 
 ## Relationships

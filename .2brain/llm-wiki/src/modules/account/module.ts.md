@@ -21,17 +21,17 @@ Entry point for the **account** module: it registers the application-wide auth r
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/kernel/authentication.ts` | `registerAuthResolver` is called once at import time to install this module's token verifiers on the kernel. |
-| `src/kernel/registry.ts` | `AppModule` type constrains the default export's shape. |
-| `src/kernel/events.ts` | `onDomainEvent` is called inside `subscribe()` to listen for `USER_SETUP_REQUESTED`. |
-| `src/kernel/access/tenant.ts` | `DEPLOYMENT_TENANT_ID` is imported and used as the fixed tenant scope for every role lookup. |
-| `src/modules/access/index.ts` (→ `module.ts` / `service.ts`) | `rolesOf` is called in the resolver to resolve a user's stored membership rows into role objects. |
-| `src/modules.ts` | Aggregates this module's manifest (routes, permissions, config) into the application. |
-| `src/app.ts` | Consumes the default export at boot; calls `setPersonalDataSections` (re-exported here) to assemble the `POST /account/export` response from other modules. |
-| `src/modules/account/module.yaml` | Static manifest / metadata that mirrors or complements the in-code manifest. |
-| `src/modules/account/openapi.yaml` | OpenAPI spec for the `/account` routes defined by `router`. |
+| Neighbor                                                     | Interaction                                                                                                                                                 |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/kernel/authentication.ts`                               | `registerAuthResolver` is called once at import time to install this module's token verifiers on the kernel.                                                |
+| `src/kernel/registry.ts`                                     | `AppModule` type constrains the default export's shape.                                                                                                     |
+| `src/kernel/events.ts`                                       | `onDomainEvent` is called inside `subscribe()` to listen for `USER_SETUP_REQUESTED`.                                                                        |
+| `src/kernel/access/tenant.ts`                                | `DEPLOYMENT_TENANT_ID` is imported and used as the fixed tenant scope for every role lookup.                                                                |
+| `src/modules/access/index.ts` (→ `module.ts` / `service.ts`) | `rolesOf` is called in the resolver to resolve a user's stored membership rows into role objects.                                                           |
+| `src/modules.ts`                                             | Aggregates this module's manifest (routes, permissions, config) into the application.                                                                       |
+| `src/app.ts`                                                 | Consumes the default export at boot; calls `setPersonalDataSections` (re-exported here) to assemble the `POST /account/export` response from other modules. |
+| `src/modules/account/module.yaml`                            | Static manifest / metadata that mirrors or complements the in-code manifest.                                                                                |
+| `src/modules/account/openapi.yaml`                           | OpenAPI spec for the `/account` routes defined by `router`.                                                                                                 |
 
 ## Notes
 

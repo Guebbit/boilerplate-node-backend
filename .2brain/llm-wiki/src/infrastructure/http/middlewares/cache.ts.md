@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP response-caching middleware that wraps Express's `response.json` to transparently store, retrieve, and serve cached responses via Redis. It owns the response envelope shape, the TTL clamping policy, the per-entry byte-size gate, and the stale-while-revalidate / stale-if-error header logic — all of which are specific to caching *responses*, not arbitrary key-value data, which is why they live here rather than in the cache adapter.
+HTTP response-caching middleware that wraps Express's `response.json` to transparently store, retrieve, and serve cached responses via Redis. It owns the response envelope shape, the TTL clamping policy, the per-entry byte-size gate, and the stale-while-revalidate / stale-if-error header logic — all of which are specific to caching _responses_, not arbitrary key-value data, which is why they live here rather than in the cache adapter.
 
 ## Key elements
 
@@ -40,4 +40,4 @@ HTTP response-caching middleware that wraps Express's `response.json` to transpa
 - Array parameter values are sorted before keying (`?id=a&id=b` ≡ `?id=b&id=a`). The code comments note this is safe today only because no array filter is order-significant; an order-sensitive array param would need an explicit exemption.
 - `Object.hasOwn` is used (not `in`) when checking parameter presence to avoid prototype-chain false positives (e.g. a param named `toString`).
 - `bodyRecordOf` returns `undefined` for GETs (Express 5 behaviour); the key builder handles both body and query transports.
-- The file is the *only* consumer of the adapter's four exported functions that care about response semantics; a hypothetical non-response cache would not inherit the envelope, TTL clamp, size gate, or stale-while-revalidate logic.
+- The file is the _only_ consumer of the adapter's four exported functions that care about response semantics; a hypothetical non-response cache would not inherit the envelope, TTL clamp, size gate, or stale-while-revalidate logic.

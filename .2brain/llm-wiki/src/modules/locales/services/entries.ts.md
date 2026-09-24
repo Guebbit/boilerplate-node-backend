@@ -13,7 +13,7 @@ CRUD and bulk-import operations for locale entries (translated key-value rows) w
 
 ## Key elements
 
-- **`searchEntries`** — Paginated, key-sorted listing of a language's entries. Accepts optional `text` and `tenant` filters. Does *not* reject unknown tenants (avoids leaking tenant names to readers).
+- **`searchEntries`** — Paginated, key-sorted listing of a language's entries. Accepts optional `text` and `tenant` filters. Does _not_ reject unknown tenants (avoids leaking tenant names to readers).
 - **`createEntry`** — Adds one key to a language+tenant. Validates: language exists → tenant is known → key not already present → key doesn't collide with an existing key in the same tree. Emits `ADMIN_LOCALE_ENTRY_CREATED`.
 - **`updateEntry`** — Changes one entry's text value. Looks up by entry id, then verifies the entry's `locale` matches the path tag (cross-language access → 404). Emits `ADMIN_LOCALE_ENTRY_UPDATED`.
 - **`deleteEntry`** — Removes one entry from a language. Same cross-language ownership check as update. Emits `ADMIN_LOCALE_ENTRY_DELETED`.

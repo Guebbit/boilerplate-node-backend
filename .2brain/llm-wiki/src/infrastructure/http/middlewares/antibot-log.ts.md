@@ -14,7 +14,7 @@ Centralizes the single warn-log format and the single HTTP-refusal response shap
 ## Key elements
 
 - **`AntibotRung`** (type export) — Union of the three rung identifiers: `'rate-limit' | 'email-policy' | 'human-challenge'`. Values match the names published under `rungs` by `GET /antibot/config`.
-- **`logAntibotRefusal(rung, method, path, status)`** — Emits one `logger.warn` line with structured fields (`rung`, `method`, `route`, `status_code`). Accepts primitive args (not Express `Request`/`Response`) so non-middleware callers (e.g. the email-policy service in rung 2) can log with the same shape. The `status` is the *true* status, even when the HTTP response intentionally misreports it.
+- **`logAntibotRefusal(rung, method, path, status)`** — Emits one `logger.warn` line with structured fields (`rung`, `method`, `route`, `status_code`). Accepts primitive args (not Express `Request`/`Response`) so non-middleware callers (e.g. the email-policy service in rung 2) can log with the same shape. The `status` is the _true_ status, even when the HTTP response intentionally misreports it.
 - **`refuseAntibot(rung, request, response, status, errors)`** — Convenience wrapper: calls `logAntibotRefusal` with the request's method/path, then delegates the HTTP reply to `rejectResponse`. Returns the Express `Response`.
 
 ## Relationships

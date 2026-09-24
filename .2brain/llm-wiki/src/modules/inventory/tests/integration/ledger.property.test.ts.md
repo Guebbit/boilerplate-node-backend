@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Property-based integration test that verifies the core invariant of the inventory module: replaying every stock-movement ledger row for a product reproduces its stored `onHand` and `reserved` counters exactly, for *all* generated sequences of transitions rather than a fixed set of examples. It runs against a real MongoDB instance so that the conditional-write coupling between ledger rows and counter updates is exercised end-to-end.
+Property-based integration test that verifies the core invariant of the inventory module: replaying every stock-movement ledger row for a product reproduces its stored `onHand` and `reserved` counters exactly, for _all_ generated sequences of transitions rather than a fixed set of examples. It runs against a real MongoDB instance so that the conditional-write coupling between ledger rows and counter updates is exercised end-to-end.
 
 ## Key elements
 
@@ -20,9 +20,9 @@ Property-based integration test that verifies the core invariant of the inventor
 - **`play(productId, steps)`** — Drives a generated sequence through the public `inventoryService` API. Maintains a single open hold (one order at a time) with a deterministically derived ObjectId so a failing run replays identically.
 - **`replay(productId)`** — Queries raw `stockMovementModel` rows for the product and sums `onHandDelta` / `reservedDelta` to produce the "ledger says" totals.
 - **Three test cases** in `describe('the ledger reproduces the counters')`:
-  1. *Replaying every row lands exactly on both stored counters* — property-based equality check.
-  2. *Never lets either counter go negative* — property-based non-negativity and `reserved ≤ onHand` invariant.
-  3. *Writes no row for a transition that was refused* — single deterministic case: reserving more than exists must leave zero ledger rows.
+    1. _Replaying every row lands exactly on both stored counters_ — property-based equality check.
+    2. _Never lets either counter go negative_ — property-based non-negativity and `reserved ≤ onHand` invariant.
+    3. _Writes no row for a transition that was refused_ — single deterministic case: reserving more than exists must leave zero ledger rows.
 
 ## Relationships
 

@@ -16,7 +16,7 @@ Unit tests that lock down the schema contracts for the locales collections — r
 - **`normalises` (local helper)** — reads a schema field's `options` (`lowercase`, `trim`) so tests can assert normalisation without importing internal option builders.
 - **`describe('localeSchema')`** — asserts required paths, the `locales_tag` unique index, case/trim normalisation on `tag` and `baseLanguage`, defaults (`direction`, `active`, `revision`), enum restriction on `direction`, and the `revision ≥ 0` constraint.
 - **`describe('deriveBaseLanguage')`** — asserts primary-subtag extraction, passthrough of bare tags, and case/whitespace normalisation of the output.
-- **`describe('localeEntrySchema')`** — asserts required paths, the compound `localeEntries_locale_tenant_key` unique index, selective normalisation (locale & tenant lowercased; key trimmed but *not* lowercased), the `value` default of `''`, and `timestamps: true`.
+- **`describe('localeEntrySchema')`** — asserts required paths, the compound `localeEntries_locale_tenant_key` unique index, selective normalisation (locale & tenant lowercased; key trimmed but _not_ lowercased), the `value` default of `''`, and `timestamps: true`.
 
 ## Relationships
 
@@ -26,6 +26,6 @@ Unit tests that lock down the schema contracts for the locales collections — r
 
 ## Notes
 
-- Tests assert *schema declarations* (index specs, option flags, defaults) rather than round-tripping documents through Mongoose. They verify the contract a database would enforce, not application logic.
+- Tests assert _schema declarations_ (index specs, option flags, defaults) rather than round-tripping documents through Mongoose. They verify the contract a database would enforce, not application logic.
 - The `normalises` helper casts the path lookup to an inline type; if the schema library's option shape changes, this local cast will need updating.
 - The distinction "key is trimmed but not lowercased" (vs. locale/tenant which are lowercased) is a deliberate contract: i18n keys are case-sensitive identifiers, while locale and tenant are case-insensitive addresses.

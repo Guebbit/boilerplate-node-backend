@@ -16,10 +16,10 @@ Cross-cutting consistency test that enforces bidirectional agreement between the
 - **`claimed`** — `Map<string, string[]>` built from `enabledModules`; maps each enabled module's name to its sorted `permissions` array (or `[]` if the field is absent).
 - **`attributed`** — `Map<string, string[]>` built by iterating `PERMISSION_KEYS`; groups keys by their `module` field, sorted.
 - **`describe('the declared keys and the modules that own them')`** — four assertions:
-  - *Orphan check*: every module name appearing in `attributed` must also exist in `claimed` (no dangling references to deleted modules).
-  - *Per-module equality* (`it.each`): for every module in `attributed`, its claimed keys must exactly equal its attributed keys.
-  - *Keyless-modules whitelist*: the set of modules with zero claimed keys must be exactly `['access', 'addresses', 'antibot', 'wishlist']`—guards the "signed-in ≠ role-gated" boundary.
-  - *Set equality*: the flat list of all claimed keys must equal `PERMISSION_KEYS` (no key exists in one place but not the other).
+    - _Orphan check_: every module name appearing in `attributed` must also exist in `claimed` (no dangling references to deleted modules).
+    - _Per-module equality_ (`it.each`): for every module in `attributed`, its claimed keys must exactly equal its attributed keys.
+    - _Keyless-modules whitelist_: the set of modules with zero claimed keys must be exactly `['access', 'addresses', 'antibot', 'wishlist']`—guards the "signed-in ≠ role-gated" boundary.
+    - _Set equality_: the flat list of all claimed keys must equal `PERMISSION_KEYS` (no key exists in one place but not the other).
 
 ## Relationships
 

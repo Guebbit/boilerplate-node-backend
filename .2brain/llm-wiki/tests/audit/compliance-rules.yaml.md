@@ -14,12 +14,12 @@ Shared compliance rule registry consumed by the `compliance-backend.md` and `com
 ## Key elements
 
 - **`rules:`** — The active rule set that either audit prompt evaluates. Each entry has:
-  - `id`, `title`, `category`, `responsibility` (`both` | `backend` | `frontend`), `severity`
-  - `rule` — the normative statement the model checks
-  - `applies_when` — prose condition the model evaluates at run time against the app's actual shape (not a boolean flag)
-  - `evidence.backend` / `evidence.frontend` — file/glob hints telling the auditor where to look
-  - `references` — legal citations (GDPR, ePrivacy, PCI-DSS, WCAG, EU AI Act, DSA, BIPA, DMCA)
-  - `notes` — context, known-good baselines, or caveats
+    - `id`, `title`, `category`, `responsibility` (`both` | `backend` | `frontend`), `severity`
+    - `rule` — the normative statement the model checks
+    - `applies_when` — prose condition the model evaluates at run time against the app's actual shape (not a boolean flag)
+    - `evidence.backend` / `evidence.frontend` — file/glob hints telling the auditor where to look
+    - `references` — legal citations (GDPR, ePrivacy, PCI-DSS, WCAG, EU AI Act, DSA, BIPA, DMCA)
+    - `notes` — context, known-good baselines, or caveats
 - **`suggested_rules:`** — Staging area for candidate rules pending human approval. **Must not** be read by either audit prompt.
 - **`version:`** — Currently `1`.
 

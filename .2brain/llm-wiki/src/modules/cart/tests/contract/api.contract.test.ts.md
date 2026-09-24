@@ -36,7 +36,7 @@ Contract tests for every `/cart` route. All six endpoints share a single `CartRe
 
 ## Notes
 
-- **404 ≠ 404:** The file deliberately tests *two* distinct 404 paths on POST and PUT: a well-formed id that matches nothing (existence check) vs. a real row with `active: false` (scope/permission refusal). Both return 404 but fail at different layers.
+- **404 ≠ 404:** The file deliberately tests _two_ distinct 404 paths on POST and PUT: a well-formed id that matches nothing (existence check) vs. a real row with `active: false` (scope/permission refusal). Both return 404 but fail at different layers.
 - **DELETE /cart vs DELETE /cart/all:** The body-based remove requires `productId`; the file comments note it is aliased to `removeCartItem` in the spec. The clear-all route takes no body.
 - **B3 regression (`notes` passthrough):** The checkout controller previously cast `request.body` without contract parsing, silently dropping the `notes` field. The test asserting `response.body.data.order.notes` is a guard against reintroduction.
 - **409 on empty-cart checkout:** The spec did not originally declare this status; the implementation always returned 409. The test was added when this suite was written and the spec updated to match.

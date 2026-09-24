@@ -26,10 +26,10 @@ Jest test suite for `normalizePagination`, the single authority on pagination **
 
 ## Relationships
 
-- **`src/infrastructure/persistence/search.ts`** — the module under test. The test imports `normalizePagination` directly and exercises its behavior in isolation (no HTTP layer, no Mongo connection). The file's doc comments and test names repeatedly reference `@infrastructure/http/schemas` and `openapi.yaml` as the *separate* authority on bounds, clarifying the division of responsibility between those modules and this one.
+- **`src/infrastructure/persistence/search.ts`** — the module under test. The test imports `normalizePagination` directly and exercises its behavior in isolation (no HTTP layer, no Mongo connection). The file's doc comments and test names repeatedly reference `@infrastructure/http/schemas` and `openapi.yaml` as the _separate_ authority on bounds, clarifying the division of responsibility between those modules and this one.
 
 ## Notes
 
-- The file enforces a deliberate **defaults-vs-bounds split**: `normalizePagination` owns defaults and the one unvalidated path (the env var); `@infrastructure/http/schemas` owns the 1–100 range for all request-driven values. Adding a cap inside `normalizePagination` for caller-supplied values would silently swallow the 422 and make the OpenAPI `maximum` a fiction — the test explicitly asserts this is *not* done.
+- The file enforces a deliberate **defaults-vs-bounds split**: `normalizePagination` owns defaults and the one unvalidated path (the env var); `@infrastructure/http/schemas` owns the 1–100 range for all request-driven values. Adding a cap inside `normalizePagination` for caller-supplied values would silently swallow the 422 and make the OpenAPI `maximum` a fiction — the test explicitly asserts this is _not_ done.
 - The env var `NODE_SETTINGS_PAGINATION_PAGE_SIZE` is the **only** input that bypasses the request schema, which is why it gets its own cap (100) and its own set of tests (numeric parse, non-numeric fallback, precedence).
 - `afterEach` handles both the "was set" and "was absent" cases for the env var; tests that depend on the env being unset must `delete` it explicitly (see the defaults and empty/zero tests).

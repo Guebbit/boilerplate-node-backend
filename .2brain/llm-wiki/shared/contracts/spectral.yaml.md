@@ -32,6 +32,6 @@ Spectral linter configuration for the project's OpenAPI contracts. Extends the b
 ## Notes
 
 - **Header parameters are exempt** from the camelCase rule by design: HTTP header names are conventionally hyphenated on the wire (e.g. `x-antibot-challenge-token`), so forcing camelCase would produce names no client actually sends.
-- **`delete` is explicitly allowed** as a semantic prefix in both operationId and schema names, while `post`, `put`, `patch`, and `get` (as a prefix) are not. The `get` rule targets the *verb-prefix* pattern `get[A-Z]…`; a plain `get` operationId is fine.
+- **`delete` is explicitly allowed** as a semantic prefix in both operationId and schema names, while `post`, `put`, `patch`, and `get` (as a prefix) are not. The `get` rule targets the _verb-prefix_ pattern `get[A-Z]…`; a plain `get` operationId is fine.
 - `avoid-nullable` is **warn**, not error — existing nullable fields will not break CI but will surface in the report.
 - The request/response schema rules only apply to schemas whose names end in `Request` or `Response` respectively; all other component schemas are unconstrained by these naming rules.

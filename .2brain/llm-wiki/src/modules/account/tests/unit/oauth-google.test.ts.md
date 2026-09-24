@@ -28,8 +28,8 @@ Unit tests for the Google OAuth provider. They verify the authorization-URL cons
 
 ## Notes
 
-- **Signature is irrelevant by design.** The `idToken` helper signs with `'irrelevant-signing-key'`; the provider only *decodes* and validates claims, so tests can focus on claim logic without a real key pair.
-- **Env-var teardown is delete-vs-restore.** If a variable was `undefined` before the test, `afterEach` *deletes* the key rather than setting it to `undefined`, avoiding a truthy string `''` in the process environment.
+- **Signature is irrelevant by design.** The `idToken` helper signs with `'irrelevant-signing-key'`; the provider only _decodes_ and validates claims, so tests can focus on claim logic without a real key pair.
+- **Env-var teardown is delete-vs-restore.** If a variable was `undefined` before the test, `afterEach` _deletes_ the key rather than setting it to `undefined`, avoiding a truthy string `''` in the process environment.
 - **B15 regression tests are inline-commented.** Two tests carry `/* B15: … */` blocks explaining the original bug (undefined `providerId` collision; unbounded fetch hang) and why the assertion is shaped the way it is.
 - **Abort test is deliberately over-built.** The `fetch` mock ignores its input and only settles when the request's own `AbortSignal` fires, proving the signal is actually threaded through to the network call rather than just checking that a timer exists.
 - **`email_verified: false` ≠ missing.** A dedicated test ensures an explicit `false` is surfaced as `emailVerified: false` in the returned identity, not silently dropped to the same state as an absent claim.

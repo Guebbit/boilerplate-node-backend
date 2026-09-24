@@ -28,6 +28,6 @@ Bundled OpenAPI 3.0.3 contract for the Ecommerce Demo API (v2.0.0). It is the si
 
 - **Do not edit by hand.** The file is overwritten on every `npm run contracts:bundle` run. Edit the source files (`openapi.root.yaml` / module specs) and re-bundle.
 - **`Accept-Language` is intentionally absent from per-operation `parameters`.** The `info.description` paragraph is its de-facto contract. Codegen tools that auto-inject headers from the spec will miss it; clients must set the header in a transport interceptor.
-- **Locale endpoint semantics are asymmetric on purpose:** `GET /locales/{locale}` serves the *backend* (deployed) dictionary; `GET /locales/{locale}/messages` serves the *frontend* (dynamic/DB) dictionary. Mixing them up is a common integration mistake.
+- **Locale endpoint semantics are asymmetric on purpose:** `GET /locales/{locale}` serves the _backend_ (deployed) dictionary; `GET /locales/{locale}/messages` serves the _frontend_ (dynamic/DB) dictionary. Mixing them up is a common integration mistake.
 - **Inactive locales return 404 on all public routes**, not 200-with-empty. The `active` flag gates visibility, not just display.
 - **`DELETE /locales/{locale}` is destructive** (removes all translations) and requires the locale to be deactivated first (409 otherwise). This two-step guard is intentional, not a bug.

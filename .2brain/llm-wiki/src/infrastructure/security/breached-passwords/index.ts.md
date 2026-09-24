@@ -16,7 +16,7 @@ Provides two independent checks that reject a password **being set** (never one 
 - **`isInBundledBreachList(password: string): boolean`** — Synchronous exact-match (case-sensitive) lookup against the `list.txt` Set loaded at module scope. No network, no async.
 - **`checkHibpRange(password: string): Promise<{ breached: boolean; count?: number }>`** — Asynchronous HIBP range lookup. Sends only the 5-char SHA-1 prefix; matches the 35-char suffix locally. Uses `AbortSignal.timeout` (default 1 500 ms, configurable via `NODE_PASSWORD_BREACH_HIBP_TIMEOUT_MS`). Fails open with a `logger.warn` on any error.
 - **`checkPasswordBreach(password: string): Promise<{ breached: boolean; count?: number }>`** — Combined primitive: runs rung 1 first (short-circuits on hit), then rung 2 only if enabled. Shared by both the enforcing and advisory call sites. The only function that surfaces `count`.
-- **`assertPasswordNotBreached(password: string): Promise<ResponseErrorItem[]>`** — The entry point for every password-SET path. Returns an empty array on success or a single `VALIDATION_ERROR` item (i18n key `account.signup.password-breached`) on breach. Deliberately never reveals *which* rung matched.
+- **`assertPasswordNotBreached(password: string): Promise<ResponseErrorItem[]>`** — The entry point for every password-SET path. Returns an empty array on success or a single `VALIDATION_ERROR` item (i18n key `account.signup.password-breached`) on breach. Deliberately never reveals _which_ rung matched.
 
 ## Relationships
 

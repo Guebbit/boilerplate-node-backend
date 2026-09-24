@@ -19,9 +19,9 @@ Unit tests for the attachment-resolving half of `nodemailer()` in the mailer ada
 - **`fileExists(target)`** — tiny `stat`-based helper returning a boolean for disk-existence checks.
 - **`beforeEach` / `afterEach`** — creates a per-test temp spool directory (`mkdtemp`), sets `NODE_MAIL_SPOOL_PATH`, clears mocks, calls `resetTransporter()`, and restores the original env var / removes the temp dir on teardown.
 - **`describe('nodemailer — resolving attachments')`** — three tests:
-  - resolved path is `path.join(spoolRoot, key)`, never the raw key
-  - no `attachments` property is present when the request has none
-  - an unresolvable key (path-traversal string) results in no `attachments` property rather than a broken path
+    - resolved path is `path.join(spoolRoot, key)`, never the raw key
+    - no `attachments` property is present when the request has none
+    - an unresolvable key (path-traversal string) results in no `attachments` property rather than a broken path
 - **`describe('nodemailer — never discards its own attachment')`** — asserts the spooled file still exists on disk after a successful send; guards the invariant that only a job-finished caller may delete.
 
 ## Relationships

@@ -14,7 +14,7 @@ Unit tests for the cache adapter (`@infrastructure/adapters/cache`). The file ve
 ## Key elements
 
 - **`freshCache()`** — calls `jest.resetModules()` then synchronously `require`s the adapter. Necessary because the adapter memoises its Redis client (`client`, `connectPromise`) at module scope; a second test case would otherwise reuse the first case's connection verdict.
-- **`freshObservability()`** — re-requires `@infrastructure/adapters/logger` and `@infrastructure/observability/metrics-cache` from the *same* fresh module epoch, so assertions on `logger.warn` and `cacheInvalidationFailuresTotal` target the instances the adapter actually touched.
+- **`freshObservability()`** — re-requires `@infrastructure/adapters/logger` and `@infrastructure/observability/metrics-cache` from the _same_ fresh module epoch, so assertions on `logger.warn` and `cacheInvalidationFailuresTotal` target the instances the adapter actually touched.
 - **`scanBatches(batches)`** — wraps an array of key-batch arrays into an `AsyncIterable`, matching the shape `node-redis`' `scanIterator` yields.
 - **Mock `redis` module** — `jest.mock('redis', …)` replaces `createClient` with a factory returning a single `mockClient` whose `isReady` is pinned to `false`, forcing every path through the connect branch where reachable/unreachable is actually decided.
 - **Mock `@infrastructure/adapters/logger`** — silences the adapter's warning logs on unreachable paths.
@@ -31,7 +31,7 @@ Unit tests for the cache adapter (`@infrastructure/adapters/cache`). The file ve
 
 ## Notes
 
-- `jest.resetModules()` + synchronous `require` (hence the `eslint-disable` for `@typescript-eslint/no-require-imports`) is the *only* way to get a clean adapter instance per test; a plain re-import would share state.
+- `jest.resetModules()` + synchronous `require` (hence the `eslint-disable` for `@typescript-eslint/no-require-imports`) is the _only_ way to get a clean adapter instance per test; a plain re-import would share state.
 - The project's Jest config sets `clearMocks: true`, so every `beforeEach` must re-arm `mockConnect` / `mockSet` / `mockSAdd` implementations — they are wiped between cases.
 - The adapter's TTL clamp, per-entry byte limit, and response-envelope logic are deliberately **not** tested here; they belong to the caching middleware and are covered in `tests/unit/infrastructure/http/middlewares/cache.test.ts`.
 - The file previously sat at ~48 % coverage because the `getCacheValue` / `setCacheValue` / invalidate branches had zero execution under the mutation runner (no real Redis available). These tests close that gap with the `redis` module fully mocked.

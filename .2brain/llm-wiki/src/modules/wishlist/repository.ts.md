@@ -30,6 +30,6 @@ Repository layer for the wishlist module. Exposes the standard CRUD surface (inh
 
 ## Notes
 
-- **No retry loop (unlike the cart).** The cart's `upsertLine` filters on `{ userId, 'items.productId': { $ne } }`, which is *not* an exact match on the unique key, so two concurrent upserts can both see "absent" and one loses. Here the filter is `{ userId: <objectId> }` — the unique key itself — so mongod resolves it atomically. Concurrency is validated at 25-way contention in `tests/integration/concurrency/wishlist-races.test.ts`.
-- **All methods are `async`** because each calls `toObjectId`, which *throws* on a malformed id. This converts a bad input into a 4xx at the service boundary rather than a 500 from Mongoose.
+- **No retry loop (unlike the cart).** The cart's `upsertLine` filters on `{ userId, 'items.productId': { $ne } }`, which is _not_ an exact match on the unique key, so two concurrent upserts can both see "absent" and one loses. Here the filter is `{ userId: <objectId> }` — the unique key itself — so mongod resolves it atomically. Concurrency is validated at 25-way contention in `tests/integration/concurrency/wishlist-races.test.ts`.
+- **All methods are `async`** because each calls `toObjectId`, which _throws_ on a malformed id. This converts a bad input into a 4xx at the service boundary rather than a 500 from Mongoose.
 - **`null` ≠ error.** Both `findByUserId` and `removeLine` return `null` for "not found" cases; the service is responsible for the 404 mapping.

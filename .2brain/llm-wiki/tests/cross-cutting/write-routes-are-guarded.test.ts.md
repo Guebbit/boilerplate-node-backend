@@ -19,9 +19,9 @@ Enforces the app-wide invariant that every write route (POST/PUT/PATCH/DELETE) o
 - **`writesOn(router)`** — filters `effectiveRouteTable` to write methods and returns `"METHOD path"` signatures.
 - **`MODULES_ROOT`** — filesystem path to `src/modules`, used to cross-check that `ROUTED_MODULES` covers every module directory that has a `routes.ts`.
 - **Three test groups** inside the `describe` block:
-  1. Module-coverage: `ROUTED_MODULES` keys match the set of directories containing `routes.ts`.
-  2. Stale-exception check: no `WRITE_EXCEPTIONS` key references a route that is no longer mounted.
-  3. Per-route guard assertion (via `it.each`): default routes must have an identity guard *before* `requirePermissionGuard`; exception routes must lack the permission guard and match their `requiresAuth` flag.
+    1. Module-coverage: `ROUTED_MODULES` keys match the set of directories containing `routes.ts`.
+    2. Stale-exception check: no `WRITE_EXCEPTIONS` key references a route that is no longer mounted.
+    3. Per-route guard assertion (via `it.each`): default routes must have an identity guard _before_ `requirePermissionGuard`; exception routes must lack the permission guard and match their `requiresAuth` flag.
 - **Jest mocks** — cache, route-flag, upload/storage, and rate-limit middlewares are replaced with shared factories from `@tests/routes` so the route tables are introspectable without real infrastructure.
 
 ## Relationships
@@ -33,6 +33,6 @@ Enforces the app-wide invariant that every write route (POST/PUT/PATCH/DELETE) o
 
 - The `observability` module is skipped in the per-route loop because it mounts zero writes; `it.each` throws on an empty table.
 - Exception keys use the exact signature format `${moduleName} ${METHOD} ${routePath}` as produced by `writesOn`, including parameter placeholders like `:id`.
-- The test asserts *ordering*: the identity guard index must be strictly less than the index of `requirePermissionGuard`. A route that has both but in the wrong order will fail.
+- The test asserts _ordering_: the identity guard index must be strictly less than the index of `requirePermissionGuard`. A route that has both but in the wrong order will fail.
 - Adding a new write route without adding a `WRITE_EXCEPTIONS` entry (or without adding the guards to the route) will fail this test — that is the intended fail-safe.
 - `requiresAuth: false` does **not** mean "public"; it means the credential is carried in the request itself (token, cookie, signed body) rather than in a session.

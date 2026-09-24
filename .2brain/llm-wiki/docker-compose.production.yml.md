@@ -34,6 +34,6 @@ Production deployment stack for the API, running one client organisation per sta
 - **Bundled vs. managed services.** Flip between them by toggling `bundled` in `COMPOSE_PROFILES` and setting `NODE_DB_URI`/`NODE_REDIS_URL`/`NODE_RABBITMQ_URL` in the client env. `depends_on … required: false` (Compose ≥ 2.20) lets the app start without the bundled containers.
 - **`clients/` is gitignored and in `.dockerignore`.** Secrets are mounted at runtime, never baked into the image.
 - **Mongo TLS is self-signed.** `database` mints a CA at startup via `mongo-entrypoint.sh`; the public cert is shared into `mongo-ca-dir` and verified by the app's `tlsCAFile`. Do not remove the `:ro` mount without understanding this.
-- **`/tmp` tmpfs is `noexec,nosuid` and 64 MB.** This bounds *concurrent* uploads (each file lands here); single-upload size is controlled by `NODE_MAX_UPLOAD_BYTES`.
+- **`/tmp` tmpfs is `noexec,nosuid` and 64 MB.** This bounds _concurrent_ uploads (each file lands here); single-upload size is controlled by `NODE_MAX_UPLOAD_BYTES`.
 - **`setup` must not run the demo seeder.** `scenarios/apply.ts` refuses `NODE_ENV=production`; the production database starts empty.
 - **OTLP collector is external.** `OTEL_EXPORTER_OTLP_ENDPOINT` is an env var with no default; no collector service is defined in this file.

@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single export that centralises the row-level access rule for the payments collection. Every other service in this directory resolves *which* payments a caller may see by delegating to this one function, so the scoping logic lives in exactly one place.
+Single export that centralises the row-level access rule for the payments collection. Every other service in this directory resolves _which_ payments a caller may see by delegating to this one function, so the scoping logic lives in exactly one place.
 
 ## Key elements
 
@@ -24,6 +24,6 @@ Single export that centralises the row-level access rule for the payments collec
 
 ## Notes
 
-- Unlike the analogous scoping in the orders module (which combines *ownership* and *not-yet-soft-deleted*), payments are **never soft-deleted**, so ownership is the only axis. Do not add a liveness/soft-delete check here; it does not apply to this collection.
+- Unlike the analogous scoping in the orders module (which combines _ownership_ and _not-yet-soft-deleted_), payments are **never soft-deleted**, so ownership is the only axis. Do not add a liveness/soft-delete check here; it does not apply to this collection.
 - The `AuthContext` parameter is optional — passing `undefined` yields whatever `accessibleFilter` returns for an unauthenticated/anonymous caller. Callers are expected to handle that case.
 - The collection label is hard-coded to the string `'Payment'`; there is no runtime parameterisation. Keep it in sync if the schema entity is ever renamed.

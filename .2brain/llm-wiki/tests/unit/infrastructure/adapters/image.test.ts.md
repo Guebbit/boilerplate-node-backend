@@ -16,18 +16,18 @@ Unit tests for the `digestImage` and `thumbnailImage` functions from the sharp a
 - **`makeImage(format, width, height, withExif?)`** — Test-fixture builder. Creates a solid-colour (r:200 g:40 b:10) image of the given size and format using sharp's `create` source; optionally injects EXIF (Copyright, Make) via `withExif`. Returns a `Buffer`.
 - **`metadataOf(buffer)`** — Thin wrapper around `sharp(buffer).metadata()` so callers get a single-async-call interface for assertions.
 - **`digestImage` suite** — Verifies:
-  - Output format matches input MIME (png/jpeg/webp), no silent conversion.
-  - EXIF metadata is stripped.
-  - Longest edge is capped at `NODE_IMAGE_MAX_DIMENSION` (aspect preserved).
-  - Images already under the cap are untouched.
-  - `NODE_IMAGE_MAX_DIMENSION` is read at *call time*, not import time.
-  - Invalid bytes reject.
-  - Inputs exceeding `NODE_IMAGE_MAX_INPUT_PIXELS` reject (decompression-bomb guard).
+    - Output format matches input MIME (png/jpeg/webp), no silent conversion.
+    - EXIF metadata is stripped.
+    - Longest edge is capped at `NODE_IMAGE_MAX_DIMENSION` (aspect preserved).
+    - Images already under the cap are untouched.
+    - `NODE_IMAGE_MAX_DIMENSION` is read at _call time_, not import time.
+    - Invalid bytes reject.
+    - Inputs exceeding `NODE_IMAGE_MAX_INPUT_PIXELS` reject (decompression-bomb guard).
 - **`thumbnailImage` suite** — Verifies:
-  - Output is always WebP regardless of source format.
-  - Longest edge capped at `NODE_IMAGE_THUMBNAIL_DIMENSION`.
-  - EXIF stripped.
-  - Invalid bytes reject.
+    - Output is always WebP regardless of source format.
+    - Longest edge capped at `NODE_IMAGE_THUMBNAIL_DIMENSION`.
+    - EXIF stripped.
+    - Invalid bytes reject.
 
 ## Relationships
 
@@ -37,5 +37,5 @@ Unit tests for the `digestImage` and `thumbnailImage` functions from the sharp a
 ## Notes
 
 - `process.env` is snapshotted before the suite and restored in `afterEach`; tests that set env vars (`NODE_IMAGE_MAX_DIMENSION`, `NODE_IMAGE_MAX_INPUT_PIXELS`, `NODE_IMAGE_THUMBNAIL_DIMENSION`) rely on this cleanup.
-- The "reads at call time" test deliberately changes the env var *between* two calls on the same input buffer to prove the value isn't captured at module-load time.
+- The "reads at call time" test deliberately changes the env var _between_ two calls on the same input buffer to prove the value isn't captured at module-load time.
 - The decompression-bomb test uses a 50×50 image (2 500 px) against a cap of 100 px — the image is small enough to encode quickly but large enough to trip the pixel-count guard.

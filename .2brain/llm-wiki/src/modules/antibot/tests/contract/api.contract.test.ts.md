@@ -27,6 +27,6 @@ Contract tests for `GET /antibot/config` (valid response shape, provider/policy 
 
 ## Notes
 
-- The file intentionally exercises `POST /feedback/contact` as the *only* guarded route. Adding a new guarded route does not require a parallel case here; the contract is "some route is gated," not "every route is gated."
+- The file intentionally exercises `POST /feedback/contact` as the _only_ guarded route. Adding a new guarded route does not require a parallel case here; the contract is "some route is gated," not "every route is gated."
 - Unknown provider or policy values must return **500**, not silently fall back to `none`. This is a deliberate fail-fast contract—regressing it would hide misconfiguration in production.
 - Env-var restoration in `afterEach` handles both "was previously set" and "was previously unset" (deletes the key) to avoid leaking state into other suites that run in the same process.

@@ -13,7 +13,7 @@ Unit tests that verify the **middleware arrangement** of the account router — 
 
 ## Key elements
 
-- **`TOKEN_BEARING`** — list of routes whose credential is a token in the URL/cookie; asserted to *lack* `isAuth` because the token itself authenticates the call.
+- **`TOKEN_BEARING`** — list of routes whose credential is a token in the URL/cookie; asserted to _lack_ `isAuth` because the token itself authenticates the call.
 - **`RATE_LIMITED`** — routes that must carry all three `credentials-*` budget limiters (identity, address, block). `POST /signup` and `POST /reset` are deliberately excluded.
 - **`AUTHENTICATED`** — routes that act on the caller's own account; asserted to require `isAuth`.
 - **`describe('what is mounted')`** — pins the exact route table (signatures + order), asserts `routerMiddleware` is `['getAuth', 'noStore']`, and that every individual route carries `noStore`.
@@ -31,6 +31,6 @@ Unit tests that verify the **middleware arrangement** of the account router — 
 ## Notes
 
 - The file header documents a **past regression** where `setCache` silently overrode `noStore` on `GET /account`; the final "caches nothing anywhere" assertion exists specifically to catch that class of bug.
-- Ordering assertions (`indexOf(a) < indexOf(b)`) are load-bearing: they verify *sequence*, not just presence. A limiter after `isAuth` means every unauthenticated request pays the session-lookup cost before being rate-limited.
+- Ordering assertions (`indexOf(a) < indexOf(b)`) are load-bearing: they verify _sequence_, not just presence. A limiter after `isAuth` means every unauthenticated request pays the session-lookup cost before being rate-limited.
 - `jest.mock` calls use `jest.requireActual` pointed at `@tests/routes` (the support module) rather than a literal mock path — the support file is the single source of truth for both the real helpers and the mock factories.
 - `POST /signup` and `POST /reset` use `skipSuccessfulRequests` on their own budgets so that a legitimate 201/200 does not consume budget, while their own abuse (Sybil signups, mail-bombing) does.

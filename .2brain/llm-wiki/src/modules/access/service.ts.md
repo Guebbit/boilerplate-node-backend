@@ -20,7 +20,7 @@ The service layer for reading and writing the authorization model. It enforces t
 - **`ensureTenant(slug, name, id?)`** — upserts a tenant by slug; `id` is only passed by bootstrap to keep a stable id across reseed cycles.
 - **`membershipsOf(userId)`** — all membership rows for a person.
 - **`membershipIn(userId, tenantId, scope)`** — the single membership in a given scope, or `null`.
-- **`assertCanGrant(scope, roleName, granter?)`** — synchronous dry-run of `validateGrant`; used by callers that must check *before* committing unrelated state.
+- **`assertCanGrant(scope, roleName, granter?)`** — synchronous dry-run of `validateGrant`; used by callers that must check _before_ committing unrelated state.
 - **`assignRole(userId, tenantId, scope, roleName, granter?, context?)`** — validates then upserts a membership. All checks run inside a `Promise.resolve().then(...)` chain so callers always see a **rejection**, never a synchronous throw. Audits success and failure (escalation attempts are logged as failures).
 - **`assignDefaultRole(userId, tenantId, scope?)`** — thin wrapper over `assignRole` that hard-codes `SIGNUP_DEFAULT_ROLE`; has no `roleName` parameter so the caller cannot inject an arbitrary role.
 - **`promoteVerifiedCustomer(userId, tenantId)`** — promotes `unverified → customer`; returns `false` (no-op) if the membership already holds any other role.

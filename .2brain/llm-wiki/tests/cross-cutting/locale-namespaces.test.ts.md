@@ -17,10 +17,10 @@ Validates that locale keys remain namespace-unique across the codebase. The deep
 - **`readDictionary(file)`** – reads and parses a JSON locale file.
 - **`moduleKeys()`** – scans `src/modules/*/locales/en.json` and returns a `Map<moduleName, string[]>` of that module's keys. Discovery is dynamic (`readdirSync`), not a hard-coded list.
 - **`describe('locale namespaces across modules')`** – four test cases:
-  1. *Canary* – at least one module ships copy (guards against a broken path returning an empty set silently).
-  2. *No shadowing* – no module key intersects the shared `src/locales/en.json` key set.
-  3. *No collision* – no key appears in more than one module.
-  4. *Namespace containment* – every key in a module begins with that module's own name as the top-level segment.
+    1. _Canary_ – at least one module ships copy (guards against a broken path returning an empty set silently).
+    2. _No shadowing_ – no module key intersects the shared `src/locales/en.json` key set.
+    3. _No collision_ – no key appears in more than one module.
+    4. _Namespace containment_ – every key in a module begins with that module's own name as the top-level segment.
 
 ## Relationships
 
@@ -30,5 +30,5 @@ No dependency-graph neighbors are recorded. The file reads sibling fixture files
 
 - Language-parity (same key set across all locale files) is **not** checked here; it lives in `tests/cross-cutting/locale-parity.test.ts` and operates on the merged dictionary.
 - The canary test asserts `readdirSync(MODULES_ROOT).length > 0` rather than pinning a specific count, so adding or removing a domain module doesn't break a locale test.
-- Only `en.json` is inspected. The test assumes the key *structure* is identical across locales (guaranteed by the parity test); it does not itself compare non-English files.
+- Only `en.json` is inspected. The test assumes the key _structure_ is identical across locales (guaranteed by the parity test); it does not itself compare non-English files.
 - The namespace rule (test 4) means the top-level key **must** equal the module directory name. A module named `account` cannot ship keys under `billing.*` or any other root.

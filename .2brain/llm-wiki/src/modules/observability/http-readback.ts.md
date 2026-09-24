@@ -29,7 +29,7 @@ Reads the shared prom-client HTTP counters and duration histogram and collapses 
 
 ## Notes
 
-- **Approximate percentiles.** The returned value is always a bucket *boundary*, so the true latency within that bucket is over-estimated (e.g. a 60 ms p95 reports as 100 ms). This is intentionally simpler than Prometheus `histogram_quantile` interpolation; for precise values, query the scraped histogram directly.
+- **Approximate percentiles.** The returned value is always a bucket _boundary_, so the true latency within that bucket is over-estimated (e.g. a 60 ms p95 reports as 100 ms). This is intentionally simpler than Prometheus `histogram_quantile` interpolation; for precise values, query the scraped histogram directly.
 - **Process-lifetime totals.** All counts and percentiles cover the entire process lifetime, not a sliding window. A single spike dilutes over time. The module doc comment points to `docs/tools/opentelemetry.md` for windowed queries.
 - **`toSorted` (ES2023 / Node ≥ 20).** Used instead of `[...arr].sort(...)`; no mutation of the source array.
 - **Zero-safe.** Both `getHttpRequestCounters` and `getLatencyPercentiles` return `0` (not `NaN`) when no samples have been recorded yet, preventing downstream dashboard breakage on a freshly started process.

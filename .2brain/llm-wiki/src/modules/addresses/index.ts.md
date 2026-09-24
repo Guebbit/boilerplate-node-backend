@@ -9,12 +9,12 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Public barrel (module facade) for the **Addresses** module. It is the *only* import surface a sibling module is allowed to use, enforcing the strategic-DDD boundary described in `docs/theory/strategic-ddd.md` §5. It re-exports the service's values and the model's types so consumers never reach into sub-paths directly.
+Public barrel (module facade) for the **Addresses** module. It is the _only_ import surface a sibling module is allowed to use, enforcing the strategic-DDD boundary described in `docs/theory/strategic-ddd.md` §5. It re-exports the service's values and the model's types so consumers never reach into sub-paths directly.
 
 ## Key elements
 
 - **`export * from './service'`** — Re-exports all value-level exports (classes, functions, constants) from `./service.ts` as the module's runtime API.
-- **`export type * from './model'`** — Re-exports only the *type-level* exports (interfaces, type aliases, enums used as types) from `./model.ts`. Values defined in `model.ts` are intentionally hidden.
+- **`export type * from './model'`** — Re-exports only the _type-level_ exports (interfaces, type aliases, enums used as types) from `./model.ts`. Values defined in `model.ts` are intentionally hidden.
 
 ## Relationships
 

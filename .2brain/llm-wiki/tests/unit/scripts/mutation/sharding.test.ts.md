@@ -15,12 +15,12 @@ Unit tests for `packIntoShards`, the function that partitions a list of files (b
 
 - **`files(...entries)`** — small helper that converts `[name, lines]` tuples into `{ file, lines }` objects so fixtures read as positional pairs.
 - **`describe('packIntoShards')`** — six cases:
-  - *Every file lands in exactly one shard* — asserts completeness and that total lines are preserved across shards.
-  - *Explicit target overrides CI default* — passing `2500` as the target yields 2 shards instead of the ~9 the 600-line default would produce.
-  - *Shard count derives from total lines, not file count* — 10 × 500-line files produce `Math.ceil(5000 / TARGET_LINES_PER_SHARD)` shards.
-  - *Lopsided input is balanced* — one 6000-line file plus twenty 50-line files; asserts the max/min shard ratio ≤ `6000/50` (the ceiling set by the un-splittable huge file).
-  - *No empty shards* — a single 10-line input still produces a shard with `mutate.length > 0`.
-  - *Deterministic naming* — identical input yields `toEqual`-equal output on repeated calls.
+    - _Every file lands in exactly one shard_ — asserts completeness and that total lines are preserved across shards.
+    - _Explicit target overrides CI default_ — passing `2500` as the target yields 2 shards instead of the ~9 the 600-line default would produce.
+    - _Shard count derives from total lines, not file count_ — 10 × 500-line files produce `Math.ceil(5000 / TARGET_LINES_PER_SHARD)` shards.
+    - _Lopsided input is balanced_ — one 6000-line file plus twenty 50-line files; asserts the max/min shard ratio ≤ `6000/50` (the ceiling set by the un-splittable huge file).
+    - _No empty shards_ — a single 10-line input still produces a shard with `mutate.length > 0`.
+    - _Deterministic naming_ — identical input yields `toEqual`-equal output on repeated calls.
 
 ## Relationships
 
@@ -29,5 +29,5 @@ Unit tests for `packIntoShards`, the function that partitions a list of files (b
 ## Notes
 
 - The lopsided-input test encodes the design motivation in comments: a single huge module (e.g. `account`) must not set the wall clock for the entire matrix.
-- The balance bound (`6000/50`) is deliberately the *input-derived ceiling* (the huge file's lines over the smallest bin a tiny file can leave), not an arbitrary constant, so it stays valid if `TARGET_LINES_PER_SHARD` changes.
+- The balance bound (`6000/50`) is deliberately the _input-derived ceiling_ (the huge file's lines over the smallest bin a tiny file can leave), not an arbitrary constant, so it stays valid if `TARGET_LINES_PER_SHARD` changes.
 - Shard shape is `{ mutate: string, lines: number }` where `mutate` is a comma-separated file list.

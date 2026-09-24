@@ -26,6 +26,6 @@ Central registry of every audit action string the account module can emit. It ex
 
 - **`auth.` prefix is deliberate, not a typo.** The strings are queried by pre-existing log tooling and alert rules that predate the `account/` folder layout. Renaming to `account.*` would break those queries; the module folder is free to be named for the domain while the wire format stays fixed.
 - **Type-only coupling.** The module augmentation means the account folder never imports infrastructure at runtime; only the type checker walks the edge.
-- **`AUTH_REFRESH_TOKEN_REUSE_DETECTED`** fires only when a rotated token is replayed *outside* the grace window (i.e., not a benign two-tab race) and triggers revocation of the entire refresh-token set in the same operation.
-- **`AUTH_2FA_CODE_SENT`** is the only 2FA action an *unauthenticated* caller can trigger an outbound message with—useful as the primary signal for mail/SMS-bombing detection.
+- **`AUTH_REFRESH_TOKEN_REUSE_DETECTED`** fires only when a rotated token is replayed _outside_ the grace window (i.e., not a benign two-tab race) and triggers revocation of the entire refresh-token set in the same operation.
+- **`AUTH_2FA_CODE_SENT`** is the only 2FA action an _unauthenticated_ caller can trigger an outbound message with—useful as the primary signal for mail/SMS-bombing detection.
 - Several actions carry a `metadata.method` discriminator (2FA enroll/disable) or are paired (e.g., `*_REQUESTED` / `*_COMPLETED` for password reset, email change, account delete) to distinguish "intent initiated" from "irreversible swap completed."

@@ -8,20 +8,23 @@ model: ollama:qwen3.8:27b
 # src/modules/account/services/two-factor.ts
 
 ## Purpose
+
 Cross-cutting two-factor authentication logic: enrollment, removal, status, and login-challenge verification. Method-specific behavior is delegated to handlers registered in `../two-factor/registry`; this file owns what is shared across all methods — entry ordering, the account-level armed flag, backup-code minting/discarding, and the login-challenge lifecycle (build → verify → spend).
 
 ## Key elements
+
 - **`buildLoginChallenge(user, amr)`** — generates a 128-bit single-use challenge token (same mechanism as password-reset), persists it via `userService.tokenAdd`, and returns the `MfaChallenge` body for `POST /account/login`. TTL is method-dependent (see below).
 - **`twoFactorStatus(userId)`** — `GET /account/2fa`. Returns enrolled methods (with `enrolledAt`), available-but-not-enrolled methods (with eligibility), and remaining backup-code count.
-- **`setupTwoFactorMethod`** *(truncated in source)* — starts or restarts one method's enrollment; restarting disarms an already-confirmed method.
+- **`setupTwoFactorMethod`** _(truncated in source)_ — starts or restarts one method's enrollment; restarting disarms an already-confirmed method.
 - **`MFA_CHALLENGE_DELIVERED_TTL_MS`** (600 000 ms) — exported; consumed by `../rate-limits.ts` to align challenge-budget windows with challenge lifetime.
 - **`verifyAnyFactor` / `verifyInOrder`** — walks armed factors in registry order (recursive, strictly sequential), then falls back to `consumeBackupCode`.
 - **`syncArmedState` / `discardIfDisarmed`** — re-derive `twoFactorEnabledAt`; the latter also clears backup codes when the last factor is removed.
-- **`audited`** — wraps any method outcome (success *or* failure) with a `recordAudit` call before passing the response through.
+- **`audited`** — wraps any method outcome (success _or_ failure) with a `recordAudit` call before passing the response through.
 - **`rejectWrongCode`** — persists the attempt-budget mutation before returning 422, so a lost write cannot silently remove the attempt ceiling.
 - **`RESEND_TOO_SOON_CODE`** — module-private string the client branches on to render a resend countdown.
 
 ## Relationships
+
 - **`./tokens.ts`** — calls `findLiveTokenEntry`, `findLiveToken`, `spendLiveToken` to load and consume the MFA challenge token on verification.
 - **`../two-factor/backup-codes.ts`** — imports `generateBackupCodes`, `hashBackupCode` for minting and matching backup codes.
 - **`../two-factor/delivered-codes.ts`** — imports `clearDeliveredCode`, `deliveryCooldownRemaining` for the delivered-code resend path.
@@ -36,7 +39,8 @@ Cross-cutting two-factor authentication logic: enrollment, removal, status, and 
 - **`tests/unit/two-factor.test.ts`** — unit tests for this module.
 
 ## Notes
-- **Backup codes are always tried *after* every armed factor.** A stolen backup list must never shadow a working authenticator.
+
+- **Backup codes are always tried _after_ every armed factor.** A stolen backup list must never shadow a working authenticator.
 - **`syncArmedState` does not touch backup codes.** Discarding them is intentional only in `discardIfDisarmed` (deliberate 2FA removal). An abandoned re-enrollment must not invalidate a list the user already wrote down.
 - **`verifyInOrder` is recursive, not a loop.** Each handler mutates its own entry (high-water mark, burned code); a losing branch must not spend anything, so the chain must remain strictly sequential.
 - **`entryFor` reads back from the array after `push`.** Mongoose hydrates a pushed subdocument; the handler that mutates it needs the hydrated instance, not the plain object.

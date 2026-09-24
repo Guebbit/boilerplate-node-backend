@@ -21,7 +21,7 @@ Holds the process-wide mapping from entity type → `TranslatableTarget` and exp
 
 - **`src/kernel/registry.ts`** — provides the `TranslatableTarget` type that this file imports and returns; this module is a consumer of that registry contract, not a definer of it.
 - **`src/modules/locales/services/index.ts`** — barrel for the `locales/services` package; re-exports the two public functions (`setTranslatables`, `translatableTarget`) so callers address the service directory rather than this file directly.
-- **`src/modules/locales/services/translations.ts`** — sibling service that resolves *where* a translation is applied; it calls `translatableTarget(entityType)` to obtain the target, then performs the actual translation work.
+- **`src/modules/locales/services/translations.ts`** — sibling service that resolves _where_ a translation is applied; it calls `translatableTarget(entityType)` to obtain the target, then performs the actual translation work.
 
 ## Notes
 

@@ -37,7 +37,7 @@ The single reconciliation point for all payment state transitions. Browser-drive
 
 ## Notes
 
-- **Ordering hazard (acknowledged in code):** `markPaid` fires `order.status_changed` *before* `inventoryService.commitForOrder` runs. A subscriber reacting to the status event sees `paid` before the reservation is committed. Currently safe because the only listener (`webhooks`) forwards only `{ orderId }`, but the comment explicitly warns to reorder (commit then report) if a future listener needs committed stock.
+- **Ordering hazard (acknowledged in code):** `markPaid` fires `order.status_changed` _before_ `inventoryService.commitForOrder` runs. A subscriber reacting to the status event sees `paid` before the reservation is committed. Currently safe because the only listener (`webhooks`) forwards only `{ orderId }`, but the comment explicitly warns to reorder (commit then report) if a future listener needs committed stock.
 - **`settlementResponse` treats in-flight as 200:** A payment still in `processing` or `requires_action` returns a success response (200) with a status-specific message, because a 4xx would tell the browser to stop when it actually has a next step.
 - **`reportAttempt` is outcome-gated:** Only `PAYMENT_DECLINED` rejections and `succeeded` outcomes produce audit/analytics events. Other rejections (not found, wrong state, order gone) are considered request-shape or race problems, not facts about the money.
 - **Inventory commit result is intentionally unchecked:** `commitForOrder` returning `false` covers both a harmless replay and an expiry-sweep race; `inventory` differentiates and alarms on the latter.

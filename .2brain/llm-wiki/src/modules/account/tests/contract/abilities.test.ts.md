@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract test for `GET /account/abilities`. It verifies that the endpoint publishes the *same* rules the server enforces, by unpacking the wire payload with CASL's own `unpackRules` and asserting specific allow/deny decisions per role and scope. The goal is to catch drift between server-side policy and what a client can actually act on — not to assert response shape.
+Contract test for `GET /account/abilities`. It verifies that the endpoint publishes the _same_ rules the server enforces, by unpacking the wire payload with CASL's own `unpackRules` and asserting specific allow/deny decisions per role and scope. The goal is to catch drift between server-side policy and what a client can actually act on — not to assert response shape.
 
 ## Key elements
 
@@ -32,6 +32,6 @@ Contract test for `GET /account/abilities`. It verifies that the endpoint publis
 ## Notes
 
 - The file deliberately tests **round-trip semantics** (pack → wire → unpack → decide) rather than asserting a fixed JSON shape, because the contract is "the client can use what arrives."
-- `abilityFrom` takes a scope *by name* on purpose: concatenating tenant + platform rules into one ability would prove the opposite of the scope-separation invariant.
+- `abilityFrom` takes a scope _by name_ on purpose: concatenating tenant + platform rules into one ability would prove the opposite of the scope-separation invariant.
 - `tenantId` is read from the **response envelope** (`body.data.tenantId`), not from the collection — the deployment is single-tenant and stores no tenant column.
 - The `version` assertion uses a key-fingerprint (not a simple count) so that a key rename or key-for-key swap would be detected, while editing a role's conditions would not bump it.

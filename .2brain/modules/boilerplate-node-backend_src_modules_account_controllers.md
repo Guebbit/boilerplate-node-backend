@@ -1,8 +1,8 @@
 ---
 tags:
-  - 2brain
-  - 2brain/module
-  - project/boilerplate-node-backend
+    - 2brain
+    - 2brain/module
+    - project/boilerplate-node-backend
 type: module
 module: src/modules/account/controllers/
 files: 33
@@ -38,6 +38,7 @@ This directory holds every Express route handler (controller) for the account mo
 Read **`post-login.ts`** first — it is the richest controller in the directory and shows the full pattern (validation, service delegation, dual-credential 2FA gating, metrics, audit, and response shaping) in one place. Then read **`get-oauth-callback.ts`**, which demonstrates the module's one non-JSON flow (302 redirects for browser mid-navigation errors) and how session minting and the MFA challenge hand-off work at the HTTP boundary.
 
 ## Connected modules
+
 ```mermaid
 flowchart LR
     m_src_modules_account_controllers["src/modules/account/controllers/"]
@@ -63,6 +64,7 @@ flowchart LR
 [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules|src/modules/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_account_tests|src/modules/account/tests/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]]
 
 ## Files
+
 - `src/modules/account/controllers/delete-2fa-method.ts` — Thin HTTP adapter for `DELETE /account/2fa/methods/{method}`. Validates the path parameter and request body (which must include a valid 2FA code), then delegates to `twoFactorService.removeTwoFactorMethod`. Enforces the same dual-credential requirement (fresh auth session + one-time code) as full 2FA disable to prevent a stolen session from peeling off factors one at a time.
 - `src/modules/account/controllers/delete-2fa.ts` — Thin HTTP adapter for `DELETE /account/2fa`. Validates the request body against the `DisableTwoFactorBody` zod schema, then delegates to `twoFactorService.disableTwoFactor` to drop all armed factors and backup codes. Emits a Prometheus counter and returns an i18n-localised success or error response.
 - `src/modules/account/controllers/delete-account-confirm.ts` — Controller for the `DELETE /account/delete-confirm` endpoint. It validates and spends a one-time account-deletion token, then hard-deletes the account. After a successful delete it clears session cookies and returns a localized success message.
@@ -71,7 +73,7 @@ flowchart LR
 - `src/modules/account/controllers/delete-session.ts` — Thin HTTP adapter that exposes `DELETE /account/sessions/:sessionId`, allowing an authenticated user to revoke one of their own refresh-token sessions ("log out that device"). It delegates all business logic to `accountService.sessionRevoke` and maps the result to a success or 404 JSON response.
 - `src/modules/account/controllers/get-2fa.ts` — Thin HTTP adapter that exposes a `GET /account/2fa` endpoint, returning the caller's own second-factor authentication status and any additional methods they could enable. Delegates all business logic to `twoFactorService.twoFactorStatus` and maps the result onto an Express response.
 - `src/modules/account/controllers/get-account.ts` — Express controller for `GET /account`. Returns the authenticated user's full profile by reading fresh from the users collection, rather than echoing the (intentionally minimal) JWT claims, so fields like `verifiedAt` and `locale` are always present for the client's verify banner and saved-language flows.
-- `src/modules/account/controllers/get-my-abilities.ts` — Express handler for `GET /account/abilities`. It serialises the server's CASL ability rules (for both the tenant and platform scopes) and sends them to the client so the UI can decide what to *render* without maintaining its own copy of the policy. It does not grant or revoke anything server-side; it is a read-only publication of the rules the server already enforces on every request.
+- `src/modules/account/controllers/get-my-abilities.ts` — Express handler for `GET /account/abilities`. It serialises the server's CASL ability rules (for both the tenant and platform scopes) and sends them to the client so the UI can decide what to _render_ without maintaining its own copy of the policy. It does not grant or revoke anything server-side; it is a read-only publication of the rules the server already enforces on every request.
 - `src/modules/account/controllers/get-oauth-callback.ts` — Express route handler for `GET /account/oauth/:provider/callback`. Validates the CSRF `state` and PKCE verifier against cookies, exchanges the authorization code with the resolved provider, then finds-or-creates the account and either mints a session or bounces the browser into the MFA challenge flow. Every failure after the provider is known is communicated via a `302` redirect carrying `?error=<code>`, because the browser is mid-navigation and a JSON body is unreadable.
 - `src/modules/account/controllers/get-oauth-providers.ts` — Thin HTTP adapter for `GET /account/oauth/providers`. It exposes the set of enabled OAuth providers for the current deployment so the frontend can render the correct "Continue with…" buttons without hardcoding a list.
 - `src/modules/account/controllers/get-oauth-start.ts` — Express controller for `GET /account/oauth/:provider`. It is the single route in the account module that responds with a `Location` redirect (302) rather than a JSON envelope, sending the browser to the provider's consent screen after minting CSRF `state` and PKCE credentials.
@@ -98,4 +100,5 @@ flowchart LR
 - `src/modules/account/controllers/put-account.ts` — HTTP controller for `PUT /account`. It lets an authenticated user edit their **own** profile (email, username, locale, image, phone, website, analytics consent) by delegating to `accountService.updateProfile` and handling the uploaded-image cleanup that accompanies a self-service edit. It exists so that a regular user can update their profile without needing the `users.*` permission that the `/users` write routes require.
 
 ---
+
 [[boilerplate-node-backend_INDEX|← boilerplate-node-backend index]]

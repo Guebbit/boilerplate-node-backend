@@ -39,7 +39,7 @@ Declares the **translation port** — a kernel-level hook that lets the read pat
 
 ## Notes
 
-- **`planTranslations` is the only non-silent entry point.** Every other function returns a safe empty value (empty map, zero, empty array) when unregistered. `plan` deliberately throws a 500 because a caller that reaches it intends to *write*; silently "validating" with no backend would corrupt data.
+- **`planTranslations` is the only non-silent entry point.** Every other function returns a safe empty value (empty map, zero, empty array) when unregistered. `plan` deliberately throws a 500 because a caller that reaches it intends to _write_; silently "validating" with no backend would corrupt data.
 - **`applyTranslations` requires wire-shaped items, not Mongoose documents.** Spreading over a hydrated document would clobber virtuals (`available`), `_id`→`id` mapping, and date serialization. Callers must `.toJSON()` first.
 - **`removeAll` is hard-delete only.** A soft-delete flag flip never triggers it, because a restored product with missing translations is exactly the bug this port prevents.
 - **`write` never validates.** A caller that skips `plan` can write corrupted rows. The split is intentional so a caller writing its own entity document can interleave cache-tag and audit updates around the write in a single operation.

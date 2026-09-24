@@ -14,10 +14,10 @@ Exports a fixed set of wishlist HTTP probes — requests that exercise edge case
 ## Key elements
 
 - **`probes: Probe[]`** — The sole export. An array of four `Probe` objects (type from `@guebbit/openapi-runnable-collections`), each with `name`, `why`, `method`, `path`, `auth`, and optional `body`.
-  - *Save a hidden product* (`POST /wishlist`): uses `{{seedInactiveProductId}}` to trigger a 404-on-read row.
-  - *Move an unsaved product* (`POST /wishlist/{{seedSoftDeletedProductId}}/move-to-cart`): expects 404 rather than silent success.
-  - *Unsave an unsaved product* (`DELETE /wishlist/000000000000000000000000`): exercises the delete code path's "filter matches nothing" branch.
-  - *Malformed id* (`DELETE /wishlist/not-an-object-id`): verifies 422 is distinct from 404 for non-ObjectId strings.
+    - _Save a hidden product_ (`POST /wishlist`): uses `{{seedInactiveProductId}}` to trigger a 404-on-read row.
+    - _Move an unsaved product_ (`POST /wishlist/{{seedSoftDeletedProductId}}/move-to-cart`): expects 404 rather than silent success.
+    - _Unsave an unsaved product_ (`DELETE /wishlist/000000000000000000000000`): exercises the delete code path's "filter matches nothing" branch.
+    - _Malformed id_ (`DELETE /wishlist/not-an-object-id`): verifies 422 is distinct from 404 for non-ObjectId strings.
 
 ## Relationships
 

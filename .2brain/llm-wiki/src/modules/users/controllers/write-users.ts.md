@@ -14,12 +14,12 @@ Single controller handler for `POST /users`, `PUT /users`, and `PUT /users/:id`.
 ## Key elements
 
 - **`writeUsers`** (exported const) — The sole handler. Accepts a loosely-typed `Request` body (six request-shape variants plus `undefined`) and a `Response`. Responsibilities:
-  - Extracts `id`, `active`, `sendSetupEmail` via `readInput`; pulls `role` directly from `request.body ?? {}`.
-  - Reads image upload state (`imageUrl`, `thumbnailUrl`, `pendingImageKey`, `deleteUpload`) via `readUploadedImage`.
-  - Calls `userService.validateData` (zod schema, `passwordRequired: false`); on failure responds **422** and runs `deleteUpload()`.
-  - **Create branch (`!id`):** rejects `PUT` without id (422), enforces "password OR sendSetupEmail" on creates, then calls `userService.create` with the caller context.
-  - **Update branch (`id` present):** calls `userService.updateById`.
-  - Both branches: on success maps the stored document through `userService.toUserContract` before responding; on failure or DB error runs `deleteUpload()` and responds via `rejectResponse` / `rejectDatabaseError`.
+    - Extracts `id`, `active`, `sendSetupEmail` via `readInput`; pulls `role` directly from `request.body ?? {}`.
+    - Reads image upload state (`imageUrl`, `thumbnailUrl`, `pendingImageKey`, `deleteUpload`) via `readUploadedImage`.
+    - Calls `userService.validateData` (zod schema, `passwordRequired: false`); on failure responds **422** and runs `deleteUpload()`.
+    - **Create branch (`!id`):** rejects `PUT` without id (422), enforces "password OR sendSetupEmail" on creates, then calls `userService.create` with the caller context.
+    - **Update branch (`id` present):** calls `userService.updateById`.
+    - Both branches: on success maps the stored document through `userService.toUserContract` before responding; on failure or DB error runs `deleteUpload()` and responds via `rejectResponse` / `rejectDatabaseError`.
 
 ## Relationships
 

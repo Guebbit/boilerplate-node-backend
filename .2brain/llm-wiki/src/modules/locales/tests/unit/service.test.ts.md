@@ -15,7 +15,7 @@ Unit tests for the pure decision logic in `localeService`: the message-tree buil
 
 - **`language(overrides)`** — local helper that fabricates a minimal `LocaleDocument` with the five fields `mergeCapabilities` reads, filled by the caller's overrides.
 - **`describe('buildMessageTree')`** — asserts flat dotted keys expand into nested objects, empty input yields `{}`, deep nesting works, conflicting leaf/group pairs throw regardless of insertion order, and a `__proto__` segment becomes an ordinary property (prototype-pollution guard).
-- **`describe('findKeyCollision')`** — verifies ancestor-vs-descendant collision detection, that shared prefixes without a dot boundary are *not* collisions, and that identical keys (duplicates) are excluded.
+- **`describe('findKeyCollision')`** — verifies ancestor-vs-descendant collision detection, that shared prefixes without a dot boundary are _not_ collisions, and that identical keys (duplicates) are excluded.
 - **`describe('findBatchCollision')`** — confirms intra-batch pairs are caught before either row is written; consistent batches pass.
 - **`describe('findDuplicateKey')`** — checks that a repeated key in a batch is named; distinct keys yield `undefined`.
 - **`describe('findUnsafeKeySegment')`** — asserts `__proto__`, `constructor`, `prototype`, and empty segments (e.g. `a..b`) are all refused; ordinary keys pass.
@@ -37,6 +37,6 @@ Unit tests for the pure decision logic in `localeService`: the message-tree buil
 - The file deliberately tests **pure logic only** — no database, no HTTP. The module doc-block states that write paths are driven through Mongo (`repository.test.ts`) and HTTP (contract suite), so coverage here is the "silent-failure" layer that would otherwise be invisible.
 - Collision tests assert **both insertion orders** (leaf-then-group and group-then-leaf) because the two branches are separate code paths; a single-order test would miss a regression in the other branch.
 - `findKeyCollision` uses a **dot-boundary** check (appending `.` before `startsWith`), not a bare prefix match — the test for `a.bc` vs `a.b` exists specifically to pin that behavior.
-- The `__proto__` test asserts the key is *present* as an ordinary property (`tree.__proto__` equals `{ polluted: 'yes' }`) **and** that the global `Object.prototype` is untouched. This is a defence-in-depth check against rows that bypassed write-time validation.
+- The `__proto__` test asserts the key is _present_ as an ordinary property (`tree.__proto__` equals `{ polluted: 'yes' }`) **and** that the global `Object.prototype` is untouched. This is a defence-in-depth check against rows that bypassed write-time validation.
 - `mergeCapabilities` ordering is asserted to be **by tag (lexicographic)**, not by insertion order — manifests are compared for diff, so stability matters.
 - `describeLanguage` has a documented failure mode: an ICU build without locale data returns the tag string rather than throwing. Tests lock in that "graceful degradation" contract.

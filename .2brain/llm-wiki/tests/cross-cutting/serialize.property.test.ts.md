@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Property-based tests (fast-check) that verify the universal invariants of `applySerialization` for *any* document shape, not just the five model shapes that exist today. Because 95 of `openapi.yaml`'s schemas declare `additionalProperties: false`, a single leaked `_id` or `__v` is a contract violation. The transform also serves two very different inputs (Mongoose `toJSON` vs. raw `.lean()`/`.aggregate()` BSON), and these tests cover the second case where Mongoose provides no help.
+Property-based tests (fast-check) that verify the universal invariants of `applySerialization` for _any_ document shape, not just the five model shapes that exist today. Because 95 of `openapi.yaml`'s schemas declare `additionalProperties: false`, a single leaked `_id` or `__v` is a contract violation. The transform also serves two very different inputs (Mongoose `toJSON` vs. raw `.lean()`/`.aggregate()` BSON), and these tests cover the second case where Mongoose provides no help.
 
 ## Key elements
 
@@ -19,7 +19,7 @@ Property-based tests (fast-check) that verify the universal invariants of `apply
 - **`documentKey()`** — Arbitrary string arb filtered to exclude `__proto__` (spreading `__proto__` mutates the prototype, not the object, producing false counterexamples).
 - **`documentLike()`** — Arbitrary JSON-keyed dictionary (max 8 keys) representing an opaque document body.
 - **`withReservedFields()`** — Layers `_id` (non-empty string) and `__v` (integer) onto a `documentLike` so every case exercises both the rename and the version-key deletion.
-- **`describe('applySerialization — universal guarantees')`** — Ten property assertions: `_id` absent, `__v` absent, `_id`→`id` string rename, `dropId` removes both spellings, `omit` keys absent, non-reserved keys preserved, in-place mutation (same reference returned), idempotency, no-throw on arbitrary shapes, and `after` hook runs once *after* shared steps.
+- **`describe('applySerialization — universal guarantees')`** — Ten property assertions: `_id` absent, `__v` absent, `_id`→`id` string rename, `dropId` removes both spellings, `omit` keys absent, non-reserved keys preserved, in-place mutation (same reference returned), idempotency, no-throw on arbitrary shapes, and `after` hook runs once _after_ shared steps.
 
 ## Relationships
 

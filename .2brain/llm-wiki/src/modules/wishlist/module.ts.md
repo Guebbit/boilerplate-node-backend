@@ -14,13 +14,13 @@ Module manifest for the wishlist feature. It wires the wishlist's HTTP routes, d
 ## Key elements
 
 - **`default` export** — An object satisfying `AppModule` with:
-  - `name` / `basePath` — Identifies the module and its URL prefix (`/wishlist`).
-  - `routes` — The Express router from `./routes`.
-  - `personalData` — A collector that calls `wishlistService.wishlistGet(userId)` and returns the user's saved items (used by the account data-export flow).
-  - `subscribe` — Registers two `onDomainEvent` handlers:
-    - `PRODUCT_DELETED` → `productRemoveFromWishlistsById(productId)`
-    - `USER_DELETED` → `wishlistDeleteByUserId(userId)`
-  - `locales` — Path to the `locales/` directory relative to this file.
+    - `name` / `basePath` — Identifies the module and its URL prefix (`/wishlist`).
+    - `routes` — The Express router from `./routes`.
+    - `personalData` — A collector that calls `wishlistService.wishlistGet(userId)` and returns the user's saved items (used by the account data-export flow).
+    - `subscribe` — Registers two `onDomainEvent` handlers:
+        - `PRODUCT_DELETED` → `productRemoveFromWishlistsById(productId)`
+        - `USER_DELETED` → `wishlistDeleteByUserId(userId)`
+    - `locales` — Path to the `locales/` directory relative to this file.
 
 ## Relationships
 

@@ -16,7 +16,7 @@ Unit tests for the per-file mutation ratchet gate (`scripts/mutation/baseline.ts
 - **`report(...)`, `scores(...)`, `baselineOf(...)`** — tuple-based fixture builders that avoid file-path keys tripping the naming-convention lint rule.
 - **`describe('scoresFromReport')`** — verifies killed/timeout/non-viable mutant classification, the 100-vs-0 edge cases, and per-file independence.
 - **`describe('compareToBaseline')`** — covers verdicts (`regressed`, `improved`, `held`, `new`, `removed`) and the `SCORE_TOLERANCE` dead-band.
-- **`describe('nextBaseline — the ratchet')`** — the critical monotonicity tests: a regression must *not* rewrite the baseline downward; also covers new-file recording, file removal, and `generatedAt` stamping.
+- **`describe('nextBaseline — the ratchet')`** — the critical monotonicity tests: a regression must _not_ rewrite the baseline downward; also covers new-file recording, file removal, and `generatedAt` stamping.
 - **`describe('formatRegressions')`** — checks the human-readable failure message names the file, both numbers, the report path, and the `mutation:check` escape hatch.
 - **`describe('compareMerged')` / `describe('mergeIntoBaseline')`** — the sharded-sweep path: unmeasured files are left untouched (not marked `removed`), and the ratchet still keeps the higher value.
 - **`describe('readReportsUnder')`** — temp-directory test that verifies `mutation.json` files are discovered and merged from arbitrary subdirectory depths.

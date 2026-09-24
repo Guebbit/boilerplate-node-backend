@@ -34,6 +34,6 @@ Module entry point for the `locales` module. At import time it wires the module'
 ## Notes
 
 - **Two tiers, no merge:** deployed locale files load into i18next at boot; runtime overrides (one row per language/tenant/key) are owned here. Neither is awaited on the request path, so a DB outage degrades to a stale overlay only.
-- **No `index.ts` by design:** this file *is* the only path the `module-internals-are-private` depcruise rule permits to outside callers.
+- **No `index.ts` by design:** this file _is_ the only path the `module-internals-are-private` depcruise rule permits to outside callers.
 - **Import-time registration, not a manifest field:** the override provider and translation port are installed by side-effect here (same pattern as `audit-logs` installing its sink), so `app.ts` never needs to know which module fills them.
 - **`personalData: 'none'`:** `translatedBy` is a staff user-id pointer set from `context?.caller.id`; it is never reachable via `POST /account/export`.

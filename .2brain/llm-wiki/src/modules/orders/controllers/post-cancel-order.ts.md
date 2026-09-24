@@ -13,7 +13,7 @@ Thin HTTP handler for `POST /orders/:id/cancel` — the only order write a custo
 
 ## Key elements
 
-- **`postCancelOrder`** *(exported function)* — The sole export. Accepts an Express `Request`/`Response`, calls `orderService.cancelById(orderId, authContext, { refund }, callerContext)`. On success, chains to `orderService.withActions(order, authContext)` and sends a `200` response with the `Order` and a message. On refusal or error, short-circuits via `refused` / `catchAs`.
+- **`postCancelOrder`** _(exported function)_ — The sole export. Accepts an Express `Request`/`Response`, calls `orderService.cancelById(orderId, authContext, { refund }, callerContext)`. On success, chains to `orderService.withActions(order, authContext)` and sends a `200` response with the `Order` and a message. On refusal or error, short-circuits via `refused` / `catchAs`.
 
 ## Relationships
 

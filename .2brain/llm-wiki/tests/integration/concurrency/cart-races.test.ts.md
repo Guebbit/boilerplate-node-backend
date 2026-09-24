@@ -17,7 +17,7 @@ Integration tests that fire concurrent HTTP requests against the cart and checko
 - **`describe('R3 — concurrent adds of DIFFERENT products')`** — Same shape but N distinct products; the only case that can distinguish a working `$ne`-in-filter guard from a broken one (a single-product race cannot).
 - **`describe('R3 — concurrent quantity writes to the same line')`** — N parallel `PUT /cart/:id` with different quantities in SET mode; asserts the final quantity is one of the values sent (no merge artefact) and no second cart appears.
 - **`describe('R2 — concurrent checkouts of one cart')`** — Six sub-tests covering: exactly one order created, 409 for losers (`CART_CHANGED`), cart emptied once, no orphan order from a loser, loser's product hold released (verified via `productService.findByIdRaw`), and a normal uncontended checkout still succeeds.
-- **`describe('account deletion racing a cart write')`** — Verifies no orphaned cart document and no 5xx when account deletion and a cart write overlap. *(content truncated in source)*
+- **`describe('account deletion racing a cart write')`** — Verifies no orphaned cart document and no 5xx when account deletion and a cart write overlap. _(content truncated in source)_
 - **Module-level `setupTestDb()`** — Truncates/reinitialises the test database before the suite runs.
 
 ## Relationships
@@ -32,7 +32,7 @@ Integration tests that fire concurrent HTTP requests against the cart and checko
 
 ## Notes
 
-- The file header documents the R2 and R3 bugs in detail; reading it first orients you on *what* each `describe` block is protecting before reading the assertions.
+- The file header documents the R2 and R3 bugs in detail; reading it first orients you on _what_ each `describe` block is protecting before reading the assertions.
 - `POST /cart` and `PUT /cart/:productId` both use **SET** semantics (`cartItemSetById`), not increment. The repository's `add` mode exists but no route reaches it, so tests correctly assert "one line, correct quantity" rather than a sum.
 - R2 losers are expected to **retract** their already-written order (compensation) and **release** their product hold. The tests verify both: order count stays at 1, and `reserved` equals only the winner's quantity.
 - The multi-product race (second `describe`) is the only test that would fail if the `$ne`-in-filter guard were removed; the single-product race would pass either way.

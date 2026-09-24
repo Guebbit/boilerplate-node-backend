@@ -15,7 +15,7 @@ Defines the shared HMAC-signature scheme for PSP webhooks: an HMAC-SHA256 over `
 
 - **`WEBHOOK_SIGNATURE_HEADER`** (`'x-payment-signature'`) – the header name where the signature travels; lower-cased because Node normalises incoming header names.
 - **`TOLERANCE_SECONDS`** (300) – max clock skew allowed; deliveries older than this are refused even with a valid signature (replay guard).
-- **`WebhookRejected`** – error class for *any* reason a webhook is turned away (bad signature, unparseable body, missing event id). Answered HTTP 400 by the controller, never 500.
+- **`WebhookRejected`** – error class for _any_ reason a webhook is turned away (bad signature, unparseable body, missing event id). Answered HTTP 400 by the controller, never 500.
 - **`signWebhookPayload(rawBody, timestamp?)`** – returns the `t=<ts>,v1=<hex>` header value. Accepts `Buffer` or `string`; defaults timestamp to current unix seconds. Used by the fake provider and by tests.
 - **`verifyWebhookSignature(rawBody, header)`** – parses the header, checks staleness, then compares the recomputed HMAC to the provided value using `timingSafeEqual` (with a length pre-check to avoid `timingSafeEqual`'s throw-on-mismatch behaviour). Throws `WebhookRejected` on any failure.
 - **`secret()`** (private) – reads `NODE_PAYMENT_WEBHOOK_SECRET` from the environment on every call so key rotation does not require a restart; throws if unset.
@@ -33,5 +33,5 @@ Defines the shared HMAC-signature scheme for PSP webhooks: an HMAC-SHA256 over `
 
 - `verifyWebhookSignature` operates on the **raw bytes** of the request body. Passing a re-serialised JSON object will produce a different digest and always fail verification.
 - The signature format is a Stripe-style `t=<unix-seconds>,v1=<hex>` pair, but the constant-time comparison and the 300-second replay window are this project's own additions on top of the format.
-- `WebhookRejected` is deliberately named for the *broad* rejection case, not just bad signatures, so that the controller's logged `error.message` is accurate for the parse-error and missing-id cases thrown by `fake.ts`.
+- `WebhookRejected` is deliberately named for the _broad_ rejection case, not just bad signatures, so that the controller's logged `error.message` is accurate for the parse-error and missing-id cases thrown by `fake.ts`.
 - The secret is read from `process.env` on every call (not cached at module load) specifically to support hot key rotation without a process restart.

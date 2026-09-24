@@ -27,6 +27,6 @@ Handler for `GET /payments/order-by-reference`. Given an RF reference code (read
 
 ## Notes
 
-- The handler deliberately validates `ref` with a zod schema *before* touching the service layer so that a missing or oversized reference yields a 422 rather than a misleading 404 from the downstream mod-97 check.
+- The handler deliberately validates `ref` with a zod schema _before_ touching the service layer so that a missing or oversized reference yields a 422 rather than a misleading 404 from the downstream mod-97 check.
 - `withActions` is not optional decoration here: the entire use-case is to surface the admin's next moves (refund/cancel) alongside the order data, so the response always carries that context.
 - The file doc-comment explicitly equates the authority of this read with the offline-payment write; there is no separate permission gate between them.

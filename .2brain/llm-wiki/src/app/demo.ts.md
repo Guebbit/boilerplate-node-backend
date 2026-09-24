@@ -16,7 +16,7 @@ Control surface for the demo profile, mounted only when `enableDemoProfile()` ha
 - **`installDemo(app: Express)`** (exported) — registers the three routes and stores `app` so the flow runner can drive real HTTP during a build.
 - **`restoreScenario(scenario?: string)`** (exported) — public entry point that queues a restore behind any in-flight one. Returns a per-caller promise; the internal queue never rejects so a failure doesn't wedge subsequent restores.
 - **`UnknownScenarioError`** (exported) — thrown for a name absent from the `SCENARIOS` registry or a non-string `scenario` body field.
-- **`buildOnce(name)`** (module-private) — dynamically imports `@scenarios/index`, builds the scenario into an empty database *once per process*, captures a `DatabaseCopy`, and caches it in the `copies` map. Subsequent calls for the same name are replays.
+- **`buildOnce(name)`** (module-private) — dynamically imports `@scenarios/index`, builds the scenario into an empty database _once per process_, captures a `DatabaseCopy`, and caches it in the `copies` map. Subsequent calls for the same name are replays.
 - **`runRestore(scenario)`** (module-private) — orchestrates a single restore: build-or-replay → `restoreDatabaseCopy` → `clearDemoOutbox` → `refreshLocaleOverrides` → `clearCache`.
 - **`describeScenario()`** (module-private) — dynamically imports `@scenarios/accounts` to return `seedCredentials` plus the pinned `subjects` map for the current scenario.
 - **`copies`** / **`currentScenario`** / **`restoreQueue`** (module-private state) — cache of built copies, the name last restored, and the tail promise of the serialisation queue.
@@ -37,7 +37,7 @@ Control surface for the demo profile, mounted only when `enableDemoProfile()` ha
 ## Notes
 
 - Scenario factories are **dynamically imported**, never statically, so a production process that never enables the demo profile pays zero cost for `scenarios/*`.
-- `buildOnce` empties the database *before* building; `restoreDatabaseCopy` empties *before* writing a replay. The two paths never double-empty.
+- `buildOnce` empties the database _before_ building; `restoreDatabaseCopy` empties _before_ writing a replay. The two paths never double-empty.
 - The restore queue serialises via a promise chain (`restoreQueue`); it never rejects, so a failed restore cannot block the next one.
 - `emptyDatabase` is used instead of `dropDatabase` to preserve index state and avoid a race where a write lands on an unbuilt unique index.
 - The `demoApp` handle is stored for the scenario flow runner (`scenarios/flows/loopback.ts`) to drive real HTTP against a throwaway listener during a one-time build.

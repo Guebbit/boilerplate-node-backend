@@ -1,8 +1,8 @@
 ---
 tags:
-  - 2brain
-  - 2brain/module
-  - project/boilerplate-node-backend
+    - 2brain
+    - 2brain/module
+    - project/boilerplate-node-backend
 type: module
 module: tests/unit/infrastructure/http/
 files: 19
@@ -34,6 +34,7 @@ This directory is the unit-test suite for the HTTP infrastructure layer (`src/in
 Read **`request.test.ts`** first — it documents the single entry point (`readInput`) that every controller calls, so understanding its source-precedence and edge-case rules gives you the shape of "how a request arrives." Then read **`response.test.ts`** to see the matching exit contract (envelope shape, status-to-code mapping, the "status written twice" invariant). Together they frame the full request→response lifecycle that every other test in this directory extends.
 
 ## Connected modules
+
 ```mermaid
 flowchart LR
     m_tests_unit_infrastructure_http["tests/unit/infrastructure/http/"]
@@ -57,6 +58,7 @@ flowchart LR
 [[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_tests_cross-cutting|tests/cross-cutting/]] · [[boilerplate-node-backend_tests_support|tests/support/]]
 
 ## Files
+
 - `tests/unit/infrastructure/http/errors.test.ts` — Unit tests for the HTTP error-interpretation layer (`databaseErrorInterpreter` and `rejectDatabaseError`). The suite pins the mapping from driver/Mongoose error shapes to `[httpCode, message]` tuples and verifies that `rejectDatabaseError` sends the correct status, a safe response body, and a developer-facing log line. Each branch is motivated by a real incident where a client error was reported as a 500 or the response body leaked driver prose and user data.
 - `tests/unit/infrastructure/http/frontend-link.test.ts` — Unit tests for the `frontendLink` builder — the single function that produces every confirmation URL the app emails (verify, reset, delete, email-change, order). Because all flows share this one builder, a regression here breaks every outbound link simultaneously, which is why coverage is thorough across kinds, locales, and configuration paths.
 - `tests/unit/infrastructure/http/middlewares/cache.test.ts` — Unit tests for the HTTP response-cache middleware. The file exercises key generation, header emission, envelope parsing, TTL clamping, the size gate, and the refresh-ahead path against the **real** middleware implementations, stubbing only the Redis transport (`@infrastructure/adapters/cache`) and the logger so the tests stay quiet.
@@ -78,4 +80,5 @@ flowchart LR
 - `tests/unit/infrastructure/http/validation-messages.test.ts` — Verifies that Zod's global error map — installed once via `registerValidationMessages` — emits the project's English i18n copy for every validation failure it handles. The file drives real schema parses (not the mapper directly) because that is the only path a request takes, and its central concern is catching the silent case where a message falls back to Zod's built-in English and looks like a valid message rather than a bug.
 
 ---
+
 [[boilerplate-node-backend_INDEX|← boilerplate-node-backend index]]

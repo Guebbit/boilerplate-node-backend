@@ -16,7 +16,7 @@ Single owner of all token-lifecycle logic for non-password account flows (reset,
 - **`findLiveTokenEntry(type, token)`** — Loads the user holding a live token of `type`, re-hashes the raw token, and returns `{ user, entry }`. Returns `undefined` for every failure mode (no match, wrong type, expired). The `entry` is exposed so `verifyLoginChallenge` (in `two-factor.ts`) can read `entry.amr`.
 - **`findLiveToken(type, token)`** — Thin wrapper over the above; returns only the `UserDocument`.
 - **`spendLiveToken(user, token)`** — Delegates to `userService.consumeToken` (the `$pull` write). Returns `true` only for the winning write; `false` is indistinguishable from "token never existed" (race-loser).
-- **`toSession(token, cookieToken?)`** *(private)* — Maps a `Token` subdocument to the wire `Session` shape. The token value never appears in the output; the subdocument `_id` is the identifier. `current` is set only when `cookieToken` hashes to the stored digest.
+- **`toSession(token, cookieToken?)`** _(private)_ — Maps a `Token` subdocument to the wire `Session` shape. The token value never appears in the output; the subdocument `_id` is the identifier. `current` is set only when `cookieToken` hashes to the stored digest.
 - **`sessionsList(userId, cookieToken?)`** — Returns `ResponseSuccess<{ sessions }>` or `ResponseReject`. Filters the user's tokens to live refresh sessions only, then maps via `toSession`.
 
 ## Relationships
@@ -30,7 +30,7 @@ Single owner of all token-lifecycle logic for non-password account flows (reset,
 
 ## Notes
 
-- **Opaque failure.** `findLiveToken` / `findLiveTokenEntry` return `undefined` for *every* reason (user not found, token not in array, wrong type, expired). Callers cannot distinguish them; the HTTP layer must map them all to the same 404/400.
+- **Opaque failure.** `findLiveToken` / `findLiveTokenEntry` return `undefined` for _every_ reason (user not found, token not in array, wrong type, expired). Callers cannot distinguish them; the HTTP layer must map them all to the same 404/400.
 - **Absent `expiration` ≠ expired.** A missing `expiration` field means the token never expires (this is how a non-positive TTL is stored). Treating absent as expired would revoke exactly those tokens.
 - **Tokens are hashed at rest.** Any comparison against `token.token` must go through `hashToken` first. The `toSession` mapping and `findLiveTokenEntry` both do this.
 - **`tokens` is `select: false`.** The field is excluded from normal reads; `sessionsList` must use `findByIdWithCredentials` to retrieve it.

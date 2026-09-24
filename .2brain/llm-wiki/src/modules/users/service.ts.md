@@ -38,7 +38,7 @@ The user-document service: admin-facing CRUD and search, plus the named identity
 
 ## Notes
 
-- `validateData` applies `.strip()` *only* at this boundary so that a PUT body carrying `id` (row identity) passes; `zodUserSchema` itself stays strict for `signup` and `PUT /account`, which must reject undeclared fields.
+- `validateData` applies `.strip()` _only_ at this boundary so that a PUT body carrying `id` (row identity) passes; `zodUserSchema` itself stays strict for `signup` and `PUT /account`, which must reject undeclared fields.
 - When no operator-supplied password is given in `create`, a 32-byte random hex string fills the required field — the account is effectively locked until a real password is set, and no setup email is sent unless `sendSetupEmail` is explicitly true.
 - A failed `assignRole` in `create` triggers a **compensating delete** of the already-persisted user row rather than pre-validating the escalation, because pre-validation would skip the audit trail that `assignRole` itself produces.
 - `analyticsConsent` rides along in `update` but is deliberately absent from the admin `UpdateUserByIdRequest` contract — consent is the data subject's own right, set only by `account`'s self-service path.

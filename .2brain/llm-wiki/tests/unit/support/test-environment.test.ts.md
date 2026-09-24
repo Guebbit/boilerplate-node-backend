@@ -16,13 +16,13 @@ Unit tests for the Jest environment (`tests/support/test-environment.ts`). Each 
 - **`EnvironmentArguments`** — type alias for the two constructor args Jest passes to an environment.
 - **`SETTLE_MS` (40)** — default settle window: long enough for 1 ms timers to tick several times, short enough to keep the suite fast.
 - **`createEnvironment()`** — instantiates a real `TestEnvironment` with minimal `projectConfig`/`globalConfig` stubs, calls `.setup()`, and returns it ready to use.
-- **`settle(ms?)`** — waits on the *real* (host) clock via `setTimeout`, so the wait itself is never affected by the environment under test.
+- **`settle(ms?)`** — waits on the _real_ (host) clock via `setTimeout`, so the wait itself is never affected by the environment under test.
 - **Test cases** (five) covering:
-  - an uncleared `setInterval` stops ticking after teardown
-  - a pending `setTimeout` does not fire after teardown
-  - the file's *own* timers (args, `clearTimeout`) still work while the environment is alive
-  - `promisify(environment.global.setTimeout)` resolves correctly
-  - a `PerformanceObserver` created on the real global is disconnected by teardown (marks before/after are distinguished)
+    - an uncleared `setInterval` stops ticking after teardown
+    - a pending `setTimeout` does not fire after teardown
+    - the file's _own_ timers (args, `clearTimeout`) still work while the environment is alive
+    - `promisify(environment.global.setTimeout)` resolves correctly
+    - a `PerformanceObserver` created on the real global is disconnected by teardown (marks before/after are distinguished)
 
 ## Relationships
 
@@ -32,5 +32,5 @@ Unit tests for the Jest environment (`tests/support/test-environment.ts`). Each 
 ## Notes
 
 - `settle` intentionally uses the host `setTimeout`, not `environment.global.setTimeout`. Using the environment's timer would mean teardown could cancel the wait itself, defeating the test.
-- The PerformanceObserver test registers the observer on the *real* `globalThis` (via `node:perf_hooks`), not on `environment.global`. This exercises the path where a test file forgets to disconnect a real-world observer.
+- The PerformanceObserver test registers the observer on the _real_ `globalThis` (via `node:perf_hooks`), not on `environment.global`. This exercises the path where a test file forgets to disconnect a real-world observer.
 - Constructor args are deliberately minimal (`testEnvironmentOptions: {}`, `fakeTimers: {}`, empty `globalConfig`). Only fields that `jest-environment-node` actually reads need to be present.

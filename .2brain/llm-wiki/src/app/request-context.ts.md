@@ -15,9 +15,9 @@ Installs the per-request context middlewares (correlation ID, access logging, lo
 
 - **`REQUEST_ID_PATTERN`** – Regex matching a canonical RFC 4122 UUID (any version/variant). Used to validate a client-supplied `x-request-id` before it is trusted into logs and audit entries.
 - **`installRequestContext(app: Express): void`** – The sole export. Registers three middlewares in sequence:
-  1. Inline request-ID middleware: reuses a valid `x-request-id` header or generates one via `crypto.randomUUID()`; sets it on `request` and the response header.
-  2. `requestLogger` (Winston access log + OpenTelemetry trace injection).
-  3. `attachLocale` (negotiates `Accept-Language` and makes the locale available to downstream code).
+    1. Inline request-ID middleware: reuses a valid `x-request-id` header or generates one via `crypto.randomUUID()`; sets it on `request` and the response header.
+    2. `requestLogger` (Winston access log + OpenTelemetry trace injection).
+    3. `attachLocale` (negotiates `Accept-Language` and makes the locale available to downstream code).
 
 ## Relationships
 

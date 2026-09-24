@@ -16,7 +16,7 @@ Centralizes Zod parse-error copy so every schema violation—generated or hand-w
 - **`sizeKey(bound, origin)`** — Maps a size constraint to the correct i18n key, distinguishing string character counts (`-string`), collection item counts (`-items`), and numeric bounds (`-number`).
 - **`NAMED_FORMATS`** — `Set` of format codes (`email`, `url`, `uuid`, `datetime`, `date`, `time`) that receive a dedicated i18n key; everything else falls to the generic format message.
 - **`messageFor(issue)`** — Translates one `$ZodIssue` into a localized string. Every branch resolves a `t(...)` key; the `default` case returns the generic `validation.invalid` rather than an untranslated Zod string.
-- **`registerValidationMessages()`** *(exported)* — Installs the map via `z.config({ customError: … })`. Must be called explicitly during boot; it is **not** a side effect of importing the module.
+- **`registerValidationMessages()`** _(exported)_ — Installs the map via `z.config({ customError: … })`. Must be called explicitly during boot; it is **not** a side effect of importing the module.
 
 ## Relationships
 
@@ -29,7 +29,7 @@ Centralizes Zod parse-error copy so every schema violation—generated or hand-w
 ## Notes
 
 - **Parse-time, not build-time.** The map reads the request-scoped `t` when Zod parses, not when a schema object is constructed. A schema can be defined once and reused across requests in different languages.
-- **~17 i18n keys cover all generated schemas.** Keys are per *constraint type* (e.g. `validation.too-small-string`), not per field, which keeps the dictionary small regardless of schema count.
+- **~17 i18n keys cover all generated schemas.** Keys are per _constraint type_ (e.g. `validation.too-small-string`), not per field, which keeps the dictionary small regardless of schema count.
 - **Unknown issue codes degrade to `validation.invalid`.** Deliberate trade-off: vague-but-translated over precise-but-English. This covers `.refine()` calls, union mismatches, and any future Zod issue codes.
 - **Uses Zod v4 `customError` hook** (`z.config`), not per-schema `.message()` overrides, so no codegen changes are needed.
 - **`invalid_type` splits on `input === undefined`** to distinguish "field missing" from "wrong type" — two different user errors with different messages.

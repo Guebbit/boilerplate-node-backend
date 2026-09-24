@@ -15,9 +15,9 @@ Pins the shape of undocumented Express router internals (`Router.stack`, `layer.
 
 - **`RouteLayer` / `UseLayer` interfaces** — local type descriptions of the two layer shapes found in `Router.stack`; used to type-assert the probe's layers for the individual assertions.
 - **`describe('Router.stack shape')`** — builds a minimal probe router (one `use`, one `get('/:id')`), then asserts three invariants:
-  1. `stack` is an array of length 2.
-  2. Route layers expose `route.methods` (a boolean map) and `route.stack[].handle` (a function).
-  3. Middleware (`use`) layers have `route === undefined`, distinguishing them from route layers.
+    1. `stack` is an array of length 2.
+    2. Route layers expose `route.methods` (a boolean map) and `route.stack[].handle` (a function).
+    3. Middleware (`use`) layers have `route === undefined`, distinguishing them from route layers.
 - **`asStub` (imported from `@tests/stub`)** — bypasses TypeScript's type system to access the non-public `probe.stack` property without a cast that the compiler would flag.
 
 ## Relationships

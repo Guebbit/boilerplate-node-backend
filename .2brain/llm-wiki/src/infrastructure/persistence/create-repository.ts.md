@@ -36,7 +36,7 @@ Generic repository factory that every module's `repository.ts` builds on. It enc
 ## Notes
 
 - **Spread, not inheritance.** The factory result is an object literal. A module that needs to override or drop a method re-declares it in its own object rather than using `extends`/`implements`. This is deliberate to avoid protected-hook complexity.
-- **`findByIdRaw` vs `findById` vs `search`.** `findByIdRaw` returns a lean object *without* the transform (keeps `_id`/`__v`); `findAll` likewise skips normalization. Only `search` applies the wire-shape transform. Use `findByIdRaw` when embedding a snapshot in another document.
+- **`findByIdRaw` vs `findById` vs `search`.** `findByIdRaw` returns a lean object _without_ the transform (keeps `_id`/`__v`); `findAll` likewise skips normalization. Only `search` applies the wire-shape transform. Use `findByIdRaw` when embedding a snapshot in another document.
 - **Boolean filters are not re-coerced.** `SearchSpec.booleans` expects a real `boolean` in the bag. Controllers are responsible for decoding `'true'`/`'false'` strings first; re-coercing in the repository would mask a controller bug.
 - **Regex inputs are always escaped.** `addRegexFilter` and `toSearchPattern` both sanitize; passing raw user text into `$regex` without them is a public ReDoS vector.
 - **`buildWhere` is also exposed publicly** on the returned object so that aggregation pipelines can reuse the same filter rules for their `$match` stage.

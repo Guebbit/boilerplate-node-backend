@@ -8,9 +8,11 @@ model: ollama:qwen3.8:27b
 # src/cluster.ts
 
 ## Purpose
+
 Entry point of the repository (set as `main` in `package.json`). It bootstraps OpenTelemetry tracing, then either forks a configurable number of `node:cluster` workers (primary role) or delegates to `./app` (worker role). It exists so the application can scale across CPU cores and survive transient worker crashes without manual restart.
 
 ## Key elements
+
 - **`startTracing()` call** — imported and invoked at the very top, before any other module loads, to ensure OTel context is available process-wide.
 - **`CLUSTER_ENABLED`** — resolved from `NODE_ENABLE_CLUSTERING` (default `false`); gates the entire primary/worker branching.
 - **`getWorkerTarget()`** — reads `NODE_CLUSTER_WORKERS` (default `os.cpus().length`) and clamps the result to ≥ 1.
@@ -19,11 +21,13 @@ Entry point of the repository (set as `main` in `package.json`). It bootstraps O
 - **Worker branch** — the `else` path simply `void import('./app')`, so workers run the same application code the primary would.
 
 ## Relationships
+
 - **`@infrastructure/runtime/otel-sdk`** — `startTracing()` is called immediately on module load; this is a hard ordering dependency (tracing must be active before the cluster or app code runs).
 - **`@infrastructure/adapters/logger`** — all structured log output (info/warn) in the primary process goes through the shared `logger` instance.
 - **`@infrastructure/runtime/environment`** — `environmentFlag` and `environmentNumber` are the sole accessors for every `NODE_*` tuning knob in this file; no direct `process.env` reads.
 
 ## Notes
+
 - The OTel import is intentionally placed above all other imports. Reordering will silently break tracing context for the rest of the module.
 - `scheduleRespawn` uses `timer.unref()` so pending respawn timers don't keep the primary process alive after an intentional shutdown.
 - The Stryker mutation-testing disable/restore comments around log lines are intentional — those lines are expected to be "trivial" for mutation scoring; do not remove them when refactoring.

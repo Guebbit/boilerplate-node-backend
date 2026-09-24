@@ -15,11 +15,11 @@ Provides role-based `AuthContext`, `Caller`, and `CallerContext` fixtures for th
 
 - **`TEST_TENANT_ID`** (`'shop'`) — the single tenant every fixture in this file belongs to; multi-tenant cases live in the conformance suite.
 - **`asRole(role, id?)`** — core factory; returns a full `AuthContext` with the given tenant role and a throwaway identity.
-- **`asCustomer` / `asAdmin` / `asManager` / `asWarehouse` / `asSupport` / `asEditor` / `asModerator`** — one-liner wrappers around `asRole` that document what each role *can* and *cannot* do in the doc comment.
+- **`asCustomer` / `asAdmin` / `asManager` / `asWarehouse` / `asSupport` / `asEditor` / `asModerator`** — one-liner wrappers around `asRole` that document what each role _can_ and _cannot_ do in the doc comment.
 - **`asOperator(id?)`** — the platform-level operator (`tenant: 'guest'`, `platform: 'operator'`); intentionally **not** a tenant super-admin, making it the natural counterpart to `asAdmin` in scope tests.
 - **`testCallerContext`** — an anonymous `CallerContext` for unit tests that call a service directly and don't care who the caller is.
 - **`callerAs(role, id?)`** — returns a `TenantCaller` (what an authorization decision, audit row, or analytics event actually sees) via `callerInScope(asRole(role, id), 'tenant')`.
-- **`callerContextAs(role, id?)`** — wraps `callerAs` into a `TenantCallerContext` for service tests that need a *specific* role (e.g., the granter in an `assignRole` call).
+- **`callerContextAs(role, id?)`** — wraps `callerAs` into a `TenantCallerContext` for service tests that need a _specific_ role (e.g., the granter in an `assignRole` call).
 - **`strangerCaller()`** — shorthand for `anonymousCaller()`, the evaluator's view of an unauthenticated actor.
 
 ## Relationships

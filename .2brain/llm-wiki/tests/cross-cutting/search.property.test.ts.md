@@ -15,14 +15,14 @@ Property-based (fast-check) tests for the search module's security-critical help
 
 - **`RUN`** — Shared fast-check config: fixed seed `20_260_809`, 300 runs, `endOnFailure: true`. Counterexamples are written back with their seed.
 - **`requestValue()`** — Arbitrary that models "anything a request can put in a pagination field" (`fc.anything()`, integers, strings, `undefined`), matching the `unknown` typing of `page`/`pageSize`.
-- **`describe('escapeRegex')`** — Five properties: compiled-RegExp never throws; round-trip literal match; metacharacter alphabet (`$()*+.?[\]^{|}`) stripped of quantifying/anchoring power; alphanumeric text passes through unmodified; double-escaping is *not* idempotent (deliberate, single application site).
+- **`describe('escapeRegex')`** — Five properties: compiled-RegExp never throws; round-trip literal match; metacharacter alphabet (`$()*+.?[\]^{|}`) stripped of quantifying/anchoring power; alphanumeric text passes through unmodified; double-escaping is _not_ idempotent (deliberate, single application site).
 - **`describe('addTextFilter / addRegexFilter')`** — Three properties: every `$regex` clause produced is compilable; empty/whitespace-only input produces an empty filter object (avoids full-collection scan); one `$or` clause per requested field.
 - **`describe('normalizePagination')`** — Four properties: skip is always a non-negative integer; `skip === (page − 1) × pageSize` identity; page 1 maps to skip 0; `buildPaginatedMeta` reports `totalPages: 0` for zero items.
 
 ## Relationships
 
 - **`src/infrastructure/persistence/search.ts`** — Sole source under test. Imports `escapeRegex`, `normalizePagination`, `addTextFilter`, `addRegexFilter`, `buildPaginatedMeta`. Every property here is a claim about those functions' behaviour over arbitrary input.
-- **`search-regex.test.ts` / `search-pagination.test.ts`** (sibling example-based files, not in graph) — Complementary, not redundant. They own per-metacharacter diagnostics, a timing assertion (catastrophic-pattern defusal), and a negative `1.5` ≠ `1x5` case. This file owns totality over arbitrary strings, generated metacharacter *combinations*, and the non-idempotence property.
+- **`search-regex.test.ts` / `search-pagination.test.ts`** (sibling example-based files, not in graph) — Complementary, not redundant. They own per-metacharacter diagnostics, a timing assertion (catastrophic-pattern defusal), and a negative `1.5` ≠ `1x5` case. This file owns totality over arbitrary strings, generated metacharacter _combinations_, and the non-idempotence property.
 
 ## Notes
 

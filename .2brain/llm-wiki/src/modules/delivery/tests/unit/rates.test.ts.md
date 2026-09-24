@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the pure shipping-rate functions in `domain/rates.ts`. No database, no mocks — it exercises the pricing table and the weight/threshold rules in isolation. The doc header explicitly separates this from `tests/integration/service.test.ts`, which exists because *persistence* of a shipment needs a real DB; the pricing rule itself does not.
+Unit tests for the pure shipping-rate functions in `domain/rates.ts`. No database, no mocks — it exercises the pricing table and the weight/threshold rules in isolation. The doc header explicitly separates this from `tests/integration/service.test.ts`, which exists because _persistence_ of a shipment needs a real DB; the pricing rule itself does not.
 
 ## Key elements
 
@@ -26,6 +26,6 @@ Unit tests for the pure shipping-rate functions in `domain/rates.ts`. No databas
 ## Notes
 
 - The `minWeight` test deliberately constructs a synthetic method object rather than pulling from `SHIPPING_METHODS`, so the branch stays covered even though no current method declares a floor.
-- `SHIPPING_METHODS` is treated as *committed data*, not user input; the canary assertions are cheap guards against a one-character typo producing a wrong price at runtime.
+- `SHIPPING_METHODS` is treated as _committed data_, not user input; the canary assertions are cheap guards against a one-character typo producing a wrong price at runtime.
 - Numeric literals use underscores (`1_000_000`, `10_000`, `40_000`) for readability.
 - The file header references `tests/integration/service.test.ts` as the companion for persistence-level concerns — do not conflate the two.

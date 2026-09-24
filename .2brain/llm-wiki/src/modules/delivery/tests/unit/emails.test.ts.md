@@ -15,11 +15,11 @@ Unit test for the `shipmentShippedEmail` builder. It verifies that the dispatch 
 
 - **`NAME` / `CODE`** – Shared fixture constants (`'Ada Lovelace'`, `'TRK-99887766'`) used by every test case.
 - **`describe('shipmentShippedEmail', …)`** – Contains five assertions:
-  - *names the dispatch template* – `.template` equals `'delivery.shipment-shipped'`.
-  - *puts the tracking code in the message* – `data.tracking` contains `CODE` and has **no** `{{` remnants.
-  - *greets the customer by name* – `data.greeting` contains `NAME`.
-  - *resolves every copy slot rather than echoing a key* – `subject`, `data.pageMetaTitle`, `data.body`, `data.footer` are non-empty and do not start with `'delivery.'`; `data.pageMetaLinks` is `[]`.
-  - *carries the locale through and translates by it* – `locale` is passed through (`'en'` / `'it'`), and the Italian `subject` differs from the English one.
+    - _names the dispatch template_ – `.template` equals `'delivery.shipment-shipped'`.
+    - _puts the tracking code in the message_ – `data.tracking` contains `CODE` and has **no** `{{` remnants.
+    - _greets the customer by name_ – `data.greeting` contains `NAME`.
+    - _resolves every copy slot rather than echoing a key_ – `subject`, `data.pageMetaTitle`, `data.body`, `data.footer` are non-empty and do not start with `'delivery.'`; `data.pageMetaLinks` is `[]`.
+    - _carries the locale through and translates by it_ – `locale` is passed through (`'en'` / `'it'`), and the Italian `subject` differs from the English one.
 
 ## Relationships
 

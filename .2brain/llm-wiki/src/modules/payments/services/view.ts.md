@@ -15,8 +15,8 @@ Read-side service for the order page's payment panel: loads a payment for a give
 
 - **`getForOrder(orderId, authContext?)`** — Looks up the payment via `paymentRepository.findByOrderId` with `callerScope`. On a miss, returns a 404 reject with an i18n message. On a hit, reads the order (via `orderService.getById`) solely to evaluate payability, then returns `withActions(payment, order, authContext)`.
 - **`withActions(payment, order, authContext?)`** — Spreads `payment.toJSON()` (document → wire transform: `_id`→`id`, dates→ISO) and computes the `actions` object:
-  - `pay` — `true` when the payment status is in `CONFIRMABLE_PAYMENT_STATUSES` **and** the order still satisfies `isPayable`. In-flight payments are deliberately excluded.
-  - `refund` — `true` when the caller's ability subject holds the `payments.any.update` key **and** the payment is in `REFUNDABLE_PAYMENT_STATUS`.
+    - `pay` — `true` when the payment status is in `CONFIRMABLE_PAYMENT_STATUSES` **and** the order still satisfies `isPayable`. In-flight payments are deliberately excluded.
+    - `refund` — `true` when the caller's ability subject holds the `payments.any.update` key **and** the payment is in `REFUNDABLE_PAYMENT_STATUS`.
 
 ## Relationships
 

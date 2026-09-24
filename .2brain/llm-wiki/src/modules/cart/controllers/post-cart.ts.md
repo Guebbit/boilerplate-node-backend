@@ -29,5 +29,5 @@ Thin HTTP adapter that handles `POST /cart`. It validates the incoming request b
 
 - The handler is **not** an async function; it returns a Promise chain (`cartService.cartItemAdd(...).then(...).catch(...)`). Callers (or Express) must not `await` it as a synchronous function.
 - `request.authContext!` is asserted non-null with `!`. The auth middleware is expected to run before this handler; if it does not, the `!` will throw at runtime rather than produce a typed error.
-- `productId` is validated against the Zod schema *and* separately against Mongo `ObjectId` format via `requireObjectId`. The Zod schema types it as a plain string (matching the OpenAPI contract), so the ObjectId check is a second, narrower guard.
-- The success status is `200`, not `201` or `202`. The endpoint is an upsert (add *or* replace quantity), so a creation-style status would be misleading.
+- `productId` is validated against the Zod schema _and_ separately against Mongo `ObjectId` format via `requireObjectId`. The Zod schema types it as a plain string (matching the OpenAPI contract), so the ObjectId check is a second, narrower guard.
+- The success status is `200`, not `201` or `202`. The endpoint is an upsert (add _or_ replace quantity), so a creation-style status would be misleading.

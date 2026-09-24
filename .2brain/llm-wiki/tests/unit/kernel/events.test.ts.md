@@ -22,11 +22,11 @@ Unit tests for the domain event bus (`src/kernel/events.ts`). They lock in two s
 ## Relationships
 
 - **`src/kernel/events.ts`** — the module under test. The file imports `emitDomainEvent`, `onDomainEvent`, and `resetDomainEvents` directly and asserts their observable behavior (return value, ordering, error propagation).
-- **`src/infrastructure/adapters/logger.ts`** — mocked at module level. The only interaction is verifying that `logger.error` is called with the event name and the thrown/rejected `Error` when a handler fails, and that it is *not* called on a clean emit.
+- **`src/infrastructure/adapters/logger.ts`** — mocked at module level. The only interaction is verifying that `logger.error` is called with the event name and the thrown/rejected `Error` when a handler fails, and that it is _not_ called on a clean emit.
 
 ## Notes
 
 - **Return-value contract:** `emitDomainEvent` resolves to `true` (all handlers succeeded or none subscribed) or `false` (at least one handler threw/rejected). It never rejects. Callers like the `orders` module use `false` to keep a refund marker standing.
-- **Async-ordering test uses `setImmediate`, not `setTimeout`** — a zero-delay timer would still let a fire-and-forget bus interleave; `setImmediate` guarantees the handler's continuation is queued *after* the emitter's await resumes, making the test deterministic without timing sensitivity.
+- **Async-ordering test uses `setImmediate`, not `setTimeout`** — a zero-delay timer would still let a fire-and-forget bus interleave; `setImmediate` guarantees the handler's continuation is queued _after_ the emitter's await resumes, making the test deterministic without timing sensitivity.
 - **`declare module` augmentation is file-scoped.** The `test.thing-happened` key exists only within this test's type graph; other files do not see it.
 - **No integration or concurrency tests here.** This file validates single-emitter, single-tick behavior only.

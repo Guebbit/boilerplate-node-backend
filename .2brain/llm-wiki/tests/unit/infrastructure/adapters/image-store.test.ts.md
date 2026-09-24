@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for `filesystemImageStore`, the sole module that translates `imageUrl` strings into filesystem paths. Tests use real files in a real temp directory (via `mkdtemp`) rather than mocking `node:fs`, because the critical property under test is *which* path string gets passed to `unlink`/`writeFile`, not merely that a call was made.
+Unit tests for `filesystemImageStore`, the sole module that translates `imageUrl` strings into filesystem paths. Tests use real files in a real temp directory (via `mkdtemp`) rather than mocking `node:fs`, because the critical property under test is _which_ path string gets passed to `unlink`/`writeFile`, not merely that a call was made.
 
 ## Key elements
 
@@ -30,8 +30,8 @@ Unit tests for `filesystemImageStore`, the sole module that translates `imageUrl
 
 ## Notes
 
-- No mocking of `node:fs`. The file header comment explicitly justifies this: a mocked `fs` would only assert that `unlink` was called with *a* string, not that it was called with the *correct* string.
+- No mocking of `node:fs`. The file header comment explicitly justifies this: a mocked `fs` would only assert that `unlink` was called with _a_ string, not that it was called with the _correct_ string.
 - Env vars `NODE_PUBLIC_PATH` and `NODE_QUARANTINE_PATH` are saved at module load and restored in `afterEach`; forgetting to restore would leak into sibling test files running in the same process.
 - The `promote` idempotency test documents an intentional design choice: a redelivered job or reclaimed lease that re-runs with the same digest stem must not fail with a "file exists" error.
-- The path-traversal tests create a real `outside.png` *outside* the temp root and assert it still exists after the rejected call; a `finally` block cleans it up regardless of assertion outcome.
-- The protocol-relative URL test (`//images/flat.png`) is singled out in a long comment because it is the *only* remote-URL case that would actually resolve to a valid local path if `isRemoteUrl`'s protocol-relative check regressed — all other remote-URL cases (`https://cdn.example.com/…`) are caught independently by the images-directory containment check.
+- The path-traversal tests create a real `outside.png` _outside_ the temp root and assert it still exists after the rejected call; a `finally` block cleans it up regardless of assertion outcome.
+- The protocol-relative URL test (`//images/flat.png`) is singled out in a long comment because it is the _only_ remote-URL case that would actually resolve to a valid local path if `isRemoteUrl`'s protocol-relative check regressed — all other remote-URL cases (`https://cdn.example.com/…`) are caught independently by the images-directory containment check.

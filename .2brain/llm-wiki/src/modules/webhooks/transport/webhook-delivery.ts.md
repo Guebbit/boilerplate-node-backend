@@ -31,7 +31,7 @@ Implements a single outbound webhook delivery attempt — SSRF-validate the targ
 ## Notes
 
 - **Redirects are a hard failure.** A 3xx status is returned as `success: false` with a specific error message. No `Location` header is ever read or followed.
-- **`hostname` vs. `lookup`.** The request options keep the *original* hostname (for TLS SNI / cert verification) while `lookup` is overridden with the SSRF guard's pinned resolver. These are independent: the socket connects to the pinned IP, but the certificate is checked against the configured name.
+- **`hostname` vs. `lookup`.** The request options keep the _original_ hostname (for TLS SNI / cert verification) while `lookup` is overridden with the SSRF guard's pinned resolver. These are independent: the socket connects to the pinned IP, but the certificate is checked against the configured name.
 - **`node:http` is reachable only for the SSRF guard's one exempted demo host.** Every other `http:` URL is refused by `resolveSafeOutboundTarget` before a request module is selected.
 - **Promise chain, not `async/await`.** Deliberate: moving `JSON.stringify` inside the first `.then` converts a synchronous throw (e.g. circular payload) into a rejection that the trailing `.catch` already handles.
 - **Cross-realm `instanceof` pitfall.** Under Jest's VM sandbox a `DOMException` (used as `AbortSignal.timeout`'s rejection reason) fails `instanceof Error` against this file's realm. `errorName` sidesteps this by reading `.name` duck-typed.

@@ -33,7 +33,7 @@ Declarative index reconciliation: compares what MongoDB stores against what Mong
 ## Notes
 
 - **Partial unique indexes are excluded** from duplicate detection: their `partialFilterExpression` selects a subset the aggregation cannot model, so a whole-collection scan would report false collisions.
-- **`syncIndexes()` is destructive by design**: it drops *every* index on a registered collection that the schema does not declare (except `_id_`). This is why `assertModelsRegistered` exists — an empty registry would mean "drop everything."
+- **`syncIndexes()` is destructive by design**: it drops _every_ index on a registered collection that the schema does not declare (except `_id_`). This is why `assertModelsRegistered` exists — an empty registry would mean "drop everything."
 - **`findBlockingDuplicates` defaults to scanning all unique indexes** when called without a `plan` argument (audit mode); pass the plan to limit the scan to indexes about to be created, which matters because `db:bootstrap` runs on every container start.
 - **Dots in key names** are handled in `findDuplicates` by replacing `.` with `_` in the `$group` `_id` (MongoDB's aggregation limitation).
 - **`planIndexSync` returns an empty array** when the database already matches — not a list of zero-diff entries.

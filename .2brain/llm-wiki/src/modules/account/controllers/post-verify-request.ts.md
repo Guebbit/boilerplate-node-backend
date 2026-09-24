@@ -27,4 +27,4 @@ Thin HTTP adapter for `POST /account/verify-request`. It re-sends an email-verif
 
 - The non-null assertion `request.authContext!` is safe only because `isAuth` middleware runs first; this file has no fallback if that invariant is broken.
 - Which account states are eligible for re-verification is **not** decided here — it's the service's responsibility. A second caller cannot bypass that check through this controller.
-- The `refused` check is a *result* check (the service explicitly declined), not an exception path. Real errors go through `.catch(catchAs …)` instead.
+- The `refused` check is a _result_ check (the service explicitly declined), not an exception path. Real errors go through `.catch(catchAs …)` instead.

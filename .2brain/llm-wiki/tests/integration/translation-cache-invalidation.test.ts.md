@@ -29,7 +29,7 @@ End-to-end integration test proving that a successful `PATCH /locales/translatio
 
 ## Notes
 
-- **`invalidateCacheTagsLogged` must be re-mocked explicitly.** `jest.requireActual` captures the real module's local binding *before* the mock factory runs, so the real `invalidateCacheTagsLogged` still calls the real Redis. The mock re-declares it against the same in-memory double; omitting this makes every write hit unreachable Redis and the test appears to pass.
+- **`invalidateCacheTagsLogged` must be re-mocked explicitly.** `jest.requireActual` captures the real module's local binding _before_ the mock factory runs, so the real `invalidateCacheTagsLogged` still calls the real Redis. The mock re-declares it against the same in-memory double; omitting this makes every write hit unreachable Redis and the test appears to pass.
 - The `x-cache` header (`MISS` / `HIT`) is the primary assertion target, not the response body alone. This mirrors the convention in `locale-cache-invalidation.test.ts` for the tier-1 dictionary.
 - `en` is treated as the universal fallback locale (documented in `.env-example`); tests will fail in an environment where that is not the case.
-- The refused-write test (422) is intentionally included to guard against a regression where the handler invalidates the tag *before* validation, clearing the cache even though no data changed.
+- The refused-write test (422) is intentionally included to guard against a regression where the handler invalidates the tag _before_ validation, clearing the cache even though no data changed.

@@ -14,7 +14,7 @@ Read-side helpers for file uploads. This module normalizes whatever the multer m
 ## Key elements
 
 - **`getFormFiles(request: Request): string[] | undefined`** — Returns a flat array of file paths regardless of whether the route used `multer.single()`, `.array()`, or `.fields()`. Returns `undefined` when no file was uploaded (including the "present but empty" edge case), giving callers one falsy check.
-- **`RequestImage` (interface)** — The contract a write controller receives for the image half of a request: `imageUrl`, `thumbnailUrl`, `pendingImageKey` (quarantine key for async digest), and `deleteUpload()` (a one-shot undo that removes only files *this* request created).
+- **`RequestImage` (interface)** — The contract a write controller receives for the image half of a request: `imageUrl`, `thumbnailUrl`, `pendingImageKey` (quarantine key for async digest), and `deleteUpload()` (a one-shot undo that removes only files _this_ request created).
 - **`readUploadedImage(request): RequestImage`** — Reads back the URLs/keys the upload middleware recorded (`storedImageUrls`, `storedThumbnailUrls`, `quarantinedImageKeys`). Priority: inline-digested URL → pending/quarantine placeholder → body-supplied `imageUrl`. Wires `deleteUpload` to `imageStore.remove` or `imageStore.removeQuarantined` accordingly. Falls through to `bodyRecordOf(request).imageUrl` for body-only cases.
 
 ## Relationships
@@ -30,4 +30,4 @@ Read-side helpers for file uploads. This module normalizes whatever the multer m
 - `readUploadedImage` intentionally reads URLs **from the middleware's stored arrays**, not from multer's raw `path` field. This keeps filesystem separators out of persisted values and lets the store swap between local paths and CDN URLs transparently.
 - Only index `[0]` is read: these endpoints accept a single image; extras are silently ignored.
 - In the body-only fallback, non-string `imageUrl` values (numbers, booleans) are passed through as-is (cast to `string | undefined`) so that Zod can reject them with the correct 422 message. Coercing to `undefined` would trigger the controller's `= ''` default and mask the type error.
-- `deleteUpload` is deliberately scoped to files created by *this* request. It must never delete a body-supplied `imageUrl`, which belongs to a prior upload.
+- `deleteUpload` is deliberately scoped to files created by _this_ request. It must never delete a body-supplied `imageUrl`, which belongs to a prior upload.

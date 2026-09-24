@@ -36,7 +36,7 @@ Defines the Express router for all order-management HTTP endpoints. It wires aut
 
 ## Notes
 
-- **Route order is load-bearing.** `/search`, `/:id/cancel`, `/:id/status-override`, `/:id/invoice`, and `/:id/hard` are declared *before* `GET /:id` so Express doesn't match them as an `:id` param. Reordering breaks routing.
+- **Route order is load-bearing.** `/search`, `/:id/cancel`, `/:id/status-override`, `/:id/invoice`, and `/:id/hard` are declared _before_ `GET /:id` so Express doesn't match them as an `:id` param. Reordering breaks routing.
 - **Session-only auth is intentional.** The router uses `isAuth` (not `isAuthOrCredential`). An API-key credential would resolve to no `authContext`, causing `orderService.callerScope` to fall back to a wider scope and leak other tenants' orders. Opening the module to credential-based access requires splitting the router first.
 - **`GET /:id/invoice` is deliberately uncached.** It renders a fresh PDF on every hit; caching raw bytes in the JSON cache would only ever store the first byte range Express flushed.
 - **`POST /:id/cancel` is the only write a non-admin customer can perform.** All other mutations require an `orders.any.*` permission.

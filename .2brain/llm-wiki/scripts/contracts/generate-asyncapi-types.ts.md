@@ -29,7 +29,7 @@ Generates the TypeScript realtime contract types (payload interfaces, message al
 
 ## Notes
 
-- **Shared-script invariant:** The file must remain byte-identical in both repos. Change it in one, copy it to the other, or generated outputs drift. The only intentional difference between repos is the *input* contract (full vs. public subset).
+- **Shared-script invariant:** The file must remain byte-identical in both repos. Change it in one, copy it to the other, or generated outputs drift. The only intentional difference between repos is the _input_ contract (full vs. public subset).
 - **ESM context:** Uses `import.meta.url` (not `__dirname`) to resolve the repo root; the script is a `.ts` file run via `tsx`.
 - **`no-unnecessary-condition` guard:** `resolveMessagePayloadType` uses `Object.hasOwn` instead of a nullish check because the `Record<string, AsyncApiMessage>` type assertion makes `?.` redundant to the type checker; without the guard the build fails under `no-unnecessary-condition`.
 - **Zod emitter is intentionally incomplete:** It covers only the constructs present in current worker payload schemas and throws on anything else. This is by design — a silent `z.unknown()` would mask a contract that outgrew the emitter.

@@ -14,16 +14,16 @@ OpenAPI 3.0.3 contract for the addresses module. It defines the four REST endpoi
 ## Key elements
 
 - **Paths** — four operations under `/account/addresses`:
-  - `GET /account/addresses` (`getAddresses`) — returns the full address book.
-  - `POST /account/addresses` (`addAddress`) — adds an entry; first entry auto-becomes default.
-  - `PUT /account/addresses/{addressId}` (`updateAddress`) — updates one entry; `default: true` claims the default slot.
-  - `DELETE /account/addresses/{addressId}` (`removeAddress`) — removes an entry; oldest remaining promotes to default.
+    - `GET /account/addresses` (`getAddresses`) — returns the full address book.
+    - `POST /account/addresses` (`addAddress`) — adds an entry; first entry auto-becomes default.
+    - `PUT /account/addresses/{addressId}` (`updateAddress`) — updates one entry; `default: true` claims the default slot.
+    - `DELETE /account/addresses/{addressId}` (`removeAddress`) — removes an entry; oldest remaining promotes to default.
 - **Schemas** (under `components/schemas`):
-  - `Address` — a saved entry; required fields: `id`, `fullName`, `street`, `city`, `zip`, `country`, `default`. Optional: `label`, `phone`.
-  - `AddressInput` — request body for POST; all address fields required except `label`, `phone`, `default`.
-  - `UpdateAddressRequest` — request body for PUT; all fields optional (partial-update semantics).
-  - `AddressesResponse` — `{ addresses: Address[] }`.
-  - `AddressesEnvelope` — standard `{ success, status, message, data }` wrapper around `AddressesResponse`.
+    - `Address` — a saved entry; required fields: `id`, `fullName`, `street`, `city`, `zip`, `country`, `default`. Optional: `label`, `phone`.
+    - `AddressInput` — request body for POST; all address fields required except `label`, `phone`, `default`.
+    - `UpdateAddressRequest` — request body for PUT; all fields optional (partial-update semantics).
+    - `AddressesResponse` — `{ addresses: Address[] }`.
+    - `AddressesEnvelope` — standard `{ success, status, message, data }` wrapper around `AddressesResponse`.
 - **Security** — every operation requires `bearerAuth`.
 
 ## Relationships
@@ -34,6 +34,6 @@ OpenAPI 3.0.3 contract for the addresses module. It defines the four REST endpoi
 ## Notes
 
 - **`default` field semantics differ by verb.** On **create**, an absent `default` means "become default only if this is the first entry." On **update**, both `default: false` and an absent `default` leave the existing assignment unchanged — the API refuses to demote the default without a named successor.
-- **404 is identity-blind.** A well-formed `addressId` belonging to *another* user returns the same `404` as a completely invented ID. This is intentional to avoid leaking the existence of other users' addresses.
+- **404 is identity-blind.** A well-formed `addressId` belonging to _another_ user returns the same `404` as a completely invented ID. This is intentional to avoid leaking the existence of other users' addresses.
 - **Strict shapes.** Every schema sets `additionalProperties: false`; unexpected fields in a request body will be rejected.
 - **Envelope is universal.** All four operations return the `AddressesEnvelope` wrapper on success, not a bare array.

@@ -18,7 +18,7 @@ Ambient TypeScript declaration that augments Express's `Request` interface with 
 - **`credentialId?: string`** – API-key id, set only on the credential path (`sk_…` branch of `getAuth`); mutually exclusive with `authContext`.
 - **`requestId?: string`** – Per-request correlation id.
 - **`storedImageUrls?: string[]` / `storedThumbnailUrls?: string[]`** – Image and thumbnail URLs set when the digest pipeline ran inline (no broker). Read via `readUploadedImage`, not directly.
-- **`quarantinedImageKeys?: string[]`** – Quarantine keys set when a broker *is* configured; digest happens later in a worker. Mutually exclusive with `storedImageUrls`.
+- **`quarantinedImageKeys?: string[]`** – Quarantine keys set when a broker _is_ configured; digest happens later in a worker. Mutually exclusive with `storedImageUrls`.
 - **`rawBody?: Buffer`** – Original request bytes, preserved for signature verification. Set only by the `verify` hook in `app/security.ts` and only on the paths listed there.
 - **`paymentConfirmDeclined?: boolean`** – Distinguishes a genuine `PAYMENT_DECLINED` 409 from the `PAYMENT_ORDER_NOT_PAYABLE` race so the decline-budget limiter spends correctly.
 - **`locale?: string`** – Locale negotiated from `Accept-Language`.

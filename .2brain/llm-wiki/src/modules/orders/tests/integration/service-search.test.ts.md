@@ -15,11 +15,11 @@ Integration tests for `orderService.search` — the read path of the orders serv
 
 - **`describe('orderService.search — derived totals')`** — four tests asserting `totalItems` (distinct line count), `totalQuantity` (sum of quantities), and `totalPrice` (Σ price × qty) appear on every search result, including a multi-product composite case.
 - **`describe('orderService.search')`** — the main filter/pagination block:
-  - Default (no-filter) call returns all orders.
-  - Filters: `userId`, `email` (exact), `paymentMethod` + `status`, `id` (array), `productId` (embedded line match).
-  - Pagination via `page` / `pageSize`, verifying `meta.totalItems` and `meta.totalPages`.
-  - `scope` parameter — a raw Mongoose filter merged into the `$match` stage.
-  - Empty-dataset edge case.
+    - Default (no-filter) call returns all orders.
+    - Filters: `userId`, `email` (exact), `paymentMethod` + `status`, `id` (array), `productId` (embedded line match).
+    - Pagination via `page` / `pageSize`, verifying `meta.totalItems` and `meta.totalPages`.
+    - `scope` parameter — a raw Mongoose filter merged into the `$match` stage.
+    - Empty-dataset edge case.
 - **`describe('orderService.search — current (live) image')`** — three branches for the `current` field on each order line: product unchanged, product replaced after purchase, product hard-deleted (→ `null`).
 - **`setupTestDb()`** — called once at module level before any test runs.
 

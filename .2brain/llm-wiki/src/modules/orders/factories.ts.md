@@ -17,8 +17,8 @@ Test-fixture factory that builds an `OrderDocument` ready for `orderRepository.c
 - **`OrderLineInput`** – One order line: a `product` snapshot + `quantity` + optional `locale`. Drops `current`, `taxAmount`, `netAmount` (all derived at read time).
 - **`OrderOverrides`** – Caller-facing override type. Omits `items` (replaced by `OrderLineInput[]`), the three totals, and `transferInstructions`. Adds `transferReference` for `bank_transfer` fixtures (not part of the `Order` contract).
 - **`OrderFixture`** – Output type: `Partial<OrderDocument> & { _id }`, i.e. "an order ready for `orderRepository.create`".
-- **`toSnapshot`** *(internal)* – Converts an `OrderSnapshotInput` to `FrozenOrderLineProduct`: maps `id` → `Types.ObjectId`, ISO strings → `Date`, strips undefined fields.
-- **`makeOrder`** *(exported)* – Builds the full `OrderFixture`. Defaults `email` and per-line `locale`; passes `status` through untouched (the model owns its own `pending` default); wraps optional columns in `stripUndefined` so absent fields stay absent on write.
+- **`toSnapshot`** _(internal)_ – Converts an `OrderSnapshotInput` to `FrozenOrderLineProduct`: maps `id` → `Types.ObjectId`, ISO strings → `Date`, strips undefined fields.
+- **`makeOrder`** _(exported)_ – Builds the full `OrderFixture`. Defaults `email` and per-line `locale`; passes `status` through untouched (the model owns its own `pending` default); wraps optional columns in `stripUndefined` so absent fields stay absent on write.
 
 ## Relationships
 

@@ -29,6 +29,6 @@ Defines the Express route table for the wishlist module. It wires HTTP verbs and
 
 ## Notes
 
-- **Route order is load-bearing.** `POST /:productId/move-to-cart` is declared *before* `DELETE /:productId`. If reordered, Express would match the literal string `"move-to-cart"` as a `:productId` and the move-to-cart handler would never fire. The module-level JSDoc calls this out explicitly; preserve the order when adding new `/:productId` routes.
+- **Route order is load-bearing.** `POST /:productId/move-to-cart` is declared _before_ `DELETE /:productId`. If reordered, Express would match the literal string `"move-to-cart"` as a `:productId` and the move-to-cart handler would never fire. The module-level JSDoc calls this out explicitly; preserve the order when adding new `/:productId` routes.
 - No admin authorization middleware is used anywhere in this file — wishlist is strictly a user-facing, per-account resource.
 - All controllers are imported as named exports; the file adds no business logic itself.

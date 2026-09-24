@@ -15,9 +15,9 @@ Verifies that the products module's Zod schemas emit locale-specific validation 
 
 - **`copy(locale)`** — Internal helper. Reads `mergedResources()[locale].translation.products` to fetch the product-namespace translation strings for a given locale. Used to assert expected messages without hard-coding them.
 - **`describe('product validation messages')`** — Single test that:
-  - Loads `zodProductCreateSchema` from `@modules/products/model` via `loadBeforeI18n('it', …, 'products.field-title-min')`.
-  - Calls `safeParse` with intentionally invalid input (`title: 'ab'`, `price: -1`).
-  - Asserts `result.success` is `false` and that the emitted messages contain the Italian values for keys `field-title-min` and `field-price-min`.
+    - Loads `zodProductCreateSchema` from `@modules/products/model` via `loadBeforeI18n('it', …, 'products.field-title-min')`.
+    - Calls `safeParse` with intentionally invalid input (`title: 'ab'`, `price: -1`).
+    - Asserts `result.success` is `false` and that the emitted messages contain the Italian values for keys `field-title-min` and `field-price-min`.
 
 ## Relationships
 
@@ -28,4 +28,4 @@ Verifies that the products module's Zod schemas emit locale-specific validation 
 
 - The test intentionally does **not** hard-code the expected Italian strings; it reads them from `mergedResources` via the `copy` helper. This keeps the test valid even if the copy text changes, as long as the key is still wired.
 - The module doc-comment points to `modules/users` as the canonical reference for the i18n-over-Zod pattern; this file is a targeted regression test for the products schema specifically.
-- `loadBeforeI18n` is called *before* the dynamic `import('@modules/products/model')`, ensuring the schema is constructed in a context where the locale is already active.
+- `loadBeforeI18n` is called _before_ the dynamic `import('@modules/products/model')`, ensuring the schema is constructed in a context where the locale is already active.

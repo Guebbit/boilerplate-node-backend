@@ -31,7 +31,7 @@ Unit tests for `readInput` (and its sibling helpers) in `@infrastructure/http/re
 ## Notes
 
 - **Express 5 vs 4 body default:** express 5 leaves `request.body` as `undefined` when no body is sent (express 4 defaulted to `{}`). Tests explicitly cover the body-less path because reading a body key before precedence is applied would throw rather than fall through to `params`.
-- **Transport-conditional decoding:** multipart coercion (booleans, numbers, string arrays) is applied *only* when the content-type is multipart. JSON bodies already carry native types, so decoding them would be destructive. Tests assert both sides of that boundary.
+- **Transport-conditional decoding:** multipart coercion (booleans, numbers, string arrays) is applied _only_ when the content-type is multipart. JSON bodies already carry native types, so decoding them would be destructive. Tests assert both sides of that boundary.
 - **Empty-string ≠ zero for numbers:** `Number('')` is `0`, but the code deliberately leaves `''` untouched so that a missing form field is not silently turned into a valid (free) price. Unparseable values stay as the original string so downstream validators can reject them with their own contract message.
 - **`is()` returns `null`, not `false`,** when `contentType` is `undefined`, matching express's behavior for requests with no body. Tests rely on this distinction.
 - The file header comment warns that `readInput` is "small enough to look self-evident" and that the integration/contract suites exercise it without asking it its own questions—this file exists to close that gap.

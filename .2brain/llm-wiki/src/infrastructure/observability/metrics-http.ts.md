@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Prometheus HTTP request metrics (counters, duration histogram, in-flight gauge) and the helper functions that record them. This is the *define-and-record* layer only: the shared `prom-client` registry lives in `metrics-registry.ts`, and the read-back logic that serialises these metrics into the `GET /observability/metrics/overview` JSON lives in `modules/observability/http-readback.ts`.
+Defines the Prometheus HTTP request metrics (counters, duration histogram, in-flight gauge) and the helper functions that record them. This is the _define-and-record_ layer only: the shared `prom-client` registry lives in `metrics-registry.ts`, and the read-back logic that serialises these metrics into the `GET /observability/metrics/overview` JSON lives in `modules/observability/http-readback.ts`.
 
 ## Key elements
 
@@ -32,7 +32,7 @@ Defines the Prometheus HTTP request metrics (counters, duration histogram, in-fl
 
 ## Notes
 
-- **Cardinality guard:** the `route` label is always the *template* Express matched, never the raw request path. `UNMATCHED_ROUTE` collapses all 404/unknown paths into one series; without it a path-scanning attack would grow the registry without bound (prom-client never evicts series).
+- **Cardinality guard:** the `route` label is always the _template_ Express matched, never the raw request path. `UNMATCHED_ROUTE` collapses all 404/unknown paths into one series; without it a path-scanning attack would grow the registry without bound (prom-client never evicts series).
 - **Trailing-slash normalisation:** `router.get('/')` mounted at `/orders` produces `/orders/`, which `getRouteLabel` strips to `/orders` so it does not become a second series. The root path `/` is the special case that is left as-is.
 - **Gauge pairing:** `incrementInflight` / `decrementInflight` must be called exactly once per request (including error and client-abort paths). A missed `decrementInflight` causes the gauge to drift upward permanently.
 - **Histogram label set is narrower** than the counters' by design — adding `status_code` would multiply the number of time series by the bucket count (10).

@@ -13,18 +13,18 @@ Key domain concepts visible across files: **users/accounts**, **addresses**, **p
 
 ## Main Areas
 
-| Area | Path / Entry | Role |
-|---|---|---|
-| **Core types** | `src/types/index.ts` | Central type definitions (touches ~233 files) |
-| **HTTP infrastructure** | `src/infrastructure/http/` | Controller, request, response abstractions |
-| **i18n / locale** | `src/infrastructure/i18n/` | Locale context and internationalisation plumbing |
-| **Logging** | `src/infrastructure/adapters/logger.ts` | Structured logging adapter |
-| **Domain modules** | `src/modules/<name>/` | Bounded contexts (e.g. `users` with `service.ts`) |
-| **Scenarios / E2E** | `scenarios/` | Seed, flow, and integration scenarios (accounts, products, shop, backdate, rate-limits, etc.) |
-| **Test infrastructure** | `tests/support/`, `jest.config.*` | Unit, cluster, and mutation-test setups |
-| **API contracts & codegen** | `openapi.yaml`, `asyncapi*.yaml`, `orval.config.ts` | Spec-driven client generation |
-| **Documentation site** | `docs/` (VitePress) | Architecture theory, API guides, tooling docs |
-| **Docker / observability** | `docker-compose*.yml`, `docker/observability/` | Local, test, production, and proxy deployments; full monitoring stack |
+| Area                        | Path / Entry                                        | Role                                                                                          |
+| --------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| **Core types**              | `src/types/index.ts`                                | Central type definitions (touches ~233 files)                                                 |
+| **HTTP infrastructure**     | `src/infrastructure/http/`                          | Controller, request, response abstractions                                                    |
+| **i18n / locale**           | `src/infrastructure/i18n/`                          | Locale context and internationalisation plumbing                                              |
+| **Logging**                 | `src/infrastructure/adapters/logger.ts`             | Structured logging adapter                                                                    |
+| **Domain modules**          | `src/modules/<name>/`                               | Bounded contexts (e.g. `users` with `service.ts`)                                             |
+| **Scenarios / E2E**         | `scenarios/`                                        | Seed, flow, and integration scenarios (accounts, products, shop, backdate, rate-limits, etc.) |
+| **Test infrastructure**     | `tests/support/`, `jest.config.*`                   | Unit, cluster, and mutation-test setups                                                       |
+| **API contracts & codegen** | `openapi.yaml`, `asyncapi*.yaml`, `orval.config.ts` | Spec-driven client generation                                                                 |
+| **Documentation site**      | `docs/` (VitePress)                                 | Architecture theory, API guides, tooling docs                                                 |
+| **Docker / observability**  | `docker-compose*.yml`, `docker/observability/`      | Local, test, production, and proxy deployments; full monitoring stack                         |
 
 ### How They Relate
 

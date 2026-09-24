@@ -16,7 +16,7 @@ Unit test suite that pins down the wishlist route table: exact endpoint signatur
 - **`routeSignatures(router)` assertion** — asserts the router exposes exactly four endpoints in a specific order: `GET /`, `POST /`, `POST /:productId/move-to-cart`, `DELETE /:productId`.
 - **`it.each` auth guard check** — iterates over all four signatures and asserts each carries the `isAuth` guard.
 - **"admin-free by design" test** — filters `routeSignatures` for any route bearing `requirePermissionGuard` and asserts the result is empty. Acts as a canary: introducing an operator/admin view of a user's wishlist will fail this test.
-- **Order assertion** — verifies `/:productId/move-to-cart` appears in the path list *before* `/:productId`, preventing the literal string `"move-to-cart"` from being captured as a product id.
+- **Order assertion** — verifies `/:productId/move-to-cart` appears in the path list _before_ `/:productId`, preventing the literal string `"move-to-cart"` from being captured as a product id.
 
 ## Relationships
 
@@ -26,5 +26,5 @@ Unit test suite that pins down the wishlist route table: exact endpoint signatur
 ## Notes
 
 - The ordering constraint is the primary reason this file exists. The docblock at the top of `routes.ts` and this test are the only two places documenting that `move-to-cart` must precede the bare `/:productId` route; a silent reordering breaks both.
-- The "admin-free" test is intentionally a *negative* assertion. It is not testing that some guard is present—it is testing that a specific guard is *absent* on every route. If you add a legitimate admin endpoint to the wishlist module, this test must be updated deliberately.
+- The "admin-free" test is intentionally a _negative_ assertion. It is not testing that some guard is present—it is testing that a specific guard is _absent_ on every route. If you add a legitimate admin endpoint to the wishlist module, this test must be updated deliberately.
 - All guards are checked by name (`'isAuth'`, `'requirePermissionGuard'`), not by behavior. Renaming a guard upstream will break these tests without changing runtime behavior.

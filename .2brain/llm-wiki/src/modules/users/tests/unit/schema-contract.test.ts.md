@@ -29,8 +29,8 @@ Unit tests that pin down the security-critical contract of `userSchema`: which f
 
 ## Notes
 
-- The email-regex tests deliberately exercise the *compiled* pattern from the schema rather than re-stating a regex, so they remain valid if the pattern text changes but the compiled shape is what matters.
+- The email-regex tests deliberately exercise the _compiled_ pattern from the schema rather than re-stating a regex, so they remain valid if the pattern text changes but the compiled shape is what matters.
 - The env-var override test uses `jest.isolateModulesAsync` + dynamic `import` because defaults are captured at module-load time; a simple property check cannot distinguish a working `??` from a broken one when the env var equals the fallback.
 - The `deletedAt` type assertion (`Date`, not `Mixed`) is load-bearing: visibility scopes use `$exists` on it, and a `Mixed` path would accept ISO strings that sort differently.
-- The JSON round-trip assertion searches for the *secret value*, not the key name, so adding a sibling field beside `password` won't mask a regression.
+- The JSON round-trip assertion searches for the _secret value_, not the key name, so adding a sibling field beside `password` won't mask a regression.
 - The hook test intentionally avoids a real `save()` call; it pokes Mongoose's internal `_pres` array. If Mongoose relocates that storage, the test fails loudly (the file's JSDoc notes this).

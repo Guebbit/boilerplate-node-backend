@@ -14,10 +14,10 @@ Defines the `HumanChallengeProvider` port (rung 3 of the anti-automation ladder)
 ## Key elements
 
 - **`HumanChallengeProvider`** (interface) — the contract every provider must satisfy:
-  - `name` — the string `NODE_ANTIBOT_PROVIDER` selects and `GET /antibot/config` publishes.
-  - `publicParameters(challengeUrl)` — returns the flat string map the browser needs (site key, script URL, etc.). Self-hosted providers use `challengeUrl`; vendor-hosted ones ignore it.
-  - `issueChallenge?()` *(optional)* — returns a provider-specific challenge for self-hosted providers. Vendor-hosted providers omit this.
-  - `verify(token, remoteAddress?)` — validates a client-submitted token and returns a `RungVerdict`. A refusal is a normal return, not a throw; only transport-level failures throw.
+    - `name` — the string `NODE_ANTIBOT_PROVIDER` selects and `GET /antibot/config` publishes.
+    - `publicParameters(challengeUrl)` — returns the flat string map the browser needs (site key, script URL, etc.). Self-hosted providers use `challengeUrl`; vendor-hosted ones ignore it.
+    - `issueChallenge?()` _(optional)_ — returns a provider-specific challenge for self-hosted providers. Vendor-hosted providers omit this.
+    - `verify(token, remoteAddress?)` — validates a client-submitted token and returns a `RungVerdict`. A refusal is a normal return, not a throw; only transport-level failures throw.
 - **`PROVIDERS`** (module-local `Record<string, HumanChallengeProvider | undefined>`) — the build-time registry. Currently maps `none`, `turnstile`, and `altcha`.
 - **`resolveHumanChallengeProvider()`** — reads `NODE_ANTIBOT_PROVIDER` (via `environmentChoice`) on every call and returns the matching provider. Throws if the name is not in the registry (no silent fallback to `none`).
 - **`isHumanChallengeEnabled()`** — convenience check: `true` when the resolved provider is anything other than `none`.

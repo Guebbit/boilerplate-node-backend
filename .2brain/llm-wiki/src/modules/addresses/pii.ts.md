@@ -13,11 +13,11 @@ Single-purpose helper that decrypts the PII-bearing fields of one `AddressItem` 
 
 ## Key elements
 
-- **`decryptAddressItem(item: AddressItem): AddressItem`** — The only export. Returns a *new* object (spread) with the six PII fields replaced by their decrypted values. `phone` is handled conditionally: if `undefined` on the input it is simply omitted from the output (no decrypt call). All other subdocument fields pass through unchanged.
+- **`decryptAddressItem(item: AddressItem): AddressItem`** — The only export. Returns a _new_ object (spread) with the six PII fields replaced by their decrypted values. `phone` is handled conditionally: if `undefined` on the input it is simply omitted from the output (no decrypt call). All other subdocument fields pass through unchanged.
 
 ## Relationships
 
-- **`src/infrastructure/security/pii-encryption.ts`** — Provides the `decryptPii` primitive that each field call delegates to. This file adds no encryption logic; it is the *read-side* counterpart to the inline `encryptPii` calls made in the repository's write path.
+- **`src/infrastructure/security/pii-encryption.ts`** — Provides the `decryptPii` primitive that each field call delegates to. This file adds no encryption logic; it is the _read-side_ counterpart to the inline `encryptPii` calls made in the repository's write path.
 - **`src/modules/addresses/model.ts`** — Supplies the `AddressItem` type used as both the input and return type of `decryptAddressItem`.
 - **`src/modules/addresses/repository.ts`** — The sole caller. Every read of an address entry passes through the repository, which invokes `decryptAddressItem` once so downstream consumers (wire mapping, checkout snapshot) always see plaintext PII.
 

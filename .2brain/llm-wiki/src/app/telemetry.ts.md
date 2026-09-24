@@ -14,9 +14,9 @@ Installs a single Express middleware that records per-request latency and in-fli
 ## Key elements
 
 - **`installTelemetry(app: Express): void`** — The sole export. Registers a `next`-style middleware that:
-  - Calls `incrementInflight()` on request start.
-  - Captures a `process.hrtime.bigint()` timestamp.
-  - On the response `finish` event, calls `decrementInflight()` and `recordRequestMetric()` with `method`, `route` (via `getRouteLabel`), `statusCode`, and `durationMs`.
+    - Calls `incrementInflight()` on request start.
+    - Captures a `process.hrtime.bigint()` timestamp.
+    - On the response `finish` event, calls `decrementInflight()` and `recordRequestMetric()` with `method`, `route` (via `getRouteLabel`), `statusCode`, and `durationMs`.
 
 ## Relationships
 
@@ -26,6 +26,6 @@ Installs a single Express middleware that records per-request latency and in-fli
 
 ## Notes
 
-- **Mount order matters.** The module doc comment states this middleware must be mounted *before* routes so the timer wraps the handler execution rather than measuring only post-handler work.
+- **Mount order matters.** The module doc comment states this middleware must be mounted _before_ routes so the timer wraps the handler execution rather than measuring only post-handler work.
 - **Route label timing.** `getRouteLabel(request)` is called inside the `finish` listener, not in the middleware body. `request.route` is only populated once Express has completed routing; reading it earlier would require parsing the raw path and would produce unbounded label cardinality for unmatched paths.
 - **Single-fire guarantee.** The `finish` handler is attached with `response.once`, so the metric is recorded exactly once per request even if `finish` were (hypothetically) re-emitted.

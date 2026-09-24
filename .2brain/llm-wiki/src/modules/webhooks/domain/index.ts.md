@@ -14,16 +14,16 @@ Barrel file for the webhooks domain layer. It re-exports the pure rules (retry/b
 ## Key elements
 
 - **From `./backoff`:**
-  - `WEBHOOK_RETRY_DELAYS_MS` – array of retry delay values (ms).
-  - `WEBHOOK_MAX_ATTEMPTS` – cap on delivery attempts.
-  - `WEBHOOK_MAX_CONSECUTIVE_FAILURES` – threshold before auto-disable.
-  - `WEBHOOK_MIN_FAILING_MS` – minimum failure window considered.
-  - `nextRetryDelayMs` – computes the delay for the next retry.
-  - `nextAttemptAt` – computes the timestamp for the next attempt.
-  - `shouldAutoDisable` – determines whether a webhook should be disabled.
+    - `WEBHOOK_RETRY_DELAYS_MS` – array of retry delay values (ms).
+    - `WEBHOOK_MAX_ATTEMPTS` – cap on delivery attempts.
+    - `WEBHOOK_MAX_CONSECUTIVE_FAILURES` – threshold before auto-disable.
+    - `WEBHOOK_MIN_FAILING_MS` – minimum failure window considered.
+    - `nextRetryDelayMs` – computes the delay for the next retry.
+    - `nextAttemptAt` – computes the timestamp for the next attempt.
+    - `shouldAutoDisable` – determines whether a webhook should be disabled.
 - **From `./event-filter`:**
-  - `matchesEventFilter` – tests whether an event passes a webhook's filter.
-  - `ALL_EVENTS` – sentinel/value representing "no filter".
+    - `matchesEventFilter` – tests whether an event passes a webhook's filter.
+    - `ALL_EVENTS` – sentinel/value representing "no filter".
 
 ## Relationships
 

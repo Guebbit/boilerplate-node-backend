@@ -20,7 +20,7 @@ Unit tests for the `manageConnection` adapter's state machine and lifecycle guar
 - **`describe('the reported state')`** — Walks the `unavailable → connecting → ready → unavailable` transition cycle.
 - **`describe('the handle')`** — Covers single-open-and-reuse, replacement when `isReady` goes false, `forget()`-triggered reconnection, and concurrent-call deduplication.
 - **`describe('a connect that fails')`** — Asserts `get()` resolves `undefined` (never rejects), retry-on-next-call, single warning per outage, latch re-arming after success, and shared latch with `reportUnavailable`.
-- **`describe('a connect that declines to build a handle')`** — `connect` resolving `undefined` (config-level absence) reports unavailable with *no* warning.
+- **`describe('a connect that declines to build a handle')`** — `connect` resolving `undefined` (config-level absence) reports unavailable with _no_ warning.
 - **`describe('stop()')`** — Closes the live handle, waits for in-flight connects before closing, calls `close(undefined)` when no handle exists, and resolves even if `close` rejects.
 
 ## Relationships
@@ -30,9 +30,9 @@ Unit tests for the `manageConnection` adapter's state machine and lifecycle guar
 
 ## Notes
 
-- The file-level comment frames the design intent: the four properties are tested *here* so that `cacheState()` and `queueState()` (or any future dependency) cannot drift into interpreting `connecting` differently.
+- The file-level comment frames the design intent: the four properties are tested _here_ so that `cacheState()` and `queueState()` (or any future dependency) cannot drift into interpreting `connecting` differently.
 - `disabled` is a supported deployment state, not an error; the test explicitly guards against reporting it as broken.
-- `forget()` is the reconnect path for handles that signal their own close (e.g. AMQP channel close); it intentionally does *not* call `close` on the old handle.
+- `forget()` is the reconnect path for handles that signal their own close (e.g. AMQP channel close); it intentionally does _not_ call `close` on the old handle.
 - `stop()` must call `close` with `undefined` rather than skip the call—adapters like `queue.ts` hold a TCP connection under a channel and need the release signal even when the channel handle is gone.
-- The warning latch is shared: a `connect` rejection and a subsequent `reportUnavailable` from an `error` event on a live handle count as the *same* outage (one warning), but a new outage after a successful reconnect re-arms the latch.
+- The warning latch is shared: a `connect` rejection and a subsequent `reportUnavailable` from an `error` event on a live handle count as the _same_ outage (one warning), but a new outage after a successful reconnect re-arms the latch.
 - `connect` resolving `undefined` (handle cannot be built) is distinct from `connect` rejecting (connection refused): the former is silent, the latter warns.

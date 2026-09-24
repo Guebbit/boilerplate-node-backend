@@ -14,9 +14,9 @@ Declares the webhooks module's audit-action vocabulary and registers it into the
 ## Key elements
 
 - **`webhooksAuditActions`** (`as const`) — the five action identifiers this module owns:
-  - `ADMIN_WEBHOOK_SUBSCRIPTION_CREATED` / `_UPDATED` / `_DELETED` — admin-initiated CRUD on a subscription.
-  - `ADMIN_WEBHOOK_DELIVERY_REPLAYED` — admin-initiated replay of a past delivery.
-  - `SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED` — auto-disable triggered by a consecutive-failure streak; no human caller. Recorded with `actor_user_id: 'system'` so it isn't attributed to whichever worker happened to run the failing delivery.
+    - `ADMIN_WEBHOOK_SUBSCRIPTION_CREATED` / `_UPDATED` / `_DELETED` — admin-initiated CRUD on a subscription.
+    - `ADMIN_WEBHOOK_DELIVERY_REPLAYED` — admin-initiated replay of a past delivery.
+    - `SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED` — auto-disable triggered by a consecutive-failure streak; no human caller. Recorded with `actor_user_id: 'system'` so it isn't attributed to whichever worker happened to run the failing delivery.
 - **`declare module '@infrastructure/observability/audit'`** — augments the global `AuditActionMap` interface with a `webhooks` key typed to the literal union of the five action strings, making them autocomplete-able and exhaustively checkable across the codebase.
 
 ## Relationships
@@ -30,4 +30,4 @@ Declares the webhooks module's audit-action vocabulary and registers it into the
 
 - The `system.` prefix (vs. `admin.`) is a deliberate convention: it signals that no human request initiated the event. Any new non-human-triggered audit action in this domain should follow the same prefix.
 - The augmentation target (`@infrastructure/observability/audit`) means this file must compile in the same project that declares that base module; a missing or renamed base module will silently drop the type augmentation.
-- The rationale for auditing *all* subscription writes (including `updated`) is stated in the module doc-comment: the `url` and secret ring are sensitive fields that data-protection reviewers will ask about.
+- The rationale for auditing _all_ subscription writes (including `updated`) is stated in the module doc-comment: the `url` and secret ring are sensitive fields that data-protection reviewers will ask about.

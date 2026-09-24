@@ -18,7 +18,7 @@ Unit tests for the `rateLimitStore` factory, verifying which store is selected (
 - **`freshStore()` / `freshLogger()` / `freshMemoryStore()`** — helpers that call `jest.resetModules()` + `require()` to obtain a clean module instance, discarding module-scope state (`client`, `connecting`, `degraded`) and avoiding cross-copy `instanceof` failures.
 - **`urlUsedFor()`** — helper that triggers one `increment` and returns the URL passed to `createClient`, used by the URL-resolution-priority suite.
 - **`ORIGINAL_ENVIRONMENT`** — snapshot of six `NODE_*` env vars restored in `afterEach`.
-- **Test suites** — *store selection* (kill-switch off, no URL, lazy build, memoisation, per-limiter prefix), *missing-config alert* (logs on multi-worker, silent on single worker), *URL resolution priority* (`NODE_RATE_LIMIT_REDIS_URL` → `NODE_REDIS_URL` → host+port fallback), *init failure fail-open* (regression: unhandled rejection must not crash), *`stopRateLimitStore`*.
+- **Test suites** — _store selection_ (kill-switch off, no URL, lazy build, memoisation, per-limiter prefix), _missing-config alert_ (logs on multi-worker, silent on single worker), _URL resolution priority_ (`NODE_RATE_LIMIT_REDIS_URL` → `NODE_REDIS_URL` → host+port fallback), _init failure fail-open_ (regression: unhandled rejection must not crash), _`stopRateLimitStore`_.
 
 ## Relationships
 

@@ -15,7 +15,7 @@ Provides versioned AES-256-GCM encryption/decryption for secrets at rest, so a k
 
 - **`VersionedKey`** — `{ version: string; key: string }`, the shape of each ring entry.
 - **`parseVersionedKeyRing(raw)`** — Parses a comma-separated env-var string (`v2:abc,v1:def`) into a `VersionedKey[]`. A bare value (no colon) defaults to version `v1` for backward compatibility with single-key deployments.
-- **`deriveKey(secret)`** *(module-private)* — Stretches an arbitrary-length operator string into a 32-byte AES key via HKDF-SHA256 (`node:crypto`), avoiding a bare single-pass hash.
+- **`deriveKey(secret)`** _(module-private)_ — Stretches an arbitrary-length operator string into a 32-byte AES key via HKDF-SHA256 (`node:crypto`), avoiding a bare single-pass hash.
 - **`encryptVersionedSecret(plaintext, ring)`** — Encrypts with `ring[0]` (newest key). Output format: `<version>:<iv-hex>:<auth-tag-hex>:<ciphertext-hex>`.
 - **`decryptVersionedSecret(stored, ring, label)`** — Splits the stored string, finds the matching `VersionedKey` by stamped version, and decrypts. Throws on unknown version, malformed format, or auth-tag mismatch.
 

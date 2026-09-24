@@ -14,9 +14,9 @@ Thin HTTP controller for `POST /account/signup`. Delegates business logic to `ac
 ## Key elements
 
 - **`postSignup(request, response)`** — the sole export. Destructures the request body (with empty-string defaults so `zodUserSchema` yields a translated 422 instead of a throw), reads the optional uploaded image, calls `accountService.signup`, then branches:
-  - **Failure** (`!result.success`): deletes the upload, increments `authSignupTotal{status:"failure"}`, sends `rejectResponse`.
-  - **Rung 2 refusal** (`data.isNew === true`): the service returned an unsaved Mongoose document; logs an antibot refusal, deletes the upload, and returns a **fabricated 201** byte-identical to a real signup (no `Set-Cookie`, no verification email).
-  - **Success**: fires the verification email (fire-and-forget), issues a session via `issueSession`, and returns `successResponse<User>` with `SIGNUP_DEFAULT_ROLE`.
+    - **Failure** (`!result.success`): deletes the upload, increments `authSignupTotal{status:"failure"}`, sends `rejectResponse`.
+    - **Rung 2 refusal** (`data.isNew === true`): the service returned an unsaved Mongoose document; logs an antibot refusal, deletes the upload, and returns a **fabricated 201** byte-identical to a real signup (no `Set-Cookie`, no verification email).
+    - **Success**: fires the verification email (fire-and-forget), issues a session via `issueSession`, and returns `successResponse<User>` with `SIGNUP_DEFAULT_ROLE`.
 
 ## Relationships
 

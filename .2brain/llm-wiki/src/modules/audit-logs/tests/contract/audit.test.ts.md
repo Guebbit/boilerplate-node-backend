@@ -15,12 +15,12 @@ Contract tests for the single route this module exposes — `GET /audit`. Covers
 
 - **`authenticateInRole(role)`** — local helper that creates a user via the factory in a caller-chosen role (`moderator`, `editor`, …) and logs in through the real `POST /account/login` route. Returns `{ user, bearer }`. Exists because the shared `authenticateAs` helper only spells `owner`/`user`.
 - **`describe('GET /audit')` block** — six test cases:
-  - 401 on unauthenticated request
-  - 403 for a role without `audit.any.read` (uses `editor`)
-  - 200 for `moderator` with `actor` + `target` filters; seeds a row via `auditLogRepository.create`
-  - 422 for `since=not-a-date`
-  - 422 for `since=2026-01-01` (date-only, missing time component)
-  - 422 for `outcome=bogus` (must be `success` or `failure`)
+    - 401 on unauthenticated request
+    - 403 for a role without `audit.any.read` (uses `editor`)
+    - 200 for `moderator` with `actor` + `target` filters; seeds a row via `auditLogRepository.create`
+    - 422 for `since=not-a-date`
+    - 422 for `since=2026-01-01` (date-only, missing time component)
+    - 422 for `outcome=bogus` (must be `success` or `failure`)
 - **`toSatisfyApiSpec()`** — called on every response to validate the body against the OpenAPI/contract schema.
 
 ## Relationships

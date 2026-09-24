@@ -14,7 +14,7 @@ Builds a per-request CASL `MongoAbility` from a caller's declared permission key
 ## Key elements
 
 - **`Ability`** (type alias for `MongoAbility`) — the concrete rule set a caller holds.
-- **`resolveConditions(conditions, caller)`** (internal) — substitutes `$caller.<field>` placeholders in a key's condition map. Returns `undefined` if *any* placeholder resolves to a missing/null/empty value, causing the caller to drop that rule entirely (fail-closed).
+- **`resolveConditions(conditions, caller)`** (internal) — substitutes `$caller.<field>` placeholders in a key's condition map. Returns `undefined` if _any_ placeholder resolves to a missing/null/empty value, causing the caller to drop that rule entirely (fail-closed).
 - **`effectiveKeys(caller)`** (internal) — intersects the caller's `permissions` list against the declared-key registry, keeping only keys whose `scope` matches the caller's scope.
 - **`buildAbility(caller)`** (export) — the main factory. For each effective key it resolves conditions (or uses `{}` for unrestricted callers), injects `tenantId` for tenant-scope callers, and emits a single `can(action, subject, filter)` rule. Returns the built ability.
 - **`holdsKey(caller, key)`** (export) — boolean "does this caller hold this key?" for route guards. Checks action + subject only (not a specific row), so it collapses breadth variants (`orders.self.read` / `orders.any.read`).
@@ -32,7 +32,7 @@ Builds a per-request CASL `MongoAbility` from a caller's declared permission key
 
 ## Notes
 
-- **No `manage` action is ever emitted.** `can('manage', …)` always answers *false* because no declared key uses `manage` as its own action; in CASL it would mean "any action," which this model deliberately forbids. Even `admin` cannot act on a subject that declares no `manage` key (e.g. `AuditLog`).
+- **No `manage` action is ever emitted.** `can('manage', …)` always answers _false_ because no declared key uses `manage` as its own action; in CASL it would mean "any action," which this model deliberately forbids. Even `admin` cannot act on a subject that declares no `manage` key (e.g. `AuditLog`).
 - **`tenantId` is sourced exclusively from the resolved caller**, never from request parameters or the keys file. A cross-tenant read is structurally inexpressible rather than merely guarded.
 - **Unrestricted callers get `{}` conditions**, computed once. This is load-bearing: `SYSTEM_ACTOR`'s id is the literal string `'system'`; running a `self`-key condition against it would bake that string into a Mongo filter as a bogus ObjectId.
 - **`holdsKey` ≠ `heldKeys`.** `holdsKey` answers a guard question (action + subject); `heldKeys` answers an enumeration question (exact key names). Do not use `holdsKey` to list which keys a role holds.

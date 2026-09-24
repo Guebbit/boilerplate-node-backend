@@ -28,6 +28,6 @@ Integration test suite that guarantees the Products API never leaks MongoDB inte
 
 ## Notes
 
-- The file's JSDoc header explains *why* two separate tests exist: `.lean()` results skip the Mongoose `toJSON` virtual, so the service layer must apply its own transform (`applyProductTransform`). The test here does not exercise that transform by name but verifies its observable effect (no `_id`/`__v`).
+- The file's JSDoc header explains _why_ two separate tests exist: `.lean()` results skip the Mongoose `toJSON` virtual, so the service layer must apply its own transform (`applyProductTransform`). The test here does not exercise that transform by name but verifies its observable effect (no `_id`/`__v`).
 - `getById` is documented (inline comment) to already call `.toJSON()` internally before returning, so the test asserts the final wire shape directly rather than checking for a second transform step.
 - The `search` test asserts `id` matches `/^[\da-f]{24}$/` — i.e., the stringified Mongo ObjectId — rather than a deep-equality against the factory-created `_id`, keeping the assertion decoupled from a specific ID value.

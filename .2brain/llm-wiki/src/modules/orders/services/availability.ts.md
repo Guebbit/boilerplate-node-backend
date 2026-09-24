@@ -16,7 +16,7 @@ Determines whether an order's product lines are still sellable by re-querying li
 - **`UnavailableLine`** (interface) — `{ productId, title }` for a line whose product is no longer purchasable.
 - **`OrderLineSource`** (interface) — Minimal structural type covering both the hydrated `OrderDocumentItem` (`product._id`) and the wire `OrderItem` (`product.id`) shapes. Exported only so `unavailableLines`'s signature can name it.
 - **`productIdOf`** (internal) — Extracts the product id from either spelling (`id ?? _id`), normalizing to `string`.
-- **`unavailableLines`** (exported) — Given an order's `items`, calls `productService.findManyByIds`, filters for products where `active && !deletedAt`, and returns the subset of lines that are *not* in that sellable set.
+- **`unavailableLines`** (exported) — Given an order's `items`, calls `productService.findManyByIds`, filters for products where `active && !deletedAt`, and returns the subset of lines that are _not_ in that sellable set.
 - **`cancelPendingOrdersHolding`** (exported) — Finds all `pending` orders for a product, cancels each via `cancelById` with `SYSTEM_ACTOR`, looks up the buyer's locale, and enqueues a `productUnavailableCancelledEmail`. Individual cancellations that fail are caught and logged without aborting the batch.
 
 ## Relationships

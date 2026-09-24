@@ -27,5 +27,5 @@ No project-internal graph neighbors. The file depends only on the `vitepress` pa
 - **SSR guard:** `enhanceApp` bails out when `globalThis.window` is `undefined` (VitePress can call this during SSR/prerender).
 - **Idempotent attachment:** The `data-zoom-attached="1"` attribute prevents duplicate listeners if `attachToUnprocessed` runs multiple times (it will, on every mutation).
 - **Reflow trick:** `overlay.getBoundingClientRect()` is called before adding the `--visible` class to force a style flush so the CSS transition actually plays.
-- **Backdrop-only close:** The click handler checks `e.target === overlay`; clicking the cloned SVG does *not* dismiss the dialog.
+- **Backdrop-only close:** The click handler checks `e.target === overlay`; clicking the cloned SVG does _not_ dismiss the dialog.
 - **Cleanup ordering:** `close()` removes the visibility class, schedules removal on `transitionend` (`{ once: true }`), strips the body class, and detaches the `keydown` listener — all synchronous so a rapid re-open doesn't leave stale listeners.

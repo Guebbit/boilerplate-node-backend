@@ -27,6 +27,6 @@ Builds the finished email content (subject + rendered data object) for the feedb
 
 ## Notes
 
-- The `name` field falls back to a *translated* "not available" string in JS (`feedback.name || t('…not-available')`) rather than relying on a template-level default, because a purely interpolating template cannot choose between a value and a placeholder.
+- The `name` field falls back to a _translated_ "not available" string in JS (`feedback.name || t('…not-available')`) rather than relying on a template-level default, because a purely interpolating template cannot choose between a value and a placeholder.
 - The shared `footer` partial is intentionally skipped; this email is internal-facing.
 - The email subject is composed as `translated-prefix: user-subject` so an operator can triage without opening the mail.

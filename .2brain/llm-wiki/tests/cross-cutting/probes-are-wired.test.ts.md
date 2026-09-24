@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cross-cutting guard that verifies every module shipping a `probes.ts` is registered in the `PROBED_SECTIONS` map, and vice-versa. The static import in the bundle file already catches *deletion* (compile error); this test catches *omission* — a new module that writes probes but never edits the map, which would silently drop its probes from the generated collections.
+Cross-cutting guard that verifies every module shipping a `probes.ts` is registered in the `PROBED_SECTIONS` map, and vice-versa. The static import in the bundle file already catches _deletion_ (compile error); this test catches _omission_ — a new module that writes probes but never edits the map, which would silently drop its probes from the generated collections.
 
 ## Key elements
 
@@ -25,6 +25,6 @@ Cross-cutting guard that verifies every module shipping a `probes.ts` is registe
 
 ## Notes
 
-- A module *without* a `probes.ts` is explicitly not a finding; most read endpoints have no interesting rejection paths to probe.
+- A module _without_ a `probes.ts` is explicitly not a finding; most read endpoints have no interesting rejection paths to probe.
 - The test is intentionally one-directional in intent (omission detection) even though it checks both directions on disk. The static import already makes the "deletion" direction a compile-time error; this test adds the "forgetting to add" direction that no compiler can catch.
 - The canary test is a convention shared with the audit sweep: it prevents the suite from passing vacuously if `src/modules/` is ever missing or empty due to a path or CI-layout mistake.

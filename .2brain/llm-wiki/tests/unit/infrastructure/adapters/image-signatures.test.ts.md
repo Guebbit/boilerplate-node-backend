@@ -26,7 +26,7 @@ Unit tests for the magic-byte image identification module. The file verifies tha
 
 ## Notes
 
-- The polyglot test (valid PNG + trailing `<script>`) is an explicit boundary pin: the module identifies *formats*, it is not a content scanner. If the implementation ever starts rejecting trailing data, this test should change intentionally.
+- The polyglot test (valid PNG + trailing `<script>`) is an explicit boundary pin: the module identifies _formats_, it is not a content scanner. If the implementation ever starts rejecting trailing data, this test should change intentionally.
 - The header-only read test asserts via `mockReadLengths` byte counts rather than wall-clock timing to avoid flaky CI failures on loaded runners.
 - `mockReadLengths` is reset (`length = 0`) inside the single test that reads it; no other test depends on its contents.
 - The WEBP fixture is 16 bytes because the format marker (`VP8 `) sits at offset 8 inside the RIFF container; a 4-byte-only check would also match WAV/AVI.

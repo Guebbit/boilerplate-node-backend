@@ -14,11 +14,11 @@ Spectral ruleset for linting a single module's OpenAPI file (`src/modules/<name>
 ## Key elements
 
 - **`extends: './spectral.yaml'`** — pulls in every rule the repo uses for the bundled contract.
-- **`rules` overrides** — five rules set to `off`, each with a comment explaining *why* the module is exempt:
-  - `operation-tag-defined` — tag list lives in the root, not repeated per module.
-  - `oas3-operation-security-defined` — `bearerAuth` is declared in the root's `components.securitySchemes`.
-  - `oas3-api-servers` — server URLs are a deployment concern, owned by the root.
-  - `info-contact` / `info-description` — module `info` exists only to satisfy the OpenAPI schema; the real description is in the root.
+- **`rules` overrides** — five rules set to `off`, each with a comment explaining _why_ the module is exempt:
+    - `operation-tag-defined` — tag list lives in the root, not repeated per module.
+    - `oas3-operation-security-defined` — `bearerAuth` is declared in the root's `components.securitySchemes`.
+    - `oas3-api-servers` — server URLs are a deployment concern, owned by the root.
+    - `info-contact` / `info-description` — module `info` exists only to satisfy the OpenAPI schema; the real description is in the root.
 
 ## Relationships
 
@@ -29,4 +29,4 @@ Spectral ruleset for linting a single module's OpenAPI file (`src/modules/<name>
 ## Notes
 
 - This file is invoked by `npm run lint:openapi:modules`. The bundled lint (`npm run lint:openapi`) uses `spectral.yaml` directly against `openapi.yaml`, where the disabled rules remain **on** and a missing tag or undeclared scheme is a real defect.
-- The per-rule comments document *why* each rule is off; if you add a new module-level rule to `spectral.yaml`, check whether it also presupposes a whole-API context and disable it here if so.
+- The per-rule comments document _why_ each rule is off; if you add a new module-level rule to `spectral.yaml`, check whether it also presupposes a whole-API context and disable it here if so.

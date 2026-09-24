@@ -14,13 +14,13 @@ Defines the Express router for the `/webhooks` admin surface: subscription CRUD,
 ## Key elements
 
 - **`router`** (exported) — the sole export; an Express `Router` instance with the following routes:
-  - `GET /subscriptions` → `listWebhookSubscriptions` (`webhooks.any.read`)
-  - `POST /subscriptions` → `createWebhookSubscription` (`webhooks.any.create`)
-  - `PATCH /subscriptions/:id` → `updateWebhookSubscription` (`webhooks.any.update`)
-  - `DELETE /subscriptions/:id` → `deleteWebhookSubscription` (`webhooks.any.delete`)
-  - `GET /deliveries` → `listWebhookDeliveries` (`webhooks.any.read`)
-  - `POST /deliveries/:id/replay` → `replayWebhookDelivery` (`webhooks.any.update`)
-  - `GET /events` → `listWebhookEvents` (`webhooks.any.read`)
+    - `GET /subscriptions` → `listWebhookSubscriptions` (`webhooks.any.read`)
+    - `POST /subscriptions` → `createWebhookSubscription` (`webhooks.any.create`)
+    - `PATCH /subscriptions/:id` → `updateWebhookSubscription` (`webhooks.any.update`)
+    - `DELETE /subscriptions/:id` → `deleteWebhookSubscription` (`webhooks.any.delete`)
+    - `GET /deliveries` → `listWebhookDeliveries` (`webhooks.any.read`)
+    - `POST /deliveries/:id/replay` → `replayWebhookDelivery` (`webhooks.any.update`)
+    - `GET /events` → `listWebhookEvents` (`webhooks.any.read`)
 
 ## Relationships
 

@@ -20,18 +20,18 @@ Orchestrates graceful shutdown of the HTTP server and all infrastructure adapter
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `infrastructure/adapters/cache.ts` | Calls `stopCache()` |
-| `infrastructure/adapters/logger.ts` | Uses `logger` for info/error messages throughout |
-| `infrastructure/adapters/queue.ts` | Calls `stopQueue()` |
-| `infrastructure/http/middlewares/rate-limit-store.ts` | Calls `stopRateLimitStore()` |
-| `infrastructure/i18n/index.ts` | Calls `stopLocaleOverrideRefresh()` |
-| `infrastructure/observability/analytics/index.ts` | Calls `shutdownAnalytics()` |
-| `infrastructure/runtime/database.ts` | Calls `stopDatabase()` |
-| `infrastructure/runtime/environment.ts` | Reads `environmentNumber` for the timeout config |
-| `infrastructure/runtime/otel-sdk.ts` | Calls `shutdownTracing()` |
-| `src/app.ts` | Expected caller of `registerSignalHandlers` / `shutdownInfra` (not imported here) |
+| Neighbor                                              | Interaction                                                                       |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `infrastructure/adapters/cache.ts`                    | Calls `stopCache()`                                                               |
+| `infrastructure/adapters/logger.ts`                   | Uses `logger` for info/error messages throughout                                  |
+| `infrastructure/adapters/queue.ts`                    | Calls `stopQueue()`                                                               |
+| `infrastructure/http/middlewares/rate-limit-store.ts` | Calls `stopRateLimitStore()`                                                      |
+| `infrastructure/i18n/index.ts`                        | Calls `stopLocaleOverrideRefresh()`                                               |
+| `infrastructure/observability/analytics/index.ts`     | Calls `shutdownAnalytics()`                                                       |
+| `infrastructure/runtime/database.ts`                  | Calls `stopDatabase()`                                                            |
+| `infrastructure/runtime/environment.ts`               | Reads `environmentNumber` for the timeout config                                  |
+| `infrastructure/runtime/otel-sdk.ts`                  | Calls `shutdownTracing()`                                                         |
+| `src/app.ts`                                          | Expected caller of `registerSignalHandlers` / `shutdownInfra` (not imported here) |
 
 ## Notes
 

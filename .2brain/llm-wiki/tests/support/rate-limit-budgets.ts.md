@@ -23,6 +23,6 @@ A small test-support helper that lets unit-test suites retrieve a named `RateLim
 
 ## Notes
 
-- The function is intentionally *not* generic over the budget array type; it accepts `readonly RateLimitBudget[]` and returns `RateLimitBudget`. If a module ever needs a budget shape that extends `RateLimitBudget`, the array will need to be typed as the base interface before passing it here.
+- The function is intentionally _not_ generic over the budget array type; it accepts `readonly RateLimitBudget[]` and returns `RateLimitBudget`. If a module ever needs a budget shape that extends `RateLimitBudget`, the array will need to be typed as the base interface before passing it here.
 - The thrown error message includes the offending `namespace` string in quotes, making test-failure output directly actionable.
 - This file is test-support only (lives under `tests/`); it is not part of the shipped application.

@@ -14,11 +14,11 @@ Declares the audit-action vocabulary for the orders module and registers it into
 ## Key elements
 
 - **`ordersAuditActions`** (exported const object) — the five action strings this module owns:
-  - `ORDER_CREATED` (`order.created`) — fired on any new order, regardless of actor role.
-  - `ORDER_UPDATED` (`order.updated`)
-  - `ORDER_DELETED` (`order.deleted`)
-  - `ORDER_CANCELLED` (`order.cancelled`) — the one write a customer performs; `actor_role` on the record distinguishes customer vs. shop.
-  - `ORDER_STATUS_OVERRIDDEN` (`order.status_overridden`) — admin lifecycle bypass; `metadata` carries `mode`/`from`/`to`/`reason`.
+    - `ORDER_CREATED` (`order.created`) — fired on any new order, regardless of actor role.
+    - `ORDER_UPDATED` (`order.updated`)
+    - `ORDER_DELETED` (`order.deleted`)
+    - `ORDER_CANCELLED` (`order.cancelled`) — the one write a customer performs; `actor_role` on the record distinguishes customer vs. shop.
+    - `ORDER_STATUS_OVERRIDDEN` (`order.status_overridden`) — admin lifecycle bypass; `metadata` carries `mode`/`from`/`to`/`reason`.
 - **`declare module '@infrastructure/observability/audit'`** — augments `AuditActionMap` with an `orders` key typed as the union of the above values, making the actions available app-wide without a runtime import cycle.
 
 ## Relationships
@@ -32,6 +32,6 @@ Declares the audit-action vocabulary for the orders module and registers it into
 
 ## Notes
 
-- Actions deliberately carry **no** `admin.`/`user.` prefix; the `actor_role` field on every audit record is the sole discriminator of *who* performed the write.
+- Actions deliberately carry **no** `admin.`/`user.` prefix; the `actor_role` field on every audit record is the sole discriminator of _who_ performed the write.
 - These action strings are **not** the same as `cartCheckoutTotal` / `orderCreatedTotal`, which are route-level request counters in a different subsystem.
 - Follows the same augmentation pattern as `modules/account/audit.ts` — each module owns its own `as const` object and merges it into the shared `AuditActionMap`, avoiding a central enum file.

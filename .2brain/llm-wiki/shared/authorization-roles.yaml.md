@@ -15,8 +15,8 @@ Declares the complete set of preset authorization roles (and the exact keys each
 
 - **`version`** — schema version (currently `1`).
 - **`roles`** — ordered list of role objects, each with `name`, `scope` (`tenant` or `platform`), `title`, `description`, and an explicit `permissions` array.
-  - *Tenant roles:* `unverified`, `customer`, `manager`, `warehouse`, `support`, `editor`, `moderator`, `admin`.
-  - *Platform role:* `operator` — holds only `platform.observability.any.read`; explicitly cannot read shop-level data.
+    - _Tenant roles:_ `unverified`, `customer`, `manager`, `warehouse`, `support`, `editor`, `moderator`, `admin`.
+    - _Platform role:_ `operator` — holds only `platform.observability.any.read`; explicitly cannot read shop-level data.
 - **`anonymous`** — the role every unauthenticated request resolves to (named `guest`, scope `tenant`); holds only `products.self.read`, `locales.self.read`, `delivery.any.read`.
 - **No wildcards anywhere.** Breadth is encoded in the key name (`self` vs `any`), so every role lists exactly the keys it grants, `admin` included.
 
@@ -29,6 +29,6 @@ Declares the complete set of preset authorization roles (and the exact keys each
 
 - The file is committed byte-for-byte identical in `boilerplate-node-backend` and `boilerplate-php-laravel-backend`; do not fork it per repo.
 - Roles are a **starting point, not a schema** — operators may add/remove keys post-deployment.
-- Every staff role (including `admin`) holds `cart.self.checkout` explicitly. There is deliberately no "unverified manager": granting a staff role *is* the vouching act, so the one key an unverified account lacks is the spending key.
+- Every staff role (including `admin`) holds `cart.self.checkout` explicitly. There is deliberately no "unverified manager": granting a staff role _is_ the vouching act, so the one key an unverified account lacks is the spending key.
 - `admin` is scoped to a single tenant; it says nothing about platform scope. One role cannot span both scopes by design.
 - The PHP implementation stores these via `spatie/laravel-permission`; the Node implementation does not persist them the same way. This file is what keeps the two stores aligned.

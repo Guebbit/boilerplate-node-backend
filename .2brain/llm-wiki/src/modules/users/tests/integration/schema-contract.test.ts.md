@@ -14,11 +14,11 @@ Integration tests that verify Mongoose schema-level guarantees (field visibility
 ## Key elements
 
 - **`describe('user schema')`** — single suite containing five assertions:
-  - *hides password and tokens from an ordinary read* — confirms `select: false` means `findById` returns `undefined` (not an empty array) for `password` and `tokens`.
-  - *exposes credentials only through the explicit selector* — confirms `findByIdWithCredentials` returns the hashed password string.
-  - *hashes the password rather than storing it verbatim* — asserts the stored value matches the bcrypt prefix `^\$2[aby]\$` and differs from `PLAIN_PASSWORD`.
-  - *serialises to id, never \_id, \_\_v, password or tokens* — pins the `toJSON()` output shape (virtual `id`, absence of Mongoose internals and sensitive fields).
-  - *enforces email uniqueness at the database level* — inserts a duplicate email and expects a Mongo `E11000` duplicate-key error; acts as a fast-fail guard for the unique index that `auth-races.test.ts` depends on.
+    - _hides password and tokens from an ordinary read_ — confirms `select: false` means `findById` returns `undefined` (not an empty array) for `password` and `tokens`.
+    - _exposes credentials only through the explicit selector_ — confirms `findByIdWithCredentials` returns the hashed password string.
+    - _hashes the password rather than storing it verbatim_ — asserts the stored value matches the bcrypt prefix `^\$2[aby]\$` and differs from `PLAIN_PASSWORD`.
+    - _serialises to id, never \_id, \_\_v, password or tokens_ — pins the `toJSON()` output shape (virtual `id`, absence of Mongoose internals and sensitive fields).
+    - _enforces email uniqueness at the database level_ — inserts a duplicate email and expects a Mongo `E11000` duplicate-key error; acts as a fast-fail guard for the unique index that `auth-races.test.ts` depends on.
 
 ## Relationships
 

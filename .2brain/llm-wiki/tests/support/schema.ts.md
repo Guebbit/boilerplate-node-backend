@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A suite of pure, database-free readers that inspect a Mongoose `Schema` object's declared contract—required paths, index names/directions/options, defaults, enums, nested schemas, and schema-level flags—so that unit tests can assert the schema *as declared* rather than inferring it from saved documents. It exists because document-shape integration tests cannot detect mutations that leave valid documents unchanged (dropped `required`, lost `_id: false`, flipped index direction, removed `timestamps`).
+A suite of pure, database-free readers that inspect a Mongoose `Schema` object's declared contract—required paths, index names/directions/options, defaults, enums, nested schemas, and schema-level flags—so that unit tests can assert the schema _as declared_ rather than inferring it from saved documents. It exists because document-shape integration tests cannot detect mutations that leave valid documents unchanged (dropped `required`, lost `_id: false`, flipped index direction, removed `timestamps`).
 
 ## Key elements
 
@@ -35,8 +35,8 @@ Every `src/modules/*/tests/unit/schema-contract.test.ts` file (addresses, api-ke
 ## Notes
 
 - **Structural typing is deliberate.** `IntrospectableSchema` avoids Mongoose's 11-parameter generic `Schema`, which is not mutually assignable across different type arguments (TS7056-class issue). Do not replace it with `Schema` or the assignability errors return.
-- **`indexName` mirrors Mongoose's build-time derivation.** For a path-level `unique: true` (no explicit `name`), the name is `field_1` (or `field_-1`). Tests should assert the *derived* name, not the absent one, because that is what `db:sync` and `dropIndex` use.
+- **`indexName` mirrors Mongoose's build-time derivation.** For a path-level `unique: true` (no explicit `name`), the name is `field_1` (or `field_-1`). Tests should assert the _derived_ name, not the absent one, because that is what `db:sync` and `dropIndex` use.
 - **`defaultOf` calls functions.** If a schema declares `default: () => new Date()`, this helper invokes it. It is not a passive read.
-- **`subSchema` throws on a non-nested path** and includes the list of paths that *do* carry a nested schema, to make typos self-diagnosing.
+- **`subSchema` throws on a non-nested path** and includes the list of paths that _do_ carry a nested schema, to make typos self-diagnosing.
 - **All list-returning helpers use `.toSorted()`** (non-mutating). This is a project convention; do not "fix" to `.sort()`.
 - **`indexOptionSpecs` renders `"(none)"`** rather than an empty string for indexes with no behavioural options, so a test asserting the literal string can distinguish "declared plain" from a rendering bug.

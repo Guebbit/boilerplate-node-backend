@@ -18,8 +18,8 @@ Mongoose schema and model for the idempotency ledger — one document per `(key,
 - **`IdempotencyRecordModel`** — Mongoose `Model` type alias.
 - **`retentionHours`** — read once at import time via `environmentNumber('NODE_IDEMPOTENCY_RETENTION_HOURS', 24, 1)`; sets the TTL window in hours.
 - **`idempotencyRecordSchema`** — the schema definition with two indexes:
-  - Unique compound index on `(key, caller)` — acts as the distributed lock; a duplicate-key `E11000` error is the signal that another caller already holds the key.
-  - TTL index on `createdAt` with `expireAfterSeconds = retentionHours * 3600`.
+    - Unique compound index on `(key, caller)` — acts as the distributed lock; a duplicate-key `E11000` error is the signal that another caller already holds the key.
+    - TTL index on `createdAt` with `expireAfterSeconds = retentionHours * 3600`.
 - **`idempotencyRecordModel`** — the exported Mongoose model (collection `idempotencyrecords`), the entry point used by `idempotency.ts`.
 
 ## Relationships

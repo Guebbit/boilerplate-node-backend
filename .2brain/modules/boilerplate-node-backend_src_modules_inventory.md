@@ -1,8 +1,8 @@
 ---
 tags:
-  - 2brain
-  - 2brain/module
-  - project/boilerplate-node-backend
+    - 2brain
+    - 2brain/module
+    - project/boilerplate-node-backend
 type: module
 module: src/modules/inventory/
 files: 25
@@ -38,6 +38,7 @@ The inventory module owns the two product stock counters (`onHand` and `reserved
 2. **`domain/transitions.ts`** — A short, dependency-free file that lays out the six transitions and the availability formula. It makes the "what can happen to the two counters" question concrete before you wade into the service logic.
 
 ## Connected modules
+
 ```mermaid
 flowchart LR
     m_src_modules_inventory["src/modules/inventory/"]
@@ -73,6 +74,7 @@ flowchart LR
 [[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_orders|src/modules/orders/]] · [[boilerplate-node-backend_src_modules_orders_tests|src/modules/orders/tests/]] · [[boilerplate-node-backend_src_modules_payments|src/modules/payments/]] · [[boilerplate-node-backend_src_modules_products|src/modules/products/]] · [[boilerplate-node-backend_tests_integration|tests/integration/]] · [[boilerplate-node-backend_tests_support|tests/support/]]
 
 ## Files
+
 - `src/modules/inventory/audit.ts` — Defines the inventory module's audit action vocabulary and registers it into the application-wide `AuditActionMap` type. The four actions cover admin-level stock operations and one module-owned invariant-failure case (`ADMIN_COMMIT_ORPHANED`) that cannot be attributed to a caller's lifecycle audit.
 - `src/modules/inventory/config.ts` — Centralizes two deployment-tunable numbers (reservation TTL and low-stock threshold) in a single read point so that independent consumers—the admin stock board and the public gauge—cannot drift apart on what "low" or "expired" means.
 - `src/modules/inventory/controllers/get-inventory-levels.ts` — Thin HTTP controller that exposes `GET /inventory/levels` — a paginated, sorted (scarcest-first) stock-board listing. It validates query-string parameters and delegates to the inventory service, keeping routing logic out of the service layer.
@@ -89,10 +91,10 @@ flowchart LR
 - `src/modules/inventory/module.ts` — Module manifest entry for the **inventory** module. It declares the module's identity, permission keys, HTTP routes, locale path, and — most importantly — wires up the two domain-event subscriptions (`PRODUCT_CREATED`, `PRODUCT_DELETED`) that keep the stock-level collection and the mirrored copy on the product document in sync. It also triggers side-effect imports of `./events` and `./metrics` so those registries are populated at load time.
 - `src/modules/inventory/openapi.yaml` — OpenAPI 3.0.3 contract for the inventory module (v2.0.0). It defines the sole write surface for the two product counters `onHand` and `reserved`, the append-only stock-movement ledger, and the reservation-sweep endpoint. Every endpoint is bearer-authenticated and admin-facing; customers read availability off the product itself.
 - `src/modules/inventory/repository.ts` — The data-access layer for the inventory module. It owns three Mongoose collections (stock levels, stock movements, reservations) and exposes typed repository objects that the service layer calls to read and write counters, append ledger entries, and drive reservation lifecycle transitions. Business rules and transition conditions live in `./service.ts`; this file only executes the database operations.
-- `src/modules/inventory/routes.ts` — Defines the Express route table for the inventory module. It wires five staff-facing endpoints (stock levels, movement ledger, receipts, adjustments, and the reservation-sweep cron) to their respective controllers, applying the module's permission tier (`read` / `create` / `sweep`) and allowing both session auth and `sk_…` API keys. The customer-facing half of inventory is intentionally *not* routed here.
+- `src/modules/inventory/routes.ts` — Defines the Express route table for the inventory module. It wires five staff-facing endpoints (stock levels, movement ledger, receipts, adjustments, and the reservation-sweep cron) to their respective controllers, applying the module's permission tier (`read` / `create` / `sweep`) and allowing both session auth and `sk_…` API keys. The customer-facing half of inventory is intentionally _not_ routed here.
 - `src/modules/inventory/service.ts` — The single chokepoint through which every stock counter change in the application passes. It guarantees that a counter move and its corresponding ledger row always happen together (or neither does) without relying on Mongo transactions. All public read and write paths for inventory levels, stock movements, reservations, receipts, and adjustments live here.
 - `src/modules/inventory/tests/contract/api.contract.test.ts` — HTTP contract tests for the inventory module. Pins every contract branch reachable over the API surface—the two read endpoints, the two write transitions with their 200/404/409/422 responses, the reservation sweep, and the 401/403 auth guard—by asserting both the status/body and the `toSatisfyApiSpec()` shape. Business-rule logic for transitions is deferred to the unit suite; this file only verifies the wire-level contract.
-- `src/modules/inventory/tests/integration/ledger.property.test.ts` — Property-based integration test that verifies the core invariant of the inventory module: replaying every stock-movement ledger row for a product reproduces its stored `onHand` and `reserved` counters exactly, for *all* generated sequences of transitions rather than a fixed set of examples. It runs against a real MongoDB instance so that the conditional-write coupling between ledger rows and counter updates is exercised end-to-end.
+- `src/modules/inventory/tests/integration/ledger.property.test.ts` — Property-based integration test that verifies the core invariant of the inventory module: replaying every stock-movement ledger row for a product reproduces its stored `onHand` and `reserved` counters exactly, for _all_ generated sequences of transitions rather than a fixed set of examples. It runs against a real MongoDB instance so that the conditional-write coupling between ledger rows and counter updates is exercised end-to-end.
 - `src/modules/inventory/tests/integration/repository.test.ts` — Integration tests for `stockLevelRepository`'s aggregate read methods (`sumReserved`, `stockBoard`, `lowAvailabilityProductIds`) against a real MongoDB instance. Its primary concern is asserting the `.at(0)` fallback path: a `$group`/`$facet` pipeline on an empty collection yields zero rows rather than a zeroed row, so the guard the calling code relies on is verified explicitly. Transition-path methods (`applyDelta`, `ensure`) are intentionally out of scope here — they belong to the service tests.
 - `src/modules/inventory/tests/integration/service.test.ts` — Integration tests for the inventory module's own service guarantees: exactly-once reservation claims, atomic all-or-nothing holds, the two admin transitions (commit, release) and their refusal paths, the reservation sweep, and receive/adjust. Cross-module lifecycle (cart → stock) and replay invariants are covered elsewhere; this file uses real MongoDB because every guarantee under test is a conditional write.
 - `src/modules/inventory/tests/unit/routes.test.ts` — Unit test that pins the inventory module's route table to a documented set of five endpoints and asserts every one is gated behind `getAuth` + `requirePermissionGuard`. It exists to catch the two failure modes the module's security model depends on: a route accidentally mounted above the auth middleware, or a mount losing its permission check — either of which would expose internal counters and the movement ledger to unauthenticated callers.
@@ -100,4 +102,5 @@ flowchart LR
 - `src/modules/inventory/tests/unit/transitions.test.ts` — Pure unit tests for the inventory transition table. Rather than restating the delta table, the suite asserts three structural invariants: (1) only `receive` or `adjust` changes total unit count, (2) `commit` moves `onHand` and `reserved` by equal amounts so availability is unaffected, and (3) `release`/`expire` are exact inverses of `reserve`. A second block pins the `availabilityOf` calculation and its edge cases (missing counters, negative clamp).
 
 ---
+
 [[boilerplate-node-backend_INDEX|← boilerplate-node-backend index]]

@@ -16,8 +16,8 @@ Unit test for the `noPersistenceImports` ESLint rule, focused exclusively on the
 - **`STRICT`** – Shared options object (`{ bindings: ['Repository', 'Model'], paths: true }`) that enables both halves of the rule so the single bad input isolates the binding match.
 - **`tester`** – `eslint.RuleTester` instance configured for ES modules.
 - **`tester.run('no-persistence-imports', …)`** – Declares `valid: []` (deliberately empty) and one `invalid` case:
-  - Code: `import { userRepository } from '@modules/users';`
-  - Expects exactly one error with `messageId: 'binding'`.
+    - Code: `import { userRepository } from '@modules/users';`
+    - Expects exactly one error with `messageId: 'binding'`.
 
 ## Relationships
 
@@ -27,6 +27,6 @@ Unit test for the `noPersistenceImports` ESLint rule, focused exclusively on the
 
 ## Notes
 
-- The empty `valid` array is **intentional**, not an omission. The header comment explains this mirrors the pattern in `comment-links.test.ts`: the rule is known to fire, so the test only asserts the *which-error-path* (binding vs. path) rather than exhaustive pass/fail coverage.
+- The empty `valid` array is **intentional**, not an omission. The header comment explains this mirrors the pattern in `comment-links.test.ts`: the rule is known to fire, so the test only asserts the _which-error-path_ (binding vs. path) rather than exhaustive pass/fail coverage.
 - The `as never` cast on the rule export works around a TypeScript typing mismatch between the rule's inferred return type and what `RuleTester` expects.
 - The single test case is designed so that only the **binding name** (`userRepository`) can trigger the violation—the specifier `@modules/users` is neutral—making it a pure binding-path assertion.

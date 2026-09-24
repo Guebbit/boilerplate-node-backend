@@ -17,7 +17,7 @@ HTTP-level test harness that drives the mounted Express app through its full req
 - **`AuthenticatedTestUser`** — Interface: `{ user, token, bearer }` where `bearer` is a template-literal-typed `` `Bearer ${string}` `` string ready to drop into an `Authorization` header.
 - **`authenticateAs(role: 'admin' | 'user' = 'user')`** — Creates a verified user (or admin) via the users factories, then performs a real `POST /account/login` round-trip. Returns the `AuthenticatedTestUser`. Default profile is a verified **customer** (can checkout, pay, use the full app).
 - **`authenticateAsRole(role: string)`** — Same login flow, but accepts any TENANT role name (`manager`, `warehouse`, `editor`, etc.). Uses a distinct `email`/`username` per role (`${role}@example.com`) to avoid duplicate-key collisions when a single test authenticates several roles.
-- **`authenticateUser(user, role)`** *(internal)* — Shared login round-trip: posts credentials to `/account/login`, asserts 200 + token presence, throws descriptive errors on failure.
+- **`authenticateUser(user, role)`** _(internal)_ — Shared login round-trip: posts credentials to `/account/login`, asserts 200 + token presence, throws descriptive errors on failure.
 
 ## Relationships
 

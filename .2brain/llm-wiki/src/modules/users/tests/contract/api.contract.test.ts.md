@@ -36,7 +36,7 @@ Contract tests for the user-facing endpoints (`/users`, `/users/{id}`, `/account
 ## Notes
 
 - The audit mock is a **replacement**, not a spy. `jest.spyOn` cannot redefine the non-configurable getter that a CommonJS namespace import exposes under swc; the factory in `tests/support/ports.ts` (`observePort`) is the sanctioned workaround.
-- `recordAudit` must be explicitly re-wired in the mock because it closes over its *own* module's `emitAuditEvent`; without the override, spying on the exported `emitAuditEvent` would be blind to `recordAudit` call-sites.
+- `recordAudit` must be explicitly re-wired in the mock because it closes over its _own_ module's `emitAuditEvent`; without the override, spying on the exported `emitAuditEvent` would be blind to `recordAudit` call-sites.
 - `assertNoCredentials` is a blunt string search over the entire JSON. It will false-positive if any legitimate string value (e.g. a username) contains the words "password" or "tokens"—a known trade-off accepted for the security guarantee.
 - The `?role=` filter on `GET /users` was **deliberately removed** (role moved to a membership store) and is not re-tested here.
 - Several tests carry `B25:` comments referencing a security-audit checklist item; they guard against regression of password-breach rejection on create and update paths.

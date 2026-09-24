@@ -19,21 +19,21 @@ Integration test verifying that product create/update requests sent as multipart
 - **`beforeEach`** – Seeds the fallback `en` locale via `localeRepository.create(makeLocale(…))`.
 - **`afterEach`** – Calls `emptyFileSandbox` to remove original, thumbnail, and any quarantined files.
 - **Five `it` blocks:**
-  - *create with price decoding* – POST `/products`, asserts `body.data.price` is `101.5` (number) and `imageUrl` matches the expected pattern.
-  - *update with price decoding* – Creates via JSON, then PATCHes multipart; asserts `price === 42`.
-  - *boolean decoding* – Sends `active: 'false'`; asserts stored value is `false`, not the truthy string.
-  - *default active* – Omits `active`; asserts stored value is `true`.
-  - *reject non-numeric price* – Sends `price: 'not-a-number'`; expects 422 and an empty upload directory (no orphaned file).
+    - _create with price decoding_ – POST `/products`, asserts `body.data.price` is `101.5` (number) and `imageUrl` matches the expected pattern.
+    - _update with price decoding_ – Creates via JSON, then PATCHes multipart; asserts `price === 42`.
+    - _boolean decoding_ – Sends `active: 'false'`; asserts stored value is `false`, not the truthy string.
+    - _default active_ – Omits `active`; asserts stored value is `true`.
+    - _reject non-numeric price_ – Sends `price: 'not-a-number'`; expects 422 and an empty upload directory (no orphaned file).
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `tests/support/http.ts` | Provides `api()` (supertest wrapper) and `authenticateAs('admin')` for bearer auth. |
-| `tests/support/file-sandbox.ts` | `emptyFileSandbox` runs in `afterEach` to wipe the upload directory. |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` called at module top-level to prepare a clean database. |
-| `src/modules/locales/repository.ts` | `localeRepository.create` seeds the fallback locale before each test. |
-| `src/modules/locales/factories.ts` | `makeLocale` builds the locale fixture object. |
+| Neighbor                                | Interaction                                                                                              |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `tests/support/http.ts`                 | Provides `api()` (supertest wrapper) and `authenticateAs('admin')` for bearer auth.                      |
+| `tests/support/file-sandbox.ts`         | `emptyFileSandbox` runs in `afterEach` to wipe the upload directory.                                     |
+| `tests/support/setup-test-db.ts`        | `setupTestDb()` called at module top-level to prepare a clean database.                                  |
+| `src/modules/locales/repository.ts`     | `localeRepository.create` seeds the fallback locale before each test.                                    |
+| `src/modules/locales/factories.ts`      | `makeLocale` builds the locale fixture object.                                                           |
 | `src/modules/locales/services/index.ts` | `localeService.setTranslatables` registers which product fields are translatable; cleared in `afterAll`. |
 
 ## Notes

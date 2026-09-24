@@ -1,8 +1,8 @@
 ---
 tags:
-  - 2brain
-  - 2brain/module
-  - project/boilerplate-node-backend
+    - 2brain
+    - 2brain/module
+    - project/boilerplate-node-backend
 type: module
 module: tests/integration/
 files: 29
@@ -37,9 +37,10 @@ updated: 2026-09-23T20:40:23.628179+00:00
 ## Where to start
 
 1. **`app-health.test.ts`** — the shortest, most self-contained file; it shows the shared harness setup, how the real app is mounted, and what a typical assertion looks like (status codes, headers, 404 behavior). Reading it first gives you the structural template for every other file.
-2. **`access.test.ts`** — a single-invariant test that makes the *reason* this module exists obvious: a role lives only in the membership row and never on the user document, an invariant that neither `src/modules/users/tests/` nor `src/modules/account/tests/` can assert alone.
+2. **`access.test.ts`** — a single-invariant test that makes the _reason_ this module exists obvious: a role lives only in the membership row and never on the user document, an invariant that neither `src/modules/users/tests/` nor `src/modules/account/tests/` can assert alone.
 
 ## Connected modules
+
 ```mermaid
 flowchart LR
     m_tests_integration["tests/integration/"]
@@ -79,6 +80,7 @@ flowchart LR
 [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_scripts|scripts/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules|src/modules/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_delivery|src/modules/delivery/]] · [[boilerplate-node-backend_src_modules_inventory|src/modules/inventory/]] · [[boilerplate-node-backend_src_modules_locales|src/modules/locales/]] · [[boilerplate-node-backend_src_modules_orders|src/modules/orders/]] · [[boilerplate-node-backend_src_modules_orders_tests|src/modules/orders/tests/]] · [[boilerplate-node-backend_src_modules_payments|src/modules/payments/]] · … and 5 more
 
 ## Files
+
 - `tests/integration/access.test.ts` — Validates the cross-module authorization invariant of the demo seed: a role is stored **only** in the membership row (owned by the access module) and is never mirrored onto the user document (owned by the users module). This file exists because the invariant spans two modules, so it cannot be tested from within either module's own test suite.
 - `tests/integration/app-health.test.ts` — Integration tests for the system routes (`/`, unknown-path 404, `x-request-id` handling) and the `/observability/*` routes (Prometheus metrics, SSE event stream, auth-gated sub-paths). They exercise the real application exported from `src/app.ts` through the shared supertest harness, ensuring the middleware stack actually mounted on the production app is what gets tested.
 - `tests/integration/app/demo-restore.test.ts` — Integration test for `restoreScenario('blank')` from `src/app/demo.ts`. Verifies three invariants of the restore path against a real database: (1) the blank scenario seeds only the named accounts, memberships, and locales with no shop data; (2) the restore preserves the unique email index; (3) repeated restores keep the process-lifetime tenant cache consistent with the database. Exercises `restoreScenario` as a direct function call, then drives the resulting state over real HTTP to confirm the invariants hold at the API boundary.
@@ -98,9 +100,9 @@ flowchart LR
 - `tests/integration/product-removal-protects-orders.test.ts` — Integration test for the cross-module cascade triggered when a product is hard-deleted, deactivated, or soft-deleted: the product module announces the event, inventory drops (or keeps) the stock-level row, orders cancels pending orders and emails the buyer, and a racing payment intent is refused. It also verifies that an admin offline-payment recording still succeeds when the product is gone. Because the scenario wires four modules' real `subscribe()` hooks together, it lives in `tests/integration/` rather than inside any single module's test directory.
 - `tests/integration/product-write.test.ts` — Integration tests for `productService.writeCreate` and `productService.writeUpdate`, exercising the multilingual product write path against a real database and a real translation port. Because the trigger lives in the `products` module while the translation rows and locale validation live in the `locales` module, the suite sits at the top-level `tests/integration/` rather than under either module's own `tests/` directory.
 - `tests/integration/scenarios/apply.test.ts` — Integration test for `scenarios/apply.ts`. It exercises three gates — production-env refusal, non-empty-database refusal, and `--reset` — by spawning the real CLI entry point as an asynchronous subprocess against a fresh database on the shared test Mongo instance.
-- `tests/integration/scenarios/shop.test.ts` — Integration test that builds the full `shop` scenario through the application's own HTTP endpoints (checkout, payment, shipping, refund, admin) into a live database, then verifies four guarantee classes: (1) every module's `scenario.shop` subjects resolve with no orphans, (2) each subject id names an existing row, (3) each row carries the property its name claims *where the consumer reads it*, and (4) a produced row is valid input to the contract's own response schema. It is the only suite in the repo that builds once and reads that single state across all cases.
+- `tests/integration/scenarios/shop.test.ts` — Integration test that builds the full `shop` scenario through the application's own HTTP endpoints (checkout, payment, shipping, refund, admin) into a live database, then verifies four guarantee classes: (1) every module's `scenario.shop` subjects resolve with no orphans, (2) each subject id names an existing row, (3) each row carries the property its name claims _where the consumer reads it_, and (4) a produced row is valid input to the contract's own response schema. It is the only suite in the repo that builds once and reads that single state across all cases.
 - `tests/integration/scripts/db/access-grant.test.ts` — Integration test for the `grantAccess` function — the core logic behind the `access:grant` console command used to create the first owner in a fresh deployment. It exercises the function directly (not the CLI wrapper) because the wrapper parses `process.argv` and connects on import, making it undrivable per test case.
-- `tests/integration/scripts/db/index-sync.test.ts` — Integration tests that prove `db:sync` reconciles a database's stored indexes with what the Mongoose schemas declare—both building missing indexes and dropping undeclared ones. It exists because no other test suite can construct a database whose indexes *disagree* with the schemas (they all run against a fresh `mongodb-memory-server` where `autoIndex` builds everything unopposed), so this file is the only place that state is exercised.
+- `tests/integration/scripts/db/index-sync.test.ts` — Integration tests that prove `db:sync` reconciles a database's stored indexes with what the Mongoose schemas declare—both building missing indexes and dropping undeclared ones. It exists because no other test suite can construct a database whose indexes _disagree_ with the schemas (they all run against a fresh `mongodb-memory-server` where `autoIndex` builds everything unopposed), so this file is the only place that state is exercised.
 - `tests/integration/security-middleware.test.ts` — Integration test that verifies two security behaviors of `src/app/security.ts` which no other test asserts: that helmet headers reach an ordinary (non-static) API response, and that a spoofed `X-Forwarded-For` header cannot obtain a fresh rate-limit bucket when `NODE_TRUST_PROXY_HOPS=0` (the deployment default). Both tests drive the fully-wired real app.
 - `tests/integration/signup-grant-compensation.test.ts` — Integration test verifying that when the starting role/membership grant fails after a `User` row has already been written, the account module compensates by deleting that row — so the email or OAuth identity can retry signup. Covers both the self-service signup path and the OAuth login-or-create path. Lives in `tests/integration/` (not in either module's own `tests/`) because the failure is forced in the access module while the compensating delete is in the account module.
 - `tests/integration/translation-cache-invalidation.test.ts` — End-to-end integration test proving that a successful `PATCH /locales/translations/product/:id` invalidates the `products` cache tag so the next anonymous `GET /products/:id` re-renders. It exists because the locales module and the products module each declare their cache tag independently; nothing type-checks the two strings against each other, so a silent typo would let stale products serve indefinitely. The test drives the real app over HTTP and asserts on `x-cache` response headers rather than on mock call counts.
@@ -110,4 +112,5 @@ flowchart LR
 - `tests/integration/upload-security.test.ts` — Integration test suite that verifies the `POST /account/signup` upload path enforces server-side content validation and that the static-file serving layer is secure. It asserts against the **filesystem** (what actually landed on disk) and the **response headers** (what a browser would do with the bytes), not merely against HTTP status codes.
 
 ---
+
 [[boilerplate-node-backend_INDEX|← boilerplate-node-backend index]]

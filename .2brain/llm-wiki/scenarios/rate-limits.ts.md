@@ -28,6 +28,6 @@ Module that supplies the full set of rate-limit environment variables a scripted
 ## Notes
 
 - The 100 000 ceiling is far above the suite's own 1 000 threshold because `run-server.ts` is a single process whose counters never reset between specs.
-- `PRIVATE_COUNTERS` is merged into `SCRIPTED_RATE_LIMITS` unconditionally; callers that *do* want shared Redis must override that key after applying this record.
+- `PRIVATE_COUNTERS` is merged into `SCRIPTED_RATE_LIMITS` unconditionally; callers that _do_ want shared Redis must override that key after applying this record.
 - `DEMO_BANK_TRANSFER` values are explicitly fictional. Callers apply these vars only where the key is unset, so a real deployment's `.env` values are preserved.
 - Both consumers refuse production (`run-server.ts` binds loopback with throwaway secrets; `apply.ts` gates on `NODE_ENV !== 'production'`). This module is never intended for a live deployment.

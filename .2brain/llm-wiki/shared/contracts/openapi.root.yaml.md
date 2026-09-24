@@ -13,7 +13,7 @@ The root OpenAPI 3.0.3 document for the Ecommerce Demo API. It declares the API-
 
 ## Key elements
 
-- **`info.description`** — Carries the `Accept-Language` contract. The header is deliberately *not* declared per-operation or in `components.parameters`; the description paragraph is its normative spec (fallback behaviour, `Content-Language`, `Vary: Accept-Language`).
+- **`info.description`** — Carries the `Accept-Language` contract. The header is deliberately _not_ declared per-operation or in `components.parameters`; the description paragraph is its normative spec (fallback behaviour, `Content-Language`, `Vary: Accept-Language`).
 - **`x-app-level-responses`** — A custom extension mapping HTTP statuses (400, 413, 415, 429) to the shared response object and an `appliesTo` scope (`all` or `requestBody`). Consumed by the bundler, not by a runtime validator.
 - **`components.securitySchemes`** — Two schemes: `bearerAuth` (JWT) and `apiKeyAuth` (opaque `sk_…` credential; deliberately no `bearerFormat`).
 - **`components.parameters`** — Reusable parameter objects: pagination (`PageParam`, `PageSizeParam`), text filter, batch `IdParam` (array, 1–100 items), path/query ID variants, `HardDeleteParam`, `IdempotencyKeyHeader`, `AntibotChallengeTokenHeader`.

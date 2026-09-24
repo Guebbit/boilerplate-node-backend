@@ -14,14 +14,14 @@ Integration test suite for the cart service layer (`src/modules/cart/services/`)
 ## Key elements
 
 - **`setupTestDb()`** — spins up a real Mongo instance for the entire suite; no in-memory substitute.
-- **`mockEnqueueEmail`** — mocked `enqueueEmail` from the mailer adapter; the test asserts *that* a confirmation email was dispatched, not *what* it contains.
+- **`mockEnqueueEmail`** — mocked `enqueueEmail` from the mailer adapter; the test asserts _that_ a confirmation email was dispatched, not _what_ it contains.
 - **`renderInvoicePdfMock`** — replaces the real PDF renderer so Chromium is never launched; the mock resolves `undefined` ("nothing to attach").
 - **`flush()`** — a `setImmediate`-based helper that drains the fire-and-forget microtask chain of `sendOrderPlacedEmail` before assertions on the mailer mock run.
 - **`EMPTY_CART`** — canonical shape `{ items: [], summary: { itemsCount: 0, totalQuantity: 0, total: 0 } }` used in empty-state assertions.
 - **`storedQuantity()`** — reads the persisted quantity back from Mongo so assertions survive the round-trip (guards against in-memory-only state).
 - **`describe('cart storage')`** — pins document lifecycle: no cart until first write, `createdAt` stamping, single-document-per-user invariant, no per-line `_id`, `updatedAt` refresh.
 - **`describe('cartGet')`** — read path with populated product; includes the "product deleted → `product` is null but `productId` survives" case.
-- **`describe('cartGetForBadge')`** — read path *without* populated product; asserts exact key set (`['productId','quantity']`) to enforce the `additionalProperties: false` contract; checks summary math with deliberately distinct numbers.
+- **`describe('cartGetForBadge')`** — read path _without_ populated product; asserts exact key set (`['productId','quantity']`) to enforce the `additionalProperties: false` contract; checks summary math with deliberately distinct numbers.
 - **`describe('cartItemSetById')`** — the `set` vs `add` discriminator: after setting 5 then setting 2, quantity must be 2 (not 7).
 - **`registerModules(...)`** — wires cart, inventory, products, users, orders, account, and delivery modules into the kernel registry so cross-module event handlers (e.g. `PRODUCT_DELETED` → `productRemoveFromCartsById`) are active.
 
@@ -41,7 +41,7 @@ Integration test suite for the cart service layer (`src/modules/cart/services/`)
 ## Notes
 
 - The file deliberately uses **real Mongo** (`setupTestDb`) rather than mocks because the behavioural contract lives in the repository's guarded `$set`/`$inc` writes; a mock would collapse `set` and `add` into the same call.
-- `renderInvoicePdf` is mocked *only* to avoid launching Chromium mid-test; the rest of the invoice module is loaded via `jest.requireActual`, so any other exported helper still runs its real code path.
+- `renderInvoicePdf` is mocked _only_ to avoid launching Chromium mid-test; the rest of the invoice module is loaded via `jest.requireActual`, so any other exported helper still runs its real code path.
 - The `flush()` pattern exists because `sendOrderPlacedEmail` is fire-and-forget: `orderConfirm` returns before `enqueueEmail` is called. Without `await flush()` the mailer mock may not have been invoked yet when the assertion runs.
 - `MISSING_ID` is a structurally valid ObjectId that exists in no collection; it is used to confirm read-path graceful degradation (returning empty, not throwing).
 - The summary test uses 2 × 25 + 3 × 10 = 80 with `itemsCount: 2, totalQuantity: 5` specifically so that a transposition bug in any of the three fields is immediately visible.

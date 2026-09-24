@@ -14,7 +14,7 @@ Thin HTTP adapter for the `GET /wishlist` endpoint. It extracts the authenticate
 ## Key elements
 
 - **`getWishlist`** (exported) — Express handler that calls `wishlistService.wishlistGet(request.authContext!.id)`, sends the view via `successResponse<WishlistResponse>`, and routes failures through `catchAs(response, 'getWishlist')`.
-- **`WishlistResponse`** (type import) — shapes the payload; the file's doc comment notes it carries product *ids only*, mirroring the cart pattern.
+- **`WishlistResponse`** (type import) — shapes the payload; the file's doc comment notes it carries product _ids only_, mirroring the cart pattern.
 
 ## Relationships
 

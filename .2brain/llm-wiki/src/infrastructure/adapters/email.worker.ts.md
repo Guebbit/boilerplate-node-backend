@@ -16,9 +16,9 @@ Consumer-side handler for queued email jobs: renders an EJS template from a spoo
 - **`EMAIL_QUEUE`** (re-exported from `adapters/queue.ts`) — the queue name for email jobs; re-exported here so the worker registry can reference it from a single import.
 - **`discardJobAttachments`** (module-private) — deletes every spooled attachment file for a job. Called only on FINAL outcomes (success or permanent refusal), never on retryable failure.
 - **`handleEmailJob(job: Partial<EmailJobPayload>)`** (exported) — processes one job. Returns `Promise<boolean>`:
-  - `true` → email sent successfully.
-  - `false` → permanent refusal (missing `to` or `templateName`); job is dead-lettered.
-  - *throws* → transient SMTP/transport error; left to the broker's TTL retry queue.
+    - `true` → email sent successfully.
+    - `false` → permanent refusal (missing `to` or `templateName`); job is dead-lettered.
+    - _throws_ → transient SMTP/transport error; left to the broker's TTL retry queue.
 
 ## Relationships
 

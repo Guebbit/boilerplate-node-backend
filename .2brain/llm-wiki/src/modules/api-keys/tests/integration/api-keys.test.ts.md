@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test suite that exercises the full API-key credential lifecycle (mint → resolve → revoke → expire) against a real database. Its central job is proving the **re-floor** guarantee: a credential's effective permissions are re-checked against the minter's *current* role at every `resolveCredential` call, not just validated once at mint time. A mocked repository can only prove the mint-time subset check; this suite proves the resolve-time check with a real role change and the real resolver path.
+Integration test suite that exercises the full API-key credential lifecycle (mint → resolve → revoke → expire) against a real database. Its central job is proving the **re-floor** guarantee: a credential's effective permissions are re-checked against the minter's _current_ role at every `resolveCredential` call, not just validated once at mint time. A mocked repository can only prove the mint-time subset check; this suite proves the resolve-time check with a real role change and the real resolver path.
 
 ## Key elements
 
@@ -17,14 +17,14 @@ Integration test suite that exercises the full API-key credential lifecycle (min
 - **`createRealUser(id)`** — inserts a persisted user via `userRepository` so role assignments and permission lookups have a real row to act on.
 - **`contextFor(userId, permissions)`** — builds a `TenantCallerContext` for the mint/revoke service calls.
 - **`describe('mint — the subset boundary')`** — asserts `mint` rejects a permission the caller lacks (422), succeeds when all requested keys are held, and allows a wildcard-holder to name a specific key beneath it.
-- **`describe('the credential-resolve path')`** — the critical "demotion" test: mints as admin, demotes to `customer`, and asserts `resolveCredential` now returns the credential with *no* api-keys permissions (document untouched, only the floor changed). Also verifies `credentialId` is the display-shaped `sk_<prefix>`, never the secret.
+- **`describe('the credential-resolve path')`** — the critical "demotion" test: mints as admin, demotes to `customer`, and asserts `resolveCredential` now returns the credential with _no_ api-keys permissions (document untouched, only the floor changed). Also verifies `credentialId` is the display-shaped `sk_<prefix>`, never the secret.
 - **`describe('revoke')`** — asserts immediate unresolvability and idempotency of double-revoke.
 - **`describe('an expired credential')`** — creates a row with a past `expiresAt` directly via `apiKeyRepository`; asserts `resolveCredential` returns `undefined` without any revoke.
 - **`describe('touchLastUsed')`** — verifies `lastUsedAt` is stamped on the correct row, and (B8) that a failed fire-and-forget write logs a `logger.warn` containing `apiKeyId` while still resolving the credential.
 
 ## Relationships
 
-- **`@modules/api-keys/module`** — imported for its *side effect* (`registerCredentialResolver`); without this import `resolveCredential` would answer nothing, mirroring real boot.
+- **`@modules/api-keys/module`** — imported for its _side effect_ (`registerCredentialResolver`); without this import `resolveCredential` would answer nothing, mirroring real boot.
 - **`@kernel/authentication` → `resolveCredential`** — the function under test in every "use" scenario.
 - **`@kernel/permissions` → `permissionsOfRole`** — supplies the admin permission set used as the mint-time context.
 - **`@modules/access` → `assignRole`** — performs the real role change (admin → customer) that the demotion test depends on.

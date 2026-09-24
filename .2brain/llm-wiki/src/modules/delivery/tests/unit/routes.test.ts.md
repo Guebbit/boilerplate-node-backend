@@ -26,6 +26,6 @@ Unit tests for the delivery module's route table. Verifies that the four documen
 ## Notes
 
 - Guards are attached **per route**, not inherited from a parent. The file's own doc comment flags this as the most likely drift point when a fifth route is added.
-- `isAuth` on `GET /order/:orderId` is only the *presence* gate; the actual ownership check (caller owns the order) lives downstream in the controller/service layer.
+- `isAuth` on `GET /order/:orderId` is only the _presence_ gate; the actual ownership check (caller owns the order) lives downstream in the controller/service layer.
 - The sweep test checks for `isAuth` specifically, not for `requirePermissionGuard`. A route that has `requirePermissionGuard` but not `isAuth` would pass the sweep — a minor gap if that combination were ever meaningful.
 - Assertions are by **guard name string**, not by invoking the guards. Renaming a guard in the app without updating these strings will break the tests.

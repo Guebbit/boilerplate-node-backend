@@ -16,8 +16,8 @@ Guards the email-template pipeline end-to-end: verifies that the EJS template di
 - **`contentFor(locale)`** — Returns a map of template filename → `EmailContent` by calling the corresponding builder from each module's `emails.ts` with a fixed test user (`Ada`) and locale. One entry per `.ejs` file in the directory.
 - **`describe('email templates')`** — Asserts `emailTemplatesDirectory()` resolves to an existing path, contains ≥ 1 `.ejs` file, and that four known templates exist as real files.
 - **`describe('email templates render in every supported locale')`** — Cross-products every template × every locale from `listSupportedLocales()`, renders via `ejs.renderFile`, and asserts:
-  - Output contains `<html lang="<locale>"`.
-  - No dotted i18next key identifier (regex: `\b[a-z]+(?:\.[\da-z-]+){2,}\b`) appears in the HTML — the shape a missing key leaves behind.
+    - Output contains `<html lang="<locale>"`.
+    - No dotted i18next key identifier (regex: `\b[a-z]+(?:\.[\da-z-]+){2,}\b`) appears in the HTML — the shape a missing key leaves behind.
 - **Invoice document test** — Same render-and-check rules applied to `shared/templates/documents/orders.invoice.ejs`, which lives outside the main templates directory.
 - **Locale-differentiation test** — Renders `account.reset-confirm.ejs` in `en` and `it`, asserts the outputs differ, proving dictionaries are actually consulted.
 

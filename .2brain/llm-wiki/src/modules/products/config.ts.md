@@ -16,7 +16,7 @@ Defines the two VAT rates a deployment charges (default and reduced) and validat
 - **`vatRateDefault(): number`** — Returns the default VAT rate from `NODE_VAT_RATE_DEFAULT` (fallback `0.22`). Applied to products with no `taxClass`.
 - **`vatRateReduced(): number`** — Returns the reduced VAT rate from `NODE_VAT_RATE_REDUCED` (fallback `0.1`). Applied to products whose `taxClass` is `reduced` (books, food, medicine, etc.).
 - **`isValidVatRate(raw: string): boolean`** (private) — Checks that a raw env value parses to a decimal in `[0, 1)` via `parseEnvironmentDecimal`.
-- **`invalidVatRateConfig(): string[]`** — Serves as this module's `customCheck`. Returns the names of env vars that are *set* but not a valid rate (e.g. `2.2`, `abc`). Absent vars are left to the manifest's declarative `requiredConfig` check.
+- **`invalidVatRateConfig(): string[]`** — Serves as this module's `customCheck`. Returns the names of env vars that are _set_ but not a valid rate (e.g. `2.2`, `abc`). Absent vars are left to the manifest's declarative `requiredConfig` check.
 
 ## Relationships
 
@@ -27,7 +27,7 @@ Defines the two VAT rates a deployment charges (default and reduced) and validat
 
 ## Notes
 
-- Both getters are *functions*, not constants. Calling them at import time would freeze the value; the per-call read is intentional.
+- Both getters are _functions_, not constants. Calling them at import time would freeze the value; the per-call read is intentional.
 - `invalidVatRateConfig` only flags vars that are **present but invalid**. An unset var is already named by `requiredConfig` in the manifest; flagging it here too would be redundant.
 - The validity range is `[0, 1)` — a value of `1` (100%) or higher is treated as a typo and rejected.
 - `isValidVatRate` deliberately uses `parseEnvironmentDecimal` (not bare `Number`) so that edge-case strings (`.5`, `1e-1`, whitespace) are handled consistently with how the readers interpret them.

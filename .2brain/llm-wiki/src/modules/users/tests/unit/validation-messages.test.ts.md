@@ -15,12 +15,12 @@ Guards against a specific i18n ordering bug: if `t()` is called at module scope 
 
 - **`copy(locale)`** — reads the `users` namespace from `mergedResources()` for a given locale; used to look up the expected strings.
 - **`invalidUser`** — a deliberately invalid payload (`email`, `username`, `password` all fail) so a single parse triggers every message under test.
-- **`messagesFor(locale)`** — calls `loadBeforeI18n` to initialize i18n *then* dynamically import `../../model`, parses `invalidUser`, and returns the array of Zod issue messages.
+- **`messagesFor(locale)`** — calls `loadBeforeI18n` to initialize i18n _then_ dynamically import `../../model`, parses `invalidUser`, and returns the array of Zod issue messages.
 - **`describe('user validation messages')`** — four tests:
-  - English messages match the shipped EN strings.
-  - Italian messages match the shipped IT strings.
-  - IT strings differ from EN (guards against accidentally shipping English twice).
-  - **"follows a locale change without the schema being rebuilt"** — inside `jest.isolateModulesAsync`, imports the schema once, parses in EN, calls `i18next.changeLanguage('it')`, parses again with the *same* schema object, and asserts the messages switched. This is the property only a thunk (message resolved at parse-time) provides.
+    - English messages match the shipped EN strings.
+    - Italian messages match the shipped IT strings.
+    - IT strings differ from EN (guards against accidentally shipping English twice).
+    - **"follows a locale change without the schema being rebuilt"** — inside `jest.isolateModulesAsync`, imports the schema once, parses in EN, calls `i18next.changeLanguage('it')`, parses again with the _same_ schema object, and asserts the messages switched. This is the property only a thunk (message resolved at parse-time) provides.
 
 ## Relationships
 
@@ -29,6 +29,6 @@ Guards against a specific i18n ordering bug: if `t()` is called at module scope 
 
 ## Notes
 
-- The last test deliberately uses `jest.isolateModulesAsync` to get a clean module registry, then imports `i18next` and the schema *inside* that sandbox — a pattern that differs from the `loadBeforeI18n` helper used in the other tests.
+- The last test deliberately uses `jest.isolateModulesAsync` to get a clean module registry, then imports `i18next` and the schema _inside_ that sandbox — a pattern that differs from the `loadBeforeI18n` helper used in the other tests.
 - `loadBeforeI18n` accepts a third argument (`'users.field-email-invalid'`) that is presumably a key to verify as present, making the ordering dependency explicit rather than relying on import side-effects.
 - All message assertions use `toContain` (not `toEqual` on the full array) so the tests remain resilient to rule reordering or additional rules being added to the schema.

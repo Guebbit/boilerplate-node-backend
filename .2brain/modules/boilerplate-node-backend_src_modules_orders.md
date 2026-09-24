@@ -1,8 +1,8 @@
 ---
 tags:
-  - 2brain
-  - 2brain/module
-  - project/boilerplate-node-backend
+    - 2brain
+    - 2brain/module
+    - project/boilerplate-node-backend
 type: module
 module: src/modules/orders/
 files: 45
@@ -41,6 +41,7 @@ The orders module owns the full order lifecycle: creation (via admin write or ca
 Read **`domain/lifecycle.ts`** first — it is the one-page state machine that every other piece (services, controllers, event listeners) defers to, and understanding which actor may move which status makes the rest of the module legible. Then read **`services/place.ts`** to see the single atomic write path that both the admin create and cart checkout converge on, which reveals how the module coordinates inventory, payments, numbering, and event emission in one transaction.
 
 ## Connected modules
+
 ```mermaid
 flowchart LR
     m_src_modules_orders["src/modules/orders/"]
@@ -80,6 +81,7 @@ flowchart LR
 [[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_scripts|scripts/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_delivery|src/modules/delivery/]] · [[boilerplate-node-backend_src_modules_inventory|src/modules/inventory/]] · [[boilerplate-node-backend_src_modules_observability|src/modules/observability/]] · [[boilerplate-node-backend_src_modules_orders_tests|src/modules/orders/tests/]] · [[boilerplate-node-backend_src_modules_payments|src/modules/payments/]] · [[boilerplate-node-backend_src_modules_products|src/modules/products/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]] · … and 7 more
 
 ## Files
+
 - `src/modules/orders/analytics.ts` — Declares the analytics event names the orders module emits and registers them into the app-wide `AnalyticsEventMap` type. This file exists so that event names live in one source-of-truth location and the analytics port's union type stays in sync across modules.
 - `src/modules/orders/audit.ts` — Declares the audit-action vocabulary for the orders module and registers it into the app-wide `AuditActionMap` via TypeScript module augmentation. It exists so that every order write-path (create, update, delete, cancel, status-override) records a typed, enumerable action in the audit trail without a shared enum.
 - `src/modules/orders/config.ts` — Centralises the shop's invoice identity (legal name, VAT number, country), the bank-transfer payment-method configuration (beneficiary, IBAN, BIC, hold window, per-account open-order cap), and the invoice render-cache knobs (path, TTL). All values are read per call from `process.env` rather than captured at import, so a deployment can correct any of them without a restart. Owned by `orders` because `./emails` is the sole reader of the shop identity, and the transfer business rules (hold, cap) constrain the order entity itself.
@@ -104,7 +106,7 @@ flowchart LR
 - `src/modules/orders/metrics.ts` — Defines the Prometheus domain counters owned by the orders module. By co-locating metric definitions with the domain logic (rather than in `infrastructure/observability`), the module self-documents what it measures and the overview endpoint can read them without a direct import into this file.
 - `src/modules/orders/model.ts` — Defines the Mongoose schema and TypeScript document interface for order records, plus the serialization transform that derives wire-only fields (`totalItems`, `totalQuantity`, `totalPrice`, `transferInstructions`) at read time. Orders embed a frozen product snapshot (not a `ref`) so that later catalogue edits never rewrite purchase history, and the snapshot is deliberately narrower than the live `productSchema` — no stock counters, no image URLs, and a resolved `taxRate` instead of a `taxClass`.
 - `src/modules/orders/module.ts` — Module manifest for the **orders** domain. It registers the module's identity (name, base path, permissions, routes), wires domain-event subscriptions (reservation expiry, user deletion, product removal), declares the GDPR data-export query, and pins the storefront/admin scenario states — all in a single `AppModule` object that the kernel's registry consumes at boot.
-- `src/modules/orders/module.yaml` — Declarative module manifest for the **orders** module. It tells the runtime which subdomain the module belongs to and lists the other modules it depends on at the data/transaction level, along with a one-line note explaining *why* each dependency exists.
+- `src/modules/orders/module.yaml` — Declarative module manifest for the **orders** module. It tells the runtime which subdomain the module belongs to and lists the other modules it depends on at the data/transaction level, along with a one-line note explaining _why_ each dependency exists.
 - `src/modules/orders/openapi.yaml` — OpenAPI 3.0.3 contract (v2.0.0) for the Orders module. It declares the full REST surface—list, create, update, delete, search, and per-id operations—along with local request/response schemas, so that clients, codegen tooling, and the runtime controller share a single source of truth for the module's API.
 - `src/modules/orders/probes.ts` — Defines the orders module's "probe" requests—HTTP calls that validate scoping behaviors the OpenAPI contract cannot express on its own. The probes are consumed by the client-collections bundle to generate runnable Postman/Insomnia-style requests that exercise role-based and ownership scoping in the orders API.
 - `src/modules/orders/rate-limits.ts` — Declares the orders module's sole rate-limit budget (`INVOICE_RENDER_BUDGET`) for `GET /orders/:id/invoice` and exposes it as a ready-to-use Express middleware (`invoiceLimiter`). It exists because each invoice render spawns a Chromium process (`renderHtmlToPdf`), making the endpoint far more resource-intensive than a typical request handler, and a per-account cap is needed to prevent one signed-in user from exhausting container CPU.
@@ -122,9 +124,10 @@ flowchart LR
 - `src/modules/orders/services/place.ts` — Single write path for creating a new order. Both `crud.ts`'s admin `create` and `cart`'s `checkout` funnel their writes through `placeOrder`, so the actual mutation (freezing lines, allocating an invoice number, minting a bank-transfer reference, holding stock) lives in exactly one place. Caller-specific concerns (payment-method validation, open-transfer caps, cart clearing, shipping resolution) stay with the caller.
 - `src/modules/orders/services/retention.ts` — Implements the two-phase PII lifecycle for orders after account erasure. Because an order is an invoice, it is retained under Art. 17(3)(b)/(e) regardless of the account's fate. This file detaches the person from the order immediately, then (via a later sweep) scrubs residual PII once a statutory retention window elapses.
 - `src/modules/orders/services/retract.ts` — Exports a single compensation function, `retractOrder`, that undoes an already-written order by releasing its inventory hold and deleting the order document. It exists as a standalone module so that `place.ts` (rollback after a failed stock hold) and the cart's `checkout` flow can both invoke it without importing each other.
-- `src/modules/orders/services/scope.ts` — The authorization boundary for the orders module. Before any other service reads or mutates an order, this file answers two questions: *which* orders the caller may see (`callerScope`, `ownerScope`) and *what* the caller may do to a specific order (`actorOf`, `withActions`). It centralises the read-filter compilation and the actor/action assignment so that every read path in the module applies the same rules.
+- `src/modules/orders/services/scope.ts` — The authorization boundary for the orders module. Before any other service reads or mutates an order, this file answers two questions: _which_ orders the caller may see (`callerScope`, `ownerScope`) and _what_ the caller may do to a specific order (`actorOf`, `withActions`). It centralises the read-filter compilation and the actor/action assignment so that every read path in the module applies the same rules.
 - `src/modules/orders/services/snapshot.ts` — Resolves catalogue product rows into the locale-specific snapshot that an order line freezes at write time, and assembles the final `OrderDocumentItem[]` array. It exists in `services/` (not the domain tier) because it deliberately reaches into `@infrastructure/i18n` and `@kernel/translation` to perform locale-aware field resolution.
 - `src/modules/orders/services/status.ts` — The single status-writer for the orders module. Other modules (`payments`, `delivery`) **report** a completed fact to this file; it decides whether that fact still applies to the order's current lifecycle position, applies the transition atomically via the repository, and emits a domain event. It is never called as a "request" — only as a "report" of something another module has already recorded.
 
 ---
+
 [[boilerplate-node-backend_INDEX|← boilerplate-node-backend index]]

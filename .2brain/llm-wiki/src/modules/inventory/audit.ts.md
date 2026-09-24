@@ -14,10 +14,10 @@ Defines the inventory module's audit action vocabulary and registers it into the
 ## Key elements
 
 - **`inventoryAuditActions`** — A `const` object with four dot-namespaced action strings:
-  - `admin.stock.received` — stock received by an admin.
-  - `admin.stock.adjusted` — admin-initiated stock level adjustment.
-  - `admin.reservations.swept` — batch expiration/sweep of stale reservations.
-  - `admin.commit.orphaned` — `commitForOrder` found no matching hold to claim (module invariant failure, audited here rather than by the caller).
+    - `admin.stock.received` — stock received by an admin.
+    - `admin.stock.adjusted` — admin-initiated stock level adjustment.
+    - `admin.reservations.swept` — batch expiration/sweep of stale reservations.
+    - `admin.commit.orphaned` — `commitForOrder` found no matching hold to claim (module invariant failure, audited here rather than by the caller).
 - **`declare module '@infrastructure/observability/audit'`** — Module augmentation that adds an `inventory` key to the global `AuditActionMap` interface, typed as the union of `inventoryAuditActions` values. This follows the same augmentation-over-shared-enum pattern used in `modules/account/audit.ts`.
 
 ## Relationships

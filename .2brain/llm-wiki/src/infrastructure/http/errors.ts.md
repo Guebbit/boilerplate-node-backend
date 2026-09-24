@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The single mapping point from raw Mongo/Mongoose driver failures to an HTTP status code. It exists so that all twelve models (and any service) resolve a duplicate key, a bad ObjectId, a schema validation failure, or an access-invariant breach to the *same* status and message, rather than each controller re-deriving the logic inline.
+The single mapping point from raw Mongo/Mongoose driver failures to an HTTP status code. It exists so that all twelve models (and any service) resolve a duplicate key, a bad ObjectId, a schema validation failure, or an access-invariant breach to the _same_ status and message, rather than each controller re-deriving the logic inline.
 
 ## Key elements
 
@@ -23,7 +23,7 @@ The single mapping point from raw Mongo/Mongoose driver failures to an HTTP stat
 - **`src/infrastructure/persistence/mongo-errors.ts`** — Provides `isDuplicateKey`, the predicate this file uses to detect unique-index violations.
 - **`src/infrastructure/adapters/logger.ts`** — Provides `logger`; both reject helpers call `logger.error` with the operation context, derived detail, status, and the raw error (which the logger's serializer expands into a stack trace).
 - **`src/infrastructure/http/controller.ts`** / account module controllers — Consumers. Their `.catch()` handlers call `rejectDatabaseError` (when they hold a `Response`) or `rejectDatabaseEnvelope` (services that return an envelope). This file is the shared "what status does this failure deserve" answer for all of them.
-- **`src/app/error-handling.ts`** — Sits in the same error-handling path; this file handles the *database* branch specifically, while the broader middleware handles transport-level and non-DB failures.
+- **`src/app/error-handling.ts`** — Sits in the same error-handling path; this file handles the _database_ branch specifically, while the broader middleware handles transport-level and non-DB failures.
 
 ## Notes
 

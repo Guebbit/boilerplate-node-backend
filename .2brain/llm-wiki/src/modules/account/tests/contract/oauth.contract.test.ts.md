@@ -15,7 +15,7 @@ Contract tests for the OAuth surface (`GET /account/oauth/providers`, `GET /acco
 
 - **`attemptCookies(start)`** — Builds a `Cookie` request header carrying both `oauth_state` and `oauth_verifier` from a start response; both are required to redeem a callback.
 - **`fakeLogin()`** — Convenience wrapper performing one complete start → callback round-trip through the fake provider.
-- **`codeFor(secret, stepsFromNow = 1)`** — Generates a TOTP code for the *next* RFC 6238 step (the "now" step is already consumed by the confirm request).
+- **`codeFor(secret, stepsFromNow = 1)`** — Generates a TOTP code for the _next_ RFC 6238 step (the "now" step is already consumed by the confirm request).
 - **`describe('GET /account/oauth/providers')`** — Asserts the fake provider is listed under the demo profile.
 - **`describe('GET /account/oauth/:provider')`** — 404 for unknown providers; 302 redirect to the callback URL with `oauth_state` and `oauth_verifier` cookies set.
 - **`describe('GET /account/oauth/:provider/callback')`** — 404, 400 (missing/mismatched state), 400 (missing verifier), successful round-trip (session cookies, user created, redirect to frontend), idempotent second login, and admin-role audit correctness (regression B4).
@@ -38,7 +38,7 @@ Contract tests for the OAuth surface (`GET /account/oauth/providers`, `GET /acco
 
 ## Notes
 
-- The `recordAudit` mock must be re-routed explicitly because `recordAudit` closes over its *own* module's `emitAuditEvent` binding; a simple property override on the module object would not be visible to it.
+- The `recordAudit` mock must be re-routed explicitly because `recordAudit` closes over its _own_ module's `emitAuditEvent` binding; a simple property override on the module object would not be visible to it.
 - `enableDemoProfile()` is toggled in `beforeAll`/`afterAll` to prevent the fake provider from leaking into other test suites.
 - The TOTP helper defaults to `stepsFromNow = 1` because the confirm request already consumed the current 30-second window; replay protection rejects a repeated code.
 - The second-login test (`toHaveLength(1)` on `userRepository.count`) is deliberately sequential, not concurrent — it tests idempotency, not race conditions.

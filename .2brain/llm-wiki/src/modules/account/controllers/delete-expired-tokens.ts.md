@@ -27,5 +27,5 @@ Thin HTTP adapter for `DELETE /account/tokens/expired`. Translates the request i
 ## Notes
 
 - The pruned token count returned by the service is deliberately **not** included in the response body. The `MessageResponse` schema forbids a `data` field; the count is only used in the service's own audit/logging path.
-- The metric increment happens *after* the `refused` check, so denied/failed calls do not count toward the cleanup total.
+- The metric increment happens _after_ the `refused` check, so denied/failed calls do not count toward the cleanup total.
 - Error handling is fully delegated to `catchAs(response, 'deleteExpiredTokens')`; there is no try/catch or manual error mapping in this file.

@@ -18,7 +18,7 @@ Integration test for the cross-module cascade triggered when a product is hard-d
 - **`renderInvoicePdfMock`** – Mocks `renderInvoicePdf` to resolve `undefined`, avoiding a real Chromium/PDF render while keeping the rest of the invoice module's exports intact via `jest.requireActual`.
 - **`mockEnqueueEmail`** – Jest mock on `enqueueEmail`; assertions check call count, recipient, and template name (e.g. `'orders.order-product-unavailable'`).
 - **`describe('hard-deleting …')`** – Asserts product is gone, order is `cancelled`, exactly one cancellation email fires, and the stock-level row is deleted.
-- **`describe('deactivating …')`** – Asserts order is `cancelled`, email fires, but the stock-level row is *preserved* (reversible).
+- **`describe('deactivating …')`** – Asserts order is `cancelled`, email fires, but the stock-level row is _preserved_ (reversible).
 - **`describe('a soft delete or a restore')`** – Asserts `productService.remove(…, false)` (soft delete) and the subsequent restore both leave the level row untouched.
 - **`describe('a payment attempt racing the removal event')`** – Bypasses the event listener by directly deleting the stock row and stamping `deletedAt`, then calls `createIntent`; expects a 409 `ORDER_PRODUCT_UNAVAILABLE` response naming the product.
 - **`describe('admin offline recording …')`** – Same "product gone" setup, but calls `recordOfflinePayment`; expects success and order status `paid`.
@@ -40,5 +40,5 @@ Integration test for the cross-module cascade triggered when a product is hard-d
 
 - The "racing" and "offline" tests deliberately **bypass the domain-event listener** by mutating DB rows directly (`stockLevelRepository.deleteByProductId`, setting `deletedAt`). This simulates the exact window where the listener hasn't yet run, so the payment module's own guard is the only protection.
 - `renderInvoicePdf` is mocked but the invoice module file itself is loaded via `jest.requireActual` spread, so every other export (helpers, types) remains real. Without this, the fire-and-forget chain would attempt a real PDF render.
-- `flush()` is necessary because `sendOrderPlacedEmail` dispatches its `enqueueEmail` call in a `setImmediate`-like microtask chain *after* `orderConfirm` has already returned; asserting on the mock without flushing would be a race.
+- `flush()` is necessary because `sendOrderPlacedEmail` dispatches its `enqueueEmail` call in a `setImmediate`-like microtask chain _after_ `orderConfirm` has already returned; asserting on the mock without flushing would be a race.
 - The file uses `void toDeactivate` as a no-op to satisfy lint (the variable is read for existence confirmation but not otherwise used).

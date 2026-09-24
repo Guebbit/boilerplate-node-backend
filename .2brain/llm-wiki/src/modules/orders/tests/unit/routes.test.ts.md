@@ -26,6 +26,6 @@ Unit test that pins the orders router's contract: exact endpoint list and order,
 
 ## Notes
 
-- The file documents *why* certain assertions exist via block comments (e.g., "adding `requirePermission` to `POST /:id/cancel` would silently remove the feature"). Treat those comments as the authoritative rationale when modifying the router.
+- The file documents _why_ certain assertions exist via block comments (e.g., "adding `requirePermission` to `POST /:id/cancel` would silently remove the feature"). Treat those comments as the authoritative rationale when modifying the router.
 - The `products` cache-invalidation asymmetry (only `POST /` and `POST /:id/cancel` clear it) is deliberate and tested; do not "fix" it to be symmetric without understanding the stock-mutation semantics.
 - Route ordering assertions (`/search` before `/:id`) protect against Express shadowing bugs, not just cosmetic ordering.

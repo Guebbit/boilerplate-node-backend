@@ -1,8 +1,8 @@
 ---
 tags:
-  - 2brain
-  - 2brain/module
-  - project/boilerplate-node-backend
+    - 2brain
+    - 2brain/module
+    - project/boilerplate-node-backend
 type: module
 module: src/modules/delivery/
 files: 22
@@ -42,6 +42,7 @@ The delivery module owns the shipment lifecycle after an order is paid: it expos
 2. **`service.ts`** — The two functions `recordShipment` and `recordDelivery` are the heart of the module. They show how the service validates, writes the Shipment, calls orders for status, and triggers the email, giving you the full lifecycle in one pass.
 
 ## Connected modules
+
 ```mermaid
 flowchart LR
     m_src_modules_delivery["src/modules/delivery/"]
@@ -81,6 +82,7 @@ flowchart LR
 [[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_orders|src/modules/orders/]] · [[boilerplate-node-backend_src_modules_orders_tests|src/modules/orders/tests/]] · [[boilerplate-node-backend_src_modules_payments|src/modules/payments/]] · [[boilerplate-node-backend_src_modules_products|src/modules/products/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]] · [[boilerplate-node-backend_tests_cross-cutting|tests/cross-cutting/]] · [[boilerplate-node-backend_tests_integration|tests/integration/]] · [[boilerplate-node-backend_tests_support|tests/support/]] · … and 1 more
 
 ## Files
+
 - `src/modules/delivery/audit.ts` — Declares the delivery module's audit action identifiers and registers them into the shared `AuditActionMap` so that the observability layer can type-check which actions belong to this domain.
 - `src/modules/delivery/controllers/get-shipment-by-order.ts` — Controller for `GET /delivery/order/:orderId`. Returns the parcel associated with a given order — its tracking code and arrival status — consumed by the order page's shipping panel once the order status is `shipped`.
 - `src/modules/delivery/controllers/get-shipping-methods.ts` — Express route handler for `GET /delivery/methods`. Exposes the shop's available shipping methods (flat rates, free-above thresholds) as a public, unauthenticated endpoint so that guests can evaluate shipping costs before signing up. Accepts an optional `weight` query parameter to filter the list.
@@ -88,7 +90,7 @@ flowchart LR
 - `src/modules/delivery/controllers/post-ship-order.ts` — HTTP handler for `POST /delivery/order/:orderId/ship`. It validates the inbound request body, delegates the actual state transition (`processing → shipped`) to the delivery service, and formats the success or rejection response. It exists so the route layer can stay thin and this single concern (shipping an order) lives in one testable function.
 - `src/modules/delivery/domain/index.ts` — Barrel file that exposes the delivery domain rules (shipping rates and pricing logic) as a clean import surface. It lets consumers pull in pure domain functions without importing the module's HTTP/service layer, per the domain-layer convention documented in `docs/theory/domain-layer.md`.
 - `src/modules/delivery/domain/rates.ts` — Pure, side-effect-free shipping-rate logic kept in the delivery domain layer so that every quote in the system (checkout, delivery service, API responses) derives from a single static table. The module doubles as the source-of-truth schema for `GET /delivery/methods`.
-- `src/modules/delivery/emails.ts` — Provides the resolved, locale-specific email content for delivery notifications. It exists to separate *what text is sent* from *how it is rendered*: the function returns a fully-translated `EmailContent` object, and whatever email template engine consumes it later performs no further resolution. This follows the same convention as `src/modules/account/emails.ts`.
+- `src/modules/delivery/emails.ts` — Provides the resolved, locale-specific email content for delivery notifications. It exists to separate _what text is sent_ from _how it is rendered_: the function returns a fully-translated `EmailContent` object, and whatever email template engine consumes it later performs no further resolution. This follows the same convention as `src/modules/account/emails.ts`.
 - `src/modules/delivery/index.ts` — Public barrel for the delivery module. It is the **only** import surface allowed for sibling modules (enforced by the DDD boundary rule in `docs/theory/strategic-ddd.md` §5). It re-exports the service, domain rules, email templates, and model types so that consumers like cart's checkout can price a shipping method without reaching into internal files.
 - `src/modules/delivery/model.ts` — Defines the Mongoose schema and compiled model for the **Shipment** collection — one document per order, enforced by a `unique` index on `orderId`. It captures carrier-specific facts (tracking code, delivered timestamp) that the Order model does not carry, and provides the serialization transform used when the repository returns lean reads.
 - `src/modules/delivery/module.ts` — Module manifest (entry point) for the delivery module. It declares the module's identity, permission keys, route table, personal-data collection contract, and locale directory to the kernel registry. It exists so the rest of the application can discover and mount the delivery feature without knowing its internals.
@@ -99,10 +101,11 @@ flowchart LR
 - `src/modules/delivery/tests/contract/api.contract.test.ts` — Contract (schema) tests for the four `/delivery` HTTP routes. Each test asserts that the response matches the declared API spec (via `toSatisfyApiSpec`) for both success and error branches, across three audiences: public (methods list), owner (shipment read), and staff (ship / deliver writes). The file does **not** test business-rule logic — it pins that each contract branch is reachable over HTTP.
 - `src/modules/delivery/tests/integration/service.test.ts` — Integration tests for the delivery service: the rate-pricing rules and the shipment→delivery lifecycle. Exercises `recordShipment`, `recordDelivery`, and `getForOrder` against a real MongoDB instance, asserting that order status transitions, parcel writes, and the outbound tracking email all happen in the expected combination (or are correctly refused).
 - `src/modules/delivery/tests/unit/emails.test.ts` — Unit test for the `shipmentShippedEmail` builder. It verifies that the dispatch email renders correctly: the tracking code is interpolated (never left as a raw `{{…}}` token), the customer's name appears in the greeting, every copy slot is resolved to real text rather than an i18n key, and locale selection drives actual translation differences.
-- `src/modules/delivery/tests/unit/rates.property.test.ts` — Property-based tests (via `fast-check`) for the shipping-rate domain module. Where `rates.test.ts` pins three fixed points around the free-shipping threshold, this file checks invariants across *all* valid item totals, using a fixed seed so any counterexample is reproducible and can be promoted back to a concrete example in the fixed-point suite.
-- `src/modules/delivery/tests/unit/rates.test.ts` — Unit tests for the pure shipping-rate functions in `domain/rates.ts`. No database, no mocks — it exercises the pricing table and the weight/threshold rules in isolation. The doc header explicitly separates this from `tests/integration/service.test.ts`, which exists because *persistence* of a shipment needs a real DB; the pricing rule itself does not.
+- `src/modules/delivery/tests/unit/rates.property.test.ts` — Property-based tests (via `fast-check`) for the shipping-rate domain module. Where `rates.test.ts` pins three fixed points around the free-shipping threshold, this file checks invariants across _all_ valid item totals, using a fixed seed so any counterexample is reproducible and can be promoted back to a concrete example in the fixed-point suite.
+- `src/modules/delivery/tests/unit/rates.test.ts` — Unit tests for the pure shipping-rate functions in `domain/rates.ts`. No database, no mocks — it exercises the pricing table and the weight/threshold rules in isolation. The doc header explicitly separates this from `tests/integration/service.test.ts`, which exists because _persistence_ of a shipment needs a real DB; the pricing rule itself does not.
 - `src/modules/delivery/tests/unit/routes.test.ts` — Unit tests for the delivery module's route table. Verifies that the four documented endpoints are mounted in the expected order and that each carries the correct authentication/authorization guard. The final "sweep" test acts as a safety net: any future route added without a guard will fail this suite rather than shipping open.
 - `src/modules/delivery/tests/unit/schema-contract.test.ts` — Unit test that pins down the structural contract of `shipmentSchema`: which fields are required, the database-level uniqueness guarantee on `orderId`, the ObjectId reference to `Order`, the `ShipmentStatus` enum with its `shipped` default, and the intentional absence of a `deliveredAt` default. It exists so that schema changes that would break exactly-once dispatch semantics are caught immediately.
 
 ---
+
 [[boilerplate-node-backend_INDEX|← boilerplate-node-backend index]]

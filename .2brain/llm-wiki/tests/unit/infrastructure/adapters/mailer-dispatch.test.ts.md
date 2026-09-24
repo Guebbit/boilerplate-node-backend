@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for `enqueueEmail` in `mailer.ts`, covering the three-branch dispatch decision (no broker → send inline; broker OK → enqueue only; broker publish fails → fall back to inline) plus two edge cases: a *rejecting* publish (contract violation, not a designed path) and attachment cleanup on inline sends. The file exists because the three-branch behavior was previously unasserted and a silent drop in any branch would be invisible to callers (the function always resolves `void`).
+Unit tests for `enqueueEmail` in `mailer.ts`, covering the three-branch dispatch decision (no broker → send inline; broker OK → enqueue only; broker publish fails → fall back to inline) plus two edge cases: a _rejecting_ publish (contract violation, not a designed path) and attachment cleanup on inline sends. The file exists because the three-branch behavior was previously unasserted and a silent drop in any branch would be invisible to callers (the function always resolves `void`).
 
 ## Key elements
 
@@ -31,6 +31,6 @@ Unit tests for `enqueueEmail` in `mailer.ts`, covering the three-branch dispatch
 
 - **Logger mock must stay getter-based.** Swc hoists `import` statements above the `const` declarations in this file; a plain `logger: loggerMock` property would be read at factory time (before the `const` is initialised) and throw `ReferenceError`. The queue mock is safe because each value is read from inside a function body, not at object-creation time.
 - **Templates render for real.** Only the SMTP transport is mocked. If a template variable is added or renamed, these tests will fail with an EJS `ReferenceError` rather than passing silently — treat a new `ReferenceError` in this file as a template/data contract break.
-- **Publish-reject path is distinct from publish-fail.** `publishToQueue` returning `false` (path 3) triggers an inline fallback; a *rejected* promise (adapter contract violation) is caught, logged at `error` level with `template` and `to`, and the function still resolves `void` with **no** inline send. These are separate `describe` blocks.
+- **Publish-reject path is distinct from publish-fail.** `publishToQueue` returning `false` (path 3) triggers an inline fallback; a _rejected_ promise (adapter contract violation) is caught, logged at `error` level with `template` and `to`, and the function still resolves `void` with **no** inline send. These are separate `describe` blocks.
 - **Mutual-exclusivity table** (`it.each`) encodes the invariant that exactly one of enqueue / inline-send fires per call. It is the fastest way to catch an inverted branch condition.
 - **File is truncated** in the provided content; the attachment-discard tests after the first `it` are incomplete. The full file likely contains additional assertions about spool cleanup on the publish-fail inline path.

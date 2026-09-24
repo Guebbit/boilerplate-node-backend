@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Redis cache adapter that exposes an opaque byte store with tag-based invalidation. Every operation fails open: if Redis is unreachable the app continues serving without a cache rather than erroring. It owns no policy about *what* is cached or how values are serialized — that is the caller's responsibility.
+Redis cache adapter that exposes an opaque byte store with tag-based invalidation. Every operation fails open: if Redis is unreachable the app continues serving without a cache rather than erroring. It owns no policy about _what_ is cached or how values are serialized — that is the caller's responsibility.
 
 ## Key elements
 
@@ -20,7 +20,7 @@ Redis cache adapter that exposes an opaque byte store with tag-based invalidatio
 - **`claimCacheRefresh(key, seconds)`** — Distributed single-writer lock via `SET NX EX`; exactly one worker/replica wins. Returns `false` on any failure so a flaky claim never looks like an in-flight rebuild.
 - **`invalidateCacheTags(tags)`** — For each tag: SMEMBERS → variadic DEL of members → DEL of the tag set. Returns a `ClearCacheResult` (`{ deleted, reachable }`); never rejects.
 - **`cacheConnection`** (internal) — A `manageConnection<RedisClientType>` instance that memoises a single client, shares in-flight connects, and reports unavailability once.
-- **`CACHE_PREFIX`**, **`getRedisUrl()`**, **`isCacheEnabled()`** — Configuration helpers; `isCacheEnabled` requires both a resolvable URL *and* the `NODE_REDIS_CACHE_ENABLED` flag (default `true`).
+- **`CACHE_PREFIX`**, **`getRedisUrl()`**, **`isCacheEnabled()`** — Configuration helpers; `isCacheEnabled` requires both a resolvable URL _and_ the `NODE_REDIS_CACHE_ENABLED` flag (default `true`).
 
 ## Relationships
 

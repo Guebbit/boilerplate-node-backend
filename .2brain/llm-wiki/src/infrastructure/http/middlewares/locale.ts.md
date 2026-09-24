@@ -13,8 +13,8 @@ Express middleware that resolves the request's language from the `Accept-Languag
 
 ## Key elements
 
-- **`attachLocale(request, response, next)`** *(exported)* — The middleware. Negotiates the locale, writes `request.locale` and `request.t`, sets `Content-Language` and `Vary: Accept-Language` on the response, then invokes `next()` inside `runWithLocaleContext` so the remainder of the chain inherits the binding.
-- **`negotiateLocale(request)`** *(module-private)* — Reads `request.acceptsLanguages(...offered)` and returns the best-matching supported locale, falling back to the configured default when nothing matches or the header is absent. Only the `acceptsLanguages` property is required on the input, so unit tests can pass a minimal stub.
+- **`attachLocale(request, response, next)`** _(exported)_ — The middleware. Negotiates the locale, writes `request.locale` and `request.t`, sets `Content-Language` and `Vary: Accept-Language` on the response, then invokes `next()` inside `runWithLocaleContext` so the remainder of the chain inherits the binding.
+- **`negotiateLocale(request)`** _(module-private)_ — Reads `request.acceptsLanguages(...offered)` and returns the best-matching supported locale, falling back to the configured default when nothing matches or the header is absent. Only the `acceptsLanguages` property is required on the input, so unit tests can pass a minimal stub.
 
 ## Relationships
 
@@ -27,5 +27,5 @@ Express middleware that resolves the request's language from the `Accept-Languag
 ## Notes
 
 - The fallback locale is deliberately placed **first** in the array passed to `acceptsLanguages`. Because `negotiator` returns the first candidate for a bare `*` or absent header, this guarantees those cases resolve to the intended default rather than an arbitrary supported locale.
-- `runWithLocaleContext(context, next)` wraps the *entire* downstream chain (including `res.send`/`res.json`), so any async work in later middleware or handlers still sees the correct `t`. Forgetting to mount this middleware before routes means those handlers will have no ambient locale.
+- `runWithLocaleContext(context, next)` wraps the _entire_ downstream chain (including `res.send`/`res.json`), so any async work in later middleware or handlers still sees the correct `t`. Forgetting to mount this middleware before routes means those handlers will have no ambient locale.
 - The `Vary: Accept-Language` header is the same caching-correctness concern documented for `Vary: Authorization` in `cache.ts`; any upstream cache must key on this header to serve the right language.

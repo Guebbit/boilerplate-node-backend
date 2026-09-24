@@ -14,8 +14,8 @@ Provides a single shared entry point—`issueSession`—for the three-step tail 
 ## Key elements
 
 - **`issueSession(response, userId, remember?, amr?)`** — The sole export. Orchestrates the sequence: `createRefreshToken` → `createRefreshCookie` + `createLoggedCookie` → `createAccessToken`. Returns the signed access token string (the caller decides how to send it in the response body). Throws if the refresh token cannot be persisted or signed.
-  - `remember` (optional) controls cookie expiry tier; omitted falls back to the same default `postLogin` uses.
-  - `amr` (optional) sets the `auth_time` proof method; omitted falls back to `createRefreshToken`'s default `['pwd']`.
+    - `remember` (optional) controls cookie expiry tier; omitted falls back to the same default `postLogin` uses.
+    - `amr` (optional) sets the `auth_time` proof method; omitted falls back to `createRefreshToken`'s default `['pwd']`.
 
 ## Relationships
 
@@ -26,6 +26,6 @@ Provides a single shared entry point—`issueSession`—for the three-step tail 
 
 ## Notes
 
-- This file is intentionally tiny: it is a *composition* of `jwt` + `cookies` calls, not a source of business logic itself. If you need to change token shape or cookie attributes, edit `jwt.ts` or `cookies.ts`, not this file.
+- This file is intentionally tiny: it is a _composition_ of `jwt` + `cookies` calls, not a source of business logic itself. If you need to change token shape or cookie attributes, edit `jwt.ts` or `cookies.ts`, not this file.
 - The access token is **returned** (not sent) by `issueSession`; the calling controller is responsible for putting it in the response body. The refresh/logged cookies, by contrast, are set directly on the `Response` object inside this function.
 - The module JSDoc points to `docs/modules/account-sessions.md` for broader design context.

@@ -13,7 +13,7 @@ Declares the two domain gauges the inventory module owns and registers them with
 
 ## Key elements
 
-- **`_productsLowStockTotal`** (`Gauge`, name `products_low_stock_total`) — Async `collect` calls `lowStockCount()` from `./service` at scrape time. Reports products whose *available* units (on-hand minus reserved) are at or under the low-stock threshold.
+- **`_productsLowStockTotal`** (`Gauge`, name `products_low_stock_total`) — Async `collect` calls `lowStockCount()` from `./service` at scrape time. Reports products whose _available_ units (on-hand minus reserved) are at or under the low-stock threshold.
 - **`_inventoryReservedUnitsTotal`** (`Gauge`, name `inventory_reserved_units_total`) — Async `collect` calls `stockLevelRepository.sumReserved()` at scrape time. Reports total units held by open (unpaid) reservations across the catalogue.
 
 ## Relationships
@@ -27,4 +27,4 @@ Declares the two domain gauges the inventory module owns and registers them with
 
 - The underscore-prefixed bindings (`_productsLowStockTotal`, `_inventoryReservedUnitsTotal`) are intentional. The constructors register the gauges as a side effect; the variables are never dereferenced. Follow the same pattern if you add a third gauge.
 - Both `collect` callbacks are **async**. If you add a new gauge here, keep `collect` synchronous unless the underlying data source is genuinely async — `prom-client` awaits it, but a slow or failing collector will stall the entire scrape.
-- The low-stock gauge deliberately tracks *availability*, not raw `onHand`. A product with 40 units all reserved reads as low-stock (0 available), not as well-stocked. Don't "simplify" the collect to a plain `sumOnHand`.
+- The low-stock gauge deliberately tracks _availability_, not raw `onHand`. A product with 40 units all reserved reads as low-stock (0 available), not as well-stocked. Don't "simplify" the collect to a plain `sumOnHand`.

@@ -34,6 +34,6 @@ Unit test suite that verifies the `runTokenCleanup` pre-flight sweep is invoked 
 ## Notes
 
 - Ordering is asserted with `mock.invocationCallOrder` rather than call counts, because two calls at the same count cannot distinguish "ran first" from "ran after."
-- There is deliberately **one** `jest.mock` for `@modules/account/services`. A second mock on the same path would *replace* the first rather than merge, leaving half the exports `undefined` at call time.
+- There is deliberately **one** `jest.mock` for `@modules/account/services`. A second mock on the same path would _replace_ the first rather than merge, leaving half the exports `undefined` at call time.
 - `refreshAccessToken` is mocked here (instead of the lower-level `session/jwt` module) because this suite's scope is cleanup ordering, not token generation internals.
 - In the missing-cookie case the controller still invokes the service (passing `undefined`); the 4xx/refusal is the service's responsibility, not the controller's. The test pins that contract.

@@ -14,11 +14,11 @@ Unit tests that lock in the defensive guards inside `applyOrderTransform`. The t
 ## Key elements
 
 - **`describe('order serialization guards')`** — single test suite, five cases:
-  - *Happy path* — verifies `totalItems`, `totalQuantity`, `totalPrice` are derived correctly from line items.
-  - *Projection without `items`* — confirms a document shaped like `{ email: … }` does not throw.
-  - *Zero-total fallback* — asserts that when `items` is absent the three totals are set to `0` (not omitted), satisfying the required-field contract in `openapi.yaml`.
-  - *Unpopulated product refs* — `item.product` is `undefined` or a plain value; the transform must skip rather than recurse.
-  - *`items` present but not an array* — `Array.isArray` guard prevents a throw and yields zero totals.
+    - _Happy path_ — verifies `totalItems`, `totalQuantity`, `totalPrice` are derived correctly from line items.
+    - _Projection without `items`_ — confirms a document shaped like `{ email: … }` does not throw.
+    - _Zero-total fallback_ — asserts that when `items` is absent the three totals are set to `0` (not omitted), satisfying the required-field contract in `openapi.yaml`.
+    - _Unpopulated product refs_ — `item.product` is `undefined` or a plain value; the transform must skip rather than recurse.
+    - _`items` present but not an array_ — `Array.isArray` guard prevents a throw and yields zero totals.
 
 ## Relationships
 
@@ -27,5 +27,5 @@ Unit tests that lock in the defensive guards inside `applyOrderTransform`. The t
 ## Notes
 
 - Tests are ordered intentionally: the happy path comes first so the remaining four read as exception cases they guard.
-- The `openapi.yaml` contract is load-bearing context: the three total fields are *required*, so the transform must emit `0` rather than omitting them when items are missing. Changing the fallback to `undefined` would break the API contract even though no test here checks for it by name.
+- The `openapi.yaml` contract is load-bearing context: the three total fields are _required_, so the transform must emit `0` rather than omitting them when items are missing. Changing the fallback to `undefined` would break the API contract even though no test here checks for it by name.
 - `applyOrderItems` and `applyOrderTotals` are not exported from `model.ts` for direct testing; they are exercised only through `applyOrderTransform`.

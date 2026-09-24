@@ -15,7 +15,7 @@ Central registry that maps provider names (`google`, `github`, `fake`) to their 
 
 - **`PROVIDERS`** (internal) — `Partial<Record<string, () => OAuthProvider | undefined>>`. Each entry is a closure that re-checks configuration on every call (`isOAuthProviderConfigured` for google/github, `isDemoMode` for fake), so a provider becomes visible the moment its env vars or demo flag are set, with no import-time memo to go stale.
 - **`enabledProviders()`** (export) — Returns the array of provider names currently resolvable. Used by `GET /account/oauth/providers` to list what the deployment actually supports.
-- **`resolveOAuthProvider(name)`** (export) — Looks up a provider by name; returns `undefined` if the name is unknown *or* if the provider is not configured. Controllers treat `undefined` as a 404.
+- **`resolveOAuthProvider(name)`** (export) — Looks up a provider by name; returns `undefined` if the name is unknown _or_ if the provider is not configured. Controllers treat `undefined` as a 404.
 
 ## Relationships
 

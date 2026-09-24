@@ -9,14 +9,14 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests that pin the *numerical relationships* between the contact-form rate-limit budgets declared in the feedback module. They assert that per-identity and per-address budgets stay well below the global browsing budget, and that the address-block budget exceeds the per-address budget it widens. The file explicitly does **not** exercise the middleware at runtime; that concern is delegated to the integration tests.
+Unit tests that pin the _numerical relationships_ between the contact-form rate-limit budgets declared in the feedback module. They assert that per-identity and per-address budgets stay well below the global browsing budget, and that the address-block budget exceeds the per-address budget it widens. The file explicitly does **not** exercise the middleware at runtime; that concern is delegated to the integration tests.
 
 ## Key elements
 
 - **`budget(namespace)`** (local const) — thin wrapper around `budgetIn(feedbackRateLimits, namespace)` that retrieves a single declared budget object by its namespace string.
 - **`describe('contactLimiters')`** — the sole test suite.
-  - *keeps every dimension a small fraction of the browsing budget* — asserts `submissions.defaultMax` and `submission-identity.defaultMax` are each **< `DEFAULT_RATE_LIMIT_MAX / 5`**.
-  - *sizes the address-block budget above its own address budget* — asserts `submission-block.defaultMax` **>** `submissions.defaultMax`.
+    - _keeps every dimension a small fraction of the browsing budget_ — asserts `submissions.defaultMax` and `submission-identity.defaultMax` are each **< `DEFAULT_RATE_LIMIT_MAX / 5`**.
+    - _sizes the address-block budget above its own address budget_ — asserts `submission-block.defaultMax` **>** `submissions.defaultMax`.
 
 ## Relationships
 
@@ -26,5 +26,5 @@ Unit tests that pin the *numerical relationships* between the contact-form rate-
 
 ## Notes
 
-- The file's docblock calls out that importing the `express-rate-limit` middleware directly is flagged by `no-restricted-imports` as an *integration* concern. Behavioral tests (real requests through the middleware) live in `../integration/contact-identity-rate-limit.test.ts` and `../integration/submission-rate-limit.test.ts`. This unit file is intentionally limited to static numeric assertions on the declared budgets.
+- The file's docblock calls out that importing the `express-rate-limit` middleware directly is flagged by `no-restricted-imports` as an _integration_ concern. Behavioral tests (real requests through the middleware) live in `../integration/contact-identity-rate-limit.test.ts` and `../integration/submission-rate-limit.test.ts`. This unit file is intentionally limited to static numeric assertions on the declared budgets.
 - The `submissions` namespace is used as the proxy for the "address" budget in the block-vs-address comparison; there is no separate `submission-address` key tested here.

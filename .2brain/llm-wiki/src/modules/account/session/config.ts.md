@@ -38,7 +38,7 @@ Centralises all token-related environment-variable reads into named, typed acces
 
 ## Notes
 
-- The name is `config.ts` deliberately (not `tokens.ts`) to signal that it *reads* settings and never touches token material.
+- The name is `config.ts` deliberately (not `tokens.ts`) to signal that it _reads_ settings and never touches token material.
 - `TOKEN_EXPIRY` is a **private** constant; consumers should go through the exported getters so the fallback logic lives in one place.
 - `invalidTokenWindows` is checked **at boot**, not per-request, because a silent misconfiguration (all replays return a clean 401) is the exact failure it guards against.
 - Key rings are ordered newest-first; `ring[0]` is always the current signing key. A single-entry ring is just the raw value with no comma.

@@ -25,4 +25,4 @@ Validates the internal consistency of the permission-key registry and preset rol
 
 - The `operator`/platform-scope test (`toHaveLength(1)`) is a deliberate canary: adding a second platform-scoped key will break this test and force a conscious re-decision about whether `operator` should still be considered unrestricted. It is not a general "unrestricted = super-admin" claim.
 - Key format is treated as a stored, migration-sensitive value (lowercase, dotted, `[a-z][.a-z]*[a-z]`); do not relax the regex without considering existing persisted data.
-- `assertDeclared` is the *write-time* guard (called when a grant is made); the preset-role loop here is the *read-time* check that the static data is self-consistent. Both halves of the invariant are covered.
+- `assertDeclared` is the _write-time_ guard (called when a grant is made); the preset-role loop here is the _read-time_ check that the static data is self-consistent. Both halves of the invariant are covered.

@@ -15,10 +15,10 @@ Unit tests for the `checkOrderLines` domain rule. Verifies that the rule correct
 
 - **`line(quantity?)`** — local factory returning an `OrderLineCandidate` with a resolved product (`{ price: 10 }`); used to build valid fixtures inline.
 - **`describe('checkOrderLines')`** — test suite covering four scenarios:
-  - Empty array → `{ ok: false, reason: 'no-lines' }`.
-  - All lines have resolved products → `{ ok: true }`.
-  - A line whose `product` is `undefined` or `null` → `{ ok: false, reason: 'product-missing' }` (parameterized via `it.each`).
-  - One bad line among valid ones → whole set rejected (snapshot semantics: you can't drop a line and keep the rest).
+    - Empty array → `{ ok: false, reason: 'no-lines' }`.
+    - All lines have resolved products → `{ ok: true }`.
+    - A line whose `product` is `undefined` or `null` → `{ ok: false, reason: 'product-missing' }` (parameterized via `it.each`).
+    - One bad line among valid ones → whole set rejected (snapshot semantics: you can't drop a line and keep the rest).
 
 ## Relationships
 
@@ -28,4 +28,4 @@ Unit tests for the `checkOrderLines` domain rule. Verifies that the rule correct
 
 - The module doc comment states the testing contract explicitly: no mocks, no DB, no fake timers — the rule is a pure argument-in / verdict-out function.
 - The two failure reasons (`no-lines`, `product-missing`) are asserted to stay distinct because they map to different HTTP status codes downstream.
-- A trailing comment documents what is *deliberately excluded* from this file: the soft-delete toggle and the read scope both live in `service.ts` and are covered by `service-crud.test.ts` and `service-scope.test.ts` respectively. Don't add those cases here.
+- A trailing comment documents what is _deliberately excluded_ from this file: the soft-delete toggle and the read scope both live in `service.ts` and are covered by `service-crud.test.ts` and `service-scope.test.ts` respectively. Don't add those cases here.

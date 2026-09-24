@@ -15,7 +15,7 @@ Centralises the order state machine: which status may transition to which, and w
 
 - **`OrderActor`** – union `'customer' | 'admin' | 'system'`. `system` is narrower than `admin` (moves nobody may make by hand), not a higher rank.
 - **`ORDER_LIFECYCLE`** – total `Record<OrderStatus, …>` mapping each status to the subset of destination statuses and the actors permitted on that edge. Terminal states carry `{}`.
-- **`canTransition(from, to, actor)`** – the primary guard. `from === to` is always allowed *except* into `paid`, where only `system` may echo-write (payment-webhook retries). Otherwise looks up the edge in `ORDER_LIFECYCLE`.
+- **`canTransition(from, to, actor)`** – the primary guard. `from === to` is always allowed _except_ into `paid`, where only `system` may echo-write (payment-webhook retries). Otherwise looks up the edge in `ORDER_LIFECYCLE`.
 - **`isPayable(status)`** – answers "may a payment be initiated against this order?" True only for `pending`; explicitly excludes the `paid → paid` echo that `canTransition` permits.
 - **`canOverrideTo(from, to)`** – forward-only admin override rule (may land on `processing`, `shipped`, or `delivered`). Deliberately independent of `ORDER_LIFECYCLE` so it can skip a `from` gate the normal lifecycle enforces.
 - **`statusesOverridableInto(to)`** – returns every status strictly earlier than `to` in the overridable sequence; feeds the `from`-set for a conditional write in the override path.
@@ -40,4 +40,4 @@ Centralises the order state machine: which status may transition to which, and w
 - The `from === to` special case in `canTransition` is asymmetric: echoing into any status is fine, but echoing into `paid` is restricted to `system` so a non-system actor cannot use a no-op write to bypass the "only the payment system marks an order paid" rule.
 - `canOverrideTo` is intentionally **not** a widened `canTransition`; reusing the table would defeat the override's purpose of skipping a `from` gate.
 - `orderActionsFor` uses `statusesReachableFrom` (which excludes the current status) for the `cancel` boolean, not `canTransition` (which allows `from === to`), so an already-cancelled order correctly reports `cancel: false`.
-- The `pay` field in `orderActionsFor` is computed as `isPayable(status)`, i.e. asked of `system`, because no client request *is* a payment transition — it only decides whether to show the card form.
+- The `pay` field in `orderActionsFor` is computed as `isPayable(status)`, i.e. asked of `system`, because no client request _is_ a payment transition — it only decides whether to show the card form.

@@ -17,7 +17,7 @@ Derives the list of HTTP operations and their request-body schemas from `openapi
 - **`resolveSchema()`** — Resolves `$ref` and flattens `allOf` into a concrete `SchemaNode`; uses a `seen` set to guard against self-referential schemas (e.g. recursive categories).
 - **`listOperations()`** — Walks `paths` × the five HTTP methods and returns an `Operation[]` with resolved body schema, path parameters, auth flag, and documented status codes.
 - **`SUPPORTED_KEYWORDS`** — A `Set` of every JSON Schema keyword this walk recognises.
-- **`unsupportedKeywords()`** — Returns sorted keys found in `components.schemas` that are *not* in `SUPPORTED_KEYWORDS`; empty array means the spec stays within the walk's vocabulary.
+- **`unsupportedKeywords()`** — Returns sorted keys found in `components.schemas` that are _not_ in `SUPPORTED_KEYWORDS`; empty array means the spec stays within the walk's vocabulary.
 - **`ungeneratablePatterns()`** — Returns sorted `pattern` values that use lookaround and have no registered sample; the sibling tripwire for values the keyword set does cover.
 - **`SchemaNode`** — The narrow interface for the JSON Schema subset this repo uses.
 - **`Operation`** — The flat descriptor the fuzzer consumes (path, method, body schema, auth, multipart flag, statuses).
@@ -35,7 +35,7 @@ Derives the list of HTTP operations and their request-body schemas from `openapi
 ## Notes
 
 - **Deliberately bounded.** The header explicitly warns against growing this into a general OpenAPI parser. The tripwire functions exist so that the moment the spec uses an unrecognised keyword, a test goes red instead of the fuzzer silently skipping a field.
-- **`childSchemasOf` is structural, not recursive over all keys.** An earlier version walked every object key and reported field *names* as "unknown keywords." The current implementation only descends into keys whose *value* is itself a schema (`properties` values, `items`, `additionalProperties`, `oneOf`/`anyOf`/`allOf` entries).
+- **`childSchemasOf` is structural, not recursive over all keys.** An earlier version walked every object key and reported field _names_ as "unknown keywords." The current implementation only descends into keys whose _value_ is itself a schema (`properties` values, `items`, `additionalProperties`, `oneOf`/`anyOf`/`allOf` entries).
 - **`resolveSchema` does not handle `discriminator`, `callbacks`, or `links`.** The header notes these are out of scope; the correct response is to adopt a dedicated OpenAPI tool.
 - **Multipart operations are flagged, not generated.** `isMultipart` is `true` and the fuzzer skips them.
 - **Cache is process-global.** `readSpec` stores the parsed document in a module-level `let`; tests sharing the same process get the same object.

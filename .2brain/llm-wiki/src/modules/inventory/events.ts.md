@@ -13,7 +13,7 @@ Declares the single domain event emitted by the inventory module (`inventory.res
 
 ## Key elements
 
-- **`declare module '@kernel/events'`** — Extends `DomainEventMap` with the key `'inventory.reservation_expired'` and its payload shape `{ orderId: string }`. This is the sole event for this module; stock-level changes are deliberately *not* events here (they live in `products/events.ts`).
+- **`declare module '@kernel/events'`** — Extends `DomainEventMap` with the key `'inventory.reservation_expired'` and its payload shape `{ orderId: string }`. This is the sole event for this module; stock-level changes are deliberately _not_ events here (they live in `products/events.ts`).
 - **`RESERVATION_EXPIRED`** (exported `const`) — The canonical string `'inventory.reservation_expired'`, re-exported through the barrel so emitters and listeners share one spelling instead of duplicating a literal.
 
 ## Relationships

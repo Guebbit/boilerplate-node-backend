@@ -36,7 +36,7 @@ Single source of truth for where translation dictionaries come from and how they
 
 ## Notes
 
-- **Module shadowing is permitted but tested against.** A module *can* overwrite a shared key (last-registered wins). The cross-cutting test `tests/cross-cutting/locale-namespaces.test.ts` fails if any module actually collides with the shared dictionary.
+- **Module shadowing is permitted but tested against.** A module _can_ overwrite a shared key (last-registered wins). The cross-cutting test `tests/cross-cutting/locale-namespaces.test.ts` fails if any module actually collides with the shared dictionary.
 - **`listSupportedLocales` is cached for the lifetime of the process.** Adding a locale file at runtime has no effect until the process restarts and `i18next.init()` runs again. `resetSupportedLocales` exists only for tests.
 - **`registerLocaleDirectories` replaces, not appends.** Calling it twice means only the second set is active.
 - **`deepMerge` treats arrays as leaves** – a module that ships an array under the same key as the shared dictionary will replace it entirely, not concatenate.

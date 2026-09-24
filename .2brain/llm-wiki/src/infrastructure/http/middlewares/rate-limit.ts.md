@@ -44,7 +44,7 @@ Shared rate-limiting machinery: a single factory (`buildRateLimiter`) that turns
 - **Fail-open, never fail-closed.** `passOnStoreError: true` means a Redis outage lets requests through rather than returning 500. The outage is logged at `error` level once per window.
 - **Audit is opt-in per budget.** Credential-keyed budgets (`apiKeyLimiter`) record every 429 via `recordAudit`; the global brake does not (a port scan would drown the signal in noise).
 - **429 is emitted before the request logger.** `installSecurity` mounts limiters before `installRequestContext` mounts the logger, so without explicit audit a 429 would leave no trace at all.
-- **`skipSuccessfulRequests` is deliberately off for the upload budget** — the expensive case is a *well-formed* upload (image digest pipeline), not a rejected one.
+- **`skipSuccessfulRequests` is deliberately off for the upload budget** — the expensive case is a _well-formed_ upload (image digest pipeline), not a rejected one.
 - **IPv4 /24 masking is hand-rolled** (no library equivalent); IPv6 /64 reuses `express-rate-limit`'s internal `ipKeyGenerator`.
 - **`identityOf` hashes with SHA-256** so a `KEYS *` scan or RDB dump does not expose the user's email/username.
 - **Test suites raise the window tenfold** (see `tests/support/setup.ts`) to avoid flaky timing in CI.

@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for the `/api-keys` admin surface (list, mint, revoke). Each response is asserted both for expected status/body **and** for conformance to the bundled `openapi.yaml` via `toSatisfyApiSpec()`. Credentials minted here are intentionally *not* reused against other routes in this file; cross-cutting usage lives in `tests/cross-cutting/`.
+Contract tests for the `/api-keys` admin surface (list, mint, revoke). Each response is asserted both for expected status/body **and** for conformance to the bundled `openapi.yaml` via `toSatisfyApiSpec()`. Credentials minted here are intentionally _not_ reused against other routes in this file; cross-cutting usage lives in `tests/cross-cutting/`.
 
 ## Key elements
 
@@ -29,6 +29,6 @@ Contract tests for the `/api-keys` admin surface (list, mint, revoke). Each resp
 
 ## Notes
 
-- The 422 "over-reaching permission" test uses `platform.observability.any.read` as a *proxy* for a genuinely missing permission: admin is unrestricted in **tenant** scope but not in **platform** scope, so the 422 path is identical.
+- The 422 "over-reaching permission" test uses `platform.observability.any.read` as a _proxy_ for a genuinely missing permission: admin is unrestricted in **tenant** scope but not in **platform** scope, so the 422 path is identical.
 - The `tenant` field on a credential is only resolved after the deployment's shop exists (same precondition as the webhooks contract suite). Forgetting the `ensureTenant` call causes auth to fail before the API-key logic is reached.
 - Every test pairs a conventional status/body assertion with `toSatisfyApiSpec()`; omitting the matcher means the OpenAPI shape is unchecked for that response.

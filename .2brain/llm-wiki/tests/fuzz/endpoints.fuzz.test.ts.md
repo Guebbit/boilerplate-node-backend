@@ -22,18 +22,18 @@ Spec-driven fuzz test (L5) that fires `fast-check`-generated, spec-valid-but-hos
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `tests/support/spec-walk.ts` | Provides `listOperations()`, `unsupportedKeywords()`, `ungeneratablePatterns()`, and the `Operation` type that drive the entire test. |
-| `tests/support/spec-arbitraries.ts` | Provides `bodyArbitraryFor(schema)` which converts an OpenAPI body schema into a `fast-check` Arbitrary. |
-| `tests/support/http.ts` | Provides `api()` (supertest agent) and `authenticateAs('admin')` for the bearer token. |
-| `tests/support/contract.ts` | Imported **for side effect only**: its module body calls `jestOpenAPI(openapi.yaml)`, which registers the `toSatisfyApiSpec()` matcher. |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` is called at module scope to prepare the test database before any case runs. |
-| `tests/support/knobs.ts` | Supplies `FUZZ_RUNS_PER_OPERATION`, the `fast-check` iteration count per operation. |
+| Neighbor                            | Interaction                                                                                                                             |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/support/spec-walk.ts`        | Provides `listOperations()`, `unsupportedKeywords()`, `ungeneratablePatterns()`, and the `Operation` type that drive the entire test.   |
+| `tests/support/spec-arbitraries.ts` | Provides `bodyArbitraryFor(schema)` which converts an OpenAPI body schema into a `fast-check` Arbitrary.                                |
+| `tests/support/http.ts`             | Provides `api()` (supertest agent) and `authenticateAs('admin')` for the bearer token.                                                  |
+| `tests/support/contract.ts`         | Imported **for side effect only**: its module body calls `jestOpenAPI(openapi.yaml)`, which registers the `toSatisfyApiSpec()` matcher. |
+| `tests/support/setup-test-db.ts`    | `setupTestDb()` is called at module scope to prepare the test database before any case runs.                                            |
+| `tests/support/knobs.ts`            | Supplies `FUZZ_RUNS_PER_OPERATION`, the `fast-check` iteration count per operation.                                                     |
 
 ## Notes
 
-- **Not in `npm run test`.** Runs nightly or via `npm run test:fuzz`. Treated as a *hunter* (finds bugs for a human to triage), not a merge gate — same rationale as mutation testing.
+- **Not in `npm run test`.** Runs nightly or via `npm run test:fuzz`. Treated as a _hunter_ (finds bugs for a human to triage), not a merge gate — same rationale as mutation testing.
 - **Multipart is skipped by design.** File bodies (PNGs, etc.) are outside `fast-check`'s domain; the upload path is covered separately by `tests/integration/upload-security.test.ts`. The skip count is asserted so "skipped" can't silently become "skipped everything."
 - **Seed is rolled per run, not fixed.** A pinned seed would re-test the same ~660 requests forever, reducing the fuzzer to a regression test. The logged seed (and the shared `RANDOM_DATA_SEED` env var name) is the reproduction mechanism.
 - **Tripwire tests exist because a silent spec-walk failure looks green.** If `listOperations()` returns an empty array, or the arbitrary builder hits an unsupported keyword and omits fields, every endpoint 422s and the suite passes. The meta-tests in `'the spec walk itself'` catch both failure modes.

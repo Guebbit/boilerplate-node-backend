@@ -32,4 +32,4 @@ Implements the `GET /users` and `POST /users/search` admin endpoints. It is a th
 
 - Rows coming back from `userService.search()` already carry `.id` (not `._id`) because `createRepository` applies a `normalize` step. The controller reads `.id` directly rather than re-deriving it.
 - `rolesOfMany` is called **once** with the full page's IDs (a single `$in` query) rather than per-item, to avoid N+1 lookups. A missing role resolves to `null` via `roles.get(user.id) ?? null`.
-- `page` / `pageSize` / `active` are intentionally absent-tolerant in the schema; `normalizePagination` (inside the search infrastructure) owns the defaults. The schema only constrains what *is* present.
+- `page` / `pageSize` / `active` are intentionally absent-tolerant in the schema; `normalizePagination` (inside the search infrastructure) owns the defaults. The schema only constrains what _is_ present.

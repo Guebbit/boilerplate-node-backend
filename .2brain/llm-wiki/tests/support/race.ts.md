@@ -26,8 +26,8 @@ Concurrency test harness that fires N identical HTTP requests truly in parallel 
 
 ## Notes
 
-- **`Promise.allSettled`, never `Promise.all`.** In a race, rejection is the *correct* outcome (e.g. 9 of 10 duplicate signups must 409). `Promise.all` would discard the very results the tests assert on.
+- **`Promise.allSettled`, never `Promise.all`.** In a race, rejection is the _correct_ outcome (e.g. 9 of 10 duplicate signups must 409). `Promise.all` would discard the very results the tests assert on.
 - **Supertest is a thenable, not a promise.** Awaiting inside the `build` callback would serialise the requests. The harness builds all thenables first, then hands the array to `allSettled`.
-- **`--runInBand` serialises test *files*, not in-test concurrency.** It protects the in-memory Mongo from parallel workers; it does not reduce the parallelism inside a single `raceN` call. Removing it would not make tests "more concurrent" and would introduce unrelated flakiness.
+- **`--runInBand` serialises test _files_, not in-test concurrency.** It protects the in-memory Mongo from parallel workers; it does not reduce the parallelism inside a single `raceN` call. Removing it would not make tests "more concurrent" and would introduce unrelated flakiness.
 - **Rate limiters are raised (budget = 1000) in `setup.ts`, not disabled.** `expectNoServerErrors` explicitly rejects 429 so a truncated race cannot pass vacuously.
 - **Status `0` means the server never answered** (rejected supertest promise). It is kept distinct from real codes so a transport failure surfaces in assertions instead of vanishing.

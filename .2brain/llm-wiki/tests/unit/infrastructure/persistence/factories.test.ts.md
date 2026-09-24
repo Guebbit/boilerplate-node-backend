@@ -9,11 +9,11 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the four shared factory helpers (`toObjectId`, `stripUndefined`, `toDate`, `identityOf`) that every module's `factories.ts` composes. The tests exist to pin down the *silent-failure* contracts of each helper — the cases where a wrong type or a missing key would not throw but would instead produce a record that matches nothing, skips a schema default, or carries a null timestamp.
+Unit tests for the four shared factory helpers (`toObjectId`, `stripUndefined`, `toDate`, `identityOf`) that every module's `factories.ts` composes. The tests exist to pin down the _silent-failure_ contracts of each helper — the cases where a wrong type or a missing key would not throw but would instead produce a record that matches nothing, skips a schema default, or carries a null timestamp.
 
 ## Key elements
 
-- **`describe('toObjectId')`** — Verifies hex→`Types.ObjectId` conversion, that a call with no argument mints a *unique* fresh id, and that a malformed string throws rather than silently substituting a random id.
+- **`describe('toObjectId')`** — Verifies hex→`Types.ObjectId` conversion, that a call with no argument mints a _unique_ fresh id, and that a malformed string throws rather than silently substituting a random id.
 - **`describe('stripUndefined')`** — Confirms only `undefined` values are dropped; `null`, `0`, `''`, and `false` are preserved. Also asserts the input object is not mutated.
 - **`describe('toDate')`** — Checks ISO-string parsing, pass-through of an existing `Date`, and that `undefined` is returned as-is (not turned into an `Invalid Date`).
 - **`describe('identityOf')`** — Exercises the full identity-derivation contract: `_id` from a given id or a fresh one, `createdAt` derived from the id's embedded timestamp when absent, `updatedAt` defaulting to `createdAt` (not wall-clock time), and explicit overrides for both timestamps.
@@ -25,6 +25,6 @@ Unit tests for the four shared factory helpers (`toObjectId`, `stripUndefined`, 
 
 ## Notes
 
-- The test comments repeatedly call out the *consequence* of each edge case (e.g., a plain string in an aggregation `$match` matches zero documents; `new Date(undefined)` becomes an `Invalid Date` that Mongoose persists as `null`). When modifying the helpers, the corresponding comment describes the production bug the test guards against.
+- The test comments repeatedly call out the _consequence_ of each edge case (e.g., a plain string in an aggregation `$match` matches zero documents; `new Date(undefined)` becomes an `Invalid Date` that Mongoose persists as `null`). When modifying the helpers, the corresponding comment describes the production bug the test guards against.
 - `identityOf` sets `updatedAt` equal to `createdAt` by default — it deliberately does **not** use `new Date()`. Any refactor must preserve this, or "recently changed" views will list the entire seeded dataset.
 - `stripUndefined` is tested for non-mutation; the implementation must return a new object rather than deleting keys in place.

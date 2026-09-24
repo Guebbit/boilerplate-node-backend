@@ -17,13 +17,13 @@ Unit test for the payments router (`@modules/payments/routes`). Verifies the sec
 - **`withoutHandler(signature)`** – helper that returns a route's guard list minus its handler, enabling direct array comparison of two routes' guard stacks.
 - **`jest.mock` for rate-limit middleware** – replaces the real rate-limiter with `securityMock()` from `@tests/routes` so tests don't depend on live rate-limit infrastructure.
 - **`describe('payment routes')` block** – the entire test suite. Key assertions:
-  - Exact route signature list and order.
-  - Every non-public route carries `isAuth`.
-  - Webhook and methods carry **no** auth guard, but webhook carries a `payment-webhook` rate limit.
-  - Webhook is index 0 (declared before `router.use(getAuth, isAuth)`).
-  - Exactly three admin-guarded routes (refund, offline, order-by-reference), excluding `cart.self.checkout`.
-  - `POST /:id/sync` guard list equals `POST /:id/confirm` minus four confirm-specific guards (`payments-confirm-attempts`, `payments-confirm-declines`, `paymentDeclineChallengeGate`, `idempotencyKey`), and both share a non-trivial common prefix.
-  - Refund/offline declared before the two-segment `/:id` routes to prevent future shadowing.
+    - Exact route signature list and order.
+    - Every non-public route carries `isAuth`.
+    - Webhook and methods carry **no** auth guard, but webhook carries a `payment-webhook` rate limit.
+    - Webhook is index 0 (declared before `router.use(getAuth, isAuth)`).
+    - Exactly three admin-guarded routes (refund, offline, order-by-reference), excluding `cart.self.checkout`.
+    - `POST /:id/sync` guard list equals `POST /:id/confirm` minus four confirm-specific guards (`payments-confirm-attempts`, `payments-confirm-declines`, `paymentDeclineChallengeGate`, `idempotencyKey`), and both share a non-trivial common prefix.
+    - Refund/offline declared before the two-segment `/:id` routes to prevent future shadowing.
 
 ## Relationships
 
@@ -33,5 +33,5 @@ Unit test for the payments router (`@modules/payments/routes`). Verifies the sec
 ## Notes
 
 - Guard comparison uses full-array equality (`toEqual`) rather than per-name checks because `requireFreshAuth(…)` is an anonymous closure with no stable name; the `(anonymous)` placeholder in the expected array is intentional.
-- The order assertion (webhook at index 0, refund/offline before `/:id` routes) encodes the *mechanism* of protection: `router.use()` applies to everything declared after it, so a silent re-order breaks auth with no error.
+- The order assertion (webhook at index 0, refund/offline before `/:id` routes) encodes the _mechanism_ of protection: `router.use()` applies to everything declared after it, so a silent re-order breaks auth with no error.
 - The `cart.self.checkout` permission key is explicitly excluded from the "admin" set; it is a customer-facing key, not an operator one.

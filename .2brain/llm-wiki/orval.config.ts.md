@@ -14,11 +14,11 @@ Orval configuration that generates Zod validators and TypeScript model types fro
 ## Key elements
 
 - **`zodSchemas`** – The sole config block. Points to `./openapi.yaml` and emits:
-  - `./api/schemas.zod.ts` – Zod schema definitions (operation input validators).
-  - `./api/models/` – Raw TypeScript interfaces for all request/response models.
+    - `./api/schemas.zod.ts` – Zod schema definitions (operation input validators).
+    - `./api/models/` – Raw TypeScript interfaces for all request/response models.
 - **`output.mode: 'single'`** – All generated schemas land in one file rather than being split by tag or operation.
 - **`output.client: 'zod'`** – Instructs Orval to emit only schema/type code; no `fetch`/`axios`/react-query call-functions are generated (nothing in this repo consumes them).
-- **`override.zod.strict: { body: true }`** – Adds `.strict()` to request-body schemas so unknown keys are *rejected* rather than silently stripped. Response schemas are intentionally left non-strict.
+- **`override.zod.strict: { body: true }`** – Adds `.strict()` to request-body schemas so unknown keys are _rejected_ rather than silently stripped. Response schemas are intentionally left non-strict.
 
 ## Notes
 

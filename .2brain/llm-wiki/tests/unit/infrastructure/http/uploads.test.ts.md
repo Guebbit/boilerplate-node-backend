@@ -16,19 +16,19 @@ Unit tests for the two upload-helper functions exported by `src/infrastructure/h
 - **`uploaded(path)`** — local factory that produces a minimal `Express.Multer.File` stub carrying only `path`.
 - **`requestWith(parts)`** — local factory that spreads a partial object over `{ body: {} }` and casts to `Request`, so the `readUploadedImage` fallback branch never sees `undefined` for `body`.
 - **`describe('getFormFiles')`** — seven cases covering:
-  - `multer.single` (`req.file`) → wrapped in a one-element array.
-  - `multer.array` (`req.files[]`) → mapped to paths in order.
-  - `multer.fields` (`req.files` as keyed object) → flattened across all fields.
-  - Precedence: `req.file` wins when both `file` and `files` are present.
-  - No upload → `undefined`.
-  - Empty field-object (`{ avatar: [], gallery: [] }`) → `undefined` (not `[]`).
-  - Empty array (`files: []`) → `undefined`, asserted as a *separate* case to prove it agrees with the fields case.
+    - `multer.single` (`req.file`) → wrapped in a one-element array.
+    - `multer.array` (`req.files[]`) → mapped to paths in order.
+    - `multer.fields` (`req.files` as keyed object) → flattened across all fields.
+    - Precedence: `req.file` wins when both `file` and `files` are present.
+    - No upload → `undefined`.
+    - Empty field-object (`{ avatar: [], gallery: [] }`) → `undefined` (not `[]`).
+    - Empty array (`files: []`) → `undefined`, asserted as a _separate_ case to prove it agrees with the fields case.
 - **`describe('readUploadedImage')`** — five cases covering:
-  - Returns the first URL from `storedImageUrls`.
-  - Absolute (remote) URLs pass through unchanged.
-  - Only the first URL is returned when multiple are present.
-  - No stored URLs → `imageUrl` is `undefined` (not `""`).
-  - A staged `req.file.path` that the store never committed is ignored; `imageUrl` stays `undefined`.
+    - Returns the first URL from `storedImageUrls`.
+    - Absolute (remote) URLs pass through unchanged.
+    - Only the first URL is returned when multiple are present.
+    - No stored URLs → `imageUrl` is `undefined` (not `""`).
+    - A staged `req.file.path` that the store never committed is ignored; `imageUrl` stays `undefined`.
 
 ## Relationships
 

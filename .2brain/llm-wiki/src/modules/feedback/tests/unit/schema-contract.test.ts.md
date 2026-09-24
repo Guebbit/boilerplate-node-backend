@@ -8,19 +8,20 @@ model: ollama:qwen3.8:27b
 # src/modules/feedback/tests/unit/schema-contract.test.ts
 
 ## Purpose
+
 Pins the social contract of `feedbackRequestSchema` — the one surface where an anonymous stranger writes to the database. It asserts which fields are required, which are optional, which carry defaults, which are indexed, and how long documents are retained, so that a schema refactor cannot silently change what a reporter must provide or how the operator queue behaves.
 
 ## Key elements
 
 - **`RETENTION_SECONDS`** – Module-level constant computed from `NODE_FEEDBACK_RETENTION_DAYS` (default 730 days) converted to seconds. Used as the expected TTL value so the test and the policy move together when the env var changes.
 - **`describe('feedbackRequestSchema')`** – Single describe block containing seven assertions:
-  - Required fields are exactly `email`, `message`, `subject`.
-  - `name` is *not* required.
-  - `respondedAt` and `adminNotes` have no default (operator-filled fields).
-  - `status` is restricted to the `FeedbackRequestStatus` enum and defaults to `FeedbackRequestStatus.new`.
-  - Index specs include `createdAt_1` (TTL) and `status_1_createdAt_-1` (operator queue).
-  - `timestamps: true` is set (Mongoose auto-manages `createdAt`/`updatedAt`).
-  - TTL `expireAfterSeconds` appears only on the ascending single-field index, not the compound one.
+    - Required fields are exactly `email`, `message`, `subject`.
+    - `name` is _not_ required.
+    - `respondedAt` and `adminNotes` have no default (operator-filled fields).
+    - `status` is restricted to the `FeedbackRequestStatus` enum and defaults to `FeedbackRequestStatus.new`.
+    - Index specs include `createdAt_1` (TTL) and `status_1_createdAt_-1` (operator queue).
+    - `timestamps: true` is set (Mongoose auto-manages `createdAt`/`updatedAt`).
+    - TTL `expireAfterSeconds` appears only on the ascending single-field index, not the compound one.
 - **Test helpers** (imported from `@tests/schema`): `requiredPaths`, `defaultOf`, `enumOf`, `indexSpecs`, `indexOptionSpecs`, `optionsOf` — small utilities that extract schema metadata for comparison.
 
 ## Relationships

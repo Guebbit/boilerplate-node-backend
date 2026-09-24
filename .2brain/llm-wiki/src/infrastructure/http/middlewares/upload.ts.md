@@ -15,7 +15,7 @@ Defines the Express multer middleware pipeline for accepting, storing, and valid
 
 - **`uploadStagingPath()`** — Returns the staging directory (`NODE_UPLOAD_STAGING_PATH` or `<tmpdir>/node-api-uploads`). Files live here until a later step commits them to the public store.
 - **`resolveUploadDestination(request, file, callback)`** — Multer destination callback. Whitelists `fieldname === 'imageUpload'`; rejects all others. Creates the staging dir on demand.
-- **`resolveUploadFilename(request, file, callback)`** — Multer filename callback. Generates a 128-bit `randomBytes` hex name + extension derived from the *declared* MIME (never the client's `originalname`).
+- **`resolveUploadFilename(request, file, callback)`** — Multer filename callback. Generates a 128-bit `randomBytes` hex name + extension derived from the _declared_ MIME (never the client's `originalname`).
 - **`fileStorage`** — `multer.diskStorage` instance wiring the two callbacks above.
 - **`fileFilter`** — First gate (pre-write). Checks `file.mimetype` against `ACCEPTED_UPLOAD_MIMETYPES`. Silently drops non-matches via `callback(null, false)`.
 - **`maxUploadBytes()`** — Reads `NODE_MAX_UPLOAD_BYTES` (default 5 MiB) at call time so lazy `.env` loading is respected.
@@ -41,6 +41,6 @@ Defines the Express multer middleware pipeline for accepting, storing, and valid
 
 - **Two distinct rejection styles.** `fileFilter` silently drops the file (`callback(null, false)`); `validateUploadedImages` responds 422. This is intentional: the first is a pre-write type gate the client may not notice, the second is a post-write integrity failure the client must know about.
 - **Memoised multer instance.** `rawUpload()` is lazy to avoid freezing `limits` before `.env` is loaded. There is exactly one instance per process.
-- **Locale wrapper is mandatory.** Any route that mounts the upload middleware *must* wrap it with `withLocaleRestored`, otherwise all downstream i18n `t()` calls fall back to the boot language. The wrapper exists here so the failure mode is centralised, not per-route.
-- **Staging ≠ public.** Files in the staging path are unguessable (random hex) and in a non-served directory, but they are not *protected* by access control—rejection relies on the 422 response deleting them promptly.
+- **Locale wrapper is mandatory.** Any route that mounts the upload middleware _must_ wrap it with `withLocaleRestored`, otherwise all downstream i18n `t()` calls fall back to the boot language. The wrapper exists here so the failure mode is centralised, not per-route.
+- **Staging ≠ public.** Files in the staging path are unguessable (random hex) and in a non-served directory, but they are not _protected_ by access control—rejection relies on the 422 response deleting them promptly.
 - **Extension is security-relevant.** The stored extension determines the `Content-Type` a static server sends. A mismatch between declared MIME and actual bytes (e.g. JPEG bytes in a `.png` file) is rejected to prevent stored-XSS vectors via MIME confusion.

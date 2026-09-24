@@ -13,9 +13,9 @@ Sends the "order placed" email (confirmation or bank-transfer instructions) with
 
 ## Key elements
 
-- **`sendOrderPlacedEmail`** *(exported)* — The sole public entry point. Selects `bankTransferInstructionsEmail` vs `orderConfirmEmail` based on `order.paymentMethod` and the presence of configured beneficiary/IBAN/BIC, renders + spools the invoice attachment, then calls `enqueueEmail`. Returns `void`; callers must `void` the call.
-- **`invoiceAttachment`** *(internal)* — Renders the invoice via `renderInvoicePdf`, spools the resulting PDF through `spoolAttachment`, and returns a `MailAttachment[]`. On any render/spool failure it logs an error and resolves to `[]` so the email still goes out.
-- **`MailAttachment`** *(internal interface)* — Describes one attachment as `{ filename, key }` (a reference, never raw bytes).
+- **`sendOrderPlacedEmail`** _(exported)_ — The sole public entry point. Selects `bankTransferInstructionsEmail` vs `orderConfirmEmail` based on `order.paymentMethod` and the presence of configured beneficiary/IBAN/BIC, renders + spools the invoice attachment, then calls `enqueueEmail`. Returns `void`; callers must `void` the call.
+- **`invoiceAttachment`** _(internal)_ — Renders the invoice via `renderInvoicePdf`, spools the resulting PDF through `spoolAttachment`, and returns a `MailAttachment[]`. On any render/spool failure it logs an error and resolves to `[]` so the email still goes out.
+- **`MailAttachment`** _(internal interface)_ — Describes one attachment as `{ filename, key }` (a reference, never raw bytes).
 
 ## Relationships
 

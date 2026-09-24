@@ -14,11 +14,11 @@ Unit tests for the order-read authorization boundary: `orderService.callerScope`
 ## Key elements
 
 - **`describe('orderService.callerScope')`** — asserts the compiled filter shape for three caller classes:
-  - Unrestricted role → `{}` (not `undefined`).
-  - Customer → `{ userId: Types.ObjectId(id), deletedAt: null }`.
-  - Anonymous / missing identity → `MATCHES_NOTHING`.
+    - Unrestricted role → `{}` (not `undefined`).
+    - Customer → `{ userId: Types.ObjectId(id), deletedAt: null }`.
+    - Anonymous / missing identity → `MATCHES_NOTHING`.
 - **`describe('actorOf')`** — asserts the lifecycle-column resolution:
-  - Customer → `'customer'`, Admin → `'admin'`, Moderator → `'admin'` (pins a historical mis-read), `undefined` → `'customer'`.
+    - Customer → `'customer'`, Admin → `'admin'`, Moderator → `'admin'` (pins a historical mis-read), `undefined` → `'customer'`.
 - **`MATCHES_NOTHING`** — local constant `{ $expr: { $eq: [0, 1] } }`, i.e. CASL's `EMPTY_RESULT_QUERY`; the filter that matches zero rows.
 - **`USER_ID`** — a fixed 24-char hex string used as the sample ObjectId.
 - Imports `orderService`, `actorOf` from `../../services`; `asCustomer`, `asAdmin`, `asModerator` from `@tests/callers`; `Types` from `mongoose`.

@@ -15,8 +15,8 @@ Verifies Mongoose schema-level contracts on the Product model — `required` sem
 
 - **`setupTestDb()`** (from `@tests/setup-test-db`) — initialises the real in-memory Mongo test database before the suite runs.
 - **`describe('product schema')`** — the single test group containing two assertions:
-  - *accepts a price of zero* — calls `productRepository.create` with only `title` and `price: 0` (cast `as never` to bypass TS), asserts `price` round-trips as `0`. Guards against a truthiness-based `required` guard.
-  - *serialises to id, never _id or __v* — creates a product via the factory, inspects `product.toJSON()`, asserts `id` equals `String(_id)` and that `_id` / `__v` keys are absent from the output.
+    - _accepts a price of zero_ — calls `productRepository.create` with only `title` and `price: 0` (cast `as never` to bypass TS), asserts `price` round-trips as `0`. Guards against a truthiness-based `required` guard.
+    - _serialises to id, never \_id or \_\_v_ — creates a product via the factory, inspects `product.toJSON()`, asserts `id` equals `String(_id)` and that `_id` / `__v` keys are absent from the output.
 
 ## Relationships
 

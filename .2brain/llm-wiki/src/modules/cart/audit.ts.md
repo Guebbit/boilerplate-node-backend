@@ -14,8 +14,8 @@ Declares the audit action names the cart module emits and registers them into th
 ## Key elements
 
 - **`cartAuditActions`** (exported const) — Maps intent keys to the string action names the cart module fires:
-  - `USER_CART_ITEM_REMOVED` → `'user.cart.item_removed'`
-  - `USER_CART_REORDERED` → `'user.cart.reordered'`
+    - `USER_CART_ITEM_REMOVED` → `'user.cart.item_removed'`
+    - `USER_CART_REORDERED` → `'user.cart.reordered'`
 - **Module augmentation** (`declare module '@infrastructure/observability/audit'`) — Adds a `cart` property to `AuditActionMap` typed as the union of `cartAuditActions` values, so any audit call site gets autocomplete/type-safety for cart actions.
 
 ## Relationships
@@ -27,6 +27,6 @@ Declares the audit action names the cart module emits and registers them into th
 
 ## Notes
 
-- Actions are prefixed `user.` (not `admin.`) because a *customer* performs these actions on their *own* cart; the prefix signals the actor in audit logs.
+- Actions are prefixed `user.` (not `admin.`) because a _customer_ performs these actions on their _own_ cart; the prefix signals the actor in audit logs.
 - The augmentation pattern (rather than a shared enum) is intentional and mirrored across modules — see `modules/account/audit.ts` for the same convention. Adding a new cart action requires both adding it to `cartAuditActions` and, implicitly, the augmentation picks it up via the `typeof` union.
 - Both actions are `as const`, so the augmentation's type is the literal union of the two strings, not `string`.

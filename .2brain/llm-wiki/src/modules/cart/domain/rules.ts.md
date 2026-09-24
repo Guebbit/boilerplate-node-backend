@@ -9,13 +9,13 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure decision logic for the cart: given cart lines already joined to their products, it answers two questions — *can this cart check out?* and *how much does it weigh?* — returning structured verdicts with no status codes, i18n, or side effects. The service layer (`services/checkout.ts`) maps those verdicts into HTTP responses.
+Pure decision logic for the cart: given cart lines already joined to their products, it answers two questions — _can this cart check out?_ and _how much does it weigh?_ — returning structured verdicts with no status codes, i18n, or side effects. The service layer (`services/checkout.ts`) maps those verdicts into HTTP responses.
 
 ## Key elements
 
 - **`CartLineCandidate`** — shape of a joined cart line as the rules consume it; `product: null` signals a hard-deleted product.
 - **`UnavailableCartLine`** / **`CheckoutShortfall`** — per-line detail payloads returned inside a refusal verdict.
-- **`availableUnits`** *(private)* — `max(0, onHand − reserved)`. Deliberately duplicates `inventory`'s `availabilityOf` because the domain layer may not import a sibling module.
+- **`availableUnits`** _(private)_ — `max(0, onHand − reserved)`. Deliberately duplicates `inventory`'s `availabilityOf` because the domain layer may not import a sibling module.
 - **`WeighedCartLine`** — minimal `{ quantity, product: { weight, requiresShipping } }` shape for weight math.
 - **`basketWeight(lines)`** — sums `weight × quantity` over shippable lines only (`requiresShipping === false` is skipped); returns grams.
 - **`CheckoutVerdict`** — discriminated union: `ok: true` or `ok: false` with reason `'empty'`, `'product-unavailable'`, or `'insufficient-stock'`.
@@ -31,6 +31,6 @@ Pure decision logic for the cart: given cart lines already joined to their produ
 
 - **Two "unavailable" cases, one filter:** `product === null` (hard delete — `populate()` cannot follow the reference) vs. `product.active === false` / `product.deletedAt` set (soft-deleted / deactivated). The filter covers both in one pass.
 - **All lines, not just the first:** both the unavailable and shortfall arrays include every offending line so the caller can tell the user exactly what to fix in one response.
-- **Pre-flight only:** this check compares against *availability* (onHand − reserved) and runs before the write. The concurrency-safe guarantee lives in `inventory`'s conditional reserve, which re-checks the same arithmetic inside the transaction. This module does not excuse or replace that.
+- **Pre-flight only:** this check compares against _availability_ (onHand − reserved) and runs before the write. The concurrency-safe guarantee lives in `inventory`'s conditional reserve, which re-checks the same arithmetic inside the transaction. This module does not excuse or replace that.
 - **`requiresShipping` absent → treated as `true`** (shipped), matching the schema default and older rows that never set the column.
 - **`availableUnits` duplication is intentional and tested:** `domain-rules.test.ts` pins the two implementations together; `inventory` is the authority.

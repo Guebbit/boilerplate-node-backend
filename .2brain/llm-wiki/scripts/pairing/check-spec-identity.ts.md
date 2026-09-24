@@ -15,9 +15,9 @@ CLI entry point (run via `npm run check:spec-identity`) that verifies the shared
 
 - **Linear CLI script** (no named exports) — resolves the sibling path, compares files, prints a result, and exits.
 - **Exit-code protocol** (the documented interface):
-  - `0` — files identical, *or* sibling absent on a developer's machine (check skipped with a warning).
-  - `1` — one or more shared files differ, or a shared file is missing on one side.
-  - `2` — sibling checkout not found *and* `CI` is set (environment misconfiguration, not a contract fork).
+    - `0` — files identical, _or_ sibling absent on a developer's machine (check skipped with a warning).
+    - `1` — one or more shared files differ, or a shared file is missing on one side.
+    - `2` — sibling checkout not found _and_ `CI` is set (environment misconfiguration, not a contract fork).
 - **Optional `.env` load** — `process.loadEnvFile()` is wrapped in a try/catch so a missing `.env` never aborts the script; `FRONTEND_PATH` may instead come from the real environment (as it does in CI).
 - **Sibling-absence branch** — if `resolveFrontendPath()` points at a path that doesn't exist, the script prints guidance and exits `0` locally or `2` under `CI`.
 

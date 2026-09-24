@@ -9,11 +9,11 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines and enforces the byte-for-byte identity contract between this (backend) repo and its paired frontend. It lists the small set of files that must be identical in both checkouts, hashes them, and produces a human-readable diagnostic when they have drifted. The check exists because a forked spec is still a *valid* spec, so neither repo's CI catches the disagreement until production.
+Defines and enforces the byte-for-byte identity contract between this (backend) repo and its paired frontend. It lists the small set of files that must be identical in both checkouts, hashes them, and produces a human-readable diagnostic when they have drifted. The check exists because a forked spec is still a _valid_ spec, so neither repo's CI catches the disagreement until production.
 
 ## Key elements
 
-- **`SHARED_FILES`** — `readonly SharedFile[]` listing the pairs that must match. Currently two entries: `openapi.yaml` (same name both sides) and `asyncapi.public.yaml` → `asyncapi.yaml` (cross-path pair). Membership rule is *necessity only*: the file is produced in the backend and copied out.
+- **`SHARED_FILES`** — `readonly SharedFile[]` listing the pairs that must match. Currently two entries: `openapi.yaml` (same name both sides) and `asyncapi.public.yaml` → `asyncapi.yaml` (cross-path pair). Membership rule is _necessity only_: the file is produced in the backend and copied out.
 - **`THIS_REPO`** / **`siblingRole()`** — the single value that differs from the frontend's copy of this file; `siblingRole` flips `backend` ↔ `frontend`.
 - **`hashFile(path)`** — returns the sha256 hex digest of a file.
 - **`compareSharedFiles(siblingRoot, here?, role?)`** — iterates `SHARED_FILES`, resolves both paths, and returns one `SpecComparison` per entry with status `match | drift | missing-here | missing-there`. Never throws on a missing file.
@@ -32,6 +32,6 @@ Defines and enforces the byte-for-byte identity contract between this (backend) 
 
 - **Byte-identity, not equivalence.** Two specs that are semantically identical but differ in key order are still a failure. This is intentional: "a fork in the making."
 - **Cross-path pair.** `asyncapi.public.yaml` (backend) maps to `asyncapi.yaml` (frontend). `SHARED_FILES` stores both paths explicitly; a single-path list could not express this.
-- **Deliberate exclusions.** Convenience-identical files (Spectral ruleset, favicon, `.prettierrc`, `.husky/*`, etc.) and regenerated outputs (`asyncapi.generated.ts`, `contract.<tool>.*`) are *not* members. A gate on an icon "trains people to ignore it"; a generated copy carries no fact the list does not already compare.
+- **Deliberate exclusions.** Convenience-identical files (Spectral ruleset, favicon, `.prettierrc`, `.husky/*`, etc.) and regenerated outputs (`asyncapi.generated.ts`, `contract.<tool>.*`) are _not_ members. A gate on an icon "trains people to ignore it"; a generated copy carries no fact the list does not already compare.
 - **`formatSharedFileProblems` returns `''` on success**, not `null` or an empty array. Callers should check truthiness.
 - **sha256, not md5**, chosen so a checksum pasted into a commit message doesn't invite deprecation questions.

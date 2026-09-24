@@ -16,15 +16,15 @@ Configuration file that feeds the `@guebbit/openapi-runnable-collections` genera
 - **`COLLECTION_TOOLS`** — the four target tools, in order: `bruno`, `insomnia`, `mockoon`, `postman`.
 - **`sections()`** — maps `SECTION_ORDER` (from `openapi-bundle.ts`) to `Section[]` with their paths.
 - **`values`** (`ValueSources`) — the seed data injected into generated requests:
-  - `byProperty` — realistic defaults keyed by property name (e.g. `productId`, `email`, `orderId`).
-  - `byOperation` — full body overrides for `POST /account/login` (admin creds) and `POST /account/signup`.
-  - `byFormat` / `pathParam` — credential and path-parameter resolution.
-  - `tokens` — named `{{…}}` slots for probes to reference seed facts without hard-coding ids.
+    - `byProperty` — realistic defaults keyed by property name (e.g. `productId`, `email`, `orderId`).
+    - `byOperation` — full body overrides for `POST /account/login` (admin creds) and `POST /account/signup`.
+    - `byFormat` / `pathParam` — credential and path-parameter resolution.
+    - `tokens` — named `{{…}}` slots for probes to reference seed facts without hard-coding ids.
 - **`PROBES`** — static map of five modules' `probes.ts` exports (account, cart, orders, products, wishlist) keyed by section name.
-- **`PROBED_SECTIONS`** *(exported)* — the section names that carry probes; consumed by the completeness guard.
+- **`PROBED_SECTIONS`** _(exported)_ — the section names that carry probes; consumed by the completeness guard.
 - **`generate()`** — one un-memoised call to `generateCollections` with the spec, sections, probes, values, and tool targets.
-- **`allProbes()`** *(exported)* — flattened list of all probe requests, for coverage checks.
-- **`brunoBundle` / `insomniaBundle` / `mockoonBundle` / `postmanBundle`** *(exported)* — `ContractBundle` objects pointing at `contract.<tool>.<ext>` at the repo root, each backed by a lazy `content()` closure.
+- **`allProbes()`** _(exported)_ — flattened list of all probe requests, for coverage checks.
+- **`brunoBundle` / `insomniaBundle` / `mockoonBundle` / `postmanBundle`** _(exported)_ — `ContractBundle` objects pointing at `contract.<tool>.<ext>` at the repo root, each backed by a lazy `content()` closure.
 
 ## Relationships
 

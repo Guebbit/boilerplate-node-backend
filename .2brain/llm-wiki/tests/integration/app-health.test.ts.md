@@ -15,9 +15,9 @@ Integration tests for the system routes (`/`, unknown-path 404, `x-request-id` h
 
 - **`describe('System routes')`** — asserts 200 + welcome payload on `GET /`, 404 on unknown paths, and validates the `x-request-id` echo/replacement logic (well-formed UUIDs are reflected; non-UUID values are replaced with a generated UUID to prevent log-injection).
 - **`describe('Observability routes')`** — covers:
-  - `GET /observability/metrics` — expects Prometheus text exposition, authenticates via a static `Bearer` token (`NODE_METRICS_TOKEN`).
-  - `GET /observability/events` — SSE snapshot; logs in as an admin to obtain a `jwt` session cookie, then reads the stream with a custom parser that destroys the socket after the first `data:` line (supertest would otherwise hang on the infinite stream).
-  - `it.each` over `/observability/health`, `/observability/metrics/overview`, `/observability/audit` — each must return **401** (not 404/500) without credentials, proving the auth middleware is mounted on the path.
+    - `GET /observability/metrics` — expects Prometheus text exposition, authenticates via a static `Bearer` token (`NODE_METRICS_TOKEN`).
+    - `GET /observability/events` — SSE snapshot; logs in as an admin to obtain a `jwt` session cookie, then reads the stream with a custom parser that destroys the socket after the first `data:` line (supertest would otherwise hang on the infinite stream).
+    - `it.each` over `/observability/health`, `/observability/metrics/overview`, `/observability/audit` — each must return **401** (not 404/500) without credentials, proving the auth middleware is mounted on the path.
 
 ## Relationships
 

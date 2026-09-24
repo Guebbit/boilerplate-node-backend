@@ -18,11 +18,11 @@ Verifies that Zod's global error map — installed once via `registerValidationM
 - **`messagesOf(schema, value)`** — same but returns all issue messages.
 - **`beforeAll → registerValidationMessages()`** — installs the error map on the Zod singleton before any test runs.
 - **`describe` groups:**
-  - *missing vs. wrong-type field* — `required` vs. `invalid-type` vs. explicit `null`.
-  - *size constraints* — string min/max (characters), number min/max (value), array min/max (items), Set min (items).
-  - *formats* — email, url, uuid, datetime, date, time, plus the generic fallback for an unnamed regex.
-  - *remaining named constraints* — `multipleOf`, `strictObject` unrecognized-keys listing, enum accepted-values listing.
-  - *nothing falls through to Zod English* — bare `.refine()`, unmatched union, and a multi-error parse asserting every message starts with a known i18n prefix.
+    - _missing vs. wrong-type field_ — `required` vs. `invalid-type` vs. explicit `null`.
+    - _size constraints_ — string min/max (characters), number min/max (value), array min/max (items), Set min (items).
+    - _formats_ — email, url, uuid, datetime, date, time, plus the generic fallback for an unnamed regex.
+    - _remaining named constraints_ — `multipleOf`, `strictObject` unrecognized-keys listing, enum accepted-values listing.
+    - _nothing falls through to Zod English_ — bare `.refine()`, unmatched union, and a multi-error parse asserting every message starts with a known i18n prefix.
 
 ## Relationships
 
@@ -33,6 +33,6 @@ Verifies that Zod's global error map — installed once via `registerValidationM
 ## Notes
 
 - Expectations are derived from the live i18n dictionary, so updating a sentence in the catalog updates the test's expected value with no edit here — but also means a typo in the dictionary will silently pass both production and test.
-- `messageOf`/`messagesOf` assert `result.success === false`; if a test accidentally uses a schema that *passes*, the helper throws a misleading "expected false to be true" error rather than a message mismatch.
+- `messageOf`/`messagesOf` assert `result.success === false`; if a test accidentally uses a schema that _passes_, the helper throws a misleading "expected false to be true" error rather than a message mismatch.
 - The final multi-error test builds a `Set` of all dictionary sentence prefixes (split on `{{`) and checks that every issue message starts with one of them — the broadest guard against any Zod-default leaking through.
 - Jest/Vitest globals (`describe`, `it`, `expect`, `beforeAll`) are used without imports, implying the project's test runner injects them.

@@ -16,7 +16,7 @@ OpenAPI 3.0.3 contract (v2.0.0) defining the REST endpoints for the **users** mo
 - **`/users` (GET / POST / PUT / DELETE)** — Collection-level routes for listing, creating, editing, and deleting users. All require `bearerAuth`.
 - **`/users/{id}` (GET / PUT / DELETE)** — Item-level routes; functionally equivalent to the collection forms (noted via `x-alias-of` and inline comments).
 - **Multipart support** — `POST /users` and both `PUT` routes accept `multipart/form-data` alongside `application/json` for optional image uploads.
-- **`hardDelete` parameter** — Acceptable as query param *or* body field on DELETE; a `true` from any source wins.
+- **`hardDelete` parameter** — Acceptable as query param _or_ body field on DELETE; a `true` from any source wins.
 - **Rate-limiting (429)** — Declared on the two upload-capable routes; enforced by an `uploadLimiter` middleware (see `routes.ts`).
 - **Local schemas** — `UsersResponseEnvelope`, `CreateUserRequest`, `UpdateUserRequest`, `DeleteUserRequest`, and their `*Multipart` / `*ById` variants defined under `#/components/schemas`.
 

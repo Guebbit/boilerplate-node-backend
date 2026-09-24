@@ -13,7 +13,7 @@ RabbitMQ (AMQP 0-9-1) adapter that provides publish/consume primitives for the a
 
 ## Key elements
 
-- **`isQueueEnabled()`** (exported) — Returns `true` when a RabbitMQ URL is resolvable *and* the `NODE_RABBITMQ_ENABLED` flag is not `false`. Callers (e.g. `mailer.ts → enqueueEmail`) check this *before* building a job payload to skip envelope construction entirely.
+- **`isQueueEnabled()`** (exported) — Returns `true` when a RabbitMQ URL is resolvable _and_ the `NODE_RABBITMQ_ENABLED` flag is not `false`. Callers (e.g. `mailer.ts → enqueueEmail`) check this _before_ building a job payload to skip envelope construction entirely.
 - **`queueState()`** (exported) — Synchronous `DependencyStatus` (`'disabled' | 'ready' | 'unavailable'`) for the `/observability/health` endpoint. No I/O; simply inspects `currentChannel`.
 - **`startQueue()`** (exported) — Kicks off the recovering connection at boot; never blocks (the amqplib promise settles only on first successful connect, which could be forever under `maxRetries: Infinity`).
 - **`stopQueue()`** (exported, truncated) — Gracefully closes the recovering connection.
@@ -44,5 +44,5 @@ RabbitMQ (AMQP 0-9-1) adapter that provides publish/consume primitives for the a
 - **`unref()` discipline.** Both the channel-close retry timer and (under test) the recovery timer are `.unref()`'d so they never hold the event loop open in tests or during graceful shutdown.
 - **Test-mode recovery.** Under `NODE_ENV=test`, `maxRetries` is `0`: one connection attempt, then the adapter stays `unavailable` for the rest of the run. This is the routine local case because `.env` points at a Docker-Compose hostname unresolvable outside the network.
 - **`getChannel()` never awaits.** It is synchronous by design; callers that need the queue simply get `undefined` and fall back. The connection dials in the background and `currentChannel` becomes available on a subsequent call.
-- **Channel-only close ≠ connection drop.** amqplib's recovery only reacts to a full connection loss. A channel that closes on its own (e.g. `PRECONDITION_FAILED` mid-restart) is handled by the `close` handler's 1 s backoff re-open on the *same* connection.
+- **Channel-only close ≠ connection drop.** amqplib's recovery only reacts to a full connection loss. A channel that closes on its own (e.g. `PRECONDITION_FAILED` mid-restart) is handled by the `close` handler's 1 s backoff re-open on the _same_ connection.
 - **Config two-mode pattern.** A ready-made `NODE_RABBITMQ_URL` wins; otherwise the URL is assembled from `HOST`/`PORT`/`USER`/`PASS` (defaults: `127.0.0.1`, `guest`/`guest`). `NODE_RABBITMQ_PORT` is the one required fragment — without it the queue is off.

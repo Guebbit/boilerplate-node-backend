@@ -14,11 +14,11 @@ Thin HTTP adapter for `POST /cart/checkout`. It validates the request body, dele
 ## Key elements
 
 - **`postCheckout(request, response)`** — The sole export. Orchestrates the full checkout flow:
-  1. Extracts `userId` from `request.authContext`.
-  2. Parses the body with the `CheckoutBody` Zod schema (`request.body ?? {}` guards against Express 5 leaving `body` undefined).
-  3. Calls `cartService.orderConfirm(userId, callerContext, addressId, shippingMethodId, paymentMethod, notes)`.
-  4. On success: increments `cart_checkout_total{status="success"}`, calls `orderService.withActions` to produce the wire-shaped order, and sends `201` with the i18n message `orders.creation-success`.
-  5. On failure or thrown error: increments `cart_checkout_total{status="failure"}`, then delegates to `refused()` or `catchAs()` respectively.
+    1. Extracts `userId` from `request.authContext`.
+    2. Parses the body with the `CheckoutBody` Zod schema (`request.body ?? {}` guards against Express 5 leaving `body` undefined).
+    3. Calls `cartService.orderConfirm(userId, callerContext, addressId, shippingMethodId, paymentMethod, notes)`.
+    4. On success: increments `cart_checkout_total{status="success"}`, calls `orderService.withActions` to produce the wire-shaped order, and sends `201` with the i18n message `orders.creation-success`.
+    5. On failure or thrown error: increments `cart_checkout_total{status="failure"}`, then delegates to `refused()` or `catchAs()` respectively.
 
 ## Relationships
 
@@ -34,7 +34,7 @@ Thin HTTP adapter for `POST /cart/checkout`. It validates the request body, dele
 
 ## Notes
 
-- **Metric-before-refusal:** `cartCheckoutTotal.inc()` fires *before* `refused()` is called. A refused checkout still counts as a business-level result; skipping it would undercount.
+- **Metric-before-refusal:** `cartCheckoutTotal.inc()` fires _before_ `refused()` is called. A refused checkout still counts as a business-level result; skipping it would undercount.
 - **`?? {}` body guard:** Express 5 can leave `request.body` as `undefined` when no body is sent. The `?? {}` is intentional, not defensive over-coding.
 - **`withActions` vs `.toJSON()`:** The response requires `orderService.withActions` (not a plain serialization) because it resolves each line-item's live `current` picture. A bare `.toJSON()` would omit those fields entirely.
 - **Single metric increment per call:** The `.then` and `.catch` branches are mutually exclusive, so the metric increments exactly once per request.

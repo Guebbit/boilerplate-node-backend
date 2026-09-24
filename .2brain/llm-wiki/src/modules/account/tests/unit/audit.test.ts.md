@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit test that pins the exact string values of every account-domain audit action constant. The strings are a **wire contract** consumed by dashboards and alert rules outside this repository, so renaming a key or changing a value silently breaks external tooling. A cross-cutting test elsewhere verifies only the *shape* (uniqueness, lower snake_case) across all modules; this file is where the account owner asserts the actual values.
+Unit test that pins the exact string values of every account-domain audit action constant. The strings are a **wire contract** consumed by dashboards and alert rules outside this repository, so renaming a key or changing a value silently breaks external tooling. A cross-cutting test elsewhere verifies only the _shape_ (uniqueness, lower snake_case) across all modules; this file is where the account owner asserts the actual values.
 
 ## Key elements
 
@@ -20,7 +20,7 @@ Unit test that pins the exact string values of every account-domain audit action
 ## Relationships
 
 - **`src/modules/account/audit.ts`** — sole import. Provides the `accountAuditActions` constant object whose keys and string values this test locks down.
-- *(Referenced in comments only, not imported)* `tests/cross-cutting/audit-actions.test.ts` — the companion suite that checks cross-module shape rules. This file complements it by pinning domain-specific values.
+- _(Referenced in comments only, not imported)_ `tests/cross-cutting/audit-actions.test.ts` — the companion suite that checks cross-module shape rules. This file complements it by pinning domain-specific values.
 
 ## Notes
 

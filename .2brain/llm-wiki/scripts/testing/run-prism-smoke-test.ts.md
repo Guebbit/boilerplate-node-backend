@@ -20,7 +20,7 @@ Boots the `prism` mock server against the repo's `openapi.yaml`, then issues a s
 - **`prism`** (child process) — spawned with `['mock', 'openapi.yaml', '--errors', '--port', …]`; `stdout`/`stderr` are piped into a shared `output` buffer for diagnostic output on failure.
 - **`stop()`** — kills the child process with `SIGTERM` if it is still running; registered on both `process.on('exit')` and `SIGINT` so a failed curl or `^C` never leaves an orphan.
 - **`finish(code, message)`** — calls `stop()`, logs the result (and the captured server output on failure), then `process.exit`.
-- **`waitForBoot()`** — polls `fetch` every 250 ms until the probe URL responds or the deadline passes; the *first* successful response **is** the assertion, so it is returned rather than discarded.
+- **`waitForBoot()`** — polls `fetch` every 250 ms until the probe URL responds or the deadline passes; the _first_ successful response **is** the assertion, so it is returned rather than discarded.
 - **`main()`** — orchestrates `waitForBoot` → status check → `finish`; invoked as `void main()` because the package is CommonJS and esbuild rejects top-level `await`.
 
 ## Relationships

@@ -16,9 +16,9 @@ Unit tests for the provider-selector half of the payments module's `customCheck`
 - **`configure()`** — local helper that sets `NODE_ENV` to `'development'`, ensuring the boot gate does not short-circuit under the test environment.
 - **`withoutEnvironmentInThisFile(['NODE_ENV', 'NODE_PAYMENT_PROVIDER'])`** — file-scoped guard (from test support) that clears both variables before any case runs.
 - **`describe('the payment provider selector', …)`** — three cases:
-  - unset `NODE_PAYMENT_PROVIDER` → passes (implicit `fake` default)
-  - explicit `fake` → passes
-  - unrecognized value → throws with a message matching `/NODE_PAYMENT_PROVIDER/`
+    - unset `NODE_PAYMENT_PROVIDER` → passes (implicit `fake` default)
+    - explicit `fake` → passes
+    - unrecognized value → throws with a message matching `/NODE_PAYMENT_PROVIDER/`
 
 ## Relationships
 

@@ -29,5 +29,5 @@ Unit tests for the response-envelope helpers in `src/infrastructure/http/respons
 
 - The `errors` array is guaranteed non-empty on every reject; tests assert this from multiple angles (no-errors call, mixed list, single string) so a refactoring that drops the fallback synthesis will fail.
 - The status→code map is exhaustive: every mapped status is asserted individually, and the two catch-alls (`>=500` → `INTERNAL_ERROR`, other 4xx → `REQUEST_ERROR`) are tested with boundary values (499, 500, 599). Partial coverage is explicitly flagged as a risk in inline comments.
-- `details` must be *absent*, not `undefined`, because some JSON serializers emit `"details": null` which breaks contract validation.
+- `details` must be _absent_, not `undefined`, because some JSON serializers emit `"details": null` which breaks contract validation.
 - `rejectResponse` is documented as non-throwing; controllers are expected to `return` it. A test pins this so the contract cannot silently change.

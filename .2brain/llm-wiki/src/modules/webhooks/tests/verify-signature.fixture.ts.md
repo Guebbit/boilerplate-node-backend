@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A test-only Standard Webhooks signature verifier. It intentionally does **not** reuse the production signer's private helpers (`../transport/webhook-signing.ts`); instead it implements the spec independently so a passing round-trip test demonstrates interop with the Standard Webhooks format, not merely self-consistency. The codebase only *sends* webhooks, so no production code depends on this module.
+A test-only Standard Webhooks signature verifier. It intentionally does **not** reuse the production signer's private helpers (`../transport/webhook-signing.ts`); instead it implements the spec independently so a passing round-trip test demonstrates interop with the Standard Webhooks format, not merely self-consistency. The codebase only _sends_ webhooks, so no production code depends on this module.
 
 ## Key elements
 
@@ -29,7 +29,7 @@ A test-only Standard Webhooks signature verifier. It intentionally does **not** 
 
 ## Notes
 
-- The `whsec_` prefix is an optional decoration on the secret; the verifier strips it before decoding. Tests must pass secrets *with* that prefix to exercise the strip path.
+- The `whsec_` prefix is an optional decoration on the secret; the verifier strips it before decoding. Tests must pass secrets _with_ that prefix to exercise the strip path.
 - `timingSafeEqual` throws on unequal-length inputs rather than returning `false`. `signatureEntryMatches` guards against this with an explicit length check, so a length mismatch reads as "no match."
 - The `secrets` array is treated as a rotation ring: a delivery signed with either the old or the new key must verify, which is why the function iterates over **all** secrets.
 - The body must be the exact bytes received on the wire (string or `Buffer`). Re-serialising a parsed object will break the HMAC and cause a spurious verification failure.

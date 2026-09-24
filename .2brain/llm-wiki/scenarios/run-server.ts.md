@@ -15,7 +15,7 @@ Entry point for the **demo profile** (`npm run demo`). Boots the real applicatio
 
 - **`REQUIRED_DEFAULTS`** — Map of env vars set when the shell hasn't already provided a non-empty value: `NODE_ENV=development`, `NODE_HOST=127.0.0.1` (loopback-only), hard-coded token secrets, plus spread-in `SCRIPTED_RATE_LIMITS` and `DEMO_BANK_TRANSFER`.
 - **`FORCED_ABSENT`** — Array of Redis/RabbitMQ env var names blanked to `''` (not deleted) to neutralize any `.env` or shell value.
-- **`waitUntilListening(port)`** — Polls `GET /` (100 ms interval, 60 s timeout) until the server responds. Valid "ready" signal because `src/app.ts` seeds *before* listening begins.
+- **`waitUntilListening(port)`** — Polls `GET /` (100 ms interval, 60 s timeout) until the server responds. Valid "ready" signal because `src/app.ts` seeds _before_ listening begins.
 - **Main flow (top-level IIFE)** — `startEphemeralMongo({ startInProcess: startInProcessMongod })` → register SIGTERM/SIGINT cleanup → shape `process.env` → rewrite DB path to `/demo` → derive `NODE_URL` from `NODE_PORT` → call `enableDemoProfile()` → `import('../src/app')` (which self-boots) → `waitUntilListening`.
 
 ## Relationships
@@ -29,6 +29,6 @@ Entry point for the **demo profile** (`npm run demo`). Boots the real applicatio
 
 - **Blanking, not deleting, external-service vars.** `dotenv/config` (loaded by `src/app.ts`) won't override a key already present in `process.env`, even if empty. Setting `''` is the only way to ensure a stale `.env` value (e.g. a compose Redis hostname) cannot resurface. All readers in the codebase treat `''` as unset.
 - **`NODE_URL` is always derived, never defaulted-when-unset.** A checked-in `.env` typically names the single-instance `:3000` setup; a stale `NODE_URL` would make OAuth `redirect_uri` and emailed password-reset/verify links point at the wrong instance on every non-default port.
-- **Import order matters.** `import('../src/app')` is deferred until *after* the environment is fully shaped, because `src/app.ts` self-boots (seeds + listens) on import.
+- **Import order matters.** `import('../src/app')` is deferred until _after_ the environment is fully shaped, because `src/app.ts` self-boots (seeds + listens) on import.
 - **Cleanup on signal.** SIGTERM/SIGINT handlers call `mongo.stop()` to remove the ~200 MB in-process data directory from the temp dir. Failure to stop logs an error but still exits — a lingering directory is a cleanup annoyance, not a reason to hang shutdown.
 - **Multiple instances.** Each `NODE_PORT` value yields an independent in-memory Mongo. Pointing `NODE_TEST_MONGO_URI` at a shared compose Mongo makes all instances share one database — do not combine the two modes unintentionally.

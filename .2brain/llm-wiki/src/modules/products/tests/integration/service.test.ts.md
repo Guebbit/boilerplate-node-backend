@@ -17,7 +17,7 @@ Integration tests for the `productService` module, exercising validation (`valid
 - **`describe('productService.validateCreateData')`** — asserts the Zod-based create validator: required fields, min-length title, inclusive price minimum (`0`), type strictness (no coercion), fallback-locale presence, `uri-reference` vs `uri` for `imageUrl`, i18n message keys, and per-locale field pointers in `details.field`.
 - **`describe('productService.validateUpdateData')`** — confirms that update is partial: a missing translations map or a non-fallback locale is legal, but `null` or `{}` for a locale is not.
 - **`describe('productService.search')`** — one case per role (guest, logged, admin) asserting which products are visible, plus text and price-range filtering.
-- **`jest.mock('@infrastructure/adapters/image-store')`** — stubs `imageStore.remove` so tests assert the service *calls* its collaborator without pinning to a filesystem backend.
+- **`jest.mock('@infrastructure/adapters/image-store')`** — stubs `imageStore.remove` so tests assert the service _calls_ its collaborator without pinning to a filesystem backend.
 - **`setupTestDb()`** — provisions a real (ephemeral) database for the test run.
 - **`afterEach → resetDomainEvents()`** — clears the global event-bus subscriptions so handler registrations do not leak across tests.
 - **`FALLBACK_TRANSLATIONS`** — a valid `{ translations: { en: { title } } }` object spread into positive-path fixtures.

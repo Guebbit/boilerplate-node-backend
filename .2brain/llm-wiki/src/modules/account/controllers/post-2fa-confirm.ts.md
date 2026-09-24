@@ -14,13 +14,13 @@ Thin HTTP adapter for `POST /account/2fa/methods/{method}/confirm`. Validates pa
 ## Key elements
 
 - **`post2faConfirm(request, response)`** — The sole export. An Express handler that:
-  - Reads `id` from `request.authContext` (set upstream by auth middleware).
-  - Safely parses `request.params` with `ConfirmTwoFactorMethodParams` and `request.body` with `ConfirmTwoFactorMethodBody` (both from `@api/schemas.zod`).
-  - Calls `twoFactorService.confirmTwoFactorMethod(id, method, code, callerContext)`.
-  - On success: increments `authTwoFactorEnrollTotal` (`status: 'success'`) and returns `200` with a `TwoFactorConfirmed` payload and an i18n message.
-  - On service-level failure: increments the metric (`status: 'failure'`) and calls `rejectResponse` with the service's status and errors.
-  - On validation failure: increments the metric (body only) and calls `rejectValidation`.
-  - On uncaught exception: routes to `rejectDatabaseError`.
+    - Reads `id` from `request.authContext` (set upstream by auth middleware).
+    - Safely parses `request.params` with `ConfirmTwoFactorMethodParams` and `request.body` with `ConfirmTwoFactorMethodBody` (both from `@api/schemas.zod`).
+    - Calls `twoFactorService.confirmTwoFactorMethod(id, method, code, callerContext)`.
+    - On success: increments `authTwoFactorEnrollTotal` (`status: 'success'`) and returns `200` with a `TwoFactorConfirmed` payload and an i18n message.
+    - On service-level failure: increments the metric (`status: 'failure'`) and calls `rejectResponse` with the service's status and errors.
+    - On validation failure: increments the metric (body only) and calls `rejectValidation`.
+    - On uncaught exception: routes to `rejectDatabaseError`.
 
 ## Relationships
 

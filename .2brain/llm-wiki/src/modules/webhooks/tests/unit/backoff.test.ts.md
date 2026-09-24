@@ -27,5 +27,5 @@ Unit tests for the pure retry-backoff rules of the webhooks module: the per-tier
 
 - **1-based vs 0-based:** `nextRetryDelayMs(attempt)` is 1-based while the underlying array is 0-based. The tests iterate `entries()` and add 1; off-by-one here is the most likely regression this file guards against.
 - **Real-clock fallback tests use a window, not a mock:** The "defaults to the real clock" cases capture `Date.now()` before and after the call and assert the result falls in `[before + delay, after + delay]`. This avoids freezing/mocking `Date` while still proving the default path is exercised.
-- **`shouldAutoDisable` is inclusive at the time floor:** A streak that has lasted *exactly* `WEBHOOK_MIN_FAILING_MS` triggers auto-disable (not "strictly greater than"). The test explicitly pins this boundary.
+- **`shouldAutoDisable` is inclusive at the time floor:** A streak that has lasted _exactly_ `WEBHOOK_MIN_FAILING_MS` triggers auto-disable (not "strictly greater than"). The test explicitly pins this boundary.
 - **`failingSince === undefined` is not the same as "streak just started":** it means no streak is open at all and the function short-circuits to `false` regardless of the count.

@@ -14,7 +14,7 @@ Unit tests for the sizing arithmetic in `scripts/testing/machine-budget.ts`. Eve
 ## Key elements
 
 - **`positiveInteger`** – parses a string into a positive `int`; returns `undefined` for zero, negatives, floats, blanks, and non-numeric input.
-- **`environmentKnob`** – reads a named env var; tests confirm invalid values (`'0'`, `'-1'`, `'plenty'`, `''`) are treated as *unset* rather than as a value. Uses a test-only var name (`JEST_WORKERS_TEST_ONLY`) and cleans up in `afterEach`.
+- **`environmentKnob`** – reads a named env var; tests confirm invalid values (`'0'`, `'-1'`, `'plenty'`, `''`) are treated as _unset_ rather than as a value. Uses a test-only var name (`JEST_WORKERS_TEST_ONLY`) and cleans up in `afterEach`.
 - **`availableMemoryMb`** – asserts the returned figure is positive and never exceeds `os.totalmem()`.
 - **`processBudgetMb`** – explicit override wins; computed value is floored at `MIN_PROCESS_BUDGET_MB`.
 - **`shardTargetMb`** – caps at `MAX_SHARD_PEAK_MB`, passes modest values through, raises values below the floor.
@@ -34,4 +34,4 @@ Unit tests for the sizing arithmetic in `scripts/testing/machine-budget.ts`. Eve
 - `INTEGRATION_FILES = 75` is a hardcoded snapshot of the current integration test file count; if that layer grows or shrinks, the final describe block's expectations must be revisited.
 - Tests that touch `os.totalmem()` / `os.cpus()` are machine-dependent but only assert inequalities, so they pass on any hardware.
 - The env-var tests use a deliberately unique variable name to avoid clobbering a real `JEST_WORKERS` setting in the developer's shell.
-- `heapCapMb` uses floor division intentionally: workers must never *jointly* exceed the budget, so rounding up is forbidden.
+- `heapCapMb` uses floor division intentionally: workers must never _jointly_ exceed the budget, so rounding up is forbidden.

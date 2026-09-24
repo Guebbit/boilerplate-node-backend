@@ -37,6 +37,6 @@ Generates (or checks) the two dependency tables in `docs/tools/package-dependenc
 
 - The script is idempotent: it only rewrites content between the `<!-- dependency-map:*:start/end -->` markers; surrounding prose is untouched.
 - A package with no group and exactly one `src/modules/<name>/` importer is listed automatically under that module — no entry in `dependency-groups.ts` needed.
-- Anything with no group *and* no single owner lands in an "Ungrouped" table: visible in the doc but **not** a build failure (per the "less policing" stance in `docs/theory/modules.md`).
+- Anything with no group _and_ no single owner lands in an "Ungrouped" table: visible in the doc but **not** a build failure (per the "less policing" stance in `docs/theory/modules.md`).
 - Undeclared dependencies (resolvable in `node_modules` but missing from `package.json`) are a **hard error**, not a warning.
 - The script uses `tsx` (see shebang) and imports `prettier` directly; it is not run under `ts-node`.

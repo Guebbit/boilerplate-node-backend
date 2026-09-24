@@ -28,7 +28,7 @@ Exports a single compensation function, `retractOrder`, that undoes an already-w
 
 ## Notes
 
-- **Order of operations is deliberate:** release runs *before* delete so the release can still reference a live order row.
+- **Order of operations is deliberate:** release runs _before_ delete so the release can still reference a live order row.
 - **Never rejects by design.** The caller has already decided the order is invalid; a second failure during cleanup must not become a new user-facing error.
 - **Logs are the only recovery signal.** A refused reserve deletes its hold row outright, so no background sweep will surface it. The two `logger.error` calls (`Rollback: hold not released` / `Rollback: order not deleted`) are the sole record a human can find.
 - **Raw `Error` object is passed to the logger, not a message string.** `redactFormat` (in `logger.ts`) serialises an `Error` into `{ name, message, stack }` before JSON output; passing a plain string would lose the stack.

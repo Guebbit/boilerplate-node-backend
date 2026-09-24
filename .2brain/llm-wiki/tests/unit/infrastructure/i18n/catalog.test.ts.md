@@ -14,18 +14,18 @@ Unit tests for the locale-discovery and dictionary-loading layer of the i18n cat
 ## Key elements
 
 - **`describe('locale discovery')`** — covers `listSupportedLocales`, `resetSupportedLocales`, `readLocaleDictionary`, and `loadLocaleResources`.
-  - *Lists every dictionary in src/locales*: asserts the default set contains `en` and `it`.
-  - *Honours NODE_SUPPORTED_LOCALES*: sets the env var, calls `resetSupportedLocales`, verifies trimming/whitespace handling, then restores.
-  - *Is cached*: calls `listSupportedLocales()` once, changes the env var, and asserts the second call returns the identical list — the critical non-drift guarantee.
-  - *Reads a dictionary off disk, merged with every registered module*: checks the shared half is verbatim **and** the `users` module namespace is present (guards against a silent merge drop).
-  - *Shapes every dictionary for i18next.init*: asserts `loadLocaleResources()` returns `{ en: { translation }, it: { translation } }`.
-  - *Finds the shared dictionaries whatever the working directory is*: `chdir('/')` then reads — confirms module-relative path resolution.
-  - *Carries the shared keys a module did not contribute to*: ensures the `users` namespace still appears for `en`.
+    - _Lists every dictionary in src/locales_: asserts the default set contains `en` and `it`.
+    - _Honours NODE_SUPPORTED_LOCALES_: sets the env var, calls `resetSupportedLocales`, verifies trimming/whitespace handling, then restores.
+    - _Is cached_: calls `listSupportedLocales()` once, changes the env var, and asserts the second call returns the identical list — the critical non-drift guarantee.
+    - _Reads a dictionary off disk, merged with every registered module_: checks the shared half is verbatim **and** the `users` module namespace is present (guards against a silent merge drop).
+    - _Shapes every dictionary for i18next.init_: asserts `loadLocaleResources()` returns `{ en: { translation }, it: { translation } }`.
+    - _Finds the shared dictionaries whatever the working directory is_: `chdir('/')` then reads — confirms module-relative path resolution.
+    - _Carries the shared keys a module did not contribute to_: ensures the `users` namespace still appears for `en`.
 - **`describe('localeCandidatesFor')`** — covers the candidate-chain builder.
-  - Region-tagged input → `[exact, base, fallback]`.
-  - Base-tag input → no duplicate of the base in the chain.
-  - Fallback requested directly → single-element array.
-  - Region-tagged fallback → base derived, no repeat.
+    - Region-tagged input → `[exact, base, fallback]`.
+    - Base-tag input → no duplicate of the base in the chain.
+    - Fallback requested directly → single-element array.
+    - Region-tagged fallback → base derived, no repeat.
 
 ## Relationships
 

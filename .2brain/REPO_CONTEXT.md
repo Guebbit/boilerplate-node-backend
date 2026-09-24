@@ -3,6 +3,7 @@
 _Canonical 2brain context source for AI editors._
 
 ## Core Artifacts
+
 - `.2brain/graphify-out/GRAPH_REPORT.md` — structural and semantic code graph report
 - `.2brain/EXECUTION.md` — runnable build/test/CI/migration knowledge
 - `.2brain/llm-wiki/` — per-file machine-oriented pages, one per source file (page path = source path + `.md`)
@@ -19,6 +20,7 @@ _Canonical 2brain context source for AI editors._
 Artifacts generated from commit `d0616e30614e1bdb4e61496b55da33c1441b07e0`. If `git rev-parse HEAD` differs, prefer the source over these artifacts and say so.
 
 ## Index Metadata
+
 - Provider: `ollama`
 - Model: `qwen3.8:27b`
 - Index revision: `108dc8e1b2c67f13d4e3f994e910d3d22643201bf28cc35218cd2109147a1fe3`
@@ -26,6 +28,6 @@ Artifacts generated from commit `d0616e30614e1bdb4e61496b55da33c1441b07e0`. If `
 - Memory entries: `0`
 
 ## Query
+
 - Semantic query: `2brain query <repo-path> "your question" --top-k 5`
 - Add durable memory: `2brain remember <repo-path> "fact/decision/runbook" --kind fact`
-

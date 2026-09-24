@@ -16,8 +16,8 @@ Verifies the **one-shop invariant**: every tenant-scope `Caller` (anonymous stra
 - **`describe('anonymousCaller')`** — asserts that `anonymousCaller()` returns a caller with `scope: 'tenant'` and `tenantId: DEPLOYMENT_TENANT_ID`.
 - **`describe('SYSTEM_ACTOR')`** — asserts that the exported `SYSTEM_ACTOR` constant carries `DEPLOYMENT_TENANT_ID` (not `null`).
 - **`describe('callerInScope')`** — two cases:
-  - Tenant scope: `callerInScope(asRole('customer'), 'tenant')` yields the resolved caller's own tenant id (`TEST_TENANT_ID`).
-  - Platform scope: `callerInScope(asOperator(), 'platform')` yields `tenantId: null`, even when the underlying caller holds a shop role.
+    - Tenant scope: `callerInScope(asRole('customer'), 'tenant')` yields the resolved caller's own tenant id (`TEST_TENANT_ID`).
+    - Platform scope: `callerInScope(asOperator(), 'platform')` yields `tenantId: null`, even when the underlying caller holds a shop role.
 
 ## Relationships
 
@@ -27,5 +27,5 @@ Verifies the **one-shop invariant**: every tenant-scope `Caller` (anonymous stra
 
 ## Notes
 
-- The module doc comment frames the invariant as a *proof obligation*: `null` tenantId must appear **only** in platform scope. If a future refactor introduces a path where a tenant-scope caller receives `null`, these tests are the guard.
-- `TEST_TENANT_ID` (from `tests/support/callers.ts`) and `DEPLOYMENT_TENANT_ID` (from `src/kernel/access/tenant.ts`) are **different values** used in different assertions. Tenant-scope *caller* assertions compare against the caller's own tenant; the anonymous/system-actor assertions compare against the deployment-level constant.
+- The module doc comment frames the invariant as a _proof obligation_: `null` tenantId must appear **only** in platform scope. If a future refactor introduces a path where a tenant-scope caller receives `null`, these tests are the guard.
+- `TEST_TENANT_ID` (from `tests/support/callers.ts`) and `DEPLOYMENT_TENANT_ID` (from `src/kernel/access/tenant.ts`) are **different values** used in different assertions. Tenant-scope _caller_ assertions compare against the caller's own tenant; the anonymous/system-actor assertions compare against the deployment-level constant.

@@ -36,7 +36,7 @@ Integration tests for the wishlist service, exercising the full request path (se
 
 ## Notes
 
-- **Withdrawal ≠ deletion.** De-activating a product (`active: false`) is the "withdrawal" case: the wishlist line *survives* and the move-to-cart fails with 404, but the line is still there. Hard-deletion (`removeById(id, true)`) fires the `PRODUCT_DELETED` subscription and *purges* the line. Tests for both shapes exist deliberately.
-- **Ordering guarantee.** Every move-to-cart refusal assertion checks both that the cart is empty *and* that `savedIds` still contains the product — encoding the "write cart before dropping line" rule from the module docstring.
+- **Withdrawal ≠ deletion.** De-activating a product (`active: false`) is the "withdrawal" case: the wishlist line _survives_ and the move-to-cart fails with 404, but the line is still there. Hard-deletion (`removeById(id, true)`) fires the `PRODUCT_DELETED` subscription and _purges_ the line. Tests for both shapes exist deliberately.
+- **Ordering guarantee.** Every move-to-cart refusal assertion checks both that the cart is empty _and_ that `savedIds` still contains the product — encoding the "write cart before dropping line" rule from the module docstring.
 - **Subscription tests require fresh wiring.** `resetDomainEvents()` + `registerModules(enabledModules)` in `beforeEach` is mandatory; without it, stale listeners from other suites produce flaky cleanup behaviour.
 - **The 422 case is the only non-404 refusal.** It exists to guard against a regression where the service naively maps every cart failure to its own 404, swallowing the "line is already at max quantity" message the shopper needs to see.

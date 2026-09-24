@@ -16,11 +16,11 @@ Integration test that pins the app's CORS behavior for disallowed origins: the `
 - **`ALLOWED_ORIGIN`** – First entry of `NODE_CORS_ORIGIN` (or the `http://localhost:8080` fallback). Read from env at test time so the assertion tracks the configured allowlist in `src/app/security.ts` rather than a hardcoded value.
 - **`DISALLOWED_ORIGIN`** – Hardcoded `https://evil.example.com`; chosen to be impossible in any real deployment.
 - **`describe('CORS')`** – Five specs:
-  - *Reflects an allowed origin* – 200 + header echoed back.
-  - *Serves a disallowed origin normally* – 200, body intact, header absent.
-  - *Does not turn a disallowed origin into a server error* – `POST /account/login` with wrong credentials returns < 500 regardless of Origin.
-  - *Allows a request with no origin* – curl/healthcheck path; no header (nothing to reflect).
-  - *Answers a disallowed preflight without error* – `OPTIONS` short-circuited by `cors` before the router; asserts < 500 and no allow header.
+    - _Reflects an allowed origin_ – 200 + header echoed back.
+    - _Serves a disallowed origin normally_ – 200, body intact, header absent.
+    - _Does not turn a disallowed origin into a server error_ – `POST /account/login` with wrong credentials returns < 500 regardless of Origin.
+    - _Allows a request with no origin_ – curl/healthcheck path; no header (nothing to reflect).
+    - _Answers a disallowed preflight without error_ – `OPTIONS` short-circuited by `cors` before the router; asserts < 500 and no allow header.
 
 ## Relationships
 
@@ -29,7 +29,7 @@ Integration test that pins the app's CORS behavior for disallowed origins: the `
 
 ## Notes
 
-- The file header documents *why* omission is correct: calling `callback(new Error(...))` in the `cors` package signals a request failure to Express, which 500s before the route executes. This is the regression the suite guards against.
+- The file header documents _why_ omission is correct: calling `callback(new Error(...))` in the `cors` package signals a request failure to Express, which 500s before the route executes. This is the regression the suite guards against.
 - `ALLOWED_ORIGIN` is intentionally **not** hardcoded; a fixed string would silently test the fallback whenever `NODE_CORS_ORIGIN` is set, passing for the wrong reason.
 - The preflight test matters because `cors` intercepts `OPTIONS` before the router, so a thrown error there never reaches a route handler—making it easy to overlook in route-level tests.
 - See `docs/tools/security.md` for the broader security policy context.

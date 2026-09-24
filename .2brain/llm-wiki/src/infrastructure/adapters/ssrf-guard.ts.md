@@ -13,12 +13,12 @@ Prevents Server-Side Request Forgery on outbound requests this server initiates 
 
 ## Key elements
 
-- **`SsrfRefusalReason`** — union of five refusal codes (`invalid-url`, `insecure-scheme`, `credentials-in-url`, `dns-resolution-failed`, `unsafe-address`) so callers and tests can branch on *why*.
+- **`SsrfRefusalReason`** — union of five refusal codes (`invalid-url`, `insecure-scheme`, `credentials-in-url`, `dns-resolution-failed`, `unsafe-address`) so callers and tests can branch on _why_.
 - **`SsrfRefusedError`** — `Error` subclass carrying the `reason` code; the single error type thrown for every refusal.
 - **`SafeOutboundTarget`** — the success shape: `hostname`, `resolvedAddress`, and a `lookup: LookupFunction` ready to pass as `https.request`'s `lookup` option to pin the TCP connection to the validated address.
 - **`resolveSafeOutboundTarget(rawUrl, options?)`** — the main exported entry point. Parses the URL, resolves all A/AAAA records, validates every address against refused ranges, and returns a `SafeOutboundTarget`. Accepts an optional `exemptHostname` (bypasses only the `https:` and unsafe-address checks) and an `AbortSignal` for timeout. Always rejects (never throws synchronously) via a `Promise.resolve().then(...)` wrapper.
 - **`isAddressUnsafe(address)`** — internal; returns `true` for private, loopback, link-local, unspecified, multicast, CGNAT, broadcast, 6to4, Teredo, and IPv4-compatible (`::/96`) ranges. Recursively re-checks embedded IPv4 in 6to4/Teredo/IPv4-compatible forms.
-- **`resolveAllAddresses(hostname, signal?)`** — internal; queries `resolve4` and `resolve6` independently via `Promise.allSettled`, collecting *all* addresses (not just the first).
+- **`resolveAllAddresses(hostname, signal?)`** — internal; queries `resolve4` and `resolve6` independently via `Promise.allSettled`, collecting _all_ addresses (not just the first).
 - **`buildPinnedLookup(address)`** — internal; returns a `LookupFunction` that ignores the hostname and always answers with the pre-validated address, handling both `all: true` and single-address callback shapes.
 - **`rejectOnAbort(signal)` / `abortReason(signal)`** — internal helpers that let the DNS lookup honour an `AbortSignal` (since `node:dns/promises` APIs accept no signal option) and safely extract a cross-realm-safe `Error` from `signal.reason`.
 
@@ -29,7 +29,7 @@ Prevents Server-Side Request Forgery on outbound requests this server initiates 
 
 ## Notes
 
-- **Fails closed on multi-answer DNS responses.** If *any* resolved address is unsafe, the entire hostname is refused — not just the offending record. This is deliberate: an attacker who controls one A/AAAA record in a set must not be able to ride on a benign sibling.
+- **Fails closed on multi-answer DNS responses.** If _any_ resolved address is unsafe, the entire hostname is refused — not just the offending record. This is deliberate: an attacker who controls one A/AAAA record in a set must not be able to ride on a benign sibling.
 - **All refusals are async rejections**, never synchronous throws. The top-level `Promise.resolve().then(...)` wrapper guarantees a single `.catch()` path for callers regardless of which internal check fires first.
 - **Credentials in the URL are rejected outright, never stripped.** The rationale: a URL embedding credentials is a misconfiguration, and silently dropping them would deliver to a URL the owner did not intend.
 - **`exemptHostname` is narrow.** It bypasses only the `https:` requirement and the unsafe-address check. Parsing, credentials, and DNS resolution still run in full. It is case-sensitive; callers are expected to pass an already-lowercased host.

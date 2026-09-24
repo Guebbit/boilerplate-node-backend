@@ -19,7 +19,7 @@ Periodic cron script (`npm run reap:orders`) that anonymizes PII on orders past 
 
 ## Relationships
 
-- **`scripts/db/run-script.ts`** — supplies `runScript`, which wraps `main` with the `stopDatabase` teardown callback for graceful shutdown on success *and* failure.
+- **`scripts/db/run-script.ts`** — supplies `runScript`, which wraps `main` with the `stopDatabase` teardown callback for graceful shutdown on success _and_ failure.
 - **`src/infrastructure/runtime/database.ts`** — exports `start` (used by `main` to open the connection) and `stopDatabase` (passed to `runScript` as the cleanup function).
 - **`src/modules/orders/index.ts`** — barrel export from which `orderService` is imported.
 - **`src/modules/orders/services/index.ts`** — the concrete source of `orderService`; the `anonymizeDueOrders()` method called here lives in that service layer.

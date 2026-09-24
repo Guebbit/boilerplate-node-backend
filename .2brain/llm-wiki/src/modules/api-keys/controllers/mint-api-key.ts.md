@@ -14,12 +14,12 @@ HTTP controller for `POST /api-keys`. Validates the request body against a Zod s
 ## Key elements
 
 - **`mintApiKey`** (exported function) — The sole handler for `POST /api-keys`. Pipeline:
-  1. `parseBody(MintApiKeyBody, …)` — validates the JSON body; returns early (no response) on schema failure.
-  2. `tenantCallerContextOf(request)` — extracts the authenticated caller's identity/permissions.
-  3. `apiKeysService.mintApiKey(body, context)` — performs the actual key creation and permission-subset check.
-  4. `refused(response, result)` — if the service rejects (e.g. 422 naming offending permission keys), sends that response and stops.
-  5. `successResponse(response, data, 201)` — on success, returns the created key with **201 Created**.
-  6. `.catch(catchAs(response, 'mintApiKey'))` — catches thrown errors into a standard error response.
+    1. `parseBody(MintApiKeyBody, …)` — validates the JSON body; returns early (no response) on schema failure.
+    2. `tenantCallerContextOf(request)` — extracts the authenticated caller's identity/permissions.
+    3. `apiKeysService.mintApiKey(body, context)` — performs the actual key creation and permission-subset check.
+    4. `refused(response, result)` — if the service rejects (e.g. 422 naming offending permission keys), sends that response and stops.
+    5. `successResponse(response, data, 201)` — on success, returns the created key with **201 Created**.
+    6. `.catch(catchAs(response, 'mintApiKey'))` — catches thrown errors into a standard error response.
 
 ## Relationships
 

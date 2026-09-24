@@ -15,7 +15,7 @@ Defines the set of tenants (translation keyspaces) this deployment serves. A ten
 
 - **`backendTenant()`** – Returns the API's own tenant id from `NODE_LOCALE_TENANT_BACKEND` (default `"demo-be"`). This tenant is layered over deployed files by `@infrastructure/i18n`.
 - **`frontendTenant()`** – Returns the default frontend tenant id from `NODE_LOCALE_TENANT_FRONTEND` (default `"demo-fe"`). Used when a client omits a tenant.
-- **`extraFrontendTenants()`** *(internal)* – Parses `NODE_LOCALE_TENANTS_EXTRA` (comma-separated `id=Label` pairs) into `LocaleTenantDescriptor[]` with `kind: frontend`.
+- **`extraFrontendTenants()`** _(internal)_ – Parses `NODE_LOCALE_TENANTS_EXTRA` (comma-separated `id=Label` pairs) into `LocaleTenantDescriptor[]` with `kind: frontend`.
 - **`listTenants()`** – Returns the full, de-duplicated tenant list ordered: backend → default frontend → extras. First spelling wins on duplicate ids.
 - **`frontendTenantIds()`** – Returns only the ids of frontend tenants (the rows that `entryCount` counts and the messages route may serve).
 - **`isKnownTenant(id)`** – True if the id matches any tenant in `listTenants()`.

@@ -16,9 +16,9 @@ Cross-cutting consistency guard that enforces a bidirectional invariant: every d
 - **`MODULES_ROOT`** — resolved path to `src/modules/`, built from `__dirname`.
 - **`moduleFolders()`** — returns the names of all immediate subdirectories of `MODULES_ROOT` (uses `readdirSync` + `statSync`).
 - **`describe('modules are enabled')`** — three assertions:
-  - *Canary*: at least one folder exists, so the two real checks can't pass vacuously.
-  - *Forward*: every folder name is present in the `enabledModules[].name` set.
-  - *Reverse*: every `enabledModules[].name` has a matching folder (no orphaned registrations).
+    - _Canary_: at least one folder exists, so the two real checks can't pass vacuously.
+    - _Forward_: every folder name is present in the `enabledModules[].name` set.
+    - _Reverse_: every `enabledModules[].name` has a matching folder (no orphaned registrations).
 
 ## Relationships
 

@@ -24,17 +24,17 @@ Integration test suite that exercises the access module's **storage layer** (mem
 
 ## Relationships
 
-| Neighbor | Interaction |
-|----------|-------------|
-| `src/modules/access/service.ts` | Primary subject under test — all domain functions (`assignRole`, `revokeRole`, `membershipsOf`, `rolesOf`, `bootstrapAccessModel`, `ensureTenant`, `assignDefaultRole`, `AccessInvariantError`, `DEPLOYMENT_TENANT_SLUG`, etc.) are imported and exercised. |
-| `src/modules/access/repository.ts` | `membershipRepository.deleteById` is spied on to simulate a Mongo failure and assert the rejection propagates. |
-| `src/modules/access/audit.ts` | `accessAuditActions` enum values are used in audit assertions. |
-| `src/infrastructure/observability/audit.ts` | Mocked (not spied) to capture `emitAuditEvent` calls; `recordAudit` is re-routed through the replacement. |
-| `src/kernel/access/tenant.ts` | `DEPLOYMENT_TENANT_ID` imported for tenant identity checks. |
-| `src/kernel/permissions.ts` | `permissionsOfRole` used to read preset permissions and to verify "granter hands over exactly what they hold." |
-| `tests/support/setup-test-db.ts` | `setupTestDb` provides the in-memory Mongo lifecycle. |
-| `tests/support/ports.ts` | `observePort` wraps the mocked `emitAuditEvent` for per-test spy assertions (the "replaced, not spied on" pattern). |
-| `tests/support/callers.ts` | `testCallerContext` / `callerContextAs` fabricate actor identities for grant/revoke calls and audit assertions. |
+| Neighbor                                    | Interaction                                                                                                                                                                                                                                                 |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/modules/access/service.ts`             | Primary subject under test — all domain functions (`assignRole`, `revokeRole`, `membershipsOf`, `rolesOf`, `bootstrapAccessModel`, `ensureTenant`, `assignDefaultRole`, `AccessInvariantError`, `DEPLOYMENT_TENANT_SLUG`, etc.) are imported and exercised. |
+| `src/modules/access/repository.ts`          | `membershipRepository.deleteById` is spied on to simulate a Mongo failure and assert the rejection propagates.                                                                                                                                              |
+| `src/modules/access/audit.ts`               | `accessAuditActions` enum values are used in audit assertions.                                                                                                                                                                                              |
+| `src/infrastructure/observability/audit.ts` | Mocked (not spied) to capture `emitAuditEvent` calls; `recordAudit` is re-routed through the replacement.                                                                                                                                                   |
+| `src/kernel/access/tenant.ts`               | `DEPLOYMENT_TENANT_ID` imported for tenant identity checks.                                                                                                                                                                                                 |
+| `src/kernel/permissions.ts`                 | `permissionsOfRole` used to read preset permissions and to verify "granter hands over exactly what they hold."                                                                                                                                              |
+| `tests/support/setup-test-db.ts`            | `setupTestDb` provides the in-memory Mongo lifecycle.                                                                                                                                                                                                       |
+| `tests/support/ports.ts`                    | `observePort` wraps the mocked `emitAuditEvent` for per-test spy assertions (the "replaced, not spied on" pattern).                                                                                                                                         |
+| `tests/support/callers.ts`                  | `testCallerContext` / `callerContextAs` fabricate actor identities for grant/revoke calls and audit assertions.                                                                                                                                             |
 
 ## Notes
 

@@ -22,7 +22,7 @@ OpenAPI 3.0.3 contract for the antibot module's two public endpoints: reading th
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** — Every schema in this file that represents an envelope field (`EnvelopeSuccess`, `EnvelopeStatus`, `EnvelopeMessage`) or a standard error response (`InternalError`, `NotFound`) is `$ref`'d back to the root contract. This file contributes no shared types; it only *consumes* them.
+- **`shared/contracts/openapi.root.yaml`** — Every schema in this file that represents an envelope field (`EnvelopeSuccess`, `EnvelopeStatus`, `EnvelopeMessage`) or a standard error response (`InternalError`, `NotFound`) is `$ref`'d back to the root contract. This file contributes no shared types; it only _consumes_ them.
 
 ## Notes
 

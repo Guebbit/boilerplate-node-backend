@@ -15,7 +15,7 @@ Test-database wrappers around the pure order builder in `../factories.ts`. Where
 
 - **`toOrderItem(product, quantity?, locale?)`** — Converts a `ProductDocument` into an `OrderLineInput`. Copies the full document (stripping `_id`, `__v`, `taxClass`), resolves `taxClass` → `taxRate` via `resolveTaxRate`, and stores the resolved rate (not the class) on the frozen line.
 - **`makeOrder(user, items, extras?)`** — Builds a valid `OrderFixture` payload from a `UserDocument` and a list of `OrderLineInput` rows by delegating to the parent `buildOrder`. `extras` (shipping, totals, etc.) pass through rather than defaulting.
-- **`orderRepository`** (re-export) — The live repository singleton, exposed so a test can `jest.spyOn` it and intercept calls made *inside* this module (e.g. compensation in `retractOrder`).
+- **`orderRepository`** (re-export) — The live repository singleton, exposed so a test can `jest.spyOn` it and intercept calls made _inside_ this module (e.g. compensation in `retractOrder`).
 - **`createOrder(user, items, extras?)`** — Persists the fixture via `orderRepository.create` and returns the hydrated `OrderDocument`.
 - **`readOrder(id)`** / **`findOrder(where)`** / **`countOrders(where?)`** — Narrow read helpers for a test's own persisted-state assertions (bypass the service layer).
 - **`saveOrder(document)`** — Persists a document a test already built/mutated in memory.
@@ -34,7 +34,7 @@ Test-database wrappers around the pure order builder in `../factories.ts`. Where
 
 ## Notes
 
-- **Snapshot, not reference.** An order line embeds a full product snapshot (with the *resolved* `taxRate`, not the source `taxClass`). This is intentional: repricing a product later must not rewrite what a customer was charged.
+- **Snapshot, not reference.** An order line embeds a full product snapshot (with the _resolved_ `taxRate`, not the source `taxClass`). This is intentional: repricing a product later must not rewrite what a customer was charged.
 - **`toObject()` over field-by-field copying.** The destructuring spread (`{ _id, __v, taxClass, ...snapshot }`) ensures a newly added product column is carried into the snapshot automatically, avoiding the class of bug where individual field naming would silently drop it.
-- **`forceOrderStatus` is test-only.** `orderService` exposes no unconditional status writer; the only callers that set status do so behind lifecycle guards. This helper exists solely so a test can reach a state the real API would never produce, in order to verify that *other* callers handle it.
+- **`forceOrderStatus` is test-only.** `orderService` exposes no unconditional status writer; the only callers that set status do so behind lifecycle guards. This helper exists solely so a test can reach a state the real API would never produce, in order to verify that _other_ callers handle it.
 - **`orderRepository` re-export is for `jest.spyOn` binding.** A wrapper function would copy the call but not the internal binding, so spying on the wrapper cannot intercept calls this module's own code makes (e.g. `retractOrder`'s compensation path). Use the re-export only when the assertion is "was this repo method called/failed"; for DB-state assertions, prefer the named helpers.

@@ -27,5 +27,5 @@ Thin HTTP controller that exposes `GET /inventory/levels` — a paginated, sorte
 ## Notes
 
 - `lowOnly` is the only boolean in the param set; the comment in the source flags that query strings are always text, so the controller layer must handle the coercion explicitly via the `input.booleans` config.
-- The schema is built with `.extend(...).partial()`, meaning *all* fields (including the original `ListInventoryLevelsQueryParams` fields) are optional at the HTTP layer. Do not assume any field is required.
+- The schema is built with `.extend(...).partial()`, meaning _all_ fields (including the original `ListInventoryLevelsQueryParams` fields) are optional at the HTTP layer. Do not assume any field is required.
 - The entity string `'inventoryLevels'` is used by the list-controller for logging / OpenAPI naming; keep it in sync with the service's internal collection if it changes.

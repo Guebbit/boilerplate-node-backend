@@ -1,8 +1,8 @@
 ---
 tags:
-  - 2brain
-  - 2brain/module
-  - project/boilerplate-node-backend
+    - 2brain
+    - 2brain/module
+    - project/boilerplate-node-backend
 type: module
 module: src/infrastructure/http/
 files: 19
@@ -39,6 +39,7 @@ The HTTP infrastructure layer provides every shared mechanism an Express-based A
 Read **`response.ts`** first — it defines the single envelope shape every endpoint returns and the status-code mapping that `errors.ts` feeds into, so understanding it makes every other file in the module click. Then read **`controller.ts`** together with **`request.ts`** to see the two helper functions (`readInput`, `validate`) that appear at the top of every controller call site across the codebase.
 
 ## Connected modules
+
 ```mermaid
 flowchart LR
     m_src_infrastructure_http["src/infrastructure/http/"]
@@ -78,11 +79,12 @@ flowchart LR
 [[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scripts|scripts/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_modules|src/modules/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_account_controllers|src/modules/account/controllers/]] · [[boilerplate-node-backend_src_modules_account_tests|src/modules/account/tests/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_delivery|src/modules/delivery/]] · [[boilerplate-node-backend_src_modules_feedback|src/modules/feedback/]] · [[boilerplate-node-backend_src_modules_inventory|src/modules/inventory/]] · [[boilerplate-node-backend_src_modules_locales|src/modules/locales/]] · [[boilerplate-node-backend_src_modules_observability|src/modules/observability/]] · … and 11 more
 
 ## Files
+
 - `src/infrastructure/http/controller.ts` — Shared helper functions that implement the four steps every Express controller repeats — read input, validate, call a service method, branch on the result, and catch errors. They exist as standalone helpers (rather than a `defineController()` wrapper) so that each controller's call site keeps its stack frame, its concrete generic, and its visible `.catch(` token intact for the `controller-chain-must-catch` AST lint rule.
-- `src/infrastructure/http/errors.ts` — The single mapping point from raw Mongo/Mongoose driver failures to an HTTP status code. It exists so that all twelve models (and any service) resolve a duplicate key, a bad ObjectId, a schema validation failure, or an access-invariant breach to the *same* status and message, rather than each controller re-deriving the logic inline.
+- `src/infrastructure/http/errors.ts` — The single mapping point from raw Mongo/Mongoose driver failures to an HTTP status code. It exists so that all twelve models (and any service) resolve a duplicate key, a bad ObjectId, a schema validation failure, or an access-invariant breach to the _same_ status and message, rather than each controller re-deriving the logic inline.
 - `src/infrastructure/http/frontend-link.ts` — Builds absolute URLs into the paired frontend for email links (account token confirmations and order pages). It lives in the infrastructure layer rather than in either the account or orders module because both need it and a module may only depend downward, not sideways (see `docs/theory/layers.md`).
 - `src/infrastructure/http/middlewares/antibot-log.ts` — Centralizes the single warn-log format and the single HTTP-refusal response shape shared by every anti-automation rung (rate-limit, email-policy, human-challenge). Eliminates each rung file duplicating its own message structure in the log stream.
-- `src/infrastructure/http/middlewares/cache.ts` — HTTP response-caching middleware that wraps Express's `response.json` to transparently store, retrieve, and serve cached responses via Redis. It owns the response envelope shape, the TTL clamping policy, the per-entry byte-size gate, and the stale-while-revalidate / stale-if-error header logic — all of which are specific to caching *responses*, not arbitrary key-value data, which is why they live here rather than in the cache adapter.
+- `src/infrastructure/http/middlewares/cache.ts` — HTTP response-caching middleware that wraps Express's `response.json` to transparently store, retrieve, and serve cached responses via Redis. It owns the response envelope shape, the TTL clamping policy, the per-entry byte-size gate, and the stale-while-revalidate / stale-if-error header logic — all of which are specific to caching _responses_, not arbitrary key-value data, which is why they live here rather than in the cache adapter.
 - `src/infrastructure/http/middlewares/human-challenge.ts` — Express middleware gate mounted on `signup`, `reset`, and `contact` routes when a human-challenge provider is configured. It requires the caller to present a token (in a request header) that the active provider will verify; if verification fails or the token is absent, the request is refused with a standard 401 envelope. When no provider is selected (the default `none`), the gate is a near-zero-cost pass-through.
 - `src/infrastructure/http/middlewares/idempotency-model.ts` — Mongoose schema and model for the idempotency ledger — one document per `(key, caller)` pair that records a retried write's fingerprint and, once the handler has answered, its response. This is the storage layer that `idempotency.ts` reads and writes against to implement replay, in-flight, and mismatch detection. It lives at the infrastructure level (not inside a domain module) because the collection belongs to no domain; the same exception applies to `rate-limit.ts`'s store.
 - `src/infrastructure/http/middlewares/idempotency.ts` — Per-route Express middleware that makes retried write requests safe by storing a one-time "claim" on the client-supplied `Idempotency-Key` header. On a replay it either re-sends the cached response (409 if still in-flight, 422 if the key was reused for a different request). Opt-in at the header level: requests without the key pass through untouched.
@@ -99,4 +101,5 @@ flowchart LR
 - `src/infrastructure/http/validation-messages.ts` — Centralizes Zod parse-error copy so every schema violation—generated or hand-written—is answered in the caller's language via the request-scoped i18n `t`. It registers a single global `customError` map on the Zod singleton, eliminating per-schema message strings and fixing the English fallback that generated schemas (`@api/schemas.zod`) otherwise produced.
 
 ---
+
 [[boilerplate-node-backend_INDEX|← boilerplate-node-backend index]]

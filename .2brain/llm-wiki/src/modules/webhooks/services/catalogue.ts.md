@@ -26,4 +26,4 @@ Exposes a static list of webhook event names and descriptions, sourced from the 
 
 - The YAML file is resolved relative to the compiled output directory (`path.join(__dirname, '..', 'asyncapi.yaml')`), not the source tree. In a bundled/compiled layout the relative path may differ.
 - Parsing happens exactly once per process (at `import` time). There is no invalidation or reload mechanism; a changed `asyncapi.yaml` requires a process restart.
-- The returned array is `readonly` at the type level but is a plain JS array at runtime—callers *can* mutate it if they cast, so treat it as immutable by convention.
+- The returned array is `readonly` at the type level but is a plain JS array at runtime—callers _can_ mutate it if they cast, so treat it as immutable by convention.

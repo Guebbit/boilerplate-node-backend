@@ -16,8 +16,8 @@ Contract tests that verify the system-level routes (`GET /`) and shared error-re
 - **`setupTestDb()`** — called once at module scope to provision a throwaway database for the test run.
 - **`describe('GET /')`** — asserts 200 status, `body.data.status === 'ok'`, and full spec compliance via `toSatisfyApiSpec()`.
 - **`describe('error envelopes')`** — two cases:
-  - 404: unmatched route returns `success: false` and an `errors` array.
-  - 422: invalid login payload is validated against the spec with `toSatisfyApiSpec()`.
+    - 404: unmatched route returns `success: false` and an `errors` array.
+    - 422: invalid login payload is validated against the spec with `toSatisfyApiSpec()`.
 - **`api()`** — thin HTTP client used to issue requests without a running server.
 
 ## Relationships

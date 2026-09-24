@@ -25,7 +25,7 @@ Unit tests for the `tokenAdd` and `tokenRemoveAll` instance methods on the user 
 
 ## Notes
 
-- **Write-then-mirror order is the contract.** Both methods hit the database first and only update the in-memory `tokens` array if it was loaded. The tests explicitly assert the `undefined`-tokens path resolves without throwing—reversing the order would let a logout throw *after* tokens were already revoked.
+- **Write-then-mirror order is the contract.** Both methods hit the database first and only update the in-memory `tokens` array if it was loaded. The tests explicitly assert the `undefined`-tokens path resolves without throwing—reversing the order would let a logout throw _after_ tokens were already revoked.
 - **Zero or negative `expirationMs`** must produce `expiration: undefined`, not `new Date(Date.now() + 0)` (which would be instantly expired). This is a deliberate guard against a class of "immediately unusable session" bugs.
 - **`timestamps: false`** is passed as the third argument to `updateOne`; the tests assert it to ensure token operations don't bump `updatedAt`.
 - **`tokenRemoveExpired` is deliberately absent.** It lives on `userRepository`, not the schema (it resolves an HTTP status). Its tests are in `repository.test.ts` and `account/tests/unit/token-cleanup-job.test.ts`.

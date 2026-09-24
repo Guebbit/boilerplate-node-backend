@@ -30,7 +30,7 @@ Pipeline configuration for the OpenTelemetry Collector container: it receives ap
 
 ## Notes
 
-- The `servicegraph` connector is the *only* producer of the service-graph metric series. If it is removed or its pipeline is misnamed, Grafana's Service Graph tab silently shows nothing—no scrape error, no exporter failure.
+- The `servicegraph` connector is the _only_ producer of the service-graph metric series. If it is removed or its pipeline is misnamed, Grafana's Service Graph tab silently shows nothing—no scrape error, no exporter failure.
 - `service.telemetry.metrics.address` must remain `0.0.0.0:8888`. Since collector v0.104 the default is `localhost:8888`, which inside a container is unreachable from the Prometheus container; the target would go DOWN with no other symptom.
 - Ports 8888 (internal telemetry) and 8889 (derived metrics) are intentionally separate Prometheus jobs so collector health and derived data are not conflated in a single target.
 - All listeners bind `0.0.0.0`; this is safe only because nothing in the compose stack is published to the host beyond the app's own ports.

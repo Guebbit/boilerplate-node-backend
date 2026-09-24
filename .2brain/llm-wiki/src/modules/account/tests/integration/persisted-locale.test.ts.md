@@ -39,6 +39,6 @@ Integration tests verifying that the `locale` field on the user document is (1) 
 
 ## Notes
 
-- The file deliberately lives under `account/tests` even though three of the five cases exercise the `users` service, because the field's *origin* (signup) belongs to the account module. The "editable afterwards" and "left alone" cases cross into users-module territory.
+- The file deliberately lives under `account/tests` even though three of the five cases exercise the `users` service, because the field's _origin_ (signup) belongs to the account module. The "editable afterwards" and "left alone" cases cross into users-module territory.
 - The "left alone" test performs two sequential `updateById` calls and then reads via the repository directly, confirming that omitting `locale` from a partial update does not reset it.
 - The `toJSON()` assertion guards against a future regression where `locale` is added to the document but excluded from the public serialisation.

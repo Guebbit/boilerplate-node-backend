@@ -27,7 +27,7 @@ Builds minimal, schema-conformant fixtures for the two locale collections (langu
 
 ## Notes
 
-- `makeLocale` hard-sets `name` and `nativeName` to the tag *before* spreading overrides, so passing `name` in the overrides will override it. `makeLocaleEntry` has no such implicit fields.
+- `makeLocale` hard-sets `name` and `nativeName` to the tag _before_ spreading overrides, so passing `name` in the overrides will override it. `makeLocaleEntry` has no such implicit fields.
 - `baseLanguage` is always derived from `tag`; a caller cannot supply it directly. This is intentional — the comment notes it prevents fixtures from representing a dataset the public API can never produce.
 - Because both factories pin `_id`, idempotency in `insertIfAbsent` / `upsertById` is keyed on the ObjectId, not on `(locale, key)` or `tag`. Two calls with different `_id` but the same logical identity will create two rows.
 - Fields omitted from the overrides fall through to Mongoose schema `default:` values at write time; the factories do not inject defaults themselves.

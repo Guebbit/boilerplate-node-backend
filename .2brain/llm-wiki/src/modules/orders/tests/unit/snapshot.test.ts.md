@@ -15,7 +15,7 @@ Unit tests for the buyer-language snapshot freezing logic (`resolveSnapshotProdu
 
 - **`fakePort(overrides?)`** — factory returning a `TranslationPort` whose six methods (`resolve`, `removeAll`, `search`, `plan`, `write`, `readAll`) are `jest.fn()` stubs; individual tests spread overrides to replace one method.
 - **`afterEach(() => registerTranslationPort(undefined))`** — global cleanup that unregisters the port between tests.
-- **`describe('resolveSnapshotProducts')`** — five tests covering: overlay of resolved fields keyed by product id, the full fallback chain (`exact → base → deployment`), pass-through when no translation row exists, binding to the *explicit* locale argument (not ambient), and preservation of the original `Types.ObjectId`.
+- **`describe('resolveSnapshotProducts')`** — five tests covering: overlay of resolved fields keyed by product id, the full fallback chain (`exact → base → deployment`), pass-through when no translation row exists, binding to the _explicit_ locale argument (not ambient), and preservation of the original `Types.ObjectId`.
 - **`describe('freezeOrderLines — the VAT rate')`** — five tests covering: absent `taxClass` → default rate, `'reduced'` → reduced rate, weight copied onto the frozen line, weight left `undefined` when absent, and the runtime guarantee that `taxClass` never appears on the frozen product.
 
 ## Relationships

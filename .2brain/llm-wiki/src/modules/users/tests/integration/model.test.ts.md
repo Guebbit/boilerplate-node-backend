@@ -17,13 +17,13 @@ Integration test that verifies credentials (bcrypt hash, live tokens) can never 
 - **`withTokens()`** — seeds a user (via `createUser` factory) with one live `REFRESH` token so tests have a realistic credentials-bearing document.
 - **`describe('select: false (the safety net)')`** — four tests confirming `findById`, `findOne`, `findAll` (lean) omit `password`/`tokens`, while `findByIdWithCredentials` deliberately returns them.
 - **`describe('applyUserTransform (the contract boundary)')`** — tests that `toJSON()` output:
-  - strips credentials even from a fully-loaded document,
-  - replaces `_id`/`__v` with a single `id` string,
-  - emits exactly the OpenAPI `User` property set (asserted via a sorted key list),
-  - keeps `active` independent of `deletedAt` (four quadrants),
-  - defaults `active` to `true` when unset,
-  - exposes `deletedAt` on soft-deleted accounts without loosening credential guards,
-  - normalizes lean lists through `userService.search` and single lookups through `userService.getById`.
+    - strips credentials even from a fully-loaded document,
+    - replaces `_id`/`__v` with a single `id` string,
+    - emits exactly the OpenAPI `User` property set (asserted via a sorted key list),
+    - keeps `active` independent of `deletedAt` (four quadrants),
+    - defaults `active` to `true` when unset,
+    - exposes `deletedAt` on soft-deleted accounts without loosening credential guards,
+    - normalizes lean lists through `userService.search` and single lookups through `userService.getById`.
 
 ## Relationships
 

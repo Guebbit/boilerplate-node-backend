@@ -14,9 +14,9 @@ Unit test that pins the four global rate-limit budget constants (browsing window
 ## Key elements
 
 - **`describe('rate limit defaults')`** — the sole test suite; three specs:
-  - *browsing budget*: asserts `DEFAULT_RATE_LIMIT_WINDOW_MS === 60_000` and `DEFAULT_RATE_LIMIT_MAX === 100`.
-  - *upload budget*: asserts `DEFAULT_UPLOAD_RATE_LIMIT_MAX < DEFAULT_RATE_LIMIT_MAX / 2`.
-  - *API-key budget*: asserts `DEFAULT_UPLOAD_RATE_LIMIT_MAX < DEFAULT_API_KEY_RATE_LIMIT_MAX < DEFAULT_RATE_LIMIT_MAX * 2`.
+    - _browsing budget_: asserts `DEFAULT_RATE_LIMIT_WINDOW_MS === 60_000` and `DEFAULT_RATE_LIMIT_MAX === 100`.
+    - _upload budget_: asserts `DEFAULT_UPLOAD_RATE_LIMIT_MAX < DEFAULT_RATE_LIMIT_MAX / 2`.
+    - _API-key budget_: asserts `DEFAULT_UPLOAD_RATE_LIMIT_MAX < DEFAULT_API_KEY_RATE_LIMIT_MAX < DEFAULT_RATE_LIMIT_MAX * 2`.
 - **Imported constants** (from `@infrastructure/http/middlewares/rate-limit`): `DEFAULT_RATE_LIMIT_MAX`, `DEFAULT_RATE_LIMIT_WINDOW_MS`, `DEFAULT_API_KEY_RATE_LIMIT_MAX`, `DEFAULT_UPLOAD_RATE_LIMIT_MAX`.
 
 ## Relationships

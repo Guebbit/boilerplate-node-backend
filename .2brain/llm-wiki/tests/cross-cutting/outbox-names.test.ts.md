@@ -30,6 +30,6 @@ Guards the **outbox name** convention: every email template identifier published
 ## Notes
 
 - `path.extname` is explicitly **not** used for validation because names are dotted by design (`account.reset-request` would be misread as extension `reset-request`).
-- The agreed-set test hard-codes the list rather than deriving it, because the contract is with a *different repository* (the PHP twin) that this test cannot read.
+- The agreed-set test hard-codes the list rather than deriving it, because the contract is with a _different repository_ (the PHP twin) that this test cannot read.
 - Several names in the agreed set (`account.setup-request`, `account.inactivity-warning`, `account.two-factor-code`, `webhooks.subscription-disabled`, `orders.order-product-unavailable`) are Node-only at the time of writing and do not yet exist in the PHP twin's test.
 - The file-extension ban is stated as a **shape** constraint (two segments) rather than a blacklist of forbidden suffixes, so a third templating engine won't slip through.

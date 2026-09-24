@@ -1,8 +1,8 @@
 ---
 tags:
-  - 2brain
-  - 2brain/module
-  - project/boilerplate-node-backend
+    - 2brain
+    - 2brain/module
+    - project/boilerplate-node-backend
 type: module
 module: scenarios/
 files: 24
@@ -19,7 +19,7 @@ updated: 2026-09-23T20:33:35.577914+00:00
 
 - **Registry & entry points** — `index.ts` is the single name-lookup table (`shop`, `blank`) that `apply.ts` (CLI runner), `run-server.ts` (demo server on `NODE_PORT`), and `app/demo.ts` all consult. `check.ts` cross-references each scenario's declared module guarantees against the rows it actually seeds. `blank.ts` is the minimal "clean-slate" scenario (access model + four accounts + locale) used as the restore target for behaviour-driven specs.
 - **Data definitions** — `accounts.ts` / `users.ts` (role accounts + filler customers), `products.ts` / `products-filler.ts` (six named branch-products + 126 combinatorial pet-supply rows), `addresses.ts`, `locales.ts` (five languages exercising distinct state), `wishlist.ts`, `webhooks.ts`, `rate-limits.ts` (env overrides for scripted callers), and `subjects.ts` (import-free pinned IDs for build-time tooling).
-- **Flow runners (`flows/`)** — `client.ts` (minimal HTTP helper), `loopback.ts` (ephemeral-port HTTP boot), `actions.ts` (one thin HTTP wrapper per shop action), `shop-history.ts` (drives real checkout/payment/shipping/cancel/refund to build order history), and `backdate.ts` (shifts timestamps per-order for realistic date spread). Together they ensure seeds are produced *through* the app, not written directly.
+- **Flow runners (`flows/`)** — `client.ts` (minimal HTTP helper), `loopback.ts` (ephemeral-port HTTP boot), `actions.ts` (one thin HTTP wrapper per shop action), `shop-history.ts` (drives real checkout/payment/shipping/cancel/refund to build order history), and `backdate.ts` (shifts timestamps per-order for realistic date spread). Together they ensure seeds are produced _through_ the app, not written directly.
 - **Infrastructure & tooling** — `seed.ts` (shared "insert-if-absent" primitive), `support/ephemeral-mongo.ts` + `ephemeral-mongod.ts` (in-process `mongod` via `mongodb-memory-server`), and `tools/generate-seed-images.ts` (one-off script that produces byte-identical seed images and manifests).
 
 ## How it connects
@@ -35,6 +35,7 @@ updated: 2026-09-23T20:33:35.577914+00:00
 Read **`scenarios/index.ts`** first — it is short, names every scenario, and shows the registry shape that every other file plugs into. Then read **`scenarios/blank.ts`** to see the minimal end-to-end scenario (access model → accounts → locale) and understand what a "scenario" looks like before the richer `shop` data is layered on top.
 
 ## Connected modules
+
 ```mermaid
 flowchart LR
     m_scenarios["scenarios/"]
@@ -74,13 +75,14 @@ flowchart LR
 [[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scripts|scripts/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_modules|src/modules/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_account_tests|src/modules/account/tests/]] · [[boilerplate-node-backend_src_modules_delivery|src/modules/delivery/]] · [[boilerplate-node-backend_src_modules_inventory|src/modules/inventory/]] · [[boilerplate-node-backend_src_modules_locales|src/modules/locales/]] · [[boilerplate-node-backend_src_modules_orders|src/modules/orders/]] · [[boilerplate-node-backend_src_modules_payments|src/modules/payments/]] · [[boilerplate-node-backend_src_modules_products|src/modules/products/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]] · … and 6 more
 
 ## Files
+
 - `scenarios/accounts.ts` — Defines the four demo seed accounts (admin, user, editor, moderator): their fixed ObjectIds, login credentials, and the role assignments that place them into the access model. Every other scenario file imports the IDs from here so they share a single source of truth for "who exists." It also exposes the `seedAccessModel` function that both the shop and blank scenarios call to materialize those accounts in a fresh database.
 - `scenarios/addresses.ts` — Seeds the demo address-book collection with two owner-scoped fixtures: a two-entry book for the admin (to make the "set as default" flow observable) and a single-entry book for the ordinary customer (to exercise the optional-`phone` path). Also exposes the seed function that `seedShop` walks.
 - `scenarios/apply.ts` — CLI runner for `npm run scenario:apply`. It validates safety gates, boots the Express app **in-process** (no port), calls the named scenario's `buildScenario` (which drives real checkout/payment/shipping flows through the middleware stack), clears the cache, and exits. It owns no scenario data — `scenarios/index.ts`'s registry does that.
 - `scenarios/blank.ts` — The `blank` scenario seeds only the minimum harness infrastructure a SPEC needs before creating its own shop-shaped data: the access model, the four named accounts, and the fallback locale. It contains no catalogue, orders, or carts. Behaviour e2e specs that create what they assert restore into `blank` rather than into `shop`, making this the "clean slate" target.
 - `scenarios/check.ts` — Verifies that a scenario's declared guarantees (each module's `AppModule.scenario` entries) exactly match the subjects the scenario actually seeds (the id map from `buildScenario`). Checks both directions: a guarantee with no seeded row, and a subject no enabled module declares. Runs at test time as a tripwire and at compile time for module mounting.
 - `scenarios/flows/actions.ts` — Provides one function per shop action (stock, cart, payment, order lifecycle, product) as thin HTTP wrappers over the real REST endpoints. They exist so that scenario flows exercise the full middleware stack — auth, caller context, rate limiters — producing correct audit entries, actor scopes, and domain events that a direct service call would not generate.
-- `scenarios/flows/backdate.ts` — Backdates every order produced by the boot-time demo flows (and all records the application wrote in response) so the shop has realistic date spread for analytics charts, "last 30 days" filters, and period-sensitive dashboards. Operates strictly per order—never a blanket shift—so the order, its payment, shipment, reservation, stock movements, and audit rows remain mutually consistent about *when* events occurred.
+- `scenarios/flows/backdate.ts` — Backdates every order produced by the boot-time demo flows (and all records the application wrote in response) so the shop has realistic date spread for analytics charts, "last 30 days" filters, and period-sensitive dashboards. Operates strictly per order—never a blanket shift—so the order, its payment, shipment, reservation, stock movements, and audit rows remain mutually consistent about _when_ events occurred.
 - `scenarios/flows/client.ts` — A minimal HTTP client that the scenario-flow runner uses to drive the application over real endpoints during container bootstrap. It exists to keep every flow's request/response handling (base-URL joining, bearer auth, envelope unwrapping, error classification) in one place, and to avoid a supertest dependency because the flows run at a stage where devDependencies may be absent.
 - `scenarios/flows/loopback.ts` — Provides a helper for driving the Express app over real HTTP on an ephemeral loopback port without publishing a stable port. It exists so callers (the demo-profile flow runner and `scenarios/apply.ts`) can exercise the app via unauthenticated `/__test/*` routes before or without the production server binding `NODE_PORT`, avoiding a half-built shop being visible to the frontend's readiness probe.
 - `scenarios/flows/shop-history.ts` — Drives the application through real HTTP endpoints (`POST /cart/checkout`, `POST /payments/…`, shipping lifecycle, cancellation, refund, soft-delete) to produce a realistic shop order history. Because every row is created by the app's own code, the resulting payments, stock movements, reservations, shipments, audit entries, and analytics events are genuine and stay consistent when that code changes. Runs **once** per process; `src/app/demo.ts` keeps the result in memory and replays it on every restore.
@@ -100,4 +102,5 @@ flowchart LR
 - `scenarios/wishlist.ts` — Defines the wishlist slice of the demo seed dataset. It produces one wishlist per demo account, deliberately containing only publicly visible products, and exposes the seeding routine that `seedShop` walks to populate the wishlist collection.
 
 ---
+
 [[boilerplate-node-backend_INDEX|← boilerplate-node-backend index]]

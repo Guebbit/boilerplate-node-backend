@@ -16,19 +16,19 @@ The data-access layer for the inventory module. It owns three Mongoose collectio
 - **`StockLevelRow`** (exported interface) — the shape of one stock-board entry: `productId`, `onHand`, `reserved`, `available`. Deliberately contains no product fields.
 - **`toReservationItems`** (private helper) — converts string product IDs to `Types.ObjectId` for the items array on a reservation document.
 - **`stockLevelRepository`** — extends the generic `Repository` with:
-  - `ensure(productId)` — upserts a zero-count row on first `PRODUCT_CREATED`; safe under redelivery via the unique index on `productId`.
-  - `findByProductId(productId)` — single-row lookup.
-  - `deleteByProductId(productId)` — hard-delete cascade only; leaves the stock-movement ledger untouched.
-  - `applyDelta(productId, condition, delta)` — the module's sole write primitive; conditionally `$inc`s `onHand`, `reserved`, and `available` in one atomic update. Returns `boolean` (did the condition match).
-  - `stockBoard({ skip, limit, maxAvailable })` — paginated read sorted by `available` asc then `_id`; returns titleless `StockLevelRow[]` + `totalItems`.
-  - `lowAvailabilityProductIds(threshold)` — all product IDs with `available ≤ threshold`, unfiltered by visibility.
-  - `sumReserved()` — aggregate sum of all `reserved` units catalogue-wide.
+    - `ensure(productId)` — upserts a zero-count row on first `PRODUCT_CREATED`; safe under redelivery via the unique index on `productId`.
+    - `findByProductId(productId)` — single-row lookup.
+    - `deleteByProductId(productId)` — hard-delete cascade only; leaves the stock-movement ledger untouched.
+    - `applyDelta(productId, condition, delta)` — the module's sole write primitive; conditionally `$inc`s `onHand`, `reserved`, and `available` in one atomic update. Returns `boolean` (did the condition match).
+    - `stockBoard({ skip, limit, maxAvailable })` — paginated read sorted by `available` asc then `_id`; returns titleless `StockLevelRow[]` + `totalItems`.
+    - `lowAvailabilityProductIds(threshold)` — all product IDs with `available ≤ threshold`, unfiltered by visibility.
+    - `sumReserved()` — aggregate sum of all `reserved` units catalogue-wide.
 - **`stockMovementRepository`** — append-only ledger; exposes only `create` and `search` (inherited from `createRepository`). No update or delete surface. Searchable by `productId` (ObjectId) and `reason` (exact string match).
 - **`reservationRepository`** — extends the generic `Repository` with:
-  - `insertHold(orderId, items, expiresAt)` — creates a held reservation; returns `null` on duplicate-key (code 11000) rather than throwing.
-  - `findByOrderId(orderId)` — read a hold in any status.
-  - `claimStatus(orderId, from, to)` — conditional status transition (e.g. `held → confirmed`, `held → released`).
-  - `findExpired(now, limit)` — batch fetch of holds past their `expiresAt`.
+    - `insertHold(orderId, items, expiresAt)` — creates a held reservation; returns `null` on duplicate-key (code 11000) rather than throwing.
+    - `findByOrderId(orderId)` — read a hold in any status.
+    - `claimStatus(orderId, from, to)` — conditional status transition (e.g. `held → confirmed`, `held → released`).
+    - `findExpired(now, limit)` — batch fetch of holds past their `expiresAt`.
 
 ## Relationships
 

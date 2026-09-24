@@ -17,8 +17,8 @@ Unit tests for the `createSearchController` factory that pin the contract: the `
 - **`makeRequest(query)`** — Builds a stub `Express.Request` via `asStub` with the supplied `query` (plus empty `params`, `body: undefined`, `is: () => false`).
 - **`makeResponse()`** — Builds a stub `Express.Response` whose `status()` and `json()` are `jest.fn()`s that `mockReturnThis()`.
 - **`describe('createSearchController — id is a batch filter, not a lookup')`**
-  - *Test 1:* query `{ id: ['a', 'b'] }` → `runSearch` receives `id: ['a', 'b']` (array preserved).
-  - *Test 2:* query `{ id: 'a' }` → `runSearch` receives `id: ['a']` (single value normalized to a one-element array).
+    - _Test 1:_ query `{ id: ['a', 'b'] }` → `runSearch` receives `id: ['a', 'b']` (array preserved).
+    - _Test 2:_ query `{ id: 'a' }` → `runSearch` receives `id: ['a']` (single value normalized to a one-element array).
 
 ## Relationships
 
@@ -28,5 +28,5 @@ Unit tests for the `createSearchController` factory that pin the contract: the `
 ## Notes
 
 - The `entity` is set to the arbitrary string `'widgets'`; it is not tied to a real domain entity (`products`, `users`, `orders`). The test is purely about the `id`-normalization contract, not entity-specific behavior.
-- The Zod schema deliberately declares `id` as `z.array(z.string()).optional()`. The second test case proves the controller normalizes a scalar incoming value *before* Zod validation would reject it — the contract being pinned is at the controller layer, not the schema layer.
+- The Zod schema deliberately declares `id` as `z.array(z.string()).optional()`. The second test case proves the controller normalizes a scalar incoming value _before_ Zod validation would reject it — the contract being pinned is at the controller layer, not the schema layer.
 - `runSearch` is always a `jest.fn()` that resolves `{ items: [] }`; the tests assert only the argument passed in, never the response body.

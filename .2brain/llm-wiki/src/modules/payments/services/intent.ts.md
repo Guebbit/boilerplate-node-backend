@@ -31,7 +31,7 @@ Entry point for the payment-intent flow: creates (or refreshes) the intent for a
 ## Notes
 
 - `orderTotal` is used for the intent amount, not a sum of line items alone — shipping is frozen on the order at checkout and included in `orderTotal`.
-- `unavailableLines` is checked against the live product catalog, *not* the order's frozen snapshot, to catch the race window between a product's auto-cancel listener firing and a payment already in flight.
+- `unavailableLines` is checked against the live product catalog, _not_ the order's frozen snapshot, to catch the race window between a product's auto-cancel listener firing and a payment already in flight.
 - `resolvePayerId` intentionally never rejects: an unresolvable payer degrades to the raw order id (logged) because orders must survive account deletion.
 - `clientSecret` is returned in the response body but never persisted; it is the one field that appears on the wire and then disappears.
 - The `.toJSON()` call on the stored payment applies the model's `_id → id` and date transforms before spreading into the response payload.

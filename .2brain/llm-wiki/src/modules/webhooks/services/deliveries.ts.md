@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the two operations on the webhook delivery log: **list** (paged, filterable read) and **replay** (synchronous re-send of a single delivery against the subscription's *current* URL and secret ring). It is the service layer that HTTP handlers call for `GET /webhooks/deliveries` and `POST /webhooks/deliveries/:id/replay`.
+Implements the two operations on the webhook delivery log: **list** (paged, filterable read) and **replay** (synchronous re-send of a single delivery against the subscription's _current_ URL and secret ring). It is the service layer that HTTP handlers call for `GET /webhooks/deliveries` and `POST /webhooks/deliveries/:id/replay`.
 
 ## Key elements
 
@@ -32,8 +32,8 @@ Implements the two operations on the webhook delivery log: **list** (paged, filt
 
 ## Notes
 
-- **Replay uses the subscription's *current* URL/secret, not the ones stored on the delivery row.** This is intentional: a replay reflects the subscription's present configuration.
-- **Attempt ordinal is *not* bumped before calling `attemptDelivery`.** `attemptDelivery` handles its own bookkeeping; pre-bumping would double-count the single HTTP call.
+- **Replay uses the subscription's _current_ URL/secret, not the ones stored on the delivery row.** This is intentional: a replay reflects the subscription's present configuration.
+- **Attempt ordinal is _not_ bumped before calling `attemptDelivery`.** `attemptDelivery` handles its own bookkeeping; pre-bumping would double-count the single HTTP call.
 - **Subscription lookup precedes the lease claim.** A 404 after a claim would leave the row `in-flight` under a 60 s lease with no one to finish it, until the stranded-lease sweep eventually marks it `exhausted`.
 - **`list` remaps `subscriptionId` → `subscription`** so the wire contract and the repository's field name can diverge independently.
 - **`page` / `pageSize` in `DeliveryListFilters` are typed `unknown`**, matching the raw query-string values before the repository parses them.

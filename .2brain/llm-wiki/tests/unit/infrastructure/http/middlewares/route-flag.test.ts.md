@@ -16,10 +16,10 @@ Unit tests for the `routeFlag` middleware, which writes a flag value onto `reque
 - **`makeRequest(params)`** – Helper wrapping `asStub<Request>` to produce a minimal Express `Request` carrying only the given `params` object.
 - **`response`** – A bare `{} as Response` stub; never asserted against.
 - **`describe('routeFlag')`** – Four cases:
-  - Writes the declared flag (`hardDelete: 'true'`) onto `request.params` and calls `next` exactly once.
-  - Confirms the value is the **string** `'true'`, not a boolean (route params are always strings; `readInput` performs the decode).
-  - Accepts an explicit second argument (e.g. `'false'`) instead of defaulting to `'true'`.
-  - Leaves pre-existing params (`id`, `productId`) untouched.
+    - Writes the declared flag (`hardDelete: 'true'`) onto `request.params` and calls `next` exactly once.
+    - Confirms the value is the **string** `'true'`, not a boolean (route params are always strings; `readInput` performs the decode).
+    - Accepts an explicit second argument (e.g. `'false'`) instead of defaulting to `'true'`.
+    - Leaves pre-existing params (`id`, `productId`) untouched.
 
 ## Relationships
 
@@ -28,6 +28,6 @@ Unit tests for the `routeFlag` middleware, which writes a flag value onto `reque
 
 ## Notes
 
-- The file's header comment intentionally scopes these tests: they verify the middleware's *own* write-and-passthrough contract, not the downstream `readInput` decoding or controller routing. Don't add integration-level assertions here.
+- The file's header comment intentionally scopes these tests: they verify the middleware's _own_ write-and-passthrough contract, not the downstream `readInput` decoding or controller routing. Don't add integration-level assertions here.
 - The string-typed flag is deliberate, not a bug. `readInput` is responsible for converting `'true'`/`'false'` into real booleans at the controller boundary.
 - `response` is never spied on or asserted; if a future change makes `routeFlag` write headers or status, this stub will need real implementation.

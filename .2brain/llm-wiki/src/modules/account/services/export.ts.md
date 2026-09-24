@@ -29,7 +29,7 @@ Implements the business logic for `POST /account/export` (GDPR Art. 15/20 data p
 
 ## Notes
 
-- **`undefined` ≠ rejection.** A section that resolves `undefined` is silently omitted from the payload (used e.g. by the `feedback` module's opt-out flag). A section that *rejects* fails the entire request via `Promise.all`. An incomplete Art. 15 response must never be indistinguishable from a complete one.
+- **`undefined` ≠ rejection.** A section that resolves `undefined` is silently omitted from the payload (used e.g. by the `feedback` module's opt-out flag). A section that _rejects_ fails the entire request via `Promise.all`. An incomplete Art. 15 response must never be indistinguishable from a complete one.
 - **No static response typing.** Because the set of contributing sections is dynamic (registry-driven), the payload type is intentionally loose. Contract enforcement happens at the OpenAPI schema validation layer, not in this file.
 - **Email is passed separately from `userId`.** The `feedback` section (which also serves users without an account) matches rows by email rather than by a stable account id, so both identifiers are supplied to every section's `collect(subject)` call.
-- **File placement is deliberate.** It sits beside `profile.ts` and `authentication.ts` in the account module but is explicitly *not* an auth concern (identity is handled by `requireFreshAuth` on the route) nor a mutation.
+- **File placement is deliberate.** It sits beside `profile.ts` and `authentication.ts` in the account module but is explicitly _not_ an auth concern (identity is handled by `requireFreshAuth` on the route) nor a mutation.

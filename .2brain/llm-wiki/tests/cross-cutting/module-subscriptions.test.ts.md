@@ -13,7 +13,7 @@ Verifies that every module declaring a `subscribe` hook actually registers at le
 
 ## Key elements
 
-- **`jest.mock('@kernel/events')`** — Replaces `onDomainEvent` with `jest.fn()` so hooks can be called and their registrations *inspected* without the handlers ever executing or leaking into other suites.
+- **`jest.mock('@kernel/events')`** — Replaces `onDomainEvent` with `jest.fn()` so hooks can be called and their registrations _inspected_ without the handlers ever executing or leaking into other suites.
 - **`subscribers()`** — Filters `enabledModules` to those whose manifest includes a `subscribe` property.
 - **`subscriptionsOf(appModule)`** — Clears the mock, calls `appModule.subscribe()`, and returns the array of event names recorded in `onDomainEvent` calls.
 - **Test: "finds modules that subscribe at all"** — Canary assertion; if `subscribers()` is empty every subsequent test passes vacuously, which would itself be a bug.

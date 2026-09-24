@@ -17,16 +17,16 @@ Unit tests for the image digest pipeline (`digestQuarantinedImage`, `handleImage
 - **`primeSuccessfulDigest()`** — wires all mocks to a happy-path PNG digest (read → identify → digest → thumbnail → promote → putDerivative → removeQuarantined).
 - **`describe('digestQuarantinedImage')`** — tests the shared pipeline in isolation: full happy path and rejection of bytes that don't identify as an accepted format.
 - **`describe('handleImageDigestJob')`** — tests the queue consumer:
-  - acks when writeback resolves `true`
-  - invalidates the collection cache tag after a matched writeback
-  - cleans up promoted files and still acks when writeback resolves `false` (stale/duplicate/delete)
-  - refuses malformed jobs (missing fields, null, undefined) without digesting
-  - discards jobs naming an unregistered collection
-  - dead-letters (`resolves false`) + clears quarantine on permanent decode failure
-  - rejects (rethrows) + preserves quarantine on transient storage failure (requeue)
+    - acks when writeback resolves `true`
+    - invalidates the collection cache tag after a matched writeback
+    - cleans up promoted files and still acks when writeback resolves `false` (stale/duplicate/delete)
+    - refuses malformed jobs (missing fields, null, undefined) without digesting
+    - discards jobs naming an unregistered collection
+    - dead-letters (`resolves false`) + clears quarantine on permanent decode failure
+    - rejects (rethrows) + preserves quarantine on transient storage failure (requeue)
 - **`describe('enqueueImageDigest')`** — tests the enqueue entry point:
-  - publishes to the queue and skips inline work when the broker accepts
-  - runs the full pipeline inline when `isQueueEnabled` returns `false`
+    - publishes to the queue and skips inline work when the broker accepts
+    - runs the full pipeline inline when `isQueueEnabled` returns `false`
 
 ## Relationships
 

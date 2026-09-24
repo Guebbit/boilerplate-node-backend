@@ -14,9 +14,9 @@ Barrel/facade for the locales service layer. It aggregates every public function
 ## Key elements
 
 - **`localeService`** (const, the sole export) — a flat object exposing 26 named functions grouped by domain:
-  - *Capabilities:* `isRightToLeft`, `describeLanguage`, `staticCapability`, `dynamicCapability`, `mergeCapabilities`, `readDynamicTier`, `callerScope`, `listCapabilities`
-  - *Key safety:* `buildMessageTree`, `findUnsafeKeySegment`, `findKeyCollision`, `findBatchCollision`, `findDuplicateKey`
-  - *CRUD / data:* `listTenants`, `readMessages`, `readApiOverrides`, `createLanguage`, `updateLanguage`, `deleteLanguage`, `searchEntries`, `createEntry`, `updateEntry`, `deleteEntry`, `importEntries`, `setTranslatables`, `getEntityTranslations`, `upsertEntityTranslations`
+    - _Capabilities:_ `isRightToLeft`, `describeLanguage`, `staticCapability`, `dynamicCapability`, `mergeCapabilities`, `readDynamicTier`, `callerScope`, `listCapabilities`
+    - _Key safety:_ `buildMessageTree`, `findUnsafeKeySegment`, `findKeyCollision`, `findBatchCollision`, `findDuplicateKey`
+    - _CRUD / data:_ `listTenants`, `readMessages`, `readApiOverrides`, `createLanguage`, `updateLanguage`, `deleteLanguage`, `searchEntries`, `createEntry`, `updateEntry`, `deleteEntry`, `importEntries`, `setTranslatables`, `getEntityTranslations`, `upsertEntityTranslations`
 - **No individual named re-exports** — the header comment explicitly forbids a second `export { … }` list beside the namespace to avoid a stale duplicate.
 
 ## Relationships

@@ -30,4 +30,4 @@ A minimal Express app harness for exercising `express-rate-limit` middleware in 
 - `express-rate-limit` locks its budget at module-import time. Any test that needs a non-default budget **must** go through `withReloadedRateLimits` (which calls `jest.resetModules()`); importing the limiter module a second time without that reset returns the cached instance.
 - `trustProxyHop` is only meaningful for the **address-BLOCK** dimension of a limiter (keyed on `request.ip`). Count-based limiting keyed on a header or body field does not need it.
 - The harness intentionally omits auth, serialization, and routing logic. If a test's property under test involves any of those, this is the wrong harness.
-- `statusOf` exists so tests can capture the status of a request that was fired *before* a limiter's window expires, without the await blocking the next dispatch.
+- `statusOf` exists so tests can capture the status of a request that was fired _before_ a limiter's window expires, without the await blocking the next dispatch.

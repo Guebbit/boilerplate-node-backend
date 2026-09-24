@@ -13,7 +13,7 @@ Express controller for `POST /inventory/adjustments`. Handles a stocktake correc
 
 ## Key elements
 
-- **`postAdjustment`** *(exported function)* — The sole export and route handler. Validates the body against `AdjustStockBody`, rejects zero-delta requests with 422, then delegates to `inventoryService.adjust()` and formats the response.
+- **`postAdjustment`** _(exported function)_ — The sole export and route handler. Validates the body against `AdjustStockBody`, rejects zero-delta requests with 422, then delegates to `inventoryService.adjust()` and formats the response.
 
 ## Relationships
 

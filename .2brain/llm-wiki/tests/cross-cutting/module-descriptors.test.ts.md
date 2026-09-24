@@ -16,9 +16,9 @@ Validates that every module's `module.yaml` descriptor is well-formed and intern
 - **`MODULES_ROOT`** — Resolved path to `src/modules`; the single source of truth for which modules exist.
 - **`moduleNames`** — Directory listing of `MODULES_ROOT` (read from disk, not a registry), filtered to directories and sorted. Drives the `describe.each` block.
 - **`describe.each(moduleNames)`** — One test group per module folder. Each group runs three assertions:
-  - *exists* — `module.yaml` is present on disk.
-  - *parses against the strict schema* — `readModuleDescriptor` returns without throwing.
-  - *structural invariants on `dependsOn`* — no self-reference, every entry is a real sibling module name, no duplicates, list is in alphabetical order.
+    - _exists_ — `module.yaml` is present on disk.
+    - _parses against the strict schema_ — `readModuleDescriptor` returns without throwing.
+    - _structural invariants on `dependsOn`_ — no self-reference, every entry is a real sibling module name, no duplicates, list is in alphabetical order.
 
 ## Relationships
 
@@ -28,4 +28,4 @@ Validates that every module's `module.yaml` descriptor is well-formed and intern
 
 - Module names are read **from the filesystem**, not from any in-code registry. A descriptor is required for every directory under `src/modules` regardless of whether the module is "enabled" at runtime.
 - The tests use `Array.prototype.toSorted()` (non-mutating) rather than `sort()`, implying a Node ≥ 20 / ES2023 target.
-- The alphabetical-order assertion is a *convention enforced by test*, not a requirement of `readModuleDescriptor` itself; the parser does not re-order the list.
+- The alphabetical-order assertion is a _convention enforced by test_, not a requirement of `readModuleDescriptor` itself; the parser does not re-order the list.

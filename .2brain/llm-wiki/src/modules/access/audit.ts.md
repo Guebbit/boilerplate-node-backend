@@ -9,13 +9,13 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the audit-action vocabulary owned by the access module and registers it into the app-wide `AuditActionMap` via TypeScript declaration merging. Only two events are audited—role assignment and role revocation—because those are the sole access-module actions that *change* what a user may do; all other access-module functions are reads.
+Declares the audit-action vocabulary owned by the access module and registers it into the app-wide `AuditActionMap` via TypeScript declaration merging. Only two events are audited—role assignment and role revocation—because those are the sole access-module actions that _change_ what a user may do; all other access-module functions are reads.
 
 ## Key elements
 
 - **`accessAuditActions`** (const object, exported) — the two-action vocabulary:
-  - `ROLE_ASSIGNED: 'access.role.assigned'` — emitted when an admin grants a role to a membership.
-  - `ROLE_REVOKED: 'access.role.revoked'` — emitted when a role is removed.
+    - `ROLE_ASSIGNED: 'access.role.assigned'` — emitted when an admin grants a role to a membership.
+    - `ROLE_REVOKED: 'access.role.revoked'` — emitted when a role is removed.
 - **`declare module '@infrastructure/observability/audit'`** — augments the global `AuditActionMap` interface so the `access` key is typed against the `accessAuditActions` values. This is the mechanism that lets downstream code reference `'access.role.assigned'` in a type-safe `AuditAction` union without importing a shared enum.
 
 ## Relationships

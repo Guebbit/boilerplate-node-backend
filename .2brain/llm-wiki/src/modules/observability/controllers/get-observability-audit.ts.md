@@ -27,6 +27,6 @@ Controller for `GET /observability/audit`. It exposes a filtered, paged view of 
 
 ## Notes
 
-- The schema is `.partial()`, so *every* filter including pagination is optional. The swap to `pageSchema`/`pageSizeSchema` (rather than the raw API-schema fields) is deliberate: it lets `createListController`'s `normalizePagination` treat a missing value as "use default" instead of passing `undefined` through.
+- The schema is `.partial()`, so _every_ filter including pagination is optional. The swap to `pageSchema`/`pageSizeSchema` (rather than the raw API-schema fields) is deliberate: it lets `createListController`'s `normalizePagination` treat a missing value as "use default" instead of passing `undefined` through.
 - The `outcome` field is validated against a generated enum (`success` | `failure`). An invalid value returns **422**, not a silent match-all — this is a behavioral difference from a free-text filter and is called out in the in-file comment.
 - `since` arrives as a query-string (ISO date); the conversion to `Date` happens in `runList`, not in the schema. If the audit-logs service ever expects a different type, this is the single adaptation point.

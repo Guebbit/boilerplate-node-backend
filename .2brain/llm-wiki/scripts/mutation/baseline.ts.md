@@ -39,5 +39,5 @@ Implements a **per-file mutation ratchet** on top of Stryker. Stryker's built-in
 - The ratchet is **asymmetric by design**: `nextBaseline` and `mergeIntoBaseline` both use `Math.max(prev, current)`. A regressed file keeps its old (higher) score and keeps failing until genuinely fixed. Lowering a baseline is a human decision made via `--update` in a commit.
 - `compareToBaseline` vs `compareMerged`: use the former for full-scope runs (it reports `removed`); use the latter for sharded/partial runs (it silently skips files not in the current batch). Mixing them up either hides scope removals or false-alarms on unmeasured files.
 - `missingFromReport` is a **safety guard**, not a check: call it before `nextBaseline` to ensure the report covers the full baseline before recording.
-- The `KILLED` set includes `Timeout` (Stryker's convention: a hanging mutant was detected). The `NOT_VIABLE` set excludes `Ignored` — a file where *every* mutant is ignored gets a score of 100, not 0.
+- The `KILLED` set includes `Timeout` (Stryker's convention: a hanging mutant was detected). The `NOT_VIABLE` set excludes `Ignored` — a file where _every_ mutant is ignored gets a score of 100, not 0.
 - The frontend has a **separate copy** of this ratchet with the same shape, per the header comment; changes here may need to be mirrored there.

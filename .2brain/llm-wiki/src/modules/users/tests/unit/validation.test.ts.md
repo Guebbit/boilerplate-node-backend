@@ -33,4 +33,4 @@ Exercises the ten message thunks in `zodUserSchema` at **parse time**, which is 
 
 - Password minimum-length boundary is **not hard-coded**; it is derived from `createUserBodyPasswordMin` (generated from `openapi.yaml`), so the test tracks contract changes automatically.
 - The "inherited rules" test uses `active` (boolean) rather than `role` (string) as the type-break probe: a boolean field can be meaningfully given a string (`'yes'`), whereas a string field's "wrong type" is less unambiguous.
-- Each "not-to-contain" assertion (e.g. `not.toContain(copy('field-email-required'))` in the invalid-email test) is intentional: it catches the case where the correct message is present but the *wrong* message is also attached, which would indicate the thunk is bound to the wrong Zod rule.
+- Each "not-to-contain" assertion (e.g. `not.toContain(copy('field-email-required'))` in the invalid-email test) is intentional: it catches the case where the correct message is present but the _wrong_ message is also attached, which would indicate the thunk is bound to the wrong Zod rule.

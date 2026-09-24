@@ -14,9 +14,9 @@ Provides a no-op implementation of the `HumanChallengeProvider` interface that a
 ## Key elements
 
 - **`noneProvider`** — A `HumanChallengeProvider` object export. Its members:
-  - `name`: the string `'none'`.
-  - `publicParameters()`: returns an empty object `{}` (no widget parameters to publish).
-  - `verify()`: returns `Promise.resolve('ok')` (unconditionally passes every caller).
+    - `name`: the string `'none'`.
+    - `publicParameters()`: returns an empty object `{}` (no widget parameters to publish).
+    - `verify()`: returns `Promise.resolve('ok')` (unconditionally passes every caller).
 
 ## Relationships
 
@@ -24,5 +24,5 @@ Provides a no-op implementation of the `HumanChallengeProvider` interface that a
 
 ## Notes
 
-- This provider has no external side effects; `verify` never consults a network. If a test or demo is unexpectedly receiving a challenge widget, the configured provider is *not* this one.
+- This provider has no external side effects; `verify` never consults a network. If a test or demo is unexpectedly receiving a challenge widget, the configured provider is _not_ this one.
 - Because `publicParameters` always returns `{}`, any code that conditionally renders a widget based on parameter presence will skip rendering when this provider is active.

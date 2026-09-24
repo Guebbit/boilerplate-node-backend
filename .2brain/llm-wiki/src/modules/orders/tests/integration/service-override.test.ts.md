@@ -15,13 +15,13 @@ Integration tests for the admin-order-override service (`orders/services/overrid
 
 - **`seedOrder(status)`** — local helper that creates a user, product, and order via the test factories and returns the order in the given `OrderStatus`.
 - **`describe('overrideStatus')`** — four cases:
-  - Forward move succeeds, writes one `statusOverrides` entry (`mode: 'status'`), and fires exactly one `ORDER_STATUS_CHANGED` event with `{ orderId, from, to }`.
-  - Targeting `OrderStatus.paid` is refused (system-only destination).
-  - Backward move (shipped → processing) is refused.
-  - Moving to `shipped` leaves no shipment/parcel record (confirms it is the status-only door).
+    - Forward move succeeds, writes one `statusOverrides` entry (`mode: 'status'`), and fires exactly one `ORDER_STATUS_CHANGED` event with `{ orderId, from, to }`.
+    - Targeting `OrderStatus.paid` is refused (system-only destination).
+    - Backward move (shipped → processing) is refused.
+    - Moving to `shipped` leaves no shipment/parcel record (confirms it is the status-only door).
 - **`describe('forceMove')`** — two cases:
-  - Skips past a status the normal lifecycle would refuse (paid → shipped), recording `mode: 'forced'`.
-  - Refuses if the order has already advanced beyond the target.
+    - Skips past a status the normal lifecycle would refuse (paid → shipped), recording `mode: 'forced'`.
+    - Refuses if the order has already advanced beyond the target.
 - **`setupTestDb()` / `afterEach(() => resetDomainEvents())`** — real-Mongo bootstrap and event-subscription cleanup.
 
 ## Relationships

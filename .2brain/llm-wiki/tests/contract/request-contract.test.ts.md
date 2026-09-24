@@ -23,20 +23,20 @@ Contract-derived **request** tests: for each write endpoint, it asserts the API 
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `tests/support/contract.ts` | Imported as side-effect (`@tests/contract`); provides the `toSatisfyApiSpec()` matcher used in every assertion. |
-| `tests/support/contract-data.ts` | Source of `validPayload()` and `invalidPayloads()`—the OpenAPI-derived payload generators. |
-| `tests/support/http.ts` | Provides `api()` (supertest wrapper) and `authenticateAs()` for bearer-token auth. |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` called at module top to reset the database. |
-| `src/modules/products/tests/factories.ts` | `createProduct()` supplies a real product document for order/cart reference patching. |
-| `src/modules/locales/factories.ts` | `makeLocale()` builds the locale object persisted in the products `beforeEach`. |
-| `src/modules/locales/repository.ts` | `localeRepository.create()` persists that locale row. |
-| `src/modules/locales/services/index.ts` | `localeService.setTranslatables()` / `setTranslatables({})` in `beforeAll`/`afterAll`. |
+| Neighbor                                  | Interaction                                                                                                     |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `tests/support/contract.ts`               | Imported as side-effect (`@tests/contract`); provides the `toSatisfyApiSpec()` matcher used in every assertion. |
+| `tests/support/contract-data.ts`          | Source of `validPayload()` and `invalidPayloads()`—the OpenAPI-derived payload generators.                      |
+| `tests/support/http.ts`                   | Provides `api()` (supertest wrapper) and `authenticateAs()` for bearer-token auth.                              |
+| `tests/support/setup-test-db.ts`          | `setupTestDb()` called at module top to reset the database.                                                     |
+| `src/modules/products/tests/factories.ts` | `createProduct()` supplies a real product document for order/cart reference patching.                           |
+| `src/modules/locales/factories.ts`        | `makeLocale()` builds the locale object persisted in the products `beforeEach`.                                 |
+| `src/modules/locales/repository.ts`       | `localeRepository.create()` persists that locale row.                                                           |
+| `src/modules/locales/services/index.ts`   | `localeService.setTranslatables()` / `setTranslatables({})` in `beforeAll`/`afterAll`.                          |
 
 ## Notes
 
 - **`skipField` is load-bearing.** Omitting it (or always patching) would silently replace the violation under test with a valid value, making the invalid-payload case a no-op. The orders block passes `field` directly; the cart block special-cases `field === 'productId'`.
-- **Business rules are out of scope.** `quantity ≤ available`, cross-field `passwordConfirm === password`, and "role must exist" are not schema constraints; they are patched in here only so the *schema-level* assertion isn't masked. Each has its own scenario test elsewhere.
-- **Generated data is additive.** This file does not replace hand-written factory tests; it answers the orthogonal question "does the API honour its own contract for *any* legal input?"
+- **Business rules are out of scope.** `quantity ≤ available`, cross-field `passwordConfirm === password`, and "role must exist" are not schema constraints; they are patched in here only so the _schema-level_ assertion isn't masked. Each has its own scenario test elsewhere.
+- **Generated data is additive.** This file does not replace hand-written factory tests; it answers the orthogonal question "does the API honour its own contract for _any_ legal input?"
 - **Four drift mechanisms** (documented in the header comment) are the expected failure modes: spec-format mismatch, `.extend()` dropping constraints, coercion-before-validation, and partial schema validation. Each requires a different fix—tightening the validator is not always correct.

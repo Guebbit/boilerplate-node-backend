@@ -8,18 +8,22 @@ model: ollama:qwen3.8:27b
 # src/modules/locales/tests/unit/translations.test.ts
 
 ## Purpose
+
 Unit tests for the pure function `deriveSourceDigest`, which computes a deterministic fingerprint of a translation's source fields. This file isolates the digest logic from any database or registry interaction; those concerns live in the sibling integration test.
 
 ## Key elements
+
 - **`describe('deriveSourceDigest')`** — single test block covering four invariants:
-  - *Key-order independence* — reordering object keys yields the same digest.
-  - *Value sensitivity* — changing a field value changes the digest.
-  - *Key presence sensitivity* — adding a key (even with an empty-string value) changes the digest.
-  - *Determinism* — two calls with structurally identical input produce the same digest.
+    - _Key-order independence_ — reordering object keys yields the same digest.
+    - _Value sensitivity_ — changing a field value changes the digest.
+    - _Key presence sensitivity_ — adding a key (even with an empty-string value) changes the digest.
+    - _Determinism_ — two calls with structurally identical input produce the same digest.
 
 ## Relationships
+
 - **`src/modules/locales/repository.ts`** — the sole import target; exports the `deriveSourceDigest` function under test. No other module is touched here.
 
 ## Notes
-- The module doc comment explicitly scopes this file to the *pure* half of the translation write path. If you need tests that exercise Mongo collections or the translation registry, look in `../integration/translations.test.ts` instead.
+
+- The module doc comment explicitly scopes this file to the _pure_ half of the translation write path. If you need tests that exercise Mongo collections or the translation registry, look in `../integration/translations.test.ts` instead.
 - All assertions use `toBe` (strict reference/value equality), appropriate because the function returns a string digest.

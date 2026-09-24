@@ -13,22 +13,22 @@ HTTP controller for `DELETE /users/:id/2fa`, an admin-only endpoint that strips 
 
 ## Key elements
 
-- **`deleteUserTwoFactor`** *(exported function)* — Express request handler. Reads `id` from `request.params`, calls `userService.adminDisableTwoFactor(id, callerContextOf(request))`, then maps the outcome:
-  - Failure (`result.success === false`) → `rejectResponse` with the service-provided status and error list.
-  - Success → `successResponse` with **200**, no body data, and the i18n message `users.two-factor-disabled`.
-  - Uncaught error (typically DB-level) → `rejectDatabaseError`.
+- **`deleteUserTwoFactor`** _(exported function)_ — Express request handler. Reads `id` from `request.params`, calls `userService.adminDisableTwoFactor(id, callerContextOf(request))`, then maps the outcome:
+    - Failure (`result.success === false`) → `rejectResponse` with the service-provided status and error list.
+    - Success → `successResponse` with **200**, no body data, and the i18n message `users.two-factor-disabled`.
+    - Uncaught error (typically DB-level) → `rejectDatabaseError`.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/users/service.ts` | Calls `userService.adminDisableTwoFactor`; all authz, audit, and DB logic live there. |
-| `src/modules/users/routes.ts` | Mounts this handler at `DELETE /users/:id/2fa` and enforces the admin-only gate *before* this function runs. |
-| `src/infrastructure/http/response.ts` | Imports `successResponse` / `rejectResponse` to shape the HTTP reply. |
-| `src/infrastructure/http/errors.ts` | Imports `rejectDatabaseError` for the `.catch` fallback. |
-| `src/infrastructure/http/request.ts` | Imports `callerContextOf` to extract the authenticated admin's identity for the service call. |
-| `src/infrastructure/i18n/index.ts` | Imports `t` for the localized success message. |
-| `src/infrastructure/i18n/context.ts` | Underlying locale context consumed by `t`. |
+| Neighbor                              | Interaction                                                                                                  |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `src/modules/users/service.ts`        | Calls `userService.adminDisableTwoFactor`; all authz, audit, and DB logic live there.                        |
+| `src/modules/users/routes.ts`         | Mounts this handler at `DELETE /users/:id/2fa` and enforces the admin-only gate _before_ this function runs. |
+| `src/infrastructure/http/response.ts` | Imports `successResponse` / `rejectResponse` to shape the HTTP reply.                                        |
+| `src/infrastructure/http/errors.ts`   | Imports `rejectDatabaseError` for the `.catch` fallback.                                                     |
+| `src/infrastructure/http/request.ts`  | Imports `callerContextOf` to extract the authenticated admin's identity for the service call.                |
+| `src/infrastructure/i18n/index.ts`    | Imports `t` for the localized success message.                                                               |
+| `src/infrastructure/i18n/context.ts`  | Underlying locale context consumed by `t`.                                                                   |
 
 ## Notes
 

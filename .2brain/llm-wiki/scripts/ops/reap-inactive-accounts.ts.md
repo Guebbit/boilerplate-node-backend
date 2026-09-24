@@ -8,9 +8,11 @@ model: ollama:qwen3.8:27b
 # scripts/ops/reap-inactive-accounts.ts
 
 ## Purpose
+
 Periodic cron job (`npm run reap:inactive-accounts`) that progresses accounts through three inactivity stages — email warning, soft delete, hard delete — based on a single `NODE_INACTIVE_ACCOUNT_DAYS` threshold plus a fixed 30-day grace between stages. Disabled by default (`NODE_INACTIVE_ACCOUNT_DAYS=0`) so that a boilerplate deployment never deletes a live account.
 
 ## Key elements
+
 - **`GRACE_DAYS`** (const 30) — fixed pause between stages; intentionally not configurable so the script has one dial.
 - **`LEASE_TTL_MS`** (15 min) — lease window for `withLease`; tuned so a slow night isn't pre-empted but a crashed holder doesn't block for long.
 - **`initI18n()`** — registers module locale directories and initialises `i18next` so translated email copy renders outside the HTTP process.
@@ -19,6 +21,7 @@ Periodic cron job (`npm run reap:inactive-accounts`) that progresses accounts th
 - **`runScript(main, teardown)`** — Wraps the entry point so `stopDatabase()` and `stopQueue()` run on exit.
 
 ## Relationships
+
 - **`scripts/db/run-script.ts`** — `runScript` provides the process-lifecycle wrapper (startup guard, teardown callback).
 - **`src/infrastructure/persistence/lease.ts`** — `withLease` prevents a double-run; this script is the only nightly job currently wired to the primitive.
 - **`src/infrastructure/runtime/environment.ts`** — `environmentNumber` reads `NODE_INACTIVE_ACCOUNT_DAYS`.
@@ -33,8 +36,9 @@ Periodic cron job (`npm run reap:inactive-accounts`) that progresses accounts th
 - **`src/infrastructure/adapters/logger.ts`** — Structured log output at each decision point.
 
 ## Notes
+
 - **Disabled by default.** `NODE_INACTIVE_ACCOUNT_DAYS <= 0` causes an immediate no-op exit. Enable explicitly per deployment.
-- **Re-activation resets the clock.** `LAST_ACTIVE_EXPR` is recomputed on each run, so a user who signs back in is excluded from all later stages. However, if that user *again* goes inactive, the stale `inactivityWarnedAt` means they skip the fresh warning email and go straight to soft delete after the first grace period. Documented as an acceptable trade-off for a disabled-by-default safety net.
+- **Re-activation resets the clock.** `LAST_ACTIVE_EXPR` is recomputed on each run, so a user who signs back in is excluded from all later stages. However, if that user _again_ goes inactive, the stale `inactivityWarnedAt` means they skip the fresh warning email and go straight to soft delete after the first grace period. Documented as an acceptable trade-off for a disabled-by-default safety net.
 - **Not a boot-time job.** Intended for the same cron container as `reap:quarantine` and `reap:orders`; running it on every process start would be incorrect.
 - **Ownership.** The script, its npm alias, and its crontab entry all belong to the `account` module and should be removed together if the module is removed.
 - **Hard delete cascades.** Stage three calls `userService.remove(user, true)`, which emits `USER_DELETED` and cascades identically to an admin-initiated hard delete.

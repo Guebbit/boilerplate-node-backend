@@ -16,8 +16,8 @@ Defines the Mongoose schema, document type, and model for the `FeedbackRequest` 
 - **`FeedbackRequestDocument`** – Interface extending `Omit<FeedbackRequest, …> & Document`; overrides `respondedAt`, `createdAt`, `updatedAt` from `string` to `Date`.
 - **`FeedbackRequestModel`** – Type alias for `Model<FeedbackRequestDocument>`.
 - **`feedbackRequestSchema`** – Mongoose `Schema` with fields `name`, `email`, `subject`, `message`, `status` (enum from `FeedbackRequestStatus`), `adminNotes`, `respondedAt`, plus `timestamps: true`. Two indexes are attached:
-  - `{ status: 1, createdAt: -1 }` – compound index for the admin list's status filter + newest-first sort.
-  - `{ createdAt: 1 }` with `expireAfterSeconds` – TTL index that auto-deletes tickets past the retention window.
+    - `{ status: 1, createdAt: -1 }` – compound index for the admin list's status filter + newest-first sort.
+    - `{ createdAt: 1 }` with `expireAfterSeconds` – TTL index that auto-deletes tickets past the retention window.
 - **`retentionDays`** – Module-level `const` read from `NODE_FEEDBACK_RETENTION_DAYS` (default 730). Evaluated once at import time because the TTL index is created at boot.
 - **`applyFeedbackRequestTransform`** – Serialization helper (built via `applySerialization`) that maps `_id` → `id` and drops `__v`. Exported so lean results in `service.ts#search()` can reuse it.
 - **`feedbackRequestModel`** – The Mongoose model instance registered under the `'FeedbackRequest'` collection name.

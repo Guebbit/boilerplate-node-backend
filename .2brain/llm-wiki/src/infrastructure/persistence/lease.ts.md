@@ -15,7 +15,7 @@ Provides a Mongo-backed mutual-exclusion lease so that a scaled-out cron contain
 
 - **`LeaseDocument` / `leaseSchema` / `leaseModel`** – Mongoose model for the `leases` collection. `_id` is the job name (not a generated id), enabling a single atomic upsert per job without a prior lookup.
 - **`listLeaseSummaries()`** – Projects every existing lease document to `{ name, lastSuccessAt, lastError }` for `GET /observability/health`.
-- **`withLease(name, ttlMs, run)`** – Public API. Acquires the lease via one `findOneAndUpdate` upsert, runs `run()`, then releases immediately on success *or* throw. Returns `undefined` (without calling `run`) if another holder already owns the lease.
+- **`withLease(name, ttlMs, run)`** – Public API. Acquires the lease via one `findOneAndUpdate` upsert, runs `run()`, then releases immediately on success _or_ throw. Returns `undefined` (without calling `run`) if another holder already owns the lease.
 - **`acquireLease`** (module-private) – Atomic upsert; wins when the lease is missing, expired, or already owned by the same token. Catches E11000 to answer "someone else has it" for both first-insert races and different-token conflicts.
 - **`releaseLease`** (module-private) – Sets `expiresAt` to the Unix epoch (`RELEASED`) and records the outcome. Filters on `owner: token` so a stale release cannot clobber a new holder. Failures are logged at `warn` level, never thrown.
 - **TTL index `leases_updatedAt_ttl`** – On `updatedAt` (not `expiresAt`), driven by `NODE_LEASE_RETENTION_DAYS` (default 30). Garbage-collects leases for retired jobs.

@@ -15,7 +15,7 @@ Defines the full set of Prometheus `Counter` metrics for every authentication-do
 
 - **`authLoginTotal`** – Login attempts, labelled by `status` (success/failure). Failure series is the credential-stuffing signal.
 - **`authSignupTotal`** – Sign-up attempts, labelled by `status`.
-- **`authPasswordResetTotal`** – Password-reset *request* attempts (not the confirmation step), labelled by `status`.
+- **`authPasswordResetTotal`** – Password-reset _request_ attempts (not the confirmation step), labelled by `status`.
 - **`authRefreshTotal`** – Refresh-token operations, labelled by `status`.
 - **`authPasswordChangeTotal`** – Authenticated password-change attempts, labelled by `status`. Kept separate from `authPasswordResetTotal` so the two funnels remain readable.
 - **`authReauthTotal`** – Step-up re-authentication attempts, labelled by `status`. Failure here implies a stolen live session, not a mistyped credential.
@@ -39,5 +39,5 @@ Defines the full set of Prometheus `Counter` metrics for every authentication-do
 
 - **Label convention:** Every counter except `authTokenCleanupTotal` carries a `status` label (success/failure), which doubles each counter as both a volume and a success-ratio signal. 2FA and OAuth counters add a second label (`method` or `provider`) alongside `status`.
 - **Type-safety trick:** `labelNames` are declared with `as const` (e.g. `['method', 'status'] as const`), so `inc({ status })` is checked against the literal set rather than accepting arbitrary string keys.
-- **Read path:** Nothing in the codebase imports these counters to *read* them. `GET /observability/metrics/overview` resolves metrics by name off the shared registry, so the exports here exist solely so controllers can import and increment them.
+- **Read path:** Nothing in the codebase imports these counters to _read_ them. `GET /observability/metrics/overview` resolves metrics by name off the shared registry, so the exports here exist solely so controllers can import and increment them.
 - **Intentional separation:** Several "similar" operations get distinct counters rather than a shared counter with an extra label (e.g. password reset vs. password change; email-verify vs. email-change-confirm; OAuth vs. password login). The rationale in each docstring is that mixing them would obscure per-flow funnels or force every existing call site to add a default label.

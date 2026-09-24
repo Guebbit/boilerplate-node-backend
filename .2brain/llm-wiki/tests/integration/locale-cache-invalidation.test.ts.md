@@ -28,7 +28,7 @@ Integration test that drives the real app end-to-end to verify the locale cache-
 
 - **Why the adapter is a double, not live Redis:** `getCacheValue` resolves `undefined` on any failure, so on a machine without Redis every request is a miss and the test would pass while proving nothing. The Map-based double isolates exactly the assertion target: that the key the write clears is the key the read stored.
 - **Only the adapter is mocked.** The TTL clamp and envelope logic in `http/middlewares/cache.ts` run for real; stubbing them would let the suite pass against a configuration where the middleware caches nothing.
-- **`invalidateCacheTagsLogged` redeclaration:** The real implementation calls `invalidateCacheTags` through a module-local binding captured by `jest.requireActual` *before* the mock factory runs. The mock factory must redeclare it against the local `invalidateCacheTags`, otherwise every write "succeeds" against the unreachable real Redis.
+- **`invalidateCacheTagsLogged` redeclaration:** The real implementation calls `invalidateCacheTags` through a module-local binding captured by `jest.requireActual` _before_ the mock factory runs. The mock factory must redeclare it against the local `invalidateCacheTags`, otherwise every write "succeeds" against the unreachable real Redis.
 - **`x-cache` header (MISS/HIT)** is the primary assertion mechanism—proving the response truly came from the store rather than the DB.
 - **`demo-fe` tenant** is used because `GET /locales/:locale/messages` serves only that tenant's entries; it is the cached half this test targets.
 - **`invalidateCache` fires only on 2xx.** The refused-write test (409) guards against a future change that would drop all cached locale responses on a failed request.

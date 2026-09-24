@@ -9,15 +9,15 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declarative module manifest for the **orders** module. It tells the runtime which subdomain the module belongs to and lists the other modules it depends on at the data/transaction level, along with a one-line note explaining *why* each dependency exists.
+Declarative module manifest for the **orders** module. It tells the runtime which subdomain the module belongs to and lists the other modules it depends on at the data/transaction level, along with a one-line note explaining _why_ each dependency exists.
 
 ## Key elements
 
 - **`subdomain: core`** — Places the orders module in the `core` subdomain (as opposed to, e.g., an edge or auxiliary subdomain).
 - **`dependsOn`** — Ordered list of module dependencies:
-  - **`inventory`** — Orders place a claim on stock units; the claim is released on cancellation or when the reservation expires (`RESERVATION_EXPIRED`).
-  - **`products`** — Each order line copies the relevant catalogue-row fields at purchase time (snapshot, not a live reference).
-  - **`users`** — A `USER_DELETED` cascade affects orders; the buyer's stored locale is used for outbound emails.
+    - **`inventory`** — Orders place a claim on stock units; the claim is released on cancellation or when the reservation expires (`RESERVATION_EXPIRED`).
+    - **`products`** — Each order line copies the relevant catalogue-row fields at purchase time (snapshot, not a live reference).
+    - **`users`** — A `USER_DELETED` cascade affects orders; the buyer's stored locale is used for outbound emails.
 
 ## Relationships
 

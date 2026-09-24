@@ -13,17 +13,17 @@ Unit tests for the `attachLocale` Express middleware. Verifies that locale negot
 
 ## Key elements
 
-- **`makeRequest(acceptLanguage?)`** — Builds a realistic Express `Request` via `Object.create(express.request)`, so `acceptsLanguages` (backed by `accepts`/`negotiator`) is the *real* implementation, not a mock.
+- **`makeRequest(acceptLanguage?)`** — Builds a realistic Express `Request` via `Object.create(express.request)`, so `acceptsLanguages` (backed by `accepts`/`negotiator`) is the _real_ implementation, not a mock.
 - **`makeResponse()`** — Returns an `asStub`-typed response whose `set` and `vary` are `jest.fn()` spies.
 - **`describe('attachLocale')`** — Top-level suite covering:
-  - Negotiated locale + bound `t` on the request
-  - `next()` executing *inside* the locale context (`getCurrentLocale` / `getLocaleContext` visible)
-  - Context not leaking after the chain returns
-  - `Content-Language` reflecting the resolved (possibly fallback) locale
-  - `vary('Accept-Language')` appending (not replacing) for shared-cache correctness
-  - Graceful fallback on garbage headers
-  - `next` called exactly once
-  - Case-, region-, and q-weight negotiation (table-driven)
+    - Negotiated locale + bound `t` on the request
+    - `next()` executing _inside_ the locale context (`getCurrentLocale` / `getLocaleContext` visible)
+    - Context not leaking after the chain returns
+    - `Content-Language` reflecting the resolved (possibly fallback) locale
+    - `vary('Accept-Language')` appending (not replacing) for shared-cache correctness
+    - Graceful fallback on garbage headers
+    - `next` called exactly once
+    - Case-, region-, and q-weight negotiation (table-driven)
 - **`describe('behaviour deltas from the hand-rolled parser')`** — Two explicit assertions that pin down intentional differences from the old `negotiateLocale`: unparseable q-weights now drop the tag (falling to `getFallbackLocale()`), and `*` resolves to the fallback via candidate ordering.
 
 ## Relationships
@@ -36,6 +36,6 @@ Unit tests for the `attachLocale` Express middleware. Verifies that locale negot
 
 ## Notes
 
-- The request fixture deliberately uses the **real** `accepts`/`negotiator` stack rather than a hand-rolled stand-in. The two "behaviour delta" tests exist precisely because `negotiator` handles unparseable q-weights and wildcards differently from the old parser; they lock in the *chosen* semantics so a future refactor that re-introduces the old behaviour fails loudly.
+- The request fixture deliberately uses the **real** `accepts`/`negotiator` stack rather than a hand-rolled stand-in. The two "behaviour delta" tests exist precisely because `negotiator` handles unparseable q-weights and wildcards differently from the old parser; they lock in the _chosen_ semantics so a future refactor that re-introduces the old behaviour fails loudly.
 - `response.vary` is asserted (not `response.set`) because the middleware must **append** to an existing `Vary` header (e.g. one set by CORS), not overwrite it.
 - The "leaves no locale context behind" test guards against an AsyncLocalStorage leak that would silently affect subsequent requests in the same event-loop tick.

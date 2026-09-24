@@ -15,11 +15,11 @@ Test-support helper that reproduces the production import ordering in `app.ts` (
 
 - **`mergedResources()`** – Returns the i18next `resources` object for `en` and `it` by calling `readLocaleDictionary` from the i18n infrastructure. Used to seed `i18next.init`.
 - **`loadBeforeI18n<T>(locale, load, probeKey)`** – Inside `jest.isolateModulesAsync`:
-  1. Imports the `i18next` module.
-  2. Calls the caller-supplied `load()` (the module under test) *before* `i18next.init`.
-  3. Asserts `i18next.isInitialized` is falsy and `t(probeKey)` is `undefined`, proving the ordering is real.
-  4. Initialises i18next with the requested locale and `mergedResources()`.
-  5. Returns the value produced by `load()`.
+    1. Imports the `i18next` module.
+    2. Calls the caller-supplied `load()` (the module under test) _before_ `i18next.init`.
+    3. Asserts `i18next.isInitialized` is falsy and `t(probeKey)` is `undefined`, proving the ordering is real.
+    4. Initialises i18next with the requested locale and `mergedResources()`.
+    5. Returns the value produced by `load()`.
 
 ## Relationships
 

@@ -26,6 +26,6 @@ Unit tests for the HTTP metrics module (`metrics-http.ts`). Validates that route
 
 ## Notes
 
-- The file's doc comment on `describe('getRouteLabel')` explains *why* cardinality is bounded to declared routes: prom-client never evicts series, so any unbounded label (e.g. raw request path) would grow the registry indefinitely under scanner traffic.
+- The file's doc comment on `describe('getRouteLabel')` explains _why_ cardinality is bounded to declared routes: prom-client never evicts series, so any unbounded label (e.g. raw request path) would grow the registry indefinitely under scanner traffic.
 - Assertions on `recordRequestMetric` and in-flight tests are **async** (`await getPrometheusMetrics()`) because the registry renders lazily; the `getRouteLabel` tests are synchronous pure-function checks.
 - The "does not increment error counter for 2xx" test searches the rendered text line-by-line rather than using `toContain`, because a blanket absence assertion would be weakened by other series sharing the metric name.

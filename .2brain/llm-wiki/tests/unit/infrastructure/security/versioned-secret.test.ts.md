@@ -14,18 +14,18 @@ Unit tests for the versioned AES-256-GCM secret encryption module. Validates the
 ## Key elements
 
 - **`describe('encryptVersionedSecret / decryptVersionedSecret')`** — eight tests covering:
-  - Round-trip correctness
-  - Absence of plaintext in ciphertext
-  - Ciphertext shape: exactly 4 colon-delimited fields (`version:iv:tag:data`), prefixed by the key version
-  - Non-deterministic ciphertext (fresh IV) while decryption remains stable
-  - `Unknown <context> key version: <v>` thrown on version mismatch
-  - Auth-tag / data tamper detection (a single flipped hex digit causes a throw)
-  - Key rotation: encryption always uses the **first** ring entry; decryption resolves by version so older rows still work
-  - Dropped-key scenario: decrypting against a ring that no longer contains the version throws loudly
+    - Round-trip correctness
+    - Absence of plaintext in ciphertext
+    - Ciphertext shape: exactly 4 colon-delimited fields (`version:iv:tag:data`), prefixed by the key version
+    - Non-deterministic ciphertext (fresh IV) while decryption remains stable
+    - `Unknown <context> key version: <v>` thrown on version mismatch
+    - Auth-tag / data tamper detection (a single flipped hex digit causes a throw)
+    - Key rotation: encryption always uses the **first** ring entry; decryption resolves by version so older rows still work
+    - Dropped-key scenario: decrypting against a ring that no longer contains the version throws loudly
 - **`describe('parseVersionedKeyRing')`** — three tests covering:
-  - `undefined` input → `[]`
-  - Bare unversioned string → `[{ version: 'v1', key: <value> }]` (backward-compat default)
-  - Comma-separated `vN:key` pairs parsed into an array, **newest first**
+    - `undefined` input → `[]`
+    - Bare unversioned string → `[{ version: 'v1', key: <value> }]` (backward-compat default)
+    - Comma-separated `vN:key` pairs parsed into an array, **newest first**
 - **`KEY` / `RING`** — module-level fixtures: a single `v1` key and its one-entry ring, reused across all encryption tests.
 
 ## Relationships

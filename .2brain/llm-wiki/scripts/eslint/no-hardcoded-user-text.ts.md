@@ -15,11 +15,11 @@ Custom ESLint rule that enforces user-facing error copy must come from an i18n d
 
 - **`noHardcodedUserText`** (exported) — the rule itself, created via `ESLintUtils.RuleCreator.withoutDocs`. Takes no options; reports a single `literal` message.
 - **`CARRIERS`** — a `Set` of the two function names (`rejectResponse`, `generateReject`) whose `errors` argument is inspected. All other call sites are ignored.
-- **`isLiteralText`** — type-guard helper. Returns true for a `StringLiteral` or a `TemplateLiteral` with zero expressions (i.e., no interpolation). Template literals *with* expressions pass through unflagged.
+- **`isLiteralText`** — type-guard helper. Returns true for a `StringLiteral` or a `TemplateLiteral` with zero expressions (i.e., no interpolation). Template literals _with_ expressions pass through unflagged.
 - **`create(context)` → `CallExpression` visitor** — the core logic. Locates the `errors` argument (must be an `ArrayExpression`), then walks each element:
-  - Bare string/template literal element → report.
-  - Object element → check each property; if the key is `message` (Identifier or Literal) and the value is literal text → report.
-  - Properties named `code`, or any non-`message` key, are skipped.
+    - Bare string/template literal element → report.
+    - Object element → check each property; if the key is `message` (Identifier or Literal) and the value is literal text → report.
+    - Properties named `code`, or any non-`message` key, are skipped.
 
 ## Relationships
 

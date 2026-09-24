@@ -9,15 +9,15 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the shared `readAll` pager that all `personalData.collect` exports use to fetch paginated data. The suite exists to pin down the loop's stopping rule — a short page is the *only* signal to stop — so that no module regresses to a per-module page-size cap that silently truncates results.
+Unit tests for the shared `readAll` pager that all `personalData.collect` exports use to fetch paginated data. The suite exists to pin down the loop's stopping rule — a short page is the _only_ signal to stop — so that no module regresses to a per-module page-size cap that silently truncates results.
 
 ## Key elements
 
 - **`describe('readAll')`** — single test group with four cases:
-  - *Single short page*: one `fetchPage` call, returns items directly.
-  - *Multi-page loop*: pages of exactly `pageSize` are followed by a short page; iterator calls pages 1, 2, 3 in order and concatenates results.
-  - *Empty first page*: stops immediately after one call, returns `[]`.
-  - *Exact multiple of `pageSize`*: a full last page does **not** confirm the end; a second call must return an empty page to stop the loop.
+    - _Single short page_: one `fetchPage` call, returns items directly.
+    - _Multi-page loop_: pages of exactly `pageSize` are followed by a short page; iterator calls pages 1, 2, 3 in order and concatenates results.
+    - _Empty first page_: stops immediately after one call, returns `[]`.
+    - _Exact multiple of `pageSize`_: a full last page does **not** confirm the end; a second call must return an empty page to stop the loop.
 
 ## Relationships
 

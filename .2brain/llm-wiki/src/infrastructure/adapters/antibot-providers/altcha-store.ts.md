@@ -26,6 +26,6 @@ Implements the ALTCHA library's `Store` contract to enforce single-use of solved
 
 ## Notes
 
-- The local `Map` is a *floor*, not a full replacement: cross-worker replay protection only exists when Redis is reachable (consistent with `rate-limit-store.ts` and `cluster.ts`'s worker-fork model).
+- The local `Map` is a _floor_, not a full replacement: cross-worker replay protection only exists when Redis is reachable (consistent with `rate-limit-store.ts` and `cluster.ts`'s worker-fork model).
 - `get` returns `Promise.resolve(true)` on a local hit without touching Redis, but still calls `sweepExpired()` first—so the sweep runs on every read, not on a timer.
 - The `set` value is stored as `String(value)` in the cache; `get` only checks for presence (`!== undefined`), so the stored boolean's magnitude is irrelevant.

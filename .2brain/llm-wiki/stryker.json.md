@@ -30,6 +30,6 @@ Stryker mutation-testing configuration for this repository. It defines which sou
 ## Notes
 
 - `break` is explicitly `null`, so a score below the low threshold does **not** fail the CI step by itself; any hard gating must be enforced in the workflow script or by a separate check.
-- The Jest `testPathIgnorePatterns` here are *additive* to whatever `jest.config.mutation.js` defines; if a new test category is added to the project, it must also be excluded here to avoid slowing mutation runs.
+- The Jest `testPathIgnorePatterns` here are _additive_ to whatever `jest.config.mutation.js` defines; if a new test category is added to the project, it must also be excluded here to avoid slowing mutation runs.
 - `maxTestRunnerReuse: 1` means every single mutation gets a clean Jest instance—intentional for isolation, but it increases wall-clock time compared to reusing the runner.
 - The `incrementalFile` lives under `tmp/`, which is also in `ignorePatterns`; the file is meant to be ephemeral (CI artifact) and not committed.

@@ -23,7 +23,7 @@ Compiles a caller's CASL rules into a MongoDB filter fragment via `@casl/mongoos
 ## Relationships
 
 - **`src/kernel/ability.ts`** — Provides `buildAbility`, which `accessibleFilter` calls to construct the ability instance from a resolved caller.
-- **`src/kernel/permissions.ts`** — Provides `callerForSubject` and `anonymousCaller`, used to determine *which* rules apply to the current context and subject.
+- **`src/kernel/permissions.ts`** — Provides `callerForSubject` and `anonymousCaller`, used to determine _which_ rules apply to the current context and subject.
 - **`src/types/auth-context.ts` / `src/types/index.ts`** — Source of the `AuthContext` type that `accessibleFilter` accepts as its first argument.
 - **`src/modules/orders/services/scope.ts`, `src/modules/payments/services/scope.ts`, `src/modules/products/service.ts`, `src/modules/locales/services/capabilities.ts`** — Consumer modules in the same dependency graph; they are the call sites that previously maintained their own filter fragments and now rely on this kernel function.
 - **`tests/unit/kernel/access-query.test.ts`** — Unit test covering the compilation, coercion, and collapse behaviour.

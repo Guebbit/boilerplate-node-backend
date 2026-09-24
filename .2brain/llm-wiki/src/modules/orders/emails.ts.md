@@ -40,8 +40,8 @@ Builds the finished, locale-resolved copy for every customer-facing document the
 
 ## Notes
 
-- **Product titles are pre-resolved.** They arrive in the order's *frozen* locale (see `OrderDocumentItem.locale`). Builders only interpolate; they never call a translator on `product.title`.
-- **`bic` is set to `undefined` unconditionally**, not conditionally spread. This keeps the template's `typeof bic !== "undefined"` guard working *and* keeps the data object a plain literal that `tests/cross-cutting/mail-copy.test.ts` can read statically.
+- **Product titles are pre-resolved.** They arrive in the order's _frozen_ locale (see `OrderDocumentItem.locale`). Builders only interpolate; they never call a translator on `product.title`.
+- **`bic` is set to `undefined` unconditionally**, not conditionally spread. This keeps the template's `typeof bic !== "undefined"` guard working _and_ keeps the data object a plain literal that `tests/cross-cutting/mail-copy.test.ts` can read statically.
 - **`grossAmount` is `netAmount + taxAmount`, not `unitPrice × quantity`.** The latter is a float multiplication in JS (`19.99 × 5 → 99.94999999999999`) that would drift from the adjacent columns. The invoice's contract is that its columns sum to the charged amount to the cent.
 - **`buildInvoiceMeta` is all-or-nothing.** A date without a number would misrepresent a pre-compliance order; both fields are gated together on `invoiceNumber` presence.
 - **`createdAt` is a `Date`, not an ISO string.** It comes from a hydrated Mongoose document via `orderRepository.findByIdRaw`, bypassing `applyOrderTransform` / `.toJSON()`.

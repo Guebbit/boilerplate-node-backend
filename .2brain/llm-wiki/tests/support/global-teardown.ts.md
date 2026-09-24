@@ -14,10 +14,10 @@ Jest's `globalTeardown` hook: runs once per Jest instance after the last worker 
 ## Key elements
 
 - **`globalTeardown` (default export)** — async function, the sole logic of the file.
-  1. Stops `globalThis.__testMongoServer` (best-effort; errors are swallowed).
-  2. Recursively removes the instance data root (best-effort).
-  3. Scans the instance files root for leftover files via `leftoverFiles`, then removes that root (best-effort).
-  4. **Throws** if any files were found in the sandbox, naming the offending test file via `describeLeftovers`.
+    1. Stops `globalThis.__testMongoServer` (best-effort; errors are swallowed).
+    2. Recursively removes the instance data root (best-effort).
+    3. Scans the instance files root for leftover files via `leftoverFiles`, then removes that root (best-effort).
+    4. **Throws** if any files were found in the sandbox, naming the offending test file via `describeLeftovers`.
 
 ## Relationships
 
@@ -27,5 +27,5 @@ Jest's `globalTeardown` hook: runs once per Jest instance after the last worker 
 ## Notes
 
 - Cleanup of the Mongo server and temp dirs is **best-effort** (`.catch(() => {})`); it will never fail a run that has already finished.
-- The **only** path that throws is a non-empty sandbox. The directory is still deleted first, so the machine stays clean regardless — the throw is purely to surface *which* test forgot to clean up.
-- A killed Jest instance is **not** swept by this teardown; it is cleaned by the *next* run (see the note in `global-setup.ts`).
+- The **only** path that throws is a non-empty sandbox. The directory is still deleted first, so the machine stays clean regardless — the throw is purely to surface _which_ test forgot to clean up.
+- A killed Jest instance is **not** swept by this teardown; it is cleaned by the _next_ run (see the note in `global-setup.ts`).

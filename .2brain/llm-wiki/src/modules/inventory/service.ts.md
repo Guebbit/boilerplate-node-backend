@@ -24,28 +24,28 @@ The single chokepoint through which every stock counter change in the applicatio
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `./domain` (`counterDeltaFor`) | `applyTransition` calls it to get the `$inc` deltas for a given reason. |
-| `./config` (`reservationTtlMinutes`, `lowStockThreshold`) | Default TTL for `reserveForOrder`; threshold used in level reads. |
-| `./repository` (stock-level, stock-movement, reservation) | All Mongo reads/writes for levels, ledger, and reservation documents. |
-| `./audit` (`inventoryAuditActions`) | Maps action names for `recordAudit` calls. |
-| `./events` (`RESERVATION_EXPIRED`) | Emitted (via `emitDomainEvent`) when the sweep expires a hold. |
-| `@kernel/events` (`emitDomainEvent`) | Publishes domain events (e.g. reservation expired). |
-| `@kernel/permissions` (`SYSTEM_ACTOR`, `callerForSubject`) | Resolves the actor to record on audit/ledger rows. |
-| `@infrastructure/observability/audit` (`recordAudit`) | Writes structured audit entries alongside ledger rows. |
-| `@infrastructure/i18n` (`t`) | Localises user-facing messages. |
-| `@infrastructure/http/response` | Builds `ResponseSuccess` / `ResponseReject` envelopes for controller returns. |
-| `@infrastructure/adapters/logger` (`logger`) | Error/warn logging (cache-sync failure, commit refusals, alarms). |
-| `@infrastructure/persistence/search` | `normalizePagination`, `buildPaginatedMeta` for paginated list endpoints. |
-| `@modules/products` (`productService`) | `findByIdRaw` for titles; `syncStockCache` to keep the catalogue's copy in step. |
-| `controllers/post-receipt`, `post-adjustment`, `get-inventory-levels`, `get-stock-movements` | Thin HTTP wrappers that call the exported service functions. |
-| `modules/cart/tests/integration/stock.test.ts` | Integration tests that exercise `reserveForOrder` / `commitForOrder` / release flows end-to-end. |
+| Neighbor                                                                                     | Interaction                                                                                      |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `./domain` (`counterDeltaFor`)                                                               | `applyTransition` calls it to get the `$inc` deltas for a given reason.                          |
+| `./config` (`reservationTtlMinutes`, `lowStockThreshold`)                                    | Default TTL for `reserveForOrder`; threshold used in level reads.                                |
+| `./repository` (stock-level, stock-movement, reservation)                                    | All Mongo reads/writes for levels, ledger, and reservation documents.                            |
+| `./audit` (`inventoryAuditActions`)                                                          | Maps action names for `recordAudit` calls.                                                       |
+| `./events` (`RESERVATION_EXPIRED`)                                                           | Emitted (via `emitDomainEvent`) when the sweep expires a hold.                                   |
+| `@kernel/events` (`emitDomainEvent`)                                                         | Publishes domain events (e.g. reservation expired).                                              |
+| `@kernel/permissions` (`SYSTEM_ACTOR`, `callerForSubject`)                                   | Resolves the actor to record on audit/ledger rows.                                               |
+| `@infrastructure/observability/audit` (`recordAudit`)                                        | Writes structured audit entries alongside ledger rows.                                           |
+| `@infrastructure/i18n` (`t`)                                                                 | Localises user-facing messages.                                                                  |
+| `@infrastructure/http/response`                                                              | Builds `ResponseSuccess` / `ResponseReject` envelopes for controller returns.                    |
+| `@infrastructure/adapters/logger` (`logger`)                                                 | Error/warn logging (cache-sync failure, commit refusals, alarms).                                |
+| `@infrastructure/persistence/search`                                                         | `normalizePagination`, `buildPaginatedMeta` for paginated list endpoints.                        |
+| `@modules/products` (`productService`)                                                       | `findByIdRaw` for titles; `syncStockCache` to keep the catalogue's copy in step.                 |
+| `controllers/post-receipt`, `post-adjustment`, `get-inventory-levels`, `get-stock-movements` | Thin HTTP wrappers that call the exported service functions.                                     |
+| `modules/cart/tests/integration/stock.test.ts`                                               | Integration tests that exercise `reserveForOrder` / `commitForOrder` / release flows end-to-end. |
 
 ## Notes
 
 - **No Mongo transactions.** The invariant (counter + ledger row) is enforced by ordering the writes and the conditional guard; gaps are acknowledged at the call sites that own them.
-- **`conditionFor` has no dedicated unit test.** It is a manual invariant kept in sync with `counterDeltaFor` (which *is* tested in `tests/unit/transitions.test.ts`).
+- **`conditionFor` has no dedicated unit test.** It is a manual invariant kept in sync with `counterDeltaFor` (which _is_ tested in `tests/unit/transitions.test.ts`).
 - **"No level row" branch in `applyTransition`:** for `release`/`expire`/`commit`, a missing row returns `true` (trivially moved) so the sweep or order-fulfilment loop can continue past a since-deleted product. `receive` and `adjust` never hit this path in practice.
 - **Product cache sync is a plain call, never a domain event.** A failure to sync is logged and swallowed; the next transition self-corrects. (See `docs/modules/inventory.md#why-products-still-carries-a-copy`.)
 - **`reserveForOrder` reads the shortfall from this module's own level row**, not the product's synced copy, to avoid a one-transition lag.

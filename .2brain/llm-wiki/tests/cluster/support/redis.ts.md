@@ -16,9 +16,9 @@ Test-only helper that provisions a disposable Redis instance for the cluster tes
 - **`TestRedis` (interface)** — The handle returned to callers: `{ url: string; stop: () => Promise<void> }`.
 - **`containerEngineAvailable()`** — Synchronous check that the engine (default `podman`, overridable via `CONTAINER_ENGINE`) is on `PATH` and responds to `info`.
 - **`startRedis()`** — Main entry point. Returns `Promise<TestRedis>`.
-  - If `NODE_TEST_REDIS_URL` is set, resolves immediately with that URL and a no-op `stop` (CI path).
-  - Otherwise: grabs a free port, launches `redis:7-alpine` (or `NODE_TEST_REDIS_IMAGE`) with `--rm --name <uuid>`, polls `PING`/`PONG` over raw TCP until it answers (60 s timeout), then resolves.
-  - `stop()` runs `<engine> rm -f <name>` to tear the container down.
+    - If `NODE_TEST_REDIS_URL` is set, resolves immediately with that URL and a no-op `stop` (CI path).
+    - Otherwise: grabs a free port, launches `redis:7-alpine` (or `NODE_TEST_REDIS_IMAGE`) with `--rm --name <uuid>`, polls `PING`/`PONG` over raw TCP until it answers (60 s timeout), then resolves.
+    - `stop()` runs `<engine> rm -f <name>` to tear the container down.
 - **`freePort()`** (internal) — Binds a `net.Server` to port 0 to obtain an OS-assigned free port.
 - **`waitForPong()`** (internal) — Raw-socket Redis `PING` loop with 250 ms retry interval and a hard deadline.
 

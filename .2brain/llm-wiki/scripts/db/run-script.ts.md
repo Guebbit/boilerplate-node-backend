@@ -26,4 +26,4 @@ Shared entry-point wrapper for the one-shot scripts under `db/` and `ops/`. It g
 
 - Uses `process.exitCode = 1` rather than `process.exit(1)` deliberately: setting the code lets Node flush stdout and drain pending handles; `exit()` can truncate in-flight log writes.
 - `cleanup` is intentionally required (not defaulted). The JSDoc notes that a silent no-op default is how a script could quietly stop closing its connection.
-- A cleanup failure is treated as a *warning*, not a failure: if the main work already succeeded, a failed `quit()` on a dead socket must not flip the run to red.
+- A cleanup failure is treated as a _warning_, not a failure: if the main work already succeeded, a failed `quit()` on a dead socket must not flip the run to red.

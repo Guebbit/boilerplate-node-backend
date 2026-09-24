@@ -18,16 +18,16 @@ Handles `POST /account/reset-confirm`. Validates a one-time reset token (deliver
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
+| Neighbor                          | Interaction                                                                                                     |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `@infrastructure/http/controller` | Imports `parseBody`, `refused`, `catchAs` for body validation, result inspection, and top-level error catching. |
-| `@infrastructure/http/request` | Imports `callerContextOf` to pass request context into `passwordResetChange`. |
-| `@infrastructure/http/response` | Imports `successResponse` and `rejectResponse` for all HTTP output. |
-| `@infrastructure/i18n` | Imports `t` to localise user-facing messages (token-not-found, success). |
-| `../services` (account) | Imports `accountService` (token lookup, spend, validate, change) and the `PASSWORD_RESET_TOKEN_TYPE` constant. |
-| `../session/cookies` | Imports `destroyRefreshCookie` and `destroyLoggedCookie` to log the user out of all sessions after a reset. |
-| `@types` | Imports the `PasswordResetConfirmRequest` body type used in the Express `Request` generic. |
-| `src/modules/account/routes.ts` | The route table that wires this handler to `POST /account/reset-confirm`. |
+| `@infrastructure/http/request`    | Imports `callerContextOf` to pass request context into `passwordResetChange`.                                   |
+| `@infrastructure/http/response`   | Imports `successResponse` and `rejectResponse` for all HTTP output.                                             |
+| `@infrastructure/i18n`            | Imports `t` to localise user-facing messages (token-not-found, success).                                        |
+| `../services` (account)           | Imports `accountService` (token lookup, spend, validate, change) and the `PASSWORD_RESET_TOKEN_TYPE` constant.  |
+| `../session/cookies`              | Imports `destroyRefreshCookie` and `destroyLoggedCookie` to log the user out of all sessions after a reset.     |
+| `@types`                          | Imports the `PasswordResetConfirmRequest` body type used in the Express `Request` generic.                      |
+| `src/modules/account/routes.ts`   | The route table that wires this handler to `POST /account/reset-confirm`.                                       |
 
 ## Notes
 

@@ -31,6 +31,6 @@ Barrel file for the Order service module. It re-exports every public operation f
 
 ## Notes
 
-- Every operation is intentionally published **both** as a named export *and* inside `orderService`. The file's own comment warns that dropping either form would break existing callers (event wiring, cross-module barrels, and test suites each rely on one form or the other).
+- Every operation is intentionally published **both** as a named export _and_ inside `orderService`. The file's own comment warns that dropping either form would break existing callers (event wiring, cross-module barrels, and test suites each rely on one form or the other).
 - Config getters are re-exported here specifically to satisfy the `local/barrel-allowed-sources` constraint; they are **not** available through the module-root barrel.
 - The folder is split into sub-files (rather than one 300+ line file) per the layering rule in `docs/theory/layers.md`; this index is the single public face.

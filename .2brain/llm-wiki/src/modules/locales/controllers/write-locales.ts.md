@@ -28,6 +28,6 @@ Admin-only controller handlers for the two write endpoints on the locales resour
 
 ## Notes
 
-- **Why the local `displayName` schema?** The OpenAPI spec's `minLength: 1` accepts `" "` (one space). Mongoose trims it to `""` on a `required: true` column, producing an opaque 422. Trimming *before* the length check here yields a field-named validation error instead.
+- **Why the local `displayName` schema?** The OpenAPI spec's `minLength: 1` accepts `" "` (one space). Mongoose trims it to `""` on a `required: true` column, producing an opaque 422. Trimming _before_ the length check here yields a field-named validation error instead.
 - **`.toJSON()` before responding.** The Mongoose document is typed as stored (`_id`, Date objects). Calling `.toJSON()` applies the model's transform (`_id → id`, dates → ISO strings) so the wire shape matches the `Language` type. The `as Language` cast bridges that gap.
 - **Boot-time locale registration.** `listSupportedLocales()` is read once per worker; i18next registers its resources at boot, not per request. Creating or editing a locale here does **not** immediately change which languages the API can negotiate until the worker restarts.

@@ -14,9 +14,9 @@ Express controller for `GET /account/oauth/:provider`. It is the single route in
 ## Key elements
 
 - **`getOAuthStart(request, response)`** – The sole export. Resolves the provider by name (lowercased), 404s via `rejectResponse` if unconfigured, then:
-  1. Generates an OAuth `state` token and sets it as a cookie.
-  2. Generates a PKCE code verifier, sets it as a cookie, and derives the code challenge.
-  3. Builds the authorize URL via `provider.authorizeUrl(state, redirectUri, challenge)` and issues a 302 redirect.
+    1. Generates an OAuth `state` token and sets it as a cookie.
+    2. Generates a PKCE code verifier, sets it as a cookie, and derives the code challenge.
+    3. Builds the authorize URL via `provider.authorizeUrl(state, redirectUri, challenge)` and issues a 302 redirect.
 
 ## Relationships
 
@@ -30,6 +30,6 @@ Express controller for `GET /account/oauth/:provider`. It is the single route in
 ## Notes
 
 - The 404 is deliberate and loud: an unconfigured provider must not silently fall through. The comment explicitly parallels the "unset `NODE_PAYMENT_PROVIDER`" convention.
-- The controller is the *only* route in this module that returns a redirect; every other account controller returns a JSON envelope via the `rejectResponse` / success helpers.
+- The controller is the _only_ route in this module that returns a redirect; every other account controller returns a JSON envelope via the `rejectResponse` / success helpers.
 - Provider name matching is case-insensitive (`toLowerCase()` on the param) but must still be an exact key in the provider registry.
 - Both `state` and the PKCE verifier are stored as cookies (not query params) so they survive a potential multi-step consent flow and are not visible in the URL.

@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides a chainable Express `Response` stub for unit tests that verify what a middleware, controller, or error responder *attempts* to write (status code, JSON body) without spinning up a server. It exists so tests can assert on call arguments, order, and count rather than needing a real HTTP round-trip.
+Provides a chainable Express `Response` stub for unit tests that verify what a middleware, controller, or error responder _attempts_ to write (status code, JSON body) without spinning up a server. It exists so tests can assert on call arguments, order, and count rather than needing a real HTTP round-trip.
 
 ## Key elements
 

@@ -14,10 +14,10 @@ Declares the cart module's list of "probes" — concrete API requests that the O
 ## Key elements
 
 - **`probes: Probe[]`** — the single export; an array of four `Probe` objects (type imported from `@guebbit/openapi-runnable-collections`). Each entry carries `name`, `why`, `method`, `path`, `auth`, and optionally `body`.
-  1. *Checkout with an empty cart* — `POST /cart/checkout`; exercises the `checkout_failed` event path.
-  2. *Add a non-existent product* — `POST /cart` with a fabricated `productId`; expects a 404.
-  3. *Set quantity on an inactive product* — `PUT /cart/{{seedInactiveProductId}}`; verifies the catalogue gate shared with `POST /cart`.
-  4. *Zero quantity* — `POST /cart` with `quantity: 0`; exercises the minimum-quantity validation.
+    1. _Checkout with an empty cart_ — `POST /cart/checkout`; exercises the `checkout_failed` event path.
+    2. _Add a non-existent product_ — `POST /cart` with a fabricated `productId`; expects a 404.
+    3. _Set quantity on an inactive product_ — `PUT /cart/{{seedInactiveProductId}}`; verifies the catalogue gate shared with `POST /cart`.
+    4. _Zero quantity_ — `POST /cart` with `quantity: 0`; exercises the minimum-quantity validation.
 
 ## Relationships
 

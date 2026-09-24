@@ -28,5 +28,5 @@ Thin HTTP adapter for `POST /account/logout`. It revokes the current session's r
 ## Notes
 
 - The refresh cookie serves as **both credential and address** (same pattern as `GET /account/refresh`), so no bearer token header is required.
-- The cookie key is literally `jwt` on `request.cookies` — it is *not* an access token.
+- The cookie key is literally `jwt` on `request.cookies` — it is _not_ an access token.
 - Because the handler always resolves to 200, clients cannot distinguish "was logged in" from "was not logged in here." Callers should not rely on a non-2xx to detect an invalid session.

@@ -15,12 +15,12 @@ Integration test for `withLease` (the Mongo-based lease acquisition primitive) a
 
 - **`waitForLeaseOwner(name)`** — helper that polls `leaseModel.exists` up to 50 × 5 ms to confirm a prior acquisition has landed before asserting on subsequent state, avoiding fixed-`setTimeout` races.
 - **`describe('withLease')`** — six `it` blocks covering:
-  - Mutual exclusion when a lease is already held (second caller resolves `undefined`, body never runs).
-  - First-insert race: two back-to-back `Promise.all` calls on a fresh name; exactly one wins, the other gets `undefined`.
-  - Re-acquisition after release (release stamps `expiresAt` to epoch, so the next call finds it expired immediately).
-  - Immediate release on body throw — a same-window retry succeeds without waiting out `ttlMs`; `lastError` is cleared on the next success.
-  - Bookkeeping: `lastError` recorded on throw, `lastSuccessAt` recorded on clean run, stale `lastError` cleared by a subsequent success.
-  - Losing a duplicate-key race against a pre-existing held document leaves the holder's record untouched (owner, `expiresAt` unchanged).
+    - Mutual exclusion when a lease is already held (second caller resolves `undefined`, body never runs).
+    - First-insert race: two back-to-back `Promise.all` calls on a fresh name; exactly one wins, the other gets `undefined`.
+    - Re-acquisition after release (release stamps `expiresAt` to epoch, so the next call finds it expired immediately).
+    - Immediate release on body throw — a same-window retry succeeds without waiting out `ttlMs`; `lastError` is cleared on the next success.
+    - Bookkeeping: `lastError` recorded on throw, `lastSuccessAt` recorded on clean run, stale `lastError` cleared by a subsequent success.
+    - Losing a duplicate-key race against a pre-existing held document leaves the holder's record untouched (owner, `expiresAt` unchanged).
 
 ## Relationships
 

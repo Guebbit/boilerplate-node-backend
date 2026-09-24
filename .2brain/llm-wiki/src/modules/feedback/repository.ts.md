@@ -14,13 +14,13 @@ Declares the feedback-request repository instance for the feedback module. It wi
 ## Key elements
 
 - **`feedbackRequestRepository`** (exported const) — the fully configured repository. Built by calling `createRepository<FeedbackRequestDocument, FeedbackRequest>` with three arguments:
-  - `feedbackRequestModel` — the Mongoose model for feedback requests (imported from `./model`).
-  - `transform: applyFeedbackRequestTransform` — maps a `FeedbackRequestDocument` to a domain `FeedbackRequest` after every read.
-  - `searchable` spec:
-    - `objectIds`: maps the query field `id` to the DB field `_id`.
-    - `regex`: maps `email` → `email` (partial/regex match).
-    - `text`: full-text search across `name`, `email`, `subject`, `message`.
-  - **`status` is intentionally absent** from the searchable spec. The file's JSDoc explains it is a closed enum whose string→enum mapping is a domain decision made by the service layer, not the repository.
+    - `feedbackRequestModel` — the Mongoose model for feedback requests (imported from `./model`).
+    - `transform: applyFeedbackRequestTransform` — maps a `FeedbackRequestDocument` to a domain `FeedbackRequest` after every read.
+    - `searchable` spec:
+        - `objectIds`: maps the query field `id` to the DB field `_id`.
+        - `regex`: maps `email` → `email` (partial/regex match).
+        - `text`: full-text search across `name`, `email`, `subject`, `message`.
+    - **`status` is intentionally absent** from the searchable spec. The file's JSDoc explains it is a closed enum whose string→enum mapping is a domain decision made by the service layer, not the repository.
 
 ## Relationships
 

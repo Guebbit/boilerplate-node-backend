@@ -18,18 +18,18 @@ Cross-cutting parity test that asserts every supported locale declares **exactly
 - **`reference` / `others`** — the first element of `supported` (typically `en`) is the baseline; the rest are compared against it.
 - **`referenceKeys`** — `flattenKeys(readLocaleDictionary(reference))`; the canonical key-set every other locale must match.
 - **`describe('locale files')`** — three tests:
-  1. *Canary:* `supported.length > 1`, so the `it.each` below isn't vacuous.
-  2. *Parity (per locale):* each non-reference locale's flattened keys equal `referenceKeys`.
-  3. *Canary:* `referenceKeys.length > 20`, proving the per-module merge actually ran (otherwise all locales would trivially agree on the shared half alone).
+    1. _Canary:_ `supported.length > 1`, so the `it.each` below isn't vacuous.
+    2. _Parity (per locale):_ each non-reference locale's flattened keys equal `referenceKeys`.
+    3. _Canary:_ `referenceKeys.length > 20`, proving the per-module merge actually ran (otherwise all locales would trivially agree on the shared half alone).
 
 ## Relationships
 
 - **`src/infrastructure/i18n/index.ts`** — the import target (`@infrastructure/i18n`); provides `listSupportedLocales` and `readLocaleDictionary` that this test calls to enumerate locales and load their merged dictionaries.
-- **`src/infrastructure/i18n/catalog.ts`** — implementation behind those two functions; this test exercises the *output* of the catalog's merge logic (`registerLocaleDirectories`), which is why the `> 20 keys` canary exists.
+- **`src/infrastructure/i18n/catalog.ts`** — implementation behind those two functions; this test exercises the _output_ of the catalog's merge logic (`registerLocaleDirectories`), which is why the `> 20 keys` canary exists.
 
 ## Notes
 
 - **TIER 1 only.** This test covers the static dictionary files shipped in this repository (loaded at boot). It must **not** be extended to assert completeness of database-backed translations served by `src/modules/locales`; dynamic completeness is tracked via `entryCount` in `GET /locales`.
 - **Languages are discovered, not named.** The test iterates whatever `listSupportedLocales()` returns, so adding or removing a locale (or narrowing via `NODE_SUPPORTED_LOCALES`) requires zero test edits.
-- **Per-module *content* correctness** (e.g., whether a message reads well) is asserted by each module's own `validation-messages` spec. This file only checks key-set equality.
+- **Per-module _content_ correctness** (e.g., whether a message reads well) is asserted by each module's own `validation-messages` spec. This file only checks key-set equality.
 - **Comparison is one-reference, not pairwise.** Any locale can serve as the reference because "same keys" is symmetric; picking the first avoids N² duplicate defect reports.

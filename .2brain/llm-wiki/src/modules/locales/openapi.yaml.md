@@ -30,7 +30,7 @@ OpenAPI 3.0.3 contract for the locales module. It defines the full HTTP surface 
 
 ## Notes
 
-- **Two tiers, never merged.** Tier 1 (deployed files under `src/locales/` / `src/modules/*/locales/`, loaded into i18next) and Tier 2 (MongoDB rows, edited via admin routes) are architecturally separate. A language existing in the DB does *not* mean the API can answer in it.
+- **Two tiers, never merged.** Tier 1 (deployed files under `src/locales/` / `src/modules/*/locales/`, loaded into i18next) and Tier 2 (MongoDB rows, edited via admin routes) are architecturally separate. A language existing in the DB does _not_ mean the API can answer in it.
 - **`messages` vs `entries`.** `messages` = the built, public, nested dictionary (one object). `entries` = the admin, CRUD, flat, paginated rows. Conflating them is the most common source of bugs in this feature.
 - **`{locale}` in path, `tag` in body.** Deliberately different names for the same value. The path parameter stays `{locale}` for backward compatibility with every other module; the stored row's field is called `tag`.
 - **Tenant IDs are configuration, not data.** They come from the API's environment. The spec intentionally does not enumerate them; `GET /locales/tenants` is the source of truth at runtime.

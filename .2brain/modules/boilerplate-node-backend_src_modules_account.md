@@ -1,8 +1,8 @@
 ---
 tags:
-  - 2brain
-  - 2brain/module
-  - project/boilerplate-node-backend
+    - 2brain
+    - 2brain/module
+    - project/boilerplate-node-backend
 type: module
 module: src/modules/account/
 files: 43
@@ -40,6 +40,7 @@ The account module is the application's identity and authentication domain. It o
 2. **`src/modules/account/services/authentication.ts`** — Once you know the public surface, this file shows the core "who is this user" flow (signup → login → token issuance) and where the session layer and users module plug in. Reading it alongside `session/session.ts` gives you the full login path in roughly 150 lines.
 
 ## Connected modules
+
 ```mermaid
 flowchart LR
     m_src_modules_account["src/modules/account/"]
@@ -79,6 +80,7 @@ flowchart LR
 [[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_scripts|scripts/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules|src/modules/]] · [[boilerplate-node-backend_src_modules_account_controllers|src/modules/account/controllers/]] · [[boilerplate-node-backend_src_modules_account_tests|src/modules/account/tests/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_observability|src/modules/observability/]] · [[boilerplate-node-backend_src_modules_orders_tests|src/modules/orders/tests/]] · [[boilerplate-node-backend_src_modules_payments|src/modules/payments/]] · [[boilerplate-node-backend_src_modules_products|src/modules/products/]] · … and 8 more
 
 ## Files
+
 - `src/modules/account/analytics.ts` — Declares the canonical set of analytics event names emitted by the account module and augments the shared analytics port's event-name map so TypeScript enforces type-safety at every emit site. It exists to keep the "one name → one emitter" invariant and to let each module grow the catalogue independently (same pattern as `./audit.ts` for audit actions).
 - `src/modules/account/audit.ts` — Central registry of every audit action string the account module can emit. It exists so that (a) all event names live in one place for consistency, and (b) the infrastructure audit type map learns about the account vocabulary via a type-only module augmentation—no runtime import crosses the boundary upward.
 - `src/modules/account/cooldown.ts` — Single source of truth for the "wait a moment before resending" countdown shared by the 2FA delivered-code and verification-link flows. By computing the remaining seconds and shaping the 429 rejection in one place, both flows present an identical cooldown to the client without duplicating logic.
@@ -124,4 +126,5 @@ flowchart LR
 - `src/modules/account/two-factor/totp.ts` — Pure TOTP crypto layer: encrypting/decrypting the base32 secret at rest, building the `otpauth://` enrollment URI, and verifying a 6-digit code with replay protection. Deliberately contains no database access so it can be unit-tested against fixed clocks and known secrets. The I/O adapter that persists results to the user document lives in `methods/totp.ts`.
 
 ---
+
 [[boilerplate-node-backend_INDEX|← boilerplate-node-backend index]]

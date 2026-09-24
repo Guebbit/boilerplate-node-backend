@@ -14,9 +14,9 @@ Central route-mounting step for the Express app. It walks the registry of enable
 ## Key elements
 
 - **`installRoutes(app: Express): void`** (the sole export)
-  - Iterates `enabledModules`; for each entry where both `basePath` and `routes` are present, calls `app.use(basePath, routes)`. Modules that own a collection but no URL (e.g. `audit-logs`) are silently skipped.
-  - Mounts `systemRoutes` at `/` (serves the API contract, docs, and root redirect).
-  - Registers a final middleware that calls `rejectResponse(response, 404)` for any unmatched request.
+    - Iterates `enabledModules`; for each entry where both `basePath` and `routes` are present, calls `app.use(basePath, routes)`. Modules that own a collection but no URL (e.g. `audit-logs`) are silently skipped.
+    - Mounts `systemRoutes` at `/` (serves the API contract, docs, and root redirect).
+    - Registers a final middleware that calls `rejectResponse(response, 404)` for any unmatched request.
 
 ## Relationships
 
@@ -29,6 +29,6 @@ Central route-mounting step for the Express app. It walks the registry of enable
 
 ## Notes
 
-- The 404 catch-all lives *here*, not in the error-handling layer, because it must be the last route registered. Placing it elsewhere would risk a later `app.use` call being shadowed and unreachable.
+- The 404 catch-all lives _here_, not in the error-handling layer, because it must be the last route registered. Placing it elsewhere would risk a later `app.use` call being shadowed and unreachable.
 - The guard `if (basePath && routes)` is intentional: a manifest with one but not the other is treated as a no-op, not an error.
 - Only `system-routes` is imported by name. All domain routers arrive through the `enabledModules` array, keeping this file decoupled from individual modules.

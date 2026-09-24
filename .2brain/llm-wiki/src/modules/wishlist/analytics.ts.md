@@ -14,9 +14,9 @@ Defines the wishlist module's analytics event names and registers them into the 
 ## Key elements
 
 - **`wishlistAnalyticsEvents`** (`as const` object) — the three event names this module emits:
-  - `WISHLIST_ITEM_ADDED` — an item was saved to the wishlist.
-  - `WISHLIST_ITEM_REMOVED` — an item was removed from the wishlist.
-  - `WISHLIST_MOVED_TO_CART` — the "exit" event linking the save funnel to the purchase funnel.
+    - `WISHLIST_ITEM_ADDED` — an item was saved to the wishlist.
+    - `WISHLIST_ITEM_REMOVED` — an item was removed from the wishlist.
+    - `WISHLIST_MOVED_TO_CART` — the "exit" event linking the save funnel to the purchase funnel.
 - **`declare module '@infrastructure/observability/analytics'`** — augments the shared `AnalyticsEventMap` interface with a `wishlist` key typed to the union of the above values, so downstream analytics code gets autocomplete and type safety.
 
 ## Relationships

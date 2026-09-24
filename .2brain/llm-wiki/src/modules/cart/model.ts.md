@@ -13,7 +13,7 @@ Defines the Mongoose schema and model for the per-user cart document (one docume
 
 ## Key elements
 
-- **`CartItem`** — interface for a single cart line (`productId: ObjectId`, `quantity: number`). Stays `ObjectId` in storage; `populate` overwrites it in place, so callers must read the id *before* populating.
+- **`CartItem`** — interface for a single cart line (`productId: ObjectId`, `quantity: number`). Stays `ObjectId` in storage; `populate` overwrites it in place, so callers must read the id _before_ populating.
 - **`CartDocument`** — extends Mongoose `Document`; adds `userId`, `items: CartItem[]`, and an explicitly-typed `__v: number`. The `__v` field is read by application code (optimistic-concurrency check in `clearLinesIfUnchanged`), not merely maintained by the driver.
 - **`CartModel`** — `Model<CartDocument>` type alias. Queries live in `./repository`; business rules in `./service`.
 - **`CART_LINE_MAX`** (999) — hard per-line quantity ceiling. Enforced at the schema level (`max`) and is the guard that holds across multiple `'add'`-mode writes where a single-request bound would not.
@@ -38,6 +38,6 @@ Defines the Mongoose schema and model for the per-user cart document (one docume
 ## Notes
 
 - **TTL index is immutable in place.** Changing `NODE_CART_RETENTION_DAYS` and restarting will fail boot (`autoIndex` requests the new window; Mongo refuses to alter an existing index). Run `npm run db:sync` to drop and rebuild the index with the new value.
-- **`populate` mutates `productId` in place.** Any code that needs the raw `ObjectId` must capture it *before* calling `populate`. `readCartLines` in the service layer is the single place that handles this correctly.
+- **`populate` mutates `productId` in place.** Any code that needs the raw `ObjectId` must capture it _before_ calling `populate`. `readCartLines` in the service layer is the single place that handles this correctly.
 - **`applyCartTransform` is not an API serializer.** No endpoint returns this shape directly; it exists solely to satisfy the repository-factory contract for lean reads.
 - **`_id: false` on cart lines is intentional.** Adding one back would produce an unexpected property in serialized output, violating the OpenAPI schema.

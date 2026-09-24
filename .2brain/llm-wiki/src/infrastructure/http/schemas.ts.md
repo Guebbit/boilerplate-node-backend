@@ -13,7 +13,7 @@ Shared Zod schemas for the scalar HTTP query/body parameters (`page`, `pageSize`
 
 ## Key elements
 
-- **`PAGE_SIZE_MAX` (100), `PAGE_MAX` (10 000), `HARD_DELETE_DEFAULT` (false)** — module-private constants mirroring the `openapi.yaml` shared components. Deliberately *not* imported from orval output to avoid coupling infrastructure to a specific domain's generated file. Verified against orval by `tests/cross-cutting/contract-scalars.test.ts`.
+- **`PAGE_SIZE_MAX` (100), `PAGE_MAX` (10 000), `HARD_DELETE_DEFAULT` (false)** — module-private constants mirroring the `openapi.yaml` shared components. Deliberately _not_ imported from orval output to avoid coupling infrastructure to a specific domain's generated file. Verified against orval by `tests/cross-cutting/contract-scalars.test.ts`.
 - **`blankToUndefined`** — preprocessor that maps `''` and `null`/`undefined` to `undefined` so `.optional()` / `.default()` treat an untouched form field as absent rather than as a spurious value.
 - **`hardDeleteSchema`** — `z.preprocess(blankToUndefined, z.boolean().default(false))`. Decodes the string spellings (`"true"`/`"false"`) via `parseFormBoolean`; anything unrecognised yields a 422. Defaults to soft-delete when absent.
 - **`pageSchema`** — coerced integer, `min 1`, `max PAGE_MAX`, optional. No default here; `normalizePagination` in `@infrastructure/persistence/search` owns defaults.

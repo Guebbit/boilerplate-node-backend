@@ -26,6 +26,6 @@ Thin HTTP adapter for `POST /cart/reorder/:orderId`. Translates the Express requ
 
 ## Notes
 
-- The file's doc comment clarifies the naming: it lives under *cart* controllers (not *orders*) because the **write** target is the cart, even though the read target is an order.
+- The file's doc comment clarifies the naming: it lives under _cart_ controllers (not _orders_) because the **write** target is the cart, even though the read target is an order.
 - A `409` is returned (via `refused`) when every line in the order references a product that has left the catalogue—i.e., there is nothing to add. This avoids a misleading empty `200`.
 - `request.authContext!` uses a non-null assertion; the auth middleware upstream is expected to have already rejected unauthenticated requests.

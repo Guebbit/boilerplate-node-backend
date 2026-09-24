@@ -31,7 +31,7 @@ The service layer for the audit-logs module. It provides the write path (`record
 
 ## Notes
 
-- **Fail-open is intentional, not lazy.** The compliance record is the audit *logger* (upstream), which has already written the entry. Losing the queryable Mongo copy only degrades the dashboard. A Mongo hiccup during a rejected login must not become a 500.
+- **Fail-open is intentional, not lazy.** The compliance record is the audit _logger_ (upstream), which has already written the entry. Losing the queryable Mongo copy only degrades the dashboard. A Mongo hiccup during a rejected login must not become a 500.
 - **Error handling is asymmetric on purpose.** `record` swallows; `search` propagates. `record` is a fire-and-forget side effect; `search` is the answer to an explicit user request.
-- **Stryker mutation-testing is disabled** around the `logger.warn` call in `record`'s `.catch` — the warning is the *only* observable effect of a swallowed error, so Stryker would mutate it into a no-op that the test suite cannot distinguish.
+- **Stryker mutation-testing is disabled** around the `logger.warn` call in `record`'s `.catch` — the warning is the _only_ observable effect of a swallowed error, so Stryker would mutate it into a no-op that the test suite cannot distinguish.
 - The `void` keyword before `auditLogRepository.create(...)` marks the floating promise as deliberate; the actual safety net is the trailing `.catch()`.

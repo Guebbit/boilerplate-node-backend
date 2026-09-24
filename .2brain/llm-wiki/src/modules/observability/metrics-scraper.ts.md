@@ -14,9 +14,9 @@ Express middleware that guards the single Prometheus scrape route (`GET /observa
 ## Key elements
 
 - **`isMetricsScraper(request, response, next)`** — the sole export. Validates the `Authorization: Bearer <token>` header against `process.env.NODE_METRICS_TOKEN` using `constantTimeEqual`. Three outcomes:
-  - Token env var unset → `503` (deny-by-default), warning logged.
-  - Header missing/malformed or token mismatch → `401`.
-  - Match → `next()` is called.
+    - Token env var unset → `503` (deny-by-default), warning logged.
+    - Header missing/malformed or token mismatch → `401`.
+    - Match → `next()` is called.
 
 ## Relationships
 

@@ -30,6 +30,6 @@ Defines the Mongoose schema and model for the `apikeys` collection — one docum
 ## Notes
 
 - **Hash-only storage:** `hash` is a sha256 digest produced in `./credentials`; the raw secret is never written to the database. The serialization layer additionally strips `hash` from every wire response as defense-in-depth.
-- **Two "tenant" concepts:** The `tenant` field here is an *organisation* identifier (same convention as `webhooks/model.ts`). It is distinct from the "tenant" in `locales/model.ts`, which refers to a translation keyspace. See `docs/theory/tenancy.md`.
+- **Two "tenant" concepts:** The `tenant` field here is an _organisation_ identifier (same convention as `webhooks/model.ts`). It is distinct from the "tenant" in `locales/model.ts`, which refers to a translation keyspace. See `docs/theory/tenancy.md`.
 - **`publicPrefix` uniqueness is a database fact:** The `unique: true` constraint (not just an index) ensures `findActiveByPrefix` can never be ambiguous about which hash to verify against.
 - **`createdByUserId` is deliberately omitted from the wire:** Audit attribution travels through a separate `actor_user_id` field in the audit trail, not through this document's serialized form.

@@ -15,7 +15,7 @@ Defines every rule that decides whether a translation key can be stored or rende
 
 - **`buildMessageTree(entries)`** – Converts an array of `{ key, value }` rows into the nested object shape the read endpoint returns. Uses null-prototype objects (`Object.create(null)`) at every node. Throws on a string/group collision (e.g. `products.list` and `products.list.title` both present).
 - **`findUnsafeKeySegment(key)`** – Returns the first segment that is empty (`a..b`, trailing dot) or in the blocklist (`__proto__`, `constructor`, `prototype`), or `undefined` if the key is safe.
-- **`findKeyCollision(key, others)`** – Returns the first key in `others` that is a strict dotted-prefix of `key` (or vice-versa). Identical keys are *not* treated as collisions here.
+- **`findKeyCollision(key, others)`** – Returns the first key in `others` that is a strict dotted-prefix of `key` (or vice-versa). Identical keys are _not_ treated as collisions here.
 - **`findBatchCollision(keys)`** – Scans a batch for the first pair that cannot coexist (prefix relationship); returns `[key, collision]` or `undefined`.
 - **`findDuplicateKey(keys)`** – Returns the first key that appears twice in a batch, or `undefined`.
 - **`rejectUnusableKey(key, others)`** – Combined gate: runs `findUnsafeKeySegment` then `findKeyCollision`; returns a `ResponseReject` (422 or 409 with an i18n'd message) or `undefined` if the key passes.

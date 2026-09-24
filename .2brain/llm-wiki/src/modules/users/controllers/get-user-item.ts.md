@@ -14,9 +14,9 @@ Controller for `GET /users/:id` — resolves a single user document by path id a
 ## Key elements
 
 - **`getUserItem`** (exported) — the route handler, produced by `createItemController`. Config:
-  - `entity: 'user'` — used by the factory for logging / response metadata.
-  - `notFoundKey: 'users.not-found'` — i18n key returned as a 404 when the fetch yields `undefined`.
-  - `fetch: (id) => …` — calls `userService.getById(id)`; on a hit, maps through `userService.toUserContract(user)`; on a miss, returns `undefined` (the factory converts that to the 404 response).
+    - `entity: 'user'` — used by the factory for logging / response metadata.
+    - `notFoundKey: 'users.not-found'` — i18n key returned as a 404 when the fetch yields `undefined`.
+    - `fetch: (id) => …` — calls `userService.getById(id)`; on a hit, maps through `userService.toUserContract(user)`; on a miss, returns `undefined` (the factory converts that to the 404 response).
 
 ## Relationships
 

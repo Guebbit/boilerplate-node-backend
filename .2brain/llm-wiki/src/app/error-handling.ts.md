@@ -33,9 +33,9 @@ The single global error boundary for the Express app plus the two process-level 
 
 ## Notes
 
-- **Ordering is load-bearing.** `installErrorHandling` must run *after* `installRoutes`; an Express error handler only sees errors from middleware registered before it.
+- **Ordering is load-bearing.** `installErrorHandling` must run _after_ `installRoutes`; an Express error handler only sees errors from middleware registered before it.
 - **Never forwards `error.message` to the client** (except `MulterError`, whose messages are user-facing by design). All other responses use fixed strings from `CLIENT_ERROR_COPY` or the 500 constant. The detail lives only in the log.
-- **`expose` is checked in addition to the 4xx range.** A library can set `status: 418` while still considering the error internal; `expose: true` is the thrower's explicit statement that the error describes the *request*.
+- **`expose` is checked in addition to the 4xx range.** A library can set `status: 418` while still considering the error internal; `expose: true` is the thrower's explicit statement that the error describes the _request_.
 - **Process-level handlers are skipped in `NODE_ENV === 'test'`.** Registering an `unhandledRejection` handler would swallow the rejection into an audit log line instead of letting Jest pin it to the failing test.
 - **`uncaughtException` always calls `process.exit(1)`.** The process state after an uncaught exception is undefined; the handler logs and stops. It never re-throws.
 - **Stryker mutation testing is disabled** around the `logger.error` call in `handleUncaughtError` (mutating that call would produce unobservable differences).

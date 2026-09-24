@@ -14,7 +14,7 @@ Unit-tests the process-level `uncaughtException` and `unhandledRejection` handle
 ## Key elements
 
 - **`appStub()`** — returns a minimal object with a `jest.fn()` `use` method, just enough to satisfy `installErrorHandling`'s parameter type.
-- **`installUnder(nodeEnv)`** — captures existing process listeners, sets `NODE_ENV`, calls `installErrorHandling`, then returns only the *newly added* listeners for each event plus a `remove()` cleanup. This isolates the test from any pre-existing handlers.
+- **`installUnder(nodeEnv)`** — captures existing process listeners, sets `NODE_ENV`, calls `installErrorHandling`, then returns only the _newly added_ listeners for each event plus a `remove()` cleanup. This isolates the test from any pre-existing handlers.
 - **`describe('…uncaughtException')`** — asserts zero handlers under `NODE_ENV=test`; asserts one handler under `development`/`production` that calls `auditLogger.error` with the raw `Error` and then `process.exit(1)`.
 - **`describe('…unhandledRejection')`** — asserts zero handlers under `test`; asserts one handler under `development`/`production` that calls `auditLogger.error` with the raw rejection reason and does **not** exit.
 

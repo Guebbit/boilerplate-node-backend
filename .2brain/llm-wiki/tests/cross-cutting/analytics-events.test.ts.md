@@ -17,7 +17,7 @@ Cross-cutting guard that sweeps every `src/modules/*/analytics.ts` file to ensur
 - **`readEvents(file)`** — Dynamically `import()`s the module and locates its event-name map "by shape" (the exported object whose values are all strings). Import failure causes a test failure rather than a silent zero contribution.
 - **`'finds a vocabulary in every module that declares one'`** — Canary: asserts the modules directory is non-empty and every discovered file exports at least one event name.
 - **`'never lets two modules claim the same constant name'`** — Checks that no object key (e.g. `checkout_completed`) appears in more than one module's map.
-- **`'never lets two modules claim the same event string'`** — Checks that no event *value* (the string actually sent to Umami) is shared across modules.
+- **`'never lets two modules claim the same event string'`** — Checks that no event _value_ (the string actually sent to Umami) is shared across modules.
 - **`'spells every event as lower snake_case, subject first'`** — Enforces `/^[a-z][\da-z]*(_[a-z][\da-z]*)+$/` on every event value.
 - **`'has every module widen the port union it emits through'`** — Source-text scan for a `declare module '@infrastructure/observability/analytics'` block in each analytics file (type augmentations are erased at runtime, so a value-level check is impossible).
 

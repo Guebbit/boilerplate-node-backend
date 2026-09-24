@@ -14,18 +14,18 @@ A cross-cutting invariant test that asserts no credential-shaped key (matching `
 ## Key elements
 
 - **`CREDENTIAL_SHAPE`** — a case-insensitive regex identifying any key that should never be published. Deliberately shape-based (not an explicit field list) so it catches fields added later.
-- **`PUBLISHABLE`** — an allowlist of `(model, key, because)` tuples for keys that *look* credential-shaped but are safe (currently: `WebhookSubscription.secretIds`, opaque ring IDs only).
+- **`PUBLISHABLE`** — an allowlist of `(model, key, because)` tuples for keys that _look_ credential-shaped but are safe (currently: `WebhookSubscription.secretIds`, opaque ring IDs only).
 - **`registerAllModels`** — walks `src/modules/*/model.ts` via `fs.readdirSync` and `jest.requireActual` to populate `mongoose.models` without a hardcoded import list.
 - **`subSchema`** — type-narrows a `SchemaType` to extract its nested `Schema` when present.
 - **`sensitivePaths`** — returns every path name (one level of subdocument deep) whose name matches `CREDENTIAL_SHAPE`.
-- **`secretValues`** — builds a document object that fills *only* credential-shaped paths with the sentinel `'SENSITIVE'`, leaving everything else at defaults.
+- **`secretValues`** — builds a document object that fills _only_ credential-shaped paths with the sentinel `'SENSITIVE'`, leaving everything else at defaults.
 - **`keysWithin`** — recursively collects every key at every depth of a serialized value as dotted paths.
 - **`isPublishable`** — checks a `(model, key)` pair against the `PUBLISHABLE` allowlist.
 - **Test cases** — four `it` blocks: (1) canary asserting ≥ 8 models and ≥ 1 has a sensitive path; (2) the main assertion that no credential-shaped key survives `toJSON()`; (3) stale-exemption check (allowlist entries whose model no longer exists); (4) every exemption carries a reason of ≥ 20 chars.
 
 ## Relationships
 
-- **`src/modules/account/tests/unit/two-factor.test.ts`** — Exercises the two-factor / OTP flow that produces credential-shaped fields (`otp`, `tokens`) the cross-cutting test then asserts are stripped on serialization. The unit test validates *behavior* of the 2FA module; this file validates the *output contract* of the schema transform that both modules (and every other) share.
+- **`src/modules/account/tests/unit/two-factor.test.ts`** — Exercises the two-factor / OTP flow that produces credential-shaped fields (`otp`, `tokens`) the cross-cutting test then asserts are stripped on serialization. The unit test validates _behavior_ of the 2FA module; this file validates the _output contract_ of the schema transform that both modules (and every other) share.
 
 ## Notes
 

@@ -14,9 +14,9 @@ Thin Express controller for `POST /payments/order/:orderId/refund`. It performs 
 ## Key elements
 
 - **`postPaymentRefund`** (exported const) — The sole export. Accepts an Express `Request<{ orderId?: string }>` and `Response`. Calls `paymentService.refundByOrder(orderId, authContext, callerContext)`, then:
-  - If the result is a refusal, short-circuits via `refused(response, result)`.
-  - On success, serializes the domain object with `.toJSON()` (which applies the model's `_id → id` and date → ISO-string transform) and sends it through `successResponse<Payment>` with status 200.
-  - On thrown error, delegates to `catchAs(response, 'postPaymentRefund')`.
+    - If the result is a refusal, short-circuits via `refused(response, result)`.
+    - On success, serializes the domain object with `.toJSON()` (which applies the model's `_id → id` and date → ISO-string transform) and sends it through `successResponse<Payment>` with status 200.
+    - On thrown error, delegates to `catchAs(response, 'postPaymentRefund')`.
 
 ## Relationships
 

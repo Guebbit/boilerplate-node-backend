@@ -13,7 +13,7 @@ Thin HTTP adapter for `DELETE /account/2fa`. Validates the request body against 
 
 ## Key elements
 
-- **`delete2fa`** *(exported)* — Express controller handler. Extracts the user id from `request.authContext`, validates the body (code or backup code), calls `twoFactorService.disableTwoFactor`, and maps the result to an HTTP response. Increments `authTwoFactorDisableTotal` on both success and failure paths.
+- **`delete2fa`** _(exported)_ — Express controller handler. Extracts the user id from `request.authContext`, validates the body (code or backup code), calls `twoFactorService.disableTwoFactor`, and maps the result to an HTTP response. Increments `authTwoFactorDisableTotal` on both success and failure paths.
 - **`DisableTwoFactorBody.safeParse`** — Non-throwing zod validation of the JSON body; failures short-circuit via `rejectValidation`.
 - **`authTwoFactorDisableTotal.inc`** — Metrics counter labelled `{ method: 'all', status: 'success' | 'failure' }`, incremented before every response return.
 - **`t('account.two-factor.disabled')`** — i18n message returned as the success body.

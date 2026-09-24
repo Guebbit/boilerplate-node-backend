@@ -14,10 +14,10 @@ Integration tests for `productRepository.facets`, the storefront's filter-chip d
 ## Key elements
 
 - **`describe('facets')`** — four focused cases:
-  - *Counts categories and tags across the public catalogue* — verifies multi-product aggregation for both `categories` and `tags`.
-  - *Does not count what the storefront cannot see* — asserts `active: false` and `deletedAt`-set products contribute no counts.
-  - *Sorts by count descending, then name* — confirms the stable ordering contract chips rely on.
-  - *Empty catalogue returns empty lists* — guards against a thrown error on zero rows.
+    - _Counts categories and tags across the public catalogue_ — verifies multi-product aggregation for both `categories` and `tags`.
+    - _Does not count what the storefront cannot see_ — asserts `active: false` and `deletedAt`-set products contribute no counts.
+    - _Sorts by count descending, then name_ — confirms the stable ordering contract chips rely on.
+    - _Empty catalogue returns empty lists_ — guards against a thrown error on zero rows.
 - **`setupTestDb()`** — called once at module scope (outside `describe`) to provision/tear down the test database.
 - **`createProduct`** — factory helper used to seed rows with controlled `categories`, `tags`, `active`, and `deletedAt` values.
 

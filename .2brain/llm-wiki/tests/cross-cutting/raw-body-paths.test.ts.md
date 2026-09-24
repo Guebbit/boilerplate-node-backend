@@ -24,6 +24,6 @@ Cross-cutting validation that every module's `rawBodyPaths` entries correspond t
 
 ## Notes
 
-- The comparison is purely string-based on the path segment (second token of each signature). A path that matches a route on a *different* module's router will still fail this test, because the set is built per-module.
+- The comparison is purely string-based on the path segment (second token of each signature). A path that matches a route on a _different_ module's router will still fail this test, because the set is built per-module.
 - `rawBodyPaths` is optional per module (`?? []`); the canary test ensures the suite doesn't silently pass when no module opts in.
 - The failure mode being guarded against is entirely silent at runtime (no thrown error, no log) — this test is the only automated safeguard.

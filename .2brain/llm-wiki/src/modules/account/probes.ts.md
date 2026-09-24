@@ -14,12 +14,12 @@ Defines four hand-written API requests (probes) that the OpenAPI contract cannot
 ## Key elements
 
 - **`probes: Probe[]`** (the sole export) — an array of four `Probe` objects:
-  - *log in as the non-admin* — `POST /account/login` with `{{seedUserEmail}}`/`{{seedUserPassword}}` to exercise role-scoped 403 paths.
-  - *401 with a bogus token* — `GET /account` with a hardcoded `Bearer not.a.real.token` to hit the unauthenticated error envelope.
-  - *409 on duplicate signup* — `POST /account/signup` reusing `{{seedAdminEmail}}` to trigger the already-exists conflict.
-  - *rate limit* — `POST /account/login` with a wrong password, intended to be sent 10+ times to exhaust `NODE_AUTH_RATE_LIMIT_MAX` and surface the middleware-level 429.
+    - _log in as the non-admin_ — `POST /account/login` with `{{seedUserEmail}}`/`{{seedUserPassword}}` to exercise role-scoped 403 paths.
+    - _401 with a bogus token_ — `GET /account` with a hardcoded `Bearer not.a.real.token` to hit the unauthenticated error envelope.
+    - _409 on duplicate signup_ — `POST /account/signup` reusing `{{seedAdminEmail}}` to trigger the already-exists conflict.
+    - _rate limit_ — `POST /account/login` with a wrong password, intended to be sent 10+ times to exhaust `NODE_AUTH_RATE_LIMIT_MAX` and surface the middleware-level 429.
 
-- Each probe's `why` field is human/AI-readable prose explaining *why* the request exists and what to look for.
+- Each probe's `why` field is human/AI-readable prose explaining _why_ the request exists and what to look for.
 - The `Probe` type is imported from `@guebbit/openapi-runnable-collections`.
 
 ## Relationships

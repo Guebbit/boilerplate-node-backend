@@ -26,21 +26,21 @@ Defines the admin-only `/users` Express router, wiring authentication, per-route
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `kernel/middlewares/authorizations.ts` | Supplies `getAuth`, `isAuthOrCredential` (router-wide), and `requirePermission` (per-route). |
-| `infrastructure/http/middlewares/cache.ts` | Supplies `searchCache`, `setCache`, `invalidateCache` used for read caching and write invalidation. |
-| `infrastructure/http/middlewares/rate-limit.ts` | Supplies `uploadLimiter` applied to create/update routes. |
-| `infrastructure/http/middlewares/upload.ts` | Supplies `upload.single('imageUpload')` for avatar/profile-image uploads. |
-| `infrastructure/http/middlewares/route-flag.ts` | Supplies `routeFlag('hardDelete')` for the `/:id/hard` path. |
-| `controllers/get-users.ts` | Exports `getUsers` handler and `searchUsersKeyParameters` (cache key shape). |
-| `controllers/write-users.ts` | Exports `writeUsers` handler (create + update). |
-| `controllers/delete-users.ts` | Exports `deleteUsers` handler (soft & hard). |
-| `controllers/get-user-item.ts` | Exports `getUserItem` handler. |
-| `controllers/delete-user-two-factor.ts` | Exports `deleteUserTwoFactor` handler. |
-| `module.ts` | Imports and mounts `router` into the application. |
-| `tests/unit/routes.test.ts` | Unit-tests the route table and middleware ordering. |
-| `tests/support/routed-modules.ts` | Test harness that registers this router for integration tests. |
+| Neighbor                                        | Interaction                                                                                         |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `kernel/middlewares/authorizations.ts`          | Supplies `getAuth`, `isAuthOrCredential` (router-wide), and `requirePermission` (per-route).        |
+| `infrastructure/http/middlewares/cache.ts`      | Supplies `searchCache`, `setCache`, `invalidateCache` used for read caching and write invalidation. |
+| `infrastructure/http/middlewares/rate-limit.ts` | Supplies `uploadLimiter` applied to create/update routes.                                           |
+| `infrastructure/http/middlewares/upload.ts`     | Supplies `upload.single('imageUpload')` for avatar/profile-image uploads.                           |
+| `infrastructure/http/middlewares/route-flag.ts` | Supplies `routeFlag('hardDelete')` for the `/:id/hard` path.                                        |
+| `controllers/get-users.ts`                      | Exports `getUsers` handler and `searchUsersKeyParameters` (cache key shape).                        |
+| `controllers/write-users.ts`                    | Exports `writeUsers` handler (create + update).                                                     |
+| `controllers/delete-users.ts`                   | Exports `deleteUsers` handler (soft & hard).                                                        |
+| `controllers/get-user-item.ts`                  | Exports `getUserItem` handler.                                                                      |
+| `controllers/delete-user-two-factor.ts`         | Exports `deleteUserTwoFactor` handler.                                                              |
+| `module.ts`                                     | Imports and mounts `router` into the application.                                                   |
+| `tests/unit/routes.test.ts`                     | Unit-tests the route table and middleware ordering.                                                 |
+| `tests/support/routed-modules.ts`               | Test harness that registers this router for integration tests.                                      |
 
 ## Notes
 

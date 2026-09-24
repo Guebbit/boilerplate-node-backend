@@ -13,7 +13,7 @@ Controller for `POST /account/password/check`. It returns a candidate password's
 
 ## Key elements
 
-- **`postPasswordCheck`** *(exported handler)* — Validates the request body against the `CheckPasswordBreachedBody` Zod schema, delegates to `checkPasswordBreach`, and returns a `PasswordCheck` result or a structured error response.
+- **`postPasswordCheck`** _(exported handler)_ — Validates the request body against the `CheckPasswordBreachedBody` Zod schema, delegates to `checkPasswordBreach`, and returns a `PasswordCheck` result or a structured error response.
 
 ## Relationships
 

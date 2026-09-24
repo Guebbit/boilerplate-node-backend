@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express handler for `GET /account/abilities`. It serialises the server's CASL ability rules (for both the tenant and platform scopes) and sends them to the client so the UI can decide what to *render* without maintaining its own copy of the policy. It does not grant or revoke anything server-side; it is a read-only publication of the rules the server already enforces on every request.
+Express handler for `GET /account/abilities`. It serialises the server's CASL ability rules (for both the tenant and platform scopes) and sends them to the client so the UI can decide what to _render_ without maintaining its own copy of the policy. It does not grant or revoke anything server-side; it is a read-only publication of the rules the server already enforces on every request.
 
 ## Key elements
 
@@ -30,5 +30,5 @@ Express handler for `GET /account/abilities`. It serialises the server's CASL ab
 - **Uniform shape for anonymous callers.** A stranger is mapped to the `guest` role in tenant scope (not "no context"), so the response always contains a `tenant` array. The `platform` field is an empty array `[]` (not absent) when the caller has no platform scope.
 - **`tenantId` is conditionally omitted**, not set to `null`. The response contract deliberately has no nullable field.
 - **Both scopes are always returned** as separate arrays because the client renders a shared navigation that spans tenant screens and platform dashboard screens. The permission model does not allow one scope's keys to satisfy the other.
-- **`modelVersion` ≠ role version.** It is a fingerprint of the *key set*; editing a role's assignments never changes it, but renaming or swapping a key does. Clients use it to detect that their cached rules describe a different model.
+- **`modelVersion` ≠ role version.** It is a fingerprint of the _key set_; editing a role's assignments never changes it, but renaming or swapping a key does. Clients use it to detect that their cached rules describe a different model.
 - The file is a single-responsibility controller: no business logic, no database access. All policy construction is delegated to the kernel.

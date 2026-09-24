@@ -15,9 +15,9 @@ Defines the **port** (interface contract) for OAuth/OIDC identity providers in h
 
 - **`OAuthIdentity`** (interface) — The result of a successful token exchange. Carries `providerId` (the stable subject ID used as the app's identity key), `email`, `emailVerified` (provider's own claim; the OAuth service refuses to link unverified emails to existing password accounts), and optional `name` / `imageUrl`.
 - **`OAuthProvider`** (interface) — The contract every provider adapter must satisfy:
-  - `name: string` — persisted on `OAuthAccount.provider` and surfaced by `enabledProviders()`.
-  - `authorizeUrl(state, redirectUri, codeChallenge): string` — Builds the consent URL. `state` is the CSRF token from `../state.ts`; `redirectUri` is always server-derived (never from the request); `codeChallenge` is the S256 hash of the PKCE verifier (RFC 7636).
-  - `exchangeCode(code, redirectUri, codeVerifier): Promise<OAuthIdentity>` — Redeems the authorization code. `redirectUri` must match the one passed to `authorizeUrl` (some providers validate this). `codeVerifier` is the PKCE secret; the provider hashes it and rejects the exchange on mismatch. Throws on failure or unparseable response.
+    - `name: string` — persisted on `OAuthAccount.provider` and surfaced by `enabledProviders()`.
+    - `authorizeUrl(state, redirectUri, codeChallenge): string` — Builds the consent URL. `state` is the CSRF token from `../state.ts`; `redirectUri` is always server-derived (never from the request); `codeChallenge` is the S256 hash of the PKCE verifier (RFC 7636).
+    - `exchangeCode(code, redirectUri, codeVerifier): Promise<OAuthIdentity>` — Redeems the authorization code. `redirectUri` must match the one passed to `authorizeUrl` (some providers validate this). `codeVerifier` is the PKCE secret; the provider hashes it and rejects the exchange on mismatch. Throws on failure or unparseable response.
 
 ## Relationships
 

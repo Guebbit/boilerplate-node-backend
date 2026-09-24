@@ -13,10 +13,10 @@ Defines and exports all rate-limit middleware for the account module's credentia
 
 ## Key elements
 
-- **`credentialLimiters`** (`RequestHandler[]`) — three chained limiters (per-account, per-address, per-address-block) that count *failed* auth attempts only (`skipSuccessfulRequests: true`). Exported as an array so a route applies the full set atomically.
+- **`credentialLimiters`** (`RequestHandler[]`) — three chained limiters (per-account, per-address, per-address-block) that count _failed_ auth attempts only (`skipSuccessfulRequests: true`). Exported as an array so a route applies the full set atomically.
 - **`loginChallengeGate`** (`RequestHandler`) — mounted between `credentialLimiters` and the login handler; delegates to `humanChallengeGate` once ≥ 50 % of the per-account identity budget is spent, otherwise passes through. Fails open (no challenge) if rate-limit info is absent.
 - **`passwordCheckLimiter`** (`RequestHandler`) — single per-address limiter for `POST /account/password/check`; every request counts (no `skipSuccessfulRequests`) because a 200 validation response is itself the amplification target.
-- **`signupLimiters`** (`RequestHandler[]`) — three chained limiters (per-email, per-address, per-address-block) that count *successful* signups; protects against Sybil account creation.
+- **`signupLimiters`** (`RequestHandler[]`) — three chained limiters (per-email, per-address, per-address-block) that count _successful_ signups; protects against Sybil account creation.
 - **`resetRequestLimiters`** (`RequestHandler[]`) — same three dimensions as signup; counts successful reset requests because `postResetRequest` always returns 200 (no enumeration).
 - **`mfaChallengeLimiter` / `mfaSendLimiter`** — two MFA challenge budgets keyed on a SHA-256 hash of the challenge string (falls back to `addressBlockOf` when no challenge is present), sharing the `MFA_CHALLENGE_DELIVERED_TTL_MS` window.
 - **`IDENTITY_RATE_LIMIT_PROPERTY`** — custom `requestPropertyName` so the identity limiter's counter doesn't get overwritten by the address/block limiters in the chain.
@@ -34,8 +34,8 @@ Defines and exports all rate-limit middleware for the account module's credentia
 
 ## Notes
 
-- **`credentialLimiters` vs. `signupLimiters`/`resetRequestLimiters`**: the former uses `skipSuccessfulRequests: true` (only failures count); the latter two count *every* request because a successful response *is* the abuse vector (Sybil signups, reset spam). Mixing the two patterns is a security bug.
+- **`credentialLimiters` vs. `signupLimiters`/`resetRequestLimiters`**: the former uses `skipSuccessfulRequests: true` (only failures count); the latter two count _every_ request because a successful response _is_ the abuse vector (Sybil signups, reset spam). Mixing the two patterns is a security bug.
 - **Chained limiter overwriting**: because `credentialLimiters` chains three limiters, the identity limiter uses a custom `requestPropertyName` (`credentialIdentityRateLimit`) so its counter on `request` survives the chain. `loginChallengeGate` is the sole reader of that property.
-- **Fail-open by design in `loginChallengeGate`**: if `rateLimitInfoOf` returns `undefined` (store error, limiter skipped), the gate passes the request through. The budget limiter itself is the enforcement mechanism; the gate only *adds* a challenge and must never be the sole reason a login fails.
+- **Fail-open by design in `loginChallengeGate`**: if `rateLimitInfoOf` returns `undefined` (store error, limiter skipped), the gate passes the request through. The budget limiter itself is the enforcement mechanism; the gate only _adds_ a challenge and must never be the sole reason a login fails.
 - **MFA challenge key fallback**: a request with no `challenge` field (forged/malformed body) keys on the caller's address block rather than a shared sentinel, preventing two such callers from exhaustively sharing one bucket.
 - All budgets use `windowMs: 'shared'`, meaning the window is determined globally (likely via the rate-limit middleware's shared-window config), not per-budget.

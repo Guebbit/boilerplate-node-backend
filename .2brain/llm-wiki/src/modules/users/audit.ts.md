@@ -27,6 +27,6 @@ Declares the audit-action vocabulary for admin-facing user-record mutations (cre
 ## Notes
 
 - The augmentation pattern is intentional (see `modules/account/audit.ts` for rationale) — it avoids a shared enum while keeping each module's vocabulary local and tree-shakable.
-- `audit-logs/model.ts` types the persisted `action` column as a widened `string` so that renaming an action in code does not invalidate historical rows; the constants here are the source of truth for *new* writes only.
+- `audit-logs/model.ts` types the persisted `action` column as a widened `string` so that renaming an action in code does not invalidate historical rows; the constants here are the source of truth for _new_ writes only.
 - `ADMIN_USER_SOFT_DELETED` and `ADMIN_USER_ERASED` were deliberately split from a single "deleted" action: only the hard path scrubs the record, so conflating them would make "was the erasure request discharged?" unanswerable from the log alone.
 - Ban/unban ride on the same `PUT` endpoint as every other update (see `service.ts`'s `auditActionForUpdate`); the distinct action strings exist so the trail is self-explanatory without revision diffing.

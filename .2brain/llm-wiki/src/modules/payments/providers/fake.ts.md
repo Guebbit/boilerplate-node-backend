@@ -14,11 +14,11 @@ A stub payment-service-provider (PSP) that mirrors the shape of a real provider�
 ## Key elements
 
 - **`fakePaymentProvider`** (exported) — The `PaymentProvider` implementation. Methods:
-  - `prepare` — Derives an idempotent `providerRef` (`fake_pi_<paymentId>`) and an HMAC-based `clientSecret`; resolves immediately.
-  - `confirm` — Looks up `paymentMethodRef` in `TEST_METHODS` (or falls back to a generic success), records the settle outcome in `outcomes`, returns the current state.
-  - `retrieve` — Returns the stored settle outcome, or `processing` for any unknown reference.
-  - `refund` — Deletes the entry from `outcomes`; resolves void.
-  - `parseWebhook` — Verifies the signature via `verifyWebhookSignature`, parses JSON, validates `id` and `status`, and assembles the flat wire body into the service's `ProviderPaymentState` shape.
+    - `prepare` — Derives an idempotent `providerRef` (`fake_pi_<paymentId>`) and an HMAC-based `clientSecret`; resolves immediately.
+    - `confirm` — Looks up `paymentMethodRef` in `TEST_METHODS` (or falls back to a generic success), records the settle outcome in `outcomes`, returns the current state.
+    - `retrieve` — Returns the stored settle outcome, or `processing` for any unknown reference.
+    - `refund` — Deletes the entry from `outcomes`; resolves void.
+    - `parseWebhook` — Verifies the signature via `verifyWebhookSignature`, parses JSON, validates `id` and `status`, and assembles the flat wire body into the service's `ProviderPaymentState` shape.
 - **`TEST_METHODS`** (module-level const) — Maps three known `pm_card_*` references to their immediate and settled states (declined, requires_action→succeeded, processing→succeeded).
 - **`FAKE_SUCCESS_METHOD`** / **`FAKE_DECLINE_METHOD`** (exported constants) — The default success (`pm_card_visa`) and the one decline (`pm_card_declined`) reference strings for test panels.
 - **`isProviderPaymentStatus`** — Type guard backed by the `PROVIDER_PAYMENT_STATUSES` set; rejects arbitrary or future status strings before they reach `settlePayment`.

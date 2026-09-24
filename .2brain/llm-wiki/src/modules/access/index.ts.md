@@ -24,6 +24,6 @@ Barrel file for the `access` module. It is the **only** import surface that sibl
 
 ## Notes
 
-- The deliberate asymmetry — `service` is a value re-export, `model` is a type-only re-export — means importing a *runtime* symbol from `model.ts` (e.g., a Zod schema) will **not** work through this barrel. Consumers needing runtime schemas must import `model.ts` directly, which the module rule discourages.
+- The deliberate asymmetry — `service` is a value re-export, `model` is a type-only re-export — means importing a _runtime_ symbol from `model.ts` (e.g., a Zod schema) will **not** work through this barrel. Consumers needing runtime schemas must import `model.ts` directly, which the module rule discourages.
 - `repository.ts` has **no** export here at all; it is fully internal.
 - Design rationale lives in `docs/theory/authorization.md`.

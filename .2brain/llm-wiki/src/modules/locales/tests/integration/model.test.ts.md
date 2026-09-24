@@ -28,6 +28,6 @@ Integration tests that pin schema-level serialization guarantees for the `locale
 
 ## Notes
 
-- The file deliberately does **not** test `applySerialization` in isolation; the doc comment explains this is because the lean path skips `toJSON` and the OpenAPI schema would reject leaked keys. The tests therefore assert the *output shape* on both paths independently.
+- The file deliberately does **not** test `applySerialization` in isolation; the doc comment explains this is because the lean path skips `toJSON` and the OpenAPI schema would reject leaked keys. The tests therefore assert the _output shape_ on both paths independently.
 - The `baseLanguage` override test casts through `Parameters<typeof localeRepository.create>[0]` to slip a field that no request schema accepts — the intent is to prove the hook wins regardless of what a developer writes in code.
 - `setupTestDb()` is invoked at the top of the module (outside any `before` hook), relying on the test runner to execute it before the first `it`.

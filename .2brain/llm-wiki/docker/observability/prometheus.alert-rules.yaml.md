@@ -28,12 +28,12 @@ Defines the Prometheus alert-rule set for the local API stack. While dashboards 
 - **`docker/observability/prometheus.config.yaml`** — The Prometheus server config that loads this file via its `rule_files` directive and defines the `api` scrape job that `ApiDown` depends on.
 - **`infrastructure/observability/metrics-registry.ts`** — Registers `nodejs_heap_size_limit_bytes`, the denominator for `HighHeapUsage`.
 - **`infrastructure/observability/metrics-queue.ts`** — Registers `queue_jobs_dead_lettered_total`, the only metric that surfaces dead-letter parking (no other component reads that queue).
-- **`scripts/ops/sweep-webhook-retries.ts`** — The per-minute cron that re-enqueues pending webhook retries. `WebhookRetriesStalled` exists to detect when *this* script stops executing.
+- **`scripts/ops/sweep-webhook-retries.ts`** — The per-minute cron that re-enqueues pending webhook retries. `WebhookRetriesStalled` exists to detect when _this_ script stops executing.
 - **`docs/modules/webhooks.md`** — Documents the design decision that a single subscriber's endpoint failure stays silent (reschedules on its own row); `WebhookDeliveriesFailingEverywhere` complements that by catching fleet-wide egress/signing outages.
 
 ## Notes
 
 - **Heap denominator matters.** `HighHeapUsage` deliberately divides by `nodejs_heap_size_limit_bytes`, not `nodejs_heap_size_total_bytes`. Against `total`, a healthy idle Node process already sits at ~0.97 and the alert fires permanently, training operators to ignore it.
 - **`QueueJobsParked` uses `for: 0m`.** There is no meaningful threshold above "at least one job was parked"; any increment in 15 min is actionable.
-- **Webhook failure vs. parking.** Failed webhook deliveries *reschedule on their own row* and are republished by the sweep — they never land in a dead-letter queue. Therefore `QueueJobsParked` will **not** fire for the webhook queue; `WebhookDeliveriesFailingEverywhere` is the alert that covers that path.
+- **Webhook failure vs. parking.** Failed webhook deliveries _reschedule on their own row_ and are republished by the sweep — they never land in a dead-letter queue. Therefore `QueueJobsParked` will **not** fire for the webhook queue; `WebhookDeliveriesFailingEverywhere` is the alert that covers that path.
 - **Severity is binary.** Alerts are labelled `critical` (ApiDown, WebhookDeliveriesFailingEverywhere) or `warning` (all others). No intermediate tier exists.

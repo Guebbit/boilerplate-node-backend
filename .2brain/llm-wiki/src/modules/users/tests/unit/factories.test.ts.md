@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the `makeUser` fixture builder and the shared password vocabulary constants. Ensures the factory produces valid, insertable user objects with correct defaults/overrides, and that each password constant fulfills its designated role (settable, legacy, minimal, weak) against the *real* Zod policy and the bundled breach list.
+Unit tests for the `makeUser` fixture builder and the shared password vocabulary constants. Ensures the factory produces valid, insertable user objects with correct defaults/overrides, and that each password constant fulfills its designated role (settable, legacy, minimal, weak) against the _real_ Zod policy and the bundled breach list.
 
 ## Key elements
 
@@ -21,7 +21,7 @@ Unit tests for the `makeUser` fixture builder and the shared password vocabulary
 
 - **`src/modules/users/factories.ts`** — imports `makeUser` (the function under test) and `PLAIN_PASSWORD` (the shared login credential).
 - **`src/modules/users/tests/factories.ts`** — imports the four additional password constants (`LEGACY_PASSWORD`, `MINIMAL_PASSWORD`, `REPLACEMENT_PASSWORD`, `WEAK_PASSWORD`) and validates their roles.
-- **`src/modules/users/model.ts`** — imports `zodUserSchema` to exercise the *actual* password validation policy rather than a local re-statement.
+- **`src/modules/users/model.ts`** — imports `zodUserSchema` to exercise the _actual_ password validation policy rather than a local re-statement.
 - **`src/infrastructure/security/breached-passwords/index.ts`** — imports `isInBundledBreachList` to confirm fixture passwords won't collide with the breach-check that runs before any signup path.
 
 ## Notes

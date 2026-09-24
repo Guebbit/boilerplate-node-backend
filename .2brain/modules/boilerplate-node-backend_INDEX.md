@@ -1,8 +1,8 @@
 ---
 tags:
-  - 2brain
-  - 2brain/index
-  - project/boilerplate-node-backend
+    - 2brain
+    - 2brain/index
+    - project/boilerplate-node-backend
 type: index
 modules: 30
 updated: 2026-09-23T20:41:31.048519+00:00
@@ -13,6 +13,7 @@ updated: 2026-09-23T20:41:31.048519+00:00
 `boilerplate-node-backend` is a Node.js backend boilerplate organized around e-commerce domain modules—orders, payments, cart, products, inventory, delivery, and others—each self-contained under `src/modules/` with its own controllers and co-located tests. Cross-cutting concerns live in a dedicated `src/infrastructure/` layer (adapters and HTTP), while operational tooling is kept at the repository root, in `scripts/`, and in `scenarios/`. The test suite spans `tests/unit/`, `tests/integration/`, and `tests/cross-cutting/`, supported by a shared `tests/support/` harness.
 
 ## Module map
+
 ```mermaid
 flowchart LR
     m_scenarios["scenarios/<br/>24 files"]
@@ -120,6 +121,7 @@ flowchart LR
 _208 lower-traffic connection(s) hidden to keep the diagram readable._
 
 ## Modules
+
 - [[boilerplate-node-backend_scenarios|scenarios/]] — 24 files, 21 connected modules
 - [[boilerplate-node-backend_scripts|scripts/]] — 59 files, 20 connected modules
 - [[boilerplate-node-backend_src|src/]] — 28 files, 29 connected modules

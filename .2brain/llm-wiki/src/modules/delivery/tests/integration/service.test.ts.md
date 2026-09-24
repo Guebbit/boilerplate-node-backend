@@ -24,21 +24,21 @@ Integration tests for the delivery service: the rate-pricing rules and the shipm
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/delivery/service.ts` | System under test — `recordShipment`, `recordDelivery`, `getForOrder`. |
-| `src/modules/delivery/domain/index.ts` | Provides `findShippingMethod`, `priceShipping`, `SHIPPING_METHODS` (rate logic). |
-| `src/modules/delivery/domain/rates.ts` | Underlying rate constants/rules consumed via the domain barrel. |
-| `src/modules/delivery/repository.ts` | `shipmentRepository` used to read back parcel state after service calls. |
-| `src/modules/orders/index.ts` | `orderService.getById` used to verify order status transitions. |
-| `src/infrastructure/adapters/mailer.ts` | `enqueueEmail` — mocked; assertions target its call args. |
-| `src/modules/orders/tests/factories.ts` | `createOrder`, `toOrderItem` — order fixtures. |
-| `src/modules/products/tests/factories.ts` | `createProduct` — product fixture. |
-| `src/modules/users/tests/factories.ts` | `createUser` — user fixtures (owner, stranger). |
-| `src/types/index.ts` | `OrderStatus` enum used in fixtures and assertions. |
-| `tests/support/callers.ts` | `asCustomer`, `testCallerContext` — caller-context helpers. |
-| `tests/support/response.ts` | `asReject` — type-narrowing helper for error responses. |
-| `tests/support/setup-test-db.ts` | `setupTestDb` — real Mongo lifecycle. |
+| Neighbor                                  | Interaction                                                                      |
+| ----------------------------------------- | -------------------------------------------------------------------------------- |
+| `src/modules/delivery/service.ts`         | System under test — `recordShipment`, `recordDelivery`, `getForOrder`.           |
+| `src/modules/delivery/domain/index.ts`    | Provides `findShippingMethod`, `priceShipping`, `SHIPPING_METHODS` (rate logic). |
+| `src/modules/delivery/domain/rates.ts`    | Underlying rate constants/rules consumed via the domain barrel.                  |
+| `src/modules/delivery/repository.ts`      | `shipmentRepository` used to read back parcel state after service calls.         |
+| `src/modules/orders/index.ts`             | `orderService.getById` used to verify order status transitions.                  |
+| `src/infrastructure/adapters/mailer.ts`   | `enqueueEmail` — mocked; assertions target its call args.                        |
+| `src/modules/orders/tests/factories.ts`   | `createOrder`, `toOrderItem` — order fixtures.                                   |
+| `src/modules/products/tests/factories.ts` | `createProduct` — product fixture.                                               |
+| `src/modules/users/tests/factories.ts`    | `createUser` — user fixtures (owner, stranger).                                  |
+| `src/types/index.ts`                      | `OrderStatus` enum used in fixtures and assertions.                              |
+| `tests/support/callers.ts`                | `asCustomer`, `testCallerContext` — caller-context helpers.                      |
+| `tests/support/response.ts`               | `asReject` — type-narrowing helper for error responses.                          |
+| `tests/support/setup-test-db.ts`          | `setupTestDb` — real Mongo lifecycle.                                            |
 
 ## Notes
 

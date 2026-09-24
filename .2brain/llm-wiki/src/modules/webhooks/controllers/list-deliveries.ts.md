@@ -28,4 +28,4 @@ HTTP controller for `GET /webhooks/deliveries`. Returns the calling tenant's web
 ## Notes
 
 - `status` is intentionally a closed enum (matching the convention used by audit-logs' `outcome`): an unrecognised value produces a 422 rather than silently matching every row.
-- `page`/`pageSize` are swapped to the infra pair *before* `.partial()` so that an absent value remains absent in the parsed object, allowing `normalizePagination` (inside `createListController`) to apply its defaults. The Zod-generated schemas are *not* used here.
+- `page`/`pageSize` are swapped to the infra pair _before_ `.partial()` so that an absent value remains absent in the parsed object, allowing `normalizePagination` (inside `createListController`) to apply its defaults. The Zod-generated schemas are _not_ used here.

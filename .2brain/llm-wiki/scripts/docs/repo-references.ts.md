@@ -15,10 +15,10 @@ Shared path-resolution primitives so the two reference checkers — `check-refer
 
 - **`ROOT`** — repo root, resolved two levels up from `scripts/docs/`.
 - **`ALLOWED`** — prefix-matched list of paths that legitimately don't exist in a clean checkout (generated files, `node_modules/`, `tmp/`, build output, etc.), each with a stated reason.
-- **`allowed(token)`** — returns true if the token matches an `ALLOWED` entry (the directory itself *or* anything beneath it).
-- **`FILENAME`** — regex identifying a real filename (non-empty stem + known extension). Applied to the *last* segment only, so suffix conventions like `.visual.cy.ts` are not misread as filenames.
+- **`allowed(token)`** — returns true if the token matches an `ALLOWED` entry (the directory itself _or_ anything beneath it).
+- **`FILENAME`** — regex identifying a real filename (non-empty stem + known extension). Applied to the _last_ segment only, so suffix conventions like `.visual.cy.ts` are not misread as filenames.
 - **`NOT_A_PATH`** — regex of characters (whitespace, quotes, globs, `…`, `<placeholder>`) that mark a span as prose, a glob, or a type rather than a concrete path.
-- **`trackedTargets(root)`** — shells out to `git ls-files` and precomputes two `Set`s: `targets` (every tail of every tracked file *and* every intermediate directory) and `roots` (top-level segments actually present at the repo root). Set lookup replaces what would otherwise be tens of millions of `endsWith` comparisons.
+- **`trackedTargets(root)`** — shells out to `git ls-files` and precomputes two `Set`s: `targets` (every tail of every tracked file _and_ every intermediate directory) and `roots` (top-level segments actually present at the repo root). Set lookup replaces what would otherwise be tens of millions of `endsWith` comparisons.
 - **`SPELLINGS`** — ordered suffixes (`'', '.ts', '/index.ts', …`) tried when an extensionless token is resolved.
 - **`resolves(targets, token)`** — true if any spelling of the token is a member of the `targets` set.
 - **`claimsAPath(roots, token)`** — gatekeeper: true only if the last segment matches `FILENAME` **or** the first segment is a known root-level entry. Prevents MIME types, container images, lint rules, etc. from being treated as repo paths.
@@ -32,7 +32,7 @@ Shared path-resolution primitives so the two reference checkers — `check-refer
 
 ## Notes
 
-- `ALLOWED` is deliberately an *argument*, not a mute button: every entry carries a `reason`, and a path with no reason to be absent should appear as a finding.
+- `ALLOWED` is deliberately an _argument_, not a mute button: every entry carries a `reason`, and a path with no reason to be absent should appear as a finding.
 - `trackedTargets` includes intermediate directories (e.g. `src/infrastructure/`) as valid tails, so citing a directory name without a trailing file is still resolvable.
 - `FILENAME` and `claimsAPath` are anchored on the **last** segment to avoid reading multi-part suffix conventions (`.visual.cy.ts`, `.test.tsx`) as filenames.
 - `readAliases` manually strips `//` comment lines before `JSON.parse` because `tsconfig.json` is JSONC and the built-in parser rejects it.

@@ -15,11 +15,11 @@ Unit tests for the `makeWishlist` factory. Verifies that the factory correctly c
 
 - **`USER`, `DOG_FOOD`, `DOG_BED`** – hardcoded hex-string fixture IDs (owner + two products) used across all assertions.
 - **`describe('makeWishlist')`** – five test cases:
-  - *stores the owner as a real ObjectId* – asserts `wishlist.userId` is a `Types.ObjectId` and round-trips to the original hex string.
-  - *omits items when none are given* – asserts `'items'` key is absent so the Mongoose schema default kicks in.
-  - *wraps each bare product id into a line* – asserts each `productIds` entry becomes `{ productId: ObjectId }`.
-  - *gives a line nothing but a product id* – asserts the only key on a line is `productId` (no quantity or other fields).
-  - *keeps an explicitly empty list distinct from an absent one* – asserts `productIds: []` yields `items: []`, not a missing key.
+    - _stores the owner as a real ObjectId_ – asserts `wishlist.userId` is a `Types.ObjectId` and round-trips to the original hex string.
+    - _omits items when none are given_ – asserts `'items'` key is absent so the Mongoose schema default kicks in.
+    - _wraps each bare product id into a line_ – asserts each `productIds` entry becomes `{ productId: ObjectId }`.
+    - _gives a line nothing but a product id_ – asserts the only key on a line is `productId` (no quantity or other fields).
+    - _keeps an explicitly empty list distinct from an absent one_ – asserts `productIds: []` yields `items: []`, not a missing key.
 
 ## Relationships
 
@@ -28,5 +28,5 @@ Unit tests for the `makeWishlist` factory. Verifies that the factory correctly c
 
 ## Notes
 
-- The "no quantity" test is intentional and load-bearing: it codifies the domain rule that a wishlist line is *just* a product id, in contrast to a cart line which carries a quantity. A fixture that silently added a quantity would seed documents the schema strips and the API contract forbids.
+- The "no quantity" test is intentional and load-bearing: it codifies the domain rule that a wishlist line is _just_ a product id, in contrast to a cart line which carries a quantity. A fixture that silently added a quantity would seed documents the schema strips and the API contract forbids.
 - The absent-vs-empty `items` distinction is a real schema-level behavior (default array vs. no key); both states must be preserved because downstream code may check `hasOwnProperty` before iterating.

@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single source of truth for *where the paired Vue frontend repo lives* relative to this backend repo. It centralises the default sibling-checkout path and the env-var override logic so that every cross-repo script (contract check, sync, identity check) resolves the same directory without each one re-implementing the `FRONTEND_PATH` fallback.
+Single source of truth for _where the paired Vue frontend repo lives_ relative to this backend repo. It centralises the default sibling-checkout path and the env-var override logic so that every cross-repo script (contract check, sync, identity check) resolves the same directory without each one re-implementing the `FRONTEND_PATH` fallback.
 
 ## Key elements
 
@@ -26,6 +26,6 @@ Single source of truth for *where the paired Vue frontend repo lives* relative t
 
 ## Notes
 
-- **Empty-string trap:** `process.env.FRONTEND_PATH` can be `''` (e.g. when `.env-example` declares `FRONTEND_PATH =` with no value). The code deliberately uses `||` instead of `??` so that an empty/whitespace-only value is treated as *unset* and falls through to `DEFAULT_FRONTEND_PATH`. Using `??` would resolve to the repo's own root, making the "cross-repo" check compare the backend against itself.
+- **Empty-string trap:** `process.env.FRONTEND_PATH` can be `''` (e.g. when `.env-example` declares `FRONTEND_PATH =` with no value). The code deliberately uses `||` instead of `??` so that an empty/whitespace-only value is treated as _unset_ and falls through to `DEFAULT_FRONTEND_PATH`. Using `??` would resolve to the repo's own root, making the "cross-repo" check compare the backend against itself.
 - **Mirror contract:** Changing `DEFAULT_FRONTEND_PATH` here without updating the counterpart constant in the frontend repo breaks the identity check in exactly one direction (the "confusing half" called out in the source comment).
 - The function always returns an **absolute** path; callers should not `path.resolve` again.

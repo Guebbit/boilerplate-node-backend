@@ -15,7 +15,7 @@ Integration tests (over real HTTP) that verify the "all-or-nothing" contract for
 
 - **`describe('GET /orders/{id} — the invoice number on the response')`** — two tests: confirms `invoiceNumber` is absent on legacy orders (no field set) and present (and unchanged) when set at creation time.
 - **`describe('GET /orders/{id}/invoice — the number-and-date block')`** — two tests: confirms the rendered invoice HTML omits both the number and the date of supply when the order has no invoice number, and includes both when it does.
-- **`renderHtmlToPdfMock`** — module-level Jest mock replacing `@infrastructure/adapters/pdf`; avoids requiring a real Chromium/PDF pipeline and lets assertions inspect the HTML string that *would* have been rendered.
+- **`renderHtmlToPdfMock`** — module-level Jest mock replacing `@infrastructure/adapters/pdf`; avoids requiring a real Chromium/PDF pipeline and lets assertions inspect the HTML string that _would_ have been rendered.
 - **`setupTestDb()`** — initialises the in-memory test database before the suite runs.
 
 ## Relationships

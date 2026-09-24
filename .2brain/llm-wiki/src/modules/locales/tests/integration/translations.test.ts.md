@@ -19,23 +19,23 @@ Integration tests for `localeService.getEntityTranslations` and `localeService.u
 - **`givenLocale(tag, overrides?)`** — helper that creates a locale document through `localeRepository.create` + `makeLocale`, optionally setting `active: false`.
 - **`describe('getEntityTranslations')`** — three cases: unregistered entity → 422; entity with no rows → empty list; multiple rows returned sorted by locale tag.
 - **`describe('upsertEntityTranslations')`** — twelve cases covering:
-  - Validation rejections (unregistered entity, missing/inactive locale, undeclared field, empty `fields`, `null` on fallback).
-  - `null` on a non-fallback locale deletes that row.
-  - Locales not named in the request body are left untouched.
-  - Batch atomicity: one bad entry in the payload rejects the whole write (nothing persisted).
-  - Derived-index-column sync: fallback write updates `products.title`/`description`; non-fallback write does not.
-  - `sourceDigest` stamping: set on non-fallback rows at write time, absent on the fallback row, and **not** re-stamped when the fallback is later rewritten in a separate request.
-  - `origin` defaults to `'human'`.
+    - Validation rejections (unregistered entity, missing/inactive locale, undeclared field, empty `fields`, `null` on fallback).
+    - `null` on a non-fallback locale deletes that row.
+    - Locales not named in the request body are left untouched.
+    - Batch atomicity: one bad entry in the payload rejects the whole write (nothing persisted).
+    - Derived-index-column sync: fallback write updates `products.title`/`description`; non-fallback write does not.
+    - `sourceDigest` stamping: set on non-fallback rows at write time, absent on the fallback row, and **not** re-stamped when the fallback is later rewritten in a separate request.
+    - `origin` defaults to `'human'`.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/locales/services/index.ts` | System under test. `localeService.setTranslatables` configures the registry; `getEntityTranslations` / `upsertEntityTranslations` are the methods exercised in every case. |
-| `src/modules/locales/repository.ts` | `localeRepository.create` (via `givenLocale`) seeds locale rows; `translationRepository.findEntityTranslations` reads persisted rows directly for assertions (digest, origin, empty-set checks). |
-| `src/modules/locales/factories.ts` | `makeLocale` builds the locale document shape passed to `localeRepository.create`. |
-| `src/modules/products/tests/factories.ts` | `createProduct` seeds a product row; `readProduct` reads it back to verify the derived-index-column write (or its absence). |
-| `tests/support/setup-test-db.ts` | `setupTestDb` initialises the real Mongo connection the suite depends on. |
+| Neighbor                                  | Interaction                                                                                                                                                                                      |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/modules/locales/services/index.ts`   | System under test. `localeService.setTranslatables` configures the registry; `getEntityTranslations` / `upsertEntityTranslations` are the methods exercised in every case.                       |
+| `src/modules/locales/repository.ts`       | `localeRepository.create` (via `givenLocale`) seeds locale rows; `translationRepository.findEntityTranslations` reads persisted rows directly for assertions (digest, origin, empty-set checks). |
+| `src/modules/locales/factories.ts`        | `makeLocale` builds the locale document shape passed to `localeRepository.create`.                                                                                                               |
+| `src/modules/products/tests/factories.ts` | `createProduct` seeds a product row; `readProduct` reads it back to verify the derived-index-column write (or its absence).                                                                      |
+| `tests/support/setup-test-db.ts`          | `setupTestDb` initialises the real Mongo connection the suite depends on.                                                                                                                        |
 
 ## Notes
 

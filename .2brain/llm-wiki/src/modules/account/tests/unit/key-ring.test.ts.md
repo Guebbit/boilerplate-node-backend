@@ -14,13 +14,13 @@ Unit tests for the pure key-identification math in `key-ring.ts`. Covers the two
 ## Key elements
 
 - **`describe('keyId')`** — Three specs:
-  - Determinism: same secret always yields the same id.
-  - Uniqueness: distinct secrets yield distinct ids (prevents cross-key verification).
-  - Position-independence: id is a pure function of the secret value, so rotating the ring (dropping an entry) does not shift any existing token's `kid`.
+    - Determinism: same secret always yields the same id.
+    - Uniqueness: distinct secrets yield distinct ids (prevents cross-key verification).
+    - Position-independence: id is a pure function of the secret value, so rotating the ring (dropping an entry) does not shift any existing token's `kid`.
 - **`describe('keyForId')`** — Three specs:
-  - Lookup: given a ring and a valid `kid`, returns the matching secret.
-  - Retired key: a `kid` naming a key no longer in the ring returns `undefined` (caller rejects, never crashes).
-  - Absent `kid`: `keyForId(ring, undefined)` returns `undefined` rather than defaulting to `ring[0]`, preventing an unkeyed forgery from being treated as signed by the newest key.
+    - Lookup: given a ring and a valid `kid`, returns the matching secret.
+    - Retired key: a `kid` naming a key no longer in the ring returns `undefined` (caller rejects, never crashes).
+    - Absent `kid`: `keyForId(ring, undefined)` returns `undefined` rather than defaulting to `ring[0]`, preventing an unkeyed forgery from being treated as signed by the newest key.
 
 ## Relationships
 
@@ -28,6 +28,6 @@ Unit tests for the pure key-identification math in `key-ring.ts`. Covers the two
 
 ## Notes
 
-- The header comment states this file tests *pure* math only—no JWT signing, no I/O. If you need to verify the signing round-trip, look at `session-jwt.test.ts` instead.
-- The "position-independence" spec encodes a design requirement: `keyId` must be derived from the secret's *value*, not its index in the ring. A positional scheme would silently repoint `kid`s after rotation; the test guards against that regression.
+- The header comment states this file tests _pure_ math only—no JWT signing, no I/O. If you need to verify the signing round-trip, look at `session-jwt.test.ts` instead.
+- The "position-independence" spec encodes a design requirement: `keyId` must be derived from the secret's _value_, not its index in the ring. A positional scheme would silently repoint `kid`s after rotation; the test guards against that regression.
 - The `undefined`-kid spec is a security invariant: a token with no `kid` must never be mapped to the newest key by default.

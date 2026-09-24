@@ -26,7 +26,7 @@ Standalone script that deletes every cached response owned by this app from Redi
 
 ## Notes
 
-- **Fails closed on unreachable Redis.** `clearCache` is designed to fail *open* (return `deleted: 0`) so the seed flow isn't blocked (§9). This script explicitly checks the `reachable` flag and throws, because printing "0 keys removed" and exiting 0 would be indistinguishable from a genuinely empty cache.
+- **Fails closed on unreachable Redis.** `clearCache` is designed to fail _open_ (return `deleted: 0`) so the seed flow isn't blocked (§9). This script explicitly checks the `reachable` flag and throws, because printing "0 keys removed" and exiting 0 would be indistinguishable from a genuinely empty cache.
 - **Never runs `FLUSHALL`.** Deletion is scoped to `NODE_REDIS_CACHE_PREFIX`, making it safe on a shared Redis instance.
 - **`scenario:apply` invokes this automatically**; run manually (`npm run db:cache:clear` or `npm run host -- db:cache:clear`) after any direct database edit.
 - The `void` before `runScript(...)` signals a top-level fire-and-forget invocation (the script's own process is the only consumer).

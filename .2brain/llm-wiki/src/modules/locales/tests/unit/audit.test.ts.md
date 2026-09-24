@@ -20,7 +20,7 @@ Unit test that pins the exact string values of the locales audit-action vocabula
 ## Relationships
 
 - **`src/modules/locales/audit.ts`** — the only import; provides `localeAuditActions`, the object under test.
-- Referenced (not imported): `tests/cross-cutting/audit-actions.test.ts` is cited in the module doc-comment as the place that proves the *shape* (key count, naming pattern); this file proves the *values*.
+- Referenced (not imported): `tests/cross-cutting/audit-actions.test.ts` is cited in the module doc-comment as the place that proves the _shape_ (key count, naming pattern); this file proves the _values_.
 
 ## Notes
 

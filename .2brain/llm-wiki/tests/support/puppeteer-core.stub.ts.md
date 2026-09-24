@@ -22,6 +22,6 @@ No graph neighbors are recorded. The file is consumed implicitly by Jest's `modu
 
 ## Notes
 
-- The stub is deliberately a *loud* replacement: it throws instead of returning a fake browser. This is a design choice to prevent tests from passing vacuously while asserting on undefined behavior.
+- The stub is deliberately a _loud_ replacement: it throws instead of returning a fake browser. This is a design choice to prevent tests from passing vacuously while asserting on undefined behavior.
 - CI installs no Chromium, so no suite is expected to run real PDF rendering.
 - See `docs/tools/unit-testing.md` (referenced in the file header) for the broader testing strategy behind this pattern.

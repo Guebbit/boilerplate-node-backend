@@ -22,7 +22,7 @@ Public barrel for the delivery module. It is the **only** import surface allowed
 
 - **`src/modules/cart/services/checkout.ts`** — imports `findShippingMethod` / `priceShipping` through this barrel to price the chosen method; the frozen order total and the `/methods` quote both derive from the same domain path.
 - **`src/modules/delivery/domain/index.ts`** — re-exported wholesale; contains the pricing logic that checkout depends on.
-- **`src/modules/delivery/service.ts`** — re-exported wholesale; provides the service layer and the internal `shipmentRepository` (the write handle is *not* re-exported to other modules).
+- **`src/modules/delivery/service.ts`** — re-exported wholesale; provides the service layer and the internal `shipmentRepository` (the write handle is _not_ re-exported to other modules).
 - **`src/modules/delivery/emails.ts`** — re-exported; delivery notification email builders.
 - **`src/modules/delivery/model.ts`** — type-only re-export; structural types available to consumers, runtime stays private.
 - **`tests/cross-cutting/money-reconciliation.property.test.ts`** — imports through this barrel to verify that checkout totals and shipping quotes remain consistent (money-reconciliation property).

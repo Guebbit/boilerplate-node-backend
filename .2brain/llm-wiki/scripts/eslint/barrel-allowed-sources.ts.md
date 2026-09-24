@@ -30,7 +30,7 @@ A custom ESLint rule that enforces Strategic DDD boundaries on module barrel fil
 ## Notes
 
 - The rule only activates on files matching `src/modules/<name>/index.ts` (enforced at registration in `eslint.config.ts`, not inside the rule itself).
-- `factories` is deliberately absent from the allowlists *and* from the code: `no-restricted-imports` in `eslint.config.ts` already blocks importing it, so this rule has no allowance or check for it.
+- `factories` is deliberately absent from the allowlists _and_ from the code: `no-restricted-imports` in `eslint.config.ts` already blocks importing it, so this rule has no allowance or check for it.
 - The `tax` named-pick exception applies **only** to the `products` barrel; the module name is extracted from the file path at runtime.
 - Zod validation schemas (`zod*Schema`) are explicitly excluded from `isModelRuntimeValueName` so they are not false-positived as Mongoose runtime values.
 - Three export forms are handled: `export * from`, `export { x } from`, and `import … ; export { x };` (the last resolved via the local `importSourceOf` map since the export node carries no `source`).

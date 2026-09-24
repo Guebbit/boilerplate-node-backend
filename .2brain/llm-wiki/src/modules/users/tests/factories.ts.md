@@ -14,7 +14,7 @@ Test-only database factory for the `users` module. It wraps the plain-payload bu
 ## Key elements
 
 - **`createUser(overrides?, role?)`** – Inserts a user via `userRepository.create(makeUser(overrides))`; if `role` is provided, immediately calls `assignRole(user.id, DEPLOYMENT_TENANT_ID, 'tenant', role)`. Omitting `role` leaves the user with no membership row (the anonymous-baseline case).
-- **`createAdminUser(overrides?)`** – Builds on `createUser` with `admin` tenant role, then adds a *tenant-less* `platform` / `operator` role via `assignRole(user.id, null, 'platform', 'operator')`, mirroring the seeded `root` account's dual scope.
+- **`createAdminUser(overrides?)`** – Builds on `createUser` with `admin` tenant role, then adds a _tenant-less_ `platform` / `operator` role via `assignRole(user.id, null, 'platform', 'operator')`, mirroring the seeded `root` account's dual scope.
 - **`REPLACEMENT_PASSWORD`** (`'Replacement1!'`) – A policy-compliant password distinct from `PLAIN_PASSWORD`; use when a test asserts "the password actually changed."
 - **`MINIMAL_PASSWORD`** (`'Aa1!aaaa'`) – Exactly at the policy minimum length with one of each required class.
 - **`LEGACY_PASSWORD`** (`'correct-horse-battery'`) – Sufficient length but missing complexity classes; represents a pre-policy existing credential (valid as `currentPassword`, never settable).
@@ -34,4 +34,4 @@ Test-only database factory for the `users` module. It wraps the plain-payload bu
 - Defaulted model fields are intentionally **left unset** in `makeUser` so `createUser` exercises the real schema defaults rather than a factory-supplied value.
 - `createAdminUser` assigns **two** roles (tenant `admin` + tenant-less `platform operator`). A fixture with only one will pass shop-scoped tests but fail observability/platform-scoped ones.
 - `userRepository` is exported as the raw module binding specifically so `jest.spyOn` intercepts internal calls; a wrapper function would copy the binding and defeat interception.
-- `LEGACY_PASSWORD` is valid only as an *existing* credential (`currentPassword`), never as a new one—matching the `Password` vs `PasswordNew` distinction in `openapi.yaml`.
+- `LEGACY_PASSWORD` is valid only as an _existing_ credential (`currentPassword`), never as a new one—matching the `Password` vs `PasswordNew` distinction in `openapi.yaml`.

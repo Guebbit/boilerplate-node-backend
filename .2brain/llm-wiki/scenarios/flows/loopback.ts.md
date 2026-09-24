@@ -23,6 +23,6 @@ Provides a helper for driving the Express app over real HTTP on an ephemeral loo
 ## Notes
 
 - `server.address()` is cast to `AddressInfo` rather than `string`; the string branch (UNIX socket) is impossible when calling `listen(port, host)`, but TypeScript's union type still demands the narrowing.
-- The function always closes the server—on success *and* on `drive` rejection—before propagating the outcome, so no dangling socket lingers.
+- The function always closes the server—on success _and_ on `drive` rejection—before propagating the outcome, so no dangling socket lingers.
 - Because `app.listen()` constructs a new `http.Server` per call, this loopback instance never collides with the production server, even if both are alive briefly.
 - The server is intentionally unauthenticated; it only lives for the duration of one seed/flow run.

@@ -14,17 +14,17 @@ Unit tests for the three public functions exported by `@kernel/registry` — `re
 ## Key elements
 
 - **`registerModules` tests (top-level `it` blocks)**
-  - Verifies that `subscribe` is invoked exactly once per module that declares one.
-  - Verifies that a module with no `subscribe` is silently skipped (no throw, no error), and that a sibling module's `subscribe` is still called.
+    - Verifies that `subscribe` is invoked exactly once per module that declares one.
+    - Verifies that a module with no `subscribe` is silently skipped (no throw, no error), and that a sibling module's `subscribe` is still called.
 
 - **`resolveTranslatables` describe block**
-  - Verifies that the per-module `translatables` maps are merged into a single flat lookup keyed by `entityType`.
-  - Verifies that an empty result (`{}`) is returned when no module declares `translatables`.
+    - Verifies that the per-module `translatables` maps are merged into a single flat lookup keyed by `entityType`.
+    - Verifies that an empty result (`{}`) is returned when no module declares `translatables`.
 
 - **`resolvePersonalDataSections` describe block**
-  - Verifies that `personalData` arrays from multiple modules are concatenated in declaration order.
-  - Verifies that `'none'` contributes no entry.
-  - Verifies that a single module can contribute multiple `{ section, collect }` entries (all are kept, not just the first).
+    - Verifies that `personalData` arrays from multiple modules are concatenated in declaration order.
+    - Verifies that `'none'` contributes no entry.
+    - Verifies that a single module can contribute multiple `{ section, collect }` entries (all are kept, not just the first).
 
 ## Relationships
 

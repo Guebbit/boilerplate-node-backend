@@ -38,7 +38,7 @@ Integration test suite for the feedback request service. Pins down normalisation
 
 ## Notes
 
-- **Audit mock subtlety:** `recordAudit` in the real module closes over its *own* `emitAuditEvent`, so simply overriding the export is not enough. The mock re-implements `recordAudit` to call `buildAuditEvent` from the real module and then dispatch through the *mocked* `emitAuditEvent`. The same pattern is used in `orders/tests/integration/cancel.test.ts`.
+- **Audit mock subtlety:** `recordAudit` in the real module closes over its _own_ `emitAuditEvent`, so simply overriding the export is not enough. The mock re-implements `recordAudit` to call `buildAuditEvent` from the real module and then dispatch through the _mocked_ `emitAuditEvent`. The same pattern is used in `orders/tests/integration/cancel.test.ts`.
 - **`NODE_CONTACT_NOTIFY_EMAIL`** must be set in `beforeAll` because the service reads it from `process.env` at call time, and `dotenv/config` (loaded via `src/app.ts`) is never imported in a service-level test. Without it, honeypot tests would pass vacuously (no recipient configured rather than the honeypot suppressing the send).
 - **`NODE_ANTIBOT_EMAIL_POLICY`** is read per-call; the disposable-email block restores it in `afterEach` to avoid leaking between tests.
 - **`respondedAt` is stamped once:** the test asserts that re-resolving an already-`resolved` item does not move the timestamp. This is an idempotency invariant, not just "set if null."

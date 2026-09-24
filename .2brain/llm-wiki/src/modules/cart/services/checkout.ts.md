@@ -34,7 +34,7 @@ The single cart operation that writes into the orders module's collection. It pe
 ## Notes
 
 - **Concurrency contract:** Read cart → write order → clear cart is three separate statements. Safety depends on `clearLinesIfUnchanged` being a conditional write keyed to the `__v` captured before the product join. If you refactor the ordering, the loser's `retractOrder` + 409 path is what prevents double-charge.
-- **Pre-flight ordering matters:** Every validation that can reject (payment, address, shipping, stock) runs *before* `placeOrder` is called, so no stock is held and no invoice number is minted on a bad request.
+- **Pre-flight ordering matters:** Every validation that can reject (payment, address, shipping, stock) runs _before_ `placeOrder` is called, so no stock is held and no invoice number is minted on a bad request.
 - **`code` vs `message`:** Reject codes (`CART_EMPTY`, `CART_INSUFFICIENT_STOCK`, etc.) are stable, locale-independent identifiers consumed by analytics; `message` is the translated string shown to the user. Do not rename codes.
 - **`toObject() as Lean<ProductDocument>`:** The cast exists because Mongoose's untyped `DocType` generic makes `toObject()` resolve to `any`. It is a known friction point, not an oversight.
 - **Shipping is optional:** `shippingMethodId === undefined` is a valid path (digital-only purchase). A named method on an all-digital basket is rejected, not silently ignored.

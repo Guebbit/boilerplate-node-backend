@@ -13,7 +13,7 @@ Service-layer functions for the self-service account profile: reading one's own 
 
 ## Key elements
 
-- **`validatePasswordChange(password, passwordConfirm)`** — Zod-validated check that the two fields match and meet the user-schema password rules. Returns `ResponseErrorItem[]` (empty when valid). Split out so callers can reject *before* spending a one-time reset token.
+- **`validatePasswordChange(password, passwordConfirm)`** — Zod-validated check that the two fields match and meet the user-schema password rules. Returns `ResponseErrorItem[]` (empty when valid). Split out so callers can reject _before_ spending a one-time reset token.
 - **`passwordChange(user, password, passwordConfirm, beforeSave?)`** — Core funnel. Validates → checks breached-passwords → runs optional `beforeSave` hook → `userService.setPassword` → revokes all `REFRESH` tokens (failure swallowed). Returns `ResponseSuccess<UserDocument>` or `ResponseReject`.
 - **`getOwnProfile(userId, context)`** — Emits `USER_PROFILE_VIEWED` analytics, then reads via `findByIdWithPendingEmail` (not `getById`) so the caller sees `pendingEmail` status.
 - **`passwordResetChange(user, password, passwordConfirm, context)`** — Calls `passwordChange` with `markVerified` as the `beforeSave` hook. On success: fires-and-forgets a `resetConfirmEmail`, records `AUTH_PASSWORD_RESET_COMPLETED` audit row, resolves the actor role via `rolesOf`.
@@ -44,4 +44,4 @@ Service-layer functions for the self-service account profile: reading one's own 
 - **`getOwnProfile` avoids `userService.getById`** for two reasons: (1) `getById` is shared with admin lookups that must not see `pendingEmail`, and (2) an unconditional analytics emit inside `getById` would miscount admin reads as self-views.
 - **`removeOwnAccount` captures PII before the write.** After a hard delete the document is gone; the goodbye email and audit row must be composed from the pre-delete snapshot.
 - **Fire-and-forget convention.** Post-success side effects (email enqueue, audit role lookup) use `void` or `.catch` so a transient infra failure never turns an already-committed mutation into a 500.
-- The module's service is a *folder* (see `./index`), with `profile.ts` as one slice alongside `authentication`, `session`, `verification`, etc.
+- The module's service is a _folder_ (see `./index`), with `profile.ts` as one slice alongside `authentication`, `session`, `verification`, etc.

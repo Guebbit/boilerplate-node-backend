@@ -13,7 +13,7 @@ Unit tests for the shared scalar schemas in `@infrastructure/http/schemas`. Each
 
 ## Key elements
 
-- **`describe('hardDeleteSchema')`** — Verifies that explicit `false` is preserved (not treated as "absent → soft delete"), that absent values (`undefined`, `''`, `null`) default to `false`, and that uninterpretable values (`'maybe'`, `1`, `{}`) are *rejected* rather than silently coerced to the destructive `true`.
+- **`describe('hardDeleteSchema')`** — Verifies that explicit `false` is preserved (not treated as "absent → soft delete"), that absent values (`undefined`, `''`, `null`) default to `false`, and that uninterpretable values (`'maybe'`, `1`, `{}`) are _rejected_ rather than silently coerced to the destructive `true`.
 - **`describe('optionalBooleanSchema')`** — Asserts the full truthy/falsy vocabulary (`'true'/'yes'/'1'/'on'` and `'false'/'no'/'0'/'off'`) decodes correctly, absent values stay `undefined`, and unrecognized strings produce a `safeParse` failure.
 - **`describe('pageSchema / pageSizeSchema')`** — Confirms string-to-integer coercion, that absent values remain `undefined` (defaults are `normalizePagination`'s responsibility, not the schema's), rejection of `0`, negatives, fractional numbers, and non-numeric strings, and enforcement of the `pageSize` maximum of 100.
 - **`describe('paginationSchema')`** — Tests the combined object (`{ page, pageSize }`), and that a `safeParse` failure reports the specific offending key via `error.issues[0].path`.
@@ -24,7 +24,7 @@ Unit tests for the shared scalar schemas in `@infrastructure/http/schemas`. Each
 
 ## Notes
 
-- These schemas are expected to run *after* `readInput` has already decoded raw query-string spellings; the test comments make this contract explicit.
+- These schemas are expected to run _after_ `readInput` has already decoded raw query-string spellings; the test comments make this contract explicit.
 - The `pageSize` cap of 100 is sourced from `openapi.yaml` (`maximum: 100`), not from a constant in the schema module itself.
 - Default values for `page`/`pageSize` are intentionally **not** set here—`normalizePagination` is the single authority on defaults, and the schemas leave absent fields as `undefined` so it can apply them without a second source of truth.
 - The rejection-over-coercion philosophy is tested throughout: any value the schema cannot confidently interpret must fail (`safeParse.success === false`), never silently become a destructive or default behavior.

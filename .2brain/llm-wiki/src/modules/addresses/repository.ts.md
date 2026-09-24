@@ -15,12 +15,12 @@ Data-access layer for a per-user address book. Implements a **read-modify-write*
 
 - **`decryptBook`** (internal) – Walks every subdocument in `book.items`, calls `decryptAddressItem`, and writes the result back via `Object.assign` (preserves Mongoose DocumentArray methods; no `.save()` is called afterwards).
 - **`addressBookRepository`** (exported) – The repository object. Spreads the base factory from `createRepository` (giving `findOne`, `findById`, etc.) and adds address-specific methods:
-  - `create` – Overrides the factory's `create`. Encrypts all PII fields, inserts, then decrypts. Used by seeding scenarios that bypass `addEntry`.
-  - `findByUserId` – Returns the decrypted book or `null` (distinguished from an empty book only by identity; callers treat both as "no addresses").
-  - `addEntry` – Appends an entry (creating the book if absent). Enforces the default rule: first entry is always default; a later `default: true` demotes the current holder.
-  - `updateEntry` – Partial edit of one entry. `default: true` demotes others and promotes this one; `default: false`/absent leaves the current assignment untouched (avoids orphaning the book with zero defaults). Returns `null` if book or entry not found.
-  - `removeEntry` – Deletes one entry. If it was the default, promotes the first remaining entry. Returns `null` if not found.
-  - `deleteByUserId` – Hard-deletes the entire book (account deletion path).
+    - `create` – Overrides the factory's `create`. Encrypts all PII fields, inserts, then decrypts. Used by seeding scenarios that bypass `addEntry`.
+    - `findByUserId` – Returns the decrypted book or `null` (distinguished from an empty book only by identity; callers treat both as "no addresses").
+    - `addEntry` – Appends an entry (creating the book if absent). Enforces the default rule: first entry is always default; a later `default: true` demotes the current holder.
+    - `updateEntry` – Partial edit of one entry. `default: true` demotes others and promotes this one; `default: false`/absent leaves the current assignment untouched (avoids orphaning the book with zero defaults). Returns `null` if book or entry not found.
+    - `removeEntry` – Deletes one entry. If it was the default, promotes the first remaining entry. Returns `null` if not found.
+    - `deleteByUserId` – Hard-deletes the entire book (account deletion path).
 
 ## Relationships
 

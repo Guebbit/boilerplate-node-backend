@@ -14,12 +14,12 @@ HTTP adapter for `POST /account/login/2fa/send`. Validates the incoming request,
 ## Key elements
 
 - **`postLoginTwoFactorSend(request, response)`** – the sole export. An async Express handler (`.then/.catch` style) that:
-  - Safely parses `request.body` against the `SendTwoFactorCodeBody` Zod schema.
-  - Falls back to `readMfaChallengeCookie` when `body.challenge` is absent (mirrors the fallback in `postLoginTwoFactor`).
-  - Returns **401** if no valid challenge token is available.
-  - Calls `twoFactorService.sendLoginCode(challenge, method, callerContext)` and maps the result to a **200** (with `TwoFactorDelivery` payload) or an error status.
-  - Catches unexpected exceptions via `rejectDatabaseError`.
-  - Increments the `authTwoFactorCodeSentTotal` Prometheus counter on **every** exit path (success *and* failure), labelled with `method` and `status`.
+    - Safely parses `request.body` against the `SendTwoFactorCodeBody` Zod schema.
+    - Falls back to `readMfaChallengeCookie` when `body.challenge` is absent (mirrors the fallback in `postLoginTwoFactor`).
+    - Returns **401** if no valid challenge token is available.
+    - Calls `twoFactorService.sendLoginCode(challenge, method, callerContext)` and maps the result to a **200** (with `TwoFactorDelivery` payload) or an error status.
+    - Catches unexpected exceptions via `rejectDatabaseError`.
+    - Increments the `authTwoFactorCodeSentTotal` Prometheus counter on **every** exit path (success _and_ failure), labelled with `method` and `status`.
 
 ## Relationships
 

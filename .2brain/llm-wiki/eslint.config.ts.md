@@ -8,6 +8,7 @@ model: ollama:qwen3.8:27b
 # eslint.config.ts
 
 ## Purpose
+
 Flat ESLint configuration for the project. It wires together TypeScript, Unicorn, Boundaries, JSDoc, Jest, Prettier, and custom local rules into a single typed config, enforcing project-specific bans (double casts, production try/catch, factories imports) on top of strict type-checked linting.
 
 ## Key elements
@@ -25,7 +26,7 @@ Flat ESLint configuration for the project. It wires together TypeScript, Unicorn
 
 ## Notes
 
-- `no-restricted-syntax` and `no-restricted-imports` do **not** merge across config blocks — the nearest match *replaces* the list. Every block that sets one of these rules must re-spread `bannedDoubleCasts`, `bannedTryCatch`, or `factoriesImportPattern`, or the ban silently lifts for that scope.
+- `no-restricted-syntax` and `no-restricted-imports` do **not** merge across config blocks — the nearest match _replaces_ the list. Every block that sets one of these rules must re-spread `bannedDoubleCasts`, `bannedTryCatch`, or `factoriesImportPattern`, or the ban silently lifts for that scope.
 - `@typescript-eslint/no-non-null-assertion` is deliberately off; `!` is the sanctioned narrow claim where the compiler cannot follow a guarantee (middleware auth, `.some` guard before `.map`).
 - `unicorn/prefer-module` is off because the runtime (tsx, jest) executes TS as CommonJS, making `import.meta.dirname` undefined.
 - The file references `tests/support/stub.ts` (`asStub<T>`) as the one sanctioned escape hatch for test stubs, and `docs/reference/root.md` for the `max-nested-callbacks` rationale.

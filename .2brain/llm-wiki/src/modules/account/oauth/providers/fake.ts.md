@@ -16,8 +16,8 @@ A no-network OAuth provider that simulates a full sign-in flow (CSRF state round
 - **`FAKE_OAUTH_CODE`** – Exported constant (`'fake-oauth-code'`). The fixed prefix every fake authorization code must carry; `exchangeCode` rejects anything else.
 - **`FAKE_IDENTITY`** – Module-private object. The single, already-verified identity that every fake login resolves to (fixed `providerId`, `email`, `name`; `imageUrl` is `undefined`).
 - **`fakeOAuthProvider`** – Exported `OAuthProvider` implementation:
-  - `authorizeUrl(state, redirectUri, codeChallenge)` – Returns the redirect URI immediately with `?code=fake-oauth-code.<challenge>&state=<encoded>` appended. No consent screen; the PKCE challenge is embedded in the code itself (base64url, dot-separated).
-  - `exchangeCode(code, _redirectUri, codeVerifier)` – Splits the code on `.`, validates the prefix, re-derives the challenge from the verifier via `codeChallengeOf`, and rejects on mismatch. On success, resolves `FAKE_IDENTITY`.
+    - `authorizeUrl(state, redirectUri, codeChallenge)` – Returns the redirect URI immediately with `?code=fake-oauth-code.<challenge>&state=<encoded>` appended. No consent screen; the PKCE challenge is embedded in the code itself (base64url, dot-separated).
+    - `exchangeCode(code, _redirectUri, codeVerifier)` – Splits the code on `.`, validates the prefix, re-derives the challenge from the verifier via `codeChallengeOf`, and rejects on mismatch. On success, resolves `FAKE_IDENTITY`.
 
 ## Relationships
 
@@ -28,7 +28,7 @@ A no-network OAuth provider that simulates a full sign-in flow (CSRF state round
 
 ## Notes
 
-- PKCE is self-contained: because there is no server-side challenge store, the challenge travels *inside* the `code` value (after the dot). The callback controller treats the code as an opaque string and never inspects it; all verification happens in `exchangeCode`.
+- PKCE is self-contained: because there is no server-side challenge store, the challenge travels _inside_ the `code` value (after the dot). The callback controller treats the code as an opaque string and never inspects it; all verification happens in `exchangeCode`.
 - The code format is `fake-oauth-code.<base64url-challenge>` — a single dot separates the two parts. Consumers splitting on `.` will get exactly two segments on the happy path.
 - `imageUrl` is intentionally `undefined` in `FAKE_IDENTITY`; downstream code that renders an avatar must handle the absent case.
 - The `redirectUri` parameter in `exchangeCode` is unused (prefixed `_`); the fake provider never needs to re-validate it.

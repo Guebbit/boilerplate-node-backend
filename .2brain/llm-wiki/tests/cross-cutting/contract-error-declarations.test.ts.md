@@ -15,7 +15,7 @@ Ensures every OpenAPI operation whose route takes an id parameter declares a `42
 
 - **`MODULES_ROOT`** – Resolved path to `src/modules/`; the directory scanned for per-module `openapi.yaml` fragments.
 - **`METHODS`** – `Set` of lowercase HTTP method keys (`get`, `post`, `put`, `patch`, `delete`) used to filter operation entries.
-- **`TAKES_AN_ID`** – Regex `/{[^}]*[Ii]d}/` matching any path parameter whose name contains "id" (covers `{id}`, `{orderId}`, `{userId}`, …). Matches on parameter *name*, not on a hard-coded route list.
+- **`TAKES_AN_ID`** – Regex `/{[^}]*[Ii]d}/` matching any path parameter whose name contains "id" (covers `{id}`, `{orderId}`, `{userId}`, …). Matches on parameter _name_, not on a hard-coded route list.
 - **`Operation`** – Interface for a single flattened operation: `module`, `route`, `method`, `codes` (declared response status strings).
 - **`operations()`** – Reads every `src/modules/<name>/openapi.yaml`, parses it with `yaml`, and flattens `paths → method → responses` into an `Operation[]`.
 - **`takingAnId()`** – Filters `operations()` to those whose `route` matches `TAKES_AN_ID`.
@@ -29,6 +29,6 @@ Ensures every OpenAPI operation whose route takes an id parameter declares a `42
 ## Notes
 
 - **Reads fragments, not the bundle.** The generated `openapi.yaml` bundle is not parsed; a failure in it would point at a line nobody edits.
-- **Scope is 422 only.** Three operations (`GET /account`, `GET /observability/events`, `GET /observability/metrics`) lack a `500` declaration. The file deliberately does *not* assert on 500 because resolving those gaps requires coordinated edits across three repositories; the test enforces only the rule it can defend in-repo.
+- **Scope is 422 only.** Three operations (`GET /account`, `GET /observability/events`, `GET /observability/metrics`) lack a `500` declaration. The file deliberately does _not_ assert on 500 because resolving those gaps requires coordinated edits across three repositories; the test enforces only the rule it can defend in-repo.
 - **The contract is a shared artifact.** `openapi.yaml` fragments must stay byte-identical with a paired frontend (whose client is generated from it) and a PHP twin. An undeclared status is a missing type in the generated client, not a cosmetic gap.
-- **Test, not fix.** The doc comment explains why the correction is made in the fragments themselves; this file exists to make the regression visible and to document *why* the rule holds.
+- **Test, not fix.** The doc comment explains why the correction is made in the fragments themselves; this file exists to make the regression visible and to document _why_ the rule holds.

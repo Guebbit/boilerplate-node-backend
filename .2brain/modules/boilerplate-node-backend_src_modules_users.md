@@ -1,8 +1,8 @@
 ---
 tags:
-  - 2brain
-  - 2brain/module
-  - project/boilerplate-node-backend
+    - 2brain
+    - 2brain/module
+    - project/boilerplate-node-backend
 type: module
 module: src/modules/users/
 files: 31
@@ -19,7 +19,7 @@ The **users** module is the bounded context that owns the user record: its Mongo
 
 - **Domain core** — `model.ts` (Mongoose schema, Zod wire schema, token subdocument helpers, bcrypt pre-save hook), `service.ts` (admin CRUD, search, and the named identity operations `account` delegates to), `repository.ts` (persistence layer: CRUD, credential reads, token lifecycle, soft-delete queries).
 - **HTTP layer** — `routes.ts` (admin-only Express router: auth, permissions, caching, upload limits) and `controllers/` (thin adapters: `write-users.ts` for create/update, `delete-users.ts` for soft/hard delete, `get-users.ts` for list/search, `get-user-item.ts` for single fetch, `delete-user-two-factor.ts` for 2FA strip).
-- **Public surface & wiring** — `index.ts` (the *only* import surface permitted for sibling modules, re-exporting service, events, and narrow helpers while keeping the repository and model private), `module.ts` (kernel manifest: router, service, repository, permissions, config).
+- **Public surface & wiring** — `index.ts` (the _only_ import surface permitted for sibling modules, re-exporting service, events, and narrow helpers while keeping the repository and model private), `module.ts` (kernel manifest: router, service, repository, permissions, config).
 - **Cross-cutting declarations** — `analytics.ts`, `audit.ts`, `events.ts` (TypeScript declaration-merging into the kernel's `AnalyticsEventMap`, `AuditActionMap`, and `DomainEventMap`; purely declarative, no runtime logic).
 - **Supporting artifacts** — `factories.ts` (fixture builder that defers to schema defaults), `openapi.yaml` (v2.0.0 REST contract for all endpoints).
 - **Tests** (`tests/`) — layered unit → integration → contract suites covering schema security, service flows, repository semantics, OAuth regression (bug B24), token lifecycle, validation/i18n ordering, route mount order, and OpenAPI conformance.
@@ -37,6 +37,7 @@ The **users** module is the bounded context that owns the user record: its Mongo
 2. **`service.ts`** — the single file where admin CRUD, search, token consumption, 2FA toggling, and OAuth identity lookup all live; once you understand its method surface, the controllers and `account`-side delegates become self-evident adapters.
 
 ## Connected modules
+
 ```mermaid
 flowchart LR
     m_src_modules_users["src/modules/users/"]
@@ -76,6 +77,7 @@ flowchart LR
 [[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_scripts|scripts/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules|src/modules/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_account_controllers|src/modules/account/controllers/]] · [[boilerplate-node-backend_src_modules_account_tests|src/modules/account/tests/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_delivery|src/modules/delivery/]] · [[boilerplate-node-backend_src_modules_orders|src/modules/orders/]] · [[boilerplate-node-backend_src_modules_orders_tests|src/modules/orders/tests/]] · … and 8 more
 
 ## Files
+
 - `src/modules/users/analytics.ts` — Declares the analytics event names for the user module's administrative actions and registers them into the app-wide `AnalyticsEventMap` type so that emitters (e.g. `service.ts`) can reference them in a type-safe, stringly-typed-free way. The events distinguish operator-initiated account actions from the self-signup path (`USER_SIGNED_UP`) so that dashboards can sum or split them independently.
 - `src/modules/users/audit.ts` — Declares the audit-action vocabulary for admin-facing user-record mutations (create, update, soft-delete, erase, 2FA strip, ban/unban) and registers those actions into the app-wide `AuditActionMap` via a TypeScript module augmentation. It is purely declarative — no runtime logic beyond the `as const` export.
 - `src/modules/users/controllers/delete-user-two-factor.ts` — HTTP controller for `DELETE /users/:id/2fa`, an admin-only endpoint that strips a user's second factor of authentication without requiring the 2FA code. It is a thin adapter that delegates all business logic to `userService.adminDisableTwoFactor` and translates the result into an HTTP response.
@@ -101,7 +103,7 @@ flowchart LR
 - `src/modules/users/tests/integration/service-tokens.test.ts` — Integration tests covering the two token-facing lookups on the users service — `findByEmail` and `consumeToken`. They verify that tokens are returned as a populated array (not `undefined`), that consumption removes exactly the targeted token, that removal is persisted to the database, and that unknown tokens are a safe no-op.
 - `src/modules/users/tests/integration/service.test.ts` — Integration test suite for `userService` covering data validation, search/filter/pagination, and admin create/update/delete flows. Runs against a real in-memory MongoDB instance (via `setupTestDb`) rather than mocks, exercising the repository and model layers as the service would see them in production.
 - `src/modules/users/tests/unit/audit.test.ts` — Pin-tests the audit action string map so that any accidental addition, removal, or rewording of an action constant is caught immediately. The strings are a wire contract consumed by external log queries, dashboards, and alerting, so drift would silently break downstream tooling.
-- `src/modules/users/tests/unit/factories.test.ts` — Unit tests for the `makeUser` fixture builder and the shared password vocabulary constants. Ensures the factory produces valid, insertable user objects with correct defaults/overrides, and that each password constant fulfills its designated role (settable, legacy, minimal, weak) against the *real* Zod policy and the bundled breach list.
+- `src/modules/users/tests/unit/factories.test.ts` — Unit tests for the `makeUser` fixture builder and the shared password vocabulary constants. Ensures the factory produces valid, insertable user objects with correct defaults/overrides, and that each password constant fulfills its designated role (settable, legacy, minimal, weak) against the _real_ Zod policy and the bundled breach list.
 - `src/modules/users/tests/unit/routes.test.ts` — Structural contract test for the user-administration router. It asserts that every endpoint is mounted in the documented order, that the full authorization guard chain is present on each route in the correct sequence, that caching tags/keys are shared correctly across the two listing endpoints, that mutations invalidate both serving modules' caches, and that upload and hard-delete middleware are attached exactly where they belong. It exists so a regressed mount order, a dropped guard, or a missing cache invalidation fails loudly in CI rather than silently exposing an admin-only directory.
 - `src/modules/users/tests/unit/schema-contract.test.ts` — Unit tests that pin down the security-critical contract of `userSchema`: which fields are required, how `password`/`tokens`/`oauthAccounts` are hidden from accidental reads and serialization, what defaults a new user receives, the exact index set and uniqueness invariants, and that the `pre('save')` bcrypt hook fires only when `password` is actually modified.
 - `src/modules/users/tests/unit/token-methods.test.ts` — Unit tests for the `tokenAdd` and `tokenRemoveAll` instance methods on the user schema. These two methods are where a session is created or destroyed; the tests verify the database-first write order, the in-memory mirror (only when the `tokens` array was loaded), expiry semantics, and that unrelated token types are unaffected. The model is a double—no database is needed.
@@ -109,4 +111,5 @@ flowchart LR
 - `src/modules/users/tests/unit/validation.test.ts` — Exercises the ten message thunks in `zodUserSchema` at **parse time**, which is the only moment they actually run. Because a Zod schema is a declaration, import-time coverage reports 100 % whether or not a thunk ever fires; this file closes that gap. It also pins the distinction between `error: t('…')` (resolves at import, before `i18next.init()`, silently falling back to English) and the correct `error: () => t('…')`, and guards against a message being attached to the wrong rule.
 
 ---
+
 [[boilerplate-node-backend_INDEX|← boilerplate-node-backend index]]

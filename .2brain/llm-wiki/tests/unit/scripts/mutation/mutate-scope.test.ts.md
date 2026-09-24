@@ -24,5 +24,5 @@ Unit tests for the two exported helpers in `mutate-scope.ts`: `isMutable` (does 
 ## Notes
 
 - Follows the same convention as `local-policy.test.ts`: test the pure logic, not the CLI wrapper that calls it.
-- The `changedMutable` test comment references a historical bug ("B27") that conflated *deleted files* (absent from `mutableFiles()` output) with *glob-excluded files* — both surface as "in the diff but not in scope." The test pins the expected behavior for both.
+- The `changedMutable` test comment references a historical bug ("B27") that conflated _deleted files_ (absent from `mutableFiles()` output) with _glob-excluded files_ — both surface as "in the diff but not in scope." The test pins the expected behavior for both.
 - Globs use `*` (single segment) rather than `**` for the module pattern, which is why `src/modules/*/**/*.ts` matches `src/modules/orders/service.ts` but not `src/modules/service.ts`.

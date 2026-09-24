@@ -26,5 +26,5 @@ Barrel (re-export) file for the webhooks `services/` directory. It is the single
 ## Notes
 
 - The file imports `subscriptions` and `deliveries` only to compose the `webhooksService` object; all other re-exports are named `export … from` statements that do not retain a local binding.
-- The `webhooksService` object intentionally exposes *only* the six admin-surface operations. The event fan-out, sweep, attempt, and catalogue functions are exposed as flat named re-exports instead — they are not part of the CRUD surface.
+- The `webhooksService` object intentionally exposes _only_ the six admin-surface operations. The event fan-out, sweep, attempt, and catalogue functions are exposed as flat named re-exports instead — they are not part of the CRUD surface.
 - Per the inline comment, controllers must go through this barrel ("never the bare functions"). Bypassing it breaks the intended indirection.

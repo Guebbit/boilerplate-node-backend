@@ -31,6 +31,6 @@ OpenAPI 3.0.3 contract for the api-keys module. Defines the three machine-to-mac
 
 - **Flat `ApiKeyCreated` is intentional.** The comment explicitly warns that `allOf: [ApiKey, {secret}]` with two `additionalProperties: false` branches causes ajv to reject valid payloads. Do not "clean up" to `allOf` without re-testing validation.
 - **Secret is single-use in the API surface.** The description on `POST` and the `ApiKeyCreated.secret` field make clear the secret appears in exactly one HTTP response; every other endpoint omits it.
-- **Permission floor is enforced at request time, not just mint time.** The `ApiKey.permissions` description and the `POST` description both state the floor is re-checked against the minter's *current* permissions on every subsequent request.
+- **Permission floor is enforced at request time, not just mint time.** The `ApiKey.permissions` description and the `POST` description both state the floor is re-checked against the minter's _current_ permissions on every subsequent request.
 - **Revoke ≠ delete.** `DELETE /api-keys/{id}` is a state transition (`revokedAt` stamp), not a row removal. The 200 response is the shared `Success` envelope, not a body containing the credential.
 - All schemas set `additionalProperties: false`; any new field added to the API must update the schema here before implementation.

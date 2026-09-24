@@ -15,13 +15,13 @@ Guarantees that the scalar bounds declared in `infrastructure/http/schemas.ts` (
 
 - **`constantsEndingIn(suffix)`** – Filters the generated `@api/schemas.zod` module's entries by name suffix, returning `[name, value]` pairs. The mechanism that makes the sweep endpoint-agnostic.
 - **Canary test** (`finds the generated constants…`) – Asserts the sweep is non-trivial (>5 for PageSizeMax/PageMax, >2 for HardDeleteDefault) so a silent orval rename doesn't let every other test pass over an empty set.
-- **PageSizeMax pair** – One test asserts every generated constant is accepted by `pageSizeSchema`; a second asserts `value + 1` is *rejected*, catching a silently lowered bound.
+- **PageSizeMax pair** – One test asserts every generated constant is accepted by `pageSizeSchema`; a second asserts `value + 1` is _rejected_, catching a silently lowered bound.
 - **PageMax pair** – Same two-sided check against `pageSchema`.
 - **HardDeleteDefault test** – Parses the default from `hardDeleteSchema` (via `parse(undefined)`) and asserts every generated constant equals it.
 
 ## Relationships
 
-- **`src/infrastructure/http/schemas.ts`** – Source of the three Zod schemas (`pageSchema`, `pageSizeSchema`, `hardDeleteSchema`) that define the bounds. This test is the only consumer that validates *all* generated per-operation constants against those bounds; no other test or runtime path enforces the equivalence.
+- **`src/infrastructure/http/schemas.ts`** – Source of the three Zod schemas (`pageSchema`, `pageSizeSchema`, `hardDeleteSchema`) that define the bounds. This test is the only consumer that validates _all_ generated per-operation constants against those bounds; no other test or runtime path enforces the equivalence.
 
 ## Notes
 

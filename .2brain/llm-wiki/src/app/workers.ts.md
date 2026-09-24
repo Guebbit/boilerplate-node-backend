@@ -14,7 +14,7 @@ The single assembly point where all queue consumers are registered at applicatio
 ## Key elements
 
 - **`registerWorkers()`** (exported) — Idempotent entry point called once at startup. Resolves image writeback targets, then—only if `isQueueEnabled()`—registers the email consumer, the image-digest consumer, and every module-declared consumer in a single `Promise.all`. No-ops (resolves immediately) when RabbitMQ is disabled.
-- **`registerImageWritebackResolver` call** — Invoked *before* the queue-enabled guard so the resolver is always available; it maps a collection name to its `writeback` field from `resolveImageTargets(enabledModules)`.
+- **`registerImageWritebackResolver` call** — Invoked _before_ the queue-enabled guard so the resolver is always available; it maps a collection name to its `writeback` field from `resolveImageTargets(enabledModules)`.
 
 ## Relationships
 
@@ -31,5 +31,5 @@ The single assembly point where all queue consumers are registered at applicatio
 
 - **Prefetch is intentionally asymmetric:** `prefetch: 5` for email (I/O-bound, parallelism is free) vs `prefetch: 1` for image digestion (CPU-bound decode/re-encode; keeps upload bursts from starving request handling).
 - **Module queues are never named here.** A module (e.g. webhooks) declares its own consumer in its manifest; `resolveConsumers` picks it up. Adding a module-owned queue requires zero changes to this file.
-- **The writeback resolver registration is unconditional.** Even with RabbitMQ off, calling it costs nothing and the image worker *cannot* self-resolve (it would need the full module list, which only the app layer holds).
+- **The writeback resolver registration is unconditional.** Even with RabbitMQ off, calling it costs nothing and the image worker _cannot_ self-resolve (it would need the full module list, which only the app layer holds).
 - The file doc-comment frames itself as the "assembly decision" boundary: naming two queues is an app concern; naming a module's queue is a module concern.

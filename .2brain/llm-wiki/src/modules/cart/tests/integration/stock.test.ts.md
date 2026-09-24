@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration test suite for the reservation-based stock model. Verifies the core invariant that units are *held* (reserved) between checkout and payment rather than *sold*, and are recoverable by cancellation or expiry sweep. Runs against a real MongoDB instance because the guarantees under test are conditional writes that a mock cannot demonstrate.
+Integration test suite for the reservation-based stock model. Verifies the core invariant that units are _held_ (reserved) between checkout and payment rather than _sold_, and are recoverable by cancellation or expiry sweep. Runs against a real MongoDB instance because the guarantees under test are conditional writes that a mock cannot demonstrate.
 
 ## Key elements
 
@@ -36,5 +36,5 @@ Integration test suite for the reservation-based stock model. Verifies the core 
 - **Real Mongo, not mocks.** The file header explicitly states the guarantees are conditional writes a mock cannot show. `setupTestDb()` is called at module top-level.
 - **`clearMocks` vs. forced failures.** The rollback-failure block uses `jest.spyOn(...).mockResolvedValue / mockRejectedValue` and must restore with `jest.restoreAllMocks()` in `afterEach` because the global `clearMocks` only empties call logs, not implementations.
 - **`available` is always asserted alongside `onHand` and `reserved`.** The file header calls out that checking either counter alone can pass for a shop that never reserved.
-- **Concurrent-checkout test uses `Promise.all`** — both pre-flights see the unit as available; the loser is refused by the *conditional reserve*, not the pre-flight. The error's `available: 0` reflects the winner's post-hold state, not what the loser observed earlier.
+- **Concurrent-checkout test uses `Promise.all`** — both pre-flights see the unit as available; the loser is refused by the _conditional reserve_, not the pre-flight. The error's `available: 0` reflects the winner's post-hold state, not what the loser observed earlier.
 - **TTL is read lazily on each reserve**, which is what makes `withoutWindow` viable as a per-test override rather than a global setting.

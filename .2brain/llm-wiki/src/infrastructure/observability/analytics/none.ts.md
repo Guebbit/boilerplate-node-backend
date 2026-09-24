@@ -14,10 +14,10 @@ A no-op analytics provider that implements the `AnalyticsProvider` port by doing
 ## Key elements
 
 - **`noneAnalyticsProvider`** (exported const) — the only export; a plain object satisfying the `AnalyticsProvider` type.
-  - `name` — the literal string `'none'`, used as the provider identifier.
-  - `capture()` — deliberately empty; performs no work.
-  - `configured()` — always returns `true`, because "collect nothing" *is* the configuration; there is no unconfigured state for this provider.
-  - `shutdown()` — returns an already-resolved `Promise<void>`; no cleanup is needed.
+    - `name` — the literal string `'none'`, used as the provider identifier.
+    - `capture()` — deliberately empty; performs no work.
+    - `configured()` — always returns `true`, because "collect nothing" _is_ the configuration; there is no unconfigured state for this provider.
+    - `shutdown()` — returns an already-resolved `Promise<void>`; no cleanup is needed.
 
 ## Relationships
 

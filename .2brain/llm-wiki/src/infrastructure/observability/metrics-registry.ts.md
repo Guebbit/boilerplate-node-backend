@@ -24,7 +24,7 @@ Holds the single shared `prom-client` registry instance and the process-wide met
 - **`metrics-http.ts`** – Historical parent; this file was split out of it. HTTP-specific metrics (request count, duration, status codes) still live there but register onto `metricsRegistry` defined here.
 - **`metrics-queue.ts`** – Registers queue-related metrics onto `metricsRegistry`.
 - **Each `src/modules/*/metrics.ts`** (account, audit-logs, cart, inventory, orders, payments, webhooks) and **`src/infrastructure/persistence/metrics.ts`** – All import `metricsRegistry` from this file so their domain counters/gauges land in the same scrape.
-- **`get-observability-metrics-overview.ts`** – Reads domain counter values *by name* off `metricsRegistry` (rather than importing the owning module) to build the `GET /observability/metrics/overview` response.
+- **`get-observability-metrics-overview.ts`** – Reads domain counter values _by name_ off `metricsRegistry` (rather than importing the owning module) to build the `GET /observability/metrics/overview` response.
 - **`routes.ts`** (observability) – Wires `getPrometheusMetrics` to the `/metrics` endpoint and mounts the overview route.
 - **`metrics-overview.test.ts` / `routes.test.ts`** – Unit-test the overview and scrape endpoints that depend on this registry.
 
@@ -32,5 +32,5 @@ Holds the single shared `prom-client` registry instance and the process-wide met
 
 - The two gauge variables are intentionally underscore-prefixed (`_processUptimeGauge`, `_heapSizeLimitGauge`) solely to satisfy lint "unused variable" rules; the `new Gauge` constructor's side-effect (self-registration) is the actual purpose, not the binding.
 - Both gauges use a non-arrow `collect()` method so that `this` refers to the gauge instance at scrape time.
-- `metricsRegistry` *is* prom-client's global default (`register`), not a custom instance. Any code that imports `register` directly from `prom-client` is implicitly using the same object.
+- `metricsRegistry` _is_ prom-client's global default (`register`), not a custom instance. Any code that imports `register` directly from `prom-client` is implicitly using the same object.
 - Alerting on `nodejs_heap_size_used_bytes / nodejs_heap_size_total_bytes` will fire permanently on a healthy process (ratio hovers near 1). Use the `_limit` gauge for meaningful OOM thresholds (see `HighHeapUsage` in `prometheus.alert-rules.yaml`).

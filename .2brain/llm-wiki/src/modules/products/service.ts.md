@@ -18,7 +18,7 @@ The business-logic layer for the product (catalogue) entity. It is the single en
 - **`search`** – Main read path. Unions the product's own column match with translated-row matches (`searchTranslatedEntityIds`) across the caller's locale chain, then overlays resolved translations via `applyTranslations` in one batched pass.
 - **`searchWithTranslatedText`** – Internal helper that builds the `$or` union (own match OR translated `_id` set) and delegates to `productRepository.search`.
 - **`searchViewed` / `getByIdViewed`** – Thin wrappers around `search` / `getById` that emit an analytics event (`PRODUCTS_SEARCHED`, `PRODUCT_VIEWED`). Kept separate so non-HTTP callers (tests, other services) skip the telemetry.
-- **`getById`** – Fetches one product, calls `.toJSON()` *before* `applyTranslations` (translation is a plain-object overlay; doing it after would clobber the document's own transforms like `_id → id` and ISO-date formatting).
+- **`getById`** – Fetches one product, calls `.toJSON()` _before_ `applyTranslations` (translation is a plain-object overlay; doing it after would clobber the document's own transforms like `_id → id` and ISO-date formatting).
 - **`create`** – Persists with `onHand: 0`, sanitizes `categories`/`tags`, emits `PRODUCT_CREATED` (inventory module is the subscriber that moves the counter), then re-reads the document so the response reflects the post-event state. Optionally enqueues an image-digest job via `enqueueIfPending`.
 - **`sanitizeStringArray`** (internal) – Trim, drop blanks, de-duplicate a string array; `null`/non-array → `[]`.
 - **`TRANSLATABLE_SEARCH_FIELDS`** – `['title', 'description']`; the columns free-text search compares against, kept local rather than read from the translation registry.
@@ -41,8 +41,8 @@ The business-logic layer for the product (catalogue) entity. It is the single en
 
 ## Notes
 
-- **`onHand` is always written as `0` on create.** The opening stock count is applied *after* the `PRODUCT_CREATED` domain event, by the `inventory` module's `receive()`. A listener failure leaves the honest `0` rather than a speculative value.
-- **`.toJSON()` ordering in `getById`** is deliberate: it must run *before* `applyTranslations` because the translation overlay is a plain-object `Object.assign`-style merge that would overwrite the schema's own `toJSON` transforms (`available` flag, `_id → id`, ISO dates).
+- **`onHand` is always written as `0` on create.** The opening stock count is applied _after_ the `PRODUCT_CREATED` domain event, by the `inventory` module's `receive()`. A listener failure leaves the honest `0` rather than a speculative value.
+- **`.toJSON()` ordering in `getById`** is deliberate: it must run _before_ `applyTranslations` because the translation overlay is a plain-object `Object.assign`-style merge that would overwrite the schema's own `toJSON` transforms (`available` flag, `_id → id`, ISO dates).
 - **`searchViewed` / `getByIdViewed` exist only for the HTTP path.** Any internal or test caller should use `search` / `getById` directly; the wrappers require a `CallerContext` that non-HTTP call sites don't have.
 - **`sanitizeStringArray` is not exported.** Controllers or other services must not bypass it when mutating `categories`/`tags`; only `create`/`update` in this file apply it.
 - The file is intentionally the **one place a controller may call into** for product logic; other modules (cart, inventory) interact through domain events or by importing this service, never through the repository directly.

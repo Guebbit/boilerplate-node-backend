@@ -15,14 +15,14 @@ Root manifest for the **boilerplate-node-api-mongodb-mongoose** project (v2.0.0,
 
 - **`main`** — points to `src/cluster.ts`, the process entry that boots the Express app (cluster mode).
 - **`scripts`** — ~90 named commands grouped by domain:
-  - *Runtime*: `dev`, `dev:docker`, `start`, `debug`, `demo` (runs `scenarios/run-server.ts`).
-  - *Quality gates*: `ts-check`, `lint`, `lint:openapi*`, `lint:asyncapi*`, `prettier:*`, `check:dependencies` (dependency-cruiser), `check:spec-identity`.
-  - *Contracts*: `contracts:bundle`, `check:contracts-bundle`, `check:asyncapi-breaking`, `gen:api` (orval), `gen:asyncapi` (Modelina).
-  - *Testing*: `test` (runs unit → cross-cutting → integration → contract → fuzz), `test:unit:coverage`, `test:order-random`, `test:cluster`, `mutation*` (Stryker), `test:prism`.
-  - *Docs*: `docs:*` (VitePress), `check:docs-*` (generated artifact verification).
-  - *Ops / DB*: `db:sync`, `db:bootstrap`, `access:*`, `reap:*`, `sweep:*`, `compose*` (podman/docker).
-  - *Benchmarking*: `bench`, `bench:search`, `bench:orders`, `bench:inventory`, `bench:k6*`.
-  - *Aggregate*: `complete` / `complete:fix` chain every gate above in sequence; `complete:manual` adds Prism + cluster tests.
+    - _Runtime_: `dev`, `dev:docker`, `start`, `debug`, `demo` (runs `scenarios/run-server.ts`).
+    - _Quality gates_: `ts-check`, `lint`, `lint:openapi*`, `lint:asyncapi*`, `prettier:*`, `check:dependencies` (dependency-cruiser), `check:spec-identity`.
+    - _Contracts_: `contracts:bundle`, `check:contracts-bundle`, `check:asyncapi-breaking`, `gen:api` (orval), `gen:asyncapi` (Modelina).
+    - _Testing_: `test` (runs unit → cross-cutting → integration → contract → fuzz), `test:unit:coverage`, `test:order-random`, `test:cluster`, `mutation*` (Stryker), `test:prism`.
+    - _Docs_: `docs:*` (VitePress), `check:docs-*` (generated artifact verification).
+    - _Ops / DB_: `db:sync`, `db:bootstrap`, `access:*`, `reap:*`, `sweep:*`, `compose*` (podman/docker).
+    - _Benchmarking_: `bench`, `bench:search`, `bench:orders`, `bench:inventory`, `bench:k6*`.
+    - _Aggregate_: `complete` / `complete:fix` chain every gate above in sequence; `complete:manual` adds Prism + cluster tests.
 - **`dependencies`** — runtime libs: Express 5, Mongoose (implied), i18next, helmet, express-rate-limit, OpenTelemetry SDK + instrumentations, amqplib, bcrypt, jsonwebtoken, CASL (RBAC), dotenv, ejs, altcha-lib, etc.
 - **`devDependencies`** — TypeScript 5, Jest 30 (+ SWC transform), ESLint 9 + plugins, Prettier, Spectral, Stryker, dependency-cruiser, orval, VitePress, mongodb-memory-server, fast-check (fuzz), Husky, npm-check-updates, autocannon, k6.
 - **`postinstall`** — automatically runs `contracts:bundle`, `gen:api`, and `gen:asyncapi` after `npm install`.

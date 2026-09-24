@@ -14,13 +14,13 @@ Single-route controller for `GET /observability/health`. It assembles a **readin
 ## Key elements
 
 - **`getObservabilityHealth(_request, response)`** — The sole export. Returns a `Promise` that resolves to a 200 `ObservabilityHealth` payload. Composes:
-  - `dependencyHealth()` + `overallStatus()` — per-backing-service (database, cache, queue) status strings and a folded top-level `status` (`ok` / `degraded` / `down`).
-  - `jobHealth()` — last outcome for every lease-guarded job (resolved in parallel via `Promise.all`).
-  - `queueHealth()` (from `parked-jobs`) — dead-letter depth per worker queue (same parallel pair).
-  - `processSnapshot()` — uptime, memory (bytes, four fields matching the SSE stream).
-  - `resolveAnalyticsProvider()` — returns the selected provider's name and a `configured` boolean so `posthog: false` isn't ambiguous with "a different provider is active."
-  - `os.platform()`, `os.cpus().length`, `os.loadavg()` — static system info.
-  - Telemetry booleans read directly from `process.env` (Loki, OTel, Umami, Faro).
+    - `dependencyHealth()` + `overallStatus()` — per-backing-service (database, cache, queue) status strings and a folded top-level `status` (`ok` / `degraded` / `down`).
+    - `jobHealth()` — last outcome for every lease-guarded job (resolved in parallel via `Promise.all`).
+    - `queueHealth()` (from `parked-jobs`) — dead-letter depth per worker queue (same parallel pair).
+    - `processSnapshot()` — uptime, memory (bytes, four fields matching the SSE stream).
+    - `resolveAnalyticsProvider()` — returns the selected provider's name and a `configured` boolean so `posthog: false` isn't ambiguous with "a different provider is active."
+    - `os.platform()`, `os.cpus().length`, `os.loadavg()` — static system info.
+    - Telemetry booleans read directly from `process.env` (Loki, OTel, Umami, Faro).
 - Error handling is delegated to `catchAs(response, 'getObservabilityHealth')` in the `.catch` tail; success is written via `successResponse<ObservabilityHealth>(…)`.
 
 ## Relationships
@@ -37,7 +37,7 @@ Single-route controller for `GET /observability/health`. It assembles a **readin
 
 ## Notes
 
-- **Telemetry ≠ dependencies.** The `telemetry` block is deliberately excluded from the `overallStatus` fold: it reports *configuration* (env-var presence), not *reachability*. Losing Loki costs visibility, not capability, so it must not push `status` to `degraded`.
+- **Telemetry ≠ dependencies.** The `telemetry` block is deliberately excluded from the `overallStatus` fold: it reports _configuration_ (env-var presence), not _reachability_. Losing Loki costs visibility, not capability, so it must not push `status` to `degraded`.
 - **Dependencies are objects, not strings.** Each entry is `{ status: "ok" | "degraded" | "down" }` (or similar) rather than a bare string, so a `latencyMs` or `lastError` field can be added additively without a breaking payload change.
 - **`telemetry` is not `integrations`.** The name is intentional to prevent a reader from treating this block as a live health check.
 - **`analytics.configured` exists because provider selection and credential presence are independent.** A selected-but-uncredentialed provider silently discards events for the process lifetime; this field is the only place that condition surfaces.

@@ -15,12 +15,12 @@ Module manifest for the public contact/feedback form. Registers the module's ide
 
 - **`toExportFeedback(ticket)`** – Maps a raw ticket document to the `ExportFeedbackTicket` shape. Explicitly omits `adminNotes` (staff-internal field, protected under Art. 15(4) "rights of others"). Returns a plain object rather than relying on a narrower type annotation, because the Mongoose document's own `toJSON()` would still serialize the field.
 - **Default export (`AppModule`)** – The manifest object:
-  - `name: 'feedback'`, `basePath: '/feedback'`
-  - `permissions` – three keys (`feedback.any.read/update/delete`) owned by this module; cross-cutting tests enforce that a key in the shared permission file must be attributed to a live module.
-  - `routes` – the Express router from `./routes.ts`.
-  - `rateLimits` – contact-form budgets from `./rate-limits.ts`.
-  - `personalData[0].collect` – GDR Art. 15 export hook. Gated behind `NODE_EXPORT_INCLUDE_FEEDBACK`; when the flag is off it resolves `undefined` so the `account` module omits the key entirely (the contract marks `feedback` as optional). When on, it calls `findOwnTickets(email)` and maps each ticket through `toExportFeedback`.
-  - `locales` – path to `./locales` directory.
+    - `name: 'feedback'`, `basePath: '/feedback'`
+    - `permissions` – three keys (`feedback.any.read/update/delete`) owned by this module; cross-cutting tests enforce that a key in the shared permission file must be attributed to a live module.
+    - `routes` – the Express router from `./routes.ts`.
+    - `rateLimits` – contact-form budgets from `./rate-limits.ts`.
+    - `personalData[0].collect` – GDR Art. 15 export hook. Gated behind `NODE_EXPORT_INCLUDE_FEEDBACK`; when the flag is off it resolves `undefined` so the `account` module omits the key entirely (the contract marks `feedback` as optional). When on, it calls `findOwnTickets(email)` and maps each ticket through `toExportFeedback`.
+    - `locales` – path to `./locales` directory.
 - Satisfies the `AppModule` interface from `@kernel/registry`, which is what allows `src/modules.ts` to aggregate it.
 
 ## Relationships

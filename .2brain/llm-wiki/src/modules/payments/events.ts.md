@@ -14,8 +14,8 @@ Declares the two domain events the payments module emits and registers them into
 ## Key elements
 
 - **`declare module '@kernel/events'` block** — extends `DomainEventMap` with two keys:
-  - `'payment.succeeded'` — payload `{ paymentId, orderId }`; fired when a payment is settled. Emitted in the same at-most-once write as `order.status_changed` (`to: 'paid'`).
-  - `'payment.failed'` — payload `{ paymentId, orderId }`; fired when the provider declines the method. Can repeat per order (each retry attempt is its own event).
+    - `'payment.succeeded'` — payload `{ paymentId, orderId }`; fired when a payment is settled. Emitted in the same at-most-once write as `order.status_changed` (`to: 'paid'`).
+    - `'payment.failed'` — payload `{ paymentId, orderId }`; fired when the provider declines the method. Can repeat per order (each retry attempt is its own event).
 - **`PAYMENT_SUCCEEDED`** — exported string constant `'payment.succeeded'`, for use as an event-name reference without hardcoding.
 - **`PAYMENT_FAILED`** — exported string constant `'payment.failed'`, same role.
 

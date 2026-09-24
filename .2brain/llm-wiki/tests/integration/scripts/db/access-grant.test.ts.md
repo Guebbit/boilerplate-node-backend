@@ -14,10 +14,10 @@ Integration test for the `grantAccess` function — the core logic behind the `a
 ## Key elements
 
 - **`describe('grantAccess', …)`** — suite with four cases covering the full contract of `grantAccess(email, role, scope)`:
-  - Grants a shop/tenant role (`'admin'`, scope `'tenant'`) and verifies the membership via `membershipIn`.
-  - Grants a platform role (`'operator'`, scope `'platform'`) with `shopId = null`.
-  - Rejects an unknown email with `GrantAccessError`.
-  - Rejects a role string not declared by any module (asserts the regex `/is not a role/` thrown by `assignRole`).
+    - Grants a shop/tenant role (`'admin'`, scope `'tenant'`) and verifies the membership via `membershipIn`.
+    - Grants a platform role (`'operator'`, scope `'platform'`) with `shopId = null`.
+    - Rejects an unknown email with `GrantAccessError`.
+    - Rejects a role string not declared by any module (asserts the regex `/is not a role/` thrown by `assignRole`).
 - **`setupTestDb()`** — top-level call that prepares a fresh test database before any case runs.
 
 ## Relationships

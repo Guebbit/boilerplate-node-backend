@@ -1,8 +1,8 @@
 ---
 tags:
-  - 2brain
-  - 2brain/module
-  - project/boilerplate-node-backend
+    - 2brain
+    - 2brain/module
+    - project/boilerplate-node-backend
 type: module
 module: src/infrastructure/adapters/
 files: 23
@@ -39,6 +39,7 @@ This module is the infrastructure-layer adapter tier: it wraps every external te
 2. **`managed-connection.ts`** — Understanding the shared connect / fail-open / shutdown lifecycle here makes every other adapter (cache, queue, Redis) read as a thin "what to connect" layer rather than a self-contained module.
 
 ## Connected modules
+
 ```mermaid
 flowchart LR
     m_src_infrastructure_adapters["src/infrastructure/adapters/"]
@@ -78,6 +79,7 @@ flowchart LR
 [[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_scripts|scripts/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules|src/modules/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_account_controllers|src/modules/account/controllers/]] · [[boilerplate-node-backend_src_modules_account_tests|src/modules/account/tests/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_delivery|src/modules/delivery/]] · [[boilerplate-node-backend_src_modules_feedback|src/modules/feedback/]] · [[boilerplate-node-backend_src_modules_inventory|src/modules/inventory/]] · [[boilerplate-node-backend_src_modules_locales|src/modules/locales/]] · … and 12 more
 
 ## Files
+
 - `src/infrastructure/adapters/antibot-providers/altcha-store.ts` — Implements the ALTCHA library's `Store` contract to enforce single-use of solved challenges, preventing a solution from being replayed. It records a "spent" flag per challenge key and is backed by the shared Redis cache with an in-process `Map` fallback so that single-use enforcement still holds when Redis is unavailable.
 - `src/infrastructure/adapters/antibot-providers/altcha.ts` — Implements the self-hosted ALTCHA proof-of-work human-challenge provider. The server both issues and verifies challenges locally—no vendor script, no outbound traffic—making it the privacy-preserving alternative to Turnstile. The trade-off is that the proof-of-work runs on the visitor's device, which is heavier on a phone than on a rented bot server.
 - `src/infrastructure/adapters/antibot-providers/index.ts` — Defines the `HumanChallengeProvider` port (rung 3 of the anti-automation ladder) and the registry that resolves which concrete implementation a deployment uses via `NODE_ANTIBOT_PROVIDER`. It exists so that adding a new anti-bot vendor is a one-file-plus-one-registry-line change, and so that downstream consumers (middleware, controllers) depend on a single stable interface rather than a specific vendor.
@@ -85,7 +87,7 @@ flowchart LR
 - `src/infrastructure/adapters/antibot-providers/turnstile.ts` — A reference implementation of the `HumanChallengeProvider` port using Cloudflare Turnstile. It exists to demonstrate the contract (public parameters out, token verified server-side) for teams choosing a human-challenge approach; the module docs explicitly note it is a worked example, not a recommendation, and that selecting it means loading a third-party script and its data-protection implications.
 - `src/infrastructure/adapters/antibot-verdict.ts` — Defines the single shared `RungVerdict` union type (`'ok' | 'refused'`) used as the yes/no answer for every anti-automation rung. Exists so that rung 2 (`checkEmailPolicy`) and rung 3 (`HumanChallengeProvider.verify`) cannot drift into divergent vocabularies for the same binary question.
 - `src/infrastructure/adapters/antibot.ts` — Rung 2 of the anti-automation ladder: a pure yes/no gate that checks whether a submitted email domain is a known disposable inbox (or, under the `mx` policy, lacks an MX record). It is intentionally policy-agnostic — it returns a `RungVerdict` and leaves the consequence of `refused` to each caller. Off by default to avoid false-positives on legitimate forwarding services.
-- `src/infrastructure/adapters/cache.ts` — Redis cache adapter that exposes an opaque byte store with tag-based invalidation. Every operation fails open: if Redis is unreachable the app continues serving without a cache rather than erroring. It owns no policy about *what* is cached or how values are serialized — that is the caller's responsibility.
+- `src/infrastructure/adapters/cache.ts` — Redis cache adapter that exposes an opaque byte store with tag-based invalidation. Every operation fails open: if Redis is unreachable the app continues serving without a cache rather than erroring. It owns no policy about _what_ is cached or how values are serialized — that is the caller's responsibility.
 - `src/infrastructure/adapters/demo-outbox.ts` — In-memory email sink for demo mode. When `npm run demo` runs without an SMTP server, the mailer records every send here instead of dispatching via nodemailer. The e2e suite (especially password-reset specs) reads the recorded token and content through the demo router's `GET /__test/emails` endpoint. The file lives in `infrastructure/adapters` alongside the mailer because the mailer cannot reach up into `app/`.
 - `src/infrastructure/adapters/email.worker.ts` — Consumer-side handler for queued email jobs: renders an EJS template from a spooled attachment and sends it over SMTP via Nodemailer. It is the drain counterpart to `enqueueEmail` in `mailer.ts` and is wired in by `consumeFromQueue` when a message broker is configured. It performs no locale resolution — all user-facing strings are already resolved by the producer before the job is published.
 - `src/infrastructure/adapters/filesystem.ts` — Low-level filesystem helpers shared across all disk-touching adapters: a cross-mount move, two flavors of safe delete, a path normalizer, and an age-based flat-directory sweep. Exists so that `image-store`, `mail-spool`, the upload middleware, and the quarantine reaper each build on one implementation of the EXDEV fallback, the log-and-swallow pattern, and the `readdir`/`stat`/`unlink` sweep instead of re-deriving them.
@@ -99,8 +101,9 @@ flowchart LR
 - `src/infrastructure/adapters/managed-connection.ts` — Centralises the shared lifecycle of an optional external dependency (Redis, RabbitMQ channel): a single memoised handle, thunder-herd-free connect, warn-once outage logging, fail-open retrieval, health reporting, and clean shutdown. Adapters like the cache and rate-limit store supply only their own `connect`/`isReady`/`close` logic; the connect-reuse-latch-status-close rules live here once.
 - `src/infrastructure/adapters/pdf.ts` — Renders pre-built HTML into a PDF byte buffer via a headless Chromium process. Exists as the infrastructure adapter that turns invoice/report templates (already rendered to HTML) into the binary PDF output needed for email attachment or download.
 - `src/infrastructure/adapters/queue.ts` — RabbitMQ (AMQP 0-9-1) adapter that provides publish/consume primitives for the application's job queues. Every function degrades to a no-op when the broker is unconfigured, letting callers fall back to inline work. Reconnection is handled by amqplib's built-in `recovery` option rather than the shared `managed-connection` lifecycle, because recovery re-runs `setup` (channel creation + consumer re-binding) after every successful reconnect — exactly what this adapter needs.
-- `src/infrastructure/adapters/redis.ts` — Shared Redis connection utilities for all Redis-backed adapters in this codebase. It centralises URL assembly from environment variables, the node-redis client options (timeout, reconnect policy), and graceful client shutdown. Error-handling and retry logic are intentionally *excluded* because the two consumers (cache vs. rate-limiter) handle them differently.
+- `src/infrastructure/adapters/redis.ts` — Shared Redis connection utilities for all Redis-backed adapters in this codebase. It centralises URL assembly from environment variables, the node-redis client options (timeout, reconnect policy), and graceful client shutdown. Error-handling and retry logic are intentionally _excluded_ because the two consumers (cache vs. rate-limiter) handle them differently.
 - `src/infrastructure/adapters/ssrf-guard.ts` — Prevents Server-Side Request Forgery on outbound requests this server initiates on a caller's behalf. It enforces a strict **resolve → validate → pin** sequence so that a second DNS lookup at connect time cannot return a different (internal) address — the DNS-rebinding TOCTOU. Generic and caller-agnostic; `webhooks` is the only consumer today. Lives in `infrastructure` (not `domain/`) because it performs DNS I/O.
 
 ---
+
 [[boilerplate-node-backend_INDEX|← boilerplate-node-backend index]]

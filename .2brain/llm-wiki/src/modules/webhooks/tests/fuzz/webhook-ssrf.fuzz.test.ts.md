@@ -22,7 +22,7 @@ Fuzz tests for the SSRF-adjacent behaviors that live inside `deliverWebhook` its
 ## Relationships
 
 - **Imports & exercises** `deliverWebhook` from `src/modules/webhooks/transport/webhook-delivery.ts` — the sole production code under test. Every assertion is about that function's return shape (`success`, `error`, `statusCode`) and which Node `request` it delegates to.
-- **Sibling test file** `tests/fuzz/ssrf-guard.fuzz.test.ts` (referenced in the file header comment) owns the generic guard's hostile-URL table; this file assumes the guard already passed and tests only what happens *after* the guard lets a request through.
+- **Sibling test file** `tests/fuzz/ssrf-guard.fuzz.test.ts` (referenced in the file header comment) owns the generic guard's hostile-URL table; this file assumes the guard already passed and tests only what happens _after_ the guard lets a request through.
 
 ## Notes
 

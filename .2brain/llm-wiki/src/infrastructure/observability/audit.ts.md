@@ -38,8 +38,8 @@ Provides the structured audit-trail mechanism for the application. It is deliber
 
 ## Notes
 
-- **snake_case field names** are intentional: these are log *data* consumed by SIEM/log tooling, not TypeScript callers. Do not rename to camelCase.
-- **`actor_scope` defaults to `'tenant'`** because `CallerContext.caller` is always resolved in tenant scope. A platform-key guard *must* override it explicitly, or the event misrecords the scope.
+- **snake_case field names** are intentional: these are log _data_ consumed by SIEM/log tooling, not TypeScript callers. Do not rename to camelCase.
+- **`actor_scope` defaults to `'tenant'`** because `CallerContext.caller` is always resolved in tenant scope. A platform-key guard _must_ override it explicitly, or the event misrecords the scope.
 - **`actor_user_id` is never omitted** — it is `'unknown'` when unresolvable, so log-backend queries can rely on the field always being present.
 - **Declaration-merging seam**: `AuditActionMap` is intentionally empty in this file. Removing a module removes its actions from the `AuditAction` union automatically; there is no central registry to update.
 - **Sink is fire-and-forget**: `registerAuditSink` is called at module import (not at DB connect), so the sink must tolerate being invoked while the connection is down. The `try/catch` in `emitAuditEvent` is the safety net for a sink that violates the no-throw contract.

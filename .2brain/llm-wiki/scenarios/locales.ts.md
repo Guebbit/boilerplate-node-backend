@@ -33,6 +33,6 @@ Seeds the dynamic-locale tier of the demo dataset with five languages, each chos
 - `revision` is set explicitly on most locales because these fixtures bypass the repository path that would normally increment it. The `source` locale intentionally omits it (defaults to `0`) since its dictionary lives in a deployed file, not in rows.
 - Entry IDs are hand-assigned in non-contiguous hex bands per group (e.g. `…1001–…100a`, `…3001–…3002`, `…3101–…3102`, `…2001–…2002`); they are not sequential across groups.
 - The Spanish (`downloadable`) frontend entries use keys that exist in the actual `en.json` locale files, so a future deployed `es.json` would slot them in without key drift. The five-level-deep key `static-pages.about.features.catalogue.title` is intentional to catch builders that only nest once.
-- `draft` (French) is `active: false` *and* has entries — the fixture specifically tests "inactive hides a non-empty dictionary" rather than "empty language shows nothing."
+- `draft` (French) is `active: false` _and_ has entries — the fixture specifically tests "inactive hides a non-empty dictionary" rather than "empty language shows nothing."
 - The `empty` (Japanese) locale is `active: false` with zero entries, covering the zero-entry edge case (cascade delete of zero rows, `entryCount = 0`).
 - Seed order matters: languages are inserted before entries because an entry references its language by tag, and publishing entries before their language would produce an inconsistent manifest.

@@ -30,6 +30,6 @@ Integration test verifying that when the starting role/membership grant fails af
 
 ## Notes
 
-- The file's top-level doc comment explains the *why*: the `User` write must precede the role grant (the grant needs a real `_id`), so a grant failure can leave an orphan row. Without compensation the unique email/identity index would block all future retries.
+- The file's top-level doc comment explains the _why_: the `User` write must precede the role grant (the grant needs a real `_id`), so a grant failure can leave an orphan row. Without compensation the unique email/identity index would block all future retries.
 - `afterEach(() => jest.restoreAllMocks())` is the sole cleanup; no explicit `jest.restoreAllMocks` call appears in individual tests.
 - The OAuth test expects a thrown rejection (`.rejects.toThrow('mongo is down')`) rather than a structured `ResponseReject`, reflecting that `loginOrCreateFromOAuth` propagates the error rather than wrapping it.

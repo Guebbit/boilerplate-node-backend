@@ -1,8 +1,8 @@
 ---
 tags:
-  - 2brain
-  - 2brain/module
-  - project/boilerplate-node-backend
+    - 2brain
+    - 2brain/module
+    - project/boilerplate-node-backend
 type: module
 module: src/modules/orders/tests/
 files: 33
@@ -20,15 +20,15 @@ This directory is the complete test suite for the orders module. It spans three 
 - **`factories.ts`** — Test-database wrappers that convert a persisted `ProductDocument` into a snapshot line and provide thin CRUD helpers. Every integration test in this directory builds fixtures through it.
 - **`contract/api.contract.test.ts`** — Validates every `/orders` HTTP response against the published OpenAPI spec via `toSatisfyApiSpec()`. The only test that crosses the full HTTP boundary to catch spec drift.
 - **`integration/`** — Fourteen test files that run against a real MongoDB instance:
-  - *Service-level*: `service-crud.test.ts` (write path), `service-search.test.ts` (read/aggregate path), `service-status.test.ts` (state transitions), `service-override.test.ts` (admin overrides), `repository.test.ts` (raw repository contract).
-  - *Cross-cutting invariants*: `pending-effects.test.ts` (durability of failed side-effects), `retention.test.ts` (PII anonymization cascade), `cancel.test.ts` (cancellation semantics and events), `create-audit.test.ts` (actor identity in audit).
-  - *Invoice & money*: `invoice-number.test.ts` (all-or-nothing invoice fields over HTTP), `invoice-numbering.test.ts` (unique, gap-free numbering under concurrency), `invoice-vat.test.ts` (VAT in rendered PDF + JSON), `model.test.ts` (serialization: no `_id`/`__v` leakage).
-  - *Schema & config*: `schema-contract.test.ts` (Mongoose declaration assertions against a live DB).
+    - _Service-level_: `service-crud.test.ts` (write path), `service-search.test.ts` (read/aggregate path), `service-status.test.ts` (state transitions), `service-override.test.ts` (admin overrides), `repository.test.ts` (raw repository contract).
+    - _Cross-cutting invariants_: `pending-effects.test.ts` (durability of failed side-effects), `retention.test.ts` (PII anonymization cascade), `cancel.test.ts` (cancellation semantics and events), `create-audit.test.ts` (actor identity in audit).
+    - _Invoice & money_: `invoice-number.test.ts` (all-or-nothing invoice fields over HTTP), `invoice-numbering.test.ts` (unique, gap-free numbering under concurrency), `invoice-vat.test.ts` (VAT in rendered PDF + JSON), `model.test.ts` (serialization: no `_id`/`__v` leakage).
+    - _Schema & config_: `schema-contract.test.ts` (Mongoose declaration assertions against a live DB).
 - **`unit/`** — Seventeen test files covering pure logic with no database:
-  - *Money & tax*: `money.property.test.ts`, `totals.property.test.ts` (property-based, fast-check), `tax.test.ts`, `transfer-reference.test.ts`.
-  - *Domain rules & lifecycle*: `lifecycle.test.ts`, `domain-rules.test.ts`, `service-scope.test.ts` (authorization boundary).
-  - *Rendering & notification*: `emails.test.ts`, `notify.test.ts` (invoice-attachment pipeline), `invoice.test.ts` (render + cache + single-flight).
-  - *Wiring & contracts*: `routes.test.ts` (router table), `audit.test.ts` (action-string wire contract), `config.test.ts` (boot-time gates), `serialization-guards.test.ts`, `snapshot.test.ts` (buyer-language freeze), `schema-contract.test.ts` (declaration-level), `factories.test.ts`.
+    - _Money & tax_: `money.property.test.ts`, `totals.property.test.ts` (property-based, fast-check), `tax.test.ts`, `transfer-reference.test.ts`.
+    - _Domain rules & lifecycle_: `lifecycle.test.ts`, `domain-rules.test.ts`, `service-scope.test.ts` (authorization boundary).
+    - _Rendering & notification_: `emails.test.ts`, `notify.test.ts` (invoice-attachment pipeline), `invoice.test.ts` (render + cache + single-flight).
+    - _Wiring & contracts_: `routes.test.ts` (router table), `audit.test.ts` (action-string wire contract), `config.test.ts` (boot-time gates), `serialization-guards.test.ts`, `snapshot.test.ts` (buyer-language freeze), `schema-contract.test.ts` (declaration-level), `factories.test.ts`.
 
 ## How it connects
 
@@ -46,6 +46,7 @@ This directory is the complete test suite for the orders module. It spans three 
 2. **`unit/lifecycle.test.ts`** — A short, pure, mock-free file that encodes the state-machine rules (who may move an order where). Understanding the legal transitions makes the `service-status`, `cancel`, and `service-override` integration tests far easier to follow.
 
 ## Connected modules
+
 ```mermaid
 flowchart LR
     m_src_modules_orders_tests["src/modules/orders/tests/"]
@@ -85,6 +86,7 @@ flowchart LR
 [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules|src/modules/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_account_tests|src/modules/account/tests/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_delivery|src/modules/delivery/]] · [[boilerplate-node-backend_src_modules_inventory|src/modules/inventory/]] · [[boilerplate-node-backend_src_modules_orders|src/modules/orders/]] · [[boilerplate-node-backend_src_modules_payments|src/modules/payments/]] · [[boilerplate-node-backend_src_modules_products|src/modules/products/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]] · [[boilerplate-node-backend_tests_cross-cutting|tests/cross-cutting/]] · … and 2 more
 
 ## Files
+
 - `src/modules/orders/tests/contract/api.contract.test.ts` — Contract tests for the `/orders` resource that validate every HTTP response against the OpenAPI spec via `toSatisfyApiSpec()`. The file exists because the orders API had drifted from its published contract (a list endpoint returned `totalItems`/`totalQuantity`/`totalPrice` where the spec declared a single `total`, and `GET /orders/{id}` returned different shapes per caller role) and no test crossed the HTTP boundary to catch either divergence.
 - `src/modules/orders/tests/factories.ts` — Test-database wrappers around the pure order builder in `../factories.ts`. Where the parent factory builds an order payload from in-memory data (suitable for seeds that never persist a product), this file converts a real persisted `ProductDocument` into a snapshot line and adds thin CRUD helpers so order tests can create, read, and assert on documents in the test database without going through `orderService`.
 - `src/modules/orders/tests/integration/cancel.test.ts` — Integration tests for `orderService.cancelById`. Verifies the status-gate invariant (only `pending`/`processing` orders are cancellable), the scope gate (a stranger's order is indistinguishable from a missing one), the refund semantics per role, and that cancellation emits the correct domain event, audit entry, and analytics signal — all against a real test database.
@@ -104,10 +106,10 @@ flowchart LR
 - `src/modules/orders/tests/unit/audit.test.ts` — Contract test that pins the `ordersAuditActions` string vocabulary byte-for-byte. The action strings are a **wire contract** consumed by external log-query dashboards and alert rules (outside this repo), so this test guards against accidental renames, value changes, or silent additions/removals of actions.
 - `src/modules/orders/tests/unit/config.test.ts` — Unit test suite for the orders module's deployment configuration. It verifies two concerns: (1) the boot-time gate that `assertRequiredConfig` enforces against the orders module manifest (shop identity is mandatory, VAT/legal name are optional), and (2) the pure environment-reader functions for shop identity, bank-transfer payment settings, and invoice cache TTL. Tests are driven through the real `assertRequiredConfig` entry point so the wiring itself is exercised, not just the manifest data.
 - `src/modules/orders/tests/unit/domain-rules.test.ts` — Unit tests for the `checkOrderLines` domain rule. Verifies that the rule correctly accepts or rejects a set of order-line candidates based on whether every product has resolved, without any mocks, database, or fake timers.
-- `src/modules/orders/tests/unit/emails.test.ts` — Unit tests for the two customer-facing money renderers — `orderConfirmEmail` and `invoiceDocument` — that must agree with the charge the customer actually sees. The file asserts that these builders *delegate* totals to `orderTotal`, render one line per item with correct per-item fields, respect locale, and never re-resolve product titles through the i18n `t()` function. It deliberately does not re-test arithmetic (that lives in `totals.property.test.ts`).
+- `src/modules/orders/tests/unit/emails.test.ts` — Unit tests for the two customer-facing money renderers — `orderConfirmEmail` and `invoiceDocument` — that must agree with the charge the customer actually sees. The file asserts that these builders _delegate_ totals to `orderTotal`, render one line per item with correct per-item fields, respect locale, and never re-resolve product titles through the i18n `t()` function. It deliberately does not re-test arithmetic (that lives in `totals.property.test.ts`).
 - `src/modules/orders/tests/unit/factories.test.ts` — Unit tests for the `makeOrder` fixture builder. Verifies that the generated order document satisfies schema constraints (required fields, ObjectId types, array defaults) and that the embedded product snapshot is shaped correctly for downstream consumers (confirmation email, invoice rendering).
 - `src/modules/orders/tests/unit/invoice.test.ts` — Unit tests for the invoice-rendering service (`services/invoice.ts`). Covers locale-frozen rendering, the not-found and failed-render paths, the TTL disk cache (hit, miss, expiry, negative-case), single-flight collapsing of concurrent misses, and the two reap sweeps. A final describe block (historically co-located here) exercises the upload chain's locale re-entry after multer consumes the stream.
-- `src/modules/orders/tests/unit/lifecycle.test.ts` — Unit tests for the order-lifecycle state table and its derived query functions. The file exists to assert the *rules* the table encodes (who may move an order where, under what conditions) rather than restating individual rows, so that a copy-paste error in the table itself would be caught. All tests are pure — no mocks, no database.
+- `src/modules/orders/tests/unit/lifecycle.test.ts` — Unit tests for the order-lifecycle state table and its derived query functions. The file exists to assert the _rules_ the table encodes (who may move an order where, under what conditions) rather than restating individual rows, so that a copy-paste error in the table itself would be caught. All tests are pure — no mocks, no database.
 - `src/modules/orders/tests/unit/money.property.test.ts` — Property-based tests for the `Money` domain module. The invariant under test is that **no** monetary function can ever produce `NaN`, `Infinity`, or a fractional cent, regardless of input. Arbitraries are deliberately hostile (junk strings, booleans, `undefined`, overflow values) rather than realistic, and the suite is seeded so any counterexample is reproducible and can be pinned as a plain `it()` case.
 - `src/modules/orders/tests/unit/notify.test.ts` — Unit tests for the **invoice-attachment pipeline** inside `sendOrderPlacedEmail` (`services/notify.ts`). The file asserts that a rendered invoice PDF is spooled and attached as `{ filename, key }` to the outgoing mail, that a render failure degrades gracefully (mail still sends, attachment omitted, error logged), and that the attachment rides along with both the card-confirmation and bank-transfer-instructions email variants. It deliberately does **not** test which email builder is selected — that coverage lives in `emails.test.ts`.
 - `src/modules/orders/tests/unit/routes.test.ts` — Unit test that pins the orders router's contract: exact endpoint list and order, per-route authorization guards, cache tagging/invalidation policy, and the invoice rate-limit budget. It exists to catch silent route-table regressions (missing guards, wrong cache keys, accidental route shadowing) without spinning up an HTTP server.
@@ -120,4 +122,5 @@ flowchart LR
 - `src/modules/orders/tests/unit/transfer-reference.test.ts` — Unit tests for the transfer-reference domain logic. Verifies that `buildReference` mints a well-formed, deterministic identifier per order and that `parseReference` round-trips valid references while rejecting malformed, mistyped, or non-reference inputs—ensuring a customer-entered reference can never silently resolve to the wrong order.
 
 ---
+
 [[boilerplate-node-backend_INDEX|← boilerplate-node-backend index]]

@@ -14,13 +14,13 @@ OpenAPI 3.0.3 contract (v2.0.0) for the Orders module. It declares the full REST
 ## Key elements
 
 - **Paths defined:**
-  - `GET /orders` – `listOrders`: paginated list; non-admin callers are auto-scoped to their own orders.
-  - `POST /orders` – `createOrder`: creates an order; requires `Idempotency-Key` header; 409 if the key is in-flight, 422 if the key was used with a different body.
-  - `PUT /orders` – `updateOrder` (alias of `updateOrderById`): id travels in the body; 409 encodes three distinct refusals (illegal transition, cancel-via-wrong-endpoint, items-locked-by-hold).
-  - `DELETE /orders` – `deleteOrder` (alias of `deleteOrderById`): `hardDelete` flag readable from **both** query and body; `true` from any source wins.
-  - `POST /orders/search` – `searchOrders` (alias of `listOrders`): same logic as `GET /orders` but with a JSON body, intended for DTO / multi-language codegen.
-  - `GET /orders/{id}` – `getOrderById`: single-order fetch, equivalent to `GET /orders?id={id}`.
-  - `PUT /orders/{id}` – (truncated in source; the per-id update form).
+    - `GET /orders` – `listOrders`: paginated list; non-admin callers are auto-scoped to their own orders.
+    - `POST /orders` – `createOrder`: creates an order; requires `Idempotency-Key` header; 409 if the key is in-flight, 422 if the key was used with a different body.
+    - `PUT /orders` – `updateOrder` (alias of `updateOrderById`): id travels in the body; 409 encodes three distinct refusals (illegal transition, cancel-via-wrong-endpoint, items-locked-by-hold).
+    - `DELETE /orders` – `deleteOrder` (alias of `deleteOrderById`): `hardDelete` flag readable from **both** query and body; `true` from any source wins.
+    - `POST /orders/search` – `searchOrders` (alias of `listOrders`): same logic as `GET /orders` but with a JSON body, intended for DTO / multi-language codegen.
+    - `GET /orders/{id}` – `getOrderById`: single-order fetch, equivalent to `GET /orders?id={id}`.
+    - `PUT /orders/{id}` – (truncated in source; the per-id update form).
 
 - **Local schemas** (under `#/components/schemas`): `CreateOrderRequest`, `UpdateOrderRequest`, `DeleteOrderRequest`, `SearchOrdersRequest`, `OrderEnvelope`, `OrdersResponseEnvelope`.
 
@@ -41,6 +41,6 @@ OpenAPI 3.0.3 contract (v2.0.0) for the Orders module. It declares the full REST
 - **`cancelled` is not a writable field.** Attempting to set `status: cancelled` via `PUT /orders` returns 409 with code `ORDER_CANCEL_VIA_CANCEL_ENDPOINT`; the only way to cancel is `POST /orders/{id}/cancel`, which releases held stock and triggers a refund.
 - **`items` are immutable while stock is held or sold.** A 409 with code `ORDER_ITEMS_HELD` is returned if you try to rewrite `items` on an order whose reservation has frozen the original lines.
 - **409 on `PUT /orders` is polyglot.** Three different business rules share the same HTTP status; clients must branch on `errors[].code` (`ORDER_TRANSITION_NOT_ALLOWED`, `ORDER_CANCEL_VIA_CANCEL_ENDPOINT`, `ORDER_ITEMS_HELD`).
-- **`hardDelete` source-of-truth rule:** the flag may appear in the query string *and* the JSON body simultaneously; if either source sends `true`, the deletion is hard. A `false` elsewhere does not override it.
+- **`hardDelete` source-of-truth rule:** the flag may appear in the query string _and_ the JSON body simultaneously; if either source sends `true`, the deletion is hard. A `false` elsewhere does not override it.
 - **Admin "awaiting transfer" view** is expressed as a query combination: `paymentMethod=<id>&status=pending` on `GET /orders`.
 - **Non-admin scoping is server-side and non-overridable:** the `userId` query parameter is silently ignored for non-admin callers regardless of value.

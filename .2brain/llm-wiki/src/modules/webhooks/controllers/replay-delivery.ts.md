@@ -28,4 +28,4 @@ Controller for `POST /webhooks/deliveries/:id/replay`. It re-sends a previously 
 
 - **Params-only route.** Unlike the sibling `write` controller (params-then-body), this endpoint reads no request body.
 - **ID is pre-validated.** `extractAndValidateId` rejects malformed ObjectIds before the service call, so `replayDelivery` cannot throw a `CastError`; the `.catch` handler only deals with genuine service failures.
-- **Synchronous re-send.** The delivery is fired against the subscription's *current* URL and secret ring at replay time, not the values captured at the original delivery.
+- **Synchronous re-send.** The delivery is fired against the subscription's _current_ URL and secret ring at replay time, not the values captured at the original delivery.

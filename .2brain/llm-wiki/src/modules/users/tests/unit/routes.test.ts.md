@@ -26,7 +26,7 @@ Structural contract test for the user-administration router. It asserts that eve
 
 ## Notes
 
-- Guards are asserted **per endpoint** via `it.each(ALL)`, not once globally. This means a route accidentally mounted *above* the `router.use(getAuth, isAuthOrCredential)` line still produces a failing assertion for that route specifically.
+- Guards are asserted **per endpoint** via `it.each(ALL)`, not once globally. This means a route accidentally mounted _above_ the `router.use(getAuth, isAuthOrCredential)` line still produces a failing assertion for that route specifically.
 - The identity guard is `isAuthOrCredential` (not plain `isAuth`) because the user directory doubles as a tenant sync surface reachable by API keys.
 - Cache invalidation must clear **both** `users` and `account` tags: the same row is served to admins at `/users/:id` and to the owner at `/account`. Clearing only one leaves the other serving stale data.
 - `keyParameters` on the shared listing cache key is asserted non-empty — a key with no parameters would collapse all tenant listings into one shared entry.

@@ -15,10 +15,10 @@ Resolves a product's `taxClass` into the concrete decimal VAT rate it is charged
 
 - **`TaxClass`** (type export) — `NonNullable<Product['taxClass']>`; the set of values a product's tax class may hold.
 - **`resolveTaxRate(taxClass?)`** (function export) — Maps a `TaxClass` to a decimal rate:
-  - `'zero'` → `0`
-  - `'reduced'` → `vatRateReduced()`
-  - `undefined` or any other value → `vatRateDefault()`
-  - Always returns a `number` (never `null`/`undefined`).
+    - `'zero'` → `0`
+    - `'reduced'` → `vatRateReduced()`
+    - `undefined` or any other value → `vatRateDefault()`
+    - Always returns a `number` (never `null`/`undefined`).
 
 ## Relationships
 

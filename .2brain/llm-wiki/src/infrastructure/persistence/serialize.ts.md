@@ -15,10 +15,10 @@ Centralizes the "stored document → API wire payload" transform so that both Mo
 
 - **`SerializeTransform`** (type) — A function `(serialized: Record<string, unknown>) => Record<string, unknown>` that mutates a plain object into wire shape and returns it.
 - **`SerializeOptions`** (interface) — Per-model customization passed to `applySerialization`:
-  - `dropId` — delete `_id` entirely instead of renaming (used only by `audit-logs`).
-  - `omit` — top-level keys to strip after the shared steps (secrets, contract-omitted fields).
-  - `after` — optional callback for model-specific post-processing (nested normalization, derived fields, format tweaks).
-  - `virtuals` — whether `toJSON` includes Mongoose virtuals (default `true`).
+    - `dropId` — delete `_id` entirely instead of renaming (used only by `audit-logs`).
+    - `omit` — top-level keys to strip after the shared steps (secrets, contract-omitted fields).
+    - `after` — optional callback for model-specific post-processing (nested normalization, derived fields, format tweaks).
+    - `virtuals` — whether `toJSON` includes Mongoose virtuals (default `true`).
 - **`SerializableSchema`** (internal interface) — Structural type exposing only `set('toJSON', …)` so the file avoids Mongoose's generic document-type constraint on the parameter.
 - **`applySerialization`** (exported function) — Builds the shared transform, wires it into the schema's `toJSON` options (`versionKey: false`, virtuals, transform), and **returns** the transform so the model can also export it for the lean/aggregate path.
 

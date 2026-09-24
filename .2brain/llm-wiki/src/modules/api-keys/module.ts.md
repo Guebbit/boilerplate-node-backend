@@ -13,7 +13,7 @@ Module entry point for machine-to-machine API keys. At import time it registers 
 
 ## Key elements
 
-- **`currentCallerOf(apiKey)`** – Re-derives the minter's *current* caller (roles → permissions via `keysInScope` → `assembleCaller`) on every request, so a key can never exceed the minter's live permissions. Uses `userService.findAuthenticatableById` so a deactivated minter immediately invalidates all their keys.
+- **`currentCallerOf(apiKey)`** – Re-derives the minter's _current_ caller (roles → permissions via `keysInScope` → `assembleCaller`) on every request, so a key can never exceed the minter's live permissions. Uses `userService.findAuthenticatableById` so a deactivated minter immediately invalidates all their keys.
 - **`fromBearerToken(token)`** – The full verify path: `parseApiKeyToken` → `apiKeyRepository.findActiveByPrefix` → `verifyApiKey` (hash compare) → `currentCallerOf` → intersection of stored permissions with `holdsKey(currentCaller, key)`. Every failure mode resolves `undefined`; none throw.
 - **`registerCredentialResolver({ fromBearerToken })`** – Side-effectful import-time registration; no explicit wiring call needed elsewhere.
 - **`export default`** – The `AppModule` manifest: name, basePath (`/api-keys`), routes, locales path, three permission keys (`apikeys.any.read|create|delete`), and a `personalData` collector that pages through the repository via `readAll`.
@@ -35,8 +35,8 @@ Module entry point for machine-to-machine API keys. At import time it registers 
 
 ## Notes
 
-- **Import-time side effect:** `registerCredentialResolver` runs when this file is first imported. There is no explicit "init" call; module loading *is* the registration.
-- **Permissions are re-derived, never trusted:** The stored `apiKey.permissions` array is intersected with the minter's *live* ability (`holdsKey`) on every request. A demoted or deactivated minter loses access to all their keys on the very next request, without any key document being modified.
+- **Import-time side effect:** `registerCredentialResolver` runs when this file is first imported. There is no explicit "init" call; module loading _is_ the registration.
+- **Permissions are re-derived, never trusted:** The stored `apiKey.permissions` array is intersected with the minter's _live_ ability (`holdsKey`) on every request. A demoted or deactivated minter loses access to all their keys on the very next request, without any key document being modified.
 - **`touchLastUsed` is fire-and-forget:** The `.catch` is attached inline to convert the rejection into a `logger.warn`, preventing an unhandled-rejection crash. It is deliberately not awaited.
 - **All failures resolve `undefined`:** Malformed token, unknown prefix, wrong hash, revoked/expired key, and missing minter all produce the same `undefined` outcome the kernel expects. No error type leaks across the boundary.
 - **Manifest permissions are cross-cutting:** `tests/cross-cutting/module-permissions.test.ts` refuses a permission key in the shared contract whose owning module no longer exists—deleting this module must delete its three permission keys.

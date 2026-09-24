@@ -31,4 +31,4 @@ Barrel file that aggregates all project-local ESLint custom rules into a single 
 - The rules live in this repo rather than a published plugin package because they encode single-repo conventions with exactly one consumer.
 - `controller-chain-must-catch` and `no-hardcoded-user-text` are custom specifically because they inspect AST structure (not text), avoiding false positives from template literals, comments, or quoted strings that a grep-based check would produce.
 - `no-persistence-imports` is custom because `no-restricted-imports` only sees the module specifier, not the imported binding name, so barrel imports would hide violations.
-- `barrel-allowed-sources` is custom because `eslint-plugin-boundaries` governs file-to-file import edges, whereas this rule governs which *exports* a module's own `index.ts` is allowed to re-publish.
+- `barrel-allowed-sources` is custom because `eslint-plugin-boundaries` governs file-to-file import edges, whereas this rule governs which _exports_ a module's own `index.ts` is allowed to re-publish.

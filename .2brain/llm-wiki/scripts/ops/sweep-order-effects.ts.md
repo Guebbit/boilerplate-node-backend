@@ -28,7 +28,7 @@ Periodic ops script (`npm run sweep:order-effects`) that retries order-cancellat
 
 ## Notes
 
-- **Module registration is mandatory here** (unlike the other `reap:*` scripts, which can skip it). The sweep's mechanism is *emit an event and let a listener act*; no listener → no refund → markers cleared for nothing.
+- **Module registration is mandatory here** (unlike the other `reap:*` scripts, which can skip it). The sweep's mechanism is _emit an event and let a listener act_; no listener → no refund → markers cleared for nothing.
 - **Idempotent by design.** `payments` performs a conditional refund, so a second pass over an already-settled order is a no-op. Safe to overlap with a concurrent run.
 - **Never on boot.** Intended for a cron schedule (same container as other `reap:*` scripts). Running it on every boot would hammer the DB and the provider for no gain.
 - **Removal is coupled to the `orders` module.** Deleting the module also requires removing this file, the `sweep:order-effects` npm script, and the corresponding `docker/crontab` entry.

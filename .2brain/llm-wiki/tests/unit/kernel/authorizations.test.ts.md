@@ -34,8 +34,8 @@ Unit tests for the three authorization middlewares exported from `src/kernel/mid
 
 ## Notes
 
-- **`recordAudit` override in the audit mock.** The middleware's `auditRefusal` helper calls `recordAudit`, which closes over its own module's *real* `emitAuditEvent` and is therefore immune to the top-level `jest.mock` replacement. The mock explicitly redefines `recordAudit` to call the mocked `emitAuditEvent`, otherwise refusal audit events would be invisible to assertions.
-- **`getAuth` must call `next()` exactly once on every path.** A missed `next()` hangs the request; the tests assert `next` was called and `response.status` was *not* — the middleware identifies but never authorizes.
+- **`recordAudit` override in the audit mock.** The middleware's `auditRefusal` helper calls `recordAudit`, which closes over its own module's _real_ `emitAuditEvent` and is therefore immune to the top-level `jest.mock` replacement. The mock explicitly redefines `recordAudit` to call the mocked `emitAuditEvent`, otherwise refusal audit events would be invisible to assertions.
+- **`getAuth` must call `next()` exactly once on every path.** A missed `next()` hangs the request; the tests assert `next` was called and `response.status` was _not_ — the middleware identifies but never authorizes.
 - **`request.caller` is set alongside `request.authContext`.** A stub carrying only the session would let a guard pass while attributing every denial in the audit trail to nobody; tests assert both fields.
 - **Idempotency across routers.** Two modules sharing a URL prefix both mount `getAuth`; an unmatched route in the first falls through to the second. The test asserts the JWT resolver is hit exactly once, not twice.
-- **`nowSeconds()`** returns epoch *seconds* (matching the JWT `auth_time` claim), not milliseconds — relevant for `requireFreshAuth` staleness windows.
+- **`nowSeconds()`** returns epoch _seconds_ (matching the JWT `auth_time` claim), not milliseconds — relevant for `requireFreshAuth` staleness windows.

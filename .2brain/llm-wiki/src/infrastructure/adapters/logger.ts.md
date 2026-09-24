@@ -14,11 +14,11 @@ Central structured-logging module built on Winston. It defines the redaction pol
 ## Key elements
 
 - **`SENSITIVE_FIELDS`** – `Set<string>` of field names (lowercased) that must never appear in clear text (passwords, tokens, API keys, card numbers, SSN, etc.). Redacted to `[REDACTED]`.
-- **`PERSONAL_FIELDS`** – Separate `Set<string>` of PII fields (email, ip, phone, etc.) governed by a *different* policy: hashed (default), redacted, or left plain via `NODE_LOG_PERSONAL_FIELDS`.
+- **`PERSONAL_FIELDS`** – Separate `Set<string>` of PII fields (email, ip, phone, etc.) governed by a _different_ policy: hashed (default), redacted, or left plain via `NODE_LOG_PERSONAL_FIELDS`.
 - **`resolvePersonalFieldMode()`** – Reads the env var, returns `'hash' | 'redact' | 'plain'`. Throws on unrecognised values (vs. falling back on unset).
 - **`redactSensitiveFields(input)`** – Recursively walks objects/arrays; replaces sensitive keys with `[REDACTED]`, applies the personal-field mode to string values, returns copies (no mutation).
 - **`serializeError(error)`** – Flattens an `Error` (or any thrown value) into a plain object; omits `stack` in production.
-- **`redactFormat`** – Winston format *factory* (call it: `redactFormat()`) that serialises errors then redacts all metadata before a transport sees it.
+- **`redactFormat`** – Winston format _factory_ (call it: `redactFormat()`) that serialises errors then redacts all metadata before a transport sees it.
 - **`resolveLogLevel()`** – Returns the active Winston level: `NODE_LOG_LEVEL` if set, else `debug` (non-prod) / `info` (prod).
 - **`resolveConsoleFormat()`** – Chooses `prettyFormat` (ANSI + human layout) when `stdout.isTTY` and non-prod; `baseFormat` (ISO timestamp → redact → JSON) otherwise.
 - **`logger`** – The shared `winston.Logger` instance. Call as `logger.info('msg', { meta })` or `logger.error('msg', { error })`.

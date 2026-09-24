@@ -25,7 +25,7 @@ Factory that produces an Express handler for any paged-list endpoint. It encapsu
 
 ## Notes
 
-- Intentionally kept separate from `createSearchController` (sibling module) because a search reads the request **body** first while a list has no body. Folding them would require a `surface` knob on a factory whose entire subject is *where* input comes from.
+- Intentionally kept separate from `createSearchController` (sibling module) because a search reads the request **body** first while a list has no body. Folding them would require a `surface` knob on a factory whose entire subject is _where_ input comes from.
 - The schema is expected to be pre-`.partial()`-ed; absent fields must remain `undefined` so `normalizePagination` (inside the module's `runList`) can apply its own defaults. A fully-required schema would make 422 fire on missing pagination params.
 - `runList` must return the **bare payload**, not a wrapped response. `successResponse` builds the envelope once; a service that pre-wraps would double-wrap.
 - The `operation` string (e.g. `getInventoryLevels`) is the single source of truth for the log line, the stack-trace name, and the table generated under `docs/modules/`.

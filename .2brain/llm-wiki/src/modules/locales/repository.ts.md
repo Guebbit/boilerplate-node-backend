@@ -49,6 +49,6 @@ Data-access layer for the three locales collections (`locale`, `localeentry`, `t
 - **Revision bump is not atomic with the row write.** The two writes are ordered (row first, counter second). A crash between them means a client under-fetches once on next poll; it never caches a stale dictionary as current. This is an accepted trade-off documented in the module header.
 - **`list` deliberately bypasses `findAll`'s default limit of 10** to avoid silently truncating the language manifest.
 - **`importEntries` uses a single `bulkWrite` + one `deleteMany`** rather than a loop of upserts, sized for real import volumes (~500 keys).
-- **`resolveEntityFields` merges in *reverse* candidate order** so the most-specific locale overwrites less-specific ones field-by-field (a locale may have translated only a subset of fields).
+- **`resolveEntityFields` merges in _reverse_ candidate order** so the most-specific locale overwrites less-specific ones field-by-field (a locale may have translated only a subset of fields).
 - **`deleteLocaleCascade` runs the two child deletions in parallel (`Promise.all`)** before removing the parent row, so an interruption leaves the language present with empty children rather than orphaned children with no language.
 - **`entryBase` searchable spec** exposes one combined `text` filter over both `key` and `value`, intentionally so translators and developers share a single search box without guessing which column to target.

@@ -14,11 +14,11 @@ Admin-facing delete endpoint for the product catalogue. It is a thin, one-line w
 ## Key elements
 
 - **`deleteProducts`** (export) — The HTTP handler for `DELETE /products/:id`. Configured via `createDeleteController` with:
-  - `entity: 'product'`
-  - `remove: (id, hardDelete) => productService.removeById(id, hardDelete)` — delegates the actual delete to the product service.
-  - `auditAction: productsAuditActions.ADMIN_PRODUCT_DELETED`
-  - `notFoundKey: 'products.not-found'`
-  - Query param `?hardDelete=true` triggers a permanent delete (plus image cleanup and a `PRODUCT_DELETED` announcement); omitting it performs a soft delete.
+    - `entity: 'product'`
+    - `remove: (id, hardDelete) => productService.removeById(id, hardDelete)` — delegates the actual delete to the product service.
+    - `auditAction: productsAuditActions.ADMIN_PRODUCT_DELETED`
+    - `notFoundKey: 'products.not-found'`
+    - Query param `?hardDelete=true` triggers a permanent delete (plus image cleanup and a `PRODUCT_DELETED` announcement); omitting it performs a soft delete.
 
 ## Relationships
 

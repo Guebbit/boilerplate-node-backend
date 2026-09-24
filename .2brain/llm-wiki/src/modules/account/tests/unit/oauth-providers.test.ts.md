@@ -15,16 +15,16 @@ Unit tests for the OAuth provider registry's visibility logic (which providers a
 
 - **`OAUTH_ENV_KEYS`** – typed const array of the four `NODE_OAUTH_*` env vars; saved before each test and restored after, so the suite is hermetic.
 - **`describe('the OAuth provider registry')`** – asserts `enabledProviders()` and `resolveOAuthProvider()`:
-  - Empty list when no credentials are set and demo profile is off.
-  - Google appears only when *both* client id and secret are present.
-  - GitHub is independent of Google.
-  - `fake` appears only when `enableDemoProfile()` is active; requires no credentials.
-  - Unrecognised provider names resolve to `undefined` (no throw).
+    - Empty list when no credentials are set and demo profile is off.
+    - Google appears only when _both_ client id and secret are present.
+    - GitHub is independent of Google.
+    - `fake` appears only when `enableDemoProfile()` is active; requires no credentials.
+    - Unrecognised provider names resolve to `undefined` (no throw).
 - **`describe('fakeOAuthProvider')`** – exercises the fake implementation directly:
-  - `authorizeUrl()` produces a callback URL carrying a fixed code, PKCE challenge, and state.
-  - A full `authorizeUrl → exchangeCode` round-trip yields a deterministic, verified identity.
-  - `exchangeCode()` rejects codes that are not `FAKE_OAUTH_CODE`.
-  - `exchangeCode()` rejects a PKCE verifier that doesn't hash to the presented challenge.
+    - `authorizeUrl()` produces a callback URL carrying a fixed code, PKCE challenge, and state.
+    - A full `authorizeUrl → exchangeCode` round-trip yields a deterministic, verified identity.
+    - `exchangeCode()` rejects codes that are not `FAKE_OAUTH_CODE`.
+    - `exchangeCode()` rejects a PKCE verifier that doesn't hash to the presented challenge.
 
 ## Relationships
 
@@ -36,5 +36,5 @@ Unit tests for the OAuth provider registry's visibility logic (which providers a
 ## Notes
 
 - The module doc-block explicitly scopes this file to registry visibility and contrasts it with the per-provider token-exchange tests; don't expect Google/GitHub exchange logic here.
-- `afterEach` disables the demo profile *after* restoring env vars, so a test that enables demo mode but forgets to disable it won't leak into the next suite.
+- `afterEach` disables the demo profile _after_ restoring env vars, so a test that enables demo mode but forgets to disable it won't leak into the next suite.
 - The fake provider's `exchangeCode` is purely synchronous logic (no network); tests assert rejection via thrown errors rather than mocking fetch.

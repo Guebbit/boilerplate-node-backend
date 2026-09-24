@@ -9,7 +9,7 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the six account email builders in `emails.ts`. Because the builders produce data (template names, URLs, i18n copy) rather than throwing on misconfiguration, the tests assert on the *built content itself*—correct template key, correct `frontendLink` kind, resolved copy, and correct interpolation—rather than on error paths.
+Unit tests for the six account email builders in `emails.ts`. Because the builders produce data (template names, URLs, i18n copy) rather than throwing on misconfiguration, the tests assert on the _built content itself_—correct template key, correct `frontendLink` kind, resolved copy, and correct interpolation—rather than on error paths.
 
 ## Key elements
 
@@ -23,11 +23,11 @@ Unit tests for the six account email builders in `emails.ts`. Because the builde
 ## Relationships
 
 - **`src/modules/account/emails.ts`** — the module under test; all six builder functions are imported and exercised here.
-- **`src/infrastructure/http/frontend-link.ts`** — imported to compute the *expected* URL in the action-link assertions. The test verifies the builder delegates to this function with the correct kind, locale, and token, but does not re-test `frontendLink`'s own URL construction (that lives in `frontend-link.test.ts`).
+- **`src/infrastructure/http/frontend-link.ts`** — imported to compute the _expected_ URL in the action-link assertions. The test verifies the builder delegates to this function with the correct kind, locale, and token, but does not re-test `frontendLink`'s own URL construction (that lives in `frontend-link.test.ts`).
 
 ## Notes
 
 - `setupRequestEmail` deliberately shares the `'reset'` kind with `resetRequestEmail`—both spend a `password`-type token at `POST /account/reset-confirm`. It is therefore excluded from the "each token to its own kind" uniqueness assertion (which only checks verify, reset, and delete).
-- The `pageMetaLinks: []` assertion exists because the template renderer *iterates* that field; `undefined` would crash the render rather than produce an empty `<head>`.
+- The `pageMetaLinks: []` assertion exists because the template renderer _iterates_ that field; `undefined` would crash the render rather than produce an empty `<head>`.
 - The "distinct template" test guards against a copy-paste where two builders point at the same template—individual per-builder assertions would still pass in that scenario.
 - The "i18next key fallback" check (`/^account\.email\./`) catches the case where a translation key is missing and i18next echoes the key itself as the value.

@@ -17,15 +17,15 @@ Single exported controller that handles both `DELETE /cart/:productId` (canonica
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/cart/routes.ts` | Registers `deleteCartItem` as the handler for both the canonical and alias routes. |
-| `src/modules/cart/services/index.ts` | Provides `cartService.cartItemRemoveById`, the sole business call. |
-| `src/infrastructure/http/request.ts` | Supplies `readInput` (dual-surface `productId` resolution), `requireObjectId` (format validation), and `callerContextOf` (forwarding context to the service). |
-| `src/infrastructure/http/response.ts` | Supplies `successResponse` for the 200 reply. |
-| `src/infrastructure/http/controller.ts` | Supplies `refused` (domain-level rejection → 4xx) and `catchAs` (unexpected error → 5xx). |
-| `src/infrastructure/i18n/index.ts` / `context.ts` | Provides `t()` for the success message key `cart.product-removed`. |
-| `src/types/index.ts` | Declares `CartResponse` (response payload) and `RemoveCartItemRequest` (alias body shape). |
+| Neighbor                                          | Interaction                                                                                                                                                   |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/modules/cart/routes.ts`                      | Registers `deleteCartItem` as the handler for both the canonical and alias routes.                                                                            |
+| `src/modules/cart/services/index.ts`              | Provides `cartService.cartItemRemoveById`, the sole business call.                                                                                            |
+| `src/infrastructure/http/request.ts`              | Supplies `readInput` (dual-surface `productId` resolution), `requireObjectId` (format validation), and `callerContextOf` (forwarding context to the service). |
+| `src/infrastructure/http/response.ts`             | Supplies `successResponse` for the 200 reply.                                                                                                                 |
+| `src/infrastructure/http/controller.ts`           | Supplies `refused` (domain-level rejection → 4xx) and `catchAs` (unexpected error → 5xx).                                                                     |
+| `src/infrastructure/i18n/index.ts` / `context.ts` | Provides `t()` for the success message key `cart.product-removed`.                                                                                            |
+| `src/types/index.ts`                              | Declares `CartResponse` (response payload) and `RemoveCartItemRequest` (alias body shape).                                                                    |
 
 ## Notes
 

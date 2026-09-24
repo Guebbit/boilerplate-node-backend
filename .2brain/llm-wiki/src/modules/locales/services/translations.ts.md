@@ -14,14 +14,14 @@ Service-layer door for reading and merging translations on translatable entities
 ## Key elements
 
 - **`EntityTranslationsResult`** — interface for the admin GET response: `entityType`, `entityId`, `translations[]` (wire-shaped), and `fields` (declared by the registry).
-- **`planSlot`** *(internal)* — validates a single locale entry: checks the locale exists and is active, rejects empty fields, rejects undeclared field names, and blocks deletion of the fallback locale.
-- **`planTranslationWrites`** *(internal)* — iterates every slot in a PATCH payload via `planSlot`; returns the full plan or the first rejection.
-- **`writePlannedTranslations`** *(internal)* — applies an already-validated plan (upsert/delete rows), writes the derived index column on the entity document if the fallback locale was upserted, and passes a source digest to non-fallback rows. Does **not** invalidate cache or record audit.
+- **`planSlot`** _(internal)_ — validates a single locale entry: checks the locale exists and is active, rejects empty fields, rejects undeclared field names, and blocks deletion of the fallback locale.
+- **`planTranslationWrites`** _(internal)_ — iterates every slot in a PATCH payload via `planSlot`; returns the full plan or the first rejection.
+- **`writePlannedTranslations`** _(internal)_ — applies an already-validated plan (upsert/delete rows), writes the derived index column on the entity document if the fallback locale was upserted, and passes a source digest to non-fallback rows. Does **not** invalidate cache or record audit.
 - **`planForPort`** / **`writeForPort`** — thin adapters that reshape the internal plan into the `@kernel/translation` types (`TranslationWritePlan` / `TranslationWriteSlot`), stripping `origin` for the port side.
 - **`getEntityTranslations`** — exported GET handler; returns all translation rows via `translationRepository.normalize` plus the registry's declared fields.
 - **`upsertEntityTranslations`** — exported PATCH handler; runs plan → write, then invalidates the entity's cache tag, records an `ADMIN_TRANSLATION_UPDATED` audit event, and re-reads rows for the success response.
-- **`isRejection`** *(internal)* — type guard narrowing a `PlannedWrite | ResponseReject` union.
-- **`PlannedWrite`** *(internal)* — discriminated union: `{ kind: 'upsert', fields, origin }` or `{ kind: 'delete' }`.
+- **`isRejection`** _(internal)_ — type guard narrowing a `PlannedWrite | ResponseReject` union.
+- **`PlannedWrite`** _(internal)_ — discriminated union: `{ kind: 'upsert', fields, origin }` or `{ kind: 'delete' }`.
 
 ## Relationships
 

@@ -14,7 +14,7 @@ Cross-cutting guard that asserts every check in the `npm run complete` chain (th
 ## Key elements
 
 - **`packageScripts()`** — Reads `package.json` and returns the `scripts` map.
-- **`expand(script, all, seen?)`** — Recursively expands a script into the leaf script *names* it ultimately runs by following `npm run X` chains. Uses a `seen` set for cycle detection. Leaf commands (e.g. `jest …`, `tsc --noEmit`) contribute no name.
+- **`expand(script, all, seen?)`** — Recursively expands a script into the leaf script _names_ it ultimately runs by following `npm run X` chains. Uses a `seen` set for cycle detection. Leaf commands (e.g. `jest …`, `tsc --noEmit`) contribute no name.
 - **`scriptsRunByCi(all)`** — Reads every `.github/workflows/*.yml`, extracts `npm run <name>` tokens (filtering out comment lines), and returns the set of those names **plus** everything they expand to.
 - **`COVERED_UNDER_ANOTHER_NAME`** — Small exception map (currently one entry: `test:cross-cutting` → `test:unit:coverage`) for gate members CI covers under a different spelling. Each entry requires a justification comment.
 - **Test: "leaves no member of `complete` without a job"** — Expands `complete`, checks membership in the CI set (with exception-map fallback), asserts the uncovered list is empty.
@@ -26,7 +26,7 @@ No graph neighbors recorded for this file.
 
 ## Notes
 
-- **One-directional by design.** CI may legitimately run *more* than the gate (e.g. `fuzz.yml`, `mutation.yml` are nightly jobs absent from `complete`). The test only fails on the missing-from-CI direction.
+- **One-directional by design.** CI may legitimately run _more_ than the gate (e.g. `fuzz.yml`, `mutation.yml` are nightly jobs absent from `complete`). The test only fails on the missing-from-CI direction.
 - **Comments are filtered** when scanning workflow YAML. Without that, a comment mentioning `npm run complete` would count as coverage.
 - **Exception list is deliberately tiny.** The repo convention is to avoid exception lists; the two entries here require a diff-visible justification. Adding a new entry is expected to draw review attention.
-- **`expand` treats a script with no `npm run` children as its own leaf name**, so it is the unit CI must name. A script that *does* call other scripts contributes only its grandchildren, not itself.
+- **`expand` treats a script with no `npm run` children as its own leaf name**, so it is the unit CI must name. A script that _does_ call other scripts contributes only its grandchildren, not itself.

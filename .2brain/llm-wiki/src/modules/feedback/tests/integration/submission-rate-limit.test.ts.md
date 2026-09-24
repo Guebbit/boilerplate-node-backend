@@ -16,7 +16,7 @@ Integration test for `submissionLimiter` that verifies the contact-form budget i
 - **`submissionLimiterWithBudget(limit)`** — helper that reloads the rate-limits module with `NODE_SUBMISSION_RATE_LIMIT_MAX` set to `limit` and returns the `submissionLimiter` instance. Built on `withReloadedRateLimits` from the shared harness.
 - **"spends the budget on a SUCCESSFUL request"** — sends 5 requests through a real Express + `express-rate-limit` setup; asserts the first 3 get `201`, the last 2 get `429`.
 - **"also spends the budget on a FAILED request"** — same loop but the handler returns `422`; confirms the limiter counts failures too (budget is not success-gated).
-- **"logs every refusal, since nothing downstream will"** — asserts `logger.warn` is called with the real method/route/status on a 429, because `installSecurity` mounts the limiter *before* the request-logger, so the normal per-request log never fires for a refused request.
+- **"logs every refusal, since nothing downstream will"** — asserts `logger.warn` is called with the real method/route/status on a 429, because `installSecurity` mounts the limiter _before_ the request-logger, so the normal per-request log never fires for a refused request.
 
 ## Relationships
 

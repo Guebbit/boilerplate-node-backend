@@ -16,8 +16,8 @@ Integration tests that fire N genuinely concurrent HTTP requests at the account 
 - **`describe('R1 — concurrent signups for one address')`** — Races `POST /account/signup` with the same email. Asserts exactly one document, exactly one 201 + N−1 409s, the survivor can log in, and the serial (non-raced) duplicate path still returns 409.
 - **`describe('R4 — concurrent logins for one account')`** — Races `POST /account/login`. Asserts all N tokens are stored, all N values are distinct (no clobbering write), and `logout-all` under contention removes every refresh token of that type.
 - **`issueSession`** (local helper) — Creates a user, logs in, and returns the user plus the `jwt=` cookie for use in R5 tests.
-- **`describe('R5 — concurrent refresh-token rotation, same cookie')`** — Races `GET /account/refresh` with the *same* cookie. Asserts every racer gets a 200, each receives a distinct new refresh token, and exactly one ancestor entry is marked `supersededAt`.
-- **`describe('one-time tokens under contention')`** — Races two simultaneous reset-confirm requests; asserts exactly one succeeds and the other is rejected (not 500). *(Content truncated in source.)*
+- **`describe('R5 — concurrent refresh-token rotation, same cookie')`** — Races `GET /account/refresh` with the _same_ cookie. Asserts every racer gets a 200, each receives a distinct new refresh token, and exactly one ancestor entry is marked `supersededAt`.
+- **`describe('one-time tokens under contention')`** — Races two simultaneous reset-confirm requests; asserts exactly one succeeds and the other is rejected (not 500). _(Content truncated in source.)_
 
 ## Relationships
 
@@ -36,5 +36,5 @@ Integration tests that fire N genuinely concurrent HTTP requests at the account 
 - **Assertions are invariant-based, not ordering-based.** Which request "wins" is non-deterministic; only the final state (count = 1, all tokens present, distinct values) is asserted. Do not rewrite tests to expect a specific request to succeed.
 - **`raceN` uses `Promise.allSettled`, not `Promise.all`**, so a single 500 or 409 doesn't abort the batch. See `tests/support/race.ts` for the rationale.
 - **429 must never appear.** `expectNoServerErrors` asserts against it; the rate-limit harness is imported to ensure clean state. A 429 in results means the race never actually raced.
-- **R5 is a design proof, not a bug fix.** `tokenSupersede` in the repository is the unit under test; this file verifies its guarantee under real concurrency with N participants presenting the *same* cookie.
+- **R5 is a design proof, not a bug fix.** `tokenSupersede` in the repository is the unit under test; this file verifies its guarantee under real concurrency with N participants presenting the _same_ cookie.
 - The file docblock records observed hit rates (20/20 contended runs) as evidence the tests actually race. If a test goes green with zero 409s or zero lost tokens across many runs, suspect the harness before the code.

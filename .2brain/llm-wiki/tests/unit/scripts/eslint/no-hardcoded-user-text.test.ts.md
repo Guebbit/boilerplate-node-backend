@@ -24,4 +24,4 @@ Unit test for the `no-hardcoded-user-text` ESLint rule. It is deliberately minim
 
 - The rule is cast `as never` to bypass a TypeScript type mismatch between the custom rule shape and `RuleTester`'s expected signature.
 - The empty `valid` array is intentional (see header comment), not an oversight. If you add valid cases, the rule may still flag them.
-- The pattern (one known-bad input, no case table) is shared with `comment-links.test.ts`; check that file if you need context on *why* the rule fires on otherwise-legitimate code.
+- The pattern (one known-bad input, no case table) is shared with `comment-links.test.ts`; check that file if you need context on _why_ the rule fires on otherwise-legitimate code.

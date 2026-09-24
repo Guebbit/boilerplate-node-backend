@@ -16,9 +16,9 @@ Unit tests for the status-resolution branch of `handleUncaughtError`. The file d
 - **`requestStub()`** — builds a minimal `Request` stub (only `requestId`, `path`, `method`) via `asStub`; the sole field the handler reads for its log line.
 - **`NEXT`** — module-level `jest.fn()` standing in for `NextFunction`; not asserted on.
 - **`handleUncaughtError` describe block** — three cases:
-  - `statusCode`-only error (Node convention, no `.status`) → handler calls `res.status(416)`.
-  - Both `status` and `statusCode` present → handler prefers `status` (409 wins over 416).
-  - `statusCode: 599` (out of 4xx range) → handler falls through to 500.
+    - `statusCode`-only error (Node convention, no `.status`) → handler calls `res.status(416)`.
+    - Both `status` and `statusCode` present → handler prefers `status` (409 wins over 416).
+    - `statusCode: 599` (out of 4xx range) → handler falls through to 500.
 
 ## Relationships
 

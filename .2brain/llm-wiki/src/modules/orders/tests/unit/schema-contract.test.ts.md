@@ -29,7 +29,7 @@ Unit test that asserts the Mongoose schema **declaration** of `orderSchema` dire
 
 ## Notes
 
-- Set assertions use `toEqual`, so the test fails if a `required` is *added* as well as *removed* — both directions are breaking.
+- Set assertions use `toEqual`, so the test fails if a `required` is _added_ as well as _removed_ — both directions are breaking.
 - `userId` is intentionally **not** in the required set: account-erasure unsets it, so the schema cannot claim it is always present.
 - Index names are explicit strings (e.g. `orders_userId_createdAt`) rather than Mongoose-derived names; a rename would orphan the old index in production.
 - The `items.product` sub-schema deliberately uses `orderLineProductSchema` (not the catalogue's `productSchema`) so it carries no indexes of its own; the test proves no inherited `items.*` index leaks onto the order collection.

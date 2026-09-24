@@ -33,7 +33,7 @@ Unit tests for the HTTP response-cache middleware. The file exercises key genera
 
 ## Notes
 
-- Under jest `NODE_ENV` is `'test'`, so the **development TTL ceiling** is active by default. Any test that is *not* about clamping must explicitly set `NODE_REDIS_CACHE_DEV_TTL_MAX=0` ("no cap"), otherwise every declared TTL is silently clamped to 30 s.
+- Under jest `NODE_ENV` is `'test'`, so the **development TTL ceiling** is active by default. Any test that is _not_ about clamping must explicitly set `NODE_REDIS_CACHE_DEV_TTL_MAX=0` ("no cap"), otherwise every declared TTL is silently clamped to 30 s.
 - The `vary` mock deliberately **appends** to an existing `Vary` header (comma-separated) rather than replacing it, mirroring Express' real behavior and the `Vary: Origin` header already set by CORS. A replace-based mock would let a test pass while production drops a required header.
 - The logger mock exists solely to silence the size-gate rejection log so a passing test run produces no output.
 - The `asStub` call inside `createResponse` is annotated: without it, TypeScript inference would be circular because the stub's own callbacks reference `response`.

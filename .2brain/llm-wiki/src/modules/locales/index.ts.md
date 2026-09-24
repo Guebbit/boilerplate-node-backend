@@ -15,7 +15,7 @@ Barrel file (public API surface) for the `locales` module. Enforces the strategi
 
 - **`export * from './services'`** — Re-exports the full runtime API of the services subfolder (the public `localeService` entry point).
 - **`export type * from './model'`** — Re-exports only the type declarations from `model.ts`, making them available to consumers without pulling runtime code.
-- **`deriveBaseLanguage`** — Deliberately *not* re-exported; remains internal to this module. No sibling module may call it.
+- **`deriveBaseLanguage`** — Deliberately _not_ re-exported; remains internal to this module. No sibling module may call it.
 
 ## Relationships
 

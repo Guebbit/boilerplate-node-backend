@@ -29,7 +29,7 @@ Thin HTTP adapter for `POST /account/2fa/backup-codes`. Validates the incoming b
 
 ## Notes
 
-- **Dual authentication requirement.** The endpoint demands *both* a valid session (`authContext`) *and* a one-time 2FA code in the body. The docblock explicitly references the same rationale as `delete2fa`. Missing the code yields a service-level failure, not a validation error.
+- **Dual authentication requirement.** The endpoint demands _both_ a valid session (`authContext`) _and_ a one-time 2FA code in the body. The docblock explicitly references the same rationale as `delete2fa`. Missing the code yields a service-level failure, not a validation error.
 - **Non-null assertion on `authContext`.** `request.authContext!` assumes the route is always behind auth middleware; if that contract is ever broken the handler will throw a TypeError rather than a clean 401.
 - **Returns 200, not 201.** Regeneration is treated as a state update, not resource creation.
 - **Metrics triple-increment.** The counter is touched in three distinct code paths (validation reject, service reject, success) to capture failure rate at the controller boundary, independent of what the service logs internally.

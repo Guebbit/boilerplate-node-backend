@@ -9,13 +9,13 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Test-database persistence helpers for the Products module. The in-memory *builder* (`makeProduct`) lives one level up in `../factories.ts`; this file wraps that builder with repository calls that actually write to (and read from) the test MongoDB instance, so cross-module tests can fixture, assert against, and tear down products without importing the product service or the inventory module.
+Test-database persistence helpers for the Products module. The in-memory _builder_ (`makeProduct`) lives one level up in `../factories.ts`; this file wraps that builder with repository calls that actually write to (and read from) the test MongoDB instance, so cross-module tests can fixture, assert against, and tear down products without importing the product service or the inventory module.
 
 ## Key elements
 
 - **`makeProduct` / `ProductOverrides`** — re-exported from `../factories`. Single source of truth for constructing a product object in memory; re-exported here so consumers import everything from one path.
 - **`createProduct(overrides?)`** — Builds a product via `makeProduct` (defaulting `onHand` to 10), inserts it through `productRepository.create`, then upserts the matching `stocklevels` row via `seedStockLevel`. Returns the hydrated Mongoose document.
-- **`seedStockLevel(product)`** *(internal)* — Raw `updateOne` upsert on the `stocklevels` collection keyed by `productId`. Writes `onHand`, `reserved`, and `available` (computed via `availableStock`). Bypasses the `PRODUCT_CREATED` → `receive()` event path for speed.
+- **`seedStockLevel(product)`** _(internal)_ — Raw `updateOne` upsert on the `stocklevels` collection keyed by `productId`. Writes `onHand`, `reserved`, and `available` (computed via `availableStock`). Bypasses the `PRODUCT_CREATED` → `receive()` event path for speed.
 - **`readProduct(id)`** — Hydrated read via `productRepository.findById`. Intended as a sibling test's assertion on persisted state; deliberately does not go through `productService`.
 - **`saveProduct(document)`** — Persists an already-mutated in-memory document back to the DB.
 - **`deleteProduct(document)`** — Removes a product document; used for cleanup and negative-path fixtures.

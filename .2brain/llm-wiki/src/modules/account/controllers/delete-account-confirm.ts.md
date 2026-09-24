@@ -15,22 +15,22 @@ Controller for the `DELETE /account/delete-confirm` endpoint. It validates and s
 
 - **`ACCOUNT_DELETE_TOKEN_TYPE`** – Module-level constant (`'delete'`) identifying the token type used in lookup.
 - **`deleteAccountConfirm`** (exported) – The request handler. Performs a three-step token gate (`findLiveToken` → `spendLiveToken` → `removeOwnAccount`), then destroys the refresh and "logged" cookies and sends a `200` success response. All token-refusal paths return an identical `422` with the `account.delete.token-not-found` i18n string, regardless of whether the token is missing or already spent.
-- **`refuseToken`** (inner helper) – Centralises the uniform 422 rejection so no response shape leaks *why* the token was rejected.
+- **`refuseToken`** (inner helper) – Centralises the uniform 422 rejection so no response shape leaks _why_ the token was rejected.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `@infrastructure/http/controller` | `parseBody` validates the request body against the `ConfirmAccountDeleteBody` Zod schema before any logic runs. |
-| `@infrastructure/http/response` | `successResponse` / `rejectResponse` shape every HTTP reply from this handler. |
-| `@infrastructure/http/errors` | `rejectDatabaseError` is the sole `.catch` handler, mapping known DB failures to specific statuses instead of a blanket 500. |
-| `@infrastructure/http/request` | `callerContextOf(request)` extracts caller metadata forwarded to `accountService.removeOwnAccount`. |
-| `@infrastructure/i18n` | `t()` supplies every user-facing string (success, token-not-found). |
-| `@modules/account/services` | `accountService` provides `findLiveToken`, `spendLiveToken`, and `removeOwnAccount`. |
-| `@modules/account/session/cookies` | `destroyRefreshCookie` / `destroyLoggedCookie` clear the client's session on successful deletion. |
-| `@modules/account/routes` | Registers this handler on the `DELETE /account/delete-confirm` route. |
-| `@types` | `AccountDeleteConfirmRequest` types the Express request body parameter. |
-| `@modules/account/tests/unit/delete-account.test.ts` | Unit-tests the controller's token flow and error paths. |
+| Neighbor                                             | Interaction                                                                                                                  |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `@infrastructure/http/controller`                    | `parseBody` validates the request body against the `ConfirmAccountDeleteBody` Zod schema before any logic runs.              |
+| `@infrastructure/http/response`                      | `successResponse` / `rejectResponse` shape every HTTP reply from this handler.                                               |
+| `@infrastructure/http/errors`                        | `rejectDatabaseError` is the sole `.catch` handler, mapping known DB failures to specific statuses instead of a blanket 500. |
+| `@infrastructure/http/request`                       | `callerContextOf(request)` extracts caller metadata forwarded to `accountService.removeOwnAccount`.                          |
+| `@infrastructure/i18n`                               | `t()` supplies every user-facing string (success, token-not-found).                                                          |
+| `@modules/account/services`                          | `accountService` provides `findLiveToken`, `spendLiveToken`, and `removeOwnAccount`.                                         |
+| `@modules/account/session/cookies`                   | `destroyRefreshCookie` / `destroyLoggedCookie` clear the client's session on successful deletion.                            |
+| `@modules/account/routes`                            | Registers this handler on the `DELETE /account/delete-confirm` route.                                                        |
+| `@types`                                             | `AccountDeleteConfirmRequest` types the Express request body parameter.                                                      |
+| `@modules/account/tests/unit/delete-account.test.ts` | Unit-tests the controller's token flow and error paths.                                                                      |
 
 ## Notes
 

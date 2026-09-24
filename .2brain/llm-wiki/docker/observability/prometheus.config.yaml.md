@@ -17,9 +17,9 @@ Prometheus server configuration for the local observability stack. It defines ho
 - **`rule_files`** — Loads all `*.yml` files mounted at `/etc/prometheus/rules/`.
 - **`alerting.alertmanagers`** — Routes firing alerts to `alertmanager:9093`.
 - **`scrape_configs`** (three jobs):
-  - **`api`** — Scrapes `app:3000/observability/metrics` with a static Bearer token; relabels `__address__` → `instance: api` for stable dashboard/alert labels.
-  - **`otel-collector`** — Scrapes `otel-collector:8888/metrics` (collector self-observability: queue depth, exporter health, etc.).
-  - **`otel-collector-spanmetrics`** — Scrapes `otel-collector:8889/metrics` (servicegraph-derived `traces_service_graph_request_*` metrics produced by the collector's servicegraph connector).
+    - **`api`** — Scrapes `app:3000/observability/metrics` with a static Bearer token; relabels `__address__` → `instance: api` for stable dashboard/alert labels.
+    - **`otel-collector`** — Scrapes `otel-collector:8888/metrics` (collector self-observability: queue depth, exporter health, etc.).
+    - **`otel-collector-spanmetrics`** — Scrapes `otel-collector:8889/metrics` (servicegraph-derived `traces_service_graph_request_*` metrics produced by the collector's servicegraph connector).
 
 ## Relationships
 
@@ -33,4 +33,4 @@ Prometheus server configuration for the local observability stack. It defines ho
 - **Hard-coded port.** Prometheus performs no variable substitution; the `3000` in the `api` target must be kept in sync with `NODE_PORT` in the API `.env`. A mismatch surfaces as a `DOWN` target (connection refused), which is indistinguishable from an actual API outage.
 - **Bearer token is a dev default.** `change-me-dev-metrics-token` must equal `NODE_METRICS_TOKEN` in the API environment. Rotate it alongside `NODE_TOKEN_ACCESS` / `NODE_TOKEN_REFRESH` before exposing the stack beyond localhost.
 - **Endpoint is intentionally non-public.** `/observability/metrics` leaks request volumes, error rates, latency percentiles, and auth success/failure counts — effectively a service-health fingerprint. The Bearer token is the sole gate; there is no public fallback.
-- **8888 vs 8889 are different concerns.** 8888 reports collector health; 8889 reports *derived* span metrics. Treating them as one job loses the ability to alert on collector liveness independently of span-metric availability.
+- **8888 vs 8889 are different concerns.** 8888 reports collector health; 8889 reports _derived_ span metrics. Treating them as one job loses the ability to alert on collector liveness independently of span-metric availability.

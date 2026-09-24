@@ -19,7 +19,7 @@ Integration test for `scenarios/apply.ts`. It exercises three gates — producti
 - **`NAMED_ACCOUNT_COUNT`** — `Object.keys(seedCredentials).length`; the exact user count a `blank` seed must produce.
 - **`APPLY_TIMEOUT_MS`** (30 s) — Per-test jest timeout; the multi-step test uses `APPLY_TIMEOUT_MS * 3`.
 - **Test 1: "refuses to run in production"** — Runs with `NODE_ENV=production`, asserts exit 0 + the refusal message, then confirms zero collections were created.
-- **Test 2: "seeds an empty database, refuses a non-empty one, then reseeds after --reset"** — Three sequential `runApply` calls against the *same* fresh DB: blank seed → duplicate refusal → `--reset` reseed; asserts user count stays at `NAMED_ACCOUNT_COUNT` throughout.
+- **Test 2: "seeds an empty database, refuses a non-empty one, then reseeds after --reset"** — Three sequential `runApply` calls against the _same_ fresh DB: blank seed → duplicate refusal → `--reset` reseed; asserts user count stays at `NAMED_ACCOUNT_COUNT` throughout.
 
 ## Relationships
 
