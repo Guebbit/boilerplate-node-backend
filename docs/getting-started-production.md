@@ -20,7 +20,7 @@ client's configuration:
 flowchart TD
     Dir["mkdir clients/acme,\ncp .env-example clients/acme/.env"] --> Name["export COMPOSE_PROJECT_NAME=acme"]
     Name --> Secrets["fill in every MUST SET value —\nboot refuses and names the first missing one"]
-    Secrets --> Up["docker compose up -d --build\n(-f docker-compose.production.yml)"]
+    Secrets --> Up["docker compose build app, then up -d\n(-f docker-compose.production.yml)"]
     Up --> Setup["setup runs once:\nindexes + the shop's row"]
     Setup --> Running(["app, cron, database, cache, queue\npublished to 127.0.0.1 only"])
     Running --> Proxy["reverse proxy terminates TLS\nin front — nothing in this repo does"]
@@ -69,8 +69,12 @@ carries `tls=true&tlsCAFile=/ca-dir/...` against the self-signed CA `mongo-entry
 connection string supplies its own TLS, so this is a bundled-default concern only.
 
 ```bash
-docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml up -d --build
+docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml build app
+docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml up -d
 ```
+
+`build app` first: `setup` and `cron` run the image `app` builds rather than building their own,
+so on a stack's first deploy that image has to exist before they start.
 
 The file is named twice — once by `--env-file`, once by `env_file:` inside the compose file —
 because compose reads it through two separate channels. `--env-file` resolves the `${...}`
@@ -129,6 +133,11 @@ Nothing in this repo terminates TLS. The API is bound to loopback specifically s
 it on a public interface — plain HTTP, carrying the auth cookies this application sets — is not the
 easy path. Put nginx, Caddy, Traefik or a managed load balancer in front, terminate TLS there, and
 proxy to `127.0.0.1:${NODE_PORT}`.
+
+Then set `NODE_TRUST_PROXY_HOPS` to the number of proxies in front (usually `1`). It defaults to
+`0`, which reads the caller's address from the socket — with a proxy in front, that is the proxy's
+address for every request, so every caller shares one rate-limit bucket and every audit row names
+the proxy. See [trust proxy](./tools/security.md#trust-proxy-and-the-two-ways-to-get-it-wrong).
 
 Running **several client stacks on one host** is different enough to have its own recipe —
 `docker-compose.proxy.yml` fronts them all with one shared Traefik, discovering each stack straight

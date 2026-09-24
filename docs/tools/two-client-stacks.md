@@ -36,10 +36,12 @@ page is the walkthrough and the two demonstrations; the compose files are the so
 mkdir -p clients/acme
 cp .env-example clients/acme/.env   # then set real values
 export COMPOSE_PROJECT_NAME=acme
-docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml up -d --build
+docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml build app
+docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml up -d
 ```
 
-One `up -d` brings up everything in the right order — `database`'s own entrypoint generates the
+`build app` first, because `setup` and `cron` run the image it builds. Then one `up -d` brings up
+everything in the right order — `database`'s own entrypoint generates the
 replica set's keyFile, `mongo-rs-init` initiates the set, `setup` runs `db:sync` and
 `access:bootstrap` once that succeeds, then `app`/`cron` start.
 
