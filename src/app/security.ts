@@ -1,9 +1,11 @@
 /**
  * @module
  * Transport-level protections and body parsing, grouped because the order matters and isn't
- * obvious: `trust proxy` before the rate limiter (which keys buckets on `request.ip`), body
- * parsers before anything reading `request.body`. Infrastructure supplies the handlers; this
- * decides which ones this application installs, and in what order.
+ * obvious: `trust proxy` before the rate limiter (which keys buckets on `request.ip`), the rate
+ * limiter before the body parsers (a throttled flood should not pay for parsing), body parsers
+ * before anything reading `request.body`. Two installs, so `src/app.ts` can serve static files
+ * between them. Infrastructure supplies the handlers; this decides which ones this application
+ * installs, and in what order.
  *
  * See: docs/tools/security.md#main-security-tools
  */
@@ -98,7 +100,7 @@ export const applyServerTimeouts = (server: Server): void => {
 };
 
 /**
- * Install secure headers, strict CORS, body parsing and rate limiting.
+ * Install secure headers and strict CORS — everything a static file needs too.
  *
  * @param app - the express application to configure
  */
@@ -168,11 +170,33 @@ export const installSecurity = (app: Express): void => {
                 'Authorization',
                 'X-Requested-With',
                 'x-request-id',
-                'traceparent'
+                'traceparent',
+                // Declared by the contract on the retry-safe writes; a browser sending it would
+                // otherwise fail the preflight.
+                'Idempotency-Key'
             ],
-            exposedHeaders: ['x-request-id', 'traceparent']
+            // What a browser client may read off a response: the rate-limit answer (draft-7
+            // headers, see `rate-limit.ts`) is what lets it back off instead of retrying blind.
+            exposedHeaders: [
+                'x-request-id',
+                'traceparent',
+                'Retry-After',
+                'RateLimit',
+                'RateLimit-Policy'
+            ]
         })
     );
+};
+
+/**
+ * Install rate limiting, then body parsing. Mounted after static files, so an image a page loads
+ * does not spend the caller's request budget.
+ *
+ * @param app - the express application to configure
+ */
+export const installRequestParsing = (app: Express): void => {
+    // First: a request past its budget is refused before its body is read.
+    app.use(rateLimiter);
 
     app.use(
         express.urlencoded({
@@ -204,6 +228,4 @@ export const installSecurity = (app: Express): void => {
     );
 
     app.use(cookieParser());
-
-    app.use(rateLimiter);
 };

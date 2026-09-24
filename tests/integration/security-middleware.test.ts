@@ -11,7 +11,14 @@
  *
  * See: docs/tools/security.md
  */
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import type { Response } from 'supertest';
 import { api } from '@tests/http';
+
+/** The global budget's `remaining`, off the draft-7 `RateLimit` header (`limit=…, remaining=…`). */
+const remainingOf = (response: Response): number =>
+    Number(/remaining=(\d+)/.exec(response.headers.ratelimit ?? '')?.[1]);
 
 describe('helmet', () => {
     /*
@@ -48,9 +55,60 @@ describe('trust proxy', () => {
         const first = await api().get('/').set('X-Forwarded-For', '203.0.113.5');
         const second = await api().get('/').set('X-Forwarded-For', '198.51.100.9');
 
-        const remaining = (response: Awaited<typeof first>) =>
-            Number(response.headers['ratelimit-remaining']);
+        expect(remainingOf(first)).not.toBeNaN();
+        expect(remainingOf(second)).toBe(remainingOf(first) - 1);
+    });
+});
 
-        expect(remaining(second)).toBe(remaining(first) - 1);
+describe('static files', () => {
+    // This file's own sandbox (`tests/support/file-sandbox.ts`) — empty until these land.
+    const publicRoot = process.env.NODE_PUBLIC_PATH!;
+
+    beforeAll(async () => {
+        await mkdir(path.join(publicRoot, 'images'), { recursive: true });
+        await mkdir(path.join(publicRoot, 'favicon'), { recursive: true });
+        await writeFile(path.join(publicRoot, 'images', 'digested.png'), 'png');
+        await writeFile(path.join(publicRoot, 'favicon', 'icon.png'), 'png');
+    });
+
+    afterAll(() => rm(publicRoot, { recursive: true, force: true }));
+
+    it("are not charged against the caller's request budget", async () => {
+        const before = await api().get('/');
+        await api().get('/favicon/icon.png');
+        const after = await api().get('/');
+
+        // One request between the two reads: the second `/`, not the image.
+        expect(remainingOf(after)).toBe(remainingOf(before) - 1);
+    });
+
+    it('cache an image for a year, since its name never outlives its bytes', async () => {
+        const response = await api().get('/images/digested.png');
+
+        expect(response.headers['cache-control']).toBe('public, max-age=31536000, immutable');
+    });
+
+    it('cache a fixed-name asset for a day, so a new favicon reaches returning visitors', async () => {
+        const response = await api().get('/favicon/icon.png');
+
+        expect(response.headers['cache-control']).toBe('public, max-age=86400');
+    });
+});
+
+describe('CORS', () => {
+    it('lets a browser send Idempotency-Key and read the rate-limit answer', async () => {
+        const origin = (process.env.NODE_CORS_ORIGIN ?? 'http://localhost:8080')
+            .split(',')[0]
+            .trim();
+        const preflight = await api()
+            .options('/account/login')
+            .set('Origin', origin)
+            .set('Access-Control-Request-Method', 'POST')
+            .set('Access-Control-Request-Headers', 'idempotency-key');
+        const response = await api().get('/').set('Origin', origin);
+
+        expect(preflight.headers['access-control-allow-headers']).toMatch(/idempotency-key/i);
+        expect(response.headers['access-control-expose-headers']).toMatch(/Retry-After/);
+        expect(response.headers['access-control-expose-headers']).toMatch(/RateLimit-Policy/);
     });
 });

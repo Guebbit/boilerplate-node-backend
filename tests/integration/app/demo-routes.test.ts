@@ -12,7 +12,7 @@ import request from 'supertest';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api } from '@tests/http';
 import { installDemo } from '@app/demo';
-import { installSecurity } from '@app/security';
+import { installRequestParsing, installSecurity } from '@app/security';
 import { installRequestContext } from '@app/request-context';
 import { installRoutes } from '@app/routes';
 import { installErrorHandling } from '@app/error-handling';
@@ -73,9 +73,10 @@ const testApp = () => {
  */
 const drivableApp = () => {
     const app = express();
-    // The same four installs `src/app.ts` makes, in the same order — `installSecurity` is what
+    // The same installs `src/app.ts` makes, in the same order — `installRequestParsing` is what
     // parses a JSON body, so the flows' first login 500s without it.
     installSecurity(app);
+    installRequestParsing(app);
     installRequestContext(app);
     installDemo(app);
     installRoutes(app);

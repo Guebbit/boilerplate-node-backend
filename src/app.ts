@@ -43,7 +43,7 @@ import { setTranslatables } from '@modules/locales/module';
 import { setPersonalDataSections } from '@modules/account/module';
 import { APP_NON_MODULE_CHECKS } from '@app/required-config';
 
-import { applyServerTimeouts, installSecurity } from '@app/security';
+import { applyServerTimeouts, installRequestParsing, installSecurity } from '@app/security';
 import { installRequestContext } from '@app/request-context';
 import { installTelemetry } from '@app/telemetry';
 import { installStatic } from '@app/static-assets';
@@ -207,10 +207,12 @@ setPersonalDataSections(resolvePersonalDataSections(enabledModules));
  * The middleware stack, in the order a request travels it.
  *
  * Express applies middleware in registration order, so this sequence IS the behaviour, not a
- * summary of it. Four dependencies are load-bearing and none of them is visible from a call site:
+ * summary of it. Five dependencies are load-bearing and none of them is visible from a call site:
  *
  * - security precedes everything, because `trust proxy` decides what `request.ip` means and the
  *   rate limiter keys its buckets on it;
+ * - static files come before the rate limiter, so the images a page loads do not spend the
+ *   caller's request budget — and before request context and telemetry, which they do not need;
  * - request context precedes the routes, because every controller reads the request id, the
  *   observability handle and the negotiated locale it attaches;
  * - telemetry precedes the routes so its timer wraps the handler rather than following it;
@@ -220,9 +222,10 @@ setPersonalDataSections(resolvePersonalDataSections(enabledModules));
  * Each install owns the ordering *within* its own group and documents it there.
  */
 installSecurity(app);
+installStatic(app);
+installRequestParsing(app);
 installRequestContext(app);
 installTelemetry(app);
-installStatic(app);
 // Demo control surface (/__test/restore, /__test/scenario, /__test/emails) — inert outside
 // `npm run demo`. Before installRoutes, whose 404 catch-all would swallow anything mounted after it.
 if (isDemoMode()) installDemo(app);
