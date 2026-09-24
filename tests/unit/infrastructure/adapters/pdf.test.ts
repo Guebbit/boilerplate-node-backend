@@ -18,7 +18,8 @@ const pdfBuffer = new Uint8Array([37, 80, 68, 70]);
 const pdf = jest.fn((_options?: unknown) => Promise.resolve(pdfBuffer));
 const setContent = jest.fn((_html?: string, _options?: unknown) => Promise.resolve());
 const close = jest.fn(() => Promise.resolve());
-const newPage = jest.fn(() => Promise.resolve({ setContent, pdf }));
+const setJavaScriptEnabled = jest.fn((_enabled?: boolean) => Promise.resolve());
+const newPage = jest.fn(() => Promise.resolve({ setContent, pdf, setJavaScriptEnabled }));
 const launch = jest.fn((_options?: unknown) => Promise.resolve({ newPage, close }));
 
 jest.mock('puppeteer-core', () => ({
@@ -74,6 +75,37 @@ describe('renderHtmlToPdf', () => {
             expect(setContent).toHaveBeenCalledWith('<h1>Invoice</h1>', {
                 waitUntil: 'load'
             });
+        });
+
+        it('turns JavaScript off, since the templates run none and the browser is unsandboxed', async () => {
+            await renderHtmlToPdf('<p>hello</p>');
+
+            expect(setJavaScriptEnabled).toHaveBeenCalledWith(false);
+        });
+
+        it('runs at most two browsers at once, however many renders are asked for', async () => {
+            let open = 0;
+            let peak = 0;
+            launch.mockImplementation(() => {
+                open += 1;
+                peak = Math.max(peak, open);
+                return new Promise((resolve) => {
+                    setImmediate(() =>
+                        resolve({
+                            newPage,
+                            close: jest.fn(() => {
+                                open -= 1;
+                                return Promise.resolve();
+                            })
+                        })
+                    );
+                });
+            });
+
+            await Promise.all(Array.from({ length: 5 }, () => renderHtmlToPdf('<p>x</p>')));
+            launch.mockImplementation(() => Promise.resolve({ newPage, close }));
+
+            expect(peak).toBe(2);
         });
 
         it('waits for the load event, so referenced assets are loaded before printing', async () => {
