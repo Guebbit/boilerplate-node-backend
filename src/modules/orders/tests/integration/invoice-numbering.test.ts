@@ -7,6 +7,7 @@
  */
 import { setupTestDb } from '@tests/setup-test-db';
 import { allocateInvoiceNumber } from '../../services/invoice-numbering';
+import { freezeDate } from '@tests/clock';
 
 setupTestDb();
 
@@ -52,24 +53,8 @@ describe('allocateInvoiceNumber', () => {
         const firstYearNumber = await allocateInvoiceNumber();
         const [firstYear] = parse(firstYearNumber);
 
-        // `jest.useFakeTimers` (this repo's own convention for clock-dependent tests — see
-        // `account/tests/unit/two-factor.test.ts`) rather than waiting for a real year boundary.
-        // Only `Date` needs to move: this call still does a real Mongo round trip, and faking
-        // `setTimeout`/`setImmediate`/etc. too would freeze the driver's own timers and hang.
-        jest.useFakeTimers({
-            doNotFake: [
-                'setTimeout',
-                'clearTimeout',
-                'setInterval',
-                'clearInterval',
-                'setImmediate',
-                'clearImmediate',
-                'nextTick',
-                'hrtime',
-                'performance',
-                'queueMicrotask'
-            ]
-        }).setSystemTime(Date.UTC(firstYear + 1, 0, 1));
+        // Only `Date` moves: this call still does a real Mongo round trip — see `@tests/clock`.
+        freezeDate(Date.UTC(firstYear + 1, 0, 1));
         try {
             const nextYearNumber = await allocateInvoiceNumber();
             const [nextYear, nextSequence] = parse(nextYearNumber);

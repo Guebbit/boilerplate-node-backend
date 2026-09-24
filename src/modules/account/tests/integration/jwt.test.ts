@@ -25,6 +25,7 @@ import {
 } from '@modules/account/session/jwt';
 import { runTokenCleanup } from '@modules/account/services';
 import { withEnvironmentOverrides } from '@tests/environment';
+import { advanceDate, freezeDate } from '@tests/clock';
 import { RefreshTokenExpiryTime } from '@modules/account/session/config';
 import { keyId } from '@modules/account/session/key-ring';
 import { TokenType } from '@modules/users';
@@ -311,21 +312,26 @@ describe('createAccessToken', () => {
     // degrades to nothing, because a client that refreshes every ten minutes is
     // never more than ten minutes from "fresh". Everything else keeps working; nothing else fails.
     it('COPIES auth_time forward from the refresh token — never re-stamps it from the clock', async () => {
-        const user = await createUser();
-        const refreshToken = await createRefreshToken(
-            String(user._id),
-            RefreshTokenExpiryTime.SHORT
-        );
-        const { auth_time: mintedAt } = await verifyRefreshToken(refreshToken);
+        freezeDate();
+        try {
+            const user = await createUser();
+            const refreshToken = await createRefreshToken(
+                String(user._id),
+                RefreshTokenExpiryTime.SHORT
+            );
+            const { auth_time: mintedAt } = await verifyRefreshToken(refreshToken);
 
-        // A real gap, not a mocked clock — if `createAccessToken` read `Date.now()` instead of
-        // copying the claim, this alone would be enough to catch it.
-        await new Promise((resolve) => setTimeout(resolve, 1100));
+            // Past a whole second — `auth_time` has second resolution — so a `createAccessToken`
+            // that re-stamped the claim from the clock would produce a different value.
+            advanceDate(1100);
 
-        const accessToken = await createAccessToken(refreshToken);
-        const { auth_time: exchangedAt } = await verifyAccessToken(accessToken);
+            const accessToken = await createAccessToken(refreshToken);
+            const { auth_time: exchangedAt } = await verifyAccessToken(accessToken);
 
-        expect(exchangedAt).toBe(mintedAt);
+            expect(exchangedAt).toBe(mintedAt);
+        } finally {
+            jest.useRealTimers();
+        }
     });
 
     it('carries amr forward from the refresh token', async () => {
@@ -378,13 +384,20 @@ describe('rotateRefreshToken reuse detection', () => {
     const GRACE_MS = 20;
     const RETENTION_MS = 60_000;
 
-    /** Long enough that a superseded entry is definitively outside the grace window. */
-    const pastGrace = () => new Promise((resolve) => setTimeout(resolve, GRACE_MS * 5));
+    /**
+     * Moves the frozen clock well outside the grace window. The clock is frozen for every case
+     * below, so "inside the window" stays inside it however slow the machine is.
+     */
+    const pastGrace = () => advanceDate(GRACE_MS * 5);
+
+    beforeEach(() => freezeDate());
+
+    afterEach(() => jest.useRealTimers());
 
     /**
      * A retention window past its own grace window, the way `invalidTokenWindows` requires at
-     * boot, but still comfortably inside {@link pastGrace}'s wait — so the sweep below finds it
-     * expired without the test waiting any longer for it.
+     * boot, but still comfortably inside {@link pastGrace}'s jump — so the sweep below finds it
+     * expired without moving the clock any further.
      */
     const RETENTION_FOR_SWEEP_MS = GRACE_MS + 10;
 
@@ -412,7 +425,7 @@ describe('rotateRefreshToken reuse detection', () => {
 
             // The legitimate rotation. `attacked` is superseded from here on.
             await rotateRefreshToken(attacked);
-            await pastGrace();
+            pastGrace();
 
             // The cleanup the real HTTP path runs FIRST, on every refresh, over every document.
             // Present here on purpose: a sweep that purged the superseded tombstone before this
@@ -465,7 +478,7 @@ describe('rotateRefreshToken reuse detection', () => {
             const bystander = await createRefreshToken(id, RefreshTokenExpiryTime.SHORT);
 
             await rotateRefreshToken(stale);
-            await pastGrace();
+            pastGrace();
             await runTokenCleanup();
 
             await expect(rotateRefreshToken(stale)).rejects.toThrow('Forbidden');

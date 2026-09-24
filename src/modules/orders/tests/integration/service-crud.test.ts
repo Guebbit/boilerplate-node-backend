@@ -31,6 +31,7 @@ import type { OrderDocument } from '../../model';
 import { asReject, asSuccess } from '@tests/response';
 import { asCustomer, asAdmin, testCallerContext } from '@tests/callers';
 import { MISSING_ID } from '@tests/ids';
+import { freezeDate } from '@tests/clock';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { logger } from '@infrastructure/adapters/logger';
 import { userService } from '@modules/users';
@@ -65,7 +66,11 @@ const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 setupTestDb();
 
-afterEach(() => jest.restoreAllMocks());
+afterEach(() => {
+    jest.restoreAllMocks();
+    // A no-op unless a case froze the clock; here so a failing assertion cannot leak it.
+    jest.useRealTimers();
+});
 
 /** Creates an order through the service, returning the persisted document. */
 const seedOrder = async () => {
@@ -115,6 +120,10 @@ describe('create', () => {
     });
 
     it('assigns each new order its own sequential invoice number', async () => {
+        // Mid-year and frozen: two orders straddling a real UTC New Year would get numbers from
+        // two different yearly sequences, both correctly, and fail the "one apart" check below.
+        freezeDate(Date.UTC(2026, 5, 15, 12));
+
         const user = await createUser();
         const product = await createProduct({ title: 'Keyboard', price: 25 });
 
@@ -135,14 +144,11 @@ describe('create', () => {
             )
         ).data;
 
-        expect(first.invoiceNumber).toBeDefined();
-        expect(second.invoiceNumber).toBeDefined();
-        expect(first.invoiceNumber).not.toBe(second.invoiceNumber);
-
-        // Both minted the same run, so the same year and one apart — not merely "different".
+        // Both minted in the frozen year and one apart — not merely "different".
         const [firstYear, firstSeq] = first.invoiceNumber!.split('-').map(Number);
         const [secondYear, secondSeq] = second.invoiceNumber!.split('-').map(Number);
-        expect(secondYear).toBe(firstYear);
+        expect(firstYear).toBe(2026);
+        expect(secondYear).toBe(2026);
         expect(secondSeq).toBe(firstSeq + 1);
     });
 
