@@ -33,10 +33,9 @@
 
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { REPO_ROOT, MODULES_ROOT } from '@tests/paths';
 
-const REPO_ROOT = path.join(__dirname, '../..');
 const TEMPLATES_DIR = path.join(REPO_ROOT, 'shared/templates/emails');
-const MODULES_ROOT = path.join(REPO_ROOT, 'src/modules');
 
 const OUTPUT_TAG = /<%[=-]([\S\s]*?)%>/g;
 

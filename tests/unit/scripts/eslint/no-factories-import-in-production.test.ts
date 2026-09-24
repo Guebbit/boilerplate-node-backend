@@ -10,8 +10,8 @@
 import { execFile } from 'node:child_process';
 import { writeFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
+import { REPO_ROOT } from '@tests/paths';
 
-const REPO_ROOT = path.join(__dirname, '..', '..', '..', '..');
 const ESLINT_BIN = path.join(REPO_ROOT, 'node_modules', '.bin', 'eslint');
 const PROBE_PATH = path.join(REPO_ROOT, 'src/modules/products/__factories-import-probe.ts');
 const PROBE_RELATIVE = path.relative(REPO_ROOT, PROBE_PATH);

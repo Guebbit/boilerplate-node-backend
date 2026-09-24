@@ -9,8 +9,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { readModuleDescriptor } from '../../scripts/docs/module-descriptor';
-
-const MODULES_ROOT = path.join(__dirname, '../../src/modules');
+import { MODULES_ROOT } from '@tests/paths';
 
 /** Every module folder, read off disk rather than off the registry — a descriptor is required whether or not the module is enabled. */
 const moduleNames = readdirSync(MODULES_ROOT, { withFileTypes: true })

@@ -15,6 +15,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { bootI18n } from '@infrastructure/i18n';
 import { registerValidationMessages } from '@infrastructure/http/validation-messages';
+import { MODULES_ROOT } from '@tests/paths';
 
 /**
  * 10x the live default (`DEFAULT_RATE_LIMIT_MAX` in src/infrastructure/http/middlewares/rate-limit.ts, currently 100).
@@ -251,7 +252,6 @@ process.env.NODE_SMTP_HOST ??= 'smtp.test.invalid';
  * un-mocks repositories and services across unrelated suites. A glob knows the folder layout; an
  * import knows the whole application.
  */
-const MODULES_ROOT = path.join(__dirname, '../../src/modules');
 void bootI18n(
     readdirSync(MODULES_ROOT)
         .map((name) => path.join(MODULES_ROOT, name, 'locales'))

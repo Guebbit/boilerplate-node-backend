@@ -22,8 +22,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { templateFile } from '@infrastructure/adapters/mailer';
-
-const MODULES_ROOT = path.join(__dirname, '../../src/modules');
+import { MODULES_ROOT } from '@tests/paths';
 
 /** Every `src/modules/<name>/emails.ts`, discovered rather than listed. */
 const listEmailFiles = (): { module: string; file: string }[] =>

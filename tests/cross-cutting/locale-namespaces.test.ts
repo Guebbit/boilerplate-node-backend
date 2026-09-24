@@ -20,10 +20,9 @@
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { MODULES_ROOT, REPO_ROOT } from '@tests/paths';
 
-const SOURCE_ROOT = path.join(__dirname, '../../src');
-const MODULES_ROOT = path.join(SOURCE_ROOT, 'modules');
-const SHARED_LOCALES = path.join(SOURCE_ROOT, 'locales');
+const SHARED_LOCALES = path.join(REPO_ROOT, 'src', 'locales');
 
 /** Every dotted leaf key in a dictionary, e.g. `account.email.reset-request.subject`. */
 const flatten = (value: unknown, prefix = ''): string[] => {

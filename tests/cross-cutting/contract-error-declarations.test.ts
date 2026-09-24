@@ -36,8 +36,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import YAML from 'yaml';
-
-const MODULES_ROOT = path.join(__dirname, '../../src/modules');
+import { MODULES_ROOT } from '@tests/paths';
 
 /** The HTTP methods an operation object may be keyed by. */
 const METHODS = new Set(['get', 'post', 'put', 'patch', 'delete']);

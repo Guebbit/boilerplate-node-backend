@@ -14,12 +14,10 @@
 
 import { readdir, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { REPO_ROOT } from './paths';
 
 /** The variable `global-setup.ts` hands this jest instance's sandbox root through to the workers. */
 export const FILE_SANDBOX_ROOT_VARIABLE = 'NODE_TEST_FILES_ROOT';
-
-/** The repository root, which test paths are named relative to. */
-const REPO_ROOT = path.join(__dirname, '..', '..');
 
 /**
  * The application settings a sandbox redirects, each to its own subdirectory.

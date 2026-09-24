@@ -21,8 +21,8 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';
+import { REPO_ROOT } from '@tests/paths';
 
-const REPO_ROOT = path.join(__dirname, '..', '..');
 const SOURCE_ROOT = path.join(REPO_ROOT, 'src');
 
 /**

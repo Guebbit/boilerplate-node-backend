@@ -35,8 +35,8 @@
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { MODULES_ROOT } from '@tests/paths';
 
-const MODULES_ROOT = path.join(__dirname, '../../src/modules');
 const OVERVIEW_CONTROLLER = path.join(
     MODULES_ROOT,
     'observability/controllers/get-observability-metrics-overview.ts'

@@ -26,15 +26,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import mongoose from 'mongoose';
 import { connect, disconnect } from '@tests/database';
+import { MODULES_ROOT } from '@tests/paths';
 import {
     applyIndexSync,
     findBlockingDuplicates,
     planIndexSync
 } from '../../../../scripts/db/index-sync';
 import { enabledModules } from '../../../../src/modules';
-
-/** Where the canary below looks for the models the registry should have brought in. */
-const MODULES_ROOT = path.join(__dirname, '../../../../src/modules');
 
 /** The native handle, for the states only the driver can construct. */
 const nativeDb = () => {

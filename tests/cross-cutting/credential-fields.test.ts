@@ -29,8 +29,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import mongoose from 'mongoose';
-
-const MODULES_ROOT = path.join(__dirname, '../../src/modules');
+import { MODULES_ROOT } from '@tests/paths';
 
 /**
  * Property names that must never reach a client.

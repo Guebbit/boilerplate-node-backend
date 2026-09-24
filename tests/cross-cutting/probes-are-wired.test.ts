@@ -1,6 +1,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { PROBED_SECTIONS } from '../../scripts/contracts/client-collections-bundle';
+import { MODULES_ROOT } from '@tests/paths';
 
 /**
  * Guard: a module that declares `probes.ts` is actually wired into the generated collections.
@@ -20,8 +21,6 @@ import { PROBED_SECTIONS } from '../../scripts/contracts/client-collections-bund
  * So this asserts the other direction, and nothing else: every `probes.ts` on disk is in the map.
  * A module with no probes is not a finding — most read endpoints have no interesting rejection.
  */
-
-const MODULES_ROOT = path.join(__dirname, '..', '..', 'src', 'modules');
 
 /** Every module that has written a `probes.ts`, discovered rather than listed. */
 const modulesDeclaringProbes = (): string[] =>

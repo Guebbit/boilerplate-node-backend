@@ -21,6 +21,7 @@ import path from 'node:path';
 import type { Router } from 'express';
 import { effectiveRouteTable, guardsOn, identityGuardIndex } from '@tests/routes';
 import { ROUTED_MODULES } from '@tests/routed-modules';
+import { MODULES_ROOT } from '@tests/paths';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
@@ -34,8 +35,6 @@ jest.mock('@infrastructure/http/middlewares/upload', () =>
 jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').securityMock()
 );
-
-const MODULES_ROOT = path.join(__dirname, '..', '..', 'src', 'modules');
 
 /** The four HTTP methods that change state — the ones this guard applies to. */
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);

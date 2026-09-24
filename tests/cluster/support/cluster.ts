@@ -17,8 +17,7 @@ import net from 'node:net';
 import path from 'node:path';
 import { startEphemeralMongo } from '@scenarios/support/ephemeral-mongo';
 import { startInProcessMongod } from '@scenarios/support/ephemeral-mongod';
-
-const REPO_ROOT = path.join(__dirname, '../../..');
+import { REPO_ROOT } from '@tests/paths';
 
 export interface Cluster {
     /** The port the cluster's workers share. */

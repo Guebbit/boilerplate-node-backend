@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { Router } from 'express';
 import { effectiveRouteTable } from '@tests/routes';
 import { ROUTED_MODULES } from '@tests/routed-modules';
+import { MODULES_ROOT } from '@tests/paths';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
@@ -41,7 +42,6 @@ jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
  */
 
 /** Every module directory under `src/modules/`, router or not. */
-const MODULES_ROOT = path.join(__dirname, '..', '..', 'src', 'modules');
 const moduleNames = (): string[] => readdirSync(MODULES_ROOT);
 
 /**

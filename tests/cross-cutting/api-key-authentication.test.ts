@@ -25,6 +25,7 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
+import { MODULES_ROOT } from '@tests/paths';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type { TenantCallerContext } from '@types';
 import { createUser } from '@modules/users/tests/factories';
@@ -34,9 +35,6 @@ import '@modules/api-keys/module';
 import { mint } from '@modules/api-keys/services/api-keys';
 
 setupTestDb();
-
-/** Where the source-level rule below looks for each module's `routes.ts`. */
-const MODULES_ROOT = path.join(__dirname, '..', '..', 'src', 'modules');
 
 /**
  * Mint a real credential holding exactly `permissions`, and return its plaintext secret.

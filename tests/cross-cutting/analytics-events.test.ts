@@ -9,8 +9,7 @@
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
-
-const MODULES_ROOT = path.join(__dirname, '../../src/modules');
+import { MODULES_ROOT } from '@tests/paths';
 
 /** The import specifier a module augments to add its names to the port's union. */
 const ANALYTICS_PORT = '@infrastructure/observability/analytics';

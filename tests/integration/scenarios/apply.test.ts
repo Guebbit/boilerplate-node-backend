@@ -20,8 +20,8 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import mongoose from 'mongoose';
 import { seedCredentials } from '@scenarios/accounts';
+import { REPO_ROOT } from '@tests/paths';
 
-const REPO_ROOT = path.join(__dirname, '..', '..', '..');
 const TSX_BIN = path.join(REPO_ROOT, 'node_modules', '.bin', 'tsx');
 
 /** Module load, Mongo connect and a `blank` seed, for real — measured under 3s locally. */

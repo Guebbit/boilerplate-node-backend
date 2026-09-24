@@ -26,8 +26,7 @@
 
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
-
-const MODULES_ROOT = path.join(__dirname, '../../src/modules');
+import { MODULES_ROOT } from '@tests/paths';
 
 /**
  * Modules that deliberately emit no audit action at all.

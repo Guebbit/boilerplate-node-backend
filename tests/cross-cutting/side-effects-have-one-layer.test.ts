@@ -39,8 +39,7 @@
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
-
-const MODULES_ROOT = path.join(__dirname, '../../src/modules');
+import { MODULES_ROOT } from '@tests/paths';
 
 /** The layer a module file belongs to, from its path alone. */
 type Layer = 'controller' | 'service' | 'repository' | 'model' | 'routes' | 'domain' | 'other';
