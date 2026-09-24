@@ -29,14 +29,20 @@ sequenceDiagram
         Handler-->>Middleware: response
         Middleware->>Mongo: mark done {status, body}
         Middleware-->>Client: response
-    else duplicate key, still in-flight
+    else duplicate key, in-flight, under 5 minutes old
         Middleware-->>Client: 409 Conflict
+    else duplicate key, in-flight, older (the attempt died)
+        Middleware->>Handler: take the key over, next()
     else duplicate key, done, fingerprint matches
         Middleware-->>Client: stored response, Idempotent-Replay: true
     else duplicate key, done, fingerprint differs
-        Middleware-->>Client: 422 — key reused with a different body
+        Middleware-->>Client: 422 — key reused with a different request
     end
 ```
+
+The fingerprint is the method, the **concrete** path and the canonicalised body. The path, not
+the route template: two refunds of different orders share a template and an empty body, and must
+not share an answer.
 
 `src/infrastructure/http/middlewares/idempotency.ts` is the middleware; the schema lives beside
 it in `idempotency-model.ts`. Mounted per route — never globally, the same way
@@ -46,7 +52,9 @@ server makes.
 
 The lock is one atomic insert against a unique index on `(key, caller)`. Whoever's insert lands
 first runs the handler; every other insert collides with `E11000`, and that collision — not a
-second lookup — is what decides which of the three outcomes above a retry gets. "Caller" is the
+second lookup — is what decides which of the outcomes above a retry gets. An `in-flight` record
+older than five minutes belongs to an attempt that crashed; a retry takes it over with a
+conditional update, so of two racing retries exactly one wins. "Caller" is the
 authenticated account id, or the request's address for a public route with no account yet
 (signup, the contact form) — scoping by caller is what stops one person from reading another's
 cached reply merely by guessing or observing their key.

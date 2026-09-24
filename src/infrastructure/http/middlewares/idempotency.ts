@@ -20,7 +20,6 @@
 import { createHash } from 'node:crypto';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { canonicalize } from '@guebbit/js-toolkit';
-import { routeTemplateOf } from '@infrastructure/http/request';
 import { rejectResponse } from '@infrastructure/http/response';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { logger } from '@infrastructure/adapters/logger';
@@ -61,18 +60,16 @@ const hasProtoKey = (value: unknown): boolean => {
 };
 
 /**
- * What this request IS, independent of who is asking: the method, the route pattern (not the
- * raw URL — a path parameter must not mint a new fingerprint) and the body. Two requests with
- * the same key but a different fingerprint are the client reusing a key for a different
- * request, which is a client bug this middleware exists to catch rather than paper over.
+ * What this request IS, independent of who is asking: the method, the concrete path and the body.
+ * Two requests with the same key but a different fingerprint are the client reusing a key for a
+ * different request, which is a client bug this middleware exists to catch rather than paper over.
+ *
+ * The concrete path, not the route template: `/order/A/refund` and `/order/B/refund` carry the
+ * same (empty) body, so a template fingerprint would replay A's answer for B and never refund B.
  *
  * @param request - the incoming request, already matched to its route
  */
 const fingerprintOf = (request: Request): string => {
-    // No matched template (should not happen — this middleware is mounted per route) falls back
-    // to the request's own path rather than fingerprinting nothing.
-    const routePath = routeTemplateOf(request) ?? request.path;
-
     /*
      * js-toolkit: rebuilds the body with every object's keys sorted, recursively, so the SAME
      * body with its fields in a different order fingerprints identically. `JSON.stringify` of the
@@ -82,7 +79,7 @@ const fingerprintOf = (request: Request): string => {
     const body = JSON.stringify(canonicalize(request.body ?? {}));
 
     return createHash('sha256')
-        .update(`${request.method} ${request.baseUrl}${routePath}\n${body}`)
+        .update(`${request.method} ${request.baseUrl}${request.path}\n${body}`)
         .digest('hex');
 };
 
@@ -97,8 +94,62 @@ const fingerprintOf = (request: Request): string => {
 const callerKeyOf = (request: Request): string =>
     request.caller?.id ?? `ip:${request.ip ?? 'unknown'}`;
 
-/** Everything the three outcomes below need out of a stored record. */
-type StoredRecord = Pick<IdempotencyRecordDocument, 'state' | 'fingerprint' | 'status' | 'body'>;
+/** Everything the outcomes below need out of a stored record. */
+type StoredRecord = Pick<
+    IdempotencyRecordDocument,
+    'state' | 'fingerprint' | 'status' | 'body' | 'updatedAt'
+>;
+
+/**
+ * How long an 'in-flight' record holds its key. Past this, the attempt that claimed it is taken
+ * to be dead (a crash, a killed process) and a retry may claim the key again. Without it, a crash
+ * mid-request answers 409 to every retry for the whole retention window.
+ *
+ * Far above any real handler: a live request running this long is already past every timeout.
+ */
+const IN_FLIGHT_LEASE_MS = 5 * 60_000;
+
+/**
+ * Whether an 'in-flight' record outlived {@link IN_FLIGHT_LEASE_MS}.
+ *
+ * @param existing - the record holding the key
+ */
+const isAbandoned = (existing: StoredRecord): boolean =>
+    existing.state === 'in-flight' &&
+    existing.updatedAt !== undefined &&
+    Date.now() - existing.updatedAt.getTime() > IN_FLIGHT_LEASE_MS;
+
+/**
+ * Take over an abandoned 'in-flight' record, atomically: the filter pins the `updatedAt` this
+ * request saw, so of two retries racing for the same dead record exactly one wins. The winner runs
+ * the handler with its answer captured; the loser answers 409, as for any live attempt.
+ *
+ * @param existing - the abandoned record — see {@link isAbandoned}
+ */
+const reclaimAbandoned = (
+    raw: string,
+    caller: string,
+    existing: StoredRecord,
+    response: Response,
+    next: NextFunction
+): Promise<void> =>
+    idempotencyRecordModel
+        .updateOne(
+            { key: raw, caller, state: 'in-flight', updatedAt: existing.updatedAt },
+            // `timestamps: true` restamps `updatedAt`, which restarts the lease for this attempt.
+            { $set: { state: 'in-flight' } }
+        )
+        .exec()
+        .then(({ modifiedCount }) => {
+            if (modifiedCount === 1) {
+                armOutcomeCapture(response, raw, caller);
+                next();
+                return;
+            }
+            rejectResponse(response, 409, [
+                { code: 'IDEMPOTENCY_IN_FLIGHT', message: t('generic.error-idempotency-in-flight') }
+            ]);
+        });
 
 /**
  * Make a later hit on this same `(key, caller)` write its own outcome back to the ledger the
@@ -207,6 +258,9 @@ const onDuplicateKey = (
                 next();
                 return;
             }
+
+            if (existing.fingerprint === fingerprint && isAbandoned(existing))
+                return reclaimAbandoned(raw, caller, existing, response, next);
 
             respondToCollision(response, existing, fingerprint);
         })

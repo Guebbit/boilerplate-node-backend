@@ -22,22 +22,45 @@ import { idempotencyRecordModel } from '@infrastructure/http/middlewares/idempot
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 
 const create = idempotencyRecordModel.create as jest.Mock;
+const updateOne = idempotencyRecordModel.updateOne as jest.Mock;
 const findOne = idempotencyRecordModel.findOne as jest.Mock;
 
 /** Lets a pending promise chain (the mocked `create().then(...)`) settle before assertions run. */
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 /** A minimal request carrying only what `idempotencyKey` reads. */
-const makeRequest = (key: string | undefined, body: unknown) =>
+const makeRequest = (key: string | undefined, body: unknown, path = '/widgets') =>
     asStub<Request>({
         header: (name: string) => (name.toLowerCase() === 'idempotency-key' ? key : undefined),
         method: 'POST',
         baseUrl: '',
-        path: '/widgets',
-        route: { path: '/widgets' },
+        path,
+        route: { path: '/widgets/:id' },
         body,
         ip: '127.0.0.1'
     });
+
+/** The fingerprint `key-1` + `{ a: 1 }` produces, read back off a first claim. */
+const fingerprintOfFirstClaim = async (): Promise<string> => {
+    idempotencyKey(makeRequest('key-1', { a: 1 }), makeResponseStub(), jest.fn());
+    await flush();
+    return (create.mock.calls[0] as [{ fingerprint: string }])[0].fingerprint;
+};
+
+/** Collide once, against an in-flight record last touched `ageMs` ago. */
+const collideWithInFlight = (fingerprint: string, ageMs: number) => {
+    create.mockRejectedValueOnce({ code: 11_000 });
+    findOne.mockReturnValueOnce({
+        lean: () => ({
+            exec: () =>
+                Promise.resolve({
+                    state: 'in-flight',
+                    fingerprint,
+                    updatedAt: new Date(Date.now() - ageMs)
+                })
+        })
+    });
+};
 
 describe('idempotencyKey', () => {
     beforeEach(() => {
@@ -86,6 +109,20 @@ describe('idempotencyKey', () => {
         idempotencyKey(makeRequest('key-1', { a: 1 }), makeResponseStub(), next);
         await flush();
         idempotencyKey(makeRequest('key-2', { a: 2 }), makeResponseStub(), next);
+        await flush();
+
+        const [[first], [second]] = create.mock.calls as [{ fingerprint: string }][];
+        expect(first.fingerprint).not.toBe(second.fingerprint);
+    });
+
+    it('fingerprints two resources behind one route template differently', async () => {
+        // An empty-bodied write per resource, e.g. a refund of order A then order B: one
+        // fingerprint for both would replay A's answer for B.
+        const next = jest.fn();
+
+        idempotencyKey(makeRequest('key-1', {}, '/widgets/a'), makeResponseStub(), next);
+        await flush();
+        idempotencyKey(makeRequest('key-2', {}, '/widgets/b'), makeResponseStub(), next);
         await flush();
 
         const [[first], [second]] = create.mock.calls as [{ fingerprint: string }][];
@@ -213,5 +250,49 @@ describe('idempotencyKey', () => {
         // than looping, and the request still proceeds (uncaptured) instead of hanging.
         expect(create).toHaveBeenCalledTimes(2);
         expect(next).toHaveBeenCalledWith();
+    });
+
+    describe('an in-flight record', () => {
+        it('answers 409 while the attempt holding the key may still be running', async () => {
+            const fingerprint = await fingerprintOfFirstClaim();
+            collideWithInFlight(fingerprint, 1000);
+            const response = makeResponseStub();
+            const next = jest.fn();
+
+            idempotencyKey(makeRequest('key-1', { a: 1 }), response, next);
+            await flush();
+            await flush();
+
+            expect(response.status).toHaveBeenCalledWith(409);
+            expect(next).not.toHaveBeenCalled();
+        });
+
+        it('lets a retry take over a key whose attempt died long ago', async () => {
+            const fingerprint = await fingerprintOfFirstClaim();
+            collideWithInFlight(fingerprint, 60 * 60_000);
+            updateOne.mockReturnValueOnce({ exec: () => Promise.resolve({ modifiedCount: 1 }) });
+            const next = jest.fn();
+
+            idempotencyKey(makeRequest('key-1', { a: 1 }), makeResponseStub(), next);
+            await flush();
+            await flush();
+
+            expect(next).toHaveBeenCalledWith();
+        });
+
+        it('answers 409 to the retry that loses the race for a dead attempt', async () => {
+            const fingerprint = await fingerprintOfFirstClaim();
+            collideWithInFlight(fingerprint, 60 * 60_000);
+            updateOne.mockReturnValueOnce({ exec: () => Promise.resolve({ modifiedCount: 0 }) });
+            const response = makeResponseStub();
+            const next = jest.fn();
+
+            idempotencyKey(makeRequest('key-1', { a: 1 }), response, next);
+            await flush();
+            await flush();
+
+            expect(response.status).toHaveBeenCalledWith(409);
+            expect(next).not.toHaveBeenCalled();
+        });
     });
 });
