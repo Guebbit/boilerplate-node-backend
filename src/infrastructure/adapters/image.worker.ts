@@ -44,22 +44,23 @@ const isReencodableMime = (mime: string | undefined): mime is ReencodableImageMi
 export class UnsupportedImageFormatError extends Error {}
 
 /**
- * The shared identity a digest run's promoted original AND its thumbnail are filed under —
- * derived from the RE-ENCODED original's own bytes, SALTED by `owner`. See
- * `image-store.ts#promote`'s docblock for why: it is what makes a duplicate run of the same input
- * converge instead of collide, and a stale run's cleanup provably unable to delete a DIFFERENT
- * owner's live file.
+ * The shared identity a digest run's promoted original AND its thumbnail are filed under.
  *
- * Content-addressing alone is not enough: two documents that upload byte-identical images would
- * land on the SAME file without `owner` salting it, so cleaning up one document's stale run — a
- * writeback that matches nothing, because a newer upload has already superseded it — could delete
- * a file a completely unrelated document is still serving. `owner` closes that: it is the target
- * document's id on the path that has one ({@link handleImageDigestJob}, {@link enqueueImageDigest}
- * — retries of that SAME document still converge on the same file, which is the idempotency this
- * was for), or the quarantine key itself on the one path with no document to salt by yet
- * (`http/middlewares/upload.ts`'s synchronous, no-broker digest, ahead of the write that mints
- * one) — that path never retries the same key twice, so nothing is lost by making every upload
- * there unique instead.
+ * Basis: derived from the RE-ENCODED original's own bytes, SALTED by `owner`. See
+ *        `image-store.ts#promote`'s docblock for why: it is what makes a duplicate run of the
+ *        same input converge instead of collide, and a stale run's cleanup provably unable to
+ *        delete a DIFFERENT owner's live file.
+ * Salt:  content-addressing alone is not enough — two documents that upload byte-identical images
+ *        would land on the SAME file without `owner` salting it, so cleaning up one document's
+ *        stale run (a writeback that matches nothing, because a newer upload has already
+ *        superseded it) could delete a file a completely unrelated document is still serving.
+ *        `owner` closes that: it is the target document's id on the path that has one
+ *        ({@link handleImageDigestJob}, {@link enqueueImageDigest} — retries of that SAME
+ *        document still converge on the same file, which is the idempotency this is for), or the
+ *        quarantine key itself on the one path with no document to salt by yet
+ *        (`http/middlewares/upload.ts`'s synchronous, no-broker digest, ahead of the write that
+ *        mints one) — that path never retries the same key twice, so nothing is lost by making
+ *        every upload there unique instead.
  *
  * @param owner - what makes this run's file NOT shared with an unrelated one — see above
  * @param digested - the re-encoded bytes the file is a hash of
@@ -147,15 +148,15 @@ export const digestQuarantinedImage = (key: string, owner: string): Promise<Dige
  * Call a module's writeback, and either clean up (nothing matched) or invalidate the cache
  * (something did) — the two outcomes a finished digest can have.
  *
- * Shared by {@link handleImageDigestJob} and {@link enqueueImageDigest}'s inline fallback, so a
- * stale job, a deleted-mid-flight document, and a completed digest are all handled identically on
- * both paths.
- *
- * The invalidation half exists because the write that enqueued this job already cleared the
- * `collection` cache tag — before the digest ran, so the response it re-warmed still carries the
- * pre-digest placeholder (`imageUrl`/`thumbnailUrl` not yet set). This is the only place a
- * FINISHED digest becomes visible to anything, so it is the only place that can clear the tag a
- * second time; without it, a cached response can serve that placeholder for the tag's whole TTL.
+ * Shared:       by {@link handleImageDigestJob} and {@link enqueueImageDigest}'s inline fallback,
+ *               so a stale job, a deleted-mid-flight document, and a completed digest are all
+ *               handled identically on both paths.
+ * Invalidation: exists because the write that enqueued this job already cleared the `collection`
+ *               cache tag, ahead of the digest running, so the response it re-warmed still carries
+ *               the pre-digest placeholder (`imageUrl`/`thumbnailUrl` not yet set). This is the
+ *               only place a FINISHED digest becomes visible to anything, so it is the only place
+ *               that can clear the tag a second time; without it, a cached response can serve that
+ *               placeholder for the tag's whole TTL.
  *
  * @param writeback - the module's own writeback
  * @param documentId - the target document's id
@@ -288,16 +289,18 @@ export const enqueueImageDigest = (
 };
 
 /**
- * A module's own `enqueueIfPending`, factored out since `users` and `products` were identical
- * apart from the collection name and writeback. Checks the just-persisted document for a
- * `pendingImageKey`, dispatches through {@link enqueueImageDigest} when there is one, and always
- * hands back the same document — awaited, so a caller that returned first can't answer with a
- * record the inline fallback hasn't finished writing yet.
+ * A module's own `enqueueIfPending`, shared by `users` and `products`, which need only the
+ * collection name and writeback to differ.
  *
- * When that fallback ran, the database already holds the real urls (`writeback` wrote them) — so
- * this copies them onto the in-memory document too and clears `pendingImageKey`, or a caller that
- * hands this same object back out in its response would keep serving the pre-digest placeholder
- * with no `pendingImageKey` left to tell the client to refetch.
+ * Behavior: checks the just-persisted document for a `pendingImageKey`, dispatches through
+ *           {@link enqueueImageDigest} when there is one, and always hands back the same document
+ *           — awaited, so a caller that returned first can't answer with a record the inline
+ *           fallback hasn't finished writing yet.
+ * Inline:   when that fallback runs, the database already holds the real urls (`writeback` wrote
+ *           them), so this copies them onto the in-memory document too and clears
+ *           `pendingImageKey` — otherwise a caller that hands this same object back out in its
+ *           response would keep serving the pre-digest placeholder with no `pendingImageKey` left
+ *           to tell the client to refetch.
  *
  * @param document - the just-persisted document, checked for `pendingImageKey`
  * @param collection - the job's `collection` field, matched by {@link registerImageWritebackResolver}

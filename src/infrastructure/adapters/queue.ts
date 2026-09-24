@@ -1,16 +1,18 @@
 /**
  * @module
- * RabbitMQ (AMQP 0-9-1) adapter. Like the cache adapter, every function degrades to a no-op when
- * the broker is not configured — `publishToQueue` returns `false` and callers fall back to doing
- * the work inline (see `adapters/mailer.ts` → `enqueueEmail`).
+ * RabbitMQ (AMQP 0-9-1) adapter.
  *
- * Reconnection is amqplib's own opt-in `recovery` option (2.0.1+), not
- * `@infrastructure/adapters/managed-connection`'s lifecycle: recovery retries the CONNECTION
- * forever with backoff and re-runs `setup` after every successful (re)connect — exactly "declare
- * the queues, re-bind every consumer", the one thing this adapter needs redone whenever the
- * connection comes back. `managed-connection.ts`'s own lifecycle stays for Redis, where recovery
- * is demand-driven (the next cache read retries) rather than a background loop; only its shared
- * warn-once latch is reused here.
+ * Degrades:   like the cache adapter, every function no-ops when the broker is not configured —
+ *             `publishToQueue` returns `false` and callers fall back to doing the work inline
+ *             (see `adapters/mailer.ts` → `enqueueEmail`).
+ * Reconnects: via amqplib's own opt-in `recovery` option (2.0.1+), not
+ *             `@infrastructure/adapters/managed-connection`'s lifecycle — recovery retries the
+ *             CONNECTION forever with backoff and re-runs `setup` after every successful
+ *             (re)connect, exactly "declare the queues, re-bind every consumer", the one thing
+ *             this adapter needs redone whenever the connection comes back.
+ * Redis:      `managed-connection.ts`'s own lifecycle stays there instead, where recovery is
+ *             demand-driven (the next cache read retries) rather than a background loop; only its
+ *             shared warn-once latch is reused here.
  *
  * See: docs/tools/rabbitmq.md
  */
@@ -299,21 +301,21 @@ export const deadLetterQueueOf = (queue: string): string => `${queue}.dead`;
 export const retryQueueOf = (queue: string): string => `${queue}.retry`;
 
 /**
- * Every worker queue's current dead-letter depth, read live off the broker — for
- * `GET /observability/health`'s `queues` field, the one part of that endpoint that DOES do I/O
- * (see `modules/observability/services/dependency-health.ts`'s header for why the rest never does): a
- * queue's parked count exists nowhere else in this process, unlike every other dependency's
- * state, which is already tracked in memory.
+ * Every worker queue's current dead-letter depth, read live off the broker.
  *
- * A dedicated, short-lived channel, never {@link getChannel}'s shared one: `assertQueue` on a
- * queue this process has never published to or consumed from creates it, harmlessly, with the
- * same `durable: true` {@link assertJobQueue} already declares its dead-letter queues with — but
- * any OTHER broker error on this call closes whatever channel it ran on, and the shared channel
- * every publisher depends on is not something a health check may risk.
- *
- * `Promise.allSettled`, not `Promise.all`: one queue's failure closing the channel must not zero
- * out the queues already checked before it — a partial answer is still useful, an empty one looks
- * like "nothing is parked anywhere," which would be a false negative.
+ * Why:      the one part of `GET /observability/health`'s `queues` field that DOES do I/O (see
+ *           `modules/observability/services/dependency-health.ts`'s header for why the rest never
+ *           does) — a queue's parked count exists nowhere else in this process, unlike every
+ *           other dependency's state, which is already tracked in memory.
+ * Channel:  a dedicated, short-lived one, never {@link getChannel}'s shared one. `assertQueue` on
+ *           a queue this process has never published to or consumed from creates it, harmlessly,
+ *           with the same `durable: true` {@link assertJobQueue} already declares its dead-letter
+ *           queues with — but any OTHER broker error on this call closes whatever channel it ran
+ *           on, and the shared channel every publisher depends on is not something a health check
+ *           may risk.
+ * Settling: `Promise.allSettled`, not `Promise.all` — one queue's failure closing the channel must
+ *           not zero out the queues already checked before it; a partial answer is still useful,
+ *           an empty one looks like "nothing is parked anywhere," a false negative.
  *
  * @returns one entry per queue this call reached before anything went wrong — empty when
  *   disabled, not yet connected, or unreachable
@@ -384,20 +386,22 @@ const JOB_PRIORITY_VALUES: Record<JobPriority, number> = { normal: 0, high: 1 };
  * work queue ──(nack, requeue=false)──▶ <queue>.retry (TTL, no consumer) ──(expires)──▶ work queue
  * ```
  *
- * The work queue's `deadLetterRoutingKey` points at `<queue>.retry`, never `<queue>.dead` — a
- * `nack(msg, false, false)` always means "try again later" now. `<queue>.retry` points BACK at the
- * work queue (bound under the work queue's own name), so a message that sits out its TTL there
- * reappears on the work queue with RabbitMQ's own `x-death` array one entry longer — the free
- * attempt count `handleDelivery` reads. `<queue>.dead` gets no exchange binding at all: nothing
- * dead-letters into it automatically: a permanent rejection and an exhausted retry both need to
- * skip the retry cycle entirely, which only an explicit publish can guarantee.
- *
- * Idempotent, called on both publish and consume paths so producer and consumer may start in any
- * order — both must agree on `retryDelaySeconds` for the same queue, the same way they already
- * must agree on `durable`, or `assertQueue` throws `PRECONDITION_FAILED` on the second call. In
- * practice this app's consumers register at boot (`app/workers.ts`), before anything publishes.
- * See `docs/tools/rabbitmq.md` for upgrading an existing broker — the dead-letter target changing
- * shape here is exactly the kind of change that needs one.
+ * Routing:    the work queue's `deadLetterRoutingKey` points at `<queue>.retry`, never
+ *             `<queue>.dead` — a `nack(msg, false, false)` always means "try again later".
+ *             `<queue>.retry` points BACK at the work queue (bound under the work queue's own
+ *             name), so a message that sits out its TTL there reappears on the work queue with
+ *             RabbitMQ's own `x-death` array one entry longer — the free attempt count
+ *             `handleDelivery` reads. `<queue>.dead` gets no exchange binding at all: nothing
+ *             dead-letters into it automatically, since a permanent rejection and an exhausted
+ *             retry both need to skip the retry cycle entirely, which only an explicit publish can
+ *             guarantee.
+ * Idempotent: called on both publish and consume paths so producer and consumer may start in any
+ *             order — both must agree on `retryDelaySeconds` for the same queue, the same way they
+ *             already must agree on `durable`, or `assertQueue` throws `PRECONDITION_FAILED` on
+ *             the second call. In practice this app's consumers register at boot
+ *             (`app/workers.ts`), before anything publishes.
+ * Upgrading:  see `docs/tools/rabbitmq.md` for upgrading an existing broker — the dead-letter
+ *             target changing shape here is exactly the kind of change that needs one.
  *
  * @param ch - the channel to declare on
  * @param queue - the work queue
@@ -464,18 +468,18 @@ const PUBLISH_CONFIRM_TIMEOUT_MS = 5000;
 /**
  * Publish a message to a queue. No-op when RabbitMQ is not configured.
  *
- * Publishes to the *default exchange* (empty name), where the routing key IS the queue name — the
- * simplest AMQP topology there is. `TPayload` is the job envelope: naming it explicitly
- * (`publishToQueue<EmailJobPayload>(…)`) checks this call against the same type its consumer declares, so
- * a field added on one side and forgotten on the other is a compile error, not a 3am silent drop.
- *
- * Waits for the BROKER's own confirmation, not `sendToQueue`'s return value — that boolean means
- * "amqplib's local write buffer is full" (backpressure), never "failed", and callers that treated
- * it as a failure (`image.worker.ts`, `mailer.ts`, before this fix) ran their inline fallback
- * ALONGSIDE a publish that was going to succeed anyway, producing two runs of the same job. A
- * confirm channel's callback (https://amqp-node.github.io/amqplib/channel_api.html#confirms) fires
- * once the broker has actually accepted or refused the message, regardless of what the local
- * buffer was doing — that is the one signal this function now trusts.
+ * Topology: the *default exchange* (empty name), where the routing key IS the queue name — the
+ *           simplest AMQP topology there is. `TPayload` is the job envelope: naming it explicitly
+ *           (`publishToQueue<EmailJobPayload>(…)`) checks this call against the same type its
+ *           consumer declares, so a field added on one side and forgotten on the other is a
+ *           compile error, not a 3am silent drop.
+ * Confirms: waits for the BROKER's own confirmation, not `sendToQueue`'s return value — that
+ *           boolean means "amqplib's local write buffer is full" (backpressure), never "failed".
+ *           Treating it as a failure runs a caller's inline fallback ALONGSIDE a publish that is
+ *           going to succeed anyway, producing two runs of the same job. A confirm channel's
+ *           callback (https://amqp-node.github.io/amqplib/channel_api.html#confirms) fires once
+ *           the broker has actually accepted or refused the message, regardless of what the local
+ *           buffer was doing — that is the one signal this function trusts.
  *
  * @returns `true` once the broker confirms the message, `false` when the queue is unavailable, the
  *          broker refuses it, or confirmation does not arrive within
@@ -614,16 +618,17 @@ const safeNack = (
 };
 
 /**
- * Move a message straight into `<queue>.dead`, bypassing the retry queue entirely — the shared
- * ending for every PERMANENT rejection (unparseable, contract failure, handler-refused) and for a
- * throw whose {@link deathCountFor} has reached the limit. None of these may reach the retry queue:
- * a `nack` would, since the work queue's own `deadLetterRoutingKey` always points there now (see
- * `assertJobQueue`), which is exactly why this publishes directly instead.
+ * Move a message straight into `<queue>.dead`, bypassing the retry queue entirely.
  *
- * Confirmed the same way {@link publishToQueue} is: only acks the original once the broker has
- * actually accepted the parked copy, so a publish failure here can never silently drop the job —
- * on that failure this nacks with requeue instead, the ordinary "try the whole delivery again"
- * path, rather than pretending the park succeeded.
+ * When:      the shared ending for every PERMANENT rejection (unparseable, contract failure,
+ *            handler-refused) and for a throw whose {@link deathCountFor} has reached the limit.
+ *            None of these may reach the retry queue: a `nack` would, since the work queue's own
+ *            `deadLetterRoutingKey` always points there (see `assertJobQueue`), which is exactly
+ *            why this publishes directly instead.
+ * Confirmed: the same way {@link publishToQueue} is — only acks the original once the broker has
+ *            actually accepted the parked copy, so a publish failure here can never silently drop
+ *            the job; on that failure this nacks with requeue instead, the ordinary "try the whole
+ *            delivery again" path, rather than pretending the park succeeded.
  *
  * @param ch - the channel to publish and ack/nack on
  * @param queue - the work queue this message came from
