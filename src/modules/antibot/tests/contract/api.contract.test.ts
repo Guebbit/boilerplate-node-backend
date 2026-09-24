@@ -25,6 +25,44 @@ afterEach(() => {
     else process.env.NODE_ANTIBOT_EMAIL_POLICY = ORIGINAL_EMAIL_POLICY;
 });
 
+describe('GET /antibot/challenge', () => {
+    /** Saved so the self-hosted provider's secret does not leak into other suites. */
+    const ORIGINAL_ALTCHA_SECRET = process.env.NODE_ANTIBOT_ALTCHA_SECRET;
+
+    afterEach(() => {
+        if (ORIGINAL_ALTCHA_SECRET === undefined) delete process.env.NODE_ANTIBOT_ALTCHA_SECRET;
+        else process.env.NODE_ANTIBOT_ALTCHA_SECRET = ORIGINAL_ALTCHA_SECRET;
+    });
+
+    it('matches the contract for the self-hosted provider: a challenge to solve', async () => {
+        process.env.NODE_ANTIBOT_PROVIDER = 'altcha';
+        process.env.NODE_ANTIBOT_ALTCHA_SECRET = 'contract-test-altcha-secret';
+
+        const response = await api().get('/antibot/challenge');
+
+        expect(response.status).toBe(200);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('answers 404 when no provider this server hosts is selected — the default', async () => {
+        delete process.env.NODE_ANTIBOT_PROVIDER;
+
+        const response = await api().get('/antibot/challenge');
+
+        expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('answers 404 for a vendor-hosted provider, which issues its challenges itself', async () => {
+        process.env.NODE_ANTIBOT_PROVIDER = 'turnstile';
+
+        const response = await api().get('/antibot/challenge');
+
+        expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
 describe('GET /antibot/config', () => {
     it('matches the contract while every rung is off — the default', async () => {
         delete process.env.NODE_ANTIBOT_PROVIDER;

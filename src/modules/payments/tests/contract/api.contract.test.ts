@@ -463,6 +463,49 @@ describe('POST /payments/order/{orderId}/refund', () => {
     });
 });
 
+describe('POST /payments/order/{orderId}/refund — the operator', () => {
+    it('matches the contract, and the payment reads refunded', async () => {
+        const { order, paymentId } = await paidOrder();
+        const { bearer: adminBearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .post(`/payments/order/${String(order._id)}/refund`)
+            .set('Authorization', adminBearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.status).toBe('refunded');
+        expect(response).toSatisfyApiSpec();
+        const payment = await paymentRepository.findById(paymentId);
+        expect(payment!.status).toBe('refunded');
+    });
+
+    it('matches the error contract for a second refund — money comes back once', async () => {
+        const { order } = await paidOrder();
+        const { bearer: adminBearer } = await authenticateAs('admin');
+        await api()
+            .post(`/payments/order/${String(order._id)}/refund`)
+            .set('Authorization', adminBearer);
+
+        const response = await api()
+            .post(`/payments/order/${String(order._id)}/refund`)
+            .set('Authorization', adminBearer);
+
+        expect(response.status).toBe(409);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for an order with no payment', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .post(`/payments/order/${MISSING_ID}/refund`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
 describe('POST /payments/order/{orderId}/offline', () => {
     it('matches the contract for recording money by hand', async () => {
         const { bearer: adminBearer } = await authenticateAs('admin');

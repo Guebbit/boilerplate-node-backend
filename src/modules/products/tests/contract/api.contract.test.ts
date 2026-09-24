@@ -414,3 +414,62 @@ describe('GET /products?deleted=', () => {
         expect(deleted).toSatisfyApiSpec();
     });
 });
+
+/** The body-addressed twin of `DELETE /products/{id}`. */
+describe('DELETE /products — the id in the body', () => {
+    it('matches the contract for a soft delete', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+
+        const response = await api()
+            .delete('/products')
+            .set('Authorization', bearer)
+            .send({ id: String(product._id) });
+
+        expect(response.status).toBe(200);
+        expect(response).toSatisfyApiSpec();
+        const stored = await productRepository.findById(String(product._id));
+        expect(stored?.deletedAt).toBeInstanceOf(Date);
+    });
+
+    it('matches the error contract for an id nobody holds', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .delete('/products')
+            .set('Authorization', bearer)
+            .send({ id: '65dc8a99604c307b702b5ccc' });
+
+        expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+/*
+ * The catalogue reads are public; every write owes an anonymous caller the 401 the spec declares,
+ * and a customer the 403.
+ */
+describe.each([
+    ['post', '/products'],
+    ['delete', '/products/65dc8a99604c307b702b5ccc'],
+    ['patch', '/products/65dc8a99604c307b702b5ccc'],
+    ['post', '/products/65dc8a99604c307b702b5ccc/restore'],
+    ['delete', '/products/65dc8a99604c307b702b5ccc/hard'],
+    ['get', '/products/65dc8a99604c307b702b5ccc/admin']
+] as const)('%s %s — the refusals', (method, path) => {
+    it('matches the error contract with no credentials', async () => {
+        const response = await api()[method](path);
+
+        expect(response.status).toBe(401);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a customer', async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api()[method](path).set('Authorization', bearer);
+
+        expect(response.status).toBe(403);
+        expect(response).toSatisfyApiSpec();
+    });
+});

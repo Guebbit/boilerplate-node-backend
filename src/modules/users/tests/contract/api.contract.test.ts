@@ -334,3 +334,122 @@ describe('POST /users/{id}/restore', () => {
         expect(response).toSatisfyApiSpec();
     });
 });
+
+/*
+ * The body-addressed twins of `PUT /users/{id}` and `DELETE /users/{id}`, the explicit hard
+ * delete, the admin 2FA reset — and the refusals every one of them owes an anonymous caller.
+ */
+describe('PUT /users — the id in the body', () => {
+    it('matches the contract for an admin edit', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const target = await createUser({ email: 'body-edit@example.com', username: 'bodyedit' });
+
+        const response = await api()
+            .put('/users')
+            .set('Authorization', bearer)
+            // `email` resent, as every PUT /users/{id} case here does: the service validates it as
+            // present although `UpdateUserRequest` does not list it as required.
+            .send({ id: String(target._id), email: target.email, username: 'bodyedited' });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.username).toBe('bodyedited');
+        expect(response).toSatisfyApiSpec();
+        assertNoCredentials(response.body);
+    });
+});
+
+describe('DELETE /users — the id in the body', () => {
+    it('matches the contract for a soft delete', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const target = await createUser({ email: 'body-delete@example.com' });
+
+        const response = await api()
+            .delete('/users')
+            .set('Authorization', bearer)
+            .send({ id: String(target._id) });
+
+        expect(response.status).toBe(200);
+        expect(response).toSatisfyApiSpec();
+        const stored = await userRepository.findById(String(target._id));
+        expect(stored?.deletedAt).toBeInstanceOf(Date);
+    });
+});
+
+describe('DELETE /users/{id}/hard', () => {
+    it('matches the contract, and the row is gone rather than marked', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const target = await createUser({ email: 'erase-me@example.com' });
+
+        const response = await api()
+            .delete(`/users/${String(target._id)}/hard`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response).toSatisfyApiSpec();
+        await expect(userRepository.findById(String(target._id))).resolves.toBeNull();
+    });
+});
+
+describe('DELETE /users/{id}/2fa', () => {
+    it('answers success for a user with no factor armed — the reset is idempotent', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const target = await createUser({ email: 'no-factor@example.com' });
+
+        const response = await api()
+            .delete(`/users/${String(target._id)}/2fa`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the contract when it disarms a factor the user had', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const target = await createUser({ email: 'locked-out@example.com' });
+        // Armed directly: the admin reset is about the ROW, and the enrollment dance is
+        // `account`'s own contract, covered there.
+        const stored = await userRepository.findByIdWithCredentials(String(target._id));
+        stored!.twoFactorMethods.push({ method: 'email', enrolledAt: new Date() });
+        stored!.twoFactorEnabledAt = new Date();
+        await userRepository.save(stored!);
+
+        const response = await api()
+            .delete(`/users/${String(target._id)}/2fa`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response).toSatisfyApiSpec();
+        const after = await userRepository.findByIdWithCredentials(String(target._id));
+        expect(after!.twoFactorMethods).toEqual([]);
+    });
+});
+
+describe.each([
+    ['GET', '/users'],
+    ['POST', '/users/search'],
+    ['GET', '/users/65dc8a99604c307b702b5ccc'],
+    ['DELETE', '/users/65dc8a99604c307b702b5ccc'],
+    ['DELETE', '/users/65dc8a99604c307b702b5ccc/hard']
+] as const)('%s %s with no credentials', (method, path) => {
+    it('matches the error contract', async () => {
+        const response =
+            await api()[method === 'GET' ? 'get' : method === 'POST' ? 'post' : 'delete'](path);
+
+        expect(response.status).toBe(401);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('an id nobody holds', () => {
+    it.each([
+        ['DELETE', '/users/65dc8a99604c307b702b5ccc/hard'],
+        ['DELETE', '/users/65dc8a99604c307b702b5ccc/2fa']
+    ] as const)('%s %s matches the 404 contract', async (_method, path) => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api().delete(path).set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+});

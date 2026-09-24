@@ -383,3 +383,118 @@ describe('POST /orders/{id}/restore', () => {
         expect(response).toSatisfyApiSpec();
     });
 });
+
+describe('POST /orders/search', () => {
+    it("matches the contract for a customer, answering only the caller's own orders", async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const own = await seedOrderFor(user);
+        const stranger = await createUser({ email: 'search-stranger@example.com', username: 'ss' });
+        await seedOrderFor(stranger);
+
+        const response = await api()
+            .post('/orders/search')
+            .set('Authorization', bearer)
+            .send({ page: 1, pageSize: 10 });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items.map((o: { id: string }) => o.id)).toEqual([
+            String(own._id)
+        ]);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract with no credentials', async () => {
+        const response = await api().post('/orders/search').send({});
+
+        expect(response.status).toBe(401);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+/*
+ * The admin writes addressed by body and by path. `email` is the edit: it is the one field every
+ * order carries that no lifecycle rule guards, so the case is about the contract, not the rules.
+ */
+describe('PUT /orders and PUT /orders/{id}', () => {
+    it('matches the contract with the id in the body', async () => {
+        const { bearer, user } = await authenticateAs('admin');
+        const order = await seedOrderFor(user);
+
+        const response = await api()
+            .put('/orders')
+            .set('Authorization', bearer)
+            .send({ id: String(order._id), email: 'billing@example.com' });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.email).toBe('billing@example.com');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the contract with the id in the path', async () => {
+        const { bearer, user } = await authenticateAs('admin');
+        const order = await seedOrderFor(user);
+
+        const response = await api()
+            .put(`/orders/${String(order._id)}`)
+            .set('Authorization', bearer)
+            .send({ email: 'billing@example.com' });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.email).toBe('billing@example.com');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a customer', async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const order = await seedOrderFor(user);
+
+        const response = await api()
+            .put(`/orders/${String(order._id)}`)
+            .set('Authorization', bearer)
+            .send({ email: 'billing@example.com' });
+
+        expect(response.status).toBe(403);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('DELETE /orders and DELETE /orders/{id}/hard', () => {
+    it('matches the contract for a soft delete with the id in the body', async () => {
+        const { bearer, user } = await authenticateAs('admin');
+        const order = await seedOrderFor(user);
+
+        const response = await api()
+            .delete('/orders')
+            .set('Authorization', bearer)
+            .send({ id: String(order._id) });
+
+        expect(response.status).toBe(200);
+        expect(response).toSatisfyApiSpec();
+        const stored = await orderRepository.findById(String(order._id));
+        expect(stored?.deletedAt).toBeInstanceOf(Date);
+    });
+
+    it('matches the contract for a hard delete, and the row is gone', async () => {
+        const { bearer, user } = await authenticateAs('admin');
+        const order = await seedOrderFor(user);
+
+        const response = await api()
+            .delete(`/orders/${String(order._id)}/hard`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response).toSatisfyApiSpec();
+        await expect(orderRepository.findById(String(order._id))).resolves.toBeNull();
+    });
+
+    it('matches the error contract for a hard delete of an id nobody holds', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .delete('/orders/65dc8a99604c307b702b5ccc/hard')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+});

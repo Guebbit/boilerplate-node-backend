@@ -4,9 +4,11 @@
  * and the public event catalogue — against the bundled `openapi.yaml`.
  */
 
+import { Types } from 'mongoose';
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAsRole } from '@tests/http';
+import { webhookDeliveryRepository, webhookSubscriptionRepository } from '../../repository';
 
 setupTestDb();
 
@@ -239,6 +241,42 @@ describe('GET /webhooks/deliveries', () => {
 });
 
 describe('POST /webhooks/deliveries/:id/replay', () => {
+    /*
+     * A real replay: it makes one outbound attempt, to a `.test` host that never resolves — so the
+     * attempt fails, as a dead endpoint's would, and the answer is the delivery as it now stands.
+     * What is checked is that answer's shape, not the endpoint's health.
+     */
+    it('matches the contract for an exhausted delivery replayed by an operator', async () => {
+        const { bearer } = await authenticateAsRole('manager');
+        const created = await api()
+            .post('/webhooks/subscriptions')
+            .set('Authorization', bearer)
+            .send(subscriptionBody());
+        // Filed under the subscription's own tenant — replay only sees the caller's shop.
+        const subscription = await webhookSubscriptionRepository.findById(
+            created.body.data.id as string
+        );
+        const delivery = await webhookDeliveryRepository.create({
+            tenant: subscription!.tenant,
+            subscriptionId: new Types.ObjectId(created.body.data.id as string),
+            eventId: 'evt_contract_replay',
+            eventType: 'order.paid',
+            payload: { orderId: 'order_1' },
+            attempt: 1,
+            status: 'exhausted',
+            nextAttemptAt: new Date()
+        });
+
+        const response = await api()
+            .post(`/webhooks/deliveries/${String(delivery._id)}/replay`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.id).toBe(String(delivery._id));
+        expect(response.body.data.attempt).toBeGreaterThan(1);
+        expect(response).toSatisfyApiSpec();
+    });
+
     it('404s a delivery id that does not exist', async () => {
         const { bearer } = await authenticateAsRole('manager');
 

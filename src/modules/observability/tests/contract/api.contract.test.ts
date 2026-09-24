@@ -3,14 +3,17 @@
  * Contract tests for /observability. Its three JSON endpoints answer shapes built field by
  * field (a hand-assembled health snapshot, a Prometheus-registry overview, an audit page) rather
  * than through a serializer other assertions already constrain — exactly the code that drifts
- * from a spec unnoticed. `GET /events` (an SSE stream Supertest can't resolve; see
- * `stream.test.ts`) and `GET /metrics` (needs `NODE_METRICS_TOKEN` set for the process) aren't
- * covered here for transport reasons, not contract ones.
+ * from a spec unnoticed. `GET /events` is an endless SSE stream, read here only up to its first
+ * event; `stream.test.ts` owns what the frames say. Every route's refusals are checked too: a
+ * 401/403 body is part of the contract a client codes against.
  */
 
+import type { IncomingMessage } from 'node:http';
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
+import { setCookie } from '@tests/cookies';
+import { createAdminUser, createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { connection } from '@infrastructure/runtime/database';
 import { leaseModel } from '@infrastructure/persistence/lease';
 
@@ -258,3 +261,116 @@ describe('GET /observability/audit', () => {
         expect(response).toSatisfyApiSpec();
     });
 });
+
+/**
+ * Reads an endless SSE response up to its first event, then hangs up — supertest would otherwise
+ * wait for an end that never comes.
+ */
+const untilFirstEvent = (
+    response: unknown,
+    callback: (error: Error | null, body: string) => void
+) => {
+    // supertest hands its raw response over as `unknown`; it is the node stream.
+    const stream = response as IncomingMessage;
+    let text = '';
+    let settled = false;
+    const finish = () => {
+        if (settled) return;
+        settled = true;
+        callback(null, text);
+    };
+    stream.on('data', (chunk: Buffer) => {
+        text += chunk.toString();
+        if (text.includes('data: ')) stream.destroy();
+    });
+    stream.on('close', finish);
+    stream.on('end', finish);
+};
+
+/**
+ * The `jwt` session cookie a real login sets — the only credential `EventSource` can carry.
+ *
+ * @param role - `admin` holds the observability key (as the installation operator), `customer` not
+ */
+const sessionCookie = async (role: 'admin' | 'customer') => {
+    const identity = { email: `sse-${role}@example.com`, username: `sse-${role}` };
+    const user = await (role === 'admin'
+        ? createAdminUser(identity)
+        : createUser(identity, 'customer'));
+    const login = await api()
+        .post('/account/login')
+        .send({ email: user.email, password: PLAIN_PASSWORD });
+    return `jwt=${/^jwt=([^;]+)/.exec(setCookie(login, 'jwt') ?? '')?.[1] ?? ''}`;
+};
+
+describe('GET /observability/events', () => {
+    it('matches the contract for an admin session: an event stream', async () => {
+        const response = await api()
+            .get('/observability/events')
+            .set('Cookie', await sessionCookie('admin'))
+            .buffer(true)
+            .parse(untilFirstEvent);
+
+        expect(response.status).toBe(200);
+        expect(response.headers['content-type']).toContain('text/event-stream');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract with no session', async () => {
+        const response = await api().get('/observability/events');
+
+        expect(response.status).toBe(401);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a session without the observability key', async () => {
+        const response = await api()
+            .get('/observability/events')
+            .set('Cookie', await sessionCookie('customer'));
+
+        expect(response.status).toBe(403);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('GET /observability/metrics', () => {
+    it('answers the Prometheus exposition to the configured scraper', async () => {
+        const response = await api()
+            .get('/observability/metrics')
+            .set('Authorization', `Bearer ${process.env.NODE_METRICS_TOKEN ?? ''}`);
+
+        expect(response.status).toBe(200);
+        expect(response.headers['content-type']).toContain('text/plain');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a user bearer, which is not a scrape token', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api().get('/observability/metrics').set('Authorization', bearer);
+
+        expect(response.status).toBe(401);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe.each(['/observability/health', '/observability/metrics/overview', '/observability/audit'])(
+    'GET %s — the refusals',
+    (path) => {
+        it('matches the error contract with no credentials', async () => {
+            const response = await api().get(path);
+
+            expect(response.status).toBe(401);
+            expect(response).toSatisfyApiSpec();
+        });
+
+        it('matches the error contract for a customer', async () => {
+            const { bearer } = await authenticateAs('user');
+
+            const response = await api().get(path).set('Authorization', bearer);
+
+            expect(response.status).toBe(403);
+            expect(response).toSatisfyApiSpec();
+        });
+    }
+);
