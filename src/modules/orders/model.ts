@@ -180,7 +180,7 @@ export interface OrderStatusOverride {
 
 /**
  * Order Document model type.
- * Business logic lives in the service (`./service`); queries live in the repository
+ * Business logic lives in the service (`./services`); queries live in the repository
  * (`./repository`).
  */
 export type OrderModel = Model<OrderDocument>;

@@ -17,7 +17,7 @@ import { environmentNumber } from '@infrastructure/runtime/environment';
  * A stored cart line.
  *
  * `productId` is an `ObjectId` and stays one. `populate('items.productId')` overwrites the field in
- * place at runtime, so the id has to be read BEFORE populating — `./service` `readCartLines`
+ * place at runtime, so the id has to be read BEFORE populating — `./services/view`'s `readCartLines`
  * is the one place that does it, and it returns the id and the joined product as separate fields.
  */
 export interface CartItem {
@@ -49,7 +49,7 @@ export interface CartDocument extends Document {
     __v: number;
 }
 
-/** Cart Document model type. Queries live in `./repository`, rules in `./service`. */
+/** Cart Document model type. Queries live in `./repository`, rules in `./services`. */
 export type CartModel = Model<CartDocument>;
 
 /**
@@ -141,7 +141,7 @@ cartSchema.index(
 /**
  * Normalizes a serialized cart: the shared `_id` → `id` and `__v` removal, nothing else.
  *
- * No endpoint serves this shape — `./service` builds `CartResponse` by hand from the lines
+ * No endpoint serves this shape — `./services/view` builds `CartResponse` by hand from the lines
  * and their prices. It exists because every repository owes the repository factory a transform for its
  * lean reads (see `normalize` in @infrastructure/persistence/create-repository).
  */

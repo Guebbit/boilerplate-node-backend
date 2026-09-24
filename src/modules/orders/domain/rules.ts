@@ -1,6 +1,6 @@
 /**
  * @module
- * Order rules. Pure: data in, verdict out — no status codes, no i18n; `service.ts` maps verdicts.
+ * Order rules. Pure: data in, verdict out — no status codes, no i18n; `../services/place` maps verdicts.
  * See `docs/theory/domain-layer.md`.
  */
 

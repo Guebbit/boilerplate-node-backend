@@ -78,7 +78,7 @@ export const buildReference = (seed: string): string => {
  * tolerated.
  *
  * @param input - the pasted text
- * @returns the normalized reference `getOrderByReference` looks up by, or `null` when it is not a
+ * @returns the normalized reference `getByTransferReference` looks up by, or `null` when it is not a
  *   validly-checksummed RF reference
  */
 export const parseReference = (input: string): string | null => {
