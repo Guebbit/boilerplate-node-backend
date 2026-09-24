@@ -16,7 +16,8 @@ name: CI
 #                     it. api/ and src/types/asyncapi.generated.ts are no longer committed — see
 #                     `postinstall` in package.json — so there is nothing left to go stale for
 #                     them to check.
-#   - correctness     typecheck, build, test-unit, test-integration, test-contract
+#   - correctness     typecheck, build, test-unit, test-integration, test-contract, cluster
+#   - architecture    dependency-graph, docs
 #   - container       container-gate — the same correctness gate again, but inside the image
 #                     `docker/Dockerfile` actually ships, with no services and no network
 #   - supply chain    audit
@@ -622,6 +623,9 @@ jobs:
             - asyncapi-breaking
             - typecheck
             - build
+            - cluster
+            - dependency-graph
+            - docs
             - test-unit
             - test-integration
             - test-contract
