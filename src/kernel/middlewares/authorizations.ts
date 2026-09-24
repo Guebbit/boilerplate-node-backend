@@ -34,7 +34,7 @@ import {
     type StepUpTier
 } from '@kernel/permissions';
 import { t } from '@infrastructure/i18n';
-import { rejectResponse } from '@infrastructure/http/response';
+import { rejectResponse, type ResponseErrorItem } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import { apiKeyLimiter } from '@infrastructure/http/middlewares/rate-limit';
@@ -157,14 +157,23 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
  * The 401 both identity guards answer with. Audited before rejecting: a failed auth attempt is
  * exactly what the trail exists to record.
  */
-const refuseUnauthenticated = (request: Request, response: Response): void => {
+const refuseUnauthenticated = (
+    request: Request,
+    response: Response,
+    errors: ResponseErrorItem[] = []
+): void => {
     auditRefusal(request, {
         action: coreAuditActions.SECURITY_UNAUTHORIZED,
         actor_user_id: 'anonymous',
         actor_role: 'anonymous'
     });
-    rejectResponse(response, 401);
+    rejectResponse(response, 401, errors);
 };
+
+/** The 401 body the cookie guard has always answered with. */
+const cookieUnauthorizedErrors = (): ResponseErrorItem[] => [
+    { code: 'UNAUTHORIZED', message: t('generic.error-unauthorized') }
+];
 
 /**
  * Whether `getAuth` (or, for the one SSE route, {@link requirePermissionViaCookie}) resolved a
@@ -450,9 +459,7 @@ export const requirePermissionViaCookie = (key: string) => {
 
         // No cookie is 401 (who are you); a valid cookie without the key is 403 (not you).
         if (!refreshToken) {
-            rejectResponse(response, 401, [
-                { code: 'UNAUTHORIZED', message: t('generic.error-unauthorized') }
-            ]);
+            refuseUnauthenticated(request, response, cookieUnauthorizedErrors());
             return;
         }
 
@@ -469,11 +476,9 @@ export const requirePermissionViaCookie = (key: string) => {
                 request.caller = callerInScope(user, 'tenant');
                 next();
             })
-            .catch(() =>
-                rejectResponse(response, 401, [
-                    { code: 'UNAUTHORIZED', message: t('generic.error-unauthorized') }
-                ])
-            );
+            .catch(() => {
+                refuseUnauthenticated(request, response, cookieUnauthorizedErrors());
+            });
     };
 };
 

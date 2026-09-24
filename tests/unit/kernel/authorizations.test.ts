@@ -673,6 +673,19 @@ describe('requirePermissionViaCookie', () => {
         expect(next).not.toHaveBeenCalled();
     });
 
+    it('audits a request that arrives with no cookie at all', async () => {
+        requirePermissionViaCookie(ADMIN_ONLY_KEY)(
+            makeCookieRequest(),
+            makeResponseStub(),
+            asStub<NextFunction>(jest.fn())
+        );
+        await new Promise((resolve) => setImmediate(resolve));
+
+        expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
+            expect.objectContaining({ action: coreAuditActions.SECURITY_UNAUTHORIZED })
+        );
+    });
+
     it('rejects with 401 when the user lookup itself fails', async () => {
         // The `.catch()` covers the whole chain, not just the token verification — a database
         // outage must not become an unhandled rejection in a middleware.
