@@ -9,11 +9,12 @@
  * chain re-entering the request locale after multer consumes the stream mid-request.
  */
 
-import { mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { NextFunction, Request, Response } from 'express';
 import { asStub } from '@tests/stub';
+import { fileExists } from '@tests/file-sandbox';
 import { runWithLocale, getLocaleContext, getDefaultLocale } from '@infrastructure/i18n';
 import enOrders from '../../locales/en.json';
 import itOrders from '../../locales/it.json';
@@ -65,13 +66,6 @@ const renderedHtml = () => renderHtmlToPdfMock.mock.calls[0][0] as string;
 const orderFixture = (locale = 'en') => ({
     items: [{ product: { title: 'A product', price: 10 }, quantity: 2, locale }]
 });
-
-/** Whether a path names a real file — the cache tests' own way of proving a write or delete landed. */
-const fileExists = (target: string): Promise<boolean> =>
-    stat(target).then(
-        () => true,
-        () => false
-    );
 
 /** A cache directory scoped to one test file, torn down after. */
 const withCacheRoot = () => {

@@ -21,9 +21,10 @@
  */
 import type { EmailJobPayload } from '@types';
 import type { Data } from 'ejs';
-import { mkdtemp, rm, stat } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileExists } from '@tests/file-sandbox';
 
 const sendMailMock = jest.fn().mockResolvedValue({ messageId: 'smtp-1' });
 jest.mock('nodemailer', () => ({
@@ -61,13 +62,6 @@ jest.mock('@infrastructure/adapters/logger', () => ({
 
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { spoolAttachment } from '@infrastructure/adapters/mail-spool';
-
-/** Whether a path names a real file. */
-const fileExists = (target: string): Promise<boolean> =>
-    stat(target).then(
-        () => true,
-        () => false
-    );
 
 const REQUEST: EmailJobPayload['request'] = {
     to: 'ada@example.com',

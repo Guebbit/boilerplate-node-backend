@@ -7,9 +7,10 @@
  * `mailer-dispatch.test.ts` covers `enqueueEmail`'s queue/inline routing with no attachments in
  * play; this is the one file that drives real spool files end to end for the resolving half.
  */
-import { mkdtemp, rm, stat } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileExists } from '@tests/file-sandbox';
 
 const sendMailMock = jest.fn().mockResolvedValue({ messageId: 'smtp-1' });
 jest.mock('nodemailer', () => ({
@@ -32,13 +33,6 @@ const DATA = {
     linkUrl: '',
     footer: ''
 };
-
-/** Whether a path names a real file. */
-const fileExists = (target: string): Promise<boolean> =>
-    stat(target).then(
-        () => true,
-        () => false
-    );
 
 let spoolRoot: string;
 const originalSpoolPath = process.env.NODE_MAIL_SPOOL_PATH;

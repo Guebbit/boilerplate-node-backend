@@ -12,7 +12,7 @@
  * Relative imports only: `globalSetup` and `globalTeardown` load this outside `moduleNameMapper`.
  */
 
-import { readdir, rm } from 'node:fs/promises';
+import { readdir, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 /** The variable `global-setup.ts` hands this jest instance's sandbox root through to the workers. */
@@ -147,6 +147,17 @@ export const leftoverFiles = async (root: string): Promise<SandboxLeftovers[]> =
         .filter((leftovers) => leftovers.files.length > 0)
         .toSorted((a, b) => a.sandbox.localeCompare(b.sandbox));
 };
+
+/**
+ * Whether a path exists, for a test asserting a file was written or cleaned up — `stat`'s own
+ * rejection on a missing path is the ENOENT case, not a real failure, so it resolves `false`
+ * rather than propagating.
+ */
+export const fileExists = (target: string): Promise<boolean> =>
+    stat(target).then(
+        () => true,
+        () => false
+    );
 
 /**
  * The failure message teardown raises: which test files left what behind.
