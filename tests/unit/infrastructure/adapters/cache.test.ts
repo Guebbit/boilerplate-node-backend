@@ -60,7 +60,7 @@ const mockClient = {
     expire: mockExpire,
     get: mockGet,
     sMembers: mockSMembers,
-    quit: mockQuit,
+    close: mockQuit,
     destroy: mockDestroy,
     // The lifecycle short-circuits on `isReady`; keeping it false forces the connect path, which
     // is where the reachable/unreachable distinction is actually decided.

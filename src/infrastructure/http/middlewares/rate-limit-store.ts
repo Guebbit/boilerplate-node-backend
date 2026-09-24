@@ -7,7 +7,6 @@
  * authentication outage. A separate connection from the cache, so disabling that never disables this.
  */
 
-import { createClient, type RedisClientType } from 'redis';
 import { MemoryStore, type Options, type Store } from 'express-rate-limit';
 import { RedisStore, type RedisReply } from 'rate-limit-redis';
 import { logger } from '@infrastructure/adapters/logger';
@@ -18,8 +17,9 @@ import {
 } from '@infrastructure/adapters/managed-connection';
 import {
     closeRedisClient,
-    redisClientOptions,
-    redisUrlFromHostPort
+    createRedisClient,
+    redisUrlFromHostPort,
+    type RedisClient
 } from '@infrastructure/adapters/redis';
 
 /**
@@ -55,8 +55,8 @@ const redisUrl = (): string | undefined => {
  *
  * @param url - the limiter's Redis URL — see {@link redisUrl}
  */
-const build = (url: string): RedisClientType => {
-    const redisClient: RedisClientType = createClient(redisClientOptions(url));
+const build = (url: string): RedisClient => {
+    const redisClient: RedisClient = createRedisClient(url);
 
     // node-redis is an EventEmitter and an unhandled 'error' event would crash the process, so this
     // listener is mandatory rather than merely useful.
@@ -71,19 +71,19 @@ const build = (url: string): RedisClientType => {
  * `getOrThrow` rejects instead of resolving `undefined`, and the outage logs at `error` rather
  * than `warn` — see the header for why.
  */
-let redisConnection: ManagedConnection<RedisClientType> | undefined;
+let redisConnection: ManagedConnection<RedisClient> | undefined;
 
 /** Builds {@link redisConnection} on first call, from `url`, and memoises it thereafter. */
-const connectionFor = (url: string): ManagedConnection<RedisClientType> => {
+const connectionFor = (url: string): ManagedConnection<RedisClient> => {
     if (redisConnection) return redisConnection;
 
     // Kept apart from `manageConnection`'s own memoised handle: a client whose handshake hasn't
     // finished is still the SAME socket worth reconnecting, not one to throw away. node-redis
     // rejects a second `connect()` racing the first with `Socket already opened`, so a fresh
     // client per attempt (like the cache adapter) is not an option here.
-    let redisClient: RedisClientType | undefined;
+    let redisClient: RedisClient | undefined;
 
-    const connection = manageConnection<RedisClientType>({
+    const connection = manageConnection<RedisClient>({
         unavailableMessage:
             'Rate-limit Redis unreachable — requests are passing unbudgeted until it returns.',
         unavailableLevel: 'error',

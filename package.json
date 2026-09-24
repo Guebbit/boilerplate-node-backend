@@ -202,7 +202,7 @@
         "prom-client": "^15.1.3",
         "puppeteer-core": "^25.10.0",
         "rate-limit-redis": "^6.0.1",
-        "redis": "^5.12.1",
+        "redis": "^6.2.1",
         "sharp": "0.35.4",
         "tsx": "^4.21.0",
         "winston": "^3.19.0",

@@ -8,8 +8,6 @@
  */
 
 // `createClient` builds a (not yet connected) Redis client from a connection URL;
-// `RedisClientType` is the resulting client's type, needed for the generic below.
-import { createClient, type RedisClientType } from 'redis';
 import { logger } from '@infrastructure/adapters/logger';
 import {
     manageConnection,
@@ -17,8 +15,9 @@ import {
 } from '@infrastructure/adapters/managed-connection';
 import {
     closeRedisClient,
-    redisClientOptions,
-    redisUrlFromHostPort
+    createRedisClient,
+    redisUrlFromHostPort,
+    type RedisClient
 } from '@infrastructure/adapters/redis';
 import { environmentFlag } from '@infrastructure/runtime/environment';
 import { cacheInvalidationFailuresTotal } from '@infrastructure/observability/metrics-cache';
@@ -51,7 +50,7 @@ const isCacheEnabled = () =>
  * Lifecycle rules (memoise, share in-flight connect, warn once) live in `manageConnection`; only
  * what's Redis-specific is below.
  */
-const cacheConnection = manageConnection<RedisClientType>({
+const cacheConnection = manageConnection<RedisClient>({
     unavailableMessage: 'Redis cache unavailable, continuing without server-side cache.',
     isEnabled: isCacheEnabled,
     // `isReady` (as opposed to `isOpen`) means the socket is up *and* the handshake finished, so
@@ -65,7 +64,7 @@ const cacheConnection = manageConnection<RedisClientType>({
         if (!redisUrl) return Promise.resolve(undefined);
 
         // `redis://[:password@]host:port[/db]` — parsed by node-redis itself.
-        const client: RedisClientType = createClient(redisClientOptions(redisUrl));
+        const client: RedisClient = createRedisClient(redisUrl);
 
         // node-redis is an EventEmitter and an unhandled 'error' event would crash the process,
         // so this listener is mandatory, not just for logging.
@@ -212,7 +211,7 @@ export const setCacheValue = (
  * @param ttlSeconds - the entry's own TTL
  */
 const indexUnderTag = (
-    redisClient: RedisClientType,
+    redisClient: RedisClient,
     tagKey: string,
     cacheKey: string,
     ttlSeconds: number
@@ -398,10 +397,7 @@ export interface ClearCacheResult {
  * @param pattern - glob pattern passed to Redis `SCAN` (`MATCH`)
  * @returns total number of keys deleted across every batch
  */
-const drainMatchingKeys = async (
-    redisClient: RedisClientType,
-    pattern: string
-): Promise<number> => {
+const drainMatchingKeys = async (redisClient: RedisClient, pattern: string): Promise<number> => {
     let deleted = 0;
 
     // `scanIterator` yields batches of keys (node-redis v5), so one DEL per batch.

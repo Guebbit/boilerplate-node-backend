@@ -48,7 +48,7 @@ const mockSelectionClient = {
     connect: mockSelectionConnect,
     sendCommand: mockSelectionSendCommand,
     destroy: mockSelectionDestroy,
-    quit: mockSelectionQuit,
+    close: mockSelectionQuit,
     isReady: false
 };
 
@@ -304,7 +304,7 @@ describe('stopRateLimitStore', () => {
         expect(mockSelectionQuit).not.toHaveBeenCalled();
     });
 
-    it('quits the client that was actually built', async () => {
+    it('closes the client that was actually built', async () => {
         process.env.NODE_RATE_LIMIT_REDIS_ENABLED = '1';
         process.env.NODE_REDIS_URL = 'redis://redis:6379';
         mockSelectionQuit.mockImplementation(() => Promise.resolve());
@@ -317,7 +317,7 @@ describe('stopRateLimitStore', () => {
         expect(mockSelectionDestroy).not.toHaveBeenCalled();
     });
 
-    it('destroys the socket when QUIT itself fails, rather than hanging on shutdown', async () => {
+    it('destroys the socket when the close itself fails, rather than hanging on shutdown', async () => {
         process.env.NODE_RATE_LIMIT_REDIS_ENABLED = '1';
         process.env.NODE_REDIS_URL = 'redis://redis:6379';
         mockSelectionQuit.mockImplementation(() => Promise.reject(new Error('socket closed')));

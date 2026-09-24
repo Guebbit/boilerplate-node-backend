@@ -70,7 +70,7 @@ const fakeClient = () => {
             ready = false;
             opening = false;
         }),
-        quit: jest.fn(() => Promise.resolve())
+        close: jest.fn(() => Promise.resolve())
     };
 };
 
