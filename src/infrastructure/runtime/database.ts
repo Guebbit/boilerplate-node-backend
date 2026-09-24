@@ -18,6 +18,29 @@ const MAX_RETRIES = 10;
 /** First backoff delay; each subsequent attempt doubles it (1s, 2s, 4s, …). */
 const BASE_DELAY_MS = 1000;
 
+/**
+ * MongoDB's server error code for a failed authentication. Retrying the same credentials cannot
+ * succeed, and each attempt waits out a full server selection first.
+ * https://www.mongodb.com/docs/manual/reference/error-codes/
+ */
+const AUTHENTICATION_FAILED = 18;
+
+/**
+ * Whether a connect failure is one only a configuration change fixes — a URI that does not
+ * parse, or credentials the server refuses. Those fail the boot at once instead of after the
+ * whole retry budget (minutes, each attempt waiting out server selection).
+ *
+ * @param error - what `mongoose.connect()` rejected with
+ */
+export const isPermanentConnectError = (error: unknown): boolean => {
+    const { name, code } = (error ?? {}) as { name?: unknown; code?: unknown };
+    return (
+        name === 'MongoParseError' ||
+        name === 'MongoInvalidArgumentError' ||
+        code === AUTHENTICATION_FAILED
+    );
+};
+
 /** Fallback database name when only host/port are configured. */
 const DEFAULT_DATABASE_NAME = 'boilerplate-node-backend';
 
@@ -68,23 +91,48 @@ export const start = () => {
         mongoose.connect(getDatabaseUri()).then(
             // Swallow the resolved Mongoose instance: callers only need "connected", not the handle.
             () => undefined,
-            () => {
+            (error: unknown) => {
+                if (isPermanentConnectError(error))
+                    throw new Error('DB connection refused by configuration; not retrying.', {
+                        cause: error
+                    });
                 // Budget exhausted — propagate so the boot sequence aborts the process.
                 if (attempt >= MAX_RETRIES - 1)
-                    throw new Error(`DB connection failed after ${MAX_RETRIES} attempts`);
+                    throw new Error(`DB connection failed after ${MAX_RETRIES} attempts`, {
+                        cause: error
+                    });
                 // Exponential backoff (2^attempt), clamped at 30s so late attempts stay responsive
                 // once the database finally comes up.
                 const delayMs = Math.min(BASE_DELAY_MS * 2 ** attempt, 30_000);
                 // Stryker disable all
-                logger.warn(
-                    `DB not ready, retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`
-                );
+                logger.warn({
+                    message: `DB not ready, retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`,
+                    error
+                });
                 // Stryker restore all
                 return wait(delayMs).then(() => attemptConnect(attempt + 1));
             }
         );
 
+    watchConnection();
     return attemptConnect(0);
+};
+
+/** Whether {@link watchConnection} already attached its listeners — `start()` can run again. */
+let watching = false;
+
+/**
+ * Log the connection dropping and coming back. The driver reconnects on its own and says nothing,
+ * so without these a Mongo outage mid-run leaves no trace but the requests it failed.
+ * https://mongoosejs.com/docs/connections.html#connection-events
+ */
+const watchConnection = (): void => {
+    if (watching) return;
+    watching = true;
+    // Stryker disable all
+    mongoose.connection.on('disconnected', () => logger.warn('MongoDB connection lost.'));
+    mongoose.connection.on('reconnected', () => logger.info('MongoDB connection restored.'));
+    // Stryker restore all
 };
 
 /**
