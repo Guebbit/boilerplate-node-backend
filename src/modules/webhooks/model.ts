@@ -292,8 +292,8 @@ webhookDeliverySchema.index(
  * Wire shape: `_id` → `id`, drops `tenant` (implicit in who is asking), `payload` (not on the
  * contract — the log is about the attempt, not a payload replay viewer), and the lease pair
  * (`leaseToken`/`leaseExpiresAt`) — internal claim bookkeeping, not a fact about the attempt the
- * contract describes. Keeping the delivery-log response shape unchanged is deliberate: this is a
- * correctness fix to the CLAIM, not a new field anyone asked to see.
+ * contract describes. The claim's correctness lives entirely server-side, so the delivery-log
+ * response shape carries no field for it.
  */
 export const applyWebhookDeliveryTransform = applySerialization(webhookDeliverySchema, {
     omit: ['tenant', 'payload', 'leaseToken', 'leaseExpiresAt']

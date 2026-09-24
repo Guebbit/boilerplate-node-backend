@@ -5,12 +5,11 @@
  * {@link sweepDueWebhookDeliveries} on a schedule, per-minute, unlike the nightly `reap:*` jobs —
  * see the script's own header).
  *
- * Publishes WITHOUT claiming — the fix for the bug this lease design closes: only a worker
- * (`./attempt.ts#processDeliveryJob`) or an admin replay actually claims a row, via
- * `repository.ts`'s lease. A row published twice (this sweep's own overlapping runs, or the fast
- * path racing a stranded-row republish) is safe: whichever claim lands first does the one real
- * HTTP attempt, and every other delivery of the same message finds the row already under a live
- * lease and acks as a no-op.
+ * Publishes WITHOUT claiming: only a worker (`./attempt.ts#processDeliveryJob`) or an admin
+ * replay actually claims a row, via `repository.ts`'s lease design. A row published twice (this
+ * sweep's own overlapping runs, or the fast path racing a stranded-row republish) is safe:
+ * whichever claim lands first does the one real HTTP attempt, and every other delivery of the
+ * same message finds the row already under a live lease and acks as a no-op.
  */
 
 import { logger } from '@infrastructure/adapters/logger';

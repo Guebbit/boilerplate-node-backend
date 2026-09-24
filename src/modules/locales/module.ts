@@ -79,9 +79,9 @@ export default {
     ],
     routes: router,
     /*
-     * Its own copy, for its own error messages. The module that owns the translation feature was
-     * the last one in the repo with no translations of its own, which was funny and also a bug:
-     * a 409 on a key collision was reaching admins in English regardless of what they asked for.
+     * Its own copy, for its own error messages: without it, the module that owns the translation
+     * feature is the one place in the repo where a 409 on a key collision reaches admins in
+     * English regardless of what they asked for.
      */
     locales: path.join(__dirname, 'locales'),
     // `translatedBy` is staff attribution on a `translations.any.update` action — the caller's own

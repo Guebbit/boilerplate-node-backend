@@ -251,11 +251,11 @@ const applyOutcome = (
  * Every delivery row due for an attempt right now, oldest first, PLUS any stranded `in-flight` row
  * whose lease already expired — the sweep's own read.
  *
- * Published without claiming: `services/sweep.ts` no longer calls {@link claimPending} before
- * publishing (the bug this lease design fixes — see `docs/modules/webhooks.md`'s lease section). A
- * row this read returns may already be mid-attempt by the time the publish lands; the WORKER's own
- * claim is what decides who actually does the one real HTTP attempt, so publishing an already-live
- * row twice is safe, not a race.
+ * Published without claiming: `services/sweep.ts` does not call {@link claimPending} before
+ * publishing — the lease design is what makes that safe (see `docs/modules/webhooks.md`'s lease
+ * section). A row this read returns may already be mid-attempt by the time the publish lands; the
+ * WORKER's own claim is what decides who actually does the one real HTTP attempt, so publishing an
+ * already-live row twice is safe, not a race.
  *
  * @param limit - the ceiling per sweep run, so one very late sweep does not enqueue an unbounded burst
  */
