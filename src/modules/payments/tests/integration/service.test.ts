@@ -290,6 +290,7 @@ describe('refund on cancel', () => {
 
     afterEach(() => {
         resetDomainEvents();
+        jest.restoreAllMocks();
     });
 
     it('cancelling a paid order refunds its payment', async () => {
@@ -338,6 +339,37 @@ describe('refund on cancel', () => {
         expect(payment!.status).toBe('refunded');
         const stored = await orderService.getById(String(order._id));
         expect(stored!.status).not.toBe('paid');
+    });
+
+    /*
+     * The interleaving a confirm and a customer cancel can produce: the confirm moves the order to
+     * `paid`, the customer cancels it from `paid` at once, and that cancel's refund runs while the
+     * payment still reads `requires_confirmation` — nothing to return yet. The confirm then writes
+     * `succeeded`. Unless it re-reads the order, it trusts its own stale `paid` copy and keeps
+     * money for an order that no longer exists. Forced here rather than hoped for under load.
+     */
+    it('returns a charge that lands after the customer cancelled the order it had just paid', async () => {
+        const { user, order } = await orderFor();
+        const orderId = String(order._id);
+        const intent = await createIntent(orderId, auth(user));
+        const realMarkPaid = orderService.markPaid;
+        jest.spyOn(orderService, 'markPaid').mockImplementationOnce((id) =>
+            realMarkPaid(id).then((paid) =>
+                orderService.cancelById(id, auth(user)).then(() => paid)
+            )
+        );
+
+        const result = await confirmPayment(
+            String(intent.success && intent.data?.id),
+            GOOD_METHOD,
+            auth(user),
+            testCallerContext
+        );
+
+        expect((await orderService.getById(orderId))!.status).toBe('cancelled');
+        expect((await paymentRepository.findByOrderId(orderId))!.status).toBe('refunded');
+        // The customer is told the order could not be paid, not that it was.
+        expect(asReject(result).errors[0]).toMatchObject({ code: 'PAYMENT_ORDER_NOT_PAYABLE' });
     });
 });
 

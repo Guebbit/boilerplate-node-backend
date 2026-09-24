@@ -112,7 +112,7 @@ export const settlePayment = (
     // only `{ orderId }`, carries no stock figure that ordering could make stale, and nothing else
     // in this application listens. Reorder the two (commit, then report) if a future listener
     // ever needs to read committed stock in reaction to this event.
-    return orderService.markPaid(orderId).then(async (paidOrder) => {
+    return orderService.markPaid(orderId).then(async () => {
         const succeeded = await paymentRepository.updateStatusIfIn(
             orderId,
             SETTLEABLE_PAYMENT_STATUSES,
@@ -126,11 +126,13 @@ export const settlePayment = (
         // do. Acting again here is exactly the double-commit / wrongful-refund this guards.
         if (!succeeded) return { payment, orderLost: false };
 
-        // `paidOrder` is null in TWO different cases a redelivered event can reach: this
-        // order was raced to `paid` by another settlement of the same charge (nothing lost —
-        // just not this call's doing), or it is cancelled and cannot get there at all. A
-        // stale `paidOrder` is not enough to tell them apart; the order's CURRENT status is.
-        const orderNow = paidOrder ?? (await orderService.getById(orderId));
+        // The order's CURRENT status, read after the payment write — never what `markPaid`
+        // answered, which is a copy from before it. Between the two writes the customer may
+        // cancel the order from `paid`, and that cancel's refund found nothing `succeeded` to
+        // return yet: trusting the copy would keep the money for a cancelled order. The read
+        // also covers `markPaid` answering null — another settlement raced this order to `paid`
+        // (nothing lost), or it was already cancelled.
+        const orderNow = await orderService.getById(orderId);
         const orderIsPaid = orderNow?.status === OrderStatus.paid;
 
         if (!orderIsPaid) {
@@ -149,7 +151,7 @@ export const settlePayment = (
          *
          * Reached at most once per order: `succeeded` above is itself an at-most-once write
          * (terminal once applied), and this is the only call whose `succeeded` write can ever
-         * be truthy — `paidOrder`'s own race does not gate this: a redelivered event
+         * be truthy — `markPaid`'s own race does not gate this: a redelivered event
          * can legitimately lose it while still being the one true settlement. The result is not
          * checked: `false` covers both a harmless replay (the hold is already `committed`) and
          * a hold an expiry sweep beat the payment to — the customer has a paid order either

@@ -119,6 +119,13 @@ Two different questions, asked at two different moments, both owned by `orders`:
   independent of the pre-check: a race that slips past the pre-check still cannot double-move the
   order, because `markPaid` only writes from `pending`.
 
+**After the final write, the order is read again.** `markPaid` and the payment's own
+`succeeded` write are two writes, and a customer may cancel from `paid` in between — that cancel's
+refund then finds nothing `succeeded` to return. So `settlePayment` decides "keep the money, or
+put it straight back" on the order's status as read _after_ its own payment write, never on the
+copy `markPaid` answered. Either the cancel's refund sees `succeeded`, or this re-read sees
+`cancelled`; the conditional `succeeded → refunded` write makes sure only one of them refunds.
+
 ## Status transitions
 
 `requires_confirmation` is entered once, by `POST /payments/intent`, and never again — nothing a
