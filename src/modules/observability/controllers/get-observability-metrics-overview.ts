@@ -36,11 +36,11 @@ interface MetricSample {
  * this build, and the overview reports zero for that row. The response shape is fixed by
  * `openapi.yaml` and is the same either way, so a client never has to know which modules exist.
  */
-const readCounter = async (name: string): Promise<MetricSample[]> => {
+const readCounter = (name: string): Promise<MetricSample[]> => {
     const metric = metricsRegistry.getSingleMetric(name);
-    if (!metric) return [];
-    const result = (await metric.get()) as { values?: MetricSample[] };
-    return result.values ?? [];
+    if (!metric) return Promise.resolve([]);
+
+    return metric.get().then((result) => (result as { values?: MetricSample[] }).values ?? []);
 };
 
 /**
