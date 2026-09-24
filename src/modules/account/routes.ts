@@ -172,10 +172,12 @@ router.post('/reauth', credentialLimiters, isAuth, postReauth);
 /*
  * GET /account/abilities — the rules the server enforces, for a client to render from.
  *
- * `getAuth` and no guard: a stranger has rules too (the `guest` role), and a shop front that
- * greys nothing out for a visitor is a shop front that lies twice.
+ * No guard beyond the router-wide `router.use(getAuth)` above: a stranger has rules too (the
+ * `guest` role), and a shop front that greys nothing out for a visitor is a shop front that lies
+ * twice. Not mounted a second time here — `getAuth` already ran for every route on this router
+ * and already stashed `request.authContext`; `getMyAbilities` reads that directly.
  */
-router.get('/abilities', getAuth, getMyAbilities);
+router.get('/abilities', getMyAbilities);
 
 // GET /account/refresh — create a new access token from the jwt cookie
 router.get('/refresh', getRefreshToken);
