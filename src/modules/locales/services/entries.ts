@@ -39,13 +39,13 @@ const entryNotFound = (): ResponseReject => generateReject(404, [t('locales.erro
  * Looked up by id, then CHECKED against `tag` — so `PUT /locales/it/entries/<a spanish entry>`
  * 404s rather than silently cross-editing.
  */
-const findEntryInLanguage = async (
+const findEntryInLanguage = (
     entryId: string,
     tag: string
-): Promise<LocaleEntryDocument | null> => {
-    const entry = await localeEntryRepository.findById(entryId);
-    return entry?.locale === normalizeTag(tag) ? entry : null;
-};
+): Promise<LocaleEntryDocument | null> =>
+    localeEntryRepository
+        .findById(entryId)
+        .then((entry) => (entry?.locale === normalizeTag(tag) ? entry : null));
 
 /**
  * One page of a language's rows, for the editing screen.
@@ -55,7 +55,7 @@ const findEntryInLanguage = async (
  * produce. A 422 here would reveal which tenants exist to a caller who guessed; refusing that is
  * `rejectUnknownTenant`'s job, on the write path.
  */
-export const searchEntries = async (
+export const searchEntries = (
     tag: string,
     filters: {
         page?: string | number;
@@ -63,19 +63,19 @@ export const searchEntries = async (
         text?: string;
         tenant?: LocaleTenant;
     } = {}
-): Promise<ResponseSuccess<{ items: LocaleEntry[]; meta: PaginatedMeta }> | ResponseReject> => {
-    const language = await localeRepository.findByTag(tag);
-    if (!language) return languageNotFound();
+): Promise<ResponseSuccess<{ items: LocaleEntry[]; meta: PaginatedMeta }> | ResponseReject> =>
+    localeRepository.findByTag(tag).then((language) => {
+        if (!language) return languageNotFound();
 
-    /*
-     * Scoped to this language, and sorted by key rather than by the shared `createdAt` default: a
-     * translator reads an alphabetical list, and `(locale, key)` is unique, so sorting on it is
-     * already the total order that keeps a row off two pages.
-     */
-    return generateSuccess(
-        await localeEntryRepository.search(filters, { locale: language.tag }, { key: 1 })
-    );
-};
+        /*
+         * Scoped to this language, and sorted by key rather than by the shared `createdAt` default:
+         * a translator reads an alphabetical list, and `(locale, key)` is unique, so sorting on it
+         * is already the total order that keeps a row off two pages.
+         */
+        return localeEntryRepository
+            .search(filters, { locale: language.tag }, { key: 1 })
+            .then((result) => generateSuccess(result));
+    });
 
 /**
  * Add one key to one language.
@@ -127,61 +127,61 @@ export const createEntry = async (
 };
 
 /** Change one entry's text. */
-export const updateEntry = async (
+export const updateEntry = (
     tag: string,
     entryId: string,
     payload: UpdateLocaleEntryRequest,
     context?: CallerContext
-): Promise<ResponseSuccess<LocaleEntryDocument> | ResponseReject> => {
-    const entry = await findEntryInLanguage(entryId, tag);
-    if (!entry) return entryNotFound();
+): Promise<ResponseSuccess<LocaleEntryDocument> | ResponseReject> =>
+    findEntryInLanguage(entryId, tag).then((entry) => {
+        if (!entry) return entryNotFound();
 
-    const { entry: saved } = await localeEntryRepository.saveEntryValue(entry, payload.value);
+        return localeEntryRepository.saveEntryValue(entry, payload.value).then(({ entry: saved }) => {
+            recordAudit(context, {
+                action: localeAuditActions.ADMIN_LOCALE_ENTRY_UPDATED,
+                outcome: 'success',
+                target_type: 'locale_entry',
+                target_id: entryId,
+                // The key, not the new text. An audit trail records that the Spanish product
+                // title changed and who changed it; storing the copy itself would make the trail
+                // a second, unmanaged copy of the dictionary.
+                metadata: { locale: tag, key: saved.key }
+            });
 
-    recordAudit(context, {
-        action: localeAuditActions.ADMIN_LOCALE_ENTRY_UPDATED,
-        outcome: 'success',
-        target_type: 'locale_entry',
-        target_id: entryId,
-        // The key, not the new text. An audit trail records that the Spanish product
-        // title changed and who changed it; storing the copy itself would make the trail
-        // a second, unmanaged copy of the dictionary.
-        metadata: { locale: tag, key: saved.key }
+            refreshOverlay();
+
+            return generateSuccess(saved);
+        });
     });
-
-    refreshOverlay();
-
-    return generateSuccess(saved);
-};
 
 /**
  * Remove one key from one language. The other languages keep theirs.
  * @param context - caller context for the `ADMIN_LOCALE_ENTRY_DELETED` audit emit; omitted by
  *   tests that call this as a plain helper — no context means no emit
  */
-export const deleteEntry = async (
+export const deleteEntry = (
     tag: string,
     entryId: string,
     context?: CallerContext
-): Promise<ResponseSuccess<{ key: string }> | ResponseReject> => {
-    const entry = await findEntryInLanguage(entryId, tag);
-    if (!entry) return entryNotFound();
+): Promise<ResponseSuccess<{ key: string }> | ResponseReject> =>
+    findEntryInLanguage(entryId, tag).then((entry) => {
+        if (!entry) return entryNotFound();
 
-    const { key } = entry;
-    await localeEntryRepository.removeEntry(entry);
+        const { key } = entry;
+        return localeEntryRepository.removeEntry(entry).then(() => {
+            recordAudit(context, {
+                action: localeAuditActions.ADMIN_LOCALE_ENTRY_DELETED,
+                outcome: 'success',
+                target_type: 'locale_entry',
+                target_id: entryId,
+                metadata: { locale: tag, key }
+            });
 
-    recordAudit(context, {
-        action: localeAuditActions.ADMIN_LOCALE_ENTRY_DELETED,
-        outcome: 'success',
-        target_type: 'locale_entry',
-        target_id: entryId,
-        metadata: { locale: tag, key }
+            refreshOverlay();
+
+            return generateSuccess({ key });
+        });
     });
-
-    refreshOverlay();
-
-    return generateSuccess({ key });
-};
 
 /**
  * Bulk import, in either of its two meanings.

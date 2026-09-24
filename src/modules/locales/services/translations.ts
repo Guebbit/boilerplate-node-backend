@@ -73,7 +73,7 @@ type PlannedWrite =
  * Validate one locale slot against the `locales` collection, the registry's declared fields, and
  * the fallback-locale delete guard. Returns the planned write, or the rejection.
  */
-const planSlot = async (
+const planSlot = (
     entityType: string,
     fields: readonly string[],
     fallbackLocale: string,
@@ -82,32 +82,31 @@ const planSlot = async (
 ): Promise<PlannedWrite | ResponseReject> => {
     if (value === null) {
         if (locale === fallbackLocale)
-            return slotRejection(
-                'locales.error-translation-fallback-required',
-                { locale },
-                locale
+            return Promise.resolve(
+                slotRejection('locales.error-translation-fallback-required', { locale }, locale)
             );
-        return { locale, kind: 'delete' };
+        return Promise.resolve({ locale, kind: 'delete' });
     }
 
-    const language = await localeRepository.findByTag(locale);
-    if (!language)
-        return slotRejection('locales.error-translation-locale-unknown', { locale }, locale);
-    if (!language.active)
-        return slotRejection('locales.error-translation-locale-inactive', { locale }, locale);
+    return localeRepository.findByTag(locale).then((language) => {
+        if (!language)
+            return slotRejection('locales.error-translation-locale-unknown', { locale }, locale);
+        if (!language.active)
+            return slotRejection('locales.error-translation-locale-inactive', { locale }, locale);
 
-    if (Object.keys(value.fields).length === 0)
-        return slotRejection('locales.error-translation-fields-empty', undefined, locale);
+        if (Object.keys(value.fields).length === 0)
+            return slotRejection('locales.error-translation-fields-empty', undefined, locale);
 
-    const unknownField = Object.keys(value.fields).find((field) => !fields.includes(field));
-    if (unknownField !== undefined)
-        return slotRejection(
-            'locales.error-translation-field-unknown',
-            { field: unknownField, entityType },
-            `${locale}.${unknownField}`
-        );
+        const unknownField = Object.keys(value.fields).find((field) => !fields.includes(field));
+        if (unknownField !== undefined)
+            return slotRejection(
+                'locales.error-translation-field-unknown',
+                { field: unknownField, entityType },
+                `${locale}.${unknownField}`
+            );
 
-    return { locale, kind: 'upsert', fields: value.fields, origin: value.origin ?? 'human' };
+        return { locale, kind: 'upsert', fields: value.fields, origin: value.origin ?? 'human' };
+    });
 };
 
 /** `true` for a rejection, narrowing a union of it and a plan/slot shape — neither of which carries `success`. */
@@ -293,19 +292,19 @@ export const upsertEntityTranslations = async (
 };
 
 /** Every locale row an entity has, in the admin shape. */
-export const getEntityTranslations = async (
+export const getEntityTranslations = (
     entityType: string,
     entityId: string
 ): Promise<ResponseSuccess<EntityTranslationsResult> | ResponseReject> => {
     const target = translatableTarget(entityType);
-    if (!target) return entityTypeUnknown(entityType);
+    if (!target) return Promise.resolve(entityTypeUnknown(entityType));
 
-    const rows = await translationRepository.findEntityTranslations(entityType, entityId);
-
-    return generateSuccess({
-        entityType,
-        entityId,
-        translations: translationRepository.normalize(rows),
-        fields: target.fields
-    });
+    return translationRepository.findEntityTranslations(entityType, entityId).then((rows) =>
+        generateSuccess({
+            entityType,
+            entityId,
+            translations: translationRepository.normalize(rows),
+            fields: target.fields
+        })
+    );
 };

@@ -92,8 +92,8 @@ const list = (scope?: Record<string, unknown>): Promise<LocaleDocument[]> =>
  * Frontend tenants' rows only: this feeds the manifest's `entryCount`, and counting the API's own
  * overrides would advertise a language as having strings a client cannot actually download.
  */
-const countEntriesByLocale = async (): Promise<Map<string, number>> => {
-    const rows = await localeEntryModel
+const countEntriesByLocale = (): Promise<Map<string, number>> =>
+    localeEntryModel
         .aggregate<{
             _id: string;
             count: number;
@@ -101,10 +101,8 @@ const countEntriesByLocale = async (): Promise<Map<string, number>> => {
             { $match: { tenant: { $in: frontendTenantIds() } } },
             { $group: { _id: '$locale', count: { $sum: 1 } } }
         ])
-        .exec();
-
-    return new Map(rows.map(({ _id, count }) => [_id, count]));
-};
+        .exec()
+        .then((rows) => new Map(rows.map(({ _id, count }) => [_id, count])));
 
 /**
  * Every row for one language and one tenant, sorted by key so a build is byte-stable.
@@ -136,15 +134,13 @@ const listEntriesByTenant = (tenant: LocaleTenant): Promise<LocaleEntryDocument[
  * Its own query rather than a `listEntries().map()`: the collision check runs on every single
  * write, and it has no use for the values — which are the whole weight of the collection.
  */
-const listKeys = async (locale: string, tenant: LocaleTenant): Promise<string[]> => {
-    const rows = await localeEntryModel
+const listKeys = (locale: string, tenant: LocaleTenant): Promise<string[]> =>
+    localeEntryModel
         .find({ locale, tenant })
         .select({ key: 1, _id: 0 })
         .lean<{ key: string }[]>()
-        .exec();
-
-    return rows.map(({ key }) => key);
-};
+        .exec()
+        .then((rows) => rows.map(({ key }) => key));
 
 /**
  * Move a language's revision on, and hand back the new value.
@@ -153,43 +149,40 @@ const listKeys = async (locale: string, tenant: LocaleTenant): Promise<string[]>
  * a read-modify-write would lose one — which is precisely the state that leaves a client believing
  * it is current when it is not.
  */
-const bumpRevision = async (tag: string): Promise<number> => {
-    const updated = await localeModel
+const bumpRevision = (tag: string): Promise<number> =>
+    localeModel
         .findOneAndUpdate({ tag }, { $inc: { revision: 1 } }, { returnDocument: 'after' })
-        .exec();
-
-    return updated?.revision ?? 0;
-};
+        .exec()
+        .then((updated) => updated?.revision ?? 0);
 
 /** Insert one entry, and bump. */
-const createEntry = async (
+const createEntry = (
     locale: string,
     tenant: LocaleTenant,
     input: EntryInput
-): Promise<{ entry: LocaleEntryDocument; revision: number }> => {
-    const entry = await entryBase.create({
-        locale,
-        tenant,
-        ...input
-    } as Partial<LocaleEntryDocument>);
-    return { entry, revision: await bumpRevision(locale) };
-};
+): Promise<{ entry: LocaleEntryDocument; revision: number }> =>
+    entryBase
+        .create({
+            locale,
+            tenant,
+            ...input
+        } as Partial<LocaleEntryDocument>)
+        .then((entry) => bumpRevision(locale).then((revision) => ({ entry, revision })));
 
 /** Change one entry's value, and bump. */
-const saveEntryValue = async (
+const saveEntryValue = (
     entry: LocaleEntryDocument,
     value: string
 ): Promise<{ entry: LocaleEntryDocument; revision: number }> => {
     entry.value = value;
-    const saved = await entryBase.save(entry);
-    return { entry: saved, revision: await bumpRevision(entry.locale) };
+    return entryBase
+        .save(entry)
+        .then((saved) => bumpRevision(entry.locale).then((revision) => ({ entry: saved, revision })));
 };
 
 /** Remove one entry, and bump. */
-const removeEntry = async (entry: LocaleEntryDocument): Promise<number> => {
-    await entryBase.deleteOne(entry);
-    return bumpRevision(entry.locale);
-};
+const removeEntry = (entry: LocaleEntryDocument): Promise<number> =>
+    entryBase.deleteOne(entry).then(() => bumpRevision(entry.locale));
 
 /**
  * Write a whole set of entries, and bump once for the batch.
@@ -255,14 +248,13 @@ export interface LocaleCascadeCounts {
  * keeps stale rows; interrupted after either cascade but before the language row, it is briefly
  * empty, which is the state the caller asked for anyway.
  */
-const deleteLocaleCascade = async (locale: LocaleDocument): Promise<LocaleCascadeCounts> => {
-    const [{ deletedCount: entries }, { deletedCount: translations }] = await Promise.all([
+const deleteLocaleCascade = (locale: LocaleDocument): Promise<LocaleCascadeCounts> =>
+    Promise.all([
         localeEntryModel.deleteMany({ locale: locale.tag }).exec(),
         translationModel.deleteMany({ locale: locale.tag }).exec()
-    ]);
-    await localeBase.deleteOne(locale);
-    return { entries, translations };
-};
+    ]).then(([{ deletedCount: entries }, { deletedCount: translations }]) =>
+        localeBase.deleteOne(locale).then(() => ({ entries, translations }))
+    );
 
 /** Base CRUD repository over the translations collection. No `searchable`: never listed by filter. */
 const translationBase = createRepository<TranslationDocument, Translation>(translationModel, {
@@ -300,38 +292,38 @@ const findEntityLocale = (
  * a less specific one's, field by field — not row by row, since a locale may have translated only
  * some of an entity's fields.
  */
-const resolveEntityFields = async (
+const resolveEntityFields = (
     entityType: string,
     entityIds: string[],
     localeCandidates: string[]
-): Promise<Map<string, TranslationFields>> => {
-    const rows = await translationModel
+): Promise<Map<string, TranslationFields>> =>
+    translationModel
         .find({ entityType, entityId: { $in: entityIds }, locale: { $in: localeCandidates } })
         .select({ entityId: 1, locale: 1, fields: 1, _id: 0 })
         .lean<Pick<TranslationDocument, 'entityId' | 'locale' | 'fields'>[]>()
-        .exec();
+        .exec()
+        .then((rows) => {
+            const byEntity = new Map<string, Map<string, TranslationFields>>();
+            for (const row of rows) {
+                const byLocale = byEntity.get(row.entityId) ?? new Map<string, TranslationFields>();
+                byLocale.set(row.locale, row.fields);
+                byEntity.set(row.entityId, byLocale);
+            }
 
-    const byEntity = new Map<string, Map<string, TranslationFields>>();
-    for (const row of rows) {
-        const byLocale = byEntity.get(row.entityId) ?? new Map<string, TranslationFields>();
-        byLocale.set(row.locale, row.fields);
-        byEntity.set(row.entityId, byLocale);
-    }
+            const leastSpecificFirst = localeCandidates.toReversed();
 
-    const leastSpecificFirst = localeCandidates.toReversed();
+            const resolved = new Map<string, TranslationFields>();
+            for (const [entityId, byLocale] of byEntity) {
+                const merged: TranslationFields = {};
+                for (const locale of leastSpecificFirst) {
+                    const fields = byLocale.get(locale);
+                    if (fields) Object.assign(merged, fields);
+                }
+                resolved.set(entityId, merged);
+            }
 
-    const resolved = new Map<string, TranslationFields>();
-    for (const [entityId, byLocale] of byEntity) {
-        const merged: TranslationFields = {};
-        for (const locale of leastSpecificFirst) {
-            const fields = byLocale.get(locale);
-            if (fields) Object.assign(merged, fields);
-        }
-        resolved.set(entityId, merged);
-    }
-
-    return resolved;
-};
+            return resolved;
+        });
 
 /**
  * Every entity whose translated `fields` match a search pattern, in the caller's locale chain —
@@ -344,13 +336,13 @@ const resolveEntityFields = async (
  *
  * @returns entity ids, deduplicated; an id can match through more than one locale in the chain
  */
-const findEntityIdsByFieldMatch = async (
+const findEntityIdsByFieldMatch = (
     entityType: string,
     fields: readonly string[],
     pattern: string,
     localeCandidates: string[]
-): Promise<string[]> => {
-    const rows = await translationModel
+): Promise<string[]> =>
+    translationModel
         .find({
             entityType,
             locale: { $in: localeCandidates },
@@ -360,10 +352,8 @@ const findEntityIdsByFieldMatch = async (
         })
         .select({ entityId: 1, _id: 0 })
         .lean<{ entityId: string }[]>()
-        .exec();
-
-    return [...new Set(rows.map((row) => row.entityId))];
-};
+        .exec()
+        .then((rows) => [...new Set(rows.map((row) => row.entityId))]);
 
 /**
  * A stable digest of a fields map, for {@link TranslationDocument.sourceDigest}.
@@ -405,13 +395,15 @@ const upsertEntityLocale = (
         .exec();
 
 /** Delete one entity's one-locale row — a `null` in a PATCH. A no-op if it never existed. */
-const removeEntityLocale = async (
+const removeEntityLocale = (
     entityType: string,
     entityId: string,
     locale: string
-): Promise<void> => {
-    await translationModel.deleteOne({ entityType, entityId, locale }).exec();
-};
+): Promise<void> =>
+    translationModel
+        .deleteOne({ entityType, entityId, locale })
+        .exec()
+        .then(() => undefined);
 
 /**
  * Delete every locale's row for one entity — a product's HARD delete taking its translations with
@@ -419,10 +411,11 @@ const removeEntityLocale = async (
  *
  * @returns how many rows were removed
  */
-const removeEntityTranslations = async (entityType: string, entityId: string): Promise<number> => {
-    const { deletedCount } = await translationModel.deleteMany({ entityType, entityId }).exec();
-    return deletedCount;
-};
+const removeEntityTranslations = (entityType: string, entityId: string): Promise<number> =>
+    translationModel
+        .deleteMany({ entityType, entityId })
+        .exec()
+        .then(({ deletedCount }) => deletedCount);
 
 /**
  * The Mongoose model registered for a `translatables` target's collection, found by name rather

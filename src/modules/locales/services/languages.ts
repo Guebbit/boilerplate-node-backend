@@ -48,7 +48,7 @@ export const rejectUnknownTenant = (tenant: string): ResponseReject | undefined 
  * @param context - caller context for the `ADMIN_LOCALE_CREATED` audit emit; omitted by tests
  *   that call this as a plain helper — no context means no emit
  */
-export const createLanguage = async (
+export const createLanguage = (
     payload: CreateLocaleRequest,
     context?: CallerContext
 ): Promise<ResponseSuccess<LocaleDocument> | ResponseReject> => {
@@ -56,26 +56,29 @@ export const createLanguage = async (
 
     // Checked here for the message, and by a unique index for the race — a concurrent creation of
     // the same tag reaches E11000, which the shared interpreter answers 409 for anyway.
-    if (await localeRepository.findByTag(tag))
-        return generateReject(409, [t('locales.error-language-exists', { tag })]);
+    return localeRepository.findByTag(tag).then((existing) => {
+        if (existing) return generateReject(409, [t('locales.error-language-exists', { tag })]);
 
-    const language = await localeRepository.create({
-        tag,
-        name: payload.name.trim(),
-        nativeName: payload.nativeName.trim(),
-        direction: payload.direction ?? LocaleDirection.ltr,
-        active: payload.active ?? true
-    } as Partial<LocaleDocument>);
+        return localeRepository
+            .create({
+                tag,
+                name: payload.name.trim(),
+                nativeName: payload.nativeName.trim(),
+                direction: payload.direction ?? LocaleDirection.ltr,
+                active: payload.active ?? true
+            } as Partial<LocaleDocument>)
+            .then((language) => {
+                recordAudit(context, {
+                    action: localeAuditActions.ADMIN_LOCALE_CREATED,
+                    outcome: 'success',
+                    target_type: 'locale',
+                    target_id: tag,
+                    metadata: { active: language.active }
+                });
 
-    recordAudit(context, {
-        action: localeAuditActions.ADMIN_LOCALE_CREATED,
-        outcome: 'success',
-        target_type: 'locale',
-        target_id: tag,
-        metadata: { active: language.active }
+                return generateSuccess(language, 201);
+            });
     });
-
-    return generateSuccess(language, 201);
 };
 
 /**
@@ -84,39 +87,39 @@ export const createLanguage = async (
  * `undefined` means "leave it alone", which is why each field is tested rather than assigned: a
  * blanket assign would turn a request that changed one field into one that cleared the other three.
  */
-export const updateLanguage = async (
+export const updateLanguage = (
     tag: string,
     payload: UpdateLocaleRequest,
     context?: CallerContext
-): Promise<ResponseSuccess<LocaleDocument> | ResponseReject> => {
-    const language = await localeRepository.findByTag(tag);
-    if (!language) return languageNotFound();
+): Promise<ResponseSuccess<LocaleDocument> | ResponseReject> =>
+    localeRepository.findByTag(tag).then((language) => {
+        if (!language) return languageNotFound();
 
-    if (payload.active === false) {
-        const fallbackRefusal = rejectFallbackLocale(tag);
-        if (fallbackRefusal) return fallbackRefusal;
-    }
+        if (payload.active === false) {
+            const fallbackRefusal = rejectFallbackLocale(tag);
+            if (fallbackRefusal) return fallbackRefusal;
+        }
 
-    if (payload.name !== undefined) language.name = payload.name.trim();
-    if (payload.nativeName !== undefined) language.nativeName = payload.nativeName.trim();
-    if (payload.direction !== undefined) language.direction = payload.direction;
-    if (payload.active !== undefined) language.active = payload.active;
+        if (payload.name !== undefined) language.name = payload.name.trim();
+        if (payload.nativeName !== undefined) language.nativeName = payload.nativeName.trim();
+        if (payload.direction !== undefined) language.direction = payload.direction;
+        if (payload.active !== undefined) language.active = payload.active;
 
-    const saved = await localeRepository.save(language);
+        return localeRepository.save(language).then((saved) => {
+            recordAudit(context, {
+                action: localeAuditActions.ADMIN_LOCALE_UPDATED,
+                outcome: 'success',
+                target_type: 'locale',
+                target_id: tag,
+                // The visibility flag is the field worth having in the trail on its own: it is
+                // what makes a half-finished translation public, and the only edit here that
+                // changes what an anonymous caller can see.
+                metadata: { active: saved.active }
+            });
 
-    recordAudit(context, {
-        action: localeAuditActions.ADMIN_LOCALE_UPDATED,
-        outcome: 'success',
-        target_type: 'locale',
-        target_id: tag,
-        // The visibility flag is the field worth having in the trail on its own: it is
-        // what makes a half-finished translation public, and the only edit here that
-        // changes what an anonymous caller can see.
-        metadata: { active: saved.active }
+            return generateSuccess(saved);
+        });
     });
-
-    return generateSuccess(saved);
-};
 
 /**
  * Remove a language and everything translated into it.
@@ -124,32 +127,33 @@ export const updateLanguage = async (
  * Refuses while still active — the two-step is the whole safeguard: this destroys days of work,
  * and an accidental `DELETE` should cost a toggle first, not the work itself.
  */
-export const deleteLanguage = async (
+export const deleteLanguage = (
     tag: string,
     context?: CallerContext
 ): Promise<
     ResponseSuccess<{ removedEntries: number; removedTranslations: number }> | ResponseReject
-> => {
-    const language = await localeRepository.findByTag(tag);
-    if (!language) return languageNotFound();
+> =>
+    localeRepository.findByTag(tag).then((language) => {
+        if (!language) return languageNotFound();
 
-    if (language.active) return generateReject(409, [t('locales.error-language-active')]);
+        if (language.active) return generateReject(409, [t('locales.error-language-active')]);
 
-    const fallbackRefusal = rejectFallbackLocale(tag);
-    if (fallbackRefusal) return fallbackRefusal;
+        const fallbackRefusal = rejectFallbackLocale(tag);
+        if (fallbackRefusal) return fallbackRefusal;
 
-    const { entries: removedEntries, translations: removedTranslations } =
-        await localeRepository.deleteLocaleCascade(language);
+        return localeRepository.deleteLocaleCascade(language).then(
+            ({ entries: removedEntries, translations: removedTranslations }) => {
+                recordAudit(context, {
+                    action: localeAuditActions.ADMIN_LOCALE_DELETED,
+                    outcome: 'success',
+                    target_type: 'locale',
+                    target_id: tag,
+                    metadata: { removedEntries, removedTranslations }
+                });
 
-    recordAudit(context, {
-        action: localeAuditActions.ADMIN_LOCALE_DELETED,
-        outcome: 'success',
-        target_type: 'locale',
-        target_id: tag,
-        metadata: { removedEntries, removedTranslations }
+                refreshOverlay();
+
+                return generateSuccess({ removedEntries, removedTranslations });
+            }
+        );
     });
-
-    refreshOverlay();
-
-    return generateSuccess({ removedEntries, removedTranslations });
-};

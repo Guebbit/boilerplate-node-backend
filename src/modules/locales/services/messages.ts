@@ -28,21 +28,22 @@ import { languageNotFound } from './languages';
  *
  * @param tenant - whose dictionary; omitted, the deployment's default frontend tenant
  */
-export const readMessages = async (
+export const readMessages = (
     tag: string,
     tenant: LocaleTenant = frontendTenant()
 ): Promise<ResponseSuccess<LocaleMessages> | ResponseReject> => {
-    if (!isFrontendTenant(tenant)) return languageNotFound();
+    if (!isFrontendTenant(tenant)) return Promise.resolve(languageNotFound());
 
-    const language = await localeRepository.findByTag(tag);
-    if (!language?.active) return languageNotFound();
+    return localeRepository.findByTag(tag).then((language) => {
+        if (!language?.active) return languageNotFound();
 
-    const entries = await localeEntryRepository.listEntries(language.tag, tenant);
-
-    return generateSuccess({
-        locale: language.tag,
-        revision: language.revision,
-        messages: buildMessageTree(entries)
+        return localeEntryRepository.listEntries(language.tag, tenant).then((entries) =>
+            generateSuccess({
+                locale: language.tag,
+                revision: language.revision,
+                messages: buildMessageTree(entries)
+            })
+        );
     });
 };
 
@@ -56,30 +57,29 @@ export const readMessages = async (
  * A key that is both a string and a group throws in the builder; caught per language so one
  * malformed dictionary does not take the whole refresh down.
  */
-export const readApiOverrides = async (): Promise<Record<string, Record<string, unknown>>> => {
-    const rows = await localeEntryRepository.listEntriesByTenant(backendTenant());
-
-    const byLocale = new Map<string, { key: string; value: string }[]>();
-    for (const { locale, key, value } of rows) {
-        const entries = byLocale.get(locale) ?? [];
-        entries.push({ key, value });
-        byLocale.set(locale, entries);
-    }
-
-    const overrides: Record<string, Record<string, unknown>> = {};
-    for (const [locale, entries] of byLocale) {
-        // eslint-disable-next-line no-restricted-syntax -- caught per locale: one language's malformed keys must not take down the rest
-        try {
-            overrides[locale] = buildMessageTree(entries);
-        } catch (error) {
-            // Stryker disable all
-            logger.warn('readApiOverrides - skipping a language whose keys cannot form a tree', {
-                locale,
-                error
-            });
-            // Stryker restore all
+export const readApiOverrides = (): Promise<Record<string, Record<string, unknown>>> =>
+    localeEntryRepository.listEntriesByTenant(backendTenant()).then((rows) => {
+        const byLocale = new Map<string, { key: string; value: string }[]>();
+        for (const { locale, key, value } of rows) {
+            const entries = byLocale.get(locale) ?? [];
+            entries.push({ key, value });
+            byLocale.set(locale, entries);
         }
-    }
 
-    return overrides;
-};
+        const overrides: Record<string, Record<string, unknown>> = {};
+        for (const [locale, entries] of byLocale) {
+            // eslint-disable-next-line no-restricted-syntax -- caught per locale: one language's malformed keys must not take down the rest
+            try {
+                overrides[locale] = buildMessageTree(entries);
+            } catch (error) {
+                // Stryker disable all
+                logger.warn('readApiOverrides - skipping a language whose keys cannot form a tree', {
+                    locale,
+                    error
+                });
+                // Stryker restore all
+            }
+        }
+
+        return overrides;
+    });
