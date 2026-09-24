@@ -1,22 +1,18 @@
 name: Fuzz (spec-driven)
 
 # Throws hostile-but-spec-valid requests at every operation in openapi.yaml and asserts none of
-# them 5xxes or answers off-contract. Nightly, not a merge gate.
+# them 5xxes or answers off-contract.
 #
-# Spec-driven fuzzing lives in its own workflow, for the same structural reason mutation testing
-# does: it is a HUNTER, not a gate.
+# Two runs of the same suite, at two depths:
 #
-# What it does: walks `openapi.yaml`, generates spec-valid but hostile requests for every
-# operation it finds, and asserts that none produces a 5xx and that every response matches the
-# contract. Because the endpoint list is derived from the spec rather than written down, a route
-# added tomorrow is covered tomorrow, with nobody remembering to add it.
+#   Gate:    `npm test` includes `test:fuzz`, so `ci.yml`'s `container-gate` (which runs
+#            `npm run complete`) fuzzes every PR — a small pass, `TEST_FUZZ_RUNS`' default.
+#   Hunter:  this workflow. Nightly, many more requests per operation, a fresh seed each night.
+#            A red run here is a FINDING for a person to read, not a merge blocker — its first
+#            run produced five genuine bugs, one an unauthenticated 500.
 #
-# Why it is not in `ci.yml`:
-#
-#   - it is slow (a real in-memory Mongo, dozens of generated requests per operation), and
-#   - a failure is normally a FINDING that needs a person to read it, not a red X that should
-#     block a merge. Its first run produced five genuine bugs, one of them an unauthenticated
-#     500 and one a spec error that had made the frontend's admin dashboard silently blank.
+# The endpoint list is derived from the spec rather than written down, so a route added tomorrow
+# is covered tomorrow, with nobody remembering to add it.
 #
 # Nightly, and on demand from the Actions tab before touching the HTTP layer or the spec.
 
@@ -40,7 +36,7 @@ jobs:
         # Generous on purpose: the point of a nightly is that it is allowed to be slow, and the
         # run scales with the number of operations in the spec. It should never be trimmed by
         # narrowing what gets fuzzed.
-        timeout-minutes: 45
+        timeout-minutes: 90
         permissions:
             contents: read
         steps:
@@ -55,6 +51,11 @@ jobs:
 
             # No Mongo service container: the suite uses `mongodb-memory-server` against a
             # preinstalled `mongod`, and the cache adapter treats an unreachable Redis as a miss —
-            # same as the contract suite.
+            # same as the contract suite. The seed is printed first; rerun with
+            # RANDOM_DATA_SEED=<seed> to reproduce.
             - name: Run the fuzzer
+              env:
+                  # Requests per operation. The gate runs the knob's small default; the nightly is
+                  # where it is worth paying for depth — see tests/support/knobs.ts.
+                  TEST_FUZZ_RUNS: '40'
               run: npm run test:fuzz
