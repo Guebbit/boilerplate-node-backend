@@ -75,6 +75,16 @@ describe('resolveTranslatables', () => {
     it('is an empty lookup when no module declares one', () => {
         expect(resolveTranslatables([{ name: 'headless', personalData: 'none' }])).toEqual({});
     });
+
+    it('refuses to boot when two modules declare the same entityType, instead of keeping one', () => {
+        const target = { collection: 'products', fields: ['title'], cacheTag: 'products' };
+        const modules: AppModule[] = [
+            { name: 'products', translatables: { product: target }, personalData: 'none' },
+            { name: 'catalogue', translatables: { product: target }, personalData: 'none' }
+        ];
+
+        expect(() => resolveTranslatables(modules)).toThrow(/"product"/);
+    });
 });
 
 /**

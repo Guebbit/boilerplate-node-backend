@@ -301,6 +301,25 @@ export interface AppModule {
 }
 
 /**
+ * Entries from several modules, merged into one lookup — refusing a key two of them declare.
+ * `Object.fromEntries` would keep the last silently, so one module's writeback or translatable
+ * would quietly answer for another's.
+ *
+ * @param entries - every module's entries, in module order
+ * @param label - what the key names, for the boot error
+ * @throws {Error} when two entries share a key
+ */
+const uniqueEntries = <T>(entries: [string, T][], label: string): Record<string, T> => {
+    const merged: Record<string, T> = {};
+    for (const [key, value] of entries) {
+        if (Object.hasOwn(merged, key))
+            throw new Error(`Two modules declare the same ${label}: "${key}".`);
+        merged[key] = value;
+    }
+    return merged;
+};
+
+/**
  * Every registered module's {@link ImageTarget}s, flattened into one lookup keyed by `collection`.
  *
  * Built from the passed-in list rather than importing `enabledModules` itself, for the same reason
@@ -310,14 +329,16 @@ export interface AppModule {
  * builds the lookup once (`app/workers.ts`) and hands the worker a plain resolver function.
  *
  * @param appModules - the enabled module list
+ * @throws {Error} when two modules declare the same collection
  */
 export const resolveImageTargets = (
     appModules: AppModule[]
     // `| undefined` stated explicitly: `noUncheckedIndexedAccess` is off project-wide, so without
     // this a lookup by an unregistered `collection` string would type-check as always present.
 ): Readonly<Record<string, ImageTarget | undefined>> =>
-    Object.fromEntries(
-        appModules.flatMap((appModule) => Object.entries(appModule.imageTargets ?? {}))
+    uniqueEntries(
+        appModules.flatMap((appModule) => Object.entries(appModule.imageTargets ?? {})),
+        'image target collection'
     );
 
 /**
@@ -342,14 +363,16 @@ export const resolveConsumers = (appModules: AppModule[]): readonly ModuleConsum
  * cycle. The `app` tier builds the lookup once, the way `app/workers.ts` builds `imageTargets`.
  *
  * @param appModules - the enabled module list
+ * @throws {Error} when two modules declare the same entity type
  */
 export const resolveTranslatables = (
     appModules: AppModule[]
     // `| undefined` stated explicitly: `noUncheckedIndexedAccess` is off project-wide, so without
     // this a lookup by an unregistered `entityType` string would type-check as always present.
 ): Readonly<Record<string, TranslatableTarget | undefined>> =>
-    Object.fromEntries(
-        appModules.flatMap((appModule) => Object.entries(appModule.translatables ?? {}))
+    uniqueEntries(
+        appModules.flatMap((appModule) => Object.entries(appModule.translatables ?? {})),
+        'translatable entity type'
     );
 
 /**
