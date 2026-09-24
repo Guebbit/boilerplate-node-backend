@@ -41,9 +41,11 @@ const redisUrl = (): string | undefined => {
      * test, and without this the limiters would fail open against a Redis that is not there.
      */
     if (!environmentFlag('NODE_RATE_LIMIT_REDIS_ENABLED', true)) return;
+    // `||`, not `??`: an env file carries `NAME=` as an empty string, and an empty URL is "not
+    // configured" — `??` would stop at it and count in memory while Redis is right there.
     return (
-        process.env.NODE_RATE_LIMIT_REDIS_URL ??
-        process.env.NODE_REDIS_URL ??
+        process.env.NODE_RATE_LIMIT_REDIS_URL?.trim() ||
+        process.env.NODE_REDIS_URL?.trim() ||
         redisUrlFromHostPort('NODE_REDIS_HOST', 'NODE_REDIS_PORT')
     );
 };
@@ -174,8 +176,14 @@ const lazyRedisStore = (namespace: string, url: string): Store => {
             // Redis unreachable, an unrecognised reply — rejects this fire-and-forget promise. An
             // uncaught rejection is fatal by default (Node 15+), turning "Redis had a bad moment"
             // into "the process is gone" — exactly the outage `send()` is written to fail open from.
-            if (options)
-                void inner.init(options).catch((error: unknown) => {
+            //
+            // The failed store is also dropped: `RedisStore` keeps the rejected script-load promise
+            // and awaits it on every later `increment`, so keeping it would leave this limiter
+            // open until a restart. The next request builds a fresh one.
+            if (options) {
+                const failed = inner;
+                void failed.init(options).catch((error: unknown) => {
+                    if (inner === failed) inner = undefined;
                     // Stryker disable all
                     logger.error({
                         message:
@@ -184,6 +192,7 @@ const lazyRedisStore = (namespace: string, url: string): Store => {
                     });
                     // Stryker restore all
                 });
+            }
         }
 
         return inner;

@@ -228,6 +228,13 @@ describe('rateLimitStore — URL resolution priority', () => {
         await expect(urlUsedFor()).resolves.toBe('redis://shared:6379');
     });
 
+    it('treats an empty NODE_RATE_LIMIT_REDIS_URL as unset, the way an env file writes it', async () => {
+        process.env.NODE_RATE_LIMIT_REDIS_URL = '';
+        process.env.NODE_REDIS_URL = 'redis://shared:6379';
+
+        await expect(urlUsedFor()).resolves.toBe('redis://shared:6379');
+    });
+
     it('assembles a URL from host and port as the last resort, defaulting the host', async () => {
         delete process.env.NODE_RATE_LIMIT_REDIS_URL;
         delete process.env.NODE_REDIS_URL;
@@ -270,6 +277,24 @@ describe('rateLimitStore — an init failure fails open instead of crashing (reg
                 message: expect.stringContaining('failed to initialise')
             })
         );
+    });
+});
+
+describe('rateLimitStore — a failed init does not disable the limiter for good', () => {
+    it('builds a fresh RedisStore on the next count instead of reusing the broken one', async () => {
+        process.env.NODE_RATE_LIMIT_REDIS_ENABLED = '1';
+        process.env.NODE_REDIS_URL = 'redis://redis:6379';
+        mockInit.mockRejectedValueOnce(new Error('connection refused'));
+        const store = freshStore().rateLimitStore('global');
+        void store.init?.({ windowMs: 60_000 } as Options);
+
+        await store.increment('key');
+        // Let the failed init's `.catch()` drop the broken store.
+        await Promise.resolve();
+        await Promise.resolve();
+        await store.increment('key');
+
+        expect(mockConstruct).toHaveBeenCalledTimes(2);
     });
 });
 
