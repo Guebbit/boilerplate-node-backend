@@ -119,7 +119,10 @@ describe('quarantineUploadedImages — no broker ready', () => {
 
         await expect(run(request)).resolves.toBeUndefined();
 
-        expect(digestQuarantinedImage).toHaveBeenCalledWith('a.png', 'a.png');
+        // Owner is the key's STEM ('a'), not the key itself ('a.png'): `image-store.ts#promote`
+        // appends the digested mime's own extension to it, and passing the key whole would double
+        // it — see `digestQuarantinedKeysInline`'s own comment.
+        expect(digestQuarantinedImage).toHaveBeenCalledWith('a.png', 'a');
         expect(request.storedImageUrls).toEqual(['/images/a.png']);
         expect(request.storedThumbnailUrls).toEqual(['/images/thumbs/v1/a.webp']);
         expect(request.quarantinedImageKeys).toBeUndefined();
@@ -143,10 +146,28 @@ describe('quarantineUploadedImages — no broker ready', () => {
 
             await run(request);
 
-            expect(digestQuarantinedImage).toHaveBeenCalledWith('a.png', 'a.png');
+            expect(digestQuarantinedImage).toHaveBeenCalledWith('a.png', 'a');
             expect(request.quarantinedImageKeys).toBeUndefined();
         }
     );
+
+    /**
+     * A quarantine key with a multi-dot original name (`resolveUploadFilename` only ever mints
+     * `<hex>.<ext>`, but the stem-stripping must not assume exactly one dot) still salts with
+     * everything before the LAST extension — regression coverage for the bug this fixed: passing
+     * the raw key doubled the extension (`<hex>.png-<hash>.png`) whenever the queue was not ready.
+     */
+    it('strips only the final extension off a quarantine key with dots in its stem', async () => {
+        imageStore.quarantine.mockResolvedValue('a.b.png');
+        digestQuarantinedImage.mockResolvedValue({
+            imageUrl: '/images/a.b-hash.png',
+            thumbnailUrl: '/images/thumbs/v1/a.b-hash.webp'
+        });
+
+        await run({ file: uploaded('/staging/a.b.png') });
+
+        expect(digestQuarantinedImage).toHaveBeenCalledWith('a.b.png', 'a.b');
+    });
 
     /**
      * A bad decode fails the request exactly as a rejected quarantine does — the quarantine file

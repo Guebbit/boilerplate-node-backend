@@ -309,7 +309,14 @@ const digestQuarantinedKeysInline = (
     keys: string[],
     next: NextFunction
 ): Promise<void> =>
-    Promise.all(keys.map((key) => digestQuarantinedImage(key, key)))
+    // The owner salt is the key's STEM, not the key itself: `resolveUploadFilename` names the
+    // quarantined file `<hex>.<ext>`, and `image-store.ts#promote` appends the digested mime's own
+    // extension to `contentStem`'s result — passing the raw key here doubled it, landing files as
+    // `<hex>.png-<hash>.png`. `key` (with its extension) still goes to `digestQuarantinedImage`
+    // itself, which needs it to find the quarantined file on disk.
+    Promise.all(
+        keys.map((key) => digestQuarantinedImage(key, path.basename(key, path.extname(key))))
+    )
         .then((digested) => {
             request.storedImageUrls = digested.map((result) => result.imageUrl);
             request.storedThumbnailUrls = digested.map((result) => result.thumbnailUrl);
@@ -381,12 +388,14 @@ export const quarantineUploadedImages: RequestHandler = (request, _response, nex
                 //   process runs. The next upload after it succeeds simply finds `queueState()`
                 //   reading `ready` again.
                 //
-                // Why the `owner` salt below is the quarantine key:
+                // Why the `owner` salt below is the quarantine key's stem:
                 //   no document exists yet at this point in the request, so
-                //   `digestQuarantinedImage`'s `owner` salt is the quarantine key itself instead.
-                //   That key is unique per upload and never retried, so this loses nothing (there
-                //   is no duplicate run to converge) while still keeping this promoted file from
-                //   ever sharing a name with an unrelated upload.
+                //   `digestQuarantinedImage`'s `owner` salt is the quarantine key instead — minus
+                //   its extension, which `digestQuarantinedKeysInline` strips before passing it on
+                //   (see that function's own comment for why). That stem is unique per upload and
+                //   never retried, so this loses nothing (there is no duplicate run to converge)
+                //   while still keeping this promoted file from ever sharing a name with an
+                //   unrelated upload.
                 return digestQuarantinedKeysInline(request, keys, next);
             }
             // A rejection from inside the callback above — its own cleanup Promise.all included —
