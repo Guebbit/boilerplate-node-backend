@@ -10,9 +10,8 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment } from '@tests/environment';
 import { createUser } from '@modules/users/tests/factories';
-import { createProduct } from '@modules/products/tests/factories';
+import { createProduct, countersOf } from '@modules/products/tests/factories';
 import { cartService } from '../../services';
-import { productService } from '@modules/products';
 import { orderService } from '@modules/orders';
 import { orderRepository, readOrder } from '@modules/orders/tests/factories';
 import { inventoryService } from '@modules/inventory';
@@ -35,16 +34,6 @@ beforeEach(() => {
     resetDomainEvents();
     registerCheckoutModules([paymentsModule]);
 });
-
-/** Both counters and the number derived from them — what every assertion here reads. */
-const countersOf = async (productId: unknown) => {
-    const stored = await productService.findByIdRaw(String(productId));
-    return {
-        onHand: stored?.onHand,
-        reserved: stored?.reserved,
-        available: (stored?.onHand ?? 0) - (stored?.reserved ?? 0)
-    };
-};
 
 /**
  * Run `body` with the reservation window closed, so every hold it opens is already stale by the

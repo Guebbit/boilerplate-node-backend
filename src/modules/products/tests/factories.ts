@@ -11,6 +11,7 @@ import { productRepository } from '../repository';
 import { makeProduct } from '../factories';
 import type { ProductOverrides } from '../factories';
 import { availableStock } from '../domain/stock';
+import { productService } from '../service';
 
 export { makeProduct, type ProductOverrides } from '../factories';
 
@@ -68,3 +69,17 @@ export const saveProduct = (document: ProductDocument): Promise<ProductDocument>
 /** Remove a product outright — a sibling's cleanup or negative-path fixture. */
 export const deleteProduct = (document: ProductDocument): Promise<void> =>
     productRepository.deleteOne(document);
+
+/**
+ * A product's live stock counters, read the plain untransformed way `@modules/inventory` writes
+ * them — the `onHand`/`reserved`/`available` triple a checkout, payment or reservation test reads
+ * back after some mutation to prove units moved, not just that a call returned success.
+ */
+export const countersOf = (
+    productId: unknown
+): Promise<{ onHand?: number; reserved?: number; available: number }> =>
+    productService.findByIdRaw(String(productId)).then((stored) => ({
+        onHand: stored?.onHand,
+        reserved: stored?.reserved,
+        available: availableStock(stored?.onHand, stored?.reserved)
+    }));

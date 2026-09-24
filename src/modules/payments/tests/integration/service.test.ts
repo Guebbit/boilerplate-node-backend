@@ -9,11 +9,10 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
-import { createProduct } from '@modules/products/tests/factories';
+import { createProduct, countersOf } from '@modules/products/tests/factories';
 import { createOrder, forceOrderStatus, toOrderItem } from '@modules/orders/tests/factories';
 import { resetDomainEvents } from '@kernel/events';
 import { orderService } from '@modules/orders';
-import { productService } from '@modules/products';
 import {
     createIntent,
     confirmPayment,
@@ -342,12 +341,6 @@ describe('refund on cancel', () => {
     });
 });
 
-/** Counters straight from the catalogue row, which is where the truth lives. */
-const countersOf = async (productId: unknown) => {
-    const stored = await productService.findByIdRaw(String(productId));
-    return { onHand: stored?.onHand, reserved: stored?.reserved };
-};
-
 /** A real placed order: units held, nothing sold yet. */
 const placedOrder = async (onHand = 10, quantity = 3) => {
     const user = await createUser();
@@ -380,13 +373,13 @@ const payFor = async (orderId: string, user: { id: string }) => {
 describe('the confirm commits the order’s held units', () => {
     it('drops both counters together when the money lands', async () => {
         const { user, product, order } = await placedOrder(10, 3);
-        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3 });
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
 
         const paid = await payFor(String(order._id), user);
 
         expect(paid.success).toBe(true);
         // Availability is unchanged by the sale — those units stopped being sellable at checkout.
-        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0 });
+        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0, available: 7 });
     });
 
     it('leaves the hold alone when the card is declined', async () => {
@@ -403,7 +396,7 @@ describe('the confirm commits the order’s held units', () => {
         expect(declined.success).toBe(false);
         // Still held, not sold and not released: a decline is retryable state, and dropping the
         // hold here would let someone else take the units mid-retry.
-        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3 });
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
     });
 
     it('commits once even if the confirm is replayed', async () => {
@@ -416,7 +409,7 @@ describe('the confirm commits the order’s held units', () => {
 
         // Seven, not four. Two guards refuse the replay independently — the order's conditional
         // `pending → paid` and the reservation's own `held → committed` claim.
-        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0 });
+        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0, available: 7 });
     });
 
     it('commits once when the webhook and the browser settle the same payment', async () => {
@@ -439,7 +432,7 @@ describe('the confirm commits the order’s held units', () => {
         await applyWebhookSettlement(providerRef, { status: 'succeeded', cardLast4: '3155' });
         await syncPayment(paymentId, auth(user), testCallerContext);
 
-        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0 });
+        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0, available: 7 });
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('succeeded');
     });
@@ -465,7 +458,7 @@ describe('the confirm commits the order’s held units', () => {
         await syncPayment(paymentId, auth(user), testCallerContext);
         await applyWebhookSettlement(providerRef, { status: 'succeeded', cardLast4: '3155' });
 
-        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0 });
+        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0, available: 7 });
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('succeeded');
     });
@@ -591,7 +584,7 @@ describe('syncPayment', () => {
         expect(asReject(result).status).toBe(409);
         expect(asReject(result).errors[0].code).toBe('PAYMENT_DECLINED');
         expect((await orderService.getById(String(order._id)))!.status).toBe('pending');
-        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3 });
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
     });
 
     it('refuses to sync a row the provider was never asked to open', async () => {
@@ -768,7 +761,7 @@ describe('recordOfflinePayment', () => {
         });
         const stored = await orderService.getById(String(order._id));
         expect(stored!.status).toBe('paid');
-        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0 });
+        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0, available: 7 });
     });
 
     it('refuses an order that is not pending, the same code createIntent uses', async () => {

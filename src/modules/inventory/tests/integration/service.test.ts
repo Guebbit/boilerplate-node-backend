@@ -10,8 +10,12 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment } from '@tests/environment';
 import { observePort } from '@tests/ports';
-import { createProduct, readProduct, deleteProduct } from '@modules/products/tests/factories';
-import { productService } from '@modules/products';
+import {
+    createProduct,
+    readProduct,
+    deleteProduct,
+    countersOf
+} from '@modules/products/tests/factories';
 import { StockMovementReason } from '@types';
 import {
     reserveForOrder,
@@ -63,11 +67,6 @@ afterEach(() => jest.restoreAllMocks());
 let orderCounter = 0;
 const anOrderId = () => (++orderCounter).toString(16).padStart(24, 'b');
 
-const countersOf = async (productId: string) => {
-    const stored = await productService.findByIdRaw(productId);
-    return { onHand: stored?.onHand, reserved: stored?.reserved };
-};
-
 /** `stocklevels` itself — this module's source of truth, `countersOf` above only reads the mirror `syncStockCache` writes into `products`. */
 const levelOf = async (productId: string) => {
     const level = await stockLevelRepository.findByProductId(productId);
@@ -103,8 +102,8 @@ describe('reserveForOrder', () => {
                 }
             ]
         });
-        expect(await countersOf(String(plenty._id))).toEqual({ onHand: 50, reserved: 0 });
-        expect(await countersOf(String(scarce._id))).toEqual({ onHand: 1, reserved: 0 });
+        expect(await countersOf(String(plenty._id))).toEqual({ onHand: 50, reserved: 0, available: 50 });
+        expect(await countersOf(String(scarce._id))).toEqual({ onHand: 1, reserved: 0, available: 1 });
     });
 
     it('records the rollback rather than netting it to nothing', async () => {
@@ -135,7 +134,7 @@ describe('reserveForOrder', () => {
         expect(await reserveForOrder(orderId, lines)).toEqual({ held: true });
 
         // Three, not six: the unique `orderId` is what makes the second call a no-op.
-        expect(await countersOf(String(product._id))).toEqual({ onHand: 10, reserved: 3 });
+        expect(await countersOf(String(product._id))).toEqual({ onHand: 10, reserved: 3, available: 7 });
         // The cache agreeing with itself twice isn't proof `syncStockCache` mirrored the real
         // write — `stocklevels` is the row every other assertion in this file takes on faith.
         expect(await levelOf(String(product._id))).toEqual({ onHand: 10, reserved: 3 });
@@ -190,7 +189,7 @@ describe('reserveForOrder', () => {
         ).rejects.toThrow('connection reset');
 
         // And nothing was held on the way out.
-        expect(await countersOf(String(product._id))).toEqual({ onHand: 10, reserved: 0 });
+        expect(await countersOf(String(product._id))).toEqual({ onHand: 10, reserved: 0, available: 10 });
         spy.mockRestore();
     });
 
@@ -214,7 +213,7 @@ describe('reserveForOrder', () => {
                 }
             ]
         });
-        expect(await countersOf(String(product._id))).toEqual({ onHand: 4, reserved: 4 });
+        expect(await countersOf(String(product._id))).toEqual({ onHand: 4, reserved: 4, available: 0 });
     });
 });
 
@@ -225,7 +224,7 @@ describe('commitForOrder', () => {
         await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
 
         expect(await commitForOrder(orderId)).toBe(true);
-        expect(await countersOf(String(product._id))).toEqual({ onHand: 7, reserved: 0 });
+        expect(await countersOf(String(product._id))).toEqual({ onHand: 7, reserved: 0, available: 7 });
     });
 
     it('is at most once — a second confirm commits nothing, and raises no alarm', async () => {
@@ -239,7 +238,7 @@ describe('commitForOrder', () => {
         expect(await commitForOrder(orderId)).toBe(false);
 
         // Seven, not four: the reservation's status claim is what refuses the replay.
-        expect(await countersOf(String(product._id))).toEqual({ onHand: 7, reserved: 0 });
+        expect(await countersOf(String(product._id))).toEqual({ onHand: 7, reserved: 0, available: 7 });
         // A redelivered settlement finding its own sale already on record is not an incident.
         expect(auditSpy).not.toHaveBeenCalled();
     });
@@ -252,7 +251,7 @@ describe('commitForOrder', () => {
         await releaseForOrder(orderId);
 
         expect(await commitForOrder(orderId)).toBe(false);
-        expect(await countersOf(String(product._id))).toEqual({ onHand: 10, reserved: 0 });
+        expect(await countersOf(String(product._id))).toEqual({ onHand: 10, reserved: 0, available: 10 });
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: inventoryAuditActions.ADMIN_COMMIT_ORPHANED,
@@ -274,7 +273,7 @@ describe('commitForOrder', () => {
         expect(await commitForOrder(orderId)).toBe(false);
 
         // No hold ever existed, so no counter had anything to move.
-        expect(await countersOf(String(product._id))).toEqual({ onHand: 10, reserved: 0 });
+        expect(await countersOf(String(product._id))).toEqual({ onHand: 10, reserved: 0, available: 10 });
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: inventoryAuditActions.ADMIN_COMMIT_ORPHANED,
@@ -294,7 +293,7 @@ describe('releaseForOrder', () => {
 
         expect(await releaseForOrder(orderId)).toBe(true);
         expect(await releaseForOrder(orderId)).toBe(false);
-        expect(await countersOf(String(product._id))).toEqual({ onHand: 10, reserved: 0 });
+        expect(await countersOf(String(product._id))).toEqual({ onHand: 10, reserved: 0, available: 10 });
     });
 
     it('records which story it was', async () => {
@@ -370,7 +369,7 @@ describe('adjust', () => {
         expect(!result.success && result.errors[0]).toMatchObject({
             code: 'INVENTORY_BELOW_RESERVED'
         });
-        expect(await countersOf(String(product._id))).toEqual({ onHand: 10, reserved: 8 });
+        expect(await countersOf(String(product._id))).toEqual({ onHand: 10, reserved: 8, available: 2 });
     });
 
     it('allows a correction down to exactly what is promised', async () => {
@@ -439,7 +438,7 @@ describe('runReservationSweep', () => {
 
         expect(expired).toBe(1);
         // The fresh hold survives — a sweep is a deadline, not a purge.
-        expect(await countersOf(String(product._id))).toEqual({ onHand: 20, reserved: 5 });
+        expect(await countersOf(String(product._id))).toEqual({ onHand: 20, reserved: 5, available: 15 });
         const freshHold = await reservationRepository.findByOrderId(fresh);
         const staleHold = await reservationRepository.findByOrderId(stale);
         expect(freshHold?.status).toBe('held');
@@ -453,7 +452,7 @@ describe('runReservationSweep', () => {
 
             expect(await runReservationSweep()).toBe(1);
             expect(await runReservationSweep()).toBe(0);
-            expect(await countersOf(String(product._id))).toEqual({ onHand: 20, reserved: 0 });
+            expect(await countersOf(String(product._id))).toEqual({ onHand: 20, reserved: 0, available: 20 });
         }));
 });
 
