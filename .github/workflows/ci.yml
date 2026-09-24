@@ -21,7 +21,8 @@ name: CI
 #                     `docker/Dockerfile` actually ships, with no services and no network
 #   - supply chain    audit
 #
-# The slow suites live elsewhere on a nightly schedule: mutation.yml and fuzz.yml.
+# The slow and hunting suites live elsewhere on a schedule: mutation.yml, fuzz.yml (the deep pass —
+# the shallow one is in `complete`), schemathesis.yml and order-random.yml.
 
 on:
     # Run on every PR and on direct pushes to main.
@@ -440,11 +441,13 @@ jobs:
               run: npm run build
 
     test-unit:
-        # The fast suite: pure functions, services and repositories against in-memory Mongo.
-        # 25 minutes was still too tight: the coverage rerun (`--runInBand`) takes ~10 minutes on a
-        # dev machine but over 20 on this runner's shared, likely fewer-core hardware — the job hit
-        # the wall mid-run again and reported a bare cancellation instead of the coverage failures
-        # (`COVERAGE_AND_MUTATION_DEBT.md`'s own tracked debt) underneath it.
+        # The fast suites, unit and cross-cutting: pure functions, services and repositories
+        # against in-memory Mongo.
+        #
+        # ONE jest pass does all three jobs — the verdict, the per-file coverage floors and the
+        # JSON report — because each extra pass re-ran the same ~10-20 minutes to learn nothing new.
+        # 40 minutes because the coverage pass (`--runInBand`) takes over 20 on this runner's
+        # shared hardware, and a bare cancellation hides the failures underneath it.
         runs-on: ubuntu-latest
         timeout-minutes: 40
         permissions:
@@ -459,26 +462,23 @@ jobs:
                   node-version: ${{ env.NODE_VERSION }}
                   setup-mongod: 'true'
 
-            - name: Run unit tests
-              run: npm run test:unit
-
             # The per-file floors in `jest.config.js` are enforced here and NOT in the pre-commit
-            # hook: coverage runs the suite again under `--runInBand`, which is minutes rather than
-            # the ~60s the hook is designed around (see .husky/pre-commit). A gate that makes the
-            # hook unusable gets bypassed with --no-verify, which is worse than one that runs here.
+            # hook: `--runInBand` coverage is minutes rather than the ~60s the hook is designed
+            # around. Jest exits non-zero on a failing test and on a threshold miss alike.
             #
-            # `test:unit:coverage` fails the step on its own when a file drops below its floor —
-            # jest exits non-zero on a threshold miss, so no extra check is needed.
-            - name: Run unit tests with coverage thresholds
-              run: npm run test:unit:coverage
+            # `--json --outputFile` rides along on the same run: jest writes the per-test report
+            # to the file and keeps its normal console output. `mkdir -p` first, because jest does
+            # not create the parent directory and `tmp/` is gitignored.
+            - name: Run unit tests with coverage thresholds and the JSON report
+              run: |
+                  mkdir -p tmp/reports
+                  npm run test:unit:coverage -- --json --outputFile=tmp/reports/test-report.json
 
             - name: Per-module test report
-              # Reads the JSON the run just wrote and prints the rollup into the job log, so a
-              # red build names the MODULE before anyone opens an artifact. `mkdir -p` first:
-              # jest's --outputFile does not create its parent directory, and tmp/ is
-              # gitignored, so a fresh checkout has none.
+              # Prints the rollup of the JSON the run above wrote into the job log, so a red build
+              # names the MODULE before anyone opens an artifact.
               if: always()
-              run: mkdir -p tmp/reports && npm run test:unit:report && npm run test:report
+              run: npm run test:report
 
             - name: Upload test report
               if: always()
