@@ -14,7 +14,7 @@ import {
     type Wire
 } from '@infrastructure/persistence/create-repository';
 import { encryptPii } from '@infrastructure/security/pii-encryption';
-import { decryptAddressItem } from './pii';
+import { encryptAddressItem, decryptAddressItem } from './pii';
 
 /**
  * Every book this module hands back is decrypted first — `findByUserId` and every write method's
@@ -65,15 +65,7 @@ export const addressBookRepository: Repository<AddressBookDocument, Wire<Address
         addressBookModel
             .create({
                 ...data,
-                items: (data.items ?? []).map((item) => ({
-                    ...item,
-                    fullName: encryptPii(item.fullName),
-                    street: encryptPii(item.street),
-                    city: encryptPii(item.city),
-                    zip: encryptPii(item.zip),
-                    country: encryptPii(item.country),
-                    ...(item.phone === undefined ? {} : { phone: encryptPii(item.phone) })
-                }))
+                items: (data.items ?? []).map((item) => encryptAddressItem(item))
             })
             .then(decryptBook),
 
@@ -103,13 +95,7 @@ export const addressBookRepository: Repository<AddressBookDocument, Wire<Address
         if (wantsDefault) for (const item of book.items) item.default = false;
 
         book.items.push({
-            ...entry,
-            fullName: encryptPii(entry.fullName),
-            street: encryptPii(entry.street),
-            city: encryptPii(entry.city),
-            zip: encryptPii(entry.zip),
-            country: encryptPii(entry.country),
-            ...(entry.phone === undefined ? {} : { phone: encryptPii(entry.phone) }),
+            ...encryptAddressItem(entry),
             default: wantsDefault
         });
         return book.save().then(decryptBook);
