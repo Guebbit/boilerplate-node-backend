@@ -202,4 +202,42 @@ describe('an empty catalogue', () => {
     it('answers facets as empty lists, not a crash on the absent aggregate row', async () => {
         await expect(productRepository.facets()).resolves.toEqual({ categories: [], tags: [] });
     });
+
+    describe('writebackImage', () => {
+        const urls = {
+            imageUrl: '/images/digested.png',
+            thumbnailUrl: '/images/thumbs/v1/digested.webp'
+        };
+
+        it('writes the digested urls onto the document still waiting on this key', async () => {
+            const created = await createProduct();
+            await productModel.updateOne({ _id: created._id }, { pendingImageKey: 'key-1' });
+
+            await expect(
+                productRepository.writebackImage(String(created._id), 'key-1', urls)
+            ).resolves.toBe(true);
+        });
+
+        it('answers true to a duplicate run of the same job, so its twin files are not deleted', async () => {
+            const created = await createProduct();
+            await productModel.updateOne({ _id: created._id }, { pendingImageKey: 'key-1' });
+            await productRepository.writebackImage(String(created._id), 'key-1', urls);
+
+            await expect(
+                productRepository.writebackImage(String(created._id), 'key-1', urls)
+            ).resolves.toBe(true);
+        });
+
+        it('answers false to a stale job whose document has moved on', async () => {
+            const created = await createProduct();
+            await productModel.updateOne({ _id: created._id }, { pendingImageKey: 'key-2' });
+
+            await expect(
+                productRepository.writebackImage(String(created._id), 'key-1', {
+                    imageUrl: '/images/stale.png',
+                    thumbnailUrl: '/images/thumbs/v1/stale.webp'
+                })
+            ).resolves.toBe(false);
+        });
+    });
 });

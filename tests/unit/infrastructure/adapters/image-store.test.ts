@@ -6,7 +6,7 @@
  * temp directory: a mocked `fs` would assert that the code calls unlink with a string, which is
  * not the property that matters — *which* string is.
  */
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -166,6 +166,12 @@ describe('filesystemImageStore.promote', () => {
         // The second write simply lands on the same path — never a "file exists" failure, which
         // is what makes a duplicate digest run (a redelivered job, a reclaimed lease) harmless.
         expect(await readFile(path.join(root, 'images', 'abc123.png'), 'utf8')).toBe('run two');
+    });
+
+    it('leaves nothing but the image itself — the temporary file it wrote through is gone', async () => {
+        await filesystemImageStore.promote('abc123', Buffer.from('x'), 'image/png');
+
+        expect(await readdir(path.join(root, 'images'))).toEqual(['abc123.png']);
     });
 });
 

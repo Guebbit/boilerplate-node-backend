@@ -11,7 +11,8 @@
  */
 
 import path from 'node:path';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { deleteFile, moveFile, toPosixPath } from '@infrastructure/adapters/filesystem';
 import type { ReencodableImageMime } from '@infrastructure/adapters/image';
 
@@ -173,6 +174,21 @@ const isRemoteUrl = (value: string) =>
     /^[a-z][\d+.a-z-]*:\/\//i.test(value) || value.startsWith('//');
 
 /**
+ * Write `bytes` to `target` through a sibling temp file and a rename. The target is served with a
+ * one-year immutable cache, and a duplicate digest run writes the same name again: a plain
+ * `writeFile` truncates first, so a request landing mid-write would cache a half-written image
+ * for a year. A rename within one directory is atomic on POSIX.
+ *
+ * @param target - the final path
+ * @param bytes - what to write there
+ */
+const writeAtomically = async (target: string, bytes: Buffer): Promise<void> => {
+    const temporary = `${target}.${randomUUID()}.tmp`;
+    await writeFile(temporary, bytes);
+    await rename(temporary, target);
+};
+
+/**
  * The store this API has always had: files under `NODE_PUBLIC_PATH/images/`, served by
  * `express.static`, addressed by the server-relative path `/images/<name>`.
  */
@@ -196,7 +212,7 @@ export const filesystemImageStore: ImageStore = {
         const filename = `${safeStem}${EXTENSION_OF[mime]}`;
         const root = publicRoot();
         await mkdir(path.join(root, IMAGES_SEGMENT), { recursive: true });
-        await writeFile(path.join(root, IMAGES_SEGMENT, filename), digested);
+        await writeAtomically(path.join(root, IMAGES_SEGMENT, filename), digested);
         // Built from literals rather than `path.join`, because this is a URL: on Windows `join`
         // would answer `\images\x.png`, which `express.static` does not serve and which is broken
         // the moment it reaches a browser.
@@ -208,7 +224,7 @@ export const filesystemImageStore: ImageStore = {
         const directory = thumbnailsDirectory(root);
         await mkdir(directory, { recursive: true });
         const filename = thumbnailFilename(stem);
-        await writeFile(path.join(directory, filename), thumbnail);
+        await writeAtomically(path.join(directory, filename), thumbnail);
         return `/${IMAGES_SEGMENT}/thumbs/${THUMBNAIL_VERSION}/${filename}`;
     },
 

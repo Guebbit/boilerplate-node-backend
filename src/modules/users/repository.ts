@@ -369,7 +369,16 @@ export const userRepository: Repository<UserDocument, UserWire> & {
                 { timestamps: false }
             )
             .exec()
-            .then(({ matchedCount }) => matchedCount > 0),
+            .then(({ matchedCount }) =>
+                // A miss may be a duplicate run of this same job, whose twin already wrote these
+                // exact urls: that counts as held, or the caller deletes the live files.
+                matchedCount > 0
+                    ? true
+                    : userModel
+                          .exists({ _id: toObjectId(documentId), imageUrl: urls.imageUrl })
+                          .exec()
+                          .then((held) => held !== null)
+            ),
 
     /**
      * Every account inactive past the warning threshold, never yet warned —

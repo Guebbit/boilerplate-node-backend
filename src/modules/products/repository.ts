@@ -158,5 +158,14 @@ export const productRepository: Repository<ProductDocument, Product> & {
                 { timestamps: false }
             )
             .exec()
-            .then(({ matchedCount }) => matchedCount > 0)
+            .then(({ matchedCount }) =>
+                // A miss may be a duplicate run of this same job, whose twin already wrote these
+                // exact urls: that counts as held, or the caller deletes the live files.
+                matchedCount > 0
+                    ? true
+                    : productModel
+                          .exists({ _id: toObjectId(documentId), imageUrl: urls.imageUrl })
+                          .exec()
+                          .then((held) => held !== null)
+            )
 };
