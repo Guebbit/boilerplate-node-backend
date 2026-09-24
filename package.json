@@ -190,7 +190,7 @@
         "helmet": "^8.1.0",
         "i18next": "^25.10.9",
         "ibantools": "^4.5.4",
-        "ip-address": "^10.5.0",
+        "ipaddr.js": "^2.5.0",
         "jsonwebtoken": "^9.0.3",
         "mongodb": "^7.1.1",
         "mongoose": "^9.9.5",

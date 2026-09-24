@@ -49,7 +49,7 @@ export const RUNTIME_GROUPS: DependencyGroup[] = [
             '@casl/mongoose',
             'altcha-lib',
             'disposable-email-domains-js',
-            'ip-address'
+            'ipaddr.js'
         ]
     },
     {

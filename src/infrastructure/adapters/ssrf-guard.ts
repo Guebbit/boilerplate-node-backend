@@ -6,13 +6,13 @@
  *
  * Infrastructure, not `domain/`: this module does DNS I/O.
  *
- * Ranges refused and why, `ip-address`'s role, and what this guard deliberately leaves to its
+ * Ranges refused and why, `ipaddr.js`'s role, and what this guard deliberately leaves to its
  * caller (redirects, timeouts) — see docs/theory/defences/ssrf.md.
  */
 
 import { resolve4, resolve6 } from 'node:dns/promises';
 import net, { type LookupFunction } from 'node:net';
-import { Address4, Address6 } from 'ip-address';
+import ipaddr from 'ipaddr.js';
 
 /** Why {@link resolveSafeOutboundTarget} refused a URL — so a caller and a test can branch on why. */
 export type SsrfRefusalReason =
@@ -97,53 +97,25 @@ const parseOutboundUrl = (rawUrl: string, exemptHostname?: string): URL => {
     return parsed;
 };
 
-/** The deprecated IPv4-compatible IPv6 range (`::/96`) — see {@link isAddressUnsafe}. */
-const IPV4_COMPATIBLE_SUBNET = new Address6('::/96');
-
 /**
- * Whether a single resolved address falls in any range this guard refuses. See the module
- * docblock for the exact range list and the RFCs behind it.
+ * Whether a single resolved address is anything but a public, globally routable one — an
+ * allowlist, not a list of known-bad ranges, so a range nobody thought to list (benchmarking,
+ * reserved, NAT64, 6to4, Teredo, the deprecated site-local block) is refused by default.
+ *
+ * `ipaddr.js`'s `range()` classifies against the IANA special-purpose registries; only `unicast`
+ * is ordinary public space. An IPv4-mapped IPv6 literal (`::ffff:127.0.0.1`) is unwrapped first,
+ * so it is judged as the IPv4 address it really is.
+ * https://github.com/whitequark/ipaddr.js#readme
  *
  * @param address - one resolved (or literal) IPv4 or IPv6 address, dotted/colon form
  */
 const isAddressUnsafe = (address: string): boolean => {
-    const family = net.isIP(address);
     // Neither 4 nor 6: not a real address at all. Refusing rather than ignoring keeps the
     // "fail closed" rule from the module docblock intact even for a malformed DNS answer.
-    if (family === 0) return true;
+    if (net.isIP(address) === 0) return true;
 
-    if (family === 4) {
-        const ip = new Address4(address);
-        return (
-            ip.isPrivate() ||
-            ip.isLoopback() ||
-            ip.isLinkLocal() ||
-            ip.isUnspecified() ||
-            ip.isMulticast() ||
-            ip.isCGNAT() ||
-            ip.isBroadcast()
-        );
-    }
-
-    const ip = new Address6(address);
-    return (
-        ip.isPrivate() ||
-        ip.isLoopback() ||
-        ip.isLinkLocal() ||
-        ip.isUnspecified() ||
-        ip.isMulticast() ||
-        ip.isCGNAT() ||
-        ip.isBroadcast() ||
-        // Neither is unwrapped by `embeddedIPv4()` — a 6to4 or Teredo literal carrying a
-        // private/loopback/link-local IPv4 would otherwise read as an ordinary global address to
-        // every check above.
-        ip.is6to4() ||
-        ip.isTeredo() ||
-        // `::1`/`::` also sit in `::/96` but are already caught above via `isLoopback`/
-        // `isUnspecified` — this only adds the cases those checks miss, like `::127.0.0.1`, by
-        // recursing into the family-4 branch instead of repeating its range list.
-        (ip.isHostInSubnet(IPV4_COMPATIBLE_SUBNET) && isAddressUnsafe(ip.to4().correctForm()))
-    );
+    const parsed = ipaddr.process(address);
+    return parsed.range() !== 'unicast';
 };
 
 /**

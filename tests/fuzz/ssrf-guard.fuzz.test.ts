@@ -79,7 +79,16 @@ describe('resolveSafeOutboundTarget — literal IP hostiles, refused with unsafe
         [
             'Teredo-encoded loopback (RFC 4380)',
             'https://[2001:0000:4136:e378:8000:63bf:3fff:fdd2]/hook'
-        ]
+        ],
+        // Not globally routable either, and missed by a list of known-bad ranges — the reason
+        // the guard allows only public unicast instead.
+        ['"this network" beyond 0.0.0.0 (RFC 1122)', 'https://0.1.2.3/hook'],
+        ['benchmarking (RFC 2544)', 'https://198.18.0.1/hook'],
+        ['reserved class E (RFC 1112)', 'https://240.0.0.1/hook'],
+        ['IETF protocol assignments (RFC 6890)', 'https://192.0.0.8/hook'],
+        ['documentation (RFC 5737)', 'https://203.0.113.7/hook'],
+        ['local-use NAT64 (RFC 8215)', 'https://[64:ff9b:1::1]/hook'],
+        ['deprecated IPv6 site-local (RFC 3879)', 'https://[fec0::1]/hook']
     ])('%s: %s', async (_label, url) => {
         await expect(resolveSafeOutboundTarget(url)).rejects.toBeInstanceOf(SsrfRefusedError);
         await expect(resolveSafeOutboundTarget(url)).rejects.toMatchObject({
@@ -122,7 +131,7 @@ describe('resolveSafeOutboundTarget — a hostname whose DNS answer is private s
     });
 
     it('refuses when even ONE of several resolved addresses is private — fail closed', async () => {
-        mockDns(['203.0.113.7', '10.1.2.3']);
+        mockDns(['93.184.215.7', '10.1.2.3']);
 
         await expect(
             resolveSafeOutboundTarget('https://multi-answer.example.test/hook')
@@ -138,10 +147,10 @@ describe('resolveSafeOutboundTarget — a hostname whose DNS answer is private s
     });
 
     it('accepts a hostname resolving only to public addresses', async () => {
-        mockDns(['203.0.113.7']);
+        mockDns(['93.184.215.7']);
 
         const target = await resolveSafeOutboundTarget('https://public.example.test/hook');
-        expect(target.resolvedAddress).toBe('203.0.113.7');
+        expect(target.resolvedAddress).toBe('93.184.215.7');
     });
 
     it('refuses when neither record type resolves — dns-resolution-failed', async () => {
@@ -155,9 +164,9 @@ describe('resolveSafeOutboundTarget — a hostname whose DNS answer is private s
 
 describe('resolveSafeOutboundTarget — a literal IP never triggers a DNS query', () => {
     it('accepts a public literal IPv4 address without calling resolve4/resolve6', async () => {
-        const target = await resolveSafeOutboundTarget('https://203.0.113.7/hook');
+        const target = await resolveSafeOutboundTarget('https://93.184.215.7/hook');
 
-        expect(target.resolvedAddress).toBe('203.0.113.7');
+        expect(target.resolvedAddress).toBe('93.184.215.7');
         expect(dns.resolve4).not.toHaveBeenCalled();
         expect(dns.resolve6).not.toHaveBeenCalled();
     });
@@ -165,7 +174,7 @@ describe('resolveSafeOutboundTarget — a literal IP never triggers a DNS query'
 
 describe('resolveSafeOutboundTarget — the pinned lookup it hands back', () => {
     it('always answers the SAME address it validated, never re-resolving', async () => {
-        mockDns(['203.0.113.9']);
+        mockDns(['93.184.215.9']);
         const target = await resolveSafeOutboundTarget('https://pin-me.example.test/hook');
 
         const singleAnswer = await new Promise((resolve, reject) => {
@@ -173,7 +182,7 @@ describe('resolveSafeOutboundTarget — the pinned lookup it hands back', () => 
                 error ? reject(error) : resolve({ address, family })
             );
         });
-        expect(singleAnswer).toEqual({ address: '203.0.113.9', family: 4 });
+        expect(singleAnswer).toEqual({ address: '93.184.215.9', family: 4 });
 
         // Called a second time (`{ all: true }`, the shape `https.request` uses when it wants
         // every candidate address) — still the one address that was actually checked.
@@ -182,7 +191,7 @@ describe('resolveSafeOutboundTarget — the pinned lookup it hands back', () => 
                 error ? reject(error) : resolve(addresses)
             );
         });
-        expect(allAnswer).toEqual([{ address: '203.0.113.9', family: 4 }]);
+        expect(allAnswer).toEqual([{ address: '93.184.215.9', family: 4 }]);
 
         // The DNS mock was consulted exactly once, by `resolveSafeOutboundTarget` itself — the
         // pinned `lookup` above answered from the already-validated address, not a new query.

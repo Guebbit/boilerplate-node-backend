@@ -72,7 +72,7 @@ describe('deliverWebhook — the total timeout covers DNS resolution too', () =>
 
 describe('deliverWebhook — a redirect is a failed delivery, never followed', () => {
     it('does not chase a 3xx Location header to a second request', async () => {
-        mockDns(['203.0.113.9']);
+        mockDns(['93.184.215.9']);
 
         // `httpsRequest` resolves to `jest.fn()` under the `jest.mock('node:https', …)` above —
         // typed as the real export so the mock still shows up under `node:https`'s own signature.

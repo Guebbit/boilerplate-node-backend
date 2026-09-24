@@ -25,25 +25,29 @@ A deployment that never sends webhooks removes the module, and that one path goe
 | SSRF — blind                | the fetch happens but the response is not shown; timing or out-of-band DNS reveals it   | For the hard-coded hosts, nothing to steer. For webhooks the guard runs _before_ the request against the resolved IP, so a refused target never connects — there is no timing or out-of-band signal to read off a request that was never made.                                                                                                                           |
 | SSRF — via redirect         | an allowed URL 302s to an internal one; the validator checked the first hop only        | `webhook-delivery.ts` never follows a redirect: a 3xx is read as a failed delivery, full stop. There is no "first hop only" because there is no second hop to a validator's blind spot.                                                                                                                                                                                  |
 | SSRF — DNS rebinding        | a TTL-0 record resolves publicly at check time and privately at fetch time              | The guard closes the TOCTOU window by construction: it resolves the hostname once, validates that address, then hands delivery a `lookup` pinned to it — the HTTP client is never free to resolve a second time and get a private answer.                                                                                                                                |
-| SSRF — parser confusion     | `http://allowed@evil/`, `evil#@allowed`, IPv6 forms, decimal or octal IPs               | The subscriber URL is parsed once with `URL`, and the range checks run on the resolved IP via `ip-address`'s `Address4`/`Address6`, not string matching — including the IPv4-mapped IPv6 literal (`::ffff:127.0.0.1`) a naive check waves through.                                                                                                                       |
+| SSRF — parser confusion     | `http://allowed@evil/`, `evil#@allowed`, IPv6 forms, decimal or octal IPs               | The subscriber URL is parsed once with `URL`, and the range check runs on the resolved IP via `ipaddr.js`'s `range()`, not string matching — including the IPv4-mapped IPv6 literal (`::ffff:127.0.0.1`) a naive check waves through, which is unwrapped first.                                                                                                          |
 | Protocol smuggling via SSRF | `gopher://`, `dict://`, `file://` where the client library allows it                    | The guard requires `https:` (the one dev/test demo host aside), and Node's client speaks HTTP(S) only regardless.                                                                                                                                                                                                                                                        |
 | Webhook / callback abuse    | user-registered URLs hit by the server — SSRF as a feature, and port scanning by timing | This IS the surface, and it is the one the guard is for. Private, loopback, link-local and CGNAT ranges are refused before the first request, so a subscription cannot be turned into an internal port scanner — see [The delivery path](../../modules/webhooks.md#the-delivery-path).                                                                                   |
 
 ## Ranges refused, and why
 
-RFC 1918 private space, RFC 1122 loopback, RFC 3927 / RFC 4291 link-local (this is what blocks the
-cloud metadata endpoint `169.254.169.254`), RFC 4193 IPv6 unique-local, RFC 6598 carrier-grade NAT,
-RFC 919 broadcast, and both families' unspecified (`0.0.0.0`, `::`) and multicast ranges — plus
-three IPv6 forms that embed an address `ip-address`'s own `embeddedIPv4()` does NOT unwrap: 6to4
-(RFC 3056, `2002::/16`), Teredo (RFC 4380, `2001::/32`), and the deprecated IPv4-compatible form
-(RFC 4291 §2.5.5.1, `::/96` — `::a.b.c.d`, distinct from the IPv4-_mapped_ `::ffff:a.b.c.d` form
-`embeddedIPv4()` already covers). All three carry an IPv4 address in their bits — 6to4 plainly,
-Teredo XOR-obfuscated, the compat form plainly again — that would otherwise read as an ordinary
-global address to every other check: a literal encoding `169.254.169.254` inside any of the three
-is invisible to a check that only unwraps the mapped form. Refused outright rather than decoded: a
-legitimate outbound target has no reason to be specified as a transition-mechanism literal, and
-native 6to4/Teredo relaying is still enabled on some hosts and networks despite the public relay
-infrastructure having mostly been decommissioned.
+Everything that is not public, globally routable unicast — an allowlist, not a list of bad
+ranges. `ipaddr.js`'s `range()` classifies an address against the IANA special-purpose registries,
+and anything but `unicast` is refused.
+
+| Refused because                             | Examples                                                                                                                |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Internal by definition                      | RFC 1918 private, loopback, RFC 4193 unique-local, RFC 6598 carrier-grade NAT                                           |
+| Link-local                                  | `169.254.0.0/16` (the cloud metadata endpoint), `fe80::/10`                                                             |
+| Not a destination at all                    | unspecified, `0.0.0.0/8`, broadcast, multicast, class E `240.0.0.0/4`                                                   |
+| Reserved for something else                 | benchmarking `198.18.0.0/15`, IETF `192.0.0.0/24`, documentation ranges                                                 |
+| Transition forms that embed an IPv4 address | 6to4 `2002::/16`, Teredo `2001::/32`, NAT64 `64:ff9b::/96` and `64:ff9b:1::/48`, the deprecated IPv4-compatible `::/96` |
+| Deprecated                                  | IPv6 site-local `fec0::/10`                                                                                             |
+
+Why an allowlist: a list of known-bad ranges misses the ones nobody thought to list — a literal
+encoding `169.254.169.254` inside a 6to4 or Teredo address reads as an ordinary global address to
+a check that only knows the plain ranges. The IPv4-mapped form (`::ffff:a.b.c.d`) is the one
+transition form that is unwrapped rather than refused: it is judged as the IPv4 address it carries.
 
 ## What the guard deliberately does not do
 
@@ -84,7 +88,7 @@ re-derive. The non-negotiables, all of which it already implements:
 - **pin** the validated address for the actual connection, so a second DNS lookup cannot answer
   differently (the rebinding window);
 - **redirects disabled** — a 3xx is a failure, not a new hop to re-validate;
-- **`https:` only**, and parsing done by a library (`ip-address`), not by hand.
+- **`https:` only**, and range classification done by a library (`ipaddr.js`), not by hand.
 
 Reuse the guard rather than writing a fresh check: the IPv6 embedding forms alone — mapped, 6to4,
 Teredo — are a class of bug a hand-rolled range test gets wrong. See
