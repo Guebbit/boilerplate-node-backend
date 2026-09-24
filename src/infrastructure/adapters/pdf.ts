@@ -42,6 +42,9 @@ const launchOptions = () => ({
  */
 const MAX_CONCURRENT_RENDERS = 2;
 
+/** Every render started and not yet finished — what {@link settleRenders} waits for. */
+const inFlight = new Set<Promise<Uint8Array>>();
+
 /** Renders running now — see {@link MAX_CONCURRENT_RENDERS}. */
 let running = 0;
 
@@ -90,7 +93,41 @@ const withRenderSlot = <T>(task: () => Promise<T>): Promise<T> =>
 export const renderHtmlToPdf = (
     html: string,
     pdfOptions: PDFOptions = DEFAULT_PDF_OPTIONS
-): Promise<Uint8Array> => withRenderSlot(() => renderOnce(html, pdfOptions));
+): Promise<Uint8Array> => {
+    const render = withRenderSlot(() => renderOnce(html, pdfOptions));
+    inFlight.add(render);
+    // Both branches: a rejected render is still finished. `then(f, f)` rather than `finally`,
+    // which would hand back a second promise rejecting with nobody listening.
+    const forget = () => inFlight.delete(render);
+    render.then(forget, forget);
+    return render;
+};
+
+/**
+ * Wait for every render already started, up to `timeoutMs` — the shutdown step that keeps an
+ * exiting process from orphaning the Chromium it launched.
+ *
+ * Why it exists: an invoice render is often fire-and-forget (the placed-order email attaches
+ * one). A process that exits mid-render — a seeding script, a worker stopped on deploy — leaves
+ * that browser running with no parent, and its ~120 MB temporary profile on disk. `close()` in
+ * `renderOnce` only runs if the process lives long enough to reach it.
+ *
+ * @param timeoutMs - the most it may wait; a hung render must not hold shutdown hostage
+ * @returns resolves once every render has finished, or the time is up
+ */
+export const settleRenders = (timeoutMs: number): Promise<void> => {
+    if (inFlight.size === 0) return Promise.resolve();
+
+    let timer: NodeJS.Timeout | undefined;
+    const deadline = new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs);
+        // Never, on its own, the thing keeping the process alive.
+        timer.unref();
+    });
+    return Promise.race([Promise.allSettled(inFlight).then(() => undefined), deadline]).finally(
+        () => clearTimeout(timer)
+    );
+};
 
 /**
  * One render: launch, print, close — see {@link renderHtmlToPdf}.

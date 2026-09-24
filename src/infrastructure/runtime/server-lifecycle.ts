@@ -16,6 +16,7 @@ import { stopCache } from '@infrastructure/adapters/cache';
 import { stopRateLimitStore } from '@infrastructure/http/middlewares/rate-limit-store';
 import { stopQueue } from '@infrastructure/adapters/queue';
 import { stopLocaleOverrideRefresh } from '@infrastructure/i18n';
+import { settleRenders } from '@infrastructure/adapters/pdf';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 
 /** Upper bound on graceful shutdown before we stop being polite and kill the process. */
@@ -128,6 +129,9 @@ export const shutdownInfra = (server?: Server) =>
             return closeServer(s);
         })
         .then(() => stopLocaleOverrideRefresh())
+        // Renders already started finish (or time out) before the process can exit: an exit
+        // mid-render orphans the Chromium it launched, and its temporary profile with it.
+        .then(() => settleRenders(getShutdownTimeoutMs() * DRAIN_SHARE))
         // The queue before the cache: a job still running would otherwise reopen the cache
         // connection that was just closed under it.
         .then(() => stopQueue())

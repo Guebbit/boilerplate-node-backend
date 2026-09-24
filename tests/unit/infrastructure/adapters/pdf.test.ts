@@ -29,7 +29,7 @@ jest.mock('puppeteer-core', () => ({
     }
 }));
 
-import { renderHtmlToPdf } from '@infrastructure/adapters/pdf';
+import { renderHtmlToPdf, settleRenders } from '@infrastructure/adapters/pdf';
 
 /** The options object handed to the last `puppeteer.launch` call. */
 const lastLaunchOptions = () =>
@@ -178,5 +178,55 @@ describe('renderHtmlToPdf', () => {
             // the more serious of the two, and the render error is already lost to the caller
             await expect(renderHtmlToPdf('<p>hello</p>')).rejects.toThrow('close failed');
         });
+    });
+});
+
+/*
+ * The shutdown half: an exiting process must not orphan a render it started. The render below is
+ * held open by a print that has not answered yet — the state a seeding script is in when it calls
+ * `process.exit` right after a fire-and-forget invoice.
+ */
+/**
+ * A print that answers only when the case says so — the render stays in flight until then.
+ *
+ * @returns the pending print, and the function that lets it finish
+ */
+const heldPrint = () => {
+    let resolvePrint: ((bytes: typeof pdfBuffer) => void) | undefined;
+    const printed = new Promise<typeof pdfBuffer>((resolve) => {
+        resolvePrint = resolve;
+    });
+    return { printed, release: () => resolvePrint?.(pdfBuffer) };
+};
+
+describe('settleRenders', () => {
+    it('waits for a render already in flight, so its browser is closed before exit', async () => {
+        const print = heldPrint();
+        pdf.mockImplementationOnce(() => print.printed);
+        close.mockClear();
+        const render = renderHtmlToPdf('<p>slow</p>');
+
+        const settled = settleRenders(5000);
+        // Let the render reach its print, then finish it.
+        await new Promise((resolve) => setImmediate(resolve));
+        print.release();
+
+        await settled;
+        await expect(render).resolves.toBe(pdfBuffer);
+        expect(close).toHaveBeenCalledTimes(1);
+    });
+
+    it('gives up on a render that never finishes, rather than holding shutdown hostage', async () => {
+        pdf.mockImplementationOnce(() => new Promise<typeof pdfBuffer>(() => undefined));
+        void renderHtmlToPdf('<p>hung</p>');
+
+        const startedAt = Date.now();
+        await settleRenders(50);
+
+        expect(Date.now() - startedAt).toBeLessThan(2000);
+    });
+
+    it('resolves at once when nothing is rendering', async () => {
+        await expect(settleRenders(5000)).resolves.toBeUndefined();
     });
 });
