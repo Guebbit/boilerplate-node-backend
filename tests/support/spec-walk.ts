@@ -6,8 +6,8 @@
  * run without anyone remembering to add it — which is the whole property that made `schemathesis`
  * attractive, kept without adding a second language to the repo.
  *
- * Deliberately small. It resolves `$ref`, reads request bodies and path parameters, and reports
- * whether an operation needs a token. It is not a general OpenAPI library and should not grow
+ * Deliberately small. It resolves `$ref`, reads request bodies, path and query parameters, and
+ * reports whether an operation needs a token. It is not a general OpenAPI library and should not grow
  * into one: the moment it needs to understand something genuinely hard (`discriminator`,
  * callbacks, links), the honest move is to reach for a real tool rather than to keep extending
  * this. `assertSpecVocabulary` below is the tripwire for that — it fails when the spec starts
@@ -55,6 +55,8 @@ export interface Operation {
     operationId?: string;
     /** Path parameter names, in declaration order. */
     pathParameters: string[];
+    /** Query parameters, `$ref`s resolved — the path item's own first, then the operation's. */
+    queryParameters: QueryParameter[];
     /** Resolved `application/json` request body schema, when the operation takes one. */
     bodySchema?: SchemaNode;
     /** True when the operation declares a `multipart/form-data` body (skipped by the fuzzer). */
@@ -65,9 +67,31 @@ export interface Operation {
     documentedStatuses: string[];
 }
 
+/** One `in: query` parameter, as the fuzzer needs it to build a query string. */
+export interface QueryParameter {
+    /** The key in the query string. */
+    name: string;
+    /** Whether a request without it is malformed. */
+    required: boolean;
+    /** The value's schema, `$ref` resolved. */
+    schema?: SchemaNode;
+}
+
+/** A parameter object as the spec writes it, before `$ref` resolution. */
+interface ParameterObject {
+    $ref?: string;
+    name?: string;
+    in?: string;
+    required?: boolean;
+    schema?: SchemaNode;
+}
+
 interface SpecDocument {
     paths: Record<string, Record<string, unknown>>;
-    components?: { schemas?: Record<string, SchemaNode> };
+    components?: {
+        schemas?: Record<string, SchemaNode>;
+        parameters?: Record<string, ParameterObject>;
+    };
 }
 
 const SPEC_PATH = path.join(__dirname, '..', '..', 'openapi.yaml');
@@ -123,6 +147,28 @@ export const resolveSchema = (
     return schema;
 };
 
+/**
+ * The query parameters of one operation, `$ref`s into `components.parameters` resolved.
+ *
+ * @param declared - the path item's `parameters` followed by the operation's own
+ * @param spec - the document the references point into
+ */
+const queryParametersOf = (declared: ParameterObject[], spec: SpecDocument): QueryParameter[] =>
+    declared
+        .map((parameter) =>
+            parameter.$ref
+                ? spec.components?.parameters?.[
+                      parameter.$ref.replace('#/components/parameters/', '')
+                  ]
+                : parameter
+        )
+        .filter((parameter): parameter is ParameterObject => parameter?.in === 'query')
+        .map((parameter) => ({
+            name: String(parameter.name),
+            required: parameter.required === true,
+            schema: resolveSchema(parameter.schema, spec)
+        }));
+
 /** Every operation the spec declares, in document order. */
 export const listOperations = (spec: SpecDocument = readSpec()): Operation[] => {
     const operations: Operation[] = [];
@@ -143,6 +189,13 @@ export const listOperations = (spec: SpecDocument = readSpec()): Operation[] => 
                 method,
                 operationId: operation.operationId as string | undefined,
                 pathParameters: [...pathName.matchAll(/{(\w+)}/g)].map(([, name]) => name),
+                queryParameters: queryParametersOf(
+                    [
+                        ...((pathItem.parameters as ParameterObject[] | undefined) ?? []),
+                        ...((operation.parameters as ParameterObject[] | undefined) ?? [])
+                    ],
+                    spec
+                ),
                 bodySchema: resolveSchema(content?.['application/json']?.schema, spec),
                 isMultipart: Boolean(content?.['multipart/form-data']),
                 requiresAuth: Array.isArray(operation.security) && operation.security.length > 0,

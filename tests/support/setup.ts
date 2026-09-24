@@ -18,7 +18,7 @@ import { registerValidationMessages } from '@infrastructure/http/validation-mess
 import { MODULES_ROOT } from '@tests/paths';
 
 /**
- * 10x the live default (`DEFAULT_RATE_LIMIT_MAX` in src/infrastructure/http/middlewares/rate-limit.ts, currently 100).
+ * 100x the live default (`DEFAULT_RATE_LIMIT_MAX` in src/infrastructure/http/middlewares/rate-limit.ts, currently 100).
  *
  * A suite issues far more requests than a person does, and every one of them shares a single
  * source address, so the per-IP limiter sees one very busy client. Without this the later tests
@@ -29,15 +29,14 @@ import { MODULES_ROOT } from '@tests/paths';
  * `buildRateLimiter()` before this line had a chance to set the variable it reads.
  *
  * The number tracks the FUZZ suite, which is what actually sets the floor: it fires
- * `RUNS_PER_OPERATION` requests at every non-multipart operation in the contract, from one
- * address, inside one window. At 12 runs an operation that is roughly 12 × (operations + auth
- * setup), so the budget has to stay comfortably ahead of the endpoint count. It was raised from
- * 1000 to 2000 when `inventory` grew from two endpoints to five and the last operation in the
- * run started answering 429 — a status no endpoint declares, so the contract assertion failed
- * and pointed here rather than at anything real. If a future module tips it again, raise it
- * again; a rate limit is not what the fuzz suite is testing.
+ * `TEST_FUZZ_RUNS` requests at every non-multipart operation in the contract three times over (as
+ * an admin, a customer and anonymously), from one address, and more than one window's worth lands
+ * inside a single minute. The nightly raises `TEST_FUZZ_RUNS`, so this sits well above what the
+ * gate's default needs. A 429 is a status no endpoint declares, so the contract assertion fails and
+ * points here rather than at anything real — if a future module tips it again, raise it again; a
+ * rate limit is not what the fuzz suite is testing.
  */
-process.env.NODE_RATE_LIMIT_MAX ??= '2000';
+process.env.NODE_RATE_LIMIT_MAX ??= '20000';
 
 /**
  * Same reasoning for the two credential budgets (`credentialLimiters`), which are deliberately much

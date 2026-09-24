@@ -56,11 +56,29 @@ So the generator honours `minLength`, `maximum`, `pattern`, `enum`, `format` and
 | Kind    | What it reaches for                                                                                                                           |
 | ------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | strings | empty, whitespace, `'null'`, `'undefined'`, emoji, right-to-left marks, 1000 characters, regex metacharacters, traversal and injection shapes |
-| numbers | exactly `minimum`, exactly `maximum`, `0`, `1`                                                                                                |
+| numbers | exactly `minimum`, exactly `maximum`, `0`, `1` — each only where the bounds allow it                                                          |
 | objects | optional properties genuinely omitted — "absent" is a different case from "empty"                                                             |
 | arrays  | `minItems` respected, so the request is not rejected before it reaches the handler                                                            |
 
 These are weighted rather than uniform. Uniform random strings essentially never produce an empty one.
+
+The same generator fills **query parameters** from each operation's `in: query` declarations —
+required ones always, optional ones sometimes, an array as a repeated key. **Path parameters**
+name real rows where the path says which kind: a product, an order and a second user are seeded
+before each operation, so `/orders/{id}/cancel` reaches the cancel rather than stopping at a 404.
+A path whose resource is not seeded still gets a well-formed id nothing holds.
+
+## Three callers
+
+Each operation is fuzzed three times over:
+
+| Caller           | What it proves                                                               |
+| ---------------- | ---------------------------------------------------------------------------- |
+| an admin         | the deepest code paths never 5xx and always answer on-contract               |
+| a plain customer | the surface refused to a customer is refused on-contract, never with a crash |
+| no credentials   | every operation the spec marks as secured answers exactly 401, never a 5xx   |
+
+The two refused callers run a quarter of the requests: a refusal rarely depends on the body.
 
 ## The two assertions
 
@@ -125,19 +143,24 @@ docker run --rm --network host \
 
 The reasoning against a Python dependency in the first section still holds for the single-request case, which is why `tests/fuzz/` stays hand-rolled. It does not hold for sequences: `--stateful=links` is not a capability worth re-deriving from four building blocks when the actual gap is state, not generation. `--hypothesis-derandomize` keeps a red run reproducible, same requirement as the seeded run below. Python never enters `package.json` — the workflow is the only place it exists, exactly like `test:prism`'s relationship with the Prism CLI.
 
-Nightly, same as the per-request fuzzer, and advisory for the same reason: a stateful failure is a finding, not something a merge should block on.
+The workflow logs in as the demo profile's admin first and hands Schemathesis the bearer token
+(`--header "Authorization: Bearer …"`), so the chains reach the routes that need a session instead
+of stopping at the first 401.
 
-## Why it is a nightly, not a PR gate
+Nightly and advisory: a stateful failure is a finding, not something a merge should block on.
 
-Same reasoning as [Mutation Testing](./mutation-testing.md): it is slow, and a failure is usually a **finding** that needs a person to read it rather than a red X that should stop a merge.
+## Where the per-request fuzzer runs
 
-It also means a green PR is not a promise the fuzzer agrees — that is what the nightly is for.
+Twice, at two depths. `npm run test` includes `test:fuzz`, so every PR's `container-gate` runs a
+shallow pass at `TEST_FUZZ_RUNS`' default. `.github/workflows/fuzz.yml` runs the deep one nightly,
+with many more requests per operation and a fresh seed — that is the hunter, and a red night is a
+**finding** for a person to read. The seed is printed first; `RANDOM_DATA_SEED=<seed>` reproduces it.
 
 ## File map
 
 | Path                                 | Contents                                                                                         |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| `tests/fuzz/endpoints.fuzz.test.ts`  | The driver: one jest case per operation, the two assertions, the self-tripwire                   |
+| `tests/fuzz/endpoints.fuzz.test.ts`  | The driver: three callers per operation, the two assertions, the self-tripwire                   |
 | `tests/support/spec-walk.ts`         | Parses `openapi.yaml`, resolves `$ref`/`allOf`, enumerates operations, owns `SUPPORTED_KEYWORDS` |
 | `tests/support/spec-arbitraries.ts`  | JSON Schema → `fast-check` arbitrary, and the hostile-value tables                               |
 | `tests/support/http.ts`              | The supertest harness and `authenticateAs`, shared with the integration and contract suites      |

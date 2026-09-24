@@ -19,11 +19,18 @@
  * `fast-check`, the supertest harness, and `jest-openapi`'s `toSatisfyApiSpec()` — rather than
  * adding a Python toolchain that every copy of this boilerplate would inherit.
  *
- * ── Why it is not in `npm run test` ──────────────────────────────────────────────────────────
- * It is slow and it is a HUNTER, not a gate: a failure here is usually a real finding that needs a
- * person to read it, not a red X that should block a merge. Same reasoning as mutation testing.
- * It runs nightly, and on demand via `npm run test:fuzz`.
+ * ── Three callers, not one ───────────────────────────────────────────────────────────────────
+ * Every operation is fuzzed as an admin, as a plain customer, and with no credentials. The admin
+ * pass reaches the deepest code; the other two ask whether a caller the operation is NOT for gets
+ * the refusal the spec documents — 401 without credentials where a token is required — rather
+ * than a crash or an answer. Path parameters name REAL rows (a product, an order, a user) where
+ * the path says which kind, so a handler runs past its 404; query parameters are drawn from the
+ * spec like bodies are.
  *
+ * ── Where it runs ─────────────────────────────────────────────────────────────────────────────
+ * In `npm run test` — so in the merge gate — at `TEST_FUZZ_RUNS`' small default, and nightly in
+ * `.github/workflows/fuzz.yml` at a much larger one. A failure is usually a real finding.
+
  * ── What it deliberately does not cover ──────────────────────────────────────────────────────
  * `multipart/form-data` operations are skipped: their bodies are files, `fast-check` has nothing
  * useful to say about a PNG, and the upload path already has
@@ -43,8 +50,19 @@ import {
     unsupportedKeywords,
     type Operation
 } from '@tests/spec-walk';
-import { bodyArbitraryFor } from '@tests/spec-arbitraries';
+import { bodyArbitraryFor, queryArbitraryFor } from '@tests/spec-arbitraries';
 import { FUZZ_RUNS_PER_OPERATION } from '@tests/knobs';
+import { createUser } from '@modules/users/tests/factories';
+import { createProduct } from '@modules/products/tests/factories';
+import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
+import type { UserDocument } from '@modules/users';
+
+// No real Chromium here, and a missing browser is not what this suite hunts: the invoice route
+// with a REAL order renders, and the stub would answer every request 500. Same stand-in the
+// orders contract suite uses.
+jest.mock('@infrastructure/adapters/pdf', () => ({
+    renderHtmlToPdf: () => Promise.resolve(Buffer.from('pdf'))
+}));
 
 setupTestDb();
 
@@ -74,14 +92,66 @@ const OPERATIONS = listOperations();
 /** Stands in for "this operation takes no request body". */
 const NO_BODY = fc.constant(undefined);
 
-/** A syntactically valid ObjectId, so `{id}` paths reach the handler rather than a CastError. */
+/** A syntactically valid ObjectId nothing holds — for a path whose resource kind is not seeded. */
 const OBJECT_ID = '65dc8a99604c307b702b5ccc';
 
-/** Fill path parameters with something well-formed; the handler's 404 is a fine outcome. */
-const buildUrl = (operation: Operation): string => {
+/** The rows a fuzzed path can name, created fresh for each operation. */
+interface World {
+    productId: string;
+    orderId: string;
+    userId: string;
+}
+
+/**
+ * A product, an order for it owned by `owner`, and a second user — enough for most `{id}` paths
+ * to name something that exists. Per operation, because every test starts on an empty database.
+ *
+ * @param owner - who the order belongs to (the admin the first pass runs as)
+ */
+const seedWorld = async (owner: UserDocument): Promise<World> => {
+    const product = await createProduct({ onHand: 50 });
+    const order = await createOrder(owner, [toOrderItem(product, 1)]);
+    const other = await createUser({ email: 'fuzz-target@example.com', username: 'fuzz-target' });
+    return {
+        productId: String(product._id),
+        orderId: String(order._id),
+        userId: String(other._id)
+    };
+};
+
+/** Fixed values for the path parameters that are not ids. */
+const LITERAL_PARAMETERS: Record<string, string> = {
+    locale: 'en',
+    entityType: 'product',
+    method: 'totp',
+    provider: 'fake'
+};
+
+/**
+ * The value for one path parameter: a literal where the spec's vocabulary is fixed, the seeded row
+ * whose kind the path names, and a well-formed id nothing holds otherwise — a 404 is a fine
+ * outcome, a 500 is not.
+ *
+ * @param path - the templated path, which says what kind of row `{id}` is
+ * @param name - the parameter
+ * @param world - the rows seeded for this operation
+ */
+const parameterValue = (path: string, name: string, world: World): string => {
+    if (name in LITERAL_PARAMETERS) return LITERAL_PARAMETERS[name];
+    if (name.toLowerCase().includes('token')) return 'tok';
+    if (name === 'productId' || /^\/(products|wishlist|cart)\//.test(path)) return world.productId;
+    if (name === 'orderId' || path.startsWith('/orders/')) return world.orderId;
+    if (path.startsWith('/users/')) return world.userId;
+    // `entityType` is fixed to `product` above, so the entity is the seeded product.
+    if (path.startsWith('/locales/translations/')) return world.productId;
+    return OBJECT_ID;
+};
+
+/** Fill every path parameter from {@link parameterValue}. */
+const buildUrl = (operation: Operation, world: World): string => {
     let url = operation.path;
     for (const name of operation.pathParameters)
-        url = url.replace(`{${name}}`, name.toLowerCase().includes('token') ? 'tok' : OBJECT_ID);
+        url = url.replace(`{${name}}`, parameterValue(operation.path, name, world));
     return url;
 };
 
@@ -121,37 +191,105 @@ describe('the spec walk itself', () => {
  */
 const FUZZABLE = OPERATIONS.filter((operation) => !operation.isMultipart);
 
+/** Requests per operation for the two refused callers — the refusal rarely depends on the body. */
+const REFUSED_CALLER_RUNS = Math.max(1, Math.ceil(FUZZ_RUNS_PER_OPERATION / 4));
+
+/** One fuzzed request: what was drawn for its body and its query string. */
+type Draw = [body: unknown, query: string];
+
+/**
+ * Fires every drawn request for one operation as one caller and hands each response to `check`.
+ *
+ * @param operation - what to call
+ * @param bearer - the caller's `Authorization` header value, or undefined for no credentials
+ * @param world - the rows the path parameters name
+ * @param runs - how many requests
+ * @param check - the assertions every response must pass
+ */
+const fuzzAs = (
+    operation: Operation,
+    bearer: string | undefined,
+    world: World,
+    runs: number,
+    check: (response: Awaited<ReturnType<ReturnType<typeof api>['get']>>) => void
+) => {
+    const url = buildUrl(operation, world);
+    return fc.assert(
+        fc.asyncProperty(
+            fc.tuple(
+                bodyArbitraryFor(operation.bodySchema) ?? NO_BODY,
+                queryArbitraryFor(operation.queryParameters)
+            ),
+            async ([body, query]: Draw) => {
+                const target = query ? `${url}?${query}` : url;
+                const request = api()[operation.method](target).set('Accept-Language', 'en');
+                if (bearer) request.set('Authorization', bearer);
+
+                check(await (body === undefined || body === null ? request : request.send(body)));
+            }
+        ),
+        { seed: SEED, numRuns: runs, endOnFailure: true }
+    );
+};
+
+/**
+ * The two properties every response must have, whoever asked:
+ *   1. no 5xx — a well-formed request must not reach an unhandled throw;
+ *   2. it matches the contract, status included — `additionalProperties: false` on the
+ *      response schemas makes the shape check real.
+ *
+ * A binary body (the invoice PDF) is held to its status only: `toSatisfyApiSpec()` compares a
+ * body against a JSON schema, and a `format: binary` string is not one a Buffer can match.
+ *
+ * @param operation - the operation that answered, for its documented statuses
+ */
+const neverCrashesOffContract =
+    (operation: Operation) => (response: Awaited<ReturnType<ReturnType<typeof api>['get']>>) => {
+        expect(response.status).toBeLessThan(500);
+        if (response.type === 'application/pdf')
+            expect(operation.documentedStatuses).toContain(String(response.status));
+        else expect(response).toSatisfyApiSpec();
+    };
+
 describe.each(
     FUZZABLE.map(
         (operation) => [`${operation.method.toUpperCase()} ${operation.path}`, operation] as const
     )
 )('%s', (_label, operation) => {
-    it('never answers 5xx, and always answers something the spec documents', async () => {
-        const { bearer } = await authenticateAs('admin');
-        const bodyArbitrary = bodyArbitraryFor(operation.bodySchema);
-        const url = buildUrl(operation);
+    it('never answers 5xx, and always answers something the spec documents — as an admin', async () => {
+        const { user, bearer } = await authenticateAs('admin');
+        const world = await seedWorld(user);
 
-        await fc.assert(
-            fc.asyncProperty(bodyArbitrary ?? NO_BODY, async (body) => {
-                const request = api()
-                    [operation.method](url)
-                    .set('Authorization', bearer)
-                    .set('Accept-Language', 'en');
-
-                const response = await (body === undefined || body === null
-                    ? request
-                    : request.send(body));
-
-                // 1. No crash. This is the finding worth hunting: a spec-valid request that
-                //    reaches an unhandled throw.
-                expect(response.status).toBeLessThan(500);
-
-                // 2. The response matches the contract — shape AND status. An undocumented
-                //    status is as much a contract break as an undeclared field, and
-                //    `additionalProperties: false` on 95 schemas makes the shape check real.
-                expect(response).toSatisfyApiSpec();
-            }),
-            { seed: SEED, numRuns: FUZZ_RUNS_PER_OPERATION, endOnFailure: true }
+        await fuzzAs(
+            operation,
+            bearer,
+            world,
+            FUZZ_RUNS_PER_OPERATION,
+            neverCrashesOffContract(operation)
         );
+    }, 120_000);
+
+    it('does the same for a plain customer, whom most of the surface refuses', async () => {
+        const { user: admin } = await authenticateAs('admin');
+        const world = await seedWorld(admin);
+        const { bearer } = await authenticateAs('user');
+
+        await fuzzAs(
+            operation,
+            bearer,
+            world,
+            FUZZ_RUNS_PER_OPERATION,
+            neverCrashesOffContract(operation)
+        );
+    }, 120_000);
+
+    it('answers 401 without credentials where the spec requires them, and never crashes', async () => {
+        const { user: admin } = await authenticateAs('admin');
+        const world = await seedWorld(admin);
+
+        await fuzzAs(operation, undefined, world, REFUSED_CALLER_RUNS, (response) => {
+            neverCrashesOffContract(operation)(response);
+            if (operation.requiresAuth) expect(response.status).toBe(401);
+        });
     }, 120_000);
 });
