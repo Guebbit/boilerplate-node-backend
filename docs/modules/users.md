@@ -22,7 +22,6 @@ flowchart LR
     addresses["addresses"]
     api_keys["api-keys"]
     cart["cart"]
-    delivery["delivery"]
     orders["orders"]
     payments["payments"]
     webhooks["webhooks"]
@@ -32,7 +31,6 @@ flowchart LR
     addresses --> users
     api_keys --> users
     cart --> users
-    delivery --> users
     orders --> users
     payments --> users
     webhooks --> users
@@ -50,7 +48,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class access,account,addresses,api_keys,delivery,payments,webhooks,wishlist supporting;
+    class access,account,addresses,api_keys,payments,webhooks,wishlist supporting;
     class users centre;
 ```
 

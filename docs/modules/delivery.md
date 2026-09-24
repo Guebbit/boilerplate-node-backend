@@ -19,18 +19,15 @@ flowchart LR
     delivery["delivery<br/><i>this module</i>"]
     cart["cart"]
     orders["orders"]
-    users["users"]
 
     cart --> delivery
     delivery --> orders
-    delivery --> users
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class users supporting;
     class delivery centre;
 ```
 
