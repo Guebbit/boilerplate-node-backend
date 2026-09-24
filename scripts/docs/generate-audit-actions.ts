@@ -16,9 +16,10 @@
  * actions. `target_type` is not declared anywhere near an action — it is a free string passed at
  * each `recordAudit`/`emitAuditEvent`/`buildAuditEvent` call site — so it is read off the call
  * site's own text instead, the same trade-off `generate-module-graph.ts`'s `readEventEdges` makes
- * for event subscriptions: `—` where no call site names one (the three `security.*` actions have
- * no object to attach to), `(varies)` where the same action fires against more than one literal
- * target (a generic helper like `upsertEntityTranslations` takes the entity type as a parameter).
+ * for event subscriptions: `—` where no call site names a literal one (the three `security.*`
+ * actions have no object to attach to; a generic helper like `upsertEntityTranslations` takes the
+ * target as a runtime parameter instead of a literal), `(varies)` where the same action is fired
+ * against more than one distinct literal target.
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
