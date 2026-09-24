@@ -111,7 +111,7 @@ jobs:
               # guarantees a save at the end; `restore-keys` falls back to the shard's most recent
               # cache. `workflow_dispatch`'s `force` input still discards whatever this restores
               # (Stryker's own behaviour), so restoring on that run is harmless, not wasted.
-              uses: actions/cache@v4
+              uses: actions/cache@v6
               with:
                   path: tmp/reports/stryker-incremental.json
                   key: mutation-incremental-${{ matrix.name }}-${{ github.run_id }}
