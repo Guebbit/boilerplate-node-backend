@@ -263,7 +263,7 @@ const compile = (): string => {
          * than wrapping it in a summary that hides the location.
          */
         const details = (error as { stderr?: Buffer }).stderr?.toString() ?? '';
-        throw new Error(`[openapi] redocly bundle failed.\n${details}`);
+        throw new Error(`[openapi] redocly bundle failed.\n${details}`, { cause: error });
     }
 
     /*
