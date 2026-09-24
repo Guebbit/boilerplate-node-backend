@@ -162,7 +162,7 @@ apart.
 - **`sharp.concurrency(1)` and `sharp.cache(false)`** are set once, at import — `registerWorkers()`
   runs in every cluster fork, so without this a multi-core deployment runs N forks × sharp's own
   thread pool × libvips's own cache.
-- **Alpine/musl.** The runtime image is `node:25-alpine`. `@img/sharp-linuxmusl-x64`/`-arm64` both
+- **Alpine/musl.** The runtime image is `node:24-alpine`. `@img/sharp-linuxmusl-x64`/`-arm64` both
   exist, so `npm install` needs no compiler, but sharp's own docs flag allocator fragmentation
   under musl for long-running processes — worth a `k6` soak test before relying on it at scale.
 - **Remote and default images get no thumbnail.** `thumbnailUrl` stays absent when `imageUrl` is a

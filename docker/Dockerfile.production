@@ -39,7 +39,7 @@
 # ────────────────────────────────────────────────────────────────────────────────────────────────
 # Stage 1 — build: install everything, then use it as a gate.
 # ────────────────────────────────────────────────────────────────────────────────────────────────
-FROM docker.io/library/node:25-alpine AS build
+FROM docker.io/library/node:24-alpine AS build
 
 WORKDIR /app
 
@@ -75,7 +75,7 @@ RUN npm run postinstall && npm run ts-check
 # ────────────────────────────────────────────────────────────────────────────────────────────────
 # Stage 2 — runtime: production dependencies, application source, and nothing else.
 # ────────────────────────────────────────────────────────────────────────────────────────────────
-FROM docker.io/library/node:25-alpine AS runtime
+FROM docker.io/library/node:24-alpine AS runtime
 
 # Chromium is OFF by default and it is a ~200 MB difference.
 #
