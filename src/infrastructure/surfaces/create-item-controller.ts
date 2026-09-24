@@ -28,17 +28,28 @@ export interface ItemControllerSpec {
     fetch: (id: string, request: Request) => Promise<unknown>;
     /** The i18n key answered when the id matches nothing, or is not an id at all. */
     notFoundKey: string;
+    /**
+     * Appended after `entity` in the generated operation name, in place of the default `'Item'` —
+     * for a second read-one on the same entity that would otherwise collide with the plain
+     * `get<Entity>Item`, e.g. `'Admin'` for `getProductAdmin`.
+     */
+    handlerSuffix?: string;
 }
 
 /**
  * Build a module's read-one controller.
  *
- * @param spec - the three things that differ per entity
+ * @param spec - the four things that differ per entity
  * @returns the express handler, named for the entity it reads
  */
-export const createItemController = ({ entity, fetch, notFoundKey }: ItemControllerSpec) => {
+export const createItemController = ({
+    entity,
+    fetch,
+    notFoundKey,
+    handlerSuffix
+}: ItemControllerSpec) => {
     // The name printed in stack traces, the request log line and `docs/modules/` — e.g. `getProductItem`.
-    const operation = operationName('get', entity, 'Item');
+    const operation = operationName('get', entity, handlerSuffix ?? 'Item');
 
     return namedHandler(operation, (request: Request, response: Response) => {
         // The module's own fetch — a miss answers `null`/`undefined`/`void`, never throws.
