@@ -166,7 +166,7 @@ const createEntry = (
             locale,
             tenant,
             ...input
-        } as Partial<LocaleEntryDocument>)
+        })
         .then((entry) => bumpRevision(locale).then((revision) => ({ entry, revision })));
 
 /** Change one entry's value, and bump. */

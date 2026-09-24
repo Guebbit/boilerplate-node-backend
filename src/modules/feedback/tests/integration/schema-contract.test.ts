@@ -20,7 +20,7 @@ describe('feedback request schema', () => {
     };
 
     it('serialises to id, never _id or __v', async () => {
-        const feedback = await feedbackRequestRepository.create(payload as never);
+        const feedback = await feedbackRequestRepository.create(payload);
 
         const serialized = feedback.toJSON() as Record<string, unknown>;
 

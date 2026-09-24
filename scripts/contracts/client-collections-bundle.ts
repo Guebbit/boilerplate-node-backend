@@ -199,7 +199,7 @@ const generate = (): GenerateResult =>
     generateCollections({
         spec: loadSpec(path.join(REPO_ROOT, 'openapi.yaml')),
         sections: sections(),
-        probes: PROBES as Record<string, Probe[]>,
+        probes: PROBES,
         values,
         collection: { name: COLLECTION_NAME },
         targets: COLLECTION_TOOLS

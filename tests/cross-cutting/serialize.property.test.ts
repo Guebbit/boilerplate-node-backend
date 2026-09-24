@@ -48,7 +48,7 @@ const documentKey = () => fc.string().filter((key) => key !== '__proto__');
 const documentLike = () =>
     fc
         .dictionary(documentKey(), fc.jsonValue(), { maxKeys: 8 })
-        .map((body) => ({ ...body }) as Record<string, unknown>);
+        .map((body) => ({ ...body }));
 
 const withReservedFields = () =>
     fc

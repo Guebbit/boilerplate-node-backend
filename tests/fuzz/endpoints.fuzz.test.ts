@@ -140,7 +140,7 @@ describe.each(
 
                 const response = await (body === undefined || body === null
                     ? request
-                    : request.send(body as object));
+                    : request.send(body));
 
                 // 1. No crash. This is the finding worth hunting: a spec-valid request that
                 //    reaches an unhandled throw.

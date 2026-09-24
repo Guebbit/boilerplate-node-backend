@@ -42,7 +42,7 @@ const makeOrderPayload = async () => {
 
 describe('order schema', () => {
     it('serialises to id, never _id or __v', async () => {
-        const order = await orderRepository.create((await makeOrderPayload()) as never);
+        const order = await orderRepository.create((await makeOrderPayload()));
 
         const serialized = order.toJSON() as Record<string, unknown>;
 
@@ -55,7 +55,7 @@ describe('order schema', () => {
         // `product.toObject()` in `makeOrderPayload` above is the FULL live product, `onHand`/
         // `reserved` included — this is what proves `orderLineProductSchema` has no path for
         // either, rather than merely relying on nobody setting them.
-        const order = await orderRepository.create((await makeOrderPayload()) as never);
+        const order = await orderRepository.create((await makeOrderPayload()));
 
         const serialized = order.toJSON() as { items: Record<string, unknown>[] };
 

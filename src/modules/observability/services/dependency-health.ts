@@ -26,7 +26,7 @@ export interface DependencyHealth {
  * `unavailable` rather than `connecting`: it is on its way out and will not start serving again,
  * so treating it as "nearly ready" would report a shutdown as a startup.
  */
-const DATABASE_STATES: Record<number, DependencyStatus> = {
+const DATABASE_STATES: Partial<Record<number, DependencyStatus>> = {
     0: 'unavailable',
     1: 'ready',
     2: 'connecting',
@@ -37,8 +37,7 @@ const DATABASE_STATES: Record<number, DependencyStatus> = {
  * Read every dependency's current state. No I/O — see this file's header.
  */
 export const dependencyHealth = (): DependencyHealth => ({
-    database:
-        (DATABASE_STATES[connection.readyState] as DependencyStatus | undefined) ?? 'unavailable',
+    database: DATABASE_STATES[connection.readyState] ?? 'unavailable',
     cache: cacheState(),
     queue: queueState()
 });

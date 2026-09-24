@@ -166,7 +166,7 @@ describe('an expired credential', () => {
             permissions: ['apikeys.any.read'],
             createdByUserId: 'irrelevant-for-this-check',
             expiresAt: new Date(Date.now() - 1000)
-        } as never);
+        });
 
         expect(await resolveCredential(plaintext)).toBeUndefined();
     });
@@ -182,7 +182,7 @@ describe('touchLastUsed', () => {
             hash,
             permissions: ['apikeys.any.read'],
             createdByUserId: 'irrelevant-for-this-check'
-        } as never);
+        });
         expect(apiKey.lastUsedAt).toBeUndefined();
 
         await apiKeyRepository.touchLastUsed(String(apiKey._id));

@@ -58,5 +58,5 @@ export const turnstileProvider: HumanChallengeProvider = {
         scriptUrl: 'https://challenges.cloudflare.com/turnstile/v0/api.js'
     }),
     verify: (token, remoteAddress) =>
-        siteverify(token, remoteAddress).catch(() => 'refused' as RungVerdict)
+        siteverify(token, remoteAddress).catch(() => 'refused')
 };

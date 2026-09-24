@@ -9,7 +9,7 @@ import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { makeUser, createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { userRepository } from '../../repository';
-import { TokenType, hashToken, type UserDocument } from '../../model';
+import { TokenType, hashToken } from '../../model';
 // The model directly: not exported from the barrel, since no sibling MODULE needs it there. A
 // spec reaching its own module's internals is correct — `eslint-plugin-boundaries` allows exactly
 // that.
@@ -20,7 +20,7 @@ setupTestDb();
 describe('userRepository', () => {
     describe('create', () => {
         it('inserts a new user and returns the Mongoose document', async () => {
-            const user = await userRepository.create(makeUser() as Partial<UserDocument>);
+            const user = await userRepository.create(makeUser());
 
             expect(user._id).toBeDefined();
             expect(user.email).toBe('user@example.com');

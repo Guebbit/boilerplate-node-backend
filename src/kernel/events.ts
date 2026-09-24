@@ -45,7 +45,7 @@ export const onDomainEvent = <TEventName extends DomainEventName>(
     handler: DomainEventHandler<TEventName>
 ): void => {
     const existing = handlers.get(name) ?? [];
-    existing.push(handler as (payload: never) => unknown);
+    existing.push(handler);
     handlers.set(name, existing);
 };
 

@@ -169,7 +169,7 @@ export const createRefreshToken = (
                     // Stamped HERE, at login, and nowhere else — see the TokenData doc above.
                     auth_time: Math.floor(Date.now() / 1000),
                     amr
-                } as TokenData,
+                },
                 getExpiryTime(remember)
             );
             return userService.tokenAdd(
@@ -209,7 +209,7 @@ export const recordRefreshTokenUse = (refreshToken: string): Promise<void> =>
  */
 export const createAccessToken = (refreshToken: string) =>
     verifyRefreshToken(refreshToken).then(({ id, auth_time: authTime, amr }) =>
-        signAccessToken({ id, auth_time: authTime, amr } as TokenData)
+        signAccessToken({ id, auth_time: authTime, amr })
     );
 
 /**
@@ -251,7 +251,7 @@ const reissueRotated = (
     userService.findByIdWithCredentials(id).then((user) => {
         if (!user || !isAuthenticatable(user)) throw new Error('User not found');
 
-        const claims = { id, auth_time: authTime, amr } as TokenData;
+        const claims = { id, auth_time: authTime, amr };
         const newRefreshToken = signRefreshToken(claims, Math.ceil(remainingMs / 1000));
 
         return userService

@@ -189,7 +189,7 @@ describe('getAuth', () => {
 
     it('attaches the identity of the user the token names', async () => {
         const resolved = { ...asAdmin('user-1'), username: 'tester', imageUrl: '/images/a.png' };
-        mockedVerifyAccessToken.mockResolvedValue(resolved as never);
+        mockedVerifyAccessToken.mockResolvedValue(resolved);
 
         const request = makeRequest({ authorization: 'Bearer valid.token' });
         await runUntilNext(getAuth, request, makeResponseStub());
@@ -214,7 +214,7 @@ describe('getAuth', () => {
 
     it('proceeds anonymously when the token is valid but the user no longer exists', async () => {
         // A deleted account holding a still-valid JWT must not be granted an identity.
-        mockedVerifyAccessToken.mockResolvedValue(undefined as never);
+        mockedVerifyAccessToken.mockResolvedValue(undefined);
 
         const request = makeRequest({ authorization: 'Bearer valid.token' });
         const next = await runUntilNext(getAuth, request, makeResponseStub());
@@ -249,7 +249,7 @@ describe('getAuth', () => {
         // their own router; an unmatched request in the first falls through Express to the
         // second. The JWT boundary must be hit once, not twice.
         const resolved = { ...asAdmin('user-1'), username: 'tester', imageUrl: '/images/a.png' };
-        mockedVerifyAccessToken.mockResolvedValue(resolved as never);
+        mockedVerifyAccessToken.mockResolvedValue(resolved);
 
         const request = makeRequest({ authorization: 'Bearer valid.token' });
         await runUntilNext(getAuth, request, makeResponseStub());
@@ -551,7 +551,7 @@ describe('requirePermissionViaCookie', () => {
     it('verifies the REFRESH token, not the access token', async () => {
         // The whole design decision: the cookie holds a refresh token, and verifying it against
         // the access-token secret would either always fail or, worse, accept the wrong audience.
-        mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser as never);
+        mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser);
 
         await runUntilNext(
             requirePermissionViaCookie(ADMIN_ONLY_KEY),
@@ -564,7 +564,7 @@ describe('requirePermissionViaCookie', () => {
     });
 
     it('admits an unrestricted caller and calls next exactly once', async () => {
-        mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser as never);
+        mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser);
 
         const next = await runUntilNext(
             requirePermissionViaCookie(ADMIN_ONLY_KEY),
@@ -578,7 +578,7 @@ describe('requirePermissionViaCookie', () => {
     it('populates authContext with the resolved caller', async () => {
         // Downstream handlers read the caller's keys; a context that arrives without them turns
         // an authorized request into a confusing 403 further down.
-        mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser as never);
+        mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser);
         const request = makeCookieRequest('cookie.jwt');
 
         await runUntilNext(requirePermissionViaCookie(ADMIN_ONLY_KEY), request, makeResponseStub());
@@ -590,7 +590,7 @@ describe('requirePermissionViaCookie', () => {
     it('rejects a valid session without the wildcard with 403', async () => {
         // The mutant that matters most: a key check forced to `true` would hand every logged-in
         // customer a document only the shop's staff may see.
-        mockedVerifyRefreshToken.mockResolvedValueOnce(asCustomer('user-1') as never);
+        mockedVerifyRefreshToken.mockResolvedValueOnce(asCustomer('user-1'));
         const response = makeResponseStub();
         const next = jest.fn();
 
@@ -607,7 +607,7 @@ describe('requirePermissionViaCookie', () => {
 
     it('rejects with 403 when the token is valid but the user is gone', async () => {
         // The resolver answers `undefined` — a deleted account holding a still-signed cookie.
-        mockedVerifyRefreshToken.mockResolvedValueOnce(undefined as never);
+        mockedVerifyRefreshToken.mockResolvedValueOnce(undefined);
         const response = makeResponseStub();
 
         requirePermissionViaCookie(ADMIN_ONLY_KEY)(
@@ -621,7 +621,7 @@ describe('requirePermissionViaCookie', () => {
     });
 
     it('records a forbidden attempt in the audit trail', async () => {
-        mockedVerifyRefreshToken.mockResolvedValueOnce(asCustomer('user-1') as never);
+        mockedVerifyRefreshToken.mockResolvedValueOnce(asCustomer('user-1'));
 
         requirePermissionViaCookie(ADMIN_ONLY_KEY)(
             makeCookieRequest('cookie.jwt'),
@@ -641,7 +641,7 @@ describe('requirePermissionViaCookie', () => {
 
     it('names the anonymous actor when the user could not be loaded', async () => {
         // `user?.id ?? 'anonymous'` — an audit row with an empty actor is a row nobody can act on.
-        mockedVerifyRefreshToken.mockResolvedValueOnce(undefined as never);
+        mockedVerifyRefreshToken.mockResolvedValueOnce(undefined);
 
         requirePermissionViaCookie(ADMIN_ONLY_KEY)(
             makeCookieRequest('cookie.jwt'),
@@ -713,7 +713,7 @@ describe('stillHoldsKeyViaCookie', () => {
     const adminUser = { ...asAdmin('admin-1'), username: 'root', imageUrl: '/images/root.png' };
 
     it('resolves true for a caller who still holds the key', async () => {
-        mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser as never);
+        mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser);
 
         await expect(
             stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', ADMIN_ONLY_KEY)
@@ -721,7 +721,7 @@ describe('stillHoldsKeyViaCookie', () => {
     });
 
     it('resolves false when the caller no longer holds the key', async () => {
-        mockedVerifyRefreshToken.mockResolvedValueOnce(asCustomer('user-1') as never);
+        mockedVerifyRefreshToken.mockResolvedValueOnce(asCustomer('user-1'));
 
         await expect(
             stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', ADMIN_ONLY_KEY)
@@ -729,7 +729,7 @@ describe('stillHoldsKeyViaCookie', () => {
     });
 
     it('resolves false when the token no longer names anyone', async () => {
-        mockedVerifyRefreshToken.mockResolvedValueOnce(undefined as never);
+        mockedVerifyRefreshToken.mockResolvedValueOnce(undefined);
 
         await expect(
             stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', ADMIN_ONLY_KEY)
@@ -747,7 +747,7 @@ describe('stillHoldsKeyViaCookie', () => {
     });
 
     it('audits the refusal the same way the connect-time guard does', async () => {
-        mockedVerifyRefreshToken.mockResolvedValueOnce(asCustomer('user-1') as never);
+        mockedVerifyRefreshToken.mockResolvedValueOnce(asCustomer('user-1'));
 
         await stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', ADMIN_ONLY_KEY);
 
@@ -761,7 +761,7 @@ describe('stillHoldsKeyViaCookie', () => {
     });
 
     it('does not audit a passing recheck', async () => {
-        mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser as never);
+        mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser);
 
         await stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', ADMIN_ONLY_KEY);
 

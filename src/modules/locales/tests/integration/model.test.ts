@@ -115,7 +115,7 @@ describe('baseLanguage', () => {
             baseLanguage: 'es',
             name: 'Portuguese',
             nativeName: 'Português'
-        } as Parameters<typeof localeRepository.create>[0]);
+        });
 
         expect(language.baseLanguage).toBe('pt');
     });

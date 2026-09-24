@@ -85,5 +85,5 @@ export const altchaProvider: HumanChallengeProvider = {
     // (`modules/antibot`'s own controller), never hard-coded in this adapter.
     publicParameters: (challengeUrl) => ({ challengeUrl }),
     issueChallenge: issue,
-    verify: (token) => check(token).catch(() => 'refused' as RungVerdict)
+    verify: (token) => check(token).catch(() => 'refused')
 };

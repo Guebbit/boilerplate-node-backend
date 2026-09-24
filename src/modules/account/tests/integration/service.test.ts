@@ -344,7 +344,7 @@ describe('login', () => {
         // `deletedAt: undefined` in the filter is the whole of this rule, and it is one key in an
         // object literal. Dropping it lets someone who deleted their account keep signing in —
         // and every other login test still passes, because they use live accounts.
-        await createLoginUser({ deletedAt: new Date() } as Partial<UserDocument>);
+        await createLoginUser({ deletedAt: new Date() });
 
         const response = asReject(await accountService.login('login@example.com', PLAIN_PASSWORD));
 

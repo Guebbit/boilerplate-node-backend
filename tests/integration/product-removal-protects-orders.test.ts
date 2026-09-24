@@ -98,9 +98,9 @@ describe('deactivating a product with a pending order against it', () => {
         const product = await createProduct({ onHand: 5 });
         const { orderId } = await placePendingOrder(product);
 
-        const toDeactivate = await readProduct(String(product._id));
+        // The id is enough; this fresh read only confirms the product exists first.
+        await readProduct(String(product._id));
         await productService.updateById(String(product._id), { active: false }, testCallerContext);
-        void toDeactivate; // the id is enough; the fresh read above already confirmed it exists
 
         const order = await readOrder(orderId);
         expect(order!.status).toBe('cancelled');

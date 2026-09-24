@@ -16,7 +16,7 @@ describe('product schema', () => {
     it('accepts a price of zero', async () => {
         // `required` on a Number rejects `undefined`, not `0`. A free product is legal, and a
         // truthiness-based guard would wrongly reject it.
-        const product = await productRepository.create({ title: 'Free', price: 0 } as never);
+        const product = await productRepository.create({ title: 'Free', price: 0 });
 
         expect(product.price).toBe(0);
     });

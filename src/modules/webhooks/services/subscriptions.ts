@@ -137,7 +137,7 @@ export const create = (
                 eventTypes: body.eventTypes,
                 ownerUserId: context.caller.id ?? undefined,
                 secrets: [entry]
-            } as Partial<WebhookSubscriptionDocument>)
+            })
             .then((subscription) => finalizeCreate(subscription, plaintext, tenant, context));
     });
 };

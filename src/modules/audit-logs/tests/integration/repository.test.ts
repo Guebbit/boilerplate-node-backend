@@ -23,7 +23,7 @@ const makeEntry = (overrides: Partial<AuditEntry> = {}): Partial<AuditLogDocumen
         timestamp: new Date('2026-08-01T10:00:00.000Z'),
         level: 'info',
         ...overrides
-    }) as Partial<AuditLogDocument>;
+    });
 
 /*
  * Every fixture below uses `coreAuditActions`, never a domain's.

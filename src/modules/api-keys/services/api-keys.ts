@@ -21,7 +21,6 @@ import { holdsKey } from '@kernel/ability';
 import { findKey } from '@kernel/permissions';
 import type { Caller } from '@types';
 import type { MintApiKeyRequest, ApiKeyCreated, ApiKey } from '@types';
-import type { ApiKeyDocument } from '../model';
 import { apiKeyRepository } from '../repository';
 import { mintApiKey, displayIdOf } from '../credentials';
 import { apiKeysAuditActions } from '../audit';
@@ -109,7 +108,7 @@ export const mint = (
             // reached, so `id` is never the stranger case `Caller` otherwise allows for.
             createdByUserId: context.caller.id!,
             expiresAt: body.expiresAt ? new Date(body.expiresAt) : undefined
-        } as Partial<ApiKeyDocument>)
+        })
         .then((apiKey) => {
             recordAudit(context, {
                 action: apiKeysAuditActions.ADMIN_API_KEY_MINTED,

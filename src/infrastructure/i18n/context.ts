@@ -68,6 +68,7 @@ export const getLocaleContext = (): LocaleContext | undefined => localeStorage.g
  */
 export const getCurrentLocale = (): string =>
     localeStorage.getStore()?.locale ??
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- i18next types `language` as `string`, but it is `undefined` until `init` has run
     (i18next.language as string | undefined) ??
     getDefaultLocale();
 

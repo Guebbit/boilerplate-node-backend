@@ -66,7 +66,7 @@ export const createLanguage = (
                 nativeName: payload.nativeName.trim(),
                 direction: payload.direction ?? LocaleDirection.ltr,
                 active: payload.active ?? true
-            } as Partial<LocaleDocument>)
+            })
             .then((language) => {
                 recordAudit(context, {
                     action: localeAuditActions.ADMIN_LOCALE_CREATED,

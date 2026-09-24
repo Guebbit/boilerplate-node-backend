@@ -18,9 +18,9 @@ describe('cart schema', () => {
     it('refuses a second cart for the same user', async () => {
         // The unique index, not a convention every write path has to remember.
         const user = await createUser({ email: 'twice@example.com' });
-        await cartRepository.create({ userId: user._id } as never);
+        await cartRepository.create({ userId: user._id });
         await cartModel.syncIndexes();
 
-        await expect(cartRepository.create({ userId: user._id } as never)).rejects.toThrow();
+        await expect(cartRepository.create({ userId: user._id })).rejects.toThrow();
     });
 });

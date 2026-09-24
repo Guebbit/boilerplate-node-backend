@@ -19,8 +19,7 @@ import {
     addRegexFilter,
     toSearchPattern,
     DEFAULT_SORT,
-    type PaginatedMeta,
-    type PaginationInput
+    type PaginatedMeta
 } from './search';
 import { trackDatabaseQuery } from './metrics';
 import type { SerializeTransform } from './serialize';
@@ -366,7 +365,7 @@ export function createRepository<TDocument extends Document, TWire>(
         // one document on two pages — see `DEFAULT_SORT`.
         sort: Record<string, 1 | -1> = DEFAULT_SORT
     ): Promise<PaginatedResult<TWire>> => {
-        const pagination = normalizePagination(filters as PaginationInput);
+        const pagination = normalizePagination(filters);
         // `scope` is the caller's authorization boundary (own rows, publicly visible rows), which
         // no client-supplied filter may widen — so both must hold, under `$and`. A spread would
         // let one side's key replace the other's: two `$or`s, and one is silently dropped.

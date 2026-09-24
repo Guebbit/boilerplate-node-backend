@@ -32,7 +32,7 @@ export const tenantRepository = {
             )
             // `upsert: true` + `returnDocument: 'after'` guarantee a document — found or just
             // created — so this can never resolve `null` the way a plain `findOneAndUpdate` can.
-            .exec() as Promise<TenantDocument>
+            .exec()
 };
 
 /** The membership collection's queries — who holds which role, where. */
@@ -64,7 +64,7 @@ export const membershipRepository = {
             )
             // `upsert: true` + `returnDocument: 'after'` guarantee a document — found or just
             // created — so this can never resolve `null` the way a plain `findOneAndUpdate` can.
-            .exec() as Promise<MembershipDocument>,
+            .exec(),
 
     /** Remove one row by its own id. */
     deleteById: (id: MembershipDocument['_id']): Promise<{ deletedCount?: number }> =>

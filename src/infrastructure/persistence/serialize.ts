@@ -55,6 +55,7 @@ export const applySerialization = (
     const transform: SerializeTransform = (serialized) => {
         if (dropId) delete serialized._id;
         else if (serialized._id) {
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- the narrower type is what tells `no-base-to-string` an ObjectId stringifies to its hex, not `[object Object]`
             serialized.id = String(serialized._id as { toString(): string });
             delete serialized._id;
         }
@@ -75,7 +76,7 @@ export const applySerialization = (
          * One `as`, not `as unknown as`: Mongoose hands the transform `{ _id, __v? }`, a
          * *narrower* type than the serializer's string-keyed bag — widening it is a single step.
          */
-        transform: (_document, serialized) => transform(serialized as Record<string, unknown>)
+        transform: (_document, serialized) => transform(serialized)
     });
 
     return transform;

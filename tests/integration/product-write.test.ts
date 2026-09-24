@@ -14,14 +14,13 @@ import type { ProductDocument } from '@modules/products';
 import { translationRepository } from '@modules/locales/repository';
 import { givenLocale } from '@modules/locales/tests/factories';
 import { localeService } from '@modules/locales/services';
-import { enabledModules } from '../../src/modules';
+// Imported for its side effect: loading the module list runs `locales/module.ts`'s import-time
+// `registerTranslationPort` — the only legal way `products` reaches translation data.
+import '../../src/modules';
 
 setupTestDb();
 
 beforeAll(() => {
-    // Importing the module list runs `locales/module.ts`'s import-time `registerTranslationPort`
-    // — the only legal way `products` reaches translation data, per the module boundary.
-    void enabledModules;
     localeService.setTranslatables({
         product: { collection: 'products', fields: ['title', 'description'], cacheTag: 'products' }
     });

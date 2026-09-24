@@ -51,7 +51,7 @@ const makeEntry = (overrides: Partial<AuditEntry> = {}): AuditEntry =>
         timestamp: new Date('2026-08-01T10:00:00.000Z'),
         level: 'info',
         ...overrides
-    }) as AuditEntry;
+    });
 
 describe('auditLogService.record', () => {
     it('hands the entry to the repository unchanged', () => {

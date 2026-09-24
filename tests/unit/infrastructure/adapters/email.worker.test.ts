@@ -63,7 +63,7 @@ describe('handleEmailJob', () => {
     } as Parameters<typeof handleEmailJob>[0];
 
     it('sends the job and acks it', async () => {
-        mockedMailer.mockResolvedValue(undefined as never);
+        mockedMailer.mockResolvedValue(undefined);
 
         await expect(handleEmailJob(job)).resolves.toBe(true);
         // The producer resolved the copy before publishing, so the worker forwards `data`
@@ -73,7 +73,7 @@ describe('handleEmailJob', () => {
     });
 
     it('defaults absent template data to an empty object rather than passing undefined', async () => {
-        mockedMailer.mockResolvedValue(undefined as never);
+        mockedMailer.mockResolvedValue(undefined);
 
         await handleEmailJob({ request: job.request, templateName: 'welcome' });
 
@@ -127,7 +127,7 @@ describe('handleEmailJob', () => {
         } as Parameters<typeof handleEmailJob>[0];
 
         it('discards it once the send succeeds', async () => {
-            mockedMailer.mockResolvedValue(undefined as never);
+            mockedMailer.mockResolvedValue(undefined);
 
             await handleEmailJob(withAttachment);
 
@@ -138,7 +138,7 @@ describe('handleEmailJob', () => {
             await handleEmailJob({
                 request: { to: '', attachments: [{ filename: 'x.pdf', key: 'a.pdf' }] },
                 templateName: 'welcome'
-            } as Parameters<typeof handleEmailJob>[0]);
+            });
 
             expect(discardSpooledMock).toHaveBeenCalledWith('a.pdf');
         });

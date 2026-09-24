@@ -224,7 +224,7 @@ export const readInput = <TId extends string = never>(
     const values: Record<RequestInputSource, Record<string, unknown>> = {
         params: request.params,
         body: bodyRecordOf(request),
-        query: request.query as Record<string, unknown>
+        query: request.query
     };
     const sources = SURFACE_SOURCES[declaration.surface].map((source) =>
         decodes && stringTransport[source] ? decode(values[source]) : values[source]
