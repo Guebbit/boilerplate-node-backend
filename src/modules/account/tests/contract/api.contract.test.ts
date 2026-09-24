@@ -176,7 +176,9 @@ describe('PUT /account', () => {
         // The account keeps its current, proven address until the new one is confirmed.
         expect(response.body.data.email).toBe(user.email);
         expect(response.body.data.pendingEmail).toBe('fresh-address@example.com');
-        expect(response.body.data.verifiedAt).toBeDefined();
+        // Still verified, at the same instant: an unconfirmed new address must not unverify the
+        // proven one it has not yet replaced.
+        expect(response.body.data.verifiedAt).toBe(user.verifiedAt!.toISOString());
         expect(response).toSatisfyApiSpec();
     });
 
@@ -357,7 +359,12 @@ describe('POST /account/password', () => {
         expect(response.status).toBe(200);
         expect(response.body.data).toBeUndefined();
         expect(response).toSatisfyApiSpec();
-        expect(loggedWarn).toHaveBeenCalled();
+        expect(loggedWarn).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: 'Password changed, but the session re-mint failed.',
+                userId: expect.any(String)
+            })
+        );
         jest.restoreAllMocks();
     });
 });
@@ -673,7 +680,7 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
             .get('/account/refresh')
             .set('Cookie', cookieHeader(response, 'jwt'));
         expect(refresh.status).toBe(200);
-        expect(refresh.body.data.token).toBeDefined();
+        expect(refresh.body.data.token).toEqual(expect.any(String));
     });
 
     /*
@@ -754,9 +761,9 @@ describe('PUT /account (email change) and /account/email-change-confirm', () => 
 
         expect(response.status).toBe(200);
         // The old address gets a warning, not a receipt — sent at request time, not on swap.
-        expect(mailTo(user.email)).toBeDefined();
+        expect(mailTo(user.email)?.[1]).toBe('account.email-change-notice');
         // The new address gets the token-bearing link.
-        expect(mailTo('new-address@example.com')).toBeDefined();
+        expect(mailTo('new-address@example.com')?.[1]).toBe('account.verify-request');
     });
 
     it('confirming the token swaps pendingEmail into email and re-verifies the account', async () => {

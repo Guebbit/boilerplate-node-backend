@@ -117,7 +117,12 @@ describe('recordShipment', () => {
         expect(template).toBe('delivery.shipment-shipped');
         // Fallback name policy: `username ?? email`, and no username was ever resolved.
         expect(data?.greeting).toContain(order.email);
-        expect(loggedError).toHaveBeenCalled();
+        expect(loggedError).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: 'Buyer lookup failed; mailing the order with the fallback name.',
+                orderId: String(order._id)
+            })
+        );
     });
 
     it('refuses an order that is not processing', async () => {

@@ -118,10 +118,18 @@ describe('GET /orders', () => {
 
     it('matches the contract for a scoped caller, limited to their own orders', async () => {
         const { bearer, user } = await authenticateAs('user');
-        await seedOrderFor(user);
+        const own = await seedOrderFor(user);
+        // Someone else's order in the same collection: the scope is only proven by its absence.
+        const stranger = await createUser({ email: 'stranger@example.com', username: 'stranger' });
+        await seedOrderFor(stranger);
+
         const response = await api().get('/orders').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
+        expect(response.body.data.items.map((o: { id: string }) => o.id)).toEqual([
+            String(own._id)
+        ]);
+        expect(response.body.data.meta.totalItems).toBe(1);
         expect(response).toSatisfyApiSpec();
     });
 

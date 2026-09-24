@@ -93,8 +93,11 @@ describe('runScript', () => {
         );
 
         expect(process.exitCode).toBe(1);
-        expect(mockError).toHaveBeenCalled();
-        expect(mockWarn).toHaveBeenCalled();
+        // Each failure reported as what it was: the body's as the error, cleanup's as a warning.
+        expect(mockError).toHaveBeenCalledWith(expect.objectContaining({ error: 'boom' }));
+        expect(mockWarn).toHaveBeenCalledWith(
+            expect.objectContaining({ error: 'and cleanup too' })
+        );
     });
 
     it('reports a non-Error throw without crashing on `.message`', async () => {

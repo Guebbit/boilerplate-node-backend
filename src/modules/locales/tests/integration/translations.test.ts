@@ -8,7 +8,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct, readProduct } from '@modules/products/tests/factories';
-import { translationRepository } from '@modules/locales/repository';
+import { deriveSourceDigest, translationRepository } from '@modules/locales/repository';
 import { givenLocale } from '@modules/locales/tests/factories';
 import { localeService } from '@modules/locales/services';
 
@@ -239,7 +239,8 @@ describe('upsertEntityTranslations', () => {
         const itRow = rows.find((row) => row.locale === 'it');
 
         expect(fallbackRow?.sourceDigest).toBeUndefined();
-        expect(itRow?.sourceDigest).toBeDefined();
+        // A digest OF THE FALLBACK ROW, not merely some digest.
+        expect(itRow?.sourceDigest).toBe(deriveSourceDigest({ title: 'Bed' }));
     });
 
     it('does not re-stamp a sibling row when the fallback locale is rewritten in a later request', async () => {

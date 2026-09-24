@@ -355,7 +355,12 @@ describe('cancelById — the bank-transfer-expired email', () => {
         const [envelope, template] = mockEnqueueEmail.mock.calls[0];
         expect(envelope.to).toBe(order.email);
         expect(template).toBe('orders.order-transfer-expired');
-        expect(loggedError).toHaveBeenCalled();
+        expect(loggedError).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: 'Buyer lookup failed; mailing the order with the fallback name.',
+                orderId: String(order._id)
+            })
+        );
     });
 });
 

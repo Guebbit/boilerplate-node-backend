@@ -168,7 +168,7 @@ describe('updateProfile', () => {
 
         expect(response.data.email).toBe('before@example.com');
         expect(response.data.pendingEmail).toBe('after@example.com');
-        expect(response.data.verifiedAt).toBeTruthy();
+        expect(response.data.verifiedAt).toEqual(user.verifiedAt);
     });
 
     it('keeps the verification when the email is restated unchanged', async () => {
@@ -178,7 +178,7 @@ describe('updateProfile', () => {
             await updateProfile(user.id, { email: 'same@example.com' }, testCallerContext)
         );
 
-        expect(response.data.verifiedAt).toBeTruthy();
+        expect(response.data.verifiedAt).toEqual(user.verifiedAt);
         expect(response.data.pendingEmail).toBeUndefined();
     });
 

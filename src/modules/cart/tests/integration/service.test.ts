@@ -1071,7 +1071,10 @@ describe('productRemoveFromCartsById', () => {
         });
 
         expect(settled).toBe(false);
-        expect(loggedError).toHaveBeenCalled();
+        expect(loggedError).toHaveBeenCalledWith(
+            `Domain event handler failed for "${PRODUCT_DELETED}"`,
+            expect.objectContaining({ message: 'write conflict' })
+        );
         resetDomainEvents();
     });
 });

@@ -132,7 +132,7 @@ describe('verifyRefreshToken', () => {
         await user.tokenAdd(TokenType.REFRESH, 3_600_000, token);
 
         // Precondition: it works before revocation, so the assertion below cannot pass vacuously.
-        await expect(verifyRefreshToken(token)).resolves.toBeDefined();
+        await expect(verifyRefreshToken(token)).resolves.toMatchObject({ id: String(user._id) });
 
         await user.tokenRemoveAll(TokenType.REFRESH);
 

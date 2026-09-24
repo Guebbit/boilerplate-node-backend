@@ -70,7 +70,11 @@ describe('emitDomainEvent', () => {
         onDomainEvent('test.thing-happened', () => Promise.reject(new Error('async boom')));
 
         await expect(emitDomainEvent('test.thing-happened', { id: 'abc' })).resolves.toBe(false);
-        expect(logger.error).toHaveBeenCalled();
+        // The rejection itself is what gets logged, not a generic "something failed".
+        expect(logger.error).toHaveBeenCalledWith(
+            expect.stringContaining('test.thing-happened'),
+            expect.objectContaining({ message: 'async boom' })
+        );
     });
 
     it('reports true when every handler resolves', async () => {

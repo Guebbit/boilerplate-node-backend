@@ -256,7 +256,7 @@ describe('renderInvoicePdf — the TTL cache', () => {
 
         await expect(renderInvoicePdf('order-1')).resolves.toEqual(Buffer.from('fresh-bytes'));
 
-        expect(renderHtmlToPdfMock).toHaveBeenCalled();
+        expect(renderHtmlToPdfMock).toHaveBeenCalledTimes(1);
         await expect(fileExists(cache.pathFor('order-1'))).resolves.toBe(true);
     });
 
@@ -270,7 +270,7 @@ describe('renderInvoicePdf — the TTL cache', () => {
 
         await expect(renderInvoicePdf('order-1')).resolves.toEqual(Buffer.from('fresh-bytes'));
 
-        expect(renderHtmlToPdfMock).toHaveBeenCalled();
+        expect(renderHtmlToPdfMock).toHaveBeenCalledTimes(1);
     });
 
     it('answers undefined without writing a cache entry for an order that no longer exists', async () => {

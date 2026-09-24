@@ -253,7 +253,18 @@ describe('create', () => {
         expect(template).toBe('orders.order-confirm');
         // The fallback name policy: `username ?? email`, and no username was ever resolved.
         expect(data?.greeting).toContain(user.email);
-        expect(loggedError).toHaveBeenCalled();
+        // Both lookups failed, and each says so — the pricing one and the mail one.
+        expect(loggedError).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: 'Buyer lookup failed while pricing a new order; using the default locale.'
+            })
+        );
+        expect(loggedError).toHaveBeenCalledWith(
+            expect.objectContaining({
+                message: 'Buyer lookup failed; mailing the order with the fallback name.',
+                orderId: String(asSuccess(result).data._id)
+            })
+        );
     });
 });
 
