@@ -2,8 +2,8 @@
  * @module
  * Route mounting. Modules mount themselves: each declares its `basePath` and router in its
  * manifest, and this install walks `enabledModules` without knowing a single domain name. The one
- * explicit import is `system-routes`, which is not a domain — it serves the contract, the docs and
- * the root redirect, none of which belong to anybody's business logic.
+ * explicit import is `system-routes`, which is not a domain — it serves the root ping, which
+ * belongs to nobody's business logic.
  */
 
 import type { Express, Request, Response } from 'express';
@@ -25,10 +25,11 @@ export const installRoutes = (app: Express): void => {
     /**
      * Registered modules, each at the base path its own manifest declares.
      *
-     * A module without a router is skipped rather than treated as an error: `audit-logs` owns a
-     * collection and no URL. `basePath` and `routes` are meaningless apart, so both are required
-     * here — a manifest carrying one without the other serves nothing, which is what a router with
-     * no mount point was always going to do.
+     * A module without a router is skipped rather than treated as an error: `access` owns the
+     * membership/role assignment data and no URL of its own — every route that touches it goes
+     * through `account`, `api-keys` or `users` instead. `basePath` and `routes` are meaningless
+     * apart, so both are required here — a manifest carrying one without the other serves nothing,
+     * which is what a router with no mount point was always going to do.
      */
     for (const { basePath, routes } of enabledModules)
         if (basePath && routes) app.use(basePath, routes);

@@ -120,7 +120,8 @@ export const installSecurity = (app: Express): void => {
      * `0` is legitimate for the compose stack, which publishes the API
      * directly — so this warns rather than refusing to boot. But a production deployment behind a
      * reverse proxy with hops left at the default is either correct or catastrophic for the rate
-     * limiter, and today that's silent either way.
+     * limiter, and the warning below reads the same either way — nothing here can tell which one
+     * this deployment is.
      */
     if (trustProxyHops === 0 && process.env.NODE_ENV === 'production')
         // Stryker disable all

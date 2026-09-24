@@ -1,8 +1,8 @@
 /**
  * @module
- * System-level routes that serve the process itself rather than a domain: the root ping, and
- * (mounted alongside it by `app/routes.ts`) the contract/docs endpoints. Kept out of
- * `src/modules` because it belongs to nobody's business logic.
+ * System-level routes that serve the process itself rather than a domain: the root ping, mounted
+ * at `/` by `app/routes.ts`. Kept out of `src/modules` because it belongs to nobody's business
+ * logic.
  */
 
 import { Router } from 'express';

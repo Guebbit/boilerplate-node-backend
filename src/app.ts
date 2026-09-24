@@ -179,9 +179,10 @@ export const stopServer = () => {
 };
 
 /*
- * Validate the module registry and attach every module's domain-event handlers before the first
- * route exists. A cycle or a missing dependency stops the boot here, with the offending path named,
- * rather than surfacing as a 500 on whichever request happens to cross the gap first.
+ * Validate every module's required config and attach its domain-event handlers before the first
+ * route exists. A missing, too-short or still-placeholder variable stops the boot here, every
+ * offending name reported at once, rather than surfacing as a 500 on whichever request needs it
+ * first.
  */
 registerModules(enabledModules, APP_NON_MODULE_CHECKS);
 
