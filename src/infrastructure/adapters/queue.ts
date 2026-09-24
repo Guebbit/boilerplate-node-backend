@@ -401,17 +401,12 @@ const JOB_PRIORITY_VALUES: Record<JobPriority, number> = { normal: 0, high: 1 };
  *
  * @param ch - the channel to declare on
  * @param queue - the work queue
- * @param durable - whether the definitions survive a broker restart
- * @param retryDelaySeconds - this queue's retry delay, always {@link defaultRetryDelaySeconds} —
- *   there is no per-consumer override, which is what keeps every caller trivially agreeing
  */
-const assertJobQueue = (
-    ch: ConfirmChannel,
-    queue: string,
-    durable: boolean,
-    retryDelaySeconds: number
-): Promise<void> => {
+const assertJobQueue = (ch: ConfirmChannel, queue: string): Promise<void> => {
     const retryQueue = retryQueueOf(queue);
+    // Always {@link defaultRetryDelaySeconds} — there is no per-consumer override, which is what
+    // keeps producer and consumer trivially agreeing (see the docblock above).
+    const retryDelaySeconds = defaultRetryDelaySeconds();
 
     return ch
         .assertExchange(DEAD_LETTER_EXCHANGE, 'direct', { durable: true })
@@ -427,8 +422,9 @@ const assertJobQueue = (
         .then(() => ch.bindQueue(retryQueue, DEAD_LETTER_EXCHANGE, retryQueue))
         .then(() =>
             ch.assertQueue(queue, {
-                // `durable` = the queue definition survives a broker restart.
-                durable,
+                // `durable` = the queue definition survives a broker restart. Every work queue
+                // gets it — no caller has ever asked for a transient one.
+                durable: true,
                 deadLetterExchange: DEAD_LETTER_EXCHANGE,
                 deadLetterRoutingKey: retryQueue,
                 // `x-max-priority`: the ceiling `JOB_PRIORITY_VALUES` publishes against. Every
@@ -450,10 +446,6 @@ export interface PublishOptions<TPayload = unknown> {
     queue: string;
     /** Message payload (will be JSON-serialized). */
     payload: TPayload;
-    /** Make queue survive broker restarts. Default: true. */
-    durable?: boolean;
-    /** Make message persistent. Default: true. */
-    persistent?: boolean;
     /** How eagerly the broker should deliver this ahead of others waiting on the same queue. Default: `'normal'`. */
     priority?: JobPriority;
 }
@@ -496,11 +488,9 @@ export const publishToQueue = <TPayload = unknown>(
     const ch = getChannel();
     if (!ch) return Promise.resolve(false);
 
-    // Destructure with defaults here (rather than in the interface) so both call paths —
-    // explicit options and omitted options — go through the same durable-by-default choice.
-    const { queue, payload, durable = true, persistent = true, priority = 'normal' } = options;
+    const { queue, payload, priority = 'normal' } = options;
 
-    return assertJobQueue(ch, queue, durable, defaultRetryDelaySeconds())
+    return assertJobQueue(ch, queue)
         .then(
             () =>
                 new Promise<boolean>((resolve) => {
@@ -521,9 +511,10 @@ export const publishToQueue = <TPayload = unknown>(
                         Buffer.from(JSON.stringify(payload)),
                         {
                             // `persistent` = the *message* is written to disk. Both this and a
-                            // `durable` queue are required to survive a restart: a durable
-                            // queue with transient messages comes back empty.
-                            persistent,
+                            // durable queue are required to survive a restart: a durable queue
+                            // with transient messages comes back empty. Every job publishes
+                            // persistent — no caller has ever asked for a transient one.
+                            persistent: true,
                             priority: JOB_PRIORITY_VALUES[priority]
                         },
                         (error: unknown) => {
@@ -558,8 +549,6 @@ export interface ConsumeOptions<TPayload = unknown> {
      * the handler to defend itself.
      */
     schema?: ZodType;
-    /** Make queue survive broker restarts. Default: true. */
-    durable?: boolean;
     /** Number of unacknowledged messages allowed at once. Default: 1. */
     prefetch?: number;
 }
@@ -773,17 +762,12 @@ const bindConsumer = <TPayload>(
     ch: ConfirmChannel,
     options: ConsumeOptions<TPayload>
 ): Promise<void> => {
-    const { queue, handler, schema, durable = true, prefetch = 1 } = options;
-    // Deployment-wide, not per-consumer: `publishToQueue` always asserts the retry queue with
-    // {@link defaultRetryDelaySeconds}, so a consumer declaring a different one would fail
-    // `assertQueue` outright the moment both sides had registered (a redeclaration must match
-    // byte-for-byte — see `assertJobQueue`'s own docblock). `ModuleConsumer` in
-    // `kernel/registry.ts` never had a way to pass one anyway, so nothing ever exercised this.
+    const { queue, handler, schema, prefetch = 1 } = options;
     const maxAttempts = defaultMaxAttempts();
 
     return (
         // Same idempotent declaration as on the publish side — the consumer may boot first.
-        assertJobQueue(ch, queue, durable, defaultRetryDelaySeconds())
+        assertJobQueue(ch, queue)
             // `prefetch` (AMQP basic.qos) caps unacked messages per consumer. With 1, the broker
             // hands over the next message only after the current one is acked, which gives fair
             // round-robin across replicas instead of one worker hoarding a batch.
