@@ -576,17 +576,17 @@ export const adjust = (
          * separates them, so a product deleted between the check and this write reports 404
          * rather than a misleading stock conflict.
          */
-        onFailure: async (id) => {
-            const stillThere = await productService.findByIdRaw(id);
-            if (!stillThere) return generateReject(404, [t('inventory.product-not-found')]);
+        onFailure: (id) =>
+            productService.findByIdRaw(id).then((stillThere) => {
+                if (!stillThere) return generateReject(404, [t('inventory.product-not-found')]);
 
-            return generateReject(409, [
-                {
-                    code: 'INVENTORY_BELOW_RESERVED',
-                    message: t('inventory.below-reserved')
-                }
-            ]);
-        },
+                return generateReject(409, [
+                    {
+                        code: 'INVENTORY_BELOW_RESERVED',
+                        message: t('inventory.below-reserved')
+                    }
+                ]);
+            }),
         auditAction: inventoryAuditActions.ADMIN_STOCK_ADJUSTED,
         buildAuditMetadata: (level) => ({ delta, note, onHand: level.onHand }),
         successMessageKey: 'inventory.adjust-success'
