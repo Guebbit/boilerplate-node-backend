@@ -69,7 +69,9 @@ export const recordOfflinePayment = async (
     // A card charge already at the provider: recording money by hand too could charge the
     // customer twice once that charge resolves on its own.
     if (existing && IN_FLIGHT_CARD_STATUSES.has(existing.status))
-        return generateReject(409, [{ code: 'PAYMENT_IN_FLIGHT', message: t('payments.in-flight') }]);
+        return generateReject(409, [
+            { code: 'PAYMENT_IN_FLIGHT', message: t('payments.in-flight') }
+        ]);
 
     const payerId = await resolvePayerId(order.userId ? String(order.userId) : undefined);
     const payment = await paymentRepository.upsertOffline(orderId, payerId, {

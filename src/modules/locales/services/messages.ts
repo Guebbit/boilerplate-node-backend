@@ -73,10 +73,13 @@ export const readApiOverrides = (): Promise<Record<string, Record<string, unknow
                 overrides[locale] = buildMessageTree(entries);
             } catch (error) {
                 // Stryker disable all
-                logger.warn('readApiOverrides - skipping a language whose keys cannot form a tree', {
-                    locale,
-                    error
-                });
+                logger.warn(
+                    'readApiOverrides - skipping a language whose keys cannot form a tree',
+                    {
+                        locale,
+                        error
+                    }
+                );
                 // Stryker restore all
             }
         }

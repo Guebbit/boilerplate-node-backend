@@ -165,9 +165,7 @@ export const callerScope = (context?: AuthContext) => accessibleFilter(context, 
  * @param scope - which rows this caller may read ({@link callerScope}); inactive languages are
  *   only in reach of the admin surface
  */
-export const listCapabilities = (
-    scope?: Record<string, unknown>
-): Promise<LocaleCapabilities> =>
+export const listCapabilities = (scope?: Record<string, unknown>): Promise<LocaleCapabilities> =>
     readDynamicTier(scope).then(({ languages, entryCounts }) => ({
         locales: mergeCapabilities(listSupportedLocales(), languages, entryCounts),
         default: getDefaultLocale(),

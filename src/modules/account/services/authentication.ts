@@ -85,7 +85,11 @@ export const requestAccountDeletion = (user: UserDocument, context: CallerContex
          * The recipient's OWN language, the request's only as fallback. What reaches the queue is
          * finished text, so the worker that sends it has no locale to work from and needs none.
          */
-        const mail = deleteRequestEmail(recipientLocale(user.locale, context), user.username, token);
+        const mail = deleteRequestEmail(
+            recipientLocale(user.locale, context),
+            user.username,
+            token
+        );
         // High priority: a token-bearing link the user is actively waiting on, not a notification.
         void sendAccountMail(user.email, mail);
     });
@@ -628,7 +632,9 @@ export const verifyOwnPassword = (
             return bcrypt
                 .compare(password, user.password)
                 .then((doMatch) =>
-                    doMatch ? generateSuccess<UserDocument>(user) : generateReject(422, [t(wrongKey)])
+                    doMatch
+                        ? generateSuccess<UserDocument>(user)
+                        : generateReject(422, [t(wrongKey)])
                 );
         });
 

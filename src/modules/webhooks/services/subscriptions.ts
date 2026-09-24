@@ -204,16 +204,18 @@ export const remove = (
     id: string,
     context: TenantCallerContext
 ): Promise<ResponseSuccess<undefined> | ResponseReject> =>
-    webhookSubscriptionRepository.findByIdInTenant(id, context.caller.tenantId).then((subscription) => {
-        if (!subscription) return generateReject(404, [t('generic.error-not-found')]);
+    webhookSubscriptionRepository
+        .findByIdInTenant(id, context.caller.tenantId)
+        .then((subscription) => {
+            if (!subscription) return generateReject(404, [t('generic.error-not-found')]);
 
-        return webhookSubscriptionRepository.deleteOne(subscription).then(() => {
-            recordAudit(context, {
-                action: webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_DELETED,
-                outcome: 'success',
-                target_type: 'webhook_subscription',
-                target_id: id
+            return webhookSubscriptionRepository.deleteOne(subscription).then(() => {
+                recordAudit(context, {
+                    action: webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_DELETED,
+                    outcome: 'success',
+                    target_type: 'webhook_subscription',
+                    target_id: id
+                });
+                return generateSuccess(undefined);
             });
-            return generateSuccess(undefined);
         });
-    });

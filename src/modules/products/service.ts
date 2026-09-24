@@ -145,18 +145,21 @@ const searchWithTranslatedText = (
     const ownMatch = productRepository.buildWhere({ text, title });
 
     const candidates = localeCandidatesFor(getCurrentLocale());
-    return searchTranslatedEntityIds('product', TRANSLATABLE_SEARCH_FIELDS, pattern, candidates).then(
-        (translatedIds) => {
-            const union =
-                translatedIds.length === 0
-                    ? ownMatch
-                    : {
-                          $or: [ownMatch, { _id: { $in: translatedIds.map((id) => toObjectId(id)) } }]
-                      };
+    return searchTranslatedEntityIds(
+        'product',
+        TRANSLATABLE_SEARCH_FIELDS,
+        pattern,
+        candidates
+    ).then((translatedIds) => {
+        const union =
+            translatedIds.length === 0
+                ? ownMatch
+                : {
+                      $or: [ownMatch, { _id: { $in: translatedIds.map((id) => toObjectId(id)) } }]
+                  };
 
-            return productRepository.search(rest, { ...scope, ...union });
-        }
-    );
+        return productRepository.search(rest, { ...scope, ...union });
+    });
 };
 
 /**

@@ -35,11 +35,7 @@ export const router = Router();
  * browser's `EventSource`, which can't set a header and so uses the session cookie; the scrape
  * endpoint is hit by Prometheus, which can't log in and so uses a static credential.
  */
-router.get(
-    '/events',
-    requirePermissionViaCookie(OBSERVABILITY_READ_KEY),
-    getObservabilityEvents
-);
+router.get('/events', requirePermissionViaCookie(OBSERVABILITY_READ_KEY), getObservabilityEvents);
 
 router.get('/metrics', isMetricsScraper, getObservabilityMetrics);
 

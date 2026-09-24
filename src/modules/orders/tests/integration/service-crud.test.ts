@@ -264,7 +264,11 @@ describe('getById', () => {
 
         // 2 lines, 3 units, 2×25 + 1×10 = 60.
         expect(scoped?.toJSON()).toMatchObject({ totalItems: 2, totalQuantity: 3, totalPrice: 60 });
-        expect(unscoped?.toJSON()).toMatchObject({ totalItems: 2, totalQuantity: 3, totalPrice: 60 });
+        expect(unscoped?.toJSON()).toMatchObject({
+            totalItems: 2,
+            totalQuantity: 3,
+            totalPrice: 60
+        });
     });
 });
 

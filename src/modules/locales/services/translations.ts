@@ -130,8 +130,7 @@ const planTranslationWrites = async (
     entityType: string,
     payload: UpsertTranslationsRequest
 ): Promise<
-    | { target: TranslatableTarget; fallbackLocale: string; planned: PlannedWrite[] }
-    | ResponseReject
+    { target: TranslatableTarget; fallbackLocale: string; planned: PlannedWrite[] } | ResponseReject
 > => {
     const target = translatableTarget(entityType);
     if (!target) return entityTypeUnknown(entityType);

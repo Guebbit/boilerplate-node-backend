@@ -21,7 +21,11 @@ import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import type { ProductSnapshot } from '@modules/products';
 import { applySerialization } from '@infrastructure/persistence/serialize';
-import { bankTransferBeneficiary, bankTransferIbanFriendly, transferInstructionsFor } from './config';
+import {
+    bankTransferBeneficiary,
+    bankTransferIbanFriendly,
+    transferInstructionsFor
+} from './config';
 import { sumLineItems, orderTotal, type LineItem } from './domain/totals';
 import { orderTaxBreakdown, type TaxableLineItem } from './domain/tax';
 import { isPayable } from './domain/lifecycle';

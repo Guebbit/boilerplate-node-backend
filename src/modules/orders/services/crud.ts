@@ -169,9 +169,7 @@ export const getByTransferReference = (reference: string): Promise<OrderDocument
  */
 const resolveItemProducts = (
     items: CartItem[]
-): Promise<
-    { item: CartItem; product: Awaited<ReturnType<typeof productService.findByIdRaw>> }[]
-> =>
+): Promise<{ item: CartItem; product: Awaited<ReturnType<typeof productService.findByIdRaw>> }[]> =>
     Promise.all(
         items.map((item) =>
             productService.findByIdRaw(item.productId).then((product) => ({ item, product }))

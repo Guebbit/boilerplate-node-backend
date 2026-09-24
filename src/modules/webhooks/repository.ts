@@ -132,13 +132,16 @@ export const webhookSubscriptionRepository: Repository<
 };
 
 /** The shared factory's CRUD, scoped to `webhookdeliveries`. */
-const deliveryBase = createRepository<WebhookDeliveryDocument, WebhookDelivery>(webhookDeliveryModel, {
-    transform: applyWebhookDeliveryTransform,
-    searchable: {
-        objectIds: { subscription: 'subscriptionId' },
-        exact: { status: 'status', eventType: 'eventType' }
+const deliveryBase = createRepository<WebhookDeliveryDocument, WebhookDelivery>(
+    webhookDeliveryModel,
+    {
+        transform: applyWebhookDeliveryTransform,
+        searchable: {
+            objectIds: { subscription: 'subscriptionId' },
+            exact: { status: 'status', eventType: 'eventType' }
+        }
     }
-});
+);
 
 /** Newest first, `_id` breaking ties — same reasoning as `AUDIT_SORT`. */
 export const WEBHOOK_DELIVERY_SORT: Record<string, 1 | -1> = { createdAt: -1, _id: -1 };

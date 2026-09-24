@@ -120,7 +120,10 @@ const resolveShipping = async (
     addressId: string | undefined,
     shippingMethodId: string | undefined
 ): Promise<
-    PreflightOutcome<{ shippingMethod: ShippingMethod | undefined; address: AddressItem | undefined }>
+    PreflightOutcome<{
+        shippingMethod: ShippingMethod | undefined;
+        address: AddressItem | undefined;
+    }>
 > => {
     const shippingMethod =
         shippingMethodId === undefined ? undefined : findShippingMethod(shippingMethodId);
@@ -262,7 +265,10 @@ const runCheckout = async (
         if (verdict.reason === 'empty')
             return generateReject(409, [{ code: 'CART_EMPTY', message: t('cart.empty') }]);
         if (verdict.reason === 'insufficient-stock')
-            return buildStockRefusal({ type: 'insufficient-stock', shortfalls: verdict.shortfalls });
+            return buildStockRefusal({
+                type: 'insufficient-stock',
+                shortfalls: verdict.shortfalls
+            });
         return buildStockRefusal({ type: 'unavailable', status: 404, lines: verdict.lines });
     }
 

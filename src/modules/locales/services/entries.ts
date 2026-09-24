@@ -31,7 +31,8 @@ import { languageNotFound, rejectUnknownTenant } from './languages';
 import { refreshOverlay } from './overlay';
 
 /** Not found, phrased the one way {@link findEntryInLanguage} and its two callers all mean it. */
-const entryNotFound = (): ResponseReject => generateReject(404, [t('locales.error-entry-not-found')]);
+const entryNotFound = (): ResponseReject =>
+    generateReject(404, [t('locales.error-entry-not-found')]);
 
 /**
  * The entry named in the path, scoped to the language also named in the path.
@@ -39,10 +40,7 @@ const entryNotFound = (): ResponseReject => generateReject(404, [t('locales.erro
  * Looked up by id, then CHECKED against `tag` — so `PUT /locales/it/entries/<a spanish entry>`
  * 404s rather than silently cross-editing.
  */
-const findEntryInLanguage = (
-    entryId: string,
-    tag: string
-): Promise<LocaleEntryDocument | null> =>
+const findEntryInLanguage = (entryId: string, tag: string): Promise<LocaleEntryDocument | null> =>
     localeEntryRepository
         .findById(entryId)
         .then((entry) => (entry?.locale === normalizeTag(tag) ? entry : null));
@@ -136,22 +134,24 @@ export const updateEntry = (
     findEntryInLanguage(entryId, tag).then((entry) => {
         if (!entry) return entryNotFound();
 
-        return localeEntryRepository.saveEntryValue(entry, payload.value).then(({ entry: saved }) => {
-            recordAudit(context, {
-                action: localeAuditActions.ADMIN_LOCALE_ENTRY_UPDATED,
-                outcome: 'success',
-                target_type: 'locale_entry',
-                target_id: entryId,
-                // The key, not the new text. An audit trail records that the Spanish product
-                // title changed and who changed it; storing the copy itself would make the trail
-                // a second, unmanaged copy of the dictionary.
-                metadata: { locale: tag, key: saved.key }
+        return localeEntryRepository
+            .saveEntryValue(entry, payload.value)
+            .then(({ entry: saved }) => {
+                recordAudit(context, {
+                    action: localeAuditActions.ADMIN_LOCALE_ENTRY_UPDATED,
+                    outcome: 'success',
+                    target_type: 'locale_entry',
+                    target_id: entryId,
+                    // The key, not the new text. An audit trail records that the Spanish product
+                    // title changed and who changed it; storing the copy itself would make the trail
+                    // a second, unmanaged copy of the dictionary.
+                    metadata: { locale: tag, key: saved.key }
+                });
+
+                refreshOverlay();
+
+                return generateSuccess(saved);
             });
-
-            refreshOverlay();
-
-            return generateSuccess(saved);
-        });
     });
 
 /**

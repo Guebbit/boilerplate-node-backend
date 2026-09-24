@@ -177,7 +177,9 @@ const saveEntryValue = (
     entry.value = value;
     return entryBase
         .save(entry)
-        .then((saved) => bumpRevision(entry.locale).then((revision) => ({ entry: saved, revision })));
+        .then((saved) =>
+            bumpRevision(entry.locale).then((revision) => ({ entry: saved, revision }))
+        );
 };
 
 /** Remove one entry, and bump. */
@@ -395,11 +397,7 @@ const upsertEntityLocale = (
         .exec();
 
 /** Delete one entity's one-locale row — a `null` in a PATCH. A no-op if it never existed. */
-const removeEntityLocale = (
-    entityType: string,
-    entityId: string,
-    locale: string
-): Promise<void> =>
+const removeEntityLocale = (entityType: string, entityId: string, locale: string): Promise<void> =>
     translationModel
         .deleteOne({ entityType, entityId, locale })
         .exec()

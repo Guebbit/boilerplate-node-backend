@@ -338,7 +338,9 @@ export const setupTwoFactorMethod = (
 
             return handler.setup(user, entry, context).then((payload) => {
                 syncArmedState(user);
-                return userService.persistTwoFactorMethods(user).then(() => generateSuccess(payload));
+                return userService
+                    .persistTwoFactorMethods(user)
+                    .then(() => generateSuccess(payload));
             });
         })
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
@@ -590,9 +592,11 @@ export const verifyLoginChallenge = (
                 // Right code: spend the challenge before minting anything. A wrong code leaves
                 // it live — `mfaChallengeLimiter` is what bounds how many times it can be tried.
                 return spendLiveToken(user, challenge).then(() =>
-                    userService.persistTwoFactorMethods(user).then((saved) =>
-                        generateSuccess({ user: saved, amr: entry.amr ?? ['pwd'] })
-                    )
+                    userService
+                        .persistTwoFactorMethods(user)
+                        .then((saved) =>
+                            generateSuccess({ user: saved, amr: entry.amr ?? ['pwd'] })
+                        )
                 );
             });
         })

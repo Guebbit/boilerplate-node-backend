@@ -141,8 +141,9 @@ export const deleteLanguage = (
         const fallbackRefusal = rejectFallbackLocale(tag);
         if (fallbackRefusal) return fallbackRefusal;
 
-        return localeRepository.deleteLocaleCascade(language).then(
-            ({ entries: removedEntries, translations: removedTranslations }) => {
+        return localeRepository
+            .deleteLocaleCascade(language)
+            .then(({ entries: removedEntries, translations: removedTranslations }) => {
                 recordAudit(context, {
                     action: localeAuditActions.ADMIN_LOCALE_DELETED,
                     outcome: 'success',
@@ -154,6 +155,5 @@ export const deleteLanguage = (
                 refreshOverlay();
 
                 return generateSuccess({ removedEntries, removedTranslations });
-            }
-        );
+            });
     });

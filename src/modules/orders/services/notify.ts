@@ -10,7 +10,11 @@
 import { logger } from '@infrastructure/adapters/logger';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { spoolAttachment } from '@infrastructure/adapters/mail-spool';
-import { bankTransferBeneficiary, bankTransferIbanFriendly, transferInstructionsFor } from '../config';
+import {
+    bankTransferBeneficiary,
+    bankTransferIbanFriendly,
+    transferInstructionsFor
+} from '../config';
 import { orderConfirmEmail, bankTransferInstructionsEmail } from '../emails';
 import { renderInvoicePdf } from './invoice';
 import type { OrderDocument } from '../model';

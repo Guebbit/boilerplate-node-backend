@@ -15,4 +15,6 @@ import { generateReject, type ResponseReject } from '@infrastructure/http/respon
  * caught it — a client cannot tell them apart and doesn't need to.
  */
 export const notPayable = (): ResponseReject =>
-    generateReject(409, [{ code: 'PAYMENT_ORDER_NOT_PAYABLE', message: t('payments.order-not-payable') }]);
+    generateReject(409, [
+        { code: 'PAYMENT_ORDER_NOT_PAYABLE', message: t('payments.order-not-payable') }
+    ]);
