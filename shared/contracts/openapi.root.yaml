@@ -680,7 +680,7 @@ components:
                     type: boolean
                 # Enforced at signup only (`SignupRequest.termsAccepted`, required there) — every
                 # account in the database has this `true` by construction, including rows that
-                # predate the field (backfilled, see `db/migrations/*-user-terms-accepted-column.js`).
+                # predate the field, backfilled to `true` when the column was introduced.
                 # Informational from here on: there is no re-acceptance flow.
                 termsAccepted:
                     type: boolean

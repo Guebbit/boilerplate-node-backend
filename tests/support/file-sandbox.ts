@@ -2,12 +2,14 @@
  * @module
  * Where the code under test writes files: a directory per test file, never the repository's own.
  *
- * Why:      uploads, quarantine and staging default to `public/`, `quarantine/` and the system
- *           temp directory — a test left alone writes onto the developer's machine.
+ * Why:      every file-writing setting (`SANDBOXED_VARIABLES` below) defaults to a real
+ *           application directory — a test left alone writes onto the developer's machine.
  * Lifetime: the jest instance's root is created by `global-setup.ts` and deleted by
  *           `global-teardown.ts`; a killed instance's root is swept by the next run.
  * Rule:     a test removes every file it causes. Teardown fails the run, naming the test file,
  *           when one did not.
+ * Also:     `fileExists`, a shared `stat`-based existence check for the tests that assert one of
+ *           these files was written or cleaned up.
  *
  * Relative imports only: `globalSetup` and `globalTeardown` load this outside `moduleNameMapper`.
  */
