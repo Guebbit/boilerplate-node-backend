@@ -174,7 +174,14 @@ export const setCacheValue = (
                         // set, which is what makes group invalidation possible (Redis cannot
                         // delete by pattern efficiently).
                         Promise.all(
-                            cacheTags.map((tag) => redisClient.sAdd(prefix(`tag:${tag}`), cacheKey))
+                            cacheTags.map((tag) =>
+                                indexUnderTag(
+                                    redisClient,
+                                    prefix(`tag:${tag}`),
+                                    cacheKey,
+                                    ttlSeconds
+                                )
+                            )
                         )
                     )
                     // Collapse the SADD reply counts to void — callers only care that it finished.
@@ -191,6 +198,56 @@ export const setCacheValue = (
             // Stryker restore all
         });
 };
+
+/**
+ * Add `cacheKey` to one tag's set, and keep the set alive at least as long as its newest member.
+ * A tag nobody invalidates would otherwise keep its set forever, growing by one member per write.
+ *
+ * Two EXPIREs because neither mode alone covers both cases: `NX` sets a TTL on a set that has
+ * none yet, `GT` extends one that has a shorter TTL (Redis 7+). https://redis.io/commands/expire/
+ *
+ * @param redisClient - the connected client
+ * @param tagKey - the tag set's own key
+ * @param cacheKey - the entry being indexed
+ * @param ttlSeconds - the entry's own TTL
+ */
+const indexUnderTag = (
+    redisClient: RedisClientType,
+    tagKey: string,
+    cacheKey: string,
+    ttlSeconds: number
+): Promise<unknown> =>
+    redisClient
+        .sAdd(tagKey, cacheKey)
+        .then(() => redisClient.expire(tagKey, ttlSeconds, 'NX'))
+        .then(() => redisClient.expire(tagKey, ttlSeconds, 'GT'));
+
+/**
+ * Claim `key` for `seconds`, once, across every worker and replica: `SET NX EX` succeeds for
+ * exactly one caller. https://redis.io/commands/set/
+ *
+ * @param key - what to claim; namespaced under `claim:`
+ * @param seconds - how long the claim stands
+ * @returns `claimed` for the one winner, `taken` for everyone after it, `unavailable` when there is
+ *   no Redis to ask — the caller decides what its own fallback is
+ */
+export const claimCacheKey = (
+    key: string,
+    seconds: number
+): Promise<'claimed' | 'taken' | 'unavailable'> =>
+    cacheConnection
+        .get()
+        .then((redisClient) => {
+            if (!redisClient) return 'unavailable' as const;
+            return redisClient
+                .set(prefix(`claim:${key}`), '1', { NX: true, EX: seconds })
+                .then((result) => (result === 'OK' ? ('claimed' as const) : ('taken' as const)));
+        })
+        .catch((error: unknown) => {
+            // Stryker disable next-line all
+            logger.warn({ message: 'Redis claim failed.', key, error });
+            return 'unavailable' as const;
+        });
 
 /**
  * Claim the right to rebuild one stale entry — refresh-ahead's only mechanism.

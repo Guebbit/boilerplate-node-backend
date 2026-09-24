@@ -43,6 +43,7 @@ const mockScanIterator = jest.fn();
 const mockDel = jest.fn();
 const mockSet = jest.fn();
 const mockSAdd = jest.fn();
+const mockExpire = jest.fn();
 const mockGet = jest.fn();
 const mockSMembers = jest.fn();
 
@@ -56,6 +57,7 @@ const mockClient = {
     del: mockDel,
     set: mockSet,
     sAdd: mockSAdd,
+    expire: mockExpire,
     get: mockGet,
     sMembers: mockSMembers,
     quit: mockQuit,
@@ -230,6 +232,15 @@ describe('setCacheValue tag index', () => {
         mockConnect.mockImplementation(() => Promise.resolve());
         mockSet.mockImplementation(() => Promise.resolve('OK'));
         mockSAdd.mockImplementation(() => Promise.resolve(1));
+        mockExpire.mockImplementation(() => Promise.resolve(1));
+    });
+
+    it('gives each tag set an expiry, so a tag nobody invalidates does not grow forever', async () => {
+        await freshCache().setCacheValue('GET:/products', '{}', 60, ['products']);
+
+        // NX sets the first TTL; GT extends it for a longer-lived member.
+        expect(mockExpire).toHaveBeenCalledWith(expect.stringContaining(':tag:products'), 60, 'NX');
+        expect(mockExpire).toHaveBeenCalledWith(expect.stringContaining(':tag:products'), 60, 'GT');
     });
 
     it('stores the bytes with the TTL as an expiry Redis enforces itself', async () => {
