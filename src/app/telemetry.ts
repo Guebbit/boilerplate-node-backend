@@ -26,8 +26,10 @@ export const installTelemetry = (app: Express): void => {
     app.use((request, response, next) => {
         incrementInflight();
         const startTime = process.hrtime.bigint();
+        // `close`, not `finish`: an aborted request or a streamed response (SSE) never finishes,
+        // and every one of those would leave the gauge one higher for good. `close` always fires.
+        response.once('close', decrementInflight);
         response.once('finish', () => {
-            decrementInflight();
             const elapsedTimeInMilliseconds =
                 Number(process.hrtime.bigint() - startTime) / 1_000_000;
             recordRequestMetric({
