@@ -46,6 +46,11 @@ const teardownTestProvider = async (provider: NodeTracerProvider) => {
 // getTracer
 // ---------------------------------------------------------------------------
 
+/** A span callback that throws before it ever returns a promise. */
+const throwing = (): Promise<never> => {
+    throw new Error('sync');
+};
+
 describe('getTracer', () => {
     it('returns a tracer without throwing', () => {
         expect(() => getTracer()).not.toThrow();
@@ -121,6 +126,11 @@ describe('withSpan — error', () => {
         await withSpan('failing-span-2', () => Promise.reject(new Error('boom'))).catch(() => {});
         const spans = exporter.getFinishedSpans();
         expect(spans.some((s) => s.name === 'failing-span-2')).toBe(true);
+    });
+
+    it('ends the span and rejects when the callback throws synchronously', async () => {
+        await expect(withSpan('sync-throw-span', throwing)).rejects.toThrow('sync');
+        expect(exporter.getFinishedSpans().some((s) => s.name === 'sync-throw-span')).toBe(true);
     });
 
     it('records an exception event on the span', async () => {

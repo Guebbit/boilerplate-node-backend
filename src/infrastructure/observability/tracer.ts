@@ -50,30 +50,34 @@ export const withSpan = <T>(
         // Two-callback `.then(onFulfilled, onRejected)` rather than `.then().catch()`: it keeps
         // the success and failure paths mutually exclusive, so a throw inside the success
         // handler could not end the span twice.
-        return callback(span).then(
-            (result) => {
-                span.setStatus({ code: SpanStatusCode.OK });
-                // `end()` stamps the duration. A span that is never ended is never exported —
-                // the single most common way to lose telemetry.
-                span.end();
-                return result;
-            },
-            (error: unknown) => {
-                // `setStatus(ERROR)` records the failure before propagating — this is what
-                // makes the span show up red / count toward error rates in the backend.
-                span.setStatus({
-                    code: SpanStatusCode.ERROR,
-                    message: extractErrorMessage(error, String(error))
-                });
-                // `recordException` additionally attaches a structured exception *event*
-                // (type, message, stack) — richer than the status message alone.
-                if (error instanceof Error) span.recordException(error);
-                span.end();
-                // Re-throw: this wrapper observes, it never swallows. Callers keep their
-                // existing error handling unchanged.
-                throw error;
-            }
-        );
+        // Started inside a promise, so a callback that throws synchronously still reaches the
+        // failure branch below — and its span still ends.
+        return Promise.resolve()
+            .then(() => callback(span))
+            .then(
+                (result) => {
+                    span.setStatus({ code: SpanStatusCode.OK });
+                    // `end()` stamps the duration. A span that is never ended is never exported —
+                    // the single most common way to lose telemetry.
+                    span.end();
+                    return result;
+                },
+                (error: unknown) => {
+                    // `setStatus(ERROR)` records the failure before propagating — this is what
+                    // makes the span show up red / count toward error rates in the backend.
+                    span.setStatus({
+                        code: SpanStatusCode.ERROR,
+                        message: extractErrorMessage(error, String(error))
+                    });
+                    // `recordException` additionally attaches a structured exception *event*
+                    // (type, message, stack) — richer than the status message alone.
+                    if (error instanceof Error) span.recordException(error);
+                    span.end();
+                    // Re-throw: this wrapper observes, it never swallows. Callers keep their
+                    // existing error handling unchanged.
+                    throw error;
+                }
+            );
     });
 };
 
