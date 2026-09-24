@@ -16,9 +16,9 @@ jest.spyOn(auditLogger, 'warn').mockImplementation(() => auditLogger);
 
 describe('coreAuditActions', () => {
     // Only the three actions core genuinely owns: this file is core's, and core does not know
-    // which domains exist. Each module pins its OWN strings in
-    // `src/modules/<name>/tests/unit/audit.test.ts`; the cross-cutting sweep proves the shape of
-    // all of them without naming a domain.
+    // which domains exist. Every module's own strings are read off `audit.ts` straight into
+    // `docs/tools/winston.md`'s generated table; the cross-cutting sweep proves the shape of all
+    // of them without naming a domain.
     it('defines the app-level security actions', () => {
         expect(coreAuditActions.SECURITY_UNAUTHORIZED).toBe('security.unauthorized');
         expect(coreAuditActions.SECURITY_FORBIDDEN).toBe('security.forbidden');
