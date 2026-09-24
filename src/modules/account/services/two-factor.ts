@@ -430,6 +430,11 @@ export const removeTwoFactorMethod = (
     code: string,
     context: CallerContext
 ): Promise<ResponseSuccess<undefined> | ResponseReject> => {
+    // A method this deployment does not run is absent, not "not enabled" — the same 404 setup and
+    // confirm answer, and the one the contract declares for this path.
+    if (!twoFactorMethod(method))
+        return Promise.resolve(generateReject(404, [t('account.two-factor.unknown-method')]));
+
     // Set by the precondition, consumed by onMatch: withVerifiedCode always runs the precondition
     // to completion before onMatch, so this is never read before it is written.
     let enrolledIndex = -1;
