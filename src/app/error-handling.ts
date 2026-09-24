@@ -89,9 +89,14 @@ export const handleUncaughtError = (
     error: Error,
     request: Request,
     response: Response,
-    _next: NextFunction
+    next: NextFunction
 ) => {
-    if (response.headersSent) return;
+    // Too late to answer: the status line is already out. Express's own handler closes the
+    // connection, where a bare return would leave a half-sent stream open.
+    if (response.headersSent) {
+        next(error);
+        return;
+    }
 
     recordErrorOnActiveSpan(error);
 

@@ -55,4 +55,15 @@ describe('handleUncaughtError', () => {
 
         expect(response.status).toHaveBeenCalledWith(500);
     });
+
+    it('hands a mid-stream error to Express, which closes the connection', () => {
+        const error = new Error('stream broke');
+        const response = Object.assign(makeResponseStub(), { headersSent: true });
+        const next = jest.fn();
+
+        handleUncaughtError(error, requestStub(), response, next);
+
+        expect(next).toHaveBeenCalledWith(error);
+        expect(response.status).not.toHaveBeenCalled();
+    });
 });
