@@ -465,9 +465,10 @@ describe('logging in with a device factor', () => {
         /*
          * Seeded directly, like the stale-reset-token case in `self-service.test.ts`'s
          * `findLiveToken` suite: `tokenAdd` cannot produce a past `expiration` itself, and this is
-         * the state a genuinely stale challenge reaches. Regression coverage for the gap the JWT
-         * design had — a signed challenge kept verifying for its whole TTL with no way to check it
-         * against anything; this one is refused the moment it's past its stored deadline.
+         * the state a genuinely stale challenge reaches. Regression coverage for a design hazard: a
+         * purely signed challenge, with no server-side record, verifies for its whole TTL with no
+         * way to check it against anything; this one is refused the moment it's past its stored
+         * deadline.
          */
         await createUser({
             email: 'stale-challenge@example.com',

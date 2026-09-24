@@ -10,12 +10,13 @@
  *
  * So the wrapper blanks `NODE_DB_URI` / `NODE_REDIS_URL` and sets only `*_HOST=127.0.0.1`, letting
  * both resolvers fall through to their host/port/name fragments — which come from `.env`, the
- * single source of truth. Five things have to stay true for that to keep working, and each is
- * asserted below:
+ * single source of truth. Each of the following has to stay true for that to keep working, and
+ * each is asserted below:
  *
  *   1. The wrapper does not reintroduce a literal URI.
- *   2. It stays the ONLY script that redirects a hostname — the per-script `:host` twins it
- *      replaced were seven copies of one env prefix, and seven chances to copy it wrong.
+ *   2. It stays the ONLY script that redirects a hostname — a per-script `:host` twin for every
+ *      script would duplicate one env prefix across all of them, and each copy is a chance to
+ *      drift out of sync with the others.
  *   3. An EMPTY URI falls through to the fragments (a `!== undefined` check would not).
  *   4. The redirect target is the LITERAL loopback address, not the name `localhost`.
  *
@@ -56,7 +57,7 @@ describe('the host script', () => {
     });
 
     it('spells out no connection URI', () => {
-        // The original bug in its most direct form. A literal URI carries a database name with
+        // The most direct way this could go wrong: a literal URI carries a database name with
         // it, and that name then contradicts `.env` the moment anyone changes one of them.
         expect(hostScript).not.toMatch(/mongodb(\+srv)?:\/\/\S/);
         expect(hostScript).not.toMatch(/redis:\/\/\S/);
@@ -80,7 +81,7 @@ describe('the host script', () => {
     });
 
     it('redirects to the literal loopback address, never to the name `localhost`', () => {
-        // See (5) in the file header. `localhost` is resolver-dependent on a dual-stack machine
+        // See (4) in the file header. `localhost` is resolver-dependent on a dual-stack machine
         // and container runtimes publish to IPv4 only, so the name reaches a port that is not
         // listening about half the time — and does it without ever naming the reason. Asserted
         // separately from the mechanism above so the failure message says which rule broke.
@@ -94,9 +95,9 @@ describe('the host script', () => {
     });
 
     it('is the only script that redirects a hostname', () => {
-        // The seven `:host` twins this replaced were one env prefix copied seven times, and
-        // `db:cache:clear:host` had already drifted — it blanked Redis but not Mongo. One wrapper
-        // cannot drift from itself, so the invariant worth guarding is that it stays one.
+        // A per-script `:host` twin for every script duplicates one env prefix across all of
+        // them, and each copy is a chance to drift — blanking one var but not the other, silently.
+        // One wrapper cannot drift from itself, so the invariant worth guarding is that it stays one.
         const redirectors = Object.entries(packageScripts)
             .filter(([, command]) => /_HOST=(?:127\.0\.0\.1|localhost)/.test(command))
             .map(([name]) => name);
@@ -147,8 +148,8 @@ describe('database URI resolution', () => {
         process.env.NODE_MONGODB_HOST = 'localhost';
         process.env.NODE_MONGODB_NAME = 'my-actual-data';
 
-        // The old scripts produced `…/boilerplate-node-backend` here, seeding a database the
-        // developer had never heard of while their real one sat untouched.
+        // A hardcoded URI would produce `…/boilerplate-node-backend` here, seeding a database the
+        // developer never heard of while their real one sat untouched.
         expect(getDatabaseUri()).toContain('/my-actual-data');
         expect(getDatabaseUri()).not.toContain('boilerplate-node-backend');
     });

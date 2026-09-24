@@ -27,7 +27,7 @@ type OrderExtras = Omit<OrderOverrides, 'userId' | 'email' | 'items'>;
 /**
  * Convert a persisted product document into an order line ready to embed.
  * Copies the whole document, minus Mongo's `_id`/`__v`/`taxClass`, so a newly added column isn't
- * silently missed the way naming fields individually did. `toObject()` keeps `Date`s as `Date`s.
+ * silently missed the way naming fields individually would. `toObject()` keeps `Date`s as `Date`s.
  * `taxClass` is replaced by the `taxRate` it resolves to, same as `freezeOrderLines` itself — an
  * order line freezes the RESOLVED rate, never the class it came from.
  *

@@ -6,22 +6,21 @@
  * Which participant wins is the database's business and varies run to run; that it is exactly one
  * is the property.
  *
- * Two races here were real bugs, and both are fixed in the same change as these tests:
+ * R1, R4 and R5 each guard one specific race:
  *
- *   R1 — signup was check-then-insert against a NON-UNIQUE index. `findOne({ email })`, then
- *        `create()` if nothing came back, with the collection free to change in between. Two
- *        concurrent signups for one address both read "absent" and both inserted. Closed by
- *        `unique: true` on `users_email` plus the E11000 → 409 branch in
- *        `databaseErrorInterpreter` — in that order, because the index alone would have turned the
- *        duplicate account into a 500.
+ *   R1 — a check-then-insert against a NON-UNIQUE index races: `findOne({ email })`, then
+ *        `create()` if nothing came back, with the collection free to change in between, lets two
+ *        concurrent signups for one address both read "absent" and both insert. `unique: true` on
+ *        `users_email` plus the E11000 → 409 branch in `databaseErrorInterpreter` closes it — in
+ *        that order, because the index alone would turn the duplicate account into a 500.
  *
- *   R4 — token writes were read-modify-write. `tokenAdd` pushed onto the loaded `tokens` array
- *        and called `save()`, which writes the WHOLE array as it looked at load time, so two
- *        concurrent logins each wrote N+1 tokens and the second erased the first. The user saw a
- *        successful login followed by an unauthenticated next request. Closed by `$push`/`$pull`
- *        against mongod rather than against a stale in-memory copy.
+ *   R4 — a read-modify-write on token storage races: pushing onto the loaded `tokens` array and
+ *        calling `save()` writes the WHOLE array as it looked at load time, so two concurrent
+ *        logins each write N+1 tokens and the second erases the first — a successful login
+ *        followed by an unauthenticated next request. `$push`/`$pull` against mongod, never
+ *        against a stale in-memory copy, closes it.
  *
- * R5 is not a bug fix — it PROVES a design decision made explicitly:
+ * R5 is not about closing a race — it PROVES a design decision made explicitly:
  * refresh-token rotation must not turn "two tabs woke up and refreshed within the same instant"
  * into "this looks like theft". `tokenSupersede` (`users/repository.ts`) lets exactly one
  * concurrent exchange of one token WIN atomically; every other exchange within
@@ -29,10 +28,11 @@
  * rejected. This is the suite where that guarantee has to be proven under real concurrency, not
  * just asserted in a docblock.
  *
- * Observed hit rates, N=10, 20 consecutive runs on 2026-08-08 (recorded because a race test that
- * never actually races is a green test measuring nothing):
- *   - signup:  20/20 runs saw at least one 409, i.e. the race was contended every time.
- *   - login:   before the R4 fix, 20/20 runs lost at least one token. After it, 0/20.
+ * Observed hit rates, N=10, 20 consecutive runs (recorded because a race test that never actually
+ * races is a green test measuring nothing):
+ *   - signup: 20/20 runs see at least one 409 — the race is contended every time.
+ *   - login: the read-modify-write pattern R4 guards against loses at least one token in 20/20
+ *     runs; the `$push`/`$pull` write against mongod loses none in 20/20.
  *
  * `tests/support/race.ts` explains why `Promise.allSettled` and not `Promise.all`, why
  * `--runInBand` is irrelevant to the concurrency inside a test, and why 429 is asserted against.
@@ -74,8 +74,8 @@ describe('R1 — concurrent signups for one address', () => {
     });
 
     it('answers one 201 and N-1 409s, with nothing in between', async () => {
-        // The status split is the visible half of the fix. Before the unique index, several
-        // participants got a 201. Before the E11000 branch, the losers got 500s.
+        // Both guards are necessary for this split: without `unique: true`, several participants
+        // would get a 201; without the E11000 → 409 branch, the losers would get 500s.
         const results = await raceN(RACE_SIZE, (index) =>
             api()
                 .post('/account/signup')
