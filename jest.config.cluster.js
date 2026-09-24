@@ -17,7 +17,7 @@
  *                    instrumented — a floor would only ever measure the harness.
  *
  * `jest.config.js` ignores `tests/cluster` for the mirror image of these reasons, so `npm test`
- * and `test:all` stay in one process and stay fast.
+ * stays in one process and stays fast.
  */
 
 const base = require('./jest.config.js');

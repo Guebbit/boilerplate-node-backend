@@ -18,6 +18,13 @@
  * `--workerIdleMemoryLimit` set below a worker's steady-state baseline restarts it after every
  * single file — measured, and slower than the retention problem it exists to solve.
  *
+ * ── WHY --unsharded EXISTS TOO ────────────────────────────────────────────────────────────────────
+ * Coverage, the JSON report and the randomized-order run each want every pattern this file knows
+ * about in ONE jest process — they already picked their own flags and heap, sharding would only
+ * cost them a repeated `mongod` boot. `--unsharded` skips the budget math below entirely and runs
+ * the named suites' patterns as one process, so {@link SUITES} stays the one place a suite's
+ * patterns are written down instead of copied into `package.json`.
+ *
  * See: docs/tools/weak-machines.md
  */
 
@@ -63,8 +70,10 @@ type Suite =
  * The layers this runner knows, keyed by the name its npm script passes.
  *
  * `unit` and `cross-cutting` run in parallel; only their worker count comes from this file.
+ * Exported so a `package.json` script needing several layers unsharded (coverage, the JSON
+ * report, randomized order) can name them instead of hand-copying their jest patterns.
  */
-const SUITES: Record<string, Suite> = {
+export const SUITES: Record<string, Suite> = {
     unit: {
         patterns: ['tests/unit', 'src/modules/.*/tests/unit'],
         serialized: false,
@@ -89,19 +98,72 @@ const SUITES: Record<string, Suite> = {
     }
 };
 
-/** The layer name from argv, and everything after it, passed through to jest untouched. */
-const [suiteName, ...passthrough] = process.argv.slice(2);
+/** True when invoked with `--unsharded`: run every named suite's patterns as one jest process,
+ *  skipping the budget math below entirely — see the module header's "WHY --unsharded" section. */
+const unsharded = process.argv.includes('--unsharded');
 
-/** This run's {@link Suite}, or undefined for a missing or unknown name. */
-const suite = suiteName ? SUITES[suiteName] : undefined;
+/** Every CLI arg after the flag above is stripped, leaving suite names then jest passthrough. */
+const argumentsWithoutFlag = process.argv.slice(2).filter((argument) => argument !== '--unsharded');
 
-if (!suite) {
+/**
+ * Splits {@link argumentsWithoutFlag} into the known suite names at the front and everything after
+ * as passthrough. A suite name is never flag-shaped, so the first argument that is not a
+ * {@link SUITES} key ends the split.
+ *
+ * @param arguments_ the CLI arguments, `--unsharded` already removed
+ * @returns the leading suite names, and the remaining passthrough arguments
+ */
+const splitSuiteNames = (arguments_: readonly string[]): { names: string[]; rest: string[] } => {
+    const boundary = arguments_.findIndex((argument) => !(argument in SUITES));
+
+    return boundary === -1
+        ? { names: [...arguments_], rest: [] }
+        : { names: arguments_.slice(0, boundary), rest: arguments_.slice(boundary) };
+};
+
+/** The layer name(s) from argv, and everything after them, passed through to jest untouched. */
+const { names: suiteNames, rest: passthrough } = splitSuiteNames(argumentsWithoutFlag);
+
+if (suiteNames.length === 0) {
     console.error(
-        `[test] unknown suite ${JSON.stringify(suiteName)} — ` +
+        `[test] unknown suite ${JSON.stringify(argumentsWithoutFlag[0])} — ` +
             `expected one of: ${Object.keys(SUITES).join(', ')}`
     );
     process.exit(2);
 }
+
+if (unsharded) {
+    // One process, every named suite's patterns at once — no shard/heap math, no `suite` lookup:
+    // the caller (coverage, the JSON report, randomized order) already chose its own jest flags.
+    const patterns = suiteNames.flatMap((name) => SUITES[name].patterns);
+
+    /**
+     * node:child_process `spawnSync`: run jest to completion, connected to this process's own
+     * stdio (`inherit`) so its live output and exit code both reach the caller unchanged.
+     * https://nodejs.org/api/child_process.html#child_processspawnsynccommand-args-options
+     */
+    const result = spawnSync('npx', ['jest', ...patterns, ...passthrough], {
+        cwd: REPO_ROOT,
+        stdio: 'inherit'
+    });
+
+    process.exit(result.status ?? 1);
+}
+
+if (suiteNames.length > 1) {
+    console.error(
+        `[test] sharded mode takes exactly one suite — pass --unsharded to combine ` +
+            suiteNames.join(', ')
+    );
+    process.exit(2);
+}
+
+/** The single layer name a sharded run always takes — {@link suiteNames} has exactly one here. */
+const [suiteName] = suiteNames;
+
+/** This run's {@link Suite} — guaranteed present, since {@link splitSuiteNames} only collects
+ *  known keys. */
+const suite = SUITES[suiteName];
 
 /**
  * How many test files this layer currently matches.
