@@ -44,7 +44,7 @@ import type { ProductDocument } from './model';
 import { productRepository } from './repository';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import { toSearchPattern } from '@infrastructure/persistence/search';
-import { toObjectId } from '@infrastructure/persistence/create-repository';
+import { toObjectId, withScope } from '@infrastructure/persistence/create-repository';
 import type { AuthContext } from '@types';
 import { accessibleFilter } from '@kernel/access/query';
 
@@ -158,7 +158,8 @@ const searchWithTranslatedText = (
                       $or: [ownMatch, { _id: { $in: translatedIds.map((id) => toObjectId(id)) } }]
                   };
 
-        return productRepository.search(rest, { ...scope, ...union });
+        // `withScope`, not a spread: `union` carries an `$or`, and so may the scope.
+        return productRepository.search(rest, withScope(union, scope ?? {}));
     });
 };
 

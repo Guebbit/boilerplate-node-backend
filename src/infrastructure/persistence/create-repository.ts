@@ -244,6 +244,22 @@ export interface Repository<TDocument extends Document, TWire> {
 }
 
 /**
+ * A filter narrowed by an authorization scope: both must match. The scope alone when there is no
+ * filter, the filter alone when there is no scope, `$and` of the two otherwise.
+ *
+ * @param filter - what the caller asked for
+ * @param scope - what the caller may see
+ */
+export const withScope = (
+    filter: Record<string, unknown>,
+    scope: Record<string, unknown>
+): Record<string, unknown> => {
+    if (Object.keys(scope).length === 0) return filter;
+    if (Object.keys(filter).length === 0) return scope;
+    return { $and: [filter, scope] };
+};
+
+/**
  * Creates the standard CRUD operations for a Mongoose model.
  *
  * Owns the Mongo-specific knowledge a service must not carry (id coercion, lean→normalized
@@ -341,9 +357,10 @@ export function createRepository<TDocument extends Document, TWire>(
         sort: Record<string, 1 | -1> = DEFAULT_SORT
     ): Promise<PaginatedResult<TWire>> => {
         const pagination = normalizePagination(filters as PaginationInput);
-        // `scope` merged last and wins: it is the caller's authorization boundary (own rows,
-        // publicly visible rows), which no client-supplied filter may widen.
-        const where = { ...buildWhere(filters, searchable), ...scope } as QueryFilter<TDocument>;
+        // `scope` is the caller's authorization boundary (own rows, publicly visible rows), which
+        // no client-supplied filter may widen — so both must hold, under `$and`. A spread would
+        // let one side's key replace the other's: two `$or`s, and one is silently dropped.
+        const where = withScope(buildWhere(filters, searchable), scope) as QueryFilter<TDocument>;
 
         return count(where).then((totalItems) =>
             findAll(where, { sort, skip: pagination.skip, limit: pagination.pageSize }).then(

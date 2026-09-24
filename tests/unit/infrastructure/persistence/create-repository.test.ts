@@ -13,7 +13,8 @@ import type { Model, Document } from 'mongoose';
 import {
     createRepository,
     type SearchSpec,
-    type Wire
+    type Wire,
+    withScope
 } from '@infrastructure/persistence/create-repository';
 
 interface FixtureDocument extends Document {
@@ -221,5 +222,19 @@ describe('buildWhere — composing multiple kinds at once', () => {
             active: false,
             price: { $gte: 5 }
         });
+    });
+});
+
+describe('withScope', () => {
+    it('keeps both halves when filter and scope each carry an $or, instead of one replacing the other', () => {
+        const filter = { $or: [{ title: /a/ }, { description: /a/ }] };
+        const scope = { $or: [{ active: true }, { ownerId: 'u1' }] };
+
+        expect(withScope(filter, scope)).toEqual({ $and: [filter, scope] });
+    });
+
+    it('is the filter alone when there is no scope, and the scope alone when there is no filter', () => {
+        expect(withScope({ a: 1 }, {})).toEqual({ a: 1 });
+        expect(withScope({}, { b: 2 })).toEqual({ b: 2 });
     });
 });
