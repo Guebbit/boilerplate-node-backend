@@ -468,7 +468,10 @@ const holdsEveryDeclaredKey = (
     permissions: readonly string[]
 ): boolean => {
     const held = new Set(permissions);
-    return (declaredKeysOfScope.get(scope) ?? []).every((key) => held.has(key));
+    const declared = declaredKeysOfScope.get(scope) ?? [];
+    // A scope with nothing declared makes nobody unrestricted — `every` over an empty list is
+    // vacuously true, which would mark every caller in it as an admin.
+    return declared.length > 0 && declared.every((key) => held.has(key));
 };
 
 /**
