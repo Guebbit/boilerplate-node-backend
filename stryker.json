@@ -1,0 +1,51 @@
+{
+    "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+    "packageManager": "npm",
+    "testRunner": "jest",
+    "jest": {
+        "projectType": "custom",
+        "configFile": "jest.config.mutation.js",
+        "enableFindRelatedTests": true,
+        "config": {
+            "testPathIgnorePatterns": [
+                "/node_modules/",
+                "<rootDir>/tests/contract/",
+                "<rootDir>/tests/fuzz/",
+                "<rootDir>/src/modules/[^/]+/tests/contract/",
+                "<rootDir>/tests/cross-cutting/contract-bundles.test.ts",
+                "<rootDir>/tests/cross-cutting/outbox-names.test.ts",
+                "<rootDir>/tests/cluster/",
+                "<rootDir>/tmp/",
+                "<rootDir>/.claude/worktrees/"
+            ]
+        }
+    },
+    "reporters": ["html", "clear-text", "progress", "json"],
+    "tempDirName": "tmp/stryker",
+    "htmlReporter": {
+        "fileName": "tmp/reports/mutation/index.html"
+    },
+    "jsonReporter": {
+        "fileName": "tmp/reports/mutation/mutation.json"
+    },
+    "coverageAnalysis": "perTest",
+    "incremental": true,
+    "incrementalFile": "tmp/reports/stryker-incremental.json",
+    "dryRunTimeoutMinutes": 20,
+    "mutate": [
+        "src/infrastructure/**/*.ts",
+        "src/kernel/**/*.ts",
+        "src/modules/*/**/*.ts",
+        "!src/modules/*/index.ts",
+        "!src/modules/*/tests/**"
+    ],
+    "ignorePatterns": ["tmp/**", "dist/**", "docs/**", ".claude/**"],
+    "thresholds": {
+        "high": 80,
+        "low": 60,
+        "break": null
+    },
+    "timeoutMS": 30000,
+    "concurrency": 4,
+    "maxTestRunnerReuse": 1
+}

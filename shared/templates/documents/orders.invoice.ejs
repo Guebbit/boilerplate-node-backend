@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="<%= locale %>">
+<%- include("../layouts/pdf-template-head.ejs"); %>
+<body>
+<main class="centered">
+    <h1><%= title %></h1>
+
+    <% if (typeof meta !== 'undefined' && meta) { %>
+        <p><%= meta.numberLabel %></p>
+        <p><%= meta.dateLabel %></p>
+    <% } %>
+
+    <ul>
+        <% lines.forEach(function(line) { %>
+            <li><%= line %></li>
+        <% }); %>
+    </ul>
+
+    <%- include("./orders.invoice.vat-table.ejs", { columns: vat.columns, rows: vat.rows, showQuantity: true }); %>
+    <% if (vat.shipping) { %>
+        <h2><%= vat.shipping.title %></h2>
+        <%- include("./orders.invoice.vat-table.ejs", { columns: vat.columns, rows: vat.shipping.rows, showQuantity: false }); %>
+    <% } %>
+
+    <h2><%= vat.summaryTitle %></h2>
+    <%- include("./orders.invoice.vat-table.ejs", { columns: vat.columns, rows: vat.summaryRows, showQuantity: false }); %>
+
+    <p><%= vat.netTotalLabel %>: <%= vat.netTotal %></p>
+    <p><%= vat.taxTotalLabel %>: <%= vat.taxTotal %></p>
+    <p><strong><%= vat.grandTotalLabel %>: <%= vat.grandTotal %></strong></p>
+
+    <address>
+        <% if (vat.supplier.legalName) { %>
+            <div><%= vat.supplier.legalName %></div>
+        <% } %>
+        <div><%= vat.supplier.vatNumberLine %></div>
+        <% if (vat.supplier.country) { %>
+            <div><%= vat.supplier.country %></div>
+        <% } %>
+    </address>
+</main>
+</body>
+</html>

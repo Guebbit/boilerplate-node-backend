@@ -1,0 +1,265 @@
+# The preset roles, and the keys each one holds.
+#
+# Committed with identical bytes in `boilerplate-node-backend` and
+# `boilerplate-php-laravel-backend`, and read by both seeders rather than restated in each.
+#
+# WHY THIS FILE EXISTS AT ALL. `authorization-keys.yaml` and `authorization-conformance.yaml` make
+# the two implementations *agree*; only this one makes them the same **product**. The PHP twin
+# stores roles in a table via `spatie/laravel-permission` and the Node twin does not store them
+# that way at all, so two independently written seeders would produce two different shops that
+# both pass every test.
+#
+# Nobody is handed an empty permission matrix. A deployment gets these on day one and may edit
+# them afterwards — they are a starting point, not a schema.
+#
+# Every tenant role below is a demo persona, run against every screen — see `docs/demo-ecommerce/`
+# — except `admin`, the shop's one superuser account rather than a job. Reusing the others means
+# the permission model is exercised by the demo rather than only by its own tests.
+#
+# EVERY GRANT BELOW IS SPELLED OUT, `admin` INCLUDED. There is no wildcard of any kind —
+# breadth is a segment on the key itself (`<family>.self.read` vs `<family>.any.read`), so a role
+# that reads widely says `any` and a role that reads only its own says `self`, and nothing has to
+# be inferred from which wildcard a role happens to hold. `admin` lists every declared tenant key
+# by name for the same reason every other role does: a key nothing lists grants nothing, and that
+# is now true of `admin` too — see `authorization-keys.yaml`'s closing note.
+
+version: 1
+
+roles:
+    # -- tenant scope --------------------------------------------------------------------------
+    # `unverified` is what `customer` starts as, before the address is proven — one key thinner,
+    # nothing else different. Browsing, the basket, the wishlist, the address book and the account
+    # follow from being signed in and need no key either way, which is the "fails in the right
+    # direction" property the whole model was chosen for. See `cart.self.checkout`'s own
+    # description in `shared/authorization-keys.yaml` and docs/theory/authorization.md.
+    #
+    # THERE IS NO UNVERIFIED MANAGER. A role is something an operator GRANTS, and granting it IS
+    # the vouching — so every staff role below holds `cart.self.checkout` explicitly, `admin`
+    # included, and this is the only tenant role that may not.
+    - name: unverified
+      scope: tenant
+      title: A signed-up account, address unproven
+      description: >-
+          What `customer` is minus the ability to spend. Assigned automatically at signup; the
+          verify flow promotes the account to `customer` once the address is proven, and an
+          operator may promote it to anything else at any time — granting a role is the vouching.
+      permissions:
+          - products.self.read
+          - locales.self.read
+          - delivery.any.read
+          - orders.self.read
+          - payments.self.read
+
+    - name: customer
+      scope: tenant
+      title: The customer
+      description: >-
+          Someone buying things. Everything they may do to their own basket, wishlist, addresses
+          and account follows from being signed in and needs no key at all — what is listed here
+          is only what they may read of the SHOP, plus the one key that lets them spend.
+      permissions:
+          - products.self.read
+          - locales.self.read
+          - delivery.any.read
+          - orders.self.read
+          - payments.self.read
+          - cart.self.checkout
+
+    - name: manager
+      scope: tenant
+      title: The shop manager
+      description: >-
+          What is for sale, at what price, and what happens to an order after it arrives. Reads
+          stock but does not move it; that is the warehouse's job and its audit trail.
+      permissions:
+          - products.any.read
+          - products.any.create
+          - products.any.update
+          - products.any.delete
+          - orders.any.read
+          - orders.any.create
+          - orders.any.update
+          - orders.any.delete
+          - locales.any.read
+          - locales.any.create
+          - locales.any.update
+          - locales.any.delete
+          # A product write stacks `products.any.update` AND a translations key, so a manager
+          # editing a listing needs this by name.
+          - translations.any.read
+          - translations.any.update
+          - payments.self.read
+          - inventory.any.read
+          - delivery.any.read
+          - feedback.any.read
+          - users.any.read
+          - audit.any.read
+          - webhooks.any.read
+          - webhooks.any.create
+          - webhooks.any.update
+          - webhooks.any.delete
+          # Shopping on a staff account is not a security event — see "no unverified manager" above.
+          - cart.self.checkout
+
+    - name: warehouse
+      scope: tenant
+      title: The warehouse
+      description: >-
+          Stock, and getting parcels out of the door. Records movements and advances consignments;
+          may not change what a thing costs or delete it from the catalogue.
+      permissions:
+          - products.self.read
+          # The fix this plan exists for: packing an order that is never the warehouse operator's
+          # own needs the WIDE read, not the narrow one `orders.self.read` would give.
+          - orders.any.read
+          - inventory.any.read
+          - inventory.any.create
+          - delivery.any.read
+          - delivery.any.update
+          - cart.self.checkout
+
+    - name: support
+      scope: tenant
+      title: The support desk
+      description: >-
+          Messages from people, and accounts that need help. May update an account and may not
+          erase one — that is the admin's and the moderator's, and it expects a freshly proved
+          session.
+      permissions:
+          - feedback.any.read
+          - feedback.any.update
+          - feedback.any.delete
+          - users.any.read
+          - users.any.update
+          # The fix this plan exists for: helping a customer with an order or a payment that is
+          # never the support agent's own needs the WIDE read, not the narrow one.
+          - orders.any.read
+          - payments.any.read
+          - audit.any.read
+          - cart.self.checkout
+
+    - name: editor
+      scope: tenant
+      title: The editor
+      description: >-
+          Everything the shop SAYS and SHOWS, in every registered language: the catalogue record
+          itself (price included), the dictionary a shopper reads the shop in — including
+          registering a language the shop has not spoken before — and the words on a translatable
+          entity such as a product's title and description. What none of them touches is a
+          different subject entirely: stock (that is `inventory`), a delivery rule, an order, or an
+          account.
+      permissions:
+          # Every product and locale action, including the wide read — an editor works on drafts,
+          # and the narrow `self` read is restricted to active rows.
+          - products.any.read
+          - products.any.create
+          - products.any.update
+          - products.any.delete
+          - locales.any.read
+          - locales.any.create
+          - locales.any.update
+          - locales.any.delete
+          - translations.any.read
+          - translations.any.update
+          - cart.self.checkout
+
+    - name: moderator
+      scope: tenant
+      title: The moderator
+      description: >-
+          Accounts, and the two things people write about their orders: the message they send and
+          the order itself. May ban an account, reverse a bad charge, and read why either happened.
+      permissions:
+          - users.any.read
+          - users.any.create
+          - users.any.update
+          # Erasing an account. Held explicitly rather than through a wildcard, so that this role
+          # gaining it was a decision somebody made rather than a key it absorbed. The route still
+          # demands a freshly proved session — `users.any.delete` carries `stepUp: critical`.
+          - users.any.delete
+          # The wide read on both — a moderator's whole purpose is rows that are never their own.
+          - orders.any.read
+          - orders.any.create
+          - orders.any.update
+          - orders.any.delete
+          - payments.any.read
+          - payments.any.create
+          - payments.any.update
+          - audit.any.read
+          - cart.self.checkout
+
+    - name: admin
+      scope: tenant
+      title: The administrator
+      description: >-
+          Unrestricted within this shop, and only within it — and note that it says nothing
+          about the platform. One role cannot reach both scopes, which is the point. Every tenant
+          key below is held by name; the conformance suite refuses a declared tenant key this list
+          omits, so adding a key here can never again be optional.
+      permissions:
+          - products.self.read
+          - products.any.read
+          - products.any.create
+          - products.any.update
+          - products.any.delete
+          - cart.self.checkout
+          - orders.self.read
+          - orders.any.read
+          - orders.any.create
+          - orders.any.update
+          - orders.any.delete
+          - orders.any.override
+          - payments.self.read
+          - payments.any.read
+          - payments.any.create
+          - payments.any.update
+          - inventory.any.read
+          - inventory.any.create
+          - inventory.any.sweep
+          - delivery.any.read
+          - delivery.any.update
+          - feedback.any.read
+          - feedback.any.update
+          - feedback.any.delete
+          - locales.self.read
+          - locales.any.read
+          - locales.any.create
+          - locales.any.update
+          - locales.any.delete
+          - translations.any.read
+          - translations.any.update
+          - users.any.read
+          - users.any.create
+          - users.any.update
+          - users.any.delete
+          - tokens.any.delete
+          - audit.any.read
+          - webhooks.any.read
+          - webhooks.any.create
+          - webhooks.any.update
+          - webhooks.any.delete
+          - apikeys.any.read
+          - apikeys.any.create
+          - apikeys.any.delete
+
+    # -- platform scope ------------------------------------------------------------------------
+    - name: operator
+      scope: platform
+      title: The platform operator
+      description: >-
+          Runs the installation: health, metrics, the operational audit. Explicitly NOT a
+          super-admin — holds no bare key and therefore cannot read a single shop's orders,
+          customers or messages. The conformance suite asserts both halves of that.
+      permissions:
+          - platform.observability.any.read
+
+# The role every unauthenticated request resolves to. Named so that "guest" is a value in the
+# model rather than a null somebody forgot to handle, and it holds exactly the keys a stranger
+# needs — reading published products and the dictionary the shop is rendered in.
+anonymous:
+    name: guest
+    scope: tenant
+    permissions:
+        - products.self.read
+        - locales.self.read
+        - delivery.any.read

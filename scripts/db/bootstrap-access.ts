@@ -1,0 +1,31 @@
+#!/usr/bin/env tsx
+/**
+ * @module
+ * Give a fresh production database its shop — `npm run access:bootstrap`.
+ *
+ * The counterpart to `scenarios/apply.ts` that is actually safe in production: the write here is an
+ * upsert keyed on the fixed `DEPLOYMENT_TENANT_ID`, so running this against an already-seeded
+ * database changes nothing, unlike `scenario:apply`'s demo accounts. No `NODE_ENV` guard is needed
+ * for that reason — `scenario:apply` refuses under production precisely because IT is not idempotent
+ * in the way this is. The preset roles need no bootstrap step of their own: they are read straight
+ * from `shared/authorization-roles.yaml` at import, never stored.
+ *
+ * Run before `app`/`cron` start — see `docker-compose.production.yml`'s `setup` service.
+ *
+ * See: docs/reference/ops.md
+ */
+import 'dotenv/config';
+import { start, stopDatabase } from '@infrastructure/runtime/database';
+import { bootstrapAccessModel } from '@modules/access';
+import { logger } from '@infrastructure/adapters/logger';
+import { runScript } from '../run-script';
+
+/** Connect, upsert the shop, and log its id for the operator's records. */
+const main = (): Promise<void> =>
+    start()
+        .then(() => bootstrapAccessModel('Shop'))
+        .then((tenant) => {
+            logger.info(`Access model bootstrapped: shop "${String(tenant._id)}".`);
+        });
+
+void runScript(main, stopDatabase);

@@ -1,0 +1,1620 @@
+openapi: 3.0.3
+info:
+    title: Ecommerce Demo API
+    version: '2.0.0'
+    description: |
+        Stable, codegen-oriented OpenAPI contract.
+        Designed for multi-project, multi-language use (client/server stubs, DTOs, SDKs).
+
+        Language: every endpoint honours `Accept-Language` (q-weights and region tags
+        included). It selects the language of user-facing copy only — `errors[].message` and a
+        success envelope's `message` — never the response shape, the status code, or a
+        machine-readable field such as `errors[].code`. An unsupported language falls back
+        instead of erroring; `Content-Language` states what was used and `Vary:
+        Accept-Language` is always set. `GET /locales` lists what a deployment supports.
+
+        The header is intentionally not declared per operation: it applies to all of them and
+        clients set it once in an interceptor, so declaring it 33 times would only add a
+        redundant argument to every generated function. This paragraph is its contract.
+    contact:
+        name: API Team
+
+servers:
+    - url: http://localhost:3000
+      description: Local
+    - url: https://api.example.com
+      description: Production
+
+# ---------- Responses the APPLICATION answers, on operations that never declare them. ----------
+#
+# Two middlewares sit in front of every route and can refuse before it runs: the global rate
+# limiter (`app.use(rateLimiter)`), and the body parser — whose size, syntax and encoding checks
+# account for three of the four statuses below. Neither is any one endpoint's business, so
+# neither belongs in a module fragment — an operation left to declare its own would either
+# duplicate these four everywhere or answer a status its own contract denies.
+#
+# Declared ONCE here and merged into every matching operation by `scripts/contracts/openapi-bundle.ts`,
+# rather than hand-copied into each fragment. A hand-copied list is a published claim with no guard
+# behind it: it goes stale silently, and the next app-level response repeats the whole exercise.
+#
+# `appliesTo` — `all` for what any request can trigger, `requestBody` for what only a request
+# carrying a body can.
+x-app-level-responses:
+    '400':
+        response: BadRequest
+        appliesTo: requestBody
+    '413':
+        response: PayloadTooLarge
+        appliesTo: requestBody
+    '415':
+        response: UnsupportedMediaType
+        appliesTo: requestBody
+    '429':
+        response: TooManyRequests
+        appliesTo: all
+
+tags:
+    - name: Auth
+    - name: Antibot
+    - name: Account
+    - name: Users
+    - name: Products
+    - name: Cart
+    - name: Wishlist
+    - name: Orders
+    - name: Payments
+    - name: Delivery
+    - name: Inventory
+    - name: Feedback
+    - name: System
+      description: Public system endpoints (ping, liveness).
+    - name: Observability
+      description: Operational observability endpoints (metrics, health, audit, events). Protected endpoints require admin role.
+    - name: Audit
+      description: The tenant's own action history — who did what, when, to which row. Read-only, and separate from Observability's operational audit, which is the platform operator's view across every shop.
+    - name: Webhooks
+      description: Outbound webhook subscriptions, the delivery log, replay, and the public event catalogue.
+    - name: ApiKeys
+      description: Machine-to-machine credentials — list, mint, revoke.
+
+# If set, by default all operation requires an authentication
+# security:
+#    - bearerAuth: []
+
+components:
+    # This is a common security scheme that can be used by any operation
+    securitySchemes:
+        bearerAuth:
+            type: http
+            scheme: bearer
+            bearerFormat: JWT
+        apiKeyAuth:
+            type: http
+            scheme: bearer
+            # No `bearerFormat` — deliberately: `JWT` would claim a structure this credential
+            # does not have. `sk_<prefix>_<secret>`, opaque, distinguished from a JWT by that
+            # prefix alone (a JWT always begins `eyJ`). See
+            # docs/tools/security.md#machine-to-machine-credentials.
+            description: An opaque `sk_...` machine-to-machine credential, minted via `POST /api-keys`.
+
+    parameters:
+        # `Accept-Language` is honoured by every operation and is documented in
+        # `info.description` rather than declared here — see the note there.
+
+        # Common parameters
+        PageParam:
+            name: page
+            in: query
+            required: false
+            schema:
+                $ref: '#/components/schemas/Page'
+            description: 1-based page index
+        PageSizeParam:
+            name: pageSize
+            in: query
+            required: false
+            schema:
+                $ref: '#/components/schemas/PageSize'
+        TextParam:
+            name: text
+            in: query
+            required: false
+            schema:
+                $ref: '#/components/schemas/Text'
+
+        # Rung 3 of the anti-automation ladder (`NODE_ANTIBOT_PROVIDER`) — see antibot/openapi.yaml.
+        # Optional at the contract level: absent while the provider is `none`, required by the
+        # server once a real one is selected.
+        AntibotChallengeTokenHeader:
+            name: x-antibot-challenge-token
+            in: header
+            required: false
+            schema:
+                type: string
+            description: >
+                The token the active human-challenge provider issued to the client — see
+                `GET /antibot/config`. Absent when that provider is `none`.
+
+        # Opt-in per route (see `src/infrastructure/http/middlewares/idempotency.ts`) — never
+        # required at the contract level, since a caller not asking for replay protection must
+        # still be able to call the route.
+        IdempotencyKeyHeader:
+            name: Idempotency-Key
+            in: header
+            required: false
+            schema:
+                type: string
+                minLength: 1
+                maxLength: 200
+                pattern: '^[A-Za-z0-9_-]+$'
+            description: >
+                An opaque, client-generated value (a UUID by convention) that makes a retried
+                write safe. Repeating this request with the SAME key and the SAME body replays
+                the first response (`Idempotent-Replay: true`, no repeated write) instead of
+                running it again; the same key with a DIFFERENT body answers 422; a key still
+                being processed by another in-flight request answers 409. Omitting the header
+                simply forgoes replay protection — the write still happens normally.
+
+        # Query ID parameters (just for filtering)
+        #
+        # `id` is a batch read, not a lookup: an array so `?id=a&id=b` reads many at once, filtered
+        # through the same `$in` a single value already produces. `minItems: 1` refuses `[]`, which
+        # a query builder that skips empty filters would otherwise read as "no filter" — an
+        # accidental full export. `maxItems: 100` matches `PageSize.maximum`, so a batch cannot cost
+        # more than a page can.
+        IdParam:
+            name: id
+            in: query
+            required: false
+            explode: true
+            schema:
+                type: array
+                minItems: 1
+                maxItems: 100
+                items: { $ref: '#/components/schemas/Id' }
+        UserIdParam:
+            name: userId
+            in: query
+            required: false
+            schema:
+                $ref: '#/components/schemas/Id'
+        ProductIdParam:
+            name: productId
+            in: query
+            required: false
+            schema:
+                $ref: '#/components/schemas/Id'
+        # OrderIdParam:
+        #     name: orderId
+        #     in: query
+        #     required: false
+        #     schema:
+        #         $ref: '#/components/schemas/Id'
+
+        # The delete flag, shared because every soft-deleting domain offers the same three
+        # spellings of it: `/hard` in the path, `?hardDelete=true` in the query, `hardDelete` in
+        # the body. Params outrank query, which outranks body — see docs/theory/request-input.md.
+        # Declared here once so a fourth domain cannot accidentally offer only two of the three.
+        HardDeleteParam:
+            name: hardDelete
+            in: query
+            required: false
+            schema:
+                type: boolean
+            description: Permanently remove the record instead of soft-deleting it. Where the same operation also accepts the flag in its path or body, a `true` from any of them wins.
+
+        # Path ID parameters (for resource lookup)
+        IdPathParam:
+            name: id
+            in: path
+            required: true
+            schema:
+                $ref: '#/components/schemas/Id'
+            description: Resource identifier
+
+        ProductIdPathParam:
+            name: productId
+            in: path
+            required: true
+            schema:
+                $ref: '#/components/schemas/Id'
+            description: Product identifier
+
+    responses:
+        Success:
+            description: Success
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/MessageResponse'
+        BadRequest:
+            description: >-
+                The request could not be understood or authenticated as what it claims to be —
+                distinct from `ValidationError`, which is a well-formed request whose FIELDS are
+                wrong. Used where a caller is a machine rather than a form: an unverifiable webhook
+                signature is the case that needs it.
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+        Unauthorized:
+            description: Unauthorized
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+        Forbidden:
+            description: Forbidden
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+        NotFound:
+            description: Resource not found
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+        Conflict:
+            description: The request conflicts with the current state of the resource
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+        ValidationError:
+            description: Validation failed
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ValidationErrorResponse'
+        PayloadTooLarge:
+            description: >-
+                The request body is larger than this deployment accepts
+                (`NODE_JSON_BODY_LIMIT`, 100kb by default; multipart uploads are bounded separately
+                by `NODE_MAX_UPLOAD_BYTES`). Refused by the body parser before any route runs,
+                which is why it is declared for every body-accepting operation rather than by hand.
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+        UnsupportedMediaType:
+            description: >-
+                The request body declares a character set or a content encoding the body parser
+                cannot read. Refused before any route runs, like `413` above — a body whose
+                content-type simply matches no parser is NOT this: it reaches the route, which
+                answers whatever it says about a request missing every field.
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+        TooManyRequests:
+            description: The caller has spent a rate-limit budget and must wait. The wait is in the standard `RateLimit`/`Retry-After` headers, and — where the endpoint has a budget of its own to report, like a resend cooldown — in the error `details` too.
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+        InternalError:
+            description: Internal server error
+            content:
+                application/json:
+                    schema:
+                        $ref: '#/components/schemas/ErrorResponse'
+
+    schemas:
+        # ---------- Shared — scalars, envelopes and the entities more than one module references. ----------
+        Page:
+            type: integer
+            minimum: 1
+            maximum: 10000
+            default: 1
+            description: 1-based page index. Bounded so page × pageSize cannot ask for an unbounded Mongo skip.
+        PageSize:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+            description: Optional override; server may clamp to a max
+        Id:
+            type: string
+            description: Resource identifier
+        Text:
+            type: string
+            minLength: 1
+            description: Free-text search string
+        Email:
+            type: string
+            format: email
+        Password:
+            type: string
+            minLength: 8
+            description: >-
+                An EXISTING password, being proved rather than set — login, the current-password
+                leg of a change, and re-auth. No complexity pattern: a password created before
+                `PasswordNew` existed must still be provable, and a login attempt is not the place
+                to also announce the site's password policy to whoever is guessing it.
+        PasswordNew:
+            type: string
+            minLength: 8
+            # Lookahead, so every generator that walks this file needs a sample rather than a
+            # generated string — registered once in `tests/support/pattern-samples.ts`, which both
+            # the fuzz and the request generators read. The rule is ALSO enforced in translated
+            # form by `zodUserSchema` (`src/modules/users/model.ts`) and the paired frontend's
+            # `usersPasswordSchema`: this pattern is what every other reader of the contract sees,
+            # those are what a person reads when they get it wrong.
+            pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\dA-Za-z]).{8,}$'
+            description: >-
+                A password being SET — signup, reset, change, and every admin-issued user
+                password. Must contain a lowercase letter, an uppercase letter, a digit and a
+                symbol, on top of `Password`'s length floor — enforced server-side, not just by
+                the paired frontend's form.
+        Locale:
+            type: string
+            description: >-
+                BCP 47 language tag, e.g. `en` or `it`. Which tags a deployment actually supports
+                is a runtime fact, not a contract one — ask `GET /locales`.
+            pattern: '^[a-z]{2}(-[A-Za-z0-9]+)*$'
+            example: it
+        ImageUrl:
+            type: string
+            format: uri-reference
+            description: >-
+                Absolute URL or server-relative upload path (e.g. `/uploads/abc.jpg`).
+                `uri-reference`, not `uri`: an uploaded image is stored and returned as a
+                path relative to the API host, which is not a valid absolute URI.
+        ThumbnailUrl:
+            type: string
+            format: uri-reference
+            readOnly: true
+            description: >-
+                Server-relative path to a small WebP derivative of `imageUrl`, produced by the
+                image digest pipeline once an uploaded image has finished processing (see
+                `docs/tools/image-processing.md`). Absent for a record whose image is a remote
+                or default URL rather than an upload — there is nothing to derive a thumbnail
+                from. Never accepted on a request body: the server is the only writer.
+
+        # ---------- On the `imageUpload` fields below (and why they carry no limits) ----------
+        #
+        # The six `*Multipart` request bodies each declare `imageUpload` as a bare
+        # `type: string, format: binary` — no `maxLength`, no `contentMediaType`. That is on
+        # purpose, and it is worth knowing why before someone "fixes" it.
+        #
+        # The real limits live in the backend, and only there:
+        #   - accepted mime types → src/infrastructure/http/middlewares/upload.ts's `fileFilter` (image/png, jpg, jpeg, webp)
+        #   - maximum size        → NODE_MAX_UPLOAD_BYTES, default 5 MB
+        # enforced twice: `fileFilter` rejects on the client's declared Content-Type before the
+        # bytes touch disk, then `identifyImageFile()` re-reads the actual magic bytes and answers
+        # 422 when the declaration lied. Nothing a client declares can substitute for either gate.
+        #
+        # Declaring the constraints here would document them but generate nothing to read:
+        #   - orval's zod generator short-circuits on `format: binary` straight to
+        #     `zod.instanceof(File)` and emits no length constant for it
+        #     (@orval/zod, the `case "string"` branch);
+        #   - the `zodSchemas` target in orval.config.ts has no `splitByContentType`, so only the
+        #     JSON body of each operation becomes a schema — the multipart bodies never do.
+        # So a `maxLength` added here would reach no generated artefact in either repo, while
+        # looking like it had.
+        #
+        # The frontend therefore restates both numbers in src/infrastructure/uploads.ts, which names
+        # storage.ts as the authority and explains the same thing at its own call site. If the
+        # backend's limits ever change, that file is what has to change with them — nothing will
+        # announce the drift.
+
+        PaginationMeta:
+            type: object
+            additionalProperties: false
+            required: [page, pageSize, totalItems, totalPages]
+            properties:
+                page:
+                    $ref: '#/components/schemas/Page'
+                pageSize:
+                    $ref: '#/components/schemas/PageSize'
+                totalItems:
+                    type: integer
+                    minimum: 0
+                totalPages:
+                    type: integer
+                    minimum: 0
+
+        # ---------- System Messages ----------
+
+        # The three `&envelope*` anchors below are the single definition of the success-envelope
+        # preamble. Every *Envelope schema aliases them with `*envelopeSuccess` etc., so the shape
+        # is written once here and the YAML parser expands it everywhere — no allOf, and therefore
+        # no schema that has to stay non-strict. See the note on ErrorResponse for why.
+        # The success-envelope preamble, named so every *Envelope schema in every module file can
+        # `$ref` it. These were YAML anchors while the document was assembled by concatenation;
+        # anchors cannot cross files, and each module is now a standalone document.
+        EnvelopeSuccess:
+            type: boolean
+            enum: [true]
+
+        EnvelopeStatus:
+            type: integer
+
+        EnvelopeMessage:
+            type: string
+
+        MessageResponse:
+            type: object
+            additionalProperties: false
+            required: [success, status, message]
+            properties:
+                success:
+                    $ref: '#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '#/components/schemas/EnvelopeMessage'
+
+        ErrorItem:
+            type: object
+            additionalProperties: false
+            required: [code, message]
+            properties:
+                code:
+                    type: string
+                    description: Stable machine-readable error code
+                    example: VALIDATION_ERROR
+                message:
+                    type: string
+                    description: Human-readable error detail
+                    example: Field "email" is required
+                details:
+                    type: object
+                    additionalProperties: true
+                    description: Optional structured metadata for programmatic handling
+
+        # `additionalProperties: false` cannot live on a schema used as an `allOf` base: the
+        # constraint is evaluated per-subschema, so it would reject the properties a sibling
+        # contributes. Rather than leave the error/success envelopes unconstrained, they are
+        # written flat and share their preamble through YAML anchors.
+        ErrorResponse:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, errors]
+            properties:
+                success: &errorSuccess
+                    type: boolean
+                    enum: [false]
+                status: &errorStatus
+                    type: integer
+                message: &errorMessage
+                    type: string
+                    description: Human-readable summary for this failure
+                errors: &errorErrors
+                    type: array
+                    minItems: 1
+                    items:
+                        $ref: '#/components/schemas/ErrorItem'
+                    description: Structured machine-friendly errors
+
+        ValidationErrorResponse:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, errors]
+            properties:
+                success: *errorSuccess
+                status: *errorStatus
+                message:
+                    type: string
+                    description: Human-readable summary for this failure
+                    example: Validation failed
+                errors: *errorErrors
+
+        # ---------- Domain ----------
+
+        # All success responses are wrapped in a standard envelope:
+        # { success: true, status: number, message: string, data: <payload> }
+        # The schemas below describe the "data" payload for each endpoint.
+        # Wrapped response schemas below combine the envelope with the domain payload.
+
+        Abilities:
+            type: object
+            additionalProperties: false
+            description: |
+                What the caller may do, as CASL's packed-rule format — the shape `unpackRules`
+                takes. A tuple per rule rather than an object, which is what makes shipping a few
+                dozen of them cheap.
+
+                BOTH SCOPES ARE ANSWERED, and that is the whole reason this is not a single rule
+                list. A request resolves to exactly one scope — the one the key it is asking about
+                declares — but a CLIENT renders screens from both at once: a shop's catalogue and
+                the installation's health dashboard sit in one navigation. Publishing only the
+                caller's tenant rules left every platform screen with no rule to grey out, so it
+                was gated on a tenant key that happened to correlate, which is exactly the
+                hand-maintained guess this endpoint exists to abolish.
+
+                The two lists never merge. A tenant rule can never satisfy a platform key and the
+                reverse is equally impossible (`shared/authorization-keys.yaml`'s one invariant),
+                so a client builds ONE ABILITY PER SCOPE and asks the one that owns the subject.
+
+                The client's copy has NO AUTHORITY: it decides what to render, never what is
+                allowed, and every request is re-evaluated server-side. Published so a client greys
+                out what it would be refused from the same rules the server enforces, rather than
+                from a hand-maintained duplicate that drifts — the drift is silent until somebody
+                is shown a button that answers 403.
+            required: [tenant, platform, version, subjects]
+            properties:
+                subjects:
+                    type: array
+                    items: { type: string }
+                    description: |
+                        Every CASL subject a declared key names, deduplicated and sorted — the
+                        `Order`/`Product`/`ApiKey`/... a rule's second element may be. Published so
+                        a client's own `meta.can` rules are typed against the real set rather than
+                        an unchecked string a typo can silently fail closed on.
+                tenantId:
+                    type: string
+                    description: |
+                        The shop `tenant`'s rules are about. Absent when the caller has no tenant
+                        membership at all — a pure platform operator administers the installation
+                        rather than acting inside one shop.
+                tenant:
+                    allOf:
+                        - $ref: '#/components/schemas/PackedRules'
+                    description: |
+                        What the caller may do INSIDE their shop. Empty for a caller with no tenant
+                        membership; for an anonymous visitor it is the `guest` role's rules, which
+                        are a value in the model rather than an absence.
+                platform:
+                    allOf:
+                        - $ref: '#/components/schemas/PackedRules'
+                    description: |
+                        What the caller may do ACROSS the installation — health, metrics, the
+                        operational audit. Empty for everyone but a platform operator, which is
+                        most callers: an operator is not a super-member and holds no shop's keys.
+                version:
+                    type: integer
+                    description: |
+                        The permission model's own version, bumped when the KEYS change rather than
+                        when a role does. A client caches these; this is what tells it the cache is
+                        about a different model, not merely a different person. One number for both
+                        lists — the keys file they are declared in is one file.
+
+        PackedRules:
+            type: array
+            description: |
+                CASL packed rules — `[action, subject, conditions?, fields?, inverted?, reason?]`,
+                with trailing absent members omitted.
+            items:
+                type: array
+                description: |
+                    One packed rule. OpenAPI 3.0 has no tuple, so a position is declared as the
+                    union of what it may hold: the action and the subject are strings, `conditions`
+                    an object, `fields` a list of strings and `inverted` a boolean.
+                items:
+                    oneOf:
+                        - type: string
+                        - type: boolean
+                        - type: object
+                        - type: array
+                          items:
+                              type: string
+
+        AbilitiesEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/Abilities'
+
+        UserEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/User'
+
+        User:
+            type: object
+            additionalProperties: false
+            required: [id, email, username]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                email:
+                    $ref: '#/components/schemas/Email'
+                username:
+                    type: string
+                # The role this person holds inside the shop, by name — one of the presets in
+                # `shared/authorization-roles.yaml`. A NAME rather than a key list: roles are data
+                # a deployment may edit, and publishing the keys would freeze each account at the
+                # permissions its role held on the day it was written. What a caller may DO is
+                # `GET /me/abilities`, which answers for the caller rather than about a row.
+                role:
+                    type: string
+                # Independent of `deletedAt` below: an account can be deactivated without being
+                # deleted, and a deleted one keeps whatever `active` it had. They share an effect,
+                # not a value — see the note on `CreateProductRequest.active`.
+                active:
+                    type: boolean
+                # WHEN the address was confirmed through the verify-request / verify-confirm flow,
+                # absent until it is. Self-signup starts absent and confirms by email;
+                # admin-created and OAuth accounts start set because an operator or the provider
+                # already vouches for the address. Informational only — enforcement is the `role`
+                # above (`unverified` holds no `cart.checkout`, see `GET /account/abilities`) — so
+                # a client renders this as a banner, never as a wall of its own.
+                verifiedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                # Set only by `PUT /account` requesting a new address, cleared once
+                # `POST /account/email-change-confirm` proves it (or a second `PUT /account`
+                # naming the CURRENT address cancels it). Inlined rather than `$ref`ing `Email`:
+                # that schema is shared with WRITABLE request bodies, and `readOnly` belongs to
+                # this field's use here, not to every one of them. A client shows it as a banner,
+                # never writes it — the request body's own `email` is what starts a change (see
+                # docs/modules/account.md#proving-an-address).
+                pendingEmail:
+                    type: string
+                    format: email
+                    readOnly: true
+                imageUrl:
+                    $ref: '#/components/schemas/ImageUrl'
+                thumbnailUrl:
+                    $ref: '#/components/schemas/ThumbnailUrl'
+                locale:
+                    $ref: '#/components/schemas/Locale'
+                phone:
+                    type: string
+                website:
+                    type: string
+                # "Never asked" and "denied" are the same answer, arrived at differently — the
+                # gate is opt-in, so only `true` captures anything
+                # (`observability/analytics/index.ts`).
+                analyticsConsent:
+                    type: boolean
+                # Enforced at signup only (`SignupRequest.termsAccepted`, required there) — every
+                # account in the database has this `true` by construction, including rows that
+                # predate the field, backfilled to `true` when the column was introduced.
+                # Informational from here on: there is no re-acceptance flow.
+                termsAccepted:
+                    type: boolean
+                # Present only once POST /account/2fa/confirm has armed a secret — a pending,
+                # unconfirmed one never reaches here. The secret and backup codes themselves are
+                # never part of this schema; see `users/model.ts`'s asymmetric storage.
+                twoFactorEnabledAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+                # Present only on a soft-deleted account, exactly as on `Product`. With `active` an
+                # independent fact, this is the only thing that tells a deleted account from a
+                # live one. Safe to expose: every route serving a `User` list is admin-only, and
+                # `/account` serves the caller their own record.
+                deletedAt:
+                    type: string
+                    format: date-time
+
+        # Overrides the shop's default VAT rate for this product. Absent — most products — means
+        # the standard rate (`NODE_VAT_RATE_DEFAULT`) applies; every product resolves to SOME
+        # rate, this field only ever narrows it. `reduced` uses `NODE_VAT_RATE_REDUCED`; `zero`
+        # is always 0%, no configuration needed. The RESOLVED decimal rate, not this class, is
+        # what gets frozen onto an order line — see `OrderLineProduct.taxRate`.
+        TaxClass:
+            type: string
+            enum: [reduced, zero]
+            description: >-
+                A category of goods taxed below the shop's standard VAT rate — books, food,
+                medicine and similar, depending on the deployment's own jurisdiction. Absent means
+                the standard rate.
+
+        Product:
+            type: object
+            additionalProperties: false
+            required: [id, title, price]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                title:
+                    type: string
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: >-
+                        Gross — what the customer pays, VAT included. Never net-of-tax: the invoice
+                        derives the net amount and the VAT amount FROM this, at whatever rate
+                        applies, rather than the other way around.
+                taxClass:
+                    $ref: '#/components/schemas/TaxClass'
+                # ── The two counters and the number derived from them ──────────────────────
+                #
+                # `onHand` is how many units exist; `reserved` is how many of those an open
+                # order has already claimed. A storefront should read NEITHER — what a customer
+                # may buy is `available`, and the two stored numbers are published mainly so an
+                # admin screen can explain a low availability ("forty here, thirty-eight
+                # spoken for") rather than merely assert it.
+                #
+                # All three are read-only. No request body anywhere in this contract accepts a
+                # counter except `CreateProductRequest.onHand`, which is a new product's opening
+                # count. Everything after that moves through the `/inventory` transitions, which
+                # are signed, conditional, and leave a ledger row.
+                onHand:
+                    type: integer
+                    minimum: 0
+                    readOnly: true
+                    description: Units physically present, whether or not they are spoken for.
+                reserved:
+                    type: integer
+                    minimum: 0
+                    readOnly: true
+                    description: Units held by an open order — present, but not for sale.
+                # Derived (`onHand - reserved`), never stored, so it cannot disagree with the
+                # pair it comes from. `0` renders as out of stock: the catalogue still lists the
+                # product, checkout is what refuses it (`CART_INSUFFICIENT_STOCK`).
+                available:
+                    type: integer
+                    minimum: 0
+                    readOnly: true
+                    description: What a customer may actually buy. Derived from the two counters above.
+                description:
+                    type: string
+                active:
+                    type: boolean
+                # Default true: most products are physical. false is a digital good — checkout
+                # never needs a shipping method for a cart made entirely of these.
+                requiresShipping:
+                    type: boolean
+                    default: true
+                # Grams. Absent counts as 0 for shipping-method filtering (`GET /delivery/methods`,
+                # checkout's weight-range refusal) — a product missing this is silently routed as
+                # weightless, not refused, so the admin form warns rather than requiring it outright.
+                weight:
+                    type: integer
+                    minimum: 0
+                imageUrl:
+                    $ref: '#/components/schemas/ImageUrl'
+                thumbnailUrl:
+                    $ref: '#/components/schemas/ThumbnailUrl'
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+                deletedAt:
+                    type: string
+                    format: date-time
+
+        CartItem:
+            type: object
+            additionalProperties: false
+            required: [productId, quantity]
+            properties:
+                productId:
+                    $ref: '#/components/schemas/Id'
+                quantity:
+                    type: integer
+                    minimum: 1
+
+        # The address an order ships to — a SNAPSHOT, exactly like the product snapshots the
+        # items embed: an order must keep where it was going, not what the address book says
+        # today. No `id`, no `default` — those are facts about the book entry, not the shipment.
+        OrderAddress:
+            type: object
+            additionalProperties: false
+            required: [fullName, street, city, zip, country]
+            properties:
+                fullName:
+                    type: string
+                street:
+                    type: string
+                city:
+                    type: string
+                zip:
+                    type: string
+                country:
+                    type: string
+                phone:
+                    type: string
+
+        # What a pending `bank_transfer` order's owner (and staff) sees to complete it. Never
+        # frozen onto the order — the beneficiary/IBAN/BIC are deployment config, not
+        # order-specific data, so this is computed at read time from whatever the deployment
+        # currently has configured. `reference` IS order-specific: it is what the customer types
+        # into the transfer's own description field, so the money can be matched back.
+        OrderTransferInstructions:
+            type: object
+            additionalProperties: false
+            required: [beneficiary, iban, reference]
+            properties:
+                beneficiary:
+                    type: string
+                iban:
+                    type: string
+                bic:
+                    type: string
+                    description: Absent when the deployment has not configured one.
+                reference:
+                    type: string
+                    description: >-
+                        The ISO 11649 "RF" creditor reference minted for this order at checkout —
+                        what the customer writes into the transfer's description, so an admin can
+                        match the incoming payment back to it via `GET
+                        /payments/order-by-reference`. An order that predates this field falls
+                        back to its own raw id, which that same endpoint also accepts.
+
+        # `Product`, without `onHand`/`reserved`/`available`, and without an image — see
+        # `OrderLineCurrent`. An order line is a purchase-time SNAPSHOT — the price and title a
+        # customer actually bought — and those two fields are the opposite of that: they describe
+        # the WAREHOUSE, right now, and publishing them on every past order republished live stock
+        # as if it were history. `id`/`title`/`price` stay `required`, same as `Product` itself.
+        OrderLineProduct:
+            type: object
+            additionalProperties: false
+            required: [id, title, price, taxRate]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                title:
+                    type: string
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: >-
+                        Gross — what the customer paid, VAT included, frozen at checkout. Same
+                        convention as `Product.price`.
+                description:
+                    type: string
+                active:
+                    type: boolean
+                requiresShipping:
+                    type: boolean
+                    default: true
+                # Grams, frozen at order-creation time — same convention as `Product.weight`,
+                # same "absent counts as 0" rule the shipping-method filter/refusal already apply.
+                weight:
+                    type: integer
+                    minimum: 0
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+                deletedAt:
+                    type: string
+                    format: date-time
+                # The decimal rate this line was actually taxed at, resolved from the product's
+                # `taxClass` and frozen here at checkout — a rate change in config must not
+                # re-state what a past order was charged, and never re-resolved from the
+                # product's CURRENT tax class.
+                taxRate:
+                    type: number
+                    format: double
+                    minimum: 0
+                    maximum: 1
+                    description: >-
+                        The VAT rate this line was actually charged, as a decimal (0.22 for 22%).
+                        Frozen at checkout, same reasoning as `price`.
+
+        # The picture, resolved LIVE from the catalogue product `OrderItem.product.id` still
+        # names — never frozen, so a hard-deleted or replaced image can never leak through order
+        # history. `null` means the product no longer exists; that is what lets "buy again" tell
+        # a deleted product apart from one that simply never had a picture.
+        OrderLineCurrent:
+            type: object
+            additionalProperties: false
+            required: [imageUrl]
+            properties:
+                imageUrl:
+                    $ref: '#/components/schemas/ImageUrl'
+                thumbnailUrl:
+                    $ref: '#/components/schemas/ThumbnailUrl'
+
+        OrderItem:
+            type: object
+            additionalProperties: false
+            required: [product, quantity, locale, current, taxAmount, netAmount]
+            properties:
+                product:
+                    $ref: '#/components/schemas/OrderLineProduct'
+                quantity:
+                    type: integer
+                    minimum: 1
+                # The language `product.title`/`description` were resolved into when this line was
+                # frozen — the buyer's, not the request's. A historical record, not a preference:
+                # re-reading the order later must reproduce what was actually bought, in whatever
+                # language it was bought in, regardless of the reader's own locale.
+                locale:
+                    $ref: '#/components/schemas/Locale'
+                current:
+                    nullable: true
+                    allOf:
+                        - $ref: '#/components/schemas/OrderLineCurrent'
+                    description: >-
+                        The product's picture, resolved live — `null` when the catalogue product
+                        (`product.id`) has been hard-deleted. Never the terms of the sale, so it
+                        is never frozen; see `OrderLineCurrent`.
+                # Both derived at serialization from `product.price`/`quantity`/`product.taxRate`
+                # — never stored. See `src/modules/orders/domain/tax.ts`.
+                taxAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: VAT included in this line's total, at its own frozen `taxRate`.
+                netAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: This line's total excluding VAT — `price × quantity` minus `taxAmount`.
+
+        # Shared by `Order.paymentMethod`, `CheckoutRequest.paymentMethod` and
+        # `PaymentMethod.id` (`payments`' own module contract) — one enum, so a third method
+        # added later cannot land in one of the three and not the others.
+        PaymentMethodId:
+            type: string
+            enum: [card, bank_transfer]
+            description: >-
+                How an order is being paid for. A preference recorded at checkout, not a lock — a
+                card payment still settles normally regardless of this value.
+
+        OrderStatus:
+            type: string
+            enum: [pending, paid, processing, shipped, delivered, cancelled]
+            description: >-
+                Where an order is in its lifecycle. The set is closed here; which value may FOLLOW
+                which is the server's own lifecycle rules, answered per caller by `OrderActions`.
+
+        OrderActions:
+            type: object
+            additionalProperties: false
+            required: [transitions, cancel, pay]
+            description: >-
+                What the requesting caller may do to this order, decided by the server. A client
+                renders its controls from this rather than re-implementing the lifecycle: the rules
+                depend on the caller's role, and a second copy in a separately deployed client is
+                how the two come to disagree.
+            properties:
+                transitions:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/OrderStatus'
+                    description: >-
+                        The statuses this caller may move the order to. Empty on a terminal order,
+                        and never contains the order's current status.
+                    example: [processing, cancelled]
+                cancel:
+                    type: boolean
+                    description: >-
+                        Whether `POST /orders/{id}/cancel` would be accepted for this caller. A
+                        customer may cancel while unpaid or paid; an operator one step further.
+                pay:
+                    type: boolean
+                    description: >-
+                        Whether this order is still awaiting payment — it can reach `paid`, which
+                        only a confirmed charge writes. Not in `transitions`, because no request may
+                        make that move: a client starts the flow with `POST /payments/intent` and
+                        the provider's yes does the rest.
+
+        # One VAT rate's slice of the whole order — goods and shipping folded into the same row,
+        # since shipping is taxed at each line's own rate rather than carrying one of its own. See
+        # `src/modules/orders/domain/tax.ts`.
+        OrderTaxSummaryRow:
+            type: object
+            additionalProperties: false
+            required: [rate, netAmount, taxAmount, grossAmount]
+            properties:
+                rate:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: The decimal rate this row is for (`0.22` for 22%) — never repeated across rows.
+                netAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                taxAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                grossAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: '`netAmount + taxAmount`, not re-derived from a price.'
+
+        Order:
+            type: object
+            additionalProperties: false
+            required:
+                [
+                    id,
+                    email,
+                    items,
+                    totalItems,
+                    totalQuantity,
+                    totalPrice,
+                    status,
+                    netTotal,
+                    taxTotal,
+                    shippingNetAmount,
+                    shippingTaxAmount,
+                    taxSummary
+                ]
+            properties:
+                id:
+                    $ref: '#/components/schemas/Id'
+                # Absent once the account that placed this order has been erased. The order
+                # survives (it is the invoice); the foreign key does not, because the account it
+                # named no longer exists.
+                userId:
+                    $ref: '#/components/schemas/Id'
+                email:
+                    $ref: '#/components/schemas/Email'
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/OrderItem'
+                totalItems:
+                    type: integer
+                    minimum: 0
+                    description: >-
+                        Number of distinct line items in this order. Not to be confused with
+                        `PaginationMeta.totalItems`, which counts orders matching a search.
+                    example: 2
+                totalQuantity:
+                    type: integer
+                    minimum: 0
+                    description: Sum of `quantity` across every line item.
+                    example: 5
+                totalPrice:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: Sum of `product.price × quantity` across every line item, plus `shippingCost` when the checkout chose a method.
+                    example: 149.97
+                # Both derived at serialization from the lines' frozen `taxRate` — never stored.
+                # See `src/modules/orders/domain/tax.ts`.
+                netTotal:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: >-
+                        Sum of every line's `netAmount` — the goods total excluding VAT, GOODS
+                        ONLY. Shipping's own net amount is `shippingNetAmount`, not folded in here.
+                taxTotal:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: >-
+                        Every VAT collected on this order: the lines' own `taxAmount`, plus the VAT
+                        on `shippingCost` — apportioned pro-rata across the lines by value and
+                        taxed at each line's own rate, since delivery is taxed as ancillary to what
+                        it delivers.
+                shippingNetAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: >-
+                        Shipping's own net amount, summed across every line it was apportioned
+                        onto — `netTotal` stays goods-only, this is the rest of the split. Zero on
+                        an order with no delivery method or free shipping.
+                shippingTaxAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: >-
+                        Shipping's own tax amount, summed across every line it was apportioned
+                        onto — already folded into `taxTotal`, published separately so an invoice
+                        can print it as its own line. Zero on an order with no delivery method or
+                        free shipping.
+                taxSummary:
+                    type: array
+                    readOnly: true
+                    items:
+                        $ref: '#/components/schemas/OrderTaxSummaryRow'
+                    description: >-
+                        One row per distinct VAT rate charged on this order, sorted ascending.
+                        Reconciles exactly: summed `netAmount` is `netTotal` + `shippingNetAmount`,
+                        summed `taxAmount` is `taxTotal`, and summed `grossAmount` is `totalPrice`.
+                        Empty on an order with no lines.
+                notes:
+                    type: string
+                    description: Optional order notes
+                # Both absent on orders that predate delivery and on checkouts that chose no
+                # method — shipping is not required to buy, exactly like the address.
+                shippingMethod:
+                    type: string
+                    description: The shipping method's id as the checkout froze it (e.g. standard, express, pickup).
+                shippingCost:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: What that method cost at checkout time — a later rate change cannot re-price history.
+                # Absent on orders placed before the address book existed, and on checkouts by
+                # users who keep no addresses — an address is not (yet) required to buy.
+                shippingAddress:
+                    $ref: '#/components/schemas/OrderAddress'
+                # Absent on orders placed before this existed, and on order creation that isn't a
+                # checkout (the admin `POST /orders` path names no method).
+                paymentMethod:
+                    $ref: '#/components/schemas/PaymentMethodId'
+                # When this order's stock hold ends — `NODE_RESERVATION_TTL_MINUTES` for `card`,
+                # `NODE_BANK_TRANSFER_HOLD_HOURS` for `bank_transfer`. Past this with no payment,
+                # the sweep releases the stock and cancels the order. Absent once paid or
+                # cancelled: the hold is over either way, and on orders that predate this field.
+                payBy:
+                    type: string
+                    format: date-time
+                # `{year}-{sequence}`, assigned once at order-creation time — never recomputed.
+                # `createdAt` below IS this invoice's date of supply, which is why there is no
+                # separate invoice-date field. Absent on an order created before this field
+                # existed; it is never assigned retroactively.
+                invoiceNumber:
+                    type: string
+                    readOnly: true
+                    example: '2026-000041'
+                # Present only while `paymentMethod` is `bank_transfer` and `status` is `pending`
+                # — the window in which the customer still needs to act. Scoped to the order's
+                # owner and to staff; never served to another customer.
+                transferInstructions:
+                    $ref: '#/components/schemas/OrderTransferInstructions'
+                status:
+                    $ref: '#/components/schemas/OrderStatus'
+                # Computed per CALLER, not stored: what this requester may do to this order right
+                # now. Present on every response carrying ONE order — the read, the writes and the
+                # cancel — so a client that replaces its cached record from a write does not lose
+                # the block and collapse its own controls. Absent from the list, where it would be
+                # answered per row for a question only the detail view asks.
+                # See docs/theory/tactical-ddd.md.
+                actions:
+                    $ref: '#/components/schemas/OrderActions'
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+                # Unlike a product or a user, an order carries no `active` flag, so this is the
+                # only thing that distinguishes a hidden order from a live one. A non-admin never
+                # sees a record where it is set — `visibleScope` filters them out — so it appears
+                # only on admin reads.
+                deletedAt:
+                    type: string
+                    format: date-time
+
+        # `POST /account/export`'s answer (`account/openapi.yaml`) — here, not in that module's
+        # own fragment, because a module fragment lints standalone and cannot reference a
+        # sibling's schema. This envelope is exactly that: one field per module that contributes
+        # a section, most of them owned by a module other than `account`.
+        AccountExportResponse:
+            type: object
+            additionalProperties: false
+            required:
+                [
+                    exportedAt,
+                    profile,
+                    roles,
+                    addresses,
+                    orders,
+                    payments,
+                    shipments,
+                    cart,
+                    wishlist,
+                    sessions,
+                    auditLog,
+                    apiKeys
+                ]
+            properties:
+                exportedAt:
+                    type: string
+                    format: date-time
+                profile:
+                    $ref: '#/components/schemas/User'
+                # Previously absent — a role lives in a membership row, not a field on the user
+                # document, so `profile` alone no longer says what this account may do. Scope only,
+                # never the tenant id: this deployment ships one shop, so the id would name nothing
+                # a subject could recognise.
+                roles:
+                    type: array
+                    items:
+                        type: object
+                        additionalProperties: false
+                        required: [role, scope]
+                        properties:
+                            role:
+                                type: string
+                            scope:
+                                type: string
+                                enum: [tenant, platform]
+                addresses:
+                    type: array
+                    items:
+                        $ref: '../../src/modules/addresses/openapi.yaml#/components/schemas/Address'
+                orders:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Order'
+                # Previously absent — `api-keys` recorded `createdByUserId` and appeared in no
+                # export. Metadata only, same as the admin's own list: no `hash`, no way to forge
+                # a credential from what a caller downloads about themselves.
+                apiKeys:
+                    type: array
+                    items:
+                        $ref: '../../src/modules/api-keys/openapi.yaml#/components/schemas/ApiKey'
+                payments:
+                    type: array
+                    items:
+                        $ref: '../../src/modules/payments/openapi.yaml#/components/schemas/ExportPayment'
+                shipments:
+                    type: array
+                    items:
+                        $ref: '../../src/modules/delivery/openapi.yaml#/components/schemas/ExportShipment'
+                cart:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/CartItem'
+                wishlist:
+                    type: array
+                    items:
+                        type: object
+                        additionalProperties: false
+                        required: [productId]
+                        properties:
+                            productId:
+                                $ref: '#/components/schemas/Id'
+                sessions:
+                    type: array
+                    items:
+                        $ref: '../../src/modules/users/openapi.yaml#/components/schemas/ExportSession'
+                auditLog:
+                    type: array
+                    items:
+                        $ref: '../../src/modules/audit-logs/openapi.yaml#/components/schemas/ExportAuditEntry'
+                feedback:
+                    type: array
+                    description: Present only when `NODE_EXPORT_INCLUDE_FEEDBACK=true`.
+                    items:
+                        $ref: '../../src/modules/feedback/openapi.yaml#/components/schemas/ExportFeedbackTicket'
+
+        AccountExportEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/AccountExportResponse'
+
+        # For the path-form deletes, which need no id — `{id}` already carries it — but do
+        # read the flag from a body as readily as from the query.
+        HardDeleteRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                hardDelete:
+                    type: boolean
+                    default: false
+
+        # ---------- system — the schemas only this module's paths reference. ----------
+        HealthPing:
+            type: object
+            additionalProperties: false
+            required: [status]
+            properties:
+                status:
+                    type: string
+                    enum: [ok]
+                    description: Liveness indicator. Always `ok` when the process is answering.
+
+        HealthPingEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/HealthPing'
+
+paths:
+    # --------- System ---------
+    /:
+        get:
+            tags: [System]
+            summary: API health check
+            description: Public ping endpoint. Returns a simple liveness indicator confirming the API process is running.
+            operationId: getHealth
+            responses:
+                '200':
+                    description: API is running
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HealthPingEnvelope'
+
+    # ---------- locales ----------
+    /locales:
+        $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales'
+    /locales/tenants:
+        $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1tenants'
+    /locales/{locale}:
+        $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1{locale}'
+    /locales/{locale}/messages:
+        $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1{locale}~1messages'
+    /locales/{locale}/entries:
+        $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1{locale}~1entries'
+    /locales/{locale}/entries/{entryId}:
+        $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1{locale}~1entries~1{entryId}'
+    /locales/translations/{entityType}/{id}:
+        $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1translations~1{entityType}~1{id}'
+
+    # ---------- observability ----------
+    /observability/events:
+        $ref: '../../src/modules/observability/openapi.yaml#/paths/~1observability~1events'
+    /observability/health:
+        $ref: '../../src/modules/observability/openapi.yaml#/paths/~1observability~1health'
+    /observability/metrics:
+        $ref: '../../src/modules/observability/openapi.yaml#/paths/~1observability~1metrics'
+    /observability/metrics/overview:
+        $ref: '../../src/modules/observability/openapi.yaml#/paths/~1observability~1metrics~1overview'
+    /observability/audit:
+        $ref: '../../src/modules/observability/openapi.yaml#/paths/~1observability~1audit'
+
+    # ---------- audit-logs ----------
+    /audit:
+        $ref: '../../src/modules/audit-logs/openapi.yaml#/paths/~1audit'
+
+    # ---------- antibot ----------
+    /antibot/config:
+        $ref: '../../src/modules/antibot/openapi.yaml#/paths/~1antibot~1config'
+    /antibot/challenge:
+        $ref: '../../src/modules/antibot/openapi.yaml#/paths/~1antibot~1challenge'
+
+    # ---------- account ----------
+    /account:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account'
+    /account/abilities:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1abilities'
+    /account/password:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1password'
+    /account/password/check:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1password~1check'
+    /account/reauth:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1reauth'
+    /account/logout:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1logout'
+    /account/sessions:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1sessions'
+    /account/sessions/{sessionId}:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1sessions~1{sessionId}'
+    /account/addresses:
+        $ref: '../../src/modules/addresses/openapi.yaml#/paths/~1account~1addresses'
+    /account/addresses/{addressId}:
+        $ref: '../../src/modules/addresses/openapi.yaml#/paths/~1account~1addresses~1{addressId}'
+    /account/verify-request:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1verify-request'
+    /account/verify-confirm:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1verify-confirm'
+    /account/email-change-confirm:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change-confirm'
+    /account/delete-confirm:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1delete-confirm'
+    /account/login:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1login'
+    /account/signup:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1signup'
+    /account/reset:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1reset'
+    /account/reset-confirm:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1reset-confirm'
+    /account/refresh:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1refresh'
+    /account/logout-all:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1logout-all'
+    /account/tokens/expired:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1tokens~1expired'
+    /account/export:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1export'
+    /account/login/2fa:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1login~12fa'
+    /account/login/2fa/send:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1login~12fa~1send'
+    /account/2fa:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa'
+    /account/2fa/methods/{method}:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1methods~1{method}'
+    /account/2fa/methods/{method}/setup:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1methods~1{method}~1setup'
+    /account/2fa/methods/{method}/confirm:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1methods~1{method}~1confirm'
+    /account/2fa/backup-codes:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1backup-codes'
+    /account/oauth/providers:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1oauth~1providers'
+    /account/oauth/{provider}:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1oauth~1{provider}'
+    /account/oauth/{provider}/callback:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1oauth~1{provider}~1callback'
+
+    # ---------- users ----------
+    /users:
+        $ref: '../../src/modules/users/openapi.yaml#/paths/~1users'
+    /users/{id}:
+        $ref: '../../src/modules/users/openapi.yaml#/paths/~1users~1{id}'
+    /users/{id}/restore:
+        $ref: '../../src/modules/users/openapi.yaml#/paths/~1users~1{id}~1restore'
+    /users/{id}/hard:
+        $ref: '../../src/modules/users/openapi.yaml#/paths/~1users~1{id}~1hard'
+    /users/{id}/2fa:
+        $ref: '../../src/modules/users/openapi.yaml#/paths/~1users~1{id}~12fa'
+    /users/search:
+        $ref: '../../src/modules/users/openapi.yaml#/paths/~1users~1search'
+
+    # ---------- feedback ----------
+    /feedback/contact:
+        $ref: '../../src/modules/feedback/openapi.yaml#/paths/~1feedback~1contact'
+    /feedback:
+        $ref: '../../src/modules/feedback/openapi.yaml#/paths/~1feedback'
+    /feedback/search:
+        $ref: '../../src/modules/feedback/openapi.yaml#/paths/~1feedback~1search'
+    /feedback/{id}:
+        $ref: '../../src/modules/feedback/openapi.yaml#/paths/~1feedback~1{id}'
+
+    # ---------- products ----------
+    /products:
+        $ref: '../../src/modules/products/openapi.yaml#/paths/~1products'
+    /products/categories:
+        $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1categories'
+    /products/{id}:
+        $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1{id}'
+    /products/{id}/admin:
+        $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1{id}~1admin'
+    /products/{id}/restore:
+        $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1{id}~1restore'
+    /products/{id}/hard:
+        $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1{id}~1hard'
+    /products/search:
+        $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1search'
+
+    # ---------- cart ----------
+    /cart:
+        $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart'
+    /cart/all:
+        $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1all'
+    /cart/{productId}:
+        $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1{productId}'
+    /cart/summary:
+        $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1summary'
+    /cart/checkout:
+        $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1checkout'
+    /cart/reorder/{orderId}:
+        $ref: '../../src/modules/cart/openapi.yaml#/paths/~1cart~1reorder~1{orderId}'
+
+    # ---------- wishlist ----------
+    /wishlist:
+        $ref: '../../src/modules/wishlist/openapi.yaml#/paths/~1wishlist'
+    /wishlist/{productId}:
+        $ref: '../../src/modules/wishlist/openapi.yaml#/paths/~1wishlist~1{productId}'
+    /wishlist/{productId}/move-to-cart:
+        $ref: '../../src/modules/wishlist/openapi.yaml#/paths/~1wishlist~1{productId}~1move-to-cart'
+
+    # ---------- orders ----------
+    /orders:
+        $ref: '../../src/modules/orders/openapi.yaml#/paths/~1orders'
+    /orders/search:
+        $ref: '../../src/modules/orders/openapi.yaml#/paths/~1orders~1search'
+    /orders/{id}:
+        $ref: '../../src/modules/orders/openapi.yaml#/paths/~1orders~1{id}'
+    /orders/{id}/restore:
+        $ref: '../../src/modules/orders/openapi.yaml#/paths/~1orders~1{id}~1restore'
+    /orders/{id}/hard:
+        $ref: '../../src/modules/orders/openapi.yaml#/paths/~1orders~1{id}~1hard'
+    /orders/{id}/cancel:
+        $ref: '../../src/modules/orders/openapi.yaml#/paths/~1orders~1{id}~1cancel'
+    /orders/{id}/status-override:
+        $ref: '../../src/modules/orders/openapi.yaml#/paths/~1orders~1{id}~1status-override'
+    /orders/{id}/invoice:
+        $ref: '../../src/modules/orders/openapi.yaml#/paths/~1orders~1{id}~1invoice'
+
+    # ---------- payments ----------
+    /payments/methods:
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1methods'
+    /payments/intent:
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1intent'
+    /payments/order/{orderId}:
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1order~1{orderId}'
+    /payments/order-by-reference:
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1order-by-reference'
+    /payments/order/{orderId}/refund:
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1order~1{orderId}~1refund'
+    /payments/order/{orderId}/offline:
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1order~1{orderId}~1offline'
+    /payments/{id}/confirm:
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1{id}~1confirm'
+    /payments/{id}/sync:
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1{id}~1sync'
+    /payments/webhook:
+        $ref: '../../src/modules/payments/openapi.yaml#/paths/~1payments~1webhook'
+
+    # ---------- delivery ----------
+    /delivery/methods:
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1methods'
+    /delivery/order/{orderId}:
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}'
+    /delivery/order/{orderId}/ship:
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}~1ship'
+    /delivery/order/{orderId}/deliver:
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}~1deliver'
+
+    # ---------- inventory ----------
+    /inventory/levels:
+        $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1levels'
+    /inventory/movements:
+        $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1movements'
+    /inventory/receipts:
+        $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1receipts'
+    /inventory/adjustments:
+        $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1adjustments'
+    /inventory/reservations/sweep:
+        $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1reservations~1sweep'
+
+    # ---------- webhooks ----------
+    /webhooks/subscriptions:
+        $ref: '../../src/modules/webhooks/openapi.yaml#/paths/~1webhooks~1subscriptions'
+    /webhooks/subscriptions/{id}:
+        $ref: '../../src/modules/webhooks/openapi.yaml#/paths/~1webhooks~1subscriptions~1{id}'
+    /webhooks/deliveries:
+        $ref: '../../src/modules/webhooks/openapi.yaml#/paths/~1webhooks~1deliveries'
+    /webhooks/deliveries/{id}/replay:
+        $ref: '../../src/modules/webhooks/openapi.yaml#/paths/~1webhooks~1deliveries~1{id}~1replay'
+    /webhooks/events:
+        $ref: '../../src/modules/webhooks/openapi.yaml#/paths/~1webhooks~1events'
+
+    # ---------- api-keys ----------
+    /api-keys:
+        $ref: '../../src/modules/api-keys/openapi.yaml#/paths/~1api-keys'
+    /api-keys/{id}:
+        $ref: '../../src/modules/api-keys/openapi.yaml#/paths/~1api-keys~1{id}'

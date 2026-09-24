@@ -1,0 +1,106 @@
+/**
+ * Every rate-limit budget in the app, module-owned or infrastructure-owned, is internally
+ * consistent as a SET:
+ *
+ *   - no two budgets share a `name` or an `environmentVariable` — either collision is silent:
+ *     two budgets answering to one env var means one of them is actually unconfigurable, and two
+ *     rows sharing a name is indistinguishable in the generated table;
+ *   - no two share a `namespace` either — that is the Redis key prefix, so a collision would mean
+ *     two logically distinct budgets counting into the SAME bucket;
+ *   - nothing a module declares is also declared in `INFRASTRUCTURE_RATE_LIMITS` — ownership is
+ *     exactly one place, or a docs/test reader sees a budget twice and a change to one silently
+ *     leaves the other stale;
+ *   - every budget's env var is raised in `tests/support/setup.ts` AND in
+ *     `scenarios/rate-limits.ts`, unless it carries a `testExemption` — see `RateLimitBudget` in
+ *     `src/types/rate-limit-budget.ts` for what that means and why it is a decision recorded on
+ *     the budget rather than a name typed here.
+ */
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { enabledModules } from '../../src/modules';
+import { INFRASTRUCTURE_RATE_LIMITS } from '@infrastructure/http/middlewares/rate-limit';
+import { RAISED_RATE_LIMIT_ENV_VARS } from '../../scenarios/rate-limits';
+import type { RateLimitBudget } from '@types';
+
+/** Every module-declared budget, tagged with the module that owns it. */
+const moduleBudgets: (RateLimitBudget & { owner: string })[] = enabledModules.flatMap((appModule) =>
+    (appModule.rateLimits ?? []).map((budget) => ({ ...budget, owner: appModule.name }))
+);
+
+/** Every budget in the app — module-owned first, then infrastructure's own. */
+const allBudgets: (RateLimitBudget & { owner: string })[] = [
+    ...moduleBudgets,
+    ...INFRASTRUCTURE_RATE_LIMITS.map((budget) => ({ ...budget, owner: 'infrastructure' }))
+];
+
+/** Duplicate values of one field, across every budget — empty means none. */
+const duplicatesOf = (field: 'name' | 'namespace' | 'environmentVariable'): string[] => {
+    const seen = new Map<string, number>();
+    for (const budget of allBudgets) seen.set(budget[field], (seen.get(budget[field]) ?? 0) + 1);
+    return [...seen.entries()].filter(([, count]) => count > 1).map(([value]) => value);
+};
+
+/**
+ * Every `process.env.NODE_..._RATE_LIMIT... ??=` (or `..._WINDOW_MS`/`..._MFA_...`) assignment in
+ * `tests/support/setup.ts`, read as TEXT rather than imported — importing it here would run its
+ * side effects (i18next init, locale registration) for a check that only needs its literal source.
+ */
+const raisedInSetup = (): Set<string> => {
+    const setupSource = readFileSync(path.join(__dirname, '../support/setup.ts'), 'utf8');
+    const matches = setupSource.matchAll(/process\.env\.(NODE_\w+)\s*\?\?=/g);
+    return new Set([...matches].map(([, name]) => name));
+};
+
+describe('rate-limit budgets, as a set', () => {
+    it('names every budget uniquely', () => {
+        expect(duplicatesOf('name')).toEqual([]);
+    });
+
+    it('gives every budget its own env var', () => {
+        expect(duplicatesOf('environmentVariable')).toEqual([]);
+    });
+
+    it('gives every budget its own Redis namespace', () => {
+        expect(duplicatesOf('namespace')).toEqual([]);
+    });
+
+    it('declares each budget in exactly one place — a module, or infrastructure, never both', () => {
+        const infrastructureVars = new Set(
+            INFRASTRUCTURE_RATE_LIMITS.map((budget) => budget.environmentVariable)
+        );
+        const redeclared = moduleBudgets.filter((budget) =>
+            infrastructureVars.has(budget.environmentVariable)
+        );
+
+        expect(redeclared).toEqual([]);
+    });
+
+    it('raises every budget without a testExemption in tests/support/setup.ts', () => {
+        const raised = raisedInSetup();
+        const missing = allBudgets
+            .filter((budget) => budget.testExemption === undefined)
+            .filter((budget) => !raised.has(budget.environmentVariable))
+            .map((budget) => `${budget.owner}: ${budget.environmentVariable}`);
+
+        expect(missing).toEqual([]);
+    });
+
+    it('exempts a budget from being raised only with a reason', () => {
+        const blank = allBudgets.filter((budget) => budget.testExemption?.trim() === '');
+
+        expect(blank).toEqual([]);
+    });
+
+    it('raises every budget without a testExemption in scenarios/rate-limits.ts too', () => {
+        // A scripted driver (`apply.ts`, `run-server.ts`) hits the app just as hard as this
+        // suite does, from its own list — `tests/support/setup.ts`'s own completeness above
+        // does not cover it, so a budget added to a module here silently missed the other side.
+        const raised = new Set(RAISED_RATE_LIMIT_ENV_VARS);
+        const missing = allBudgets
+            .filter((budget) => budget.testExemption === undefined)
+            .filter((budget) => !raised.has(budget.environmentVariable))
+            .map((budget) => `${budget.owner}: ${budget.environmentVariable}`);
+
+        expect(missing).toEqual([]);
+    });
+});

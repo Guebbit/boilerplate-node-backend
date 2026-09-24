@@ -9,12 +9,14 @@ Both are optional: they only activate when the relevant env vars / browser binar
 
 ## Where the code lives
 
-| Concern        | File                                                              |
-| -------------- | ----------------------------------------------------------------- |
-| SMTP transport | `src/utils/nodemailer.ts`                                         |
-| Email triggers | `src/controllers/account/post-reset-request.ts` (password reset)  |
-| HTML templates | `views/*.ejs`                                                     |
-| PDF rendering  | `src/controllers/orders/get-order-invoice.ts`                     |
+| Concern          | File                                                                                                                                     |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| SMTP transport   | `src/infrastructure/adapters/mailer.ts`                                                                                                  |
+| Attachment spool | `src/infrastructure/adapters/mail-spool.ts` — the Claim Check store an attachment's bytes go through; the queue carries only a key       |
+| Email triggers   | `src/modules/account/controllers/post-reset-request.ts` (password reset)                                                                 |
+| Email copy       | `src/modules/<name>/emails.ts`                                                                                                           |
+| HTML templates   | `shared/templates/**/*.ejs`                                                                                                              |
+| PDF rendering    | `src/modules/orders/services/invoice.ts` — `GET /orders/{id}/invoice` and the placed-order emails both render through `renderInvoicePdf` |
 
 ## Email pipeline
 
@@ -26,17 +28,66 @@ flowchart LR
     Send -.OTel span.-> Tempo
 ```
 
+### Which transport, and who decides
+
+One named setting rather than a condition per caller — the pattern Laravel spells `MAIL_MAILER`
+and Symfony `MAILER_DSN`.
+
+| `NODE_MAIL_TRANSPORT` | What happens to the message                                                           |
+| --------------------- | ------------------------------------------------------------------------------------- |
+| `smtp` _(default)_    | Handed to the server configured below.                                                |
+| `log`                 | Rendered, and the send is logged. No socket is opened — nodemailer's `jsonTransport`. |
+| `outbox`              | Kept in memory, where `GET /__test/emails` reads it back.                             |
+
+There is no `none`: it would differ from `log` only by skipping the render, and the render is
+where a broken template surfaces.
+
+Two cases are **not** a deployment's to set, and sit above the variable:
+
+- **The demo profile always uses its outbox.** `GET /__test/emails` is its control surface — the
+  paired e2e suite reads a password-reset token out of it — so a `.env` naming `smtp` must not
+  quietly empty it.
+- **A test run always uses `log`.** `dotenv/config` has already loaded real credentials by the
+  time a suite starts; without this rail a stray test delivers actual mail with them.
+
+`scenarios/apply.ts` sets `log` for the same reason a staging box would: seeding PLACES orders, so
+every one of them wants to email a recipient the seeder invented.
+
 ### SMTP configuration
 
-| Env var          | Meaning                                                    |
-| ---------------- | ---------------------------------------------------------- |
-| `NODE_SMTP_HOST` | SMTP server hostname.                                      |
-| `NODE_SMTP_PORT` | Defaults to `587` (STARTTLS). `465` enables implicit TLS.  |
-| `NODE_SMTP_USER` | SMTP username.                                             |
-| `NODE_SMTP_PASS` | SMTP password / app password.                              |
-| `NODE_SMTP_NAME` | EHLO/HELO name (optional).                                 |
+| Env var          | Meaning                                                   |
+| ---------------- | --------------------------------------------------------- |
+| `NODE_SMTP_HOST` | SMTP server hostname.                                     |
+| `NODE_SMTP_PORT` | Defaults to `587` (STARTTLS). `465` enables implicit TLS. |
+| `NODE_SMTP_USER` | SMTP username.                                            |
+| `NODE_SMTP_PASS` | SMTP password / app password.                             |
+| `NODE_SMTP_NAME` | EHLO/HELO name (optional).                                |
 
 Every send is wrapped in an OTel span (`withSpan`) so failures show up in [Tempo](./tempo.md) alongside the request that triggered them.
+
+### Templates interpolate, they do not translate
+
+An email is usually rendered by a queue worker, in another process, after the request that asked for it is gone — so there is no locale to resolve a translation key against at that point. The copy is therefore resolved **before** the job is published: a module's `emails.ts` takes the language as an argument, binds its own `t` to it, and returns an `IEmailContent` — the template name, the subject, and every string the template prints, down to the `locale` that fills `<html lang>` and the footer line the shared partial shows. `enqueueEmail` adds nothing and resolves nothing; it publishes exactly what the builder produced.
+
+The consequences are worth knowing:
+
+- Templates contain no `t(...)` calls. `<%= greeting %>`, never `<%= t('…') %>`.
+- The workers import no i18n at all, and cannot silently send an email in the boot language.
+- A template that grows a line grows a field in the one `emails.ts` that builds it — and a variable that is never supplied is an EJS `ReferenceError`, not a blank line.
+- `tests/unit/infrastructure/adapters/mailer-templates.test.ts` renders every template, in every supported locale, through those builders — which is where a missing key surfaces.
+
+### Using a hosted provider
+
+There is no provider-specific code here, and none is needed: SendGrid, Mailgun, SES, Postmark, Resend and Brevo all expose an SMTP relay, so switching to one is an `.env` change. SendGrid, for example:
+
+```bash
+NODE_SMTP_HOST=smtp.sendgrid.net
+NODE_SMTP_PORT=587
+NODE_SMTP_USER=apikey          # the literal string "apikey"
+NODE_SMTP_PASS=SG.xxxxxxxx     # your API key
+```
+
+Reach for a provider's HTTP SDK instead of its SMTP relay only when you actually need something SMTP cannot give you — most commonly a host that blocks outbound SMTP ports, or provider-side features like batch personalizations and hosted templates (the latter being redundant here, since bodies are rendered from EJS before they reach the transport). Nodemailer accepts any transport object, so that swap is confined to `createTransport(...)` in `mailer.ts`.
 
 ## PDF pipeline
 
@@ -48,17 +99,25 @@ flowchart LR
     PDF --> Response[HTTP response]
 ```
 
-`puppeteer-core` does **not** download Chromium. You must either install a system browser and point Puppeteer at it, or swap to the full `puppeteer` package. Without an executable the invoice endpoint will error out at request time, not at boot — by design, so the rest of the API keeps running.
+`puppeteer-core` does **not** download Chromium. You must either install a system browser and point Puppeteer at it, or swap to the full `puppeteer` package. Without an executable, two things happen, neither at boot: `GET /orders/{id}/invoice` answers `500`, and `sendOrderPlacedEmail` logs the failure and sends the order-confirmation mail anyway — with no invoice attached. The second one is silent unless something is watching the logs; see [Hosting](./hosting.md) and `docker/Dockerfile.production`'s own `INSTALL_CHROMIUM` note.
 
-## Useful links
+**Shutdown waits for a render in flight.** A placed-order email renders its invoice
+fire-and-forget, so a process can reach its exit mid-render — a seeding script does it every time
+it places orders. Exiting there orphans the Chromium it launched, and its ~120 MB temporary profile
+stays on disk: a long run of `cy.restore()` re-seeds filled a 16 GB `/tmp` this way. `shutdownInfra`
+therefore calls `settleRenders`, which waits for every render already started — bounded by half the
+graceful-shutdown timeout, so a hung browser cannot hold the exit hostage.
 
-- [Nodemailer docs](https://nodemailer.com/about/)
-- [Nodemailer SMTP options](https://nodemailer.com/smtp/)
-- [Nodemailer message structure](https://nodemailer.com/message/)
-- [EJS syntax reference](https://ejs.co/#docs)
-- [Puppeteer API](https://pptr.dev/api)
-- [puppeteer-core vs puppeteer](https://pptr.dev/guides/configuration#puppeteer-vs-puppeteer-core)
-- [Chromium download channels](https://www.chromium.org/getting-involved/download-chromium/)
+The invoice is never a durable file — `services/invoice.ts`'s `renderInvoicePdf` renders on demand and caches the result for a short TTL (`NODE_INVOICE_CACHE_TTL_MINUTES`), never as the system of record. The copy an email carries travels through the mail spool (`mail-spool.ts`): the render is spooled to disk, the queue message carries the key, never the bytes, and `mailer.ts#resolveAttachments` resolves the key back to a path before `sendTemplatedEmail()` sends; the file is discarded once the send has settled — the Claim Check pattern, the same shape `worker.image.digest`'s quarantine store already uses for an upload too large for a message.
+
+## Works with
+
+- **[RabbitMQ](./rabbitmq.md)** — email jobs are normally not sent synchronously. The controller calls `enqueueEmail()`, which publishes to the RabbitMQ `emails` queue and returns immediately. The `email.worker.ts` consumer picks up the job and calls Nodemailer in the background — so the HTTP response doesn't wait for SMTP. An attachment rides along as a `{ filename, key }` pair, never bytes: the message stays small and JSON-serializable, and the consumer resolves the key against the mail spool. Falls back to direct Nodemailer if RabbitMQ is not configured. → [How it's used — emails](./rabbitmq.md#how-it-s-used)
+
+## External references
+
+- [Nodemailer SMTP options](https://nodemailer.com/smtp/) — transport config reference (TLS, auth, pool settings)
+- [Puppeteer API](https://pptr.dev/api) — needed when extending the PDF generation beyond the invoice example
 
 ## Related pages
 

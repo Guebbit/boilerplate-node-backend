@@ -1,0 +1,185 @@
+/**
+ * @module
+ * Controller for `POST /users`, `PUT /users` and `PUT /users/:id` — staff create/update, with
+ * the create-vs-update branch decided by whether an id is present.
+ *
+ * See: docs/modules/users.md
+ */
+
+import type { Request, Response } from 'express';
+import type { ParamsDictionary } from 'express-serve-static-core';
+import { t } from '@infrastructure/i18n';
+import { userService } from '../service';
+import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { rejectDatabaseError } from '@infrastructure/http/errors';
+import { readInput, callerContextOf } from '@infrastructure/http/request';
+import { readUploadedImage } from '@infrastructure/http/uploads';
+import type {
+    CreateUserRequest,
+    CreateUserRequestMultipart,
+    UpdateUserRequest,
+    UpdateUserRequestMultipart,
+    UpdateUserByIdRequest,
+    UpdateUserByIdRequestMultipart,
+    User
+} from '@types';
+
+/**
+ * POST /users creates; PUT /users or PUT /users/:id updates — one handler for both.
+ * An id (path or body) triggers update; its absence creates (POST only; PUT without id → 422).
+ */
+export const writeUsers = (
+    request: Request<
+        ParamsDictionary,
+        unknown,
+        | CreateUserRequest
+        | CreateUserRequestMultipart
+        | UpdateUserRequest
+        | UpdateUserRequestMultipart
+        | UpdateUserByIdRequest
+        | UpdateUserByIdRequestMultipart
+        // Express 5 leaves `request.body` UNDEFINED when no parser matched the content-type, and
+        // multer does not fill it in on a non-multipart body either. Declaring that is what makes
+        // the guards below necessary rather than noise a lint rule strips.
+        | undefined
+    >,
+    response: Response
+) => {
+    // One declaration instead of a per-field assembly — see docs/theory/request-input.md.
+    // `booleans` are the fields whose type a multipart body cannot carry.
+    // `role` needs no coercion — it arrives as the string it is, on every surface.
+    const { id, active, sendSetupEmail } = readInput(request, {
+        surface: 'write',
+        ids: ['id'],
+        booleans: ['active', 'sendSetupEmail']
+    });
+    // `?? {}`: express 5 leaves `request.body` unset when no parser matched the content-type,
+    // and multer does not fill it in on a non-multipart body either. No cast needed: `role` is
+    // already on every branch of `request.body`'s own generated type, declared above.
+    const { role } = request.body ?? {};
+
+    // `= ''` because `zodUserSchema` wants a string: an absent image is an empty url here.
+    const {
+        imageUrl = '',
+        thumbnailUrl,
+        pendingImageKey,
+        deleteUpload
+    } = readUploadedImage(request);
+
+    /**
+     * `false`: password is never required at this schema layer. An edit may leave it untouched;
+     * a create may satisfy it via `sendSetupEmail` instead — checked separately just past the
+     * `!id` guard, since the schema can't express that either/or on its own.
+     */
+    const errors = userService.validateData(
+        {
+            ...request.body,
+            imageUrl,
+            role,
+            active
+        },
+        false
+    );
+    if (errors.length > 0) {
+        rejectResponse(response, 422, errors);
+        // `deleteUpload` never rejects (imageStore.remove/removeQuarantined both resolve on
+        // failure — see image-store.ts), so the response need not wait on it, and no catch is
+        // needed to keep a storage hiccup from becoming a second, different failure.
+        return deleteUpload();
+    }
+
+    // Past the guard above, these have been checked against zodUserSchema — the assertion
+    // records what the validator just established rather than assuming it. `thumbnailUrl` is on
+    // `User` itself (readOnly on the contract); `pendingImageKey` is not, so it joins via an
+    // intersection — both are server-derived, never client-supplied.
+    const validated = { imageUrl, role, active, thumbnailUrl, pendingImageKey } as Pick<
+        User,
+        'imageUrl' | 'role' | 'active' | 'thumbnailUrl'
+    > & { pendingImageKey?: string };
+
+    /**
+     * NO ID = new user
+     */
+    if (!id) {
+        // PUT without an id is invalid
+        if (request.method === 'PUT') {
+            rejectResponse(response, 422, [t('generic.error-missing-data')]);
+            // The response is already sent — a rejected cleanup must not become an unhandled
+            // promise rejection on top of it.
+            return deleteUpload().catch(() => undefined);
+        }
+
+        // Neither a password nor a way to get one to the user: `userService.create` would fill
+        // the field with a value nobody is ever told and leave the account permanently unusable.
+        // No cast: `password` is already on every branch of `request.body`'s own generated type.
+        const { password } = request.body ?? {};
+        if (!password && !sendSetupEmail) {
+            rejectResponse(response, 422, [t('users.field-password-or-setup-required')]);
+            return deleteUpload().catch(() => undefined);
+        }
+
+        return userService
+            .create(
+                {
+                    /*
+                     * Named off the SERVICE's own parameter rather than off `../model`: what this
+                     * body has to satisfy is what `create` accepts, and a controller that names
+                     * the stored shape starts changing every time the schema does. After
+                     * validation it is compatible for sure.
+                     */
+                    ...(request.body as Parameters<typeof userService.create>[0]),
+                    ...validated,
+                    sendSetupEmail: sendSetupEmail as boolean | undefined
+                },
+                callerContextOf(request)
+            )
+            .then((result) => {
+                if (!result.success)
+                    return deleteUpload()
+                        .catch(() => undefined)
+                        .then(() => {
+                            rejectResponse(response, result.status, result.errors);
+                        });
+                // `toUserContract` picks only the `User` contract's own fields, so the hashed
+                // password and tokens on the document never reach `res.json`. The role is read
+                // fresh from the membership just written — never off the document, which holds none.
+                return userService.toUserContract(result.data).then((contract) => {
+                    successResponse<User>(response, contract, 201);
+                });
+            })
+            .catch((error: unknown) =>
+                deleteUpload()
+                    .catch(() => undefined)
+                    .then(() => {
+                        rejectDatabaseError(response, 'writeUser', error);
+                    })
+            );
+    }
+
+    /**
+     * ID = edit user
+     */
+    return userService
+        .updateById(id, { ...request.body, ...validated }, callerContextOf(request))
+        .then((result) => {
+            if (!result.success)
+                return deleteUpload()
+                    .catch(() => undefined)
+                    .then(() => {
+                        rejectResponse(response, result.status, result.errors);
+                    });
+            const saved = result.data;
+            return userService.toUserContract(saved).then((contract) => {
+                successResponse<User>(response, contract);
+            });
+        })
+        .catch((error: unknown) =>
+            // Matches the create branch above: an upload this request wrote must not survive a
+            // failed write, or the file is orphaned with nothing referencing it.
+            deleteUpload()
+                .catch(() => undefined)
+                .then(() => {
+                    rejectDatabaseError(response, 'writeUser', error);
+                })
+        );
+};

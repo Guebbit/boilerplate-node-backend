@@ -1,0 +1,5 @@
+subdomain: supporting
+dependsOn:
+    - orders # the event-name constants it subscribes to: order.created, order.status_changed, order.cancelled
+    - payments # the event-name constants it subscribes to: payment.succeeded, payment.failed
+    - users # resolves the subscription owner's email for the auto-disable notification

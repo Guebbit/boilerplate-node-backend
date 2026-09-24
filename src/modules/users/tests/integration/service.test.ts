@@ -1,0 +1,856 @@
+/**
+ * @module
+ * Integration coverage for `userService` — validation, search, and the admin create/update/delete
+ * flows — against the in-memory Mongo `setupTestDb` wires up.
+ */
+
+import { asStub } from '@tests/stub';
+import { observePort } from '@tests/ports';
+import { setupTestDb } from '@tests/setup-test-db';
+import { testCallerContext, callerContextAs } from '@tests/callers';
+import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
+import * as userService from '@modules/users/service';
+import { USER_SETUP_REQUESTED } from '../../events';
+import { userRepository } from '../../repository';
+import { usersAuditActions } from '@modules/users/audit';
+import * as auditPort from '@infrastructure/observability/audit';
+import { onDomainEvent, resetDomainEvents } from '@kernel/events';
+import { assignRole, membershipsOf, rolesOf } from '@modules/access';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
+import { toUser } from '../../model';
+import type { UserDocument } from '../../model';
+
+// See `tests/support/ports.ts`: the namespace import above must resolve a plain `jest.fn()`,
+// not the real (non-configurable) export, for `observePort` to be able to clear and hand it out.
+jest.mock('@infrastructure/observability/audit', () => {
+    const actual = jest.requireActual<typeof import('@infrastructure/observability/audit')>(
+        '@infrastructure/observability/audit'
+    );
+    const emitAuditEvent = jest.fn();
+    return {
+        __esModule: true,
+        ...actual,
+        emitAuditEvent,
+        // `recordAudit` closes over its own module's real `emitAuditEvent`, immune to the
+        // override above — reroute it through the replacement so a spy on `emitAuditEvent` still
+        // sees every `recordAudit` call, exactly as it saw every direct one before.
+        recordAudit: (
+            context: Parameters<typeof actual.recordAudit>[0],
+            fields: Parameters<typeof actual.recordAudit>[1]
+        ) => {
+            if (!context) return;
+            emitAuditEvent(actual.buildAuditEvent(context, fields));
+        }
+    };
+});
+
+/**
+ * Mock the image store, not the filesystem underneath it — same reasoning as
+ * `products/tests/integration/service.test.ts`: the service owes its collaborator only a
+ * *stored-image handle* (`imageUrl`).
+ */
+jest.mock('@infrastructure/adapters/image-store', () => ({
+    // `applyImageWriteback` is a pure mutation the tests below rely on for real — only the
+    // filesystem-touching `remove` half needs stubbing.
+    ...jest.requireActual('@infrastructure/adapters/image-store'),
+    imageStore: { remove: jest.fn().mockResolvedValue(true) }
+}));
+
+const { imageStore } = jest.requireMock<{ imageStore: { remove: jest.Mock } }>(
+    '@infrastructure/adapters/image-store'
+);
+
+setupTestDb();
+
+/**
+ * Awaits `userService.create`, asserts the envelope succeeded, and returns the created document —
+ * every case in `describe('userService.create', ...)` bar the breach one expects success, so
+ * unwrapping here keeps each test one assertion shorter.
+ */
+const expectCreated = async (
+    ...args: Parameters<typeof userService.create>
+): Promise<UserDocument> => {
+    const result = await userService.create(...args);
+    expect(result.success).toBe(true);
+    return (result as ResponseSuccess<UserDocument>).data;
+};
+
+describe('userService.validateData', () => {
+    it('returns an empty array for valid user data', () => {
+        const errors = userService.validateData({
+            email: 'valid@example.com',
+            username: 'validuser',
+            password: PLAIN_PASSWORD
+        });
+
+        expect(errors).toHaveLength(0);
+    });
+
+    it('returns errors for an invalid email', () => {
+        const errors = userService.validateData({
+            email: 'not-an-email',
+            username: 'validuser',
+            password: PLAIN_PASSWORD
+        });
+
+        expect(errors.length).toBeGreaterThan(0);
+    });
+
+    it('returns errors for a username that is too short', () => {
+        const errors = userService.validateData({
+            email: 'valid@example.com',
+            username: 'ab',
+            password: PLAIN_PASSWORD
+        });
+
+        expect(errors.length).toBeGreaterThan(0);
+    });
+
+    it('does not require password when requirePassword is false', () => {
+        const errors = userService.validateData(
+            { email: 'valid@example.com', username: 'validuser' },
+            false
+        );
+
+        expect(errors).toHaveLength(0);
+    });
+
+    /**
+     * The fields a `.pick({ email, username, password })` would never look at. `active` is the
+     * costliest: an unchecked string reaches Mongoose and throws a CastError on save, so
+     * `POST /users` answers 500 where its own contract promises 422.
+     */
+    it.each(['active'])('rejects a wrong-typed %s flag', (field) => {
+        const errors = userService.validateData({
+            email: 'valid@example.com',
+            username: 'validuser',
+            password: PLAIN_PASSWORD,
+            [field]: 'not-a-boolean'
+        });
+
+        expect(errors.length).toBeGreaterThan(0);
+    });
+
+    it.each(['admin', 'customer', 'manager'])('accepts a declared role name (%s)', (role) => {
+        const errors = userService.validateData({
+            email: 'valid@example.com',
+            username: 'validuser',
+            password: PLAIN_PASSWORD,
+            role
+        });
+
+        expect(errors).toHaveLength(0);
+    });
+
+    // The contract says `uri-reference`, not `uri`: an uploaded avatar is stored as a path
+    // relative to the API host, so requiring an absolute URL here would reject every upload.
+    it('accepts a server-relative upload path as the imageUrl', () => {
+        const errors = userService.validateData({
+            email: 'valid@example.com',
+            username: 'validuser',
+            password: PLAIN_PASSWORD,
+            imageUrl: '/uploads/1700000000-avatar.jpg'
+        });
+
+        expect(errors).toHaveLength(0);
+    });
+
+    // Not strict: a PUT body legitimately carries `id`, which is not part of the user schema.
+    it('ignores body keys the schema does not declare', () => {
+        const errors = userService.validateData({
+            id: '65dc8a99604c307b702b5ccc',
+            email: 'valid@example.com',
+            username: 'validuser',
+            password: PLAIN_PASSWORD
+        });
+
+        expect(errors).toHaveLength(0);
+    });
+
+    /**
+     * A wrong i18n key is a user-visible bug the assertions above can't see: a missing key makes
+     * i18next return the key itself, still a non-empty string. This asserts against the SHAPE of
+     * a raw key — a dotted identifier, no spaces — so it keeps working when the copy is reworded.
+     */
+    it('returns translated messages, never raw i18n keys', () => {
+        const errors = userService.validateData({
+            email: 'not-an-email',
+            username: 'ab',
+            password: 'x'
+        });
+
+        expect(errors.length).toBeGreaterThan(0);
+        // `message` is the copy; `details.field` names the input it belongs to, which is what a
+        // form needs to highlight the right box rather than string-matching the sentence.
+        for (const { message, details } of errors) {
+            expect(message).not.toMatch(/^[a-z]+(?:\.[\da-z-]+)+$/);
+            expect(details).toEqual({ field: expect.any(String) });
+        }
+    });
+});
+
+// Backs the three `active` filter cases below, built so the two facts DISAGREE: the deactivated
+// account is not deleted, and the deleted account is still active.
+const seedActiveAndDeleted = () =>
+    Promise.all([
+        createUser({ email: 'enabled@example.com', username: 'enabled', active: true }),
+        createUser({ email: 'disabled@example.com', username: 'disabled', active: false }),
+        createUser({
+            email: 'deleted@example.com',
+            username: 'deleted',
+            active: true,
+            deletedAt: new Date()
+        })
+    ]);
+
+describe('userService.search', () => {
+    it('returns all users with default pagination', async () => {
+        await createUser({ email: 'a@example.com', username: 'a' });
+        await createUser({ email: 'b@example.com', username: 'b' });
+
+        const result = await userService.search({});
+
+        expect(result.items).toHaveLength(2);
+        expect(result.meta.totalItems).toBe(2);
+    });
+
+    it('filters by text (partial match on email or username)', async () => {
+        await createUser({ email: 'alice@example.com', username: 'alice' });
+        await createUser({ email: 'bob@example.com', username: 'bob' });
+
+        const result = await userService.search({ text: 'alice' });
+
+        expect(result.items).toHaveLength(1);
+    });
+
+    it('filters by email (case-insensitive partial match)', async () => {
+        await createUser({ email: 'alice@example.com', username: 'alice' });
+        await createUser({ email: 'bob@example.com', username: 'bob' });
+
+        const result = await userService.search({ email: 'ALICE' });
+
+        expect(result.items).toHaveLength(1);
+    });
+
+    it('filters by username', async () => {
+        await createUser({ email: 'a@example.com', username: 'alice' });
+        await createUser({ email: 'b@example.com', username: 'bob' });
+
+        const result = await userService.search({ username: 'bob' });
+
+        expect(result.items).toHaveLength(1);
+    });
+
+    it('decrypts phone through toUser on a lean/searched item, the same as a hydrated one', async () => {
+        const user = await createUser({ email: 'phoned@example.com', username: 'phoned' });
+        await userService.updateById(
+            user._id.toString(),
+            { phone: '+1 555 0100' },
+            testCallerContext
+        );
+
+        // `search()` is the `.lean()` path (`create-repository.ts#findAll`) — unlike every other
+        // read in this suite, `toUser` receives a plain object here, not a hydrated document.
+        const result = await userService.search({ username: 'phoned' });
+        expect(toUser(result.items[0], null).phone).toBe('+1 555 0100');
+    });
+
+    it('filters on the active column, not on soft-deletion', async () => {
+        await seedActiveAndDeleted();
+
+        const active = await userService.search({ active: true });
+
+        // The deleted-but-active account is included: deletion is a separate fact, and this
+        // filter does not ask about it.
+        expect(active.items.map((item) => asStub<{ username: string }>(item).username)).toEqual(
+            expect.arrayContaining(['enabled', 'deleted'])
+        );
+        expect(active.items).toHaveLength(2);
+    });
+
+    it('returns the deactivated account, and only it, for active: false', async () => {
+        await seedActiveAndDeleted();
+
+        const inactive = await userService.search({ active: false });
+
+        expect(inactive.items).toHaveLength(1);
+        expect(asStub<{ username: string }>(inactive.items[0]).username).toBe('disabled');
+    });
+
+    it('returns every account when active is not filtered on', async () => {
+        await seedActiveAndDeleted();
+
+        const all = await userService.search({});
+
+        expect(all.items).toHaveLength(3);
+    });
+
+    it('paginates results correctly', async () => {
+        for (let i = 0; i < 5; i++) {
+            await createUser({ email: `u${i}@example.com`, username: `u${i}` });
+        }
+
+        const page1 = await userService.search({ page: 1, pageSize: 3 });
+        const page2 = await userService.search({ page: 2, pageSize: 3 });
+
+        expect(page1.items).toHaveLength(3);
+        expect(page2.items).toHaveLength(2);
+        expect(page1.meta.totalPages).toBe(2);
+    });
+
+    it('returns correct meta when the collection is empty', async () => {
+        const result = await userService.search({});
+
+        expect(result.items).toHaveLength(0);
+        expect(result.meta.totalItems).toBe(0);
+        expect(result.meta.totalPages).toBe(0);
+    });
+});
+
+describe('userService.getById', () => {
+    it('returns a real document for an existing user', async () => {
+        const user = await createUser();
+        const id = user._id.toString();
+
+        const found = await userService.getById(id);
+
+        expect(found).toBeDefined();
+        expect(found!.email).toBe('user@example.com');
+        // A real Mongoose document — schema's toJSON transform normalizes it on the way out
+        expect(typeof asStub<{ save: unknown }>(found).save).toBe('function');
+    });
+
+    it('returns undefined for a non-existent id', async () => {
+        const found = await userService.getById('000000000000000000000000');
+        expect(found).toBeUndefined();
+    });
+
+    it('returns undefined when no id is provided', async () => {
+        expect(await userService.getById(undefined)).toBeUndefined();
+    });
+});
+
+describe('userService.create', () => {
+    it('creates a user and returns the Mongoose document', async () => {
+        // `callerContextAs('admin')`, not `testCallerContext`: `create` always grants a
+        // membership now (the implicit `customer` default included), and an anonymous granter
+        // cannot grant anything — same invariant a real route guard would already have enforced.
+        const user = await expectCreated(
+            {
+                email: 'created@example.com',
+                username: 'createduser',
+                password: PLAIN_PASSWORD
+            },
+            callerContextAs('admin')
+        );
+
+        expect(user._id).toBeDefined();
+        expect(user.email).toBe('created@example.com');
+        // Password should have been hashed by the pre-save hook
+        expect(user.password).not.toBe(PLAIN_PASSWORD);
+    });
+
+    it('creates a user in the role the request names', async () => {
+        const user = await expectCreated(
+            {
+                email: 'superadmin@example.com',
+                username: 'superadmin',
+                password: PLAIN_PASSWORD,
+                role: 'admin'
+            },
+            callerContextAs('admin')
+        );
+
+        // The membership, not a document field — `create` grants it through `assignRole`.
+        const roles = await rolesOf(String(user._id), DEPLOYMENT_TENANT_ID);
+        expect(roles.tenant).toBe('admin');
+    });
+
+    it('lets a moderator create a user in the default role, despite lacking its own self keys', async () => {
+        // `moderator` holds none of `customer`'s keys — `users.any.create` is the one thing that
+        // makes handing out the account's OWN starting role not an escalation.
+        const user = await expectCreated(
+            {
+                email: 'moderator-made@example.com',
+                username: 'moderatormade',
+                password: PLAIN_PASSWORD
+            },
+            callerContextAs('moderator')
+        );
+
+        const roles = await rolesOf(String(user._id), DEPLOYMENT_TENANT_ID);
+        expect(roles.tenant).toBe('customer');
+    });
+
+    it('deletes the orphan row when the requested role is an escalation the caller cannot grant', async () => {
+        // `moderator` can create accounts but cannot grant `admin` — before the fix this wrote
+        // the user row, THEN refused the grant, leaving a document with no membership at all and
+        // the email permanently unusable for a retry.
+        await expect(
+            userService.create(
+                {
+                    email: 'never-created@example.com',
+                    username: 'nevercreated',
+                    password: PLAIN_PASSWORD,
+                    role: 'admin'
+                },
+                callerContextAs('moderator')
+            )
+        ).rejects.toThrow();
+
+        expect(await userRepository.findOne({ email: 'never-created@example.com' })).toBeNull();
+    });
+
+    // B25: this ran on `update` already, but never on `create` — an admin could hand a brand-new
+    // account a password already on every breach list, the exact exposure the update path closes.
+    it('rejects a breached password with 422, and creates no user row', async () => {
+        const result = await userService.create(
+            {
+                email: 'breached@example.com',
+                username: 'breacheduser',
+                // A listed, composition-valid entry in `breached-passwords/list.txt` — same
+                // fixture `account/tests/integration/service-flows.test.ts` uses for its own
+                // breach case, so composition rules alone can't be what rejects it.
+                password: 'Password1!'
+            },
+            callerContextAs('admin')
+        );
+
+        expect(result.success).toBe(false);
+        expect((result as ResponseReject).status).toBe(422);
+        expect(await userRepository.findOne({ email: 'breached@example.com' })).toBeNull();
+    });
+
+    describe('with no password', () => {
+        afterEach(() => {
+            resetDomainEvents();
+        });
+
+        it('fills the field with something the caller was never told, rather than leaving it empty', async () => {
+            // `password` is `required: true` at the Mongoose layer (see `./model`) regardless of
+            // what the contract allows, so a create with no password still has to write SOMETHING.
+            const user = await expectCreated(
+                { email: 'no-password@example.com', username: 'nopassworduser' },
+                callerContextAs('admin')
+            );
+
+            const stored = await userRepository.findByIdWithCredentials(String(user._id));
+            expect(stored?.password).toBeTruthy();
+            expect(stored?.password).not.toBe('');
+        });
+
+        it('does not emit USER_SETUP_REQUESTED when sendSetupEmail is not set', async () => {
+            const seen: string[] = [];
+            onDomainEvent(USER_SETUP_REQUESTED, ({ userId }) => {
+                seen.push(userId);
+            });
+
+            await expectCreated(
+                { email: 'no-setup@example.com', username: 'nosetupuser' },
+                callerContextAs('admin')
+            );
+
+            expect(seen).toEqual([]);
+        });
+
+        it('emits USER_SETUP_REQUESTED for this user when sendSetupEmail is true', async () => {
+            const seen: string[] = [];
+            onDomainEvent(USER_SETUP_REQUESTED, ({ userId }) => {
+                seen.push(userId);
+            });
+
+            const user = await expectCreated(
+                {
+                    email: 'setup-me@example.com',
+                    username: 'setupmeuser',
+                    sendSetupEmail: true
+                },
+                callerContextAs('admin')
+            );
+
+            expect(seen).toEqual([String(user._id)]);
+        });
+    });
+
+    it('never emits USER_SETUP_REQUESTED when a password was supplied, even with sendSetupEmail: true', async () => {
+        const seen: string[] = [];
+        onDomainEvent(USER_SETUP_REQUESTED, ({ userId }) => {
+            seen.push(userId);
+        });
+
+        try {
+            await userService.create(
+                {
+                    email: 'has-password@example.com',
+                    username: 'haspassworduser',
+                    password: PLAIN_PASSWORD,
+                    sendSetupEmail: true
+                },
+                callerContextAs('admin')
+            );
+
+            expect(seen).toEqual([]);
+        } finally {
+            resetDomainEvents();
+        }
+    });
+});
+
+describe('userService.updateById', () => {
+    it('updates the username and role of an existing user', async () => {
+        const user = await createUser();
+        const id = user._id.toString();
+
+        const result = await userService.updateById(
+            id,
+            {
+                username: 'new-name',
+                role: 'admin'
+            },
+            callerContextAs('admin')
+        );
+
+        expect(result.success).toBe(true);
+        const updated = (result as { data: UserDocument }).data;
+        expect(updated.username).toBe('new-name');
+        const roles = await rolesOf(String(updated._id), DEPLOYMENT_TENANT_ID);
+        expect(roles.tenant).toBe('admin');
+    });
+
+    it('changes the password when a non-empty password is supplied', async () => {
+        const user = await createUser({ email: 'pwdupdate@example.com' });
+        const id = user._id.toString();
+        const originalHash = user.password;
+
+        await userService.updateById(id, { password: REPLACEMENT_PASSWORD }, testCallerContext);
+
+        const refreshed = await userRepository.findByIdWithCredentials(id);
+        expect(refreshed!.password).not.toBe(originalHash);
+    });
+
+    it('does not touch the password when an empty string is supplied', async () => {
+        const user = await createUser();
+        const id = user._id.toString();
+        const originalHash = user.password;
+
+        await userService.updateById(id, { password: '' }, testCallerContext);
+
+        const refreshed = await userRepository.findByIdWithCredentials(id);
+        expect(refreshed!.password).toBe(originalHash);
+    });
+
+    it('stores phone encrypted, never as the plaintext submitted, and decrypts it back through toUser', async () => {
+        const user = await createUser();
+        const id = user._id.toString();
+
+        await userService.updateById(id, { phone: '+1 555 0100' }, testCallerContext);
+
+        // Bypasses `toUser` on purpose — this is what a raw DB read, or a stolen disk/backup,
+        // would actually see.
+        const stored = await userRepository.findById(id);
+        expect(stored!.phone).not.toBe('+1 555 0100');
+        // Versioned-secret's own wire format — see infrastructure/security/versioned-secret.ts.
+        expect(stored!.phone).toMatch(/^v\d+(?::[\da-f]+){3}$/);
+
+        expect(toUser(stored!, null).phone).toBe('+1 555 0100');
+    });
+
+    it('returns reject result when the user does not exist', async () => {
+        const result = await userService.updateById(
+            '000000000000000000000000',
+            { username: 'x' },
+            testCallerContext
+        );
+        expect(result.success).toBe(false);
+        expect(result.status).toBe(404);
+    });
+
+    it('updates the imageUrl and removes the old avatar from the store', async () => {
+        const user = await createUser({ imageUrl: '/images/old-avatar.jpg' });
+        const id = user._id.toString();
+
+        await userService.updateById(id, { imageUrl: '/images/new-avatar.jpg' }, testCallerContext);
+
+        // The OLD avatar goes, and it goes by its stored url — see `products`' identical case.
+        expect(imageStore.remove).toHaveBeenCalledWith('/images/old-avatar.jpg');
+        expect(imageStore.remove).not.toHaveBeenCalledWith('/images/new-avatar.jpg');
+    });
+
+    /* The avatar is only replaced when a new one arrives; every other edit must leave it alone. */
+    it('keeps the avatar when an update carries no imageUrl', async () => {
+        const user = await createUser({ imageUrl: '/images/keep-avatar.jpg' });
+        const id = user._id.toString();
+
+        const result = await userService.updateById(
+            id,
+            { username: 'renamed-once-more' },
+            testCallerContext
+        );
+
+        expect(imageStore.remove).not.toHaveBeenCalled();
+        expect((result as { data: UserDocument }).data.imageUrl).toBe('/images/keep-avatar.jpg');
+    });
+
+    /*
+     * B21: the controller always sends a STRING `imageUrl` — `''` when nothing was uploaded, since
+     * the validation schema requires one (`write-users.ts`'s `imageUrl = ''` default) — so
+     * `data.imageUrl !== undefined` is never a safe "was a new image uploaded" check on this path.
+     */
+    it('keeps the avatar when an update carries an empty-string imageUrl, same as the controller sends', async () => {
+        const user = await createUser({ imageUrl: '/images/keep-avatar.jpg' });
+        const id = user._id.toString();
+
+        const result = await userService.updateById(
+            id,
+            { username: 'renamed-empty-image', imageUrl: '' },
+            testCallerContext
+        );
+
+        expect(imageStore.remove).not.toHaveBeenCalled();
+        expect((result as { data: UserDocument }).data.imageUrl).toBe('/images/keep-avatar.jpg');
+    });
+
+    /* Re-submitting the same url is not a replacement — deleting here would delete the live avatar. */
+    it('keeps the avatar when the update repeats the current imageUrl', async () => {
+        const user = await createUser({ imageUrl: '/images/same-avatar.jpg' });
+        const id = user._id.toString();
+
+        await userService.updateById(
+            id,
+            { imageUrl: '/images/same-avatar.jpg' },
+            testCallerContext
+        );
+
+        expect(imageStore.remove).not.toHaveBeenCalled();
+    });
+
+    it('actually deactivates the account, not just the USER_DEACTIVATED event', async () => {
+        const user = await createUser();
+        const id = user._id.toString();
+
+        const result = await userService.updateById(id, { active: false }, testCallerContext);
+
+        expect(result.success).toBe(true);
+        expect((result as { data: UserDocument }).data.active).toBe(false);
+        const refreshed = await userRepository.findById(id);
+        expect(refreshed!.active).toBe(false);
+    });
+
+    it('rejects an escalated role grant and leaves active untouched, rather than committing it first', async () => {
+        const user = await createUser({ active: true });
+        const id = user._id.toString();
+
+        // `testCallerContext`'s anonymous granter cannot grant `admin` — the escalation must be
+        // refused BEFORE the deactivation half of this same request is allowed to land. Rejects
+        // rather than resolving to a 409 envelope: `AccessInvariantError` propagates the same way
+        // `create()`'s own escalation refusal does, for `@infrastructure/http/errors`'
+        // `databaseErrorInterpreter` to map at whichever `.catch()` sits above the caller.
+        await expect(
+            userService.updateById(id, { active: false, role: 'admin' }, testCallerContext)
+        ).rejects.toMatchObject({ name: 'AccessInvariantError' });
+
+        const refreshed = await userRepository.findById(id);
+        expect(refreshed!.active).toBe(true);
+    });
+
+    it('records a ban, not a plain update, when active flips from true to false', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await createUser({ active: true });
+        const id = user._id.toString();
+
+        await userService.updateById(id, { active: false }, testCallerContext);
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: usersAuditActions.ADMIN_USER_BANNED,
+                target_type: 'user',
+                target_id: id
+            })
+        );
+    });
+
+    it('records an unban when active flips from false to true', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await createUser({ active: false });
+        const id = user._id.toString();
+
+        await userService.updateById(id, { active: true }, testCallerContext);
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: usersAuditActions.ADMIN_USER_UNBANNED,
+                target_type: 'user',
+                target_id: id
+            })
+        );
+    });
+
+    it('records a plain update, not a ban, when active is sent unchanged', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await createUser({ active: true, username: 'stays-active' });
+        const id = user._id.toString();
+
+        await userService.updateById(id, { active: true, username: 'renamed' }, testCallerContext);
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({ action: usersAuditActions.ADMIN_USER_UPDATED })
+        );
+    });
+
+    it('records a plain update, not a ban, when active is not mentioned at all', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const user = await createUser({ active: true });
+        const id = user._id.toString();
+
+        await userService.updateById(id, { username: 'renamed-again' }, testCallerContext);
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({ action: usersAuditActions.ADMIN_USER_UPDATED })
+        );
+    });
+
+    it('persists a locale change, the same as at creation', async () => {
+        const user = await createUser();
+        const id = user._id.toString();
+
+        const result = await userService.updateById(id, { locale: 'fr' }, testCallerContext);
+
+        expect(result.success).toBe(true);
+        expect((result as { data: UserDocument }).data.locale).toBe('fr');
+    });
+});
+
+describe('userService.update', () => {
+    it('updates an existing user document directly', async () => {
+        const user = await createUser();
+
+        const result = await userService.update(
+            user,
+            { username: 'direct-update' },
+            testCallerContext
+        );
+
+        expect(result.success).toBe(true);
+        expect((result as ResponseSuccess<UserDocument>).data.username).toBe('direct-update');
+    });
+});
+
+describe('userService.removeById', () => {
+    it('soft-deletes a user by setting deletedAt', async () => {
+        const user = await createUser();
+        const id = user._id.toString();
+
+        const result = await userService.removeById(id);
+
+        expect(result.success).toBe(true);
+        const updated = await userRepository.findById(id);
+        expect(updated!.deletedAt).toBeDefined();
+    });
+
+    it('leaves a soft-deleted user deleted when the delete is repeated', async () => {
+        // DELETE must be safe to retry: a second one never brings the account back.
+        const deletedAt = new Date('2026-01-01T00:00:00Z');
+        const user = await createUser({ deletedAt });
+        const id = user._id.toString();
+
+        await userService.removeById(id);
+
+        expect((await userRepository.findById(id))!.deletedAt).toEqual(deletedAt);
+    });
+
+    it('restores a soft-deleted user through restoreById', async () => {
+        const user = await createUser({ deletedAt: new Date() });
+        const id = user._id.toString();
+
+        const result = await userService.restoreById(id);
+
+        expect(result.success).toBe(true);
+        expect((await userRepository.findById(id))!.deletedAt).toBeUndefined();
+    });
+
+    it('answers 409 when restoring a user who is not deleted', async () => {
+        const user = await createUser();
+
+        const result = await userService.restoreById(user._id.toString());
+
+        expect((result as ResponseReject).status).toBe(409);
+    });
+
+    it('hard-deletes a user when hardDelete is true', async () => {
+        const user = await createUser();
+        const id = user._id.toString();
+
+        await userService.removeById(id, true);
+
+        expect(await userRepository.findById(id)).toBeNull();
+    });
+
+    it('erases a platform membership too, not only the tenant one', async () => {
+        const user = await createUser();
+        const id = user._id.toString();
+        // A second platform operator, so the platform row below is not itself the last one
+        // administering the installation — this test is about the erasure gap, not that invariant.
+        await assignRole('another-operator', null, 'platform', 'operator');
+        // A tenant seat AND a platform seat — the erasure gap a single tenant-scoped revoke leaves
+        // behind if the platform row is not swept too, surviving the user it points at.
+        await assignRole(id, DEPLOYMENT_TENANT_ID, 'tenant', 'customer');
+        await assignRole(id, null, 'platform', 'operator');
+
+        await userService.removeById(id, true);
+
+        expect(await membershipsOf(id)).toEqual([]);
+    });
+
+    it('returns a 404 rejection when the user does not exist', async () => {
+        const result = await userService.removeById('000000000000000000000000');
+
+        expect(result.success).toBe(false);
+        expect((result as ResponseReject).status).toBe(404);
+    });
+
+    /* Hard delete is the only path that destroys bytes; the row is gone, so nothing else can. */
+    it('removes the avatar from the store on a hard delete', async () => {
+        const user = await createUser({ imageUrl: '/images/doomed-avatar.jpg' });
+        const id = user._id.toString();
+
+        await userService.removeById(id, true);
+
+        expect(imageStore.remove).toHaveBeenCalledWith('/images/doomed-avatar.jpg');
+    });
+
+    /**
+     * A soft delete is reversible — `restoreById` brings the account back — so deleting the
+     * avatar would restore a user with a broken one.
+     */
+    it('keeps the avatar on a soft delete', async () => {
+        const user = await createUser({ imageUrl: '/images/survives-avatar.jpg' });
+        const id = user._id.toString();
+
+        await userService.removeById(id, false);
+
+        expect(imageStore.remove).not.toHaveBeenCalled();
+    });
+});
+
+describe('userService.remove', () => {
+    it('soft-deletes a user document directly', async () => {
+        const user = await createUser();
+        const id = user._id.toString();
+
+        const result = await userService.remove(user);
+
+        expect(result.success).toBe(true);
+        const updated = await userRepository.findById(id);
+        expect(updated!.deletedAt).toBeDefined();
+    });
+
+    it('hard-deletes a user document directly', async () => {
+        const user = await createUser();
+        const id = user._id.toString();
+
+        await userService.remove(user, true);
+
+        expect(await userRepository.findById(id)).toBeNull();
+    });
+});

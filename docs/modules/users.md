@@ -1,0 +1,139 @@
+# users
+
+::: tip At a glance
+**Owns** — the user record: email, password hash, role name, and the reset/refresh tokens hanging off it.
+**Depends on** — nothing. Authentication is next door in [`account`](./account.md).
+**Breaks if you change** — the `tokens` subdocument. `account` reads and writes it, and it is the repo's only shared-kernel edge.
+:::
+
+## Its neighbourhood
+
+<!-- module-graph:users:start -->
+
+_Solid arrows are imports. Dotted arrows are domain events — the return path an import
+graph cannot see._
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 60}}}%%
+flowchart LR
+    users["users<br/><i>this module</i>"]
+    access["access"]
+    account["account"]
+    addresses["addresses"]
+    api_keys["api-keys"]
+    cart["cart"]
+    orders["orders"]
+    payments["payments"]
+    webhooks["webhooks"]
+    wishlist["wishlist"]
+
+    account --> users
+    addresses --> users
+    api_keys --> users
+    cart --> users
+    orders --> users
+    payments --> users
+    webhooks --> users
+    wishlist --> users
+    users --> access
+    users -. "user.setup-requested" .-> account
+    users -. "user.deleted" .-> addresses
+    users -. "user.deleted" .-> cart
+    users -. "user.deleted" .-> orders
+    users -. "user.deleted" .-> payments
+    users -. "user.deleted" .-> wishlist
+
+    classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
+    classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
+    classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
+    class cart,orders core;
+    class access,account,addresses,api_keys,payments,webhooks,wishlist supporting;
+    class users centre;
+```
+
+<!-- module-graph:users:end -->
+
+## The story
+
+A user record with an email, a password hash and a role name is the same problem in every
+application that has ever had one. Nothing about it differentiates this shop — which is exactly
+what `generic` means, and why no aggregate belongs here however central the record feels.
+
+The role name is a fallback, not the source of truth — a stored membership always wins, and this
+module publishes its own field alongside it purely so a staff list has something to show. See
+[Authorization](../theory/authorization.md) for where the decision actually gets made.
+
+**Authentication is not here.** Signup, login, password reset and the token lifecycle all live in
+[`account`](./account.md), which is a _second service over this same collection_. That split is why
+this module's barrel is the widest in the repo: alongside `userService`, it publishes `TokenType`,
+`zodUserSchema`, `hashToken` and `isLiveRefreshSession` straight off the model — `account` needs
+those to authenticate and mint tokens for the same document. `userRepository` and the model's
+runtime value stay inside even so: every read or write, `account`'s included, goes through
+`userService`, never the collection directly.
+
+::: tip Why two modules and not one
+`/users` and `/account` are different mounts, and a manifest carries one `basePath`. Merging them
+would collapse two URL surfaces into one module for no gain — and the cost of keeping them apart is
+visible on the map as a `shared-kernel` arrow rather than hidden inside a barrel.
+:::
+
+Five modules depend on this one and it depends on none, so it sits at the bottom of the graph.
+Deleting an account has to empty that user's cart and wishlist, and that travels as `user.deleted`
+for the same reason products uses an event: it keeps this module a leaf.
+
+## The pipeline
+
+One collection, two services over it — and a deletion that has to reach three modules this one may
+not import.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
+flowchart LR
+    A["admin<br/><i>/users</i>"] --> R["the user record<br/><i>email · hash · role name · tokens</i>"]
+    AC["account<br/><i>/account — signup · login · reset</i>"] --> R
+    R -. "user.deleted" .-> C["cart emptied"]
+    R -. "user.deleted" .-> W["wishlist emptied"]
+    R -. "user.deleted" .-> AB["address book emptied<br/><i>account</i>"]
+    R -. "user.setup-requested" .-> SU["account sends a setup link"]
+
+    classDef own fill:#ede9fe,stroke:#7c3aed,color:#111827;
+    classDef peer fill:#dbeafe,stroke:#2563eb,color:#111827;
+    classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
+    class R own;
+    class A,AC peer;
+    class C,W,AB,SU done;
+```
+
+`phone` is stored AES-256-GCM under `NODE_PII_ENCRYPTION_KEY`
+(`@infrastructure/security/pii-encryption`) — `service.ts`'s `update` encrypts it on the one write
+path, `toUser` (`model.ts`) decrypts it on the way out, whether the source document was hydrated or
+`search()`'s `.lean()` result. See
+[Secrets at rest](../theory/defences/crypto-and-secrets.md#secrets-at-rest).
+
+## Soft delete vs. erasure
+
+`DELETE /users/:id` soft-deletes by default — `deletedAt` is stamped, the account's sessions are
+revoked, and a repeated `DELETE` changes nothing. `POST /users/:id/restore` undoes it; the owner
+signs in again. `?hardDelete=true` is the one that fires `user.deleted` (the cascade above) and
+actually removes the row.
+
+Only the hard path **discharges an Art. 17 erasure request**. The audit trail says
+so explicitly: a soft delete emits `admin.user.soft_deleted`, a hard one `admin.user.erased` — two
+actions rather than one `admin.user.deleted`, so "was this request actually closed out" is
+answerable from the log alone, not from remembering which flag an admin clicked.
+
+## Libraries
+
+`bcrypt` is shared with [`account`](./account.md) — the only package on the generated
+[Package Dependencies](../tools/package-dependencies.md) page that two modules import, rather than
+one. Not module-owned per the ownership rule, so it stays a hand-kept row on that page instead of
+a `## Libraries` table naming alternatives here: nothing about the choice is specific to `users`.
+
+## Related pages
+
+- [Modules overview](./index.md) — the whole context map
+- [`account`](./account.md) — the other service over this collection
+- [Strategic DDD](../theory/strategic-ddd.md#_5-published-language-—-the-barrel) — why a wide barrel is a map edge, not a private detail
+- [Security](../tools/security.md) — password hashing and the token shapes
+- [Events & Logging](../tools/events-and-logging.md) — `user.deleted` and its three listeners

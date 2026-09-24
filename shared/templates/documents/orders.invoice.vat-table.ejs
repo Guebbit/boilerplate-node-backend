@@ -1,0 +1,30 @@
+<table>
+    <thead>
+        <tr>
+            <th><%= columns.description %></th>
+            <% if (showQuantity) { %>
+                <th><%= columns.quantity %></th>
+                <th><%= columns.unitPrice %></th>
+            <% } %>
+            <th><%= columns.net %></th>
+            <th><%= columns.rate %></th>
+            <th><%= columns.tax %></th>
+            <th><%= columns.gross %></th>
+        </tr>
+    </thead>
+    <tbody>
+        <% rows.forEach(function(row) { %>
+            <tr>
+                <td><%= row.description %></td>
+                <% if (showQuantity) { %>
+                    <td><%= row.quantity %></td>
+                    <td><%= row.unitPrice %></td>
+                <% } %>
+                <td><%= row.netAmount %></td>
+                <td><%= row.taxRateLabel %></td>
+                <td><%= row.taxAmount %></td>
+                <td><%= row.grossAmount %></td>
+            </tr>
+        <% }); %>
+    </tbody>
+</table>

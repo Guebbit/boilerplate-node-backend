@@ -1,0 +1,4 @@
+subdomain: supporting
+dependsOn:
+    - access # rolesOf/assignRole/assignDefaultRole/promoteVerifiedCustomer
+    - users # the User document — the repo's one shared kernel

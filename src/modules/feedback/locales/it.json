@@ -1,0 +1,15 @@
+{
+    "feedback": {
+        "email-contact": {
+            "subject": "Nuova richiesta di contatto",
+            "meta-title": "Nuova richiesta di contatto",
+            "title": "Nuova richiesta di contatto",
+            "label-name": "Nome",
+            "label-email": "Email",
+            "label-subject": "Oggetto",
+            "label-message": "Messaggio",
+            "label-created-at": "Creata il",
+            "not-available": "N/D"
+        }
+    }
+}

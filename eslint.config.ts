@@ -1,45 +1,147 @@
+import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import globals from 'globals';
 import configPrettier from 'eslint-config-prettier';
 import pluginUnicorn from 'eslint-plugin-unicorn';
+import pluginBoundaries from 'eslint-plugin-boundaries';
+import pluginJsdoc from 'eslint-plugin-jsdoc';
+import pluginJest from 'eslint-plugin-jest';
+import comments from '@eslint-community/eslint-plugin-eslint-comments/configs';
 import { globalIgnores } from 'eslint/config';
-import pluginOxlint from 'eslint-plugin-oxlint';
 import path from 'node:path';
+import localRules from './scripts/eslint';
+
+/**
+ * `x as unknown as T` — the double cast that erases the type system's objection instead of
+ * answering it — is banned everywhere, tests included. `no-restricted-syntax` does not merge
+ * across configs (the nearest match REPLACES the list), so every block that configures that
+ * rule spreads this in, or the ban would silently lift for exactly those files.
+ */
+const bannedDoubleCasts = [
+    {
+        selector: 'TSAsExpression > TSAsExpression[typeAnnotation.type="TSUnknownKeyword"]',
+        message:
+            '`as unknown as T` erases the type error instead of answering it. Type the source honestly (`.lean<T>()`, a typed factory) — or, for a hand-built test stub, use the one sanctioned seam: `asStub<T>()` from tests/support/stub.ts.'
+    },
+    {
+        selector: 'TSAsExpression > TSAsExpression[typeAnnotation.type="TSAnyKeyword"]',
+        message:
+            '`as any as T` erases the type error instead of answering it. Type the source honestly — or, for a hand-built test stub, use `asStub<T>()` from tests/support/stub.ts.'
+    }
+];
+
+/**
+ * The `TryStatement` ban — a production try/catch is allowed only where a throwing API has no
+ * safe wrapper and the failure has a local answer. `no-restricted-syntax` does not merge across
+ * configs (the nearest match REPLACES the list), so every block that configures that rule lists
+ * this, or the ban would silently lift for exactly those files.
+ */
+const bannedTryCatch = {
+    selector: 'TryStatement',
+    message:
+        'try/catch in production code is for the rare spot where a throwing API has no safe wrapper and the failure has a local answer. Prefer returning a verdict or letting the rejection reach the pipeline’s handler; if this spot truly needs one, disable this rule on the line with a description of what is being contained.'
+};
+
+/**
+ * A `factories.ts` builder import — matches `./factories`, `../factories` and a sibling module's
+ * `@modules/<name>/factories`, whole-specifier so `@infrastructure/persistence/factories` (the
+ * generic helpers a builder is built FROM, not a builder itself) does not also match a bare
+ * `/factories$` suffix. `no-restricted-imports` does not merge across configs (see
+ * `bannedDoubleCasts` above), so every block covering `src/modules/**` or `scripts/ops/**`
+ * spreads this in, or the ban would silently lift for whichever of those files that block's
+ * `no-restricted-imports` entry also configures.
+ */
+const factoriesImportPattern = {
+    regex: String.raw`^(\.{1,2}/factories|@modules/[^/]+/factories)$`,
+    message:
+        'A factories.ts builder is for tests and scenarios/, not production code — it writes past the domain rules a service enforces.'
+};
 
 export default tseslint.config(
-    {
-        files: ['**/*.{ts,mts,tsx}']
-    },
-
     /**
-     * Excluded files
+     * Excluded files — GENERATED OR FOREIGN ONLY.
+     *
+     * The bar for an entry here: linting it is impossible or meaningless, not merely
+     * inconvenient. Tool configs and CLI scripts fall outside the `tsconfig` project but still
+     * belong to us, so they are linted through the scoped blocks near the bottom, which switch
+     * off the type-aware program instead of the whole linter.
      */
     globalIgnores([
-        '**/dist/**',
-        '**/dist-ssr/**',
-        '**/coverage/**',
-        '**/docs/**',
+        /*
+         * The k6 load scenarios. They are JavaScript, but not this project's JavaScript: they run
+         * inside the k6 Go runtime and import from `k6/http`, a module specifier that resolves
+         * only there. Linting them means resolving imports that cannot resolve and enforcing
+         * rules written for the app on a file the app never loads.
+         */
+        'tests/load/**',
+        /*
+         * Mongo's own init convention: a script mongosh runs directly against `db`, a global
+         * that mongosh injects and this project never defines. Same shape as the k6 scripts
+         * above — foreign runtime, not this project's JavaScript.
+         */
+        'docker/mongo-init.js',
+        /*
+         * Runs inside a bare base image during `docker build`, before this project's
+         * dependencies or tsconfig exist there — plain Node with only `node:` imports.
+         */
+        'docker/install-supercronic.mjs',
         '**/node_modules/**',
-        '**/eslint.config.ts',
-        '**/migrate-mongo-config.ts',
-        '**/migrate-mongo-config.js',
-        'db/migrations/**/*.js',
-        'docs/**',
-        'api',
-        '.prism',
-        '.dev'
+        '**/dist/**',
+        // The built docs site and its build cache; the authored source under `docs/` is markdown,
+        // and the VitePress config is linted through the tool-config block below.
+        'docs/.vitepress/dist/**',
+        'docs/.vitepress/cache/**',
+        /*
+         * `tmp/` holds every run's throwaway output: jest coverage, mutation reports, Stryker's
+         * own per-run sandbox copy of the whole project, and the per-run in-memory Mongo data
+         * directories (`tests/support/global-setup.ts`). Without this, `npm run lint` fails with
+         * one parser error per file in a Stryker sandbox the moment a mutation run is in flight —
+         * or forever, if a crashed run left one behind — because those copies sit outside the
+         * `tsconfig` project `parserOptions.project` resolves against. `jest.config.js` ignores
+         * the same path for the same reason; see the note in `stryker.json`.
+         */
+        'tmp/**',
+        // Generated by orval — do not lint generated output
+        'api/**',
+        // Generated by `npm run gen:asyncapi`, same as `api` above
+        'src/types/asyncapi.generated.ts',
+        '.prism/**',
+        '.dev/**',
+        /*
+         * A working directory that belongs to tooling rather than to this codebase — `.claude/`
+         * holds git WORKTREES, whole copies of this project sitting outside the `tsconfig`
+         * project `parserOptions.project` resolves against. Same failure as `tmp/**` above and
+         * the same fix: without it every typed rule throws the moment one exists, and
+         * `npm run lint` fails on a copy of code that is already linted where it lives.
+         * `.prettierignore` carries the matching list.
+         */
+        '.claude/**'
     ]),
 
     /**
-     * Base eslint
+     * Base eslint + typescript presets.
+     *
+     * The three type-checked tiers are the point of setting `parserOptions.project` at all:
+     * the type information is already being built for the parser, so the rules that consume it
+     * (`no-floating-promises`, `no-misused-promises`, `no-unnecessary-condition`, …) cost almost
+     * nothing extra and catch the bugs a syntax-only pass cannot see.
      */
-    ...tseslint.configs['recommended'],
-    ...pluginOxlint.configs['flat/recommended'],
+    js.configs.recommended,
+    ...tseslint.configs.strictTypeChecked,
+    ...tseslint.configs.stylisticTypeChecked,
 
     /**
      * Unicorn plugin
      */
     pluginUnicorn.configs['flat/recommended'],
+
+    /**
+     * Every `eslint-disable` must say why. The two project-local rules and the `TryStatement`
+     * restriction below are deliberately annoying; a bare disable comment converts "deliberately
+     * annoying" into "silently ignored", and the description requirement is what keeps each
+     * exemption an argument instead of a shrug.
+     */
+    comments.recommended,
 
     /**
      * All global rules
@@ -49,22 +151,73 @@ export default tseslint.config(
             parserOptions: {
                 project: path.resolve('./tsconfig.json')
             },
+            // A server: `process`, `Buffer` and friends are the environment, `window` is not.
             globals: {
-                ...globals.browser
+                ...globals.node
             },
             ecmaVersion: 'latest',
             sourceType: 'module'
         },
 
+        plugins: {
+            local: { rules: localRules },
+            boundaries: pluginBoundaries
+        },
+
         rules: {
             'no-console': 'warn',
             'no-debugger': 'warn',
+            'no-restricted-syntax': ['error', ...bannedDoubleCasts],
+            /*
+             * A comment may point at `docs/` and nothing else that ends in `.md`. Root-level plan
+             * and audit docs are deleted when their change lands, and every comment that named one
+             * becomes a dangling pointer nothing catches.
+             */
+            'local/comment-links': 'error',
+            /*
+             * `nesting <= 3 levels`, the block-statement half. The callback half is
+             * `max-nested-callbacks`, deliberately not set — see docs/reference/root.md.
+             */
+            'max-depth': ['error', 3],
+            /*
+             * `!` is allowed where a value has ALREADY been proven present by something the
+             * compiler cannot follow — the `isAdmin` middleware guaranteeing `request.authContext`,
+             * a `.some(x => !x)` guard proving the `.map` below it finds no `undefined`. The
+             * alternative is a cast, which `no-restricted-syntax` above bans for being the same
+             * claim in a form that also silences type errors. The claim itself is the same either
+             * way; `!` is the spelling that stays narrow.
+             */
             '@typescript-eslint/no-non-null-assertion': 'off',
-            // '@typescript-eslint/no-confusing-void-expression': 'off',
             '@typescript-eslint/use-unknown-in-catch-callback-variable': 'off',
             'no-nested-ternary': 'off',
             'unicorn/no-nested-ternary': 'off',
             'unicorn/prefer-top-level-await': 'off',
+
+            /*
+             * Four unicorn rules turned off rather than exempted seventeen times.
+             *
+             * Each was being disabled inline wherever it fired, which is the signal that the rule
+             * disagrees with the stack rather than with the code:
+             *
+             *   no-null            — Mongo and Express both use `null` with meaning. `deletedAt:
+             *                        null` is not `undefined`, and `res.json(null)` is a body.
+             *   no-useless-undefined — an explicit `return undefined` is this codebase's stated
+             *                        convention for "looked, found nothing" (see the union-return
+             *                        note in `infrastructure/http/response.ts`).
+             *   no-process-exit    — this is a server with a shutdown path; `server-lifecycle.ts`
+             *                        exits deliberately, four times, after draining.
+             *   prefer-module      — it flags every `__dirname`, and `__dirname` is how this
+             *                        stack actually runs: tsx and jest both execute the TS as
+             *                        CommonJS, so `import.meta.dirname` would be `undefined` at
+             *                        runtime. Fifty findings, every one a rename into a crash.
+             *
+             * A rule that needs this many exemptions is not catching bugs, it is collecting
+             * signatures.
+             */
+            'unicorn/no-null': 'off',
+            'unicorn/no-useless-undefined': 'off',
+            'unicorn/no-process-exit': 'off',
+            'unicorn/prefer-module': 'off',
 
             '@typescript-eslint/restrict-plus-operands': [
                 'error',
@@ -73,22 +226,101 @@ export default tseslint.config(
                 }
             ],
 
+            /*
+             * strictTypeChecked's default rejects numbers in template literals, which turns every
+             * log line and metric label into a `String()` ceremony. Numbers stringify one way;
+             * the risk the rule guards against is objects and `undefined`, which stay banned.
+             */
+            '@typescript-eslint/restrict-template-expressions': [
+                'error',
+                {
+                    allowNumber: true
+                }
+            ],
+
+            /*
+             * `value || fallback` on a STRING is this codebase's idiom for "empty means unset" —
+             * the `host` npm script deliberately sets `NODE_DB_URI=` to blank, and a blank
+             * feedback name falls back to translated copy. For everything non-string, `??` stays
+             * the required spelling.
+             */
+            '@typescript-eslint/prefer-nullish-coalescing': [
+                'error',
+                {
+                    ignorePrimitives: { string: true }
+                }
+            ],
+
+            /*
+             * `(request, response) => response.json(body)` is the shape of half the controllers
+             * in an Express app; the "confusing" void return is Express's own idiom, and the
+             * fixer's `{ response.json(body); }` says nothing the shorthand does not.
+             */
+            '@typescript-eslint/no-confusing-void-expression': [
+                'error',
+                {
+                    ignoreArrowShorthand: true
+                }
+            ],
+
+            /*
+             * An underscore prefix is the deliberate spelling of "unused on purpose" — a handler
+             * signature that must take `(error, request, response, next)` to be an error handler,
+             * a destructuring that drops a key. Everything unprefixed stays an error.
+             */
+            '@typescript-eslint/no-unused-vars': [
+                'error',
+                {
+                    argsIgnorePattern: '^_',
+                    varsIgnorePattern: '^_',
+                    caughtErrorsIgnorePattern: '^_'
+                }
+            ],
+
+            /*
+             * `const { name } = user` over `const name = user.name` — one read of the object per
+             * binding site instead of a scatter of member accesses. Only for declarations that
+             * read a property into a same-named variable; assignments and arrays are exempt
+             * because `[first] = parts` hides which index is being read.
+             */
+            'prefer-destructuring': 'off',
+            '@typescript-eslint/prefer-destructuring': [
+                'error',
+                {
+                    VariableDeclarator: { array: false, object: true },
+                    AssignmentExpression: { array: false, object: false }
+                }
+            ],
+
             '@typescript-eslint/naming-convention': [
                 'error',
+                /*
+                 * `allowSingleOrDouble`, not `allow`. A single leading underscore was permitted
+                 * and a double one was not, which is the entire reason this rule was being
+                 * disabled inline nineteen times: `__esModule` (the flag every `jest.mock`
+                 * factory must set) and `__v` (Mongo's version key) are both fixed spellings
+                 * owned by other ecosystems, not names this codebase gets to choose.
+                 */
                 {
                     selector: 'default',
                     format: ['camelCase', 'PascalCase'],
-                    leadingUnderscore: 'allow',
+                    leadingUnderscore: 'allowSingleOrDouble',
                     trailingUnderscore: 'allow'
+                },
+                // Allow any format for identifiers that require quotes (e.g. dotted AsyncAPI channel names)
+                {
+                    selector: ['objectLiteralProperty', 'typeProperty'],
+                    modifiers: ['requiresQuotes'],
+                    format: null
                 },
                 {
                     selector: 'variable',
                     format: ['camelCase', 'UPPER_CASE'],
-                    leadingUnderscore: 'allow',
+                    leadingUnderscore: 'allowSingleOrDouble',
                     trailingUnderscore: 'allow'
                 },
                 {
-                    selector: ['class', 'typeLike', 'typeParameter', 'enum'],
+                    selector: ['class', 'typeLike', 'enum'],
                     format: ['PascalCase']
                 },
                 {
@@ -101,7 +333,15 @@ export default tseslint.config(
                     format: ['PascalCase'],
                     custom: {
                         regex: '^I[A-Z]',
-                        match: true
+                        match: false
+                    }
+                },
+                {
+                    selector: 'typeAlias',
+                    format: ['PascalCase'],
+                    custom: {
+                        regex: '^[TI][A-Z]',
+                        match: false
                     }
                 },
                 {
@@ -109,25 +349,38 @@ export default tseslint.config(
                     format: ['PascalCase'],
                     custom: {
                         regex: '^E[A-Z]',
-                        match: true
+                        match: false
                     }
                 },
                 {
+                    selector: 'typeParameter',
+                    format: ['PascalCase'],
+                    custom: {
+                        regex: '^T[A-Z]?',
+                        match: true
+                    }
+                },
+                /*
+                 * `snake_case` is in the list because wire formats decide these names, not this
+                 * codebase: audit entries (`actor_user_id`, `target_type`), analytics properties
+                 * (`order_id`) and header-shaped keys are all read by something outside the repo.
+                 */
+                {
                     selector: ['memberLike', 'enumMember'],
                     format: ['camelCase', 'PascalCase', 'UPPER_CASE', 'snake_case'],
-                    leadingUnderscore: 'allow',
+                    leadingUnderscore: 'allowSingleOrDouble',
                     trailingUnderscore: 'allow'
                 }
             ],
 
-            // https://github.com/sindresorhus/eslint-plugin-unicorn/blob/HEAD/docs/rules/consistent-destructuring.md
-            'unicorn/better-regex': 'warn',
-
             // https://github.com/sindresorhus/eslint-plugin-unicorn/blob/HEAD/docs/rules/better-regex.md
-            'unicorn/consistent-destructuring': 'warn',
+            'unicorn/better-regex': 'error',
+
+            // https://github.com/sindresorhus/eslint-plugin-unicorn/blob/HEAD/docs/rules/consistent-destructuring.md
+            'unicorn/consistent-destructuring': 'error',
 
             // https://github.com/sindresorhus/eslint-plugin-unicorn/blob/HEAD/docs/rules/filename-case.md
-            // Every file is camelCase
+            // Every file is kebab-case
             'unicorn/filename-case': [
                 'error',
                 {
@@ -162,52 +415,881 @@ export default tseslint.config(
                         }
                     }
                 }
-            ]
+            ],
 
-            // https://github.com/sindresorhus/eslint-plugin-unicorn/blob/HEAD/docs/rules/string-content.md
-            // 'unicorn/string-content': [
-            //   'error',
-            //   {
-            //     patterns: {
-            //       unicorn: '🦄',
-            //       awesome: {
-            //         suggest: '😎',
-            //         message: 'Please use `😎` instead of `awesome`.',
-            //       },
-            //       cool: {
-            //         suggest: '😎',
-            //         fix: false,
-            //       },
-            //     },
-            //   },
-            // ],
+            // A bare `eslint-disable` is an unexplained hole in every rule above.
+            '@eslint-community/eslint-comments/require-description': 'error'
         }
     },
+
+    /**
+     * The project-local rule — defined in `scripts/eslint/`, unit-tested in
+     * `tests/unit/scripts/eslint/` — plus the try/catch restriction.
+     *
+     * Scoped to `src/`, deliberately: a test asserting what the reject envelope does with a
+     * string is not shipping user-facing copy, and `tests/unit/infrastructure/http/response.test.ts` passes
+     * a dozen literals for exactly that reason. Likewise a test may try/catch freely to assert on
+     * what was thrown, and a CLI script's try around an optional read is its error handling.
+     *
+     * The `TryStatement` restriction is a speed bump, not a wall: production code prefers typed
+     * verdicts and promise rejection into the pipeline's handlers, and each surviving try/catch
+     * carries an `eslint-disable` whose description (enforced above) says what it is protecting.
+     */
     {
-        files: ['db/migrations/**/*.ts'],
+        files: ['src/**/*.ts'],
+        rules: {
+            'local/no-hardcoded-user-text': 'error',
+            'no-restricted-syntax': ['error', ...bannedDoubleCasts, bannedTryCatch]
+        }
+    },
+
+    /**
+     * Exported API carries its own documentation, and the documentation is checked.
+     *
+     * Two halves, both of them MUSTs in CLAUDE.md, both checked by this one rule:
+     *
+     * Presence:   an exported function, interface, type or enum has a docblock.
+     * Accuracy:   `@param` names match the signature, and tag names are real ones.
+     *
+     * Warnings, not errors, and `publicOnly` — the point is the contract a caller reads, not a
+     * docblock ceremony on every internal helper. Accuracy is the half that pays: a `@param` left
+     * behind by a rename is worse than no comment, and only a rule ever notices.
+     * https://github.com/gajus/eslint-plugin-jsdoc
+     */
+    {
+        files: ['src/**/*.ts', 'scenarios/**/*.ts'],
+        // Co-located module specs are exempt: their exports are fixtures for one file, not API.
+        ignores: ['src/modules/*/tests/**/*.ts'],
+
+        plugins: {
+            jsdoc: pluginJsdoc
+        },
+
+        // TypeScript mode: types live in the signature, so the tags are not asked to repeat them.
+        settings: {
+            jsdoc: { mode: 'typescript' }
+        },
+
+        rules: {
+            'jsdoc/require-jsdoc': [
+                'warn',
+                {
+                    publicOnly: true,
+                    require: {
+                        FunctionDeclaration: true,
+                        ArrowFunctionExpression: true,
+                        FunctionExpression: true,
+                        ClassDeclaration: true
+                    },
+                    contexts: [
+                        'TSInterfaceDeclaration',
+                        'TSTypeAliasDeclaration',
+                        'TSEnumDeclaration'
+                    ]
+                }
+            ],
+            /*
+             * CLAUDE.md asks for the tags "as needed", and no rule can read that word. So the
+             * checks here are about truth, not presence:
+             *
+             * Not set:                    `require-param`, `require-returns` — they would demand
+             *                             a row per parameter across the codebase, mostly
+             *                             restating a typed signature.
+             * disableMissingParamChecks:  document the one parameter that needs a word, skip the
+             *                             three that do not — but never name one that is not there.
+             * checkDestructured: false:   an options bag is documented on its interface, not one
+             *                             `@param` row per property at every call site.
+             */
+            'jsdoc/check-param-names': [
+                'error',
+                { checkDestructured: false, disableMissingParamChecks: true }
+            ],
+            'jsdoc/check-tag-names': 'error',
+            'jsdoc/require-param-description': 'warn',
+            'jsdoc/require-returns-description': 'warn',
+            'jsdoc/require-throws': 'warn'
+        }
+    },
+
+    /**
+     * Controllers, and the one rule that is only theirs.
+     *
+     * A fire-and-forget promise chain is legitimate in an adapter — `enqueueEmail` deliberately
+     * does not block a response on SMTP — and is not legitimate in a request handler, which owes
+     * the caller an answer and owes the system its cleanup. So the rule is scoped here rather
+     * than run repo-wide, which is exactly the distinction the old source-scanning test drew by
+     * only ever looking inside `controllers/` directories.
+     *
+     * `infrastructure/http/middlewares/**` and `infrastructure/surfaces/**` owe the same answer:
+     * a middleware sits in front of every controller behind it, and a surface factory generates
+     * one outright — the same obligation, one level removed.
+     */
+    {
+        files: [
+            'src/modules/*/controllers/**/*.ts',
+            'src/infrastructure/http/middlewares/**/*.ts',
+            'src/infrastructure/surfaces/**/*.ts'
+        ],
+        rules: {
+            'local/controller-chain-must-catch': 'error'
+        }
+    },
+
+    /**
+     * ── THE REPOSITORY IS THE ONLY DOOR ───────────────────────────────────────────────────────
+     *
+     * A collection is reached through `repository.ts` and nowhere else. That file owns the query
+     * shapes, the lean/hydrated decision and the mapping from a document to plain data, and it
+     * owns them so that a schema change has ONE place to land. Every other holder of `orderModel`
+     * is a second door: the rename in `model.ts` becomes a hunt through callers, and an
+     * `updateOne` runs from a service with none of the repository's guards around it.
+     *
+     * This block is the general rule and applies to a module's whole tree, minus the three files
+     * that are the exception by definition — `model.ts` declares the schema, `repository.ts` is
+     * the door, `demo.ts` is a seeder whose entire job is bulk-writing fixtures past the domain
+     * rules (already documented as an exception elsewhere) — and minus `tests/**`, where reaching
+     * the model directly is how a schema contract gets asserted at all.
+     *
+     * Only `Model` bindings, deliberately. A service holding `productRepository` is the intended
+     * design, not a violation; the wall this block defends is the one between a module and the
+     * raw mongoose handle. Controllers get the stricter reading in the block below.
+     */
+    {
+        files: ['src/modules/**/*.ts'],
+        ignores: [
+            'src/modules/*/model.ts',
+            'src/modules/*/repository.ts',
+            'src/modules/**/tests/**'
+        ],
+        rules: {
+            'local/no-persistence-imports': ['error', { bindings: ['Model'], paths: false }]
+        }
+    },
+
+    /**
+     * Controllers, where the same rule is absolute.
+     *
+     * A controller reads the request, calls one service, and turns a verdict into a status code.
+     * It has no business holding a repository either: the moment it does, the transaction
+     * boundary and the domain rules that the service was carrying are bypassed by the HTTP layer
+     * itself, and the same operation now behaves differently depending on whether it was reached
+     * through the controller or through the service a job calls. So here BOTH suffixes are
+     * refused, and so is any import whose path is the persistence file — including `import type
+     * { OrderDocument } from '../model'`, which puts the storage layout into a signature that is
+     * supposed to be about HTTP.
+     *
+     * Stated AFTER the general block on purpose. A rule's options do not merge across configs any
+     * more than `no-restricted-syntax`'s list does — for a file matching both blocks the LAST
+     * match wins outright — so this one has to come second or controllers would silently inherit
+     * the lax `{ bindings: ['Model'], paths: false }` above and stop reporting `userRepository`.
+     */
+    {
+        files: ['src/modules/*/controllers/**/*.ts'],
+        rules: {
+            'local/no-persistence-imports': [
+                'error',
+                { bindings: ['Repository', 'Model'], paths: true }
+            ]
+        }
+    },
+
+    /**
+     * `@infrastructure/http/controller` is for controllers, and the name is the whole argument.
+     *
+     * That file's own docblock opens "The four steps every CONTROLLER repeats". Four services
+     * nevertheless imported `validationErrors` from it — a pure `ZodError → ResponseErrorItem[]`
+     * mapping with nothing HTTP about it, which they need because they validate with translated
+     * messages before answering. Neither side was wrong: the helper was simply filed under a
+     * layer rather than beside the shape it builds, and the import line read as a service reaching
+     * into the controller layer every time somebody opened it.
+     *
+     * The helper moved to `./response`, next to the `ResponseErrorItem` it returns, and this wall
+     * is what stops the next one landing back here. Everything left in `controller.ts` takes an
+     * express `Response`, so a non-controller importing it is now a real finding rather than an
+     * ambiguous one.
+     *
+     * Scoped by `ignores` rather than by listing every non-controller folder: a new file anywhere
+     * under `src/modules` is covered the day it is written, which is the property a glob-listed
+     * wall never has.
+     *
+     * `factoriesImportPattern` rides along in the same `patterns` array for the same reason it
+     * rides along everywhere else this rule is configured: the nearest matching block REPLACES
+     * `no-restricted-imports`'s options rather than merging them, and this block's `files` glob
+     * is the one that would otherwise silently win for every non-controller, non-test module file.
+     */
+    {
+        files: ['src/modules/**/*.ts'],
+        ignores: ['src/modules/*/controllers/**/*.ts', 'src/modules/**/tests/**'],
         rules: {
             'no-restricted-imports': [
                 'error',
                 {
-                    patterns: [
-                        '@controllers/*',
-                        '@middlewares/*',
-                        '@models/*',
-                        '@repositories/*',
-                        '@services/*',
-                        '@utils/*',
-                        '../../src/app',
-                        '../../src/cluster',
-                        '../../src/controllers/*',
-                        '../../src/middlewares/*',
-                        '../../src/models/*',
-                        '../../src/repositories/*',
-                        '../../src/routes/*',
-                        '../../src/services/*',
-                        '../../src/utils/*'
+                    paths: [
+                        {
+                            name: '@infrastructure/http/controller',
+                            message:
+                                'Everything here takes an express Response, so only a controller can use it. A service that needs to turn a ZodError into the contract’s error list wants `validationErrors` from `@infrastructure/http/response`, which is where that shape is defined.'
+                        }
+                    ],
+                    patterns: [factoriesImportPattern]
+                }
+            ]
+        }
+    },
+
+    /**
+     * The other two corners `factoriesImportPattern` above does not reach: a module's own
+     * controllers (excluded there so the `@infrastructure/http/controller` exemption above could
+     * be stated once, by `ignores`, rather than by listing every non-controller folder) and
+     * `scripts/ops/`'s one-off scripts, which have no more business seeding through a test
+     * builder than a controller does.
+     */
+    {
+        files: ['src/modules/*/controllers/**/*.ts', 'scripts/ops/**/*.ts'],
+        rules: {
+            'no-restricted-imports': ['error', { patterns: [factoriesImportPattern] }]
+        }
+    },
+
+    /**
+     * ── THE TIER WALLS ────────────────────────────────────────────────────────────────────────
+     *
+     * Which tier may depend on which, stated once as a graph instead of six times as file globs.
+     *
+     * The arrows point one way and only one way: `infrastructure` is the bottom and reaches
+     * nothing above it — that inversion is what turned the old `src/utils/` into a dumping ground;
+     * `kernel` IS the module system, so it knows modules exist but never which ones; a `module`
+     * owns its domain and may not reach the tier that assembles the application; and `domain` is
+     * plain TypeScript over plain data, reaching nothing at all.
+     *
+     * ── Why a plugin rather than `no-restricted-imports` ──────────────────────────────────────
+     * Two properties the built-in rule cannot express, and a test is the wrong place for either:
+     *
+     *   1. **Coverage, at both levels.** `no-restricted-imports` is scoped by file glob, so a NEW
+     *      top-level directory under `src/` matches no block, is bound by no wall, and is reported
+     *      by nothing. It is not violating a rule — it is invisible. Two things close that here,
+     *      and they are the guarantee `deptrac --fail-on-uncovered` gives the PHP twin:
+     *      `boundaries/no-unknown-files` refuses a FILE no descriptor claims, and the
+     *      `default: 'disallow'` below refuses an EDGE no policy claims — so classifying a new
+     *      tier is not enough either, its arrows have to be argued for before it can import
+     *      anything.
+     *   2. **Relation.** What a module's spec may import depends on WHICH module owns it, and a
+     *      glob cannot say "its own". `capture` reads the module name out of the path and
+     *      `{{ from.element.captured.module }}` compares the two sides, so one policy covers every
+     *      domain — including the one added tomorrow.
+     *
+     * ── The one door, and why it is stated as a file ──────────────────────────────────────────
+     * A module publishes `index.ts` — its runtime API — and nothing else. `fileInternalPath`
+     * names that file inside the target element, so the rule is about the door rather than about
+     * the path spelling that reaches it. A scenario's fixtures are `scenarios/`'s own tier, not a
+     * second door on the module — see below.
+     */
+    {
+        settings: {
+            /*
+             * `src/` and `scenarios/`. The tiers live here, and this is the tree `no-unknown-files`
+             * is meant to hold exhaustively — `tests/`, `scripts/` and `shared/` have no tier and
+             * would each need a descriptor for the sake of being ignored.
+             */
+            'boundaries/include': ['src/**/*.ts', 'scenarios/**/*.ts'],
+
+            /*
+             * Every wall below is stated in terms of the FILE an import resolves to, so an
+             * unresolved specifier is a silent pass: `@modules/products` reads as an npm package,
+             * belongs to no element, and matches no policy. The TypeScript resolver reads the
+             * `paths` map out of `tsconfig.json`, which is where `@modules`, `@kernel`,
+             * `@infrastructure` and `@app` are actually defined.
+             */
+            'import/resolver': {
+                typescript: { alwaysTryTypes: true, project: './tsconfig.json' }
+            },
+
+            /*
+             * Anchored at the repo root (`partialMatch: false`) rather than matched right-to-left.
+             * The default tries progressively longer suffixes, so a bare `modules/*` would also
+             * claim `src/infrastructure/modules/anything` — the anchored form says where each tier
+             * lives, which is the fact being stated.
+             *
+             * ORDER IS SIGNIFICANT: the first descriptor that matches wins, so `domain` must be
+             * declared before the `module` that contains it.
+             */
+            'boundaries/elements': [
+                {
+                    type: 'domain',
+                    pattern: 'src/modules/*/domain',
+                    capture: ['module'],
+                    partialMatch: false
+                },
+                {
+                    type: 'module',
+                    pattern: 'src/modules/*',
+                    capture: ['module'],
+                    partialMatch: false
+                },
+                { type: 'kernel', pattern: 'src/kernel', partialMatch: false },
+                { type: 'infrastructure', pattern: 'src/infrastructure', partialMatch: false },
+                { type: 'app', pattern: 'src/app', partialMatch: false },
+                { type: 'types', pattern: 'src/types', partialMatch: false },
+                /*
+                 * Outside `src/` entirely, on purpose. A scenario file imports a module's
+                 * repository, model and factories directly, which is wider access than the
+                 * one-door rule below grants a sibling module; the trade is that nothing under
+                 * `src/` may import `scenarios` back (see the policies below), so a production
+                 * image can omit this folder outright.
+                 */
+                { type: 'scenarios', pattern: 'scenarios', partialMatch: false }
+            ],
+
+            /*
+             * The file layer, for the four files that are a tier each on their own — an element
+             * descriptor matches folders, and these have no folder.
+             *
+             * Named one by one rather than as `src/*.ts`, deliberately: the whole point of
+             * `no-unknown-files` is that something new has to be classified before it can be
+             * imported, and a wildcard here would wave through the next file to land beside them.
+             */
+            'boundaries/files': [
+                { pattern: 'src/app.ts', category: 'composition-root' },
+                { pattern: 'src/cluster.ts', category: 'process-supervisor' },
+                { pattern: 'src/modules.ts', category: 'registry' },
+                { pattern: 'src/globals.d.ts', category: 'ambient' },
+                { pattern: 'src/modules/*/tests/**/*.ts', category: 'spec' }
+            ]
+        },
+        rules: {
+            /*
+             * The uncovered check. A file under `src/` that matches no element and no category is
+             * an error here, one commit before it can quietly import anything it likes.
+             */
+            'boundaries/no-unknown-files': 'error',
+
+            'boundaries/dependencies': [
+                'error',
+                {
+                    default: 'disallow',
+                    message:
+                        '{{from.element.type}} may not depend on {{to.element.type}} — see docs/theory/layers.md.',
+                    /*
+                     * The plugin skips same-element imports by default (`isInternalDependency`) —
+                     * without this, the own-barrel disallow below and the spec-vs-own-index split
+                     * never run, since both are same-module (same captured element) edges.
+                     * https://github.com/javierbrea/eslint-plugin-boundaries#dependencies-rule
+                     */
+                    checkInternals: true,
+                    policies: [
+                        /*
+                         * ── What is permitted ─────────────────────────────────────────────────
+                         *
+                         * The default is `disallow`, so this half is not decoration: an edge no
+                         * policy names is refused. That is the property `--fail-on-uncovered` gives
+                         * the PHP twin's deptrac one level up — `no-unknown-files` refuses a FILE
+                         * no descriptor claims, and denying by default refuses an EDGE no policy
+                         * claims. With `allow` as the default, adding a tier to the element list
+                         * and forgetting to write its rules leaves it able to import anything, and
+                         * nothing says so.
+                         *
+                         * Read top to bottom: the last matching policy wins, so these open the
+                         * legitimate arrows and the walls below close the illegitimate ones.
+                         */
+                        {
+                            // npm. The graph being described is this repository's, and a package
+                            // belongs to no tier of it.
+                            allow: { to: { module: { origin: 'external' } } }
+                        },
+                        {
+                            // Downward, which is what the tiers are for: everything may reach the
+                            // substrate below it, and `types` is erased at compile time.
+                            allow: { to: { element: { type: ['infrastructure', 'types'] } } }
+                        },
+                        {
+                            // `kernel` is the module system, reachable by what sits above it.
+                            from: { element: { type: ['module', 'domain', 'app'] } },
+                            allow: { to: { element: { type: 'kernel' } } }
+                        },
+                        {
+                            // `app` assembles the application and is the one tier allowed to know
+                            // which domains exist.
+                            from: { element: { type: 'app' } },
+                            allow: { to: { element: { type: ['app', 'module'] } } }
+                        },
+                        {
+                            // A tier reaches its own files freely — that is what makes it a tier
+                            // rather than a pile of files that happen to share a folder.
+                            from: { element: { type: 'infrastructure' } },
+                            allow: { to: { element: { type: 'infrastructure' } } }
+                        },
+                        {
+                            from: { element: { type: 'kernel' } },
+                            allow: { to: { element: { type: 'kernel' } } }
+                        },
+                        {
+                            /*
+                             * The three files that are a tier each — `app.ts` composes,
+                             * `cluster.ts` supervises, `modules.ts` IS the registry and is the one
+                             * caller allowed to import `@modules/<name>/module`. They have no
+                             * element (an element descriptor matches folders), so they are named
+                             * by the file categories declared above.
+                             */
+                            from: {
+                                file: {
+                                    categories: [
+                                        'composition-root',
+                                        'process-supervisor',
+                                        'registry'
+                                    ]
+                                }
+                            },
+                            allow: { to: { element: { type: '*' } } }
+                        },
+                        {
+                            // …including each other: `cluster.ts` imports `app.ts`, and neither
+                            // belongs to an element, so the edge is named by category on both ends.
+                            from: {
+                                file: {
+                                    categories: [
+                                        'composition-root',
+                                        'process-supervisor',
+                                        'registry'
+                                    ]
+                                }
+                            },
+                            allow: {
+                                to: {
+                                    file: {
+                                        categories: [
+                                            'composition-root',
+                                            'process-supervisor',
+                                            'registry'
+                                        ]
+                                    }
+                                }
+                            }
+                        },
+
+                        {
+                            /*
+                             * The registry is readable by the tier that composes the application
+                             * and by any spec that needs the real module list — `app/routes.ts`
+                             * mounts what it enumerates, and a co-located spec asserting
+                             * cross-module cleanup has to run the registry rather than a stand-in.
+                             *
+                             * Not by `infrastructure` or `kernel`: those sit below the domains, and
+                             * reading the list of them is knowing which ones exist.
+                             */
+                            from: [
+                                { element: { type: 'app' } },
+                                { file: { categories: ['spec'] } }
+                            ],
+                            allow: { to: { file: { categories: ['registry'] } } }
+                        },
+
+                        /*
+                         * ── What is refused ───────────────────────────────────────────────────
+                         */
+                        {
+                            from: { element: { type: 'infrastructure' } },
+                            disallow: {
+                                to: { element: { type: ['kernel', 'module', 'domain', 'app'] } }
+                            },
+                            message:
+                                'infrastructure is the bottom of the dependency graph. It may not reach up into application code — that inversion is what turned the old src/utils/ into a dumping ground.'
+                        },
+                        {
+                            from: { element: { type: 'kernel' } },
+                            disallow: { to: { element: { type: ['module', 'domain', 'app'] } } },
+                            message:
+                                'kernel IS the module system: it knows that modules exist but never which ones. One import of a named module would make the mechanism depend on a thing it carries, and "delete a domain, delete a folder" would stop being true.'
+                        },
+                        {
+                            from: { element: { type: ['module', 'domain'] } },
+                            disallow: { to: { element: { type: 'app' } } },
+                            message:
+                                'A module may not reach the app tier. `app` assembles the application and is allowed to know every domain; reaching back would point the arrow both ways. A guard every module needs belongs in @kernel behind a port — see kernel/authentication.ts.'
+                        },
+
+                        /*
+                         * The one door. A sibling is reachable through `index.ts` — its runtime
+                         * API — and nothing else; every other file of it is internal.
+                         */
+                        {
+                            from: { element: { type: ['module', 'domain'] } },
+                            disallow: { to: { element: { type: ['module', 'domain'] } } },
+                            message:
+                                'Import through @modules/<name>. A model TYPE is already there via `export type *` — if what you need is a repository, the model’s runtime value, or wiring instead, ask the module’s service for it; none of those are ever published. Reaching internals directly is what makes a module stop being deletable.'
+                        },
+                        {
+                            from: { element: { type: ['module', 'domain'] } },
+                            allow: {
+                                to: { element: { type: 'module', fileInternalPath: 'index.ts' } }
+                            }
+                        },
+
+                        /*
+                         * `scenarios/` reaches down into every tier: a scenario file imports its
+                         * module's repository, model and factories directly, which is wider than
+                         * the one door above grants a sibling module — see the element descriptor
+                         * above for why that trade is fine here specifically. It also reaches its
+                         * own files freely, the same way `infrastructure` and `kernel` do below —
+                         * `scenarios/wishlist.ts` reads `scenarios/products.ts`'s filler ids directly.
+                         */
+                        {
+                            from: { element: { type: 'scenarios' } },
+                            allow: {
+                                to: {
+                                    element: {
+                                        type: [
+                                            'scenarios',
+                                            'module',
+                                            'domain',
+                                            'kernel',
+                                            'infrastructure',
+                                            'types'
+                                        ]
+                                    }
+                                }
+                            }
+                        },
+
+                        /*
+                         * `scenarios/apply.ts` (the CLI), `scenarios/run-server.ts` (the
+                         * demo-profile server) and `scenarios/check.ts` (the guarantee checker) are
+                         * the files under `scenarios/` that are not data: they boot the real app
+                         * (`scenarios/run-server.ts`) and read the module registry
+                         * (`scenarios/apply.ts`, `scenarios/check.ts`) the way only the
+                         * composition root and the registry's own file-layer categories otherwise
+                         * may. Scoped to exactly these paths so the data files above stay unable
+                         * to reach either.
+                         */
+                        {
+                            from: {
+                                element: {
+                                    type: 'scenarios',
+                                    fileInternalPath: ['apply.ts', 'run-server.ts', 'check.ts']
+                                }
+                            },
+                            allow: {
+                                to: [
+                                    { element: { type: 'app' } },
+                                    { file: { categories: ['composition-root', 'registry'] } }
+                                ]
+                            }
+                        },
+
+                        /*
+                         * `src/app/demo.ts` is the one file under `src/` allowed back into
+                         * `scenarios/` — it mounts `POST /__test/restore`, which has to walk the
+                         * same tables `scenarios/apply.ts` does. Nothing else may: that is what lets a
+                         * production image omit `scenarios/` outright, since every OTHER file
+                         * reaching it would pull the whole folder into the bundle whether or not
+                         * `enableDemoProfile()` is ever called.
+                         */
+                        {
+                            from: { element: { type: 'app', fileInternalPath: 'demo.ts' } },
+                            allow: { to: { element: { type: 'scenarios' } } }
+                        },
+
+                        /*
+                         * A module reaches its own files freely — a service imports its repository,
+                         * a controller imports its service — so "the same module" is compared by
+                         * the captured name rather than listed per domain.
+                         */
+                        {
+                            from: { element: { type: ['module', 'domain'] } },
+                            allow: {
+                                to: {
+                                    element: {
+                                        captured: { module: '{{ from.element.captured.module }}' }
+                                    }
+                                }
+                            }
+                        },
+
+                        /*
+                         * A module never imports its own barrel. `index.ts` re-exports every file
+                         * the barrel allows with `export *`, so a file inside the module reaching
+                         * back through it risks a load-order cycle the same way any `export *`
+                         * self-import would — and the real thing is always one relative import
+                         * away. Placed after the same-module allow above so it overrides that
+                         * allow for this one path; a sibling's `index.ts` stays reachable, since
+                         * this only matches the module's OWN captured name.
+                         */
+                        {
+                            from: { element: { type: 'module' } },
+                            disallow: {
+                                to: {
+                                    element: {
+                                        type: 'module',
+                                        fileInternalPath: 'index.ts',
+                                        captured: { module: '{{ from.element.captured.module }}' }
+                                    }
+                                }
+                            },
+                            message:
+                                'A module does not import its own barrel — the export is one relative import away from the real file. Importing a SIBLING’S index.ts is the one door; importing your own is a self-import that risks a load-order cycle under `export *`. See docs/theory/strategic-ddd.md §5.'
+                        },
+
+                        /*
+                         * The domain layer: plain TypeScript over plain data. It is the only tier
+                         * whose rule is about what it may TOUCH rather than which tier it may
+                         * reach — no framework, no tier, no sibling, and not even the outer files
+                         * of its own module, so the arrow points inward only.
+                         *
+                         * `@types` is the one thing it may take, and always could: those are
+                         * ambient declarations, erased at compile time, so importing one adds no
+                         * edge to the runtime graph at all.
+                         *
+                         * Its own folder stays reachable, which the same-module allow above
+                         * already grants and the disallow here must not take back — hence the
+                         * final policy restoring it.
+                         */
+                        {
+                            from: { element: { type: 'domain' } },
+                            disallow: {
+                                to: {
+                                    element: {
+                                        type: ['infrastructure', 'kernel', 'app', 'module']
+                                    }
+                                }
+                            },
+                            message:
+                                'The domain layer imports nothing but plain TypeScript — no tier, no sibling module, and none of the outer files of its own module. If a rule needs i18n it is returning a message where it should return a verdict; if it needs a repository it is doing the job of the service layer.'
+                        },
+                        {
+                            from: { element: { type: 'domain' } },
+                            allow: {
+                                to: {
+                                    element: {
+                                        type: 'domain',
+                                        captured: { module: '{{ from.element.captured.module }}' }
+                                    }
+                                }
+                            }
+                        },
+
+                        /*
+                         * Co-located specs, and the two reaches they are allowed that production
+                         * code is not.
+                         *
+                         * A spec is deleted with the module it belongs to, so it cannot leave
+                         * coupling behind that outlives either one — and it legitimately needs two
+                         * things production code must not have: its own module's internals (a unit
+                         * test of `service.ts` tests `service.ts`, not the barrel's view of it) and
+                         * a sibling's `module.ts` manifest, because asserting cross-module cleanup
+                         * means running the real registry.
+                         *
+                         * `index.ts` is deliberately left off this list: a sibling's barrel is
+                         * already open through the one door above, and a spec reaching its OWN
+                         * module's barrel is exactly the self-import the disallow above exists to
+                         * block — tests included, per docs/theory/strategic-ddd.md §5.
+                         *
+                         * Stated last so it overrides the module walls above for spec files only.
+                         */
+                        {
+                            from: { file: { categories: ['spec'] } },
+                            allow: {
+                                to: {
+                                    element: {
+                                        type: ['module', 'domain'],
+                                        fileInternalPath: ['module.ts', 'tests/**']
+                                    }
+                                }
+                            }
+                        }
                     ]
                 }
             ]
+        }
+    },
+
+    /**
+     * The barrel's deny-list (`docs/theory/strategic-ddd.md` §5) holds only if a barrel's
+     * `export *` cannot reach a repository, the model's runtime or a wiring file by
+     * naming a source the deny-list never considered. `boundaries/dependencies` above answers
+     * "which module may a FILE import"; this is the question one level up — which of a module's
+     * OWN files its `index.ts` is allowed to publish everything from.
+     */
+    {
+        files: ['src/modules/*/index.ts'],
+        rules: {
+            'local/barrel-allowed-sources': 'error'
+        }
+    },
+
+    /**
+     * What the domain layer may not TOUCH, as opposed to which tier it may reach.
+     *
+     * Left with `no-restricted-imports` on purpose: `mongoose` and `express` are external
+     * packages, not tiers, so they are not a boundary question and stating them as one would mean
+     * describing npm in the element graph. `factoriesImportPattern` rides along for the reason
+     * given where it is declared — this glob is a subset of the module-wide block above, and would
+     * otherwise silently lose that ban for the one tier least likely to ever need it argued for.
+     */
+    {
+        files: ['src/modules/*/domain/**/*.ts'],
+        rules: {
+            'no-restricted-imports': [
+                'error',
+                {
+                    paths: [
+                        {
+                            name: 'mongoose',
+                            message:
+                                'The domain layer may not know how anything is stored. Take the data as a plain argument and let the repository do the reading.'
+                        },
+                        {
+                            name: 'express',
+                            message:
+                                'The domain layer may not know it is being called over HTTP. Return a verdict; the controller turns it into a status code.'
+                        }
+                    ],
+                    patterns: [factoriesImportPattern]
+                }
+            ]
+        }
+    },
+    /**
+     * The analytics event catalogue — the one namespace both repos write into.
+     *
+     * Every name here becomes a row in Umami, and a name is the only part of an event that a
+     * dashboard groups by. `Cart_Item_Added` and `cart_item_added` are two different funnels in
+     * that table, and nothing downstream can merge them back — so the convention is not a style
+     * preference, it is the difference between one funnel and two.
+     *
+     * `snake_case` values, `SCREAMING_SNAKE` keys, and `noun_pastTenseVerb` for the shape of the
+     * name itself. Only the first two are machine-checkable; the third is still prose, because no
+     * selector knows a noun from a verb.
+     *
+     * Scoped to where names are AUTHORED: a module's own `analytics.ts`, which is now the only
+     * place they are written at all.
+     *
+     * The `TryStatement` selector is repeated from the `src/**` block: `no-restricted-syntax`
+     * does not merge across configs — the nearest match REPLACES the list — so leaving it out
+     * here would silently lift the try/catch restriction for exactly these files.
+     */
+    {
+        files: ['src/modules/*/analytics.ts'],
+        rules: {
+            'no-restricted-syntax': [
+                'error',
+                ...bannedDoubleCasts,
+                {
+                    selector:
+                        'Property > Literal[value]:not([value=/^[a-z][a-z0-9]*(_[a-z0-9]+)*$/])',
+                    message:
+                        'An analytics event name is lower snake_case — `cart_item_added`. It is written verbatim into Umami, where a differently-spelled name is a separate funnel nothing can merge back.'
+                },
+                {
+                    selector: 'Property > Identifier.key:not([name=/^[A-Z][A-Z0-9_]*$/])',
+                    message:
+                        'An analytics event constant is SCREAMING_SNAKE — `CART_ITEM_ADDED`. Every other module spells its own that way, and one that does not is the entry a reader scanning the catalogue misses.'
+                },
+                bannedTryCatch
+            ]
+        }
+    },
+
+    /**
+     * CLI tooling and seeders: node programs inside the `tsconfig` project, so they keep the
+     * type-aware rules — but a script's interface is the terminal and its exit code, so
+     * `no-console` would flag every line of output it exists to produce.
+     *
+     * `scripts/eslint/**` is excluded: those files are rule DEFINITIONS the linter loads, not a
+     * program with a terminal interface, and the block below already covers what they actually
+     * need relaxed. A stray `console.log` left in one is exactly what `no-console` should still
+     * catch here.
+     */
+    {
+        files: ['scripts/**/*.ts', 'scenarios/run-server.ts', 'scenarios/tools/**/*.ts'],
+        ignores: ['scripts/eslint/**/*.ts'],
+        languageOptions: {
+            globals: {
+                ...globals.node
+            }
+        },
+        rules: {
+            'no-console': 'off'
+        }
+    },
+
+    /**
+     * The local rule definitions. In the `tsconfig` project so their tests can import them, but
+     * an ESLint rule walks an untyped AST — `context` and every node come in as `any`, and typing
+     * them properly means depending on `@types/estree` for two rules with their own unit tests.
+     * The `no-unsafe-*` family follows `no-explicit-any` out for the same reason: every node
+     * access in an AST walk is "unsafe" to a checker that has no ESTree types to check against.
+     */
+    {
+        files: ['scripts/eslint/**/*.ts'],
+        languageOptions: {
+            globals: {
+                ...globals.node
+            }
+        },
+        rules: {
+            '@typescript-eslint/no-explicit-any': 'off',
+            '@typescript-eslint/no-unsafe-assignment': 'off',
+            '@typescript-eslint/no-unsafe-member-access': 'off',
+            '@typescript-eslint/no-unsafe-call': 'off',
+            '@typescript-eslint/no-unsafe-argument': 'off',
+            '@typescript-eslint/no-unsafe-return': 'off'
+        }
+    },
+
+    /**
+     * Tool configs at the repo root, and the VitePress config: TypeScript, but OUTSIDE the
+     * `tsconfig` project, so the type-aware program is switched off — for these files it would be
+     * a parser error, not a finding. Everything syntax-level still applies.
+     *
+     * `.dependency-cruiser.cjs` and `.dependency-cruiser.modules.cjs` are CommonJS rather than
+     * TypeScript, and are here for the same reason: outside the project, so type-aware rules
+     * cannot run on them.
+     */
+    {
+        files: [
+            'eslint.config.ts',
+            'orval.config.ts',
+            '.dependency-cruiser.cjs',
+            '.dependency-cruiser.modules.cjs',
+            'jest.config.cluster.js',
+            'docs/.vitepress/**/*.{ts,mts}'
+        ],
+        extends: [tseslint.configs.disableTypeChecked],
+        languageOptions: {
+            globals: {
+                ...globals.node
+            }
+        },
+        rules: {
+            'no-console': 'off',
+            // `props`, `env`, `dir`: the VitePress/orval config surface spells its own keys.
+            'unicorn/prevent-abbreviations': 'off',
+            // dependency-cruiser and jest both read CommonJS configs; `module.exports` and
+            // `require` are their interface, not a style choice.
+            'unicorn/prefer-module': 'off',
+            '@typescript-eslint/no-require-imports': 'off'
+        }
+    },
+
+    /**
+     * Plain CommonJS tooling: jest's configs (a `.js` because the per-file coverage thresholds
+     * inside need an explanation attached, and JSON cannot carry a comment) and commitlint.
+     * Outside the `tsconfig` project, so the type-aware program is off; CommonJS, so the
+     * ESM-preference rules yield.
+     */
+    {
+        files: ['jest.config.js', 'jest.config.mutation.js', 'commitlint.config.cjs'],
+        extends: [tseslint.configs.disableTypeChecked],
+        languageOptions: {
+            sourceType: 'commonjs',
+            globals: {
+                ...globals.node
+            }
+        },
+        rules: {
+            'no-console': 'off',
+            '@typescript-eslint/no-require-imports': 'off',
+            // `moduleNameMapper` is jest's own key: these files spell what their tools spell.
+            'unicorn/prevent-abbreviations': 'off'
         }
     },
 
@@ -221,6 +1303,105 @@ export default tseslint.config(
             'unicorn/prevent-abbreviations': 'off'
         }
     },
+
+    /**
+     * Type-aware relief for test code, and only the relief the mocking idiom actually needs.
+     *
+     * `jest.mock` factories, `jest.requireActual`, and every `expect.any(...)` shape come back
+     * `any` — the `no-unsafe-*` family would demand a cast ceremony on top of each one that
+     * asserts nothing the test does not already assert. `no-unnecessary-condition` reads
+     * `?.`-probing of a payload as redundant, but probing IS the assertion in a test; and a test
+     * legitimately deletes `process.env` keys (`no-dynamic-delete`) and passes `() => {}` as the
+     * callback it is not exercising (`no-empty-function`). Everything else — including the
+     * deprecation and floating-promise checks — stays on.
+     */
+    {
+        files: ['tests/**/*.ts', 'src/modules/*/tests/**/*.ts'],
+        rules: {
+            '@typescript-eslint/no-unsafe-assignment': 'off',
+            '@typescript-eslint/no-unsafe-member-access': 'off',
+            '@typescript-eslint/no-unsafe-call': 'off',
+            '@typescript-eslint/no-unsafe-argument': 'off',
+            '@typescript-eslint/no-unsafe-return': 'off',
+            '@typescript-eslint/no-unnecessary-condition': 'off',
+            '@typescript-eslint/no-dynamic-delete': 'off',
+            '@typescript-eslint/no-empty-function': 'off',
+            // `expect(mock.method)` hands the method around unbound by design,
+            // and a test try/catches to assert on what was thrown. The double-cast ban stays:
+            // tests are where that idiom bred.
+            '@typescript-eslint/unbound-method': 'off',
+            'no-restricted-syntax': ['error', ...bannedDoubleCasts]
+        }
+    },
+
+    /**
+     * The unit layer does not boot the application, and does not open a database.
+     *
+     * "Unit" here means two things: no HTTP, and no Mongo, real or in-memory. The second is what
+     * mutation testing costs: Stryker re-runs every related spec once per mutant, so a database a
+     * unit spec opens at setup is paid thousands of times over for a check that needs none. A spec
+     * that needs a database belongs in its module's `tests/integration/`, where the layer's name
+     * says what it costs — see docs/tools/mutation-testing.md#per-file-setup-costs — and
+     * `unit-layer-stays-database-free` in `.dependency-cruiser.cjs` is
+     * what keeps one from drifting back in. That rule is stated as REACHABILITY, so it also
+     * catches the way it actually arrives: a spec importing a helper that already had the database.
+     * The bans below give the direct form at lint time, in the editor, for the two entry points
+     * that are clean import names.
+     *
+     * `@app/*` is deliberately NOT banned. `tests/unit/app/process-error-handlers.test.ts` unit
+     * tests a file that lives in the app tier, which is the tier being tested rather than the
+     * application being started; the composition root is `src/app.ts`, and that is what the pattern
+     * below names.
+     *
+     * This block sits after the module-spec exemption above, which switches `no-restricted-imports`
+     * off wholesale — flat config gives the last match, so the order is what makes this apply to
+     * co-located unit specs at all.
+     */
+    {
+        files: ['tests/unit/**/*.ts', 'src/modules/*/tests/unit/**/*.ts'],
+        rules: {
+            'no-restricted-imports': [
+                'error',
+                {
+                    paths: [
+                        {
+                            name: 'supertest',
+                            message:
+                                'A unit test that sends a request is an integration test. Move it to tests/integration/, where the app is booted once for the whole suite.'
+                        },
+                        {
+                            name: '@tests/http',
+                            message:
+                                '`api()` mounts src/app.ts — every module, every middleware — to exercise one function. Move the spec to tests/integration/, or call the unit under test directly.'
+                        },
+                        {
+                            name: '@tests/setup-test-db',
+                            message:
+                                'A unit test that opens a database is an integration test. Move it to tests/integration/, where Stryker does not rerun it once per mutant.'
+                        },
+                        {
+                            name: '@tests/database',
+                            message:
+                                'A unit test that opens a database is an integration test. Move it to tests/integration/, where Stryker does not rerun it once per mutant.'
+                        },
+                        {
+                            name: 'mongodb-memory-server',
+                            message:
+                                'A unit test that boots an in-memory mongod is an integration test. Move it to tests/integration/, where Stryker does not rerun it once per mutant.'
+                        }
+                    ],
+                    patterns: [
+                        {
+                            group: ['**/src/app', '**/src/cluster'],
+                            message:
+                                'The composition root starts the application. A unit test importing it pays for the whole registry on every mutant Stryker runs.'
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+
     {
         files: ['**/*.d.ts'],
         rules: {
@@ -229,15 +1410,39 @@ export default tseslint.config(
     },
 
     /**
-     *
+     * Jest's globals, for the standalone suites and the co-located module specs alike.
      */
     {
-        files: ['tests/**/*'],
+        files: ['tests/**/*', 'src/modules/*/tests/**/*'],
+
+        plugins: {
+            jest: pluginJest
+        },
 
         languageOptions: {
             globals: {
                 ...globals.jest
             }
+        },
+
+        rules: {
+            /*
+             * Pass rate is 100%, always. A focused spec turns the suite green while running a
+             * fraction of it, and a disabled one reads as green having run none — both are the
+             * same failure, a gate that reports success it did not earn.
+             *
+             * https://github.com/jest-community/eslint-plugin-jest/blob/main/docs/rules/no-focused-tests.md
+             * https://github.com/jest-community/eslint-plugin-jest/blob/main/docs/rules/no-disabled-tests.md
+             */
+            'jest/no-focused-tests': 'error',
+            'jest/no-disabled-tests': 'error',
+            /*
+             * One level more than production code gets. A spec that walks a table exhaustively —
+             * every actor against every from-status against every to-status — is at four levels by
+             * the third `for`, and flattening it into `flatMap` hides the very shape the case is
+             * asserting. The limit still holds where nesting is logic rather than enumeration.
+             */
+            'max-depth': ['error', 4]
         }
     },
 

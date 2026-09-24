@@ -1,0 +1,3 @@
+subdomain: supporting
+dependsOn:
+    - products # a shortfall's title, and syncing the catalogue's read-only stock cache

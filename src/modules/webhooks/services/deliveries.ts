@@ -1,0 +1,108 @@
+/**
+ * @module
+ * The delivery log's two reads-and-a-write: `list` (paged, filterable by subscription/status) and
+ * `replay` (re-send one, synchronously, against the subscription's current url and ring).
+ */
+
+import { t } from '@infrastructure/i18n';
+import {
+    generateReject,
+    generateSuccess,
+    type ResponseSuccess,
+    type ResponseReject
+} from '@infrastructure/http/response';
+import { recordAudit } from '@infrastructure/observability/audit';
+import type { TenantCallerContext } from '@types';
+import type { PaginatedResult } from '@infrastructure/persistence/create-repository';
+import {
+    webhookDeliveryRepository,
+    webhookSubscriptionRepository,
+    WEBHOOK_DELIVERY_SORT
+} from '../repository';
+import type { WebhookDelivery } from '@types';
+import type { WebhookDeliveryDocument } from '../model';
+import { attemptDelivery } from './attempt';
+import { webhooksAuditActions } from '../audit';
+
+/** What `GET /webhooks/deliveries` accepts, mirroring the query parameters `openapi.yaml` declares. */
+export interface DeliveryListFilters {
+    subscriptionId?: string;
+    status?: string;
+    page?: unknown;
+    pageSize?: unknown;
+}
+
+/**
+ * List this tenant's delivery log, newest first.
+ *
+ * `filters.subscriptionId`/`status` are remapped to the repository's own filter-bag keys
+ * (`subscription`/`status`, see `../repository.ts`'s `deliveryBase` search spec) here rather than
+ * in the repository, so the wire's query-parameter name and the collection's own field name may
+ * diverge without either the contract or the repository knowing about the other.
+ */
+export const list = (
+    context: TenantCallerContext,
+    filters: DeliveryListFilters
+): Promise<PaginatedResult<WebhookDelivery>> =>
+    webhookDeliveryRepository.search(
+        {
+            subscription: filters.subscriptionId,
+            status: filters.status,
+            page: filters.page,
+            pageSize: filters.pageSize
+        },
+        { tenant: context.caller.tenantId },
+        WEBHOOK_DELIVERY_SORT
+    );
+
+/** The 409 both "somebody else holds the lease" cases below answer with. */
+const rejectInProgress = (): ResponseReject =>
+    generateReject(409, [
+        { code: 'WEBHOOK_DELIVERY_IN_PROGRESS', message: t('webhooks.delivery-in-progress') }
+    ]);
+
+/**
+ * Re-send one delivery: signs and POSTs again, synchronously, against the subscription's CURRENT
+ * url and secret ring — never the ones this row was originally attempted with. Updates the same
+ * row in place, sharing {@link attemptDelivery}'s own bookkeeping with the queued path rather than
+ * bumping `attempt` here first: a replay is counted exactly like a real attempt at whatever ordinal
+ * the row already holds — one step forward on a failure with backoff tiers left, unchanged on
+ * success or exhaustion. A caller-side bump on top of that would double-count the one real HTTP
+ * attempt this makes.
+ *
+ * Looks up the subscription BEFORE claiming (`repository.ts#claimForReplay`): a 404 must never
+ * claim the row first — a claim that then answers 404 leaves the row `in-flight` under a 60s
+ * lease with nobody left to finish it, until the sweep's stranded-lease read finally reclaims it
+ * as `exhausted`. Once the subscription is confirmed to exist, claiming takes the same lease a
+ * queued attempt would — without it, replaying a delivery a live worker is mid-attempt on would
+ * double-send.
+ *
+ * @returns a 404 outside this tenant's log, or when the subscription itself no longer exists; a
+ *   409 when a live worker (or another replay) already holds the row's lease
+ */
+export const replay = async (
+    id: string,
+    context: TenantCallerContext
+): Promise<ResponseSuccess<WebhookDeliveryDocument> | ResponseReject> => {
+    const delivery = await webhookDeliveryRepository.findByIdInTenant(id, context.caller.tenantId);
+    if (!delivery) return generateReject(404, [t('generic.error-not-found')]);
+
+    const subscription = await webhookSubscriptionRepository.findById(
+        String(delivery.subscriptionId)
+    );
+    if (!subscription) return generateReject(404, [t('webhooks.subscription-not-found')]);
+
+    const claimed = await webhookDeliveryRepository.claimForReplay(id);
+    if (!claimed) return rejectInProgress();
+
+    const updated = await attemptDelivery(claimed, subscription);
+    if (!updated) return rejectInProgress();
+
+    recordAudit(context, {
+        action: webhooksAuditActions.ADMIN_WEBHOOK_DELIVERY_REPLAYED,
+        outcome: 'success',
+        target_type: 'webhook_delivery',
+        target_id: id
+    });
+    return generateSuccess(updated);
+};

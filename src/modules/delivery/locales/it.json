@@ -1,0 +1,17 @@
+{
+    "delivery": {
+        "order-not-found": "L'ordine non è stato trovato",
+        "not-shipped": "Per questo ordine non è ancora partito nulla",
+        "not-processing": "Questo ordine non è pronto per la spedizione",
+        "not-shippable-for-delivery": "Questo ordine non è ancora stato spedito",
+        "tracking-code-required": "Per questo metodo di spedizione è richiesto un codice di tracciamento",
+        "override-reason-required": "Per forzare questo spostamento è richiesto un motivo",
+        "email-shipped": {
+            "subject": "Il tuo ordine è in viaggio",
+            "meta-title": "Ordine spedito",
+            "greeting": "Ciao, {{name}}!",
+            "body": "Buone notizie — il tuo ordine ha lasciato il magazzino.",
+            "tracking": "Traccia il tuo pacco con il codice {{code}}."
+        }
+    }
+}

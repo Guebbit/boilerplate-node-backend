@@ -1,0 +1,287 @@
+/**
+ * @module
+ * The account route table — where getting the router wrong is an account takeover. Three
+ * arrangements are load-bearing and invisible to a type checker: `router.use(noStore)` must cover
+ * every route (a past regression let `setCache` override it on `GET /account`); credential routes
+ * must carry BOTH rate-limit budgets; token-bearing routes are deliberately public — the token IS
+ * the credential.
+ */
+
+import { routeSignatures, routerMiddleware, guardsOn, chainOf } from '@tests/routes';
+
+jest.mock('@infrastructure/http/middlewares/cache', () =>
+    jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
+);
+jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
+    jest.requireActual<typeof import('@tests/routes')>('@tests/routes').securityMock()
+);
+jest.mock('@infrastructure/http/middlewares/upload', () =>
+    jest.requireActual<typeof import('@tests/routes')>('@tests/routes').storageMock()
+);
+
+import { router } from '@modules/account/routes';
+
+/** Routes whose credential is a token in the URL or a cookie, not an access token. */
+const TOKEN_BEARING = [
+    'DELETE /delete-confirm',
+    'POST /reset-confirm',
+    'POST /verify-confirm',
+    'POST /email-change-confirm',
+    'GET /refresh',
+    'POST /logout'
+];
+
+/**
+ * Routes that must carry all three `credentialLimiters` budgets. `POST /signup` and `POST /reset`
+ * are deliberately NOT here — see `account routes — signup and reset rate limiting` below for why
+ * they carry `signupLimiters`/`resetRequestLimiters` instead.
+ */
+const RATE_LIMITED = [
+    'POST /login',
+    'POST /reset-confirm',
+    'POST /password',
+    'POST /reauth',
+    'POST /verify-request',
+    'POST /verify-confirm',
+    'POST /email-change-confirm',
+    'POST /login/2fa',
+    'POST /login/2fa/send',
+    'GET /oauth/:provider',
+    'GET /oauth/:provider/callback'
+];
+
+/** Routes that act on the caller's own account and therefore demand a live session. */
+const AUTHENTICATED = [
+    'GET /',
+    'PUT /',
+    'DELETE /',
+    'POST /password',
+    'POST /reauth',
+    'POST /logout-all',
+    'GET /sessions',
+    'DELETE /sessions/:sessionId',
+    'POST /verify-request',
+    'DELETE /tokens/expired',
+    'POST /export',
+    'GET /2fa',
+    'DELETE /2fa',
+    'POST /2fa/methods/:method/setup',
+    'POST /2fa/methods/:method/confirm',
+    'DELETE /2fa/methods/:method',
+    'POST /2fa/backup-codes'
+];
+
+describe('account routes — what is mounted', () => {
+    it('mounts exactly the documented endpoints, in the documented order', () => {
+        expect(routeSignatures(router)).toEqual([
+            'GET /',
+            'PUT /',
+            'DELETE /',
+            'DELETE /delete-confirm',
+            'POST /login',
+            'POST /signup',
+            'POST /reset',
+            'POST /reset-confirm',
+            'POST /password',
+            'POST /password/check',
+            'POST /reauth',
+            'GET /abilities',
+            'GET /refresh',
+            'POST /logout',
+            'POST /logout-all',
+            'GET /sessions',
+            'DELETE /sessions/:sessionId',
+            'POST /verify-request',
+            'POST /verify-confirm',
+            'POST /email-change-confirm',
+            'DELETE /tokens/expired',
+            'POST /export',
+            'POST /login/2fa/send',
+            'POST /login/2fa',
+            'GET /2fa',
+            'DELETE /2fa',
+            'POST /2fa/methods/:method/setup',
+            'POST /2fa/methods/:method/confirm',
+            'DELETE /2fa/methods/:method',
+            'POST /2fa/backup-codes',
+            'GET /oauth/providers',
+            'GET /oauth/:provider',
+            'GET /oauth/:provider/callback'
+        ]);
+    });
+
+    it('reads the caller and forbids storing the answer, for the whole router', () => {
+        // Order matters as much as presence: `noStore` after `getAuth` is fine, but both must be
+        // above every route, which `guardsOn` checks per endpoint below.
+        expect(routerMiddleware(router)).toEqual(['getAuth', 'noStore']);
+    });
+
+    it.each(routeSignatures(router))('%s is marked no-store', (signature) => {
+        // The one that regressed before: a profile is the caller's identity and must never be
+        // stored by a shared cache or a browser. Asserted per route so a route mounted above the
+        // `use` — which would be silently storable — fails here.
+        expect(guardsOn(router, signature)).toContain('noStore');
+    });
+});
+
+describe('account routes — authorization', () => {
+    it.each(AUTHENTICATED)('%s requires a live session', (signature) => {
+        expect(guardsOn(router, signature)).toContain('isAuth');
+    });
+
+    it.each(TOKEN_BEARING)('%s stays public, because the token is the credential', (signature) => {
+        // Deliberate. A caller completing a password reset has no access token by definition; a
+        // caller logging out is destroying the one they have. `isAuth` here breaks the flow.
+        expect(guardsOn(router, signature)).not.toContain('isAuth');
+    });
+
+    it.each(['POST /login', 'POST /signup', 'POST /reset'])(
+        '%s stays public, because it is how a session begins',
+        (signature) => {
+            expect(guardsOn(router, signature)).not.toContain('isAuth');
+        }
+    );
+
+    it('guards the token sweep with the shop wildcard, and nothing else', () => {
+        // `DELETE /account/tokens/expired` is maintenance across every account, not self-service.
+        // It is the only keyed route in a module that is otherwise entirely first-person.
+        const keyed = routeSignatures(router).filter((signature) =>
+            guardsOn(router, signature).includes('requirePermissionGuard')
+        );
+
+        expect(keyed).toEqual(['DELETE /tokens/expired']);
+    });
+
+    it('demands a session before checking the role on the sweep', () => {
+        const guards = guardsOn(router, 'DELETE /tokens/expired');
+
+        expect(guards.indexOf('isAuth')).toBeLessThan(guards.indexOf('requirePermissionGuard'));
+    });
+});
+
+describe('account routes — credential rate limiting', () => {
+    it.each(RATE_LIMITED)('%s carries ALL THREE credential budgets', (signature) => {
+        const limiters = chainOf(router, signature).filter((entry) =>
+            entry.startsWith('credentials-')
+        );
+
+        // Identity, address AND address-block: each is keyed differently and defends an attack
+        // the other two miss. Any one missing reads as protected and is not.
+        expect(limiters).toEqual([
+            'credentials-identity',
+            'credentials-address',
+            'credentials-block'
+        ]);
+    });
+
+    it('rate-limits before authenticating, so a spent budget costs no lookup', () => {
+        // On `POST /password`, `/reauth` and `/verify-request` the limiters precede `isAuth`.
+        // Reversed, a flood of unauthenticated requests would each do the session work before
+        // being refused.
+        for (const signature of ['POST /password', 'POST /reauth', 'POST /verify-request']) {
+            const chain = chainOf(router, signature);
+
+            expect(chain.indexOf('credentials-identity')).toBeLessThan(chain.indexOf('isAuth'));
+        }
+    });
+
+    it('leaves the non-credential routes unbudgeted', () => {
+        // The global brake covers these. A per-route credential budget on, say, the address book
+        // would spend a login allowance on ordinary browsing.
+        const unexpected = routeSignatures(router).filter(
+            (signature) =>
+                !RATE_LIMITED.includes(signature) &&
+                chainOf(router, signature).some((entry) => entry.startsWith('credentials-'))
+        );
+
+        expect(unexpected).toEqual([]);
+    });
+});
+
+describe('account routes — signup and reset rate limiting', () => {
+    /**
+     * `credentialLimiters`' `skipSuccessfulRequests` spends nothing on the 201/200 these two
+     * routes answer with on their OWN abuse (a Sybil signup, a mail-bombing reset request) — see
+     * `signupLimiters`'/`resetRequestLimiters`' own docs in `rate-limits.ts`. Each carries its own
+     * three-dimension budget instead, and neither may carry `credentialLimiters` at all.
+     */
+    it.each([
+        ['POST /signup', ['signup-identity', 'signup-address', 'signup-block']],
+        ['POST /reset', ['reset-identity', 'reset-address', 'reset-block']]
+    ])('%s carries ALL THREE budgets, and no credentialLimiters', (signature, labels) => {
+        const chain = chainOf(router, signature);
+        const [prefix] = labels[0].split('-');
+
+        expect(chain.filter((entry) => entry.startsWith(`${prefix}-`))).toEqual(labels);
+        expect(chain.some((entry) => entry.startsWith('credentials-'))).toBe(false);
+    });
+});
+
+describe('account routes — human-challenge gate (rung 3)', () => {
+    it.each([
+        ['POST /signup', 'signup-block'],
+        ['POST /reset', 'reset-block']
+    ])('%s carries humanChallengeGate, after its own rate-limit budget', (signature, lastLabel) => {
+        const chain = chainOf(router, signature);
+
+        expect(chain).toContain('humanChallengeGate');
+        // A spent budget should not reach the gate at all — see rate-limits.ts's own reasoning
+        // for mounting a budget before the cost it exists to avoid.
+        expect(chain.indexOf('humanChallengeGate')).toBeGreaterThan(chain.indexOf(lastLabel));
+    });
+
+    it('mounts the gate on no other route', () => {
+        const unexpected = routeSignatures(router).filter(
+            (signature) =>
+                signature !== 'POST /signup' &&
+                signature !== 'POST /reset' &&
+                chainOf(router, signature).includes('humanChallengeGate')
+        );
+
+        expect(unexpected).toEqual([]);
+    });
+});
+
+describe('account routes — cache invalidation and uploads', () => {
+    it.each([
+        'PUT /',
+        'DELETE /delete-confirm',
+        'POST /signup',
+        'POST /reset-confirm',
+        'POST /verify-confirm',
+        'POST /email-change-confirm',
+        'DELETE /tokens/expired'
+    ])('%s clears both the users and account tags', (signature) => {
+        // The same row is served as `/account` to its owner and `/users/:id` to an admin.
+        // Clearing one tag leaves the other serving the profile as it was.
+        expect(chainOf(router, signature)).toContain('invalidateCache([users|account])');
+    });
+
+    it('clears only the account tag when revoking every session', () => {
+        // Sessions are not part of the admin user listing, so widening this would evict the whole
+        // user directory on every logout-all.
+        expect(chainOf(router, 'POST /logout-all')).toContain('invalidateCache([account])');
+    });
+
+    it.each(['PUT /', 'POST /signup'])(
+        '%s accepts the imageUpload field and validates what arrives',
+        (signature) => {
+            const chain = chainOf(router, signature);
+
+            expect(chain).toContain('upload.image');
+            expect(chain).toContain('validateUploadedImages');
+            expect(chain).toContain('quarantineUploadedImages');
+        }
+    );
+
+    it('caches nothing anywhere', () => {
+        // The counterpart to `noStore`: not one route in this module may be stored, so not one
+        // may mount `setCache`. This is the assertion that would have caught the regression the
+        // header describes, at the router rather than at the header.
+        const cached = routeSignatures(router).filter((signature) =>
+            chainOf(router, signature).some((entry) => entry.startsWith('setCache'))
+        );
+
+        expect(cached).toEqual([]);
+    });
+});

@@ -1,0 +1,287 @@
+openapi: 3.0.3
+info:
+    title: delivery — module contract
+    version: '2.0.0'
+
+paths:
+    /delivery/methods:
+        get:
+            tags: [Delivery]
+            summary: List shipping methods
+            description: The shipping methods this shop offers — flat rates and free-above thresholds. Public, because what shipping costs is pre-purchase information; the authoritative pricing still happens at checkout, against the lines actually bought, so a client showing these numbers cannot commit the shop to a stale rate. `weight` is advisory filtering for this list only — checkout re-checks the chosen method against the basket's real weight server-side and refuses one that doesn't fit, so a stale or omitted query value cannot buy a method this endpoint would have hidden.
+            operationId: listShippingMethods
+            security: []
+            parameters:
+                - name: weight
+                  in: query
+                  required: false
+                  schema:
+                      type: integer
+                      minimum: 0
+                  description: The current basket's total weight in grams, computed by the caller. Omitted returns every method regardless of weight range.
+            responses:
+                '200':
+                    description: The methods
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ShippingMethodsResponseEnvelope'
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /delivery/order/{orderId}:
+        get:
+            tags: [Delivery]
+            summary: Get the shipment behind an order
+            description: The parcel for one of the caller's orders — tracking code and whether it has arrived. Ownership is the order's, read through the same scope every order read uses. No parcel yet (the order has not reached `shipped`) is a 404 — absence is the answer.
+            operationId: getShipmentByOrder
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: orderId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: One of the caller's own orders
+            responses:
+                '200':
+                    description: The shipment
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ShipmentEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /delivery/order/{orderId}/ship:
+        post:
+            tags: [Delivery]
+            summary: Record a parcel's handover to the carrier
+            description: Creates the parcel record and sends the shipped email, then reports the fact to `orders` — the order moves `processing → shipped`. `trackingCode` is required exactly when the order's shipping method is `tracked` (looked up live, not frozen); refused with a named 422 when a tracked method's code is missing. Refuses an order that is not `processing` with a named 409 — this door is how that move happens now, not `PUT /orders/{id}`.
+            operationId: shipOrder
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: orderId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: The order to ship
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ShipOrderRequest'
+            responses:
+                '200':
+                    description: The shipment
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ShipmentEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /delivery/order/{orderId}/deliver:
+        post:
+            tags: [Delivery]
+            summary: Record a parcel's arrival
+            description: Stamps the shipment delivered and reports the fact to `orders` — the order moves `shipped → delivered`. Refuses an order that is not `shipped` with a named 409.
+            operationId: deliverOrder
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: orderId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: The order that arrived
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/DeliverOrderRequest'
+            responses:
+                '200':
+                    description: The shipment
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ShipmentEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        # ── Delivery module ─────────────────────────────────────────────────────
+        # Owned by src/modules/delivery. The methods are the checkout's selector; the shipment
+        # is the carrier's record of one order's parcel.
+
+        ShippingMethod:
+            type: object
+            additionalProperties: false
+            required: [id, price, tracked]
+            properties:
+                id:
+                    type: string
+                    description: Stable id, frozen onto orders at checkout (standard, express, pickup).
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: Flat rate, in the shop's currency.
+                freeAbove:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: Items total at which this method becomes free. Absent — it never does.
+                tracked:
+                    type: boolean
+                    description: Whether a parcel sent by this method carries a tracking code. Looked up live by the order's shippingMethod id when it ships — not frozen at checkout — so a rate change also changes what the shipping door requires.
+                maxInsuredValue:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: The most this method insures a parcel for. Informational only — nothing in this application enforces it against an order's total.
+                minWeight:
+                    type: integer
+                    minimum: 0
+                    description: Grams. Absent means no floor. Enforced — GET /delivery/methods?weight= omits a method the basket doesn't reach, and checkout refuses one chosen outside its range.
+                maxWeight:
+                    type: integer
+                    minimum: 0
+                    description: Grams. Absent means no ceiling. Enforced the same way as minWeight.
+
+        ShippingMethodsResponse:
+            type: object
+            additionalProperties: false
+            required: [methods]
+            properties:
+                methods:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ShippingMethod'
+
+        ShippingMethodsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/ShippingMethodsResponse'
+
+        Shipment:
+            type: object
+            additionalProperties: false
+            required: [id, orderId, status]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                trackingCode:
+                    type: string
+                    description: The carrier's handle on the parcel. Absent for a method that carries no tracking (ShippingMethod.tracked is false).
+                status:
+                    type: string
+                    enum: [shipped, delivered]
+                    description: The tail of the order's lifecycle, as the carrier sees it.
+                deliveredAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        ShipOrderRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                trackingCode:
+                    type: string
+                    description: The carrier's handle on the parcel. Required when the order's shipping method is tracked; optional otherwise.
+                forced:
+                    type: boolean
+                    description: Skip the normal `processing`-only gate — the caller must hold `orders.any.override`, and `reason` is then required. Still creates the parcel record and sends the shipped email; still refuses a tracked method with no `trackingCode`.
+                reason:
+                    type: string
+                    minLength: 1
+                    description: Required exactly when `forced` is `true` — why the normal door didn't apply. Recorded on the order's override history.
+
+        DeliverOrderRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                forced:
+                    type: boolean
+                    description: Skip the normal `shipped`-only gate — the caller must hold `orders.any.override`, and `reason` is then required. Still stamps the shipment delivered and reports the fact.
+                reason:
+                    type: string
+                    minLength: 1
+                    description: Required exactly when `forced` is `true`.
+
+        ShipmentEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/Shipment'
+
+        # Used by `POST /account/export` (`shared/contracts/openapi.root.yaml`) — mirrors
+        # `Shipment` exactly, kept as its own schema since an export's shape is free to diverge
+        # from the admin response even though it doesn't today; every field here is already the
+        # caller's own, so nothing needs stripping.
+        ExportShipment:
+            type: object
+            additionalProperties: false
+            required: [id, orderId, trackingCode, status]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                trackingCode:
+                    type: string
+                status:
+                    type: string
+                    enum: [shipped, delivered]
+                deliveredAt:
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+

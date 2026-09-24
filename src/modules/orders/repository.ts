@@ -1,0 +1,420 @@
+/**
+ * @module
+ * Order repository. Unlike the other collections, orders are read through the aggregation
+ * framework: an order embeds a product snapshot, and filtering on `items.product._id` is a
+ * pipeline concern. The repository factory still supplies plain CRUD; search is overridden
+ * below.
+ */
+
+import { orderModel, applyOrderTransform, invoiceCounterModel } from './model';
+import type { OrderDocument, OrderPendingEffect, OrderStatusOverride } from './model';
+import type { PipelineStage, QueryFilter } from 'mongoose';
+import { OrderStatus } from '@types';
+import type { Order } from '@types';
+import {
+    createRepository,
+    toObjectId,
+    type Repository
+} from '@infrastructure/persistence/create-repository';
+import {
+    normalizePagination,
+    buildPaginatedMeta,
+    DEFAULT_SORT,
+    type PaginatedMeta
+} from '@infrastructure/persistence/search';
+
+/** Plain CRUD from the repository factory; `search` below overrides its aggregation-free default. */
+const base = createRepository<OrderDocument, Order>(orderModel, {
+    transform: applyOrderTransform,
+    searchable: {
+        objectIds: {
+            id: '_id',
+            userId: 'userId',
+            // Product data is embedded, not referenced — the snapshot's own `_id` is what
+            // identifies which product an order line holds.
+            productId: 'items.product._id'
+        },
+        exact: { email: 'email', status: 'status', paymentMethod: 'paymentMethod' },
+        // Staff-written text on the order, so the filter is only reachable by someone who sees it.
+        regex: { notes: 'notes' },
+        presence: { deleted: 'deletedAt' }
+    }
+});
+
+/**
+ * Run an aggregation pipeline against the Order collection.
+ */
+const aggregate = <T = OrderDocument>(pipeline: PipelineStage[]): Promise<T[]> =>
+    orderModel.aggregate<T>(pipeline);
+
+/**
+ * Filter → count → page → normalize, over the aggregation framework. `$match` is built from the
+ * same declared spec the other repositories use, so id coercion happens before the pipeline is
+ * assembled — unlike `find()`, `$match` doesn't cast. `async` so `buildWhere`'s synchronous
+ * throw on a malformed id becomes a rejection, not a thrown error that bypasses the caller's
+ * `.catch()`.
+ */
+const search = async (
+    filters: object = {},
+    scope: Record<string, unknown> = {}
+): Promise<{ items: Order[]; meta: PaginatedMeta }> => {
+    const pagination = normalizePagination(filters);
+    // Scope merged last: it is the authorization boundary, and no client filter may widen it.
+    const match = { ...base.buildWhere(filters), ...scope };
+
+    // `DEFAULT_SORT`, not a bare `createdAt` — the count and the page below are two separate
+    // `aggregate()` calls, so a tie between them puts one order on page 1 AND page 2 and skips
+    // another. Orders arrive in bursts (a seed, a bulk import, two concurrent checkouts), which
+    // makes ties the normal case rather than the edge one.
+    const basePipeline: PipelineStage[] = [{ $match: match }, { $sort: DEFAULT_SORT }];
+
+    return aggregate<{ totalItems?: number }>([...basePipeline, { $count: 'totalItems' }]).then(
+        (countResults) => {
+            const totalItems = countResults.at(0)?.totalItems ?? 0;
+
+            return aggregate([
+                ...basePipeline,
+                { $skip: pagination.skip },
+                { $limit: pagination.pageSize }
+            ]).then((items) => ({
+                items: base.normalize(items),
+                meta: buildPaginatedMeta(pagination, totalItems)
+            }));
+        }
+    );
+};
+
+/**
+ * Fetch one order, restricted to a caller's own rows when `scope` narrows it — one query,
+ * `findOne({ _id, ...scope })`, whether or not there's anything in `scope` to add: an empty
+ * object is a no-op filter addition, so the unscoped (admin) and scoped (owner) calls run the
+ * identical shape of query and always resolve the same hydrated Mongoose document. The scope
+ * rides in the SAME query as the id — checking ownership after the read is how a scoped find
+ * becomes an information leak. `async`, so a malformed `id`'s synchronous `toObjectId` throw
+ * becomes a rejection rather than an exception that bypasses a caller's `.catch()`, the same
+ * reasoning `search` above documents for `buildWhere`.
+ */
+const findByIdScoped = async (
+    id: string,
+    scope: Record<string, unknown> = {}
+): Promise<OrderDocument | undefined> =>
+    orderModel
+        .findOne({ _id: toObjectId(id), ...scope })
+        .exec()
+        .then((order) => order ?? undefined);
+
+/**
+ * Restrict a query to one user's own orders.
+ *
+ * The `userId` on an order is an ObjectId, so the caller's id has to be coerced before it can
+ * match — a raw string silently matches nothing inside a `$match`, which reads as "this user has
+ * no orders" rather than as a mistake.
+ */
+const ownerScope = (userId: string): Record<string, unknown> => ({
+    userId: toObjectId(userId)
+});
+
+/**
+ * Move an order between statuses, but only from one of the expected ones — atomically. The
+ * condition rides IN THE FILTER, not a preceding read: two requests racing an order (a customer
+ * cancelling while admin marks it shipped) must not both read `pending` and both write. mongod
+ * evaluates the filter while holding the document, so exactly one matches; the loser gets `null`
+ * and a follow-up read only informs the error message. The scope composes the same way:
+ * `callerScope` (`services/scope.ts`) rides in the same filter, so there's no window between an
+ * ownership check and the write.
+ *
+ * @param effects - consequences the mover cannot guarantee, stored in the SAME write as the
+ *   status. Single-document atomicity is what makes them exactly as durable as the move that
+ *   decided them; a second write could be the one that is lost. Only the cancel passes any —
+ *   `delivery`'s shipped move has nothing that needs retrying.
+ */
+const updateStatusIfIn = (
+    id: string,
+    from: readonly string[],
+    to: string,
+    scope?: Record<string, unknown>,
+    effects?: readonly OrderPendingEffect[]
+): Promise<OrderDocument | null> =>
+    orderModel
+        .findOneAndUpdate(
+            // `as QueryFilter`, the same cast `create-repository.ts` makes for the same reason:
+            // spreading a `Record<string, unknown>` scope widens the object past what the filter
+            // generic accepts, and the alternative is typing every caller's scope per collection.
+            {
+                _id: toObjectId(id),
+                ...scope,
+                status: { $in: [...from] }
+            } as QueryFilter<OrderDocument>,
+            { $set: { status: to, ...(effects?.length ? { pendingEffects: [...effects] } : {}) } },
+            { returnDocument: 'after' }
+        )
+        .exec();
+
+/**
+ * Move an order to `to` from any status in `from`, appending one override-history entry in the
+ * SAME write — an override's history entry and the status move it describes must never come
+ * apart, the same reasoning {@link updateStatusIfIn}'s `effects` parameter already follows for
+ * cancellation. `from` is not one fixed status here (unlike {@link updateStatusIfIn}'s normal
+ * callers): `domain/lifecycle.ts`'s `statusesOverridableInto` computes the real set per call.
+ * @param id - the order to move
+ * @param from - every status this override may legally have started from
+ * @param to - the status being written
+ * @param entry - the override-history entry to append
+ * @returns the order as it now stands, or `null` if `id`'s current status was not in `from`
+ */
+const applyStatusOverride = (
+    id: string,
+    from: readonly OrderStatus[],
+    to: OrderStatus,
+    entry: OrderStatusOverride
+): Promise<OrderDocument | null> =>
+    orderModel
+        .findOneAndUpdate(
+            { _id: toObjectId(id), status: { $in: [...from] } } as QueryFilter<OrderDocument>,
+            { $set: { status: to }, $push: { statusOverrides: entry } },
+            { returnDocument: 'after' }
+        )
+        .exec();
+
+/**
+ * Orders whose consequences are still owed, oldest first — `retryPendingEffects`'s only query.
+ *
+ * `pendingEffects.0` rather than `$exists`, so a drained order (empty array) is settled without a
+ * second write to unset the field. The grace window rides in the caller's `cutoff`: the happy
+ * path clears the marker milliseconds after writing it, so anything still standing after it has
+ * genuinely been dropped.
+ *
+ * @param cutoff - orders untouched at or before this instant are due for a retry
+ * @param limit - how many to return at most, so one pass cannot fan out unboundedly
+ * @returns the orders still owing an effect
+ */
+const findWithPendingEffects = (cutoff: Date, limit: number): Promise<OrderDocument[]> =>
+    orderModel
+        .find({ 'pendingEffects.0': { $exists: true }, updatedAt: { $lte: cutoff } })
+        .sort({ updatedAt: 1 })
+        .limit(limit)
+        .exec();
+
+/**
+ * Every still-`pending` order holding a line for this product — a hard delete or a deactivation's
+ * own query, to cancel each one at once rather than leaving it to a payment attempt's 409 to
+ * discover the product is gone. `items.product._id`, the same embedded-snapshot path `search`'s
+ * own `productId` filter reads (see this file's own top docblock) — never a reference, since an
+ * order keeps what was bought, not a pointer to the catalogue row.
+ *
+ * @param productId - the product just removed or deactivated
+ */
+const findPendingByProductId = (productId: string): Promise<OrderDocument[]> =>
+    orderModel
+        .find({ status: OrderStatus.pending, 'items.product._id': toObjectId(productId) })
+        .exec();
+
+/**
+ * Discharge one effect, once its listener has actually returned.
+ *
+ * Conditional on the effect still being there, so a retry racing the original drain resolves at
+ * the storage layer rather than double-counting. `timestamps: false` — draining is bookkeeping,
+ * and bumping `updatedAt` would push every *other* pending effect on the order out past the
+ * sweep's cutoff.
+ *
+ * @param orderId - the order that owed it
+ * @param effect - the consequence now settled
+ * @returns whether this call was the one that cleared it
+ */
+const clearPendingEffect = (orderId: string, effect: OrderPendingEffect): Promise<boolean> =>
+    orderModel
+        .updateOne(
+            { _id: toObjectId(orderId), pendingEffects: effect },
+            { $pull: { pendingEffects: effect } },
+            { timestamps: false }
+        )
+        .exec()
+        .then(({ modifiedCount }) => modifiedCount > 0);
+
+/**
+ * How many of this account's orders are still `pending` on a `bank_transfer` — checkout's
+ * open-transfer cap. A week-long hold is otherwise free to take; this is what a third one refuses
+ * before it is even written.
+ *
+ * @param userId - the caller placing a new transfer order
+ * @returns the count of open transfer orders
+ */
+const countOpenBankTransfers = (userId: string): Promise<number> =>
+    orderModel.countDocuments({
+        userId: toObjectId(userId),
+        status: OrderStatus.pending,
+        paymentMethod: 'bank_transfer'
+    });
+
+/**
+ * Which of `ids` still name a real order — `scripts/ops/reap-invoices.ts`'s existence check for a stored
+ * invoice PDF found on disk with nothing left to serve it: `remove()`'s hard-delete path cleans up
+ * its own order's file, but a row removed outside it (a scenario reset's `emptyDatabase()`, a
+ * manual drop) leaves the file behind with nothing to name it an orphan except this lookup.
+ *
+ * A malformed id (not what `toObjectId` accepts) is filtered out before this runs — see the
+ * reaper's own caller — so every entry here is a well-formed candidate.
+ *
+ * @param ids - candidate order ids, one per `.pdf` filename on disk
+ * @returns the subset of `ids` a document still exists for
+ */
+const existingIds = (ids: readonly string[]): Promise<Set<string>> =>
+    orderModel
+        .find({ _id: { $in: ids.map((id) => toObjectId(id)) } }, { _id: 1 })
+        .lean()
+        .then((documents) => new Set(documents.map((document) => String(document._id))));
+
+/**
+ * Unset `userId` on every order this account placed, and mark them for `scripts/ops/reap-orders.ts`
+ * to scrub later — `users`' `USER_DELETED` listener. The order row is never touched otherwise:
+ * it is the invoice, kept whole until `anonymizeAfter`.
+ *
+ * @param userId - the erased account's id
+ * @param anonymizeAfter - when the reaper may scrub this order's remaining PII
+ * @returns how many orders were detached
+ */
+const detachUserId = (userId: string, anonymizeAfter: Date): Promise<number> =>
+    orderModel
+        .updateMany(
+            { userId: toObjectId(userId) },
+            { $unset: { userId: 1 }, $set: { anonymizeAfter } },
+            { timestamps: false }
+        )
+        .exec()
+        .then(({ modifiedCount }) => modifiedCount);
+
+/** The scrubbed-in-place values `scrubDueForAnonymization` replaces required PII with. */
+const ANONYMIZED_EMAIL = 'anonymized@deleted.invalid';
+
+/** Same placeholder for `shippingAddress.fullName` and `.street` — both required on the schema. */
+const ANONYMIZED_TEXT = 'Anonymized';
+
+/**
+ * `scripts/ops/reap-orders.ts`'s sweep. Every order whose `anonymizeAfter` has elapsed gets its remaining
+ * PII scrubbed.
+ *
+ * Scrub:      `email` and the required `shippingAddress` fields (`fullName`, `street`) are
+ *             REPLACED, since the schema requires them; the optional `shippingAddress.phone` is
+ *             unset outright. City, country, zip, amounts, line items and dates survive — none of
+ *             it is personal data once the name and street are gone.
+ * Two writes: an order placed by an account that kept no address book (pickup, or a guest with
+ *             none) has no `shippingAddress` at all, and a single `$set` on its sub-fields would
+ *             CREATE a partial one — present but missing the required `city`/`zip`/`country`,
+ *             which no validator runs on a bulk update to catch. The second write is scoped to
+ *             orders that actually have one.
+ * Idempotent: `anonymizeAfter` is unset in the same write, so a later run cannot rescrub an
+ *             already-scrubbed row — the sparse index this field carries no longer holds it, so
+ *             the next sweep's `$lte` filter cannot match it again.
+ *
+ * @param cutoff - orders whose `anonymizeAfter` is at or before this instant are due
+ * @returns how many orders were scrubbed
+ */
+const scrubDueForAnonymization = (cutoff: Date): Promise<number> => {
+    const due = { anonymizeAfter: { $lte: cutoff } };
+
+    // Shipping address FIRST, filtered on `due` while `anonymizeAfter` still carries it — the
+    // second write below unsets that field, which would make this filter match nothing run
+    // the other way around.
+    return orderModel
+        .updateMany(
+            { ...due, shippingAddress: { $exists: true } },
+            {
+                $set: {
+                    'shippingAddress.fullName': ANONYMIZED_TEXT,
+                    'shippingAddress.street': ANONYMIZED_TEXT
+                },
+                $unset: { 'shippingAddress.phone': 1 }
+            },
+            { timestamps: false }
+        )
+        .exec()
+        .then(() =>
+            orderModel
+                .updateMany(
+                    due,
+                    { $set: { email: ANONYMIZED_EMAIL }, $unset: { anonymizeAfter: 1 } },
+                    { timestamps: false }
+                )
+                .exec()
+                .then(({ modifiedCount }) => modifiedCount)
+        );
+};
+
+/**
+ * Atomically bumps the invoice sequence for `year` and returns the new value — one
+ * `findOneAndUpdate` upsert with `$inc`, so two callers racing the same year still get distinct,
+ * contiguous numbers. Mongo serializes concurrent writes to the same document; this is what makes
+ * that guarantee do the work instead of a read-then-increment in application code.
+ * https://www.mongodb.com/docs/manual/reference/method/db.collection.findOneAndUpdate/
+ *
+ * @param year - the UTC calendar year the sequence belongs to
+ * @returns the sequence number just allocated (1 for the year's first invoice)
+ */
+const incrementInvoiceCounter = (year: number): Promise<number> =>
+    invoiceCounterModel
+        .findOneAndUpdate(
+            { _id: year },
+            { $inc: { seq: 1 } },
+            // Upsert creates the year's row on its first invoice; `returnDocument: 'after'` hands
+            // back the incremented value rather than the pre-update one.
+            { upsert: true, returnDocument: 'after' }
+        )
+        .exec()
+        .then((counter) => counter.seq);
+
+/**
+ * `search` is narrower than the base signature (no caller-supplied sort — the pipeline fixes it),
+ * so it is omitted from the base contract rather than intersected with it.
+ *
+ * The type is written out because Mongoose's generics are too large for TypeScript to serialize
+ * an inferred one at an export boundary (TS7056).
+ */
+export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> & {
+    aggregate: <T = OrderDocument>(pipeline: PipelineStage[]) => Promise<T[]>;
+    search: (
+        filters?: object,
+        scope?: Record<string, unknown>
+    ) => Promise<{ items: Order[]; meta: PaginatedMeta }>;
+    findByIdScoped: (
+        id: string,
+        scope?: Record<string, unknown>
+    ) => Promise<OrderDocument | undefined>;
+    ownerScope: (userId: string) => Record<string, unknown>;
+    updateStatusIfIn: (
+        id: string,
+        from: readonly string[],
+        to: string,
+        scope?: Record<string, unknown>,
+        effects?: readonly OrderPendingEffect[]
+    ) => Promise<OrderDocument | null>;
+    applyStatusOverride: (
+        id: string,
+        from: readonly OrderStatus[],
+        to: OrderStatus,
+        entry: OrderStatusOverride
+    ) => Promise<OrderDocument | null>;
+    findWithPendingEffects: (cutoff: Date, limit: number) => Promise<OrderDocument[]>;
+    findPendingByProductId: (productId: string) => Promise<OrderDocument[]>;
+    clearPendingEffect: (orderId: string, effect: OrderPendingEffect) => Promise<boolean>;
+    countOpenBankTransfers: (userId: string) => Promise<number>;
+    existingIds: (ids: readonly string[]) => Promise<Set<string>>;
+    detachUserId: (userId: string, anonymizeAfter: Date) => Promise<number>;
+    scrubDueForAnonymization: (cutoff: Date) => Promise<number>;
+    incrementInvoiceCounter: (year: number) => Promise<number>;
+} = {
+    ...base,
+    aggregate,
+    search,
+    findByIdScoped,
+    ownerScope,
+    updateStatusIfIn,
+    applyStatusOverride,
+    findWithPendingEffects,
+    findPendingByProductId,
+    clearPendingEffect,
+    countOpenBankTransfers,
+    existingIds,
+    detachUserId,
+    scrubDueForAnonymization,
+    incrementInvoiceCounter
+};

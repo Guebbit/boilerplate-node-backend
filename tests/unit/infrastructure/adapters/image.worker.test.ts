@@ -1,0 +1,382 @@
+/**
+ * The image digest pipeline — `digestQuarantinedImage` (the shared pipeline), `handleImageDigestJob`
+ * (the queue consumer) and `enqueueImageDigest` (what a module calls right after persisting a
+ * document with a `pendingImageKey`).
+ *
+ * Mirrors `email.worker.test.ts`'s framing for the domainless email worker: the same
+ * three-outcome contract (ack / dead-letter / requeue) applies here, plus a fourth case unique to
+ * this pipeline — a writeback that matches no document, which must clean up the files it just
+ * promoted on BOTH the queued and the inline path (see `settleWriteback`).
+ *
+ * sharp, the store and the queue are all mocked: what is under test is the pipeline's decisions,
+ * not image encoding or persistence.
+ */
+import { createHash } from 'node:crypto';
+import { logger } from '@infrastructure/adapters/logger';
+
+/** The same derivation `image.worker.ts#contentStem` uses — computed here, not hardcoded, so a
+ *  change to the hash algorithm or its length moves this expectation with it. */
+const contentStemOf = (owner: string, digested: Buffer): string =>
+    `${owner}-${createHash('sha256').update(digested).digest('hex').slice(0, 24)}`;
+
+jest.mock('@infrastructure/adapters/image-store', () => ({
+    imageStore: {
+        readQuarantined: jest.fn(),
+        promote: jest.fn(),
+        putDerivative: jest.fn(),
+        removeQuarantined: jest.fn(),
+        remove: jest.fn()
+    }
+}));
+
+jest.mock('@infrastructure/adapters/image', () => ({
+    digestImage: jest.fn(),
+    thumbnailImage: jest.fn()
+}));
+
+jest.mock('@infrastructure/adapters/image-signatures', () => ({
+    identifyImage: jest.fn()
+}));
+
+jest.mock('@infrastructure/adapters/queue', () => ({
+    IMAGE_QUEUE: 'worker.image.digest',
+    publishToQueue: jest.fn()
+}));
+
+jest.mock('@infrastructure/adapters/cache', () => ({
+    invalidateCacheTagsLogged: jest.fn()
+}));
+
+import { imageStore } from '@infrastructure/adapters/image-store';
+import { digestImage, thumbnailImage } from '@infrastructure/adapters/image';
+import { identifyImage } from '@infrastructure/adapters/image-signatures';
+import { publishToQueue } from '@infrastructure/adapters/queue';
+import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
+import {
+    digestQuarantinedImage,
+    enqueueIfImagePending,
+    enqueueImageDigest,
+    handleImageDigestJob,
+    registerImageWritebackResolver,
+    type ImageWriteback
+} from '@infrastructure/adapters/image.worker';
+
+const mockedReadQuarantined = imageStore.readQuarantined as jest.Mock;
+const mockedPromote = imageStore.promote as jest.Mock;
+const mockedPutDerivative = imageStore.putDerivative as jest.Mock;
+const mockedRemoveQuarantined = imageStore.removeQuarantined as jest.Mock;
+const mockedRemove = imageStore.remove as jest.Mock;
+const mockedDigestImage = digestImage as jest.Mock;
+const mockedThumbnailImage = thumbnailImage as jest.Mock;
+const mockedIdentifyImage = identifyImage as jest.Mock;
+const mockedPublishToQueue = publishToQueue as jest.Mock;
+/** The cache sweep a finished digest triggers — asserted, so a silent writeback is a failure. */
+const mockedInvalidateCacheTagsLogged = invalidateCacheTagsLogged as jest.Mock;
+
+/** Wires the mocks to a happy-path digest: identifies as PNG, digests, thumbnails, promotes both. */
+const primeSuccessfulDigest = () => {
+    mockedReadQuarantined.mockResolvedValue(Buffer.from('raw bytes'));
+    mockedIdentifyImage.mockReturnValue('image/png');
+    mockedDigestImage.mockResolvedValue(Buffer.from('digested'));
+    mockedThumbnailImage.mockResolvedValue(Buffer.from('thumbnail'));
+    mockedPromote.mockResolvedValue('/images/abc123.png');
+    mockedPutDerivative.mockResolvedValue('/images/thumbs/v1/abc123.webp');
+    mockedRemoveQuarantined.mockResolvedValue(true);
+};
+
+beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+    jest.spyOn(logger, 'error').mockImplementation(() => logger);
+    jest.spyOn(logger, 'info').mockImplementation(() => logger);
+    jest.spyOn(logger, 'debug').mockImplementation(() => logger);
+    mockedRemove.mockResolvedValue(true);
+    mockedInvalidateCacheTagsLogged.mockResolvedValue(undefined);
+});
+
+afterAll(() => jest.restoreAllMocks());
+
+describe('digestQuarantinedImage', () => {
+    it('reads, identifies, digests and thumbnails, then promotes both', async () => {
+        primeSuccessfulDigest();
+
+        await expect(digestQuarantinedImage('abc123.png', 'doc1')).resolves.toEqual({
+            imageUrl: '/images/abc123.png',
+            thumbnailUrl: '/images/thumbs/v1/abc123.webp'
+        });
+
+        expect(mockedReadQuarantined).toHaveBeenCalledWith('abc123.png');
+        expect(mockedDigestImage).toHaveBeenCalledWith(Buffer.from('raw bytes'), 'image/png');
+        expect(mockedThumbnailImage).toHaveBeenCalledWith(Buffer.from('raw bytes'));
+        const stem = contentStemOf('doc1', Buffer.from('digested'));
+        expect(mockedPromote).toHaveBeenCalledWith(stem, Buffer.from('digested'), 'image/png');
+        expect(mockedPutDerivative).toHaveBeenCalledWith(stem, Buffer.from('thumbnail'));
+        // The caller clears quarantine, once the result is written back.
+        expect(mockedRemoveQuarantined).not.toHaveBeenCalled();
+    });
+
+    /* A magic-byte check already ran at upload time, but a payload smuggled past it, or bytes
+       corrupted in quarantine, must not reach `digestImage` with a format it cannot re-encode. */
+    it('rejects bytes that do not identify as an accepted format', async () => {
+        mockedReadQuarantined.mockResolvedValue(Buffer.from('raw bytes'));
+        mockedIdentifyImage.mockReturnValue(undefined);
+
+        await expect(digestQuarantinedImage('abc123.bin', 'doc1')).rejects.toThrow(
+            'does not match an accepted format'
+        );
+        expect(mockedDigestImage).not.toHaveBeenCalled();
+    });
+});
+
+describe('handleImageDigestJob', () => {
+    const writeback: jest.MockedFunction<ImageWriteback> = jest.fn();
+
+    beforeEach(() => {
+        writeback.mockReset();
+        registerImageWritebackResolver((collection) =>
+            collection === 'products' ? writeback : undefined
+        );
+    });
+
+    const job = { collection: 'products', documentId: 'doc1', key: 'abc123.png' };
+
+    it('digests, writes back and acks when the writeback matches', async () => {
+        primeSuccessfulDigest();
+        writeback.mockResolvedValue(true);
+
+        await expect(handleImageDigestJob(job)).resolves.toBe(true);
+
+        expect(writeback).toHaveBeenCalledWith('doc1', 'abc123.png', {
+            imageUrl: '/images/abc123.png',
+            thumbnailUrl: '/images/thumbs/v1/abc123.webp'
+        });
+        expect(mockedRemove).not.toHaveBeenCalled();
+    });
+
+    it('clears the quarantine file once the writeback has landed', async () => {
+        primeSuccessfulDigest();
+        writeback.mockResolvedValue(true);
+
+        await handleImageDigestJob(job);
+
+        expect(mockedRemoveQuarantined).toHaveBeenCalledWith('abc123.png');
+    });
+
+    /*
+     * The writeback's own database call failing is transient: the retry must still find the
+     * quarantined bytes, or every retry fails on a missing file and the upload is lost.
+     */
+    it('keeps the quarantine file when the writeback itself fails', async () => {
+        primeSuccessfulDigest();
+        writeback.mockRejectedValue(new Error('mongo unavailable'));
+
+        await expect(handleImageDigestJob(job)).rejects.toThrow('mongo unavailable');
+
+        expect(mockedRemoveQuarantined).not.toHaveBeenCalled();
+    });
+
+    /**
+     * The write that enqueued this job already cleared the `products` tag, before the digest ran
+     * — so the response it re-warmed still carries the pre-digest placeholder. Clearing the tag
+     * again here is what stops that placeholder surviving for the whole TTL (see `settleWriteback`).
+     */
+    it('invalidates the collection cache tag once the writeback matches', async () => {
+        primeSuccessfulDigest();
+        writeback.mockResolvedValue(true);
+
+        await handleImageDigestJob(job);
+
+        expect(mockedInvalidateCacheTagsLogged).toHaveBeenCalledWith(['products']);
+    });
+
+    /**
+     * A stale or duplicate delivery, or a document deleted mid-flight: the writeback matches
+     * nothing, so the files this run just promoted are unlinked rather than orphaned — and the
+     * job still acks, since nothing about redelivering it would change the outcome.
+     */
+    it('cleans up the promoted files and still acks when the writeback matches nothing', async () => {
+        primeSuccessfulDigest();
+        writeback.mockResolvedValue(false);
+
+        await expect(handleImageDigestJob(job)).resolves.toBe(true);
+
+        expect(mockedRemove).toHaveBeenCalledWith('/images/abc123.png');
+        expect(mockedInvalidateCacheTagsLogged).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['no collection', { documentId: 'doc1', key: 'abc123.png' }],
+        ['no documentId', { collection: 'products', key: 'abc123.png' }],
+        ['no key', { collection: 'products', documentId: 'doc1' }],
+        ['an empty job', {}],
+        ['a null job', null],
+        ['an undefined job', undefined]
+    ])('refuses a job with %s, without digesting', async (_label, malformed) => {
+        await expect(
+            handleImageDigestJob(malformed as Parameters<typeof handleImageDigestJob>[0])
+        ).resolves.toBe(false);
+        expect(mockedReadQuarantined).not.toHaveBeenCalled();
+        expect(logger.warn).toHaveBeenCalled();
+    });
+
+    it('discards a job naming a collection nothing registered', async () => {
+        await expect(
+            handleImageDigestJob({ collection: 'unknown', documentId: 'doc1', key: 'abc123.png' })
+        ).resolves.toBe(false);
+
+        expect(mockedReadQuarantined).not.toHaveBeenCalled();
+        expect(writeback).not.toHaveBeenCalled();
+    });
+
+    /* A bad decode is permanent — every redelivery decodes the same bytes the same way — so it is
+       dead-lettered (false) rather than left to reject, and the quarantine file is cleared. */
+    it('dead-letters and clears quarantine when the digest itself fails', async () => {
+        mockedReadQuarantined.mockResolvedValue(Buffer.from('raw bytes'));
+        mockedIdentifyImage.mockReturnValue(undefined);
+        mockedRemoveQuarantined.mockResolvedValue(true);
+
+        await expect(handleImageDigestJob(job)).resolves.toBe(false);
+
+        expect(mockedRemoveQuarantined).toHaveBeenCalledWith('abc123.png');
+        expect(writeback).not.toHaveBeenCalled();
+    });
+
+    /*
+     * A storage failure is presumed TRANSIENT — unlike a bad decode, retrying it can genuinely
+     * succeed (the disk fills, then frees up again). Rethrown, not resolved `false`, so
+     * `consumeFromQueue` nacks and retries the delivery, and the quarantine file the retry still
+     * needs to read is never removed.
+     */
+    it('rejects and keeps the quarantine file when a storage write fails', async () => {
+        mockedReadQuarantined.mockResolvedValue(Buffer.from('raw bytes'));
+        mockedIdentifyImage.mockReturnValue('image/png');
+        mockedDigestImage.mockResolvedValue(Buffer.from('digested'));
+        mockedThumbnailImage.mockResolvedValue(Buffer.from('thumbnail'));
+        mockedPromote.mockRejectedValue(new Error('disk full'));
+
+        await expect(handleImageDigestJob(job)).rejects.toThrow('disk full');
+
+        expect(mockedRemoveQuarantined).not.toHaveBeenCalled();
+        expect(writeback).not.toHaveBeenCalled();
+    });
+});
+
+describe('enqueueImageDigest', () => {
+    const writeback: jest.MockedFunction<ImageWriteback> = jest.fn();
+    const payload = { collection: 'products', documentId: 'doc1', key: 'abc123.png' };
+
+    beforeEach(() => {
+        writeback.mockReset();
+    });
+
+    it('publishes and returns without digesting when the broker accepts the job', async () => {
+        mockedPublishToQueue.mockResolvedValue(true);
+
+        await enqueueImageDigest(payload, writeback);
+
+        expect(mockedPublishToQueue).toHaveBeenCalledWith({
+            queue: 'worker.image.digest',
+            payload
+        });
+        expect(mockedReadQuarantined).not.toHaveBeenCalled();
+        expect(writeback).not.toHaveBeenCalled();
+    });
+
+    /**
+     * No `isQueueEnabled()` pre-check any more: this always reaches `publishToQueue` first, which
+     * resolves `false` with no I/O of its own when nothing is configured (`queue.test.ts` proves
+     * that half) — so "no broker" and "a broker that refuses" are the same case here, both landing
+     * on the inline fallback below.
+     */
+    it('runs the pipeline inline when the publish resolves false', async () => {
+        mockedPublishToQueue.mockResolvedValue(false);
+        primeSuccessfulDigest();
+        writeback.mockResolvedValue(true);
+
+        await enqueueImageDigest(payload, writeback);
+
+        expect(mockedPublishToQueue).toHaveBeenCalledWith({
+            queue: 'worker.image.digest',
+            payload
+        });
+        expect(writeback).toHaveBeenCalledWith('doc1', 'abc123.png', {
+            imageUrl: '/images/abc123.png',
+            thumbnailUrl: '/images/thumbs/v1/abc123.webp'
+        });
+        // Same `settleWriteback` path as the queued job — the inline fallback must invalidate too.
+        expect(mockedInvalidateCacheTagsLogged).toHaveBeenCalledWith(['products']);
+    });
+
+    /* The gap this file's own docblock calls out: the inline path shares `settleWriteback` with
+       the queued one, so a stale/mismatched writeback cleans up here too, not only off the queue. */
+    it('cleans up the promoted files when the inline writeback matches nothing', async () => {
+        mockedPublishToQueue.mockResolvedValue(false);
+        primeSuccessfulDigest();
+        writeback.mockResolvedValue(false);
+
+        await enqueueImageDigest(payload, writeback);
+
+        expect(mockedRemove).toHaveBeenCalledWith('/images/abc123.png');
+        expect(mockedInvalidateCacheTagsLogged).not.toHaveBeenCalled();
+    });
+});
+
+describe('enqueueIfImagePending', () => {
+    const writeback: jest.MockedFunction<ImageWriteback> = jest.fn();
+
+    beforeEach(() => {
+        writeback.mockReset();
+    });
+
+    it('passes the document straight through when nothing is pending', async () => {
+        const document = { _id: 'doc1' };
+
+        await expect(enqueueIfImagePending(document, 'products', writeback)).resolves.toBe(
+            document
+        );
+
+        expect(mockedPublishToQueue).not.toHaveBeenCalled();
+        expect(writeback).not.toHaveBeenCalled();
+    });
+
+    /**
+     * The residual race `docs/tools/image-processing.md` describes: the queue looked ready at
+     * upload time, but the broker died before this publish. The awaited inline fallback is what's
+     * under test — the caller must not resolve before the writeback it depends on has run, and the
+     * document it gets back must carry the real urls rather than the pre-digest placeholder, since
+     * the database was just updated out from under it.
+     */
+    it('awaits the inline fallback and copies its urls onto the returned document', async () => {
+        const document = { _id: 'doc1', pendingImageKey: 'abc123.png' };
+        mockedPublishToQueue.mockResolvedValue(false);
+        primeSuccessfulDigest();
+        writeback.mockResolvedValue(true);
+
+        await expect(enqueueIfImagePending(document, 'products', writeback)).resolves.toEqual({
+            _id: 'doc1',
+            pendingImageKey: undefined,
+            imageUrl: '/images/abc123.png',
+            thumbnailUrl: '/images/thumbs/v1/abc123.webp'
+        });
+
+        expect(writeback).toHaveBeenCalledWith('doc1', 'abc123.png', {
+            imageUrl: '/images/abc123.png',
+            thumbnailUrl: '/images/thumbs/v1/abc123.webp'
+        });
+    });
+
+    it('publishes and resolves with the document unchanged when the broker accepts the job', async () => {
+        const document = { _id: 'doc1', pendingImageKey: 'abc123.png' };
+        mockedPublishToQueue.mockResolvedValue(true);
+
+        await expect(enqueueIfImagePending(document, 'products', writeback)).resolves.toBe(
+            document
+        );
+
+        expect(mockedPublishToQueue).toHaveBeenCalledWith({
+            queue: 'worker.image.digest',
+            payload: { collection: 'products', documentId: 'doc1', key: 'abc123.png' }
+        });
+        expect(writeback).not.toHaveBeenCalled();
+    });
+});

@@ -1,0 +1,130 @@
+/**
+ * @module
+ * Cart rules. Pure: data in, verdict out — no status codes, no i18n; `services/` maps verdicts.
+ * See `docs/theory/domain-layer.md`.
+ */
+
+/**
+ * A cart line as the rules see it. `product: null` is what `populate()` writes for a HARD-deleted
+ * product — `populate()` follows the reference with no visibility scope of its own, so a soft-
+ * deleted or deactivated product still joins successfully, `active`/`deletedAt` included, which
+ * is what lets {@link evaluateCheckout} tell "gone" from "here, but not sellable" apart.
+ */
+export interface CartLineCandidate {
+    /** Carried so a refusal can name the product rather than just report that one exists. */
+    productId?: string;
+    quantity?: number;
+    /**
+     * The joined product, narrowed to what a refusal needs. `available` is computed by the
+     * caller — `@modules/products`'s `availableStock` — since the domain layer may not import a
+     * sibling module to compute it itself; absent reads as zero, "nothing to sell" being the safe
+     * direction to be wrong in for a rule whose job is to refuse.
+     */
+    product?: {
+        title?: string;
+        available?: number;
+        active?: boolean;
+        deletedAt?: Date;
+    } | null;
+}
+
+/** One line the cart refused for having no sellable product behind it. */
+export interface UnavailableCartLine {
+    productId: string;
+    /** Absent for a hard-deleted product — there is nothing left to read a title off. */
+    title?: string;
+}
+
+/** One line the cart cannot check out, and what is actually left. */
+export interface CheckoutShortfall {
+    productId: string;
+    title: string;
+    requested: number;
+    available: number;
+}
+
+/** A cart line as {@link basketWeight} sees it — only the fields it actually sums or filters on. */
+export interface WeighedCartLine {
+    quantity?: number;
+    product?: { weight?: number; requiresShipping?: boolean } | null;
+}
+
+/**
+ * The basket's total weight, in grams — every SHIPPED line's `product.weight` (absent counts as
+ * 0, the same rule `Product.weight` documents) times its quantity, summed. A digital good
+ * (`requiresShipping: false`) contributes nothing: it never rides in the parcel a method's weight
+ * limit is about, so counting it could refuse a method that fits everything actually being
+ * shipped. `requiresShipping` absent counts as shipped — the schema's own default, matching every
+ * physical product a fixture or an older row never set it on explicitly. Used both to filter
+ * `GET /delivery/methods` (advisory) and to refuse a checkout whose chosen method doesn't fit
+ * (enforced) — see `services/checkout.ts`.
+ *
+ * @param lines - the basket's lines, joined to their products
+ * @returns the basket's total weight in grams
+ */
+export const basketWeight = (lines: readonly WeighedCartLine[]): number => {
+    let total = 0;
+    for (const { product, quantity } of lines) {
+        if (product?.requiresShipping === false) continue;
+        total += (product?.weight ?? 0) * (quantity ?? 0);
+    }
+    return total;
+};
+
+/**
+ * Reasons are named, not numbered: the checkout-failure analytics event reports them verbatim.
+ *
+ * The stock refusal carries the lines that caused it. A verdict that only said "something is
+ * short" leaves the customer to find it by editing and retrying, which for a basket of ten lines
+ * is ten round trips.
+ */
+export type CheckoutVerdict =
+    | { ok: true }
+    | { ok: false; reason: 'empty' }
+    | { ok: false; reason: 'product-unavailable'; lines: UnavailableCartLine[] }
+    | { ok: false; reason: 'insufficient-stock'; shortfalls: CheckoutShortfall[] };
+
+/**
+ * May this cart become an order?
+ * Mirrors `orders`' `checkOrderLines`, deliberately unshared: a cart is a draft, an order a commitment.
+ *
+ * The PRE-FLIGHT half of the guarantee. The half that holds under concurrency is `inventory`'s
+ * conditional reserve, which re-checks the same rule inside the write; this one does not excuse
+ * that one. It compares against AVAILABILITY, not units on hand — a product whose forty units are
+ * all promised has nothing to sell.
+ *
+ * @param lines - the cart's lines, already joined to their products
+ * @returns `ok`, or the reason checkout is refused
+ */
+export const evaluateCheckout = (lines: readonly CartLineCandidate[]): CheckoutVerdict => {
+    if (lines.length === 0) return { ok: false, reason: 'empty' };
+
+    /*
+     * "Unavailable" covers two different facts a joined line can carry: gone entirely
+     * (`product` null — a hard delete `populate()` cannot follow), or here but not sellable
+     * (`active: false`, or soft-deleted). Every unavailable line, not just the first, same
+     * reasoning `shortfalls` below already follows.
+     */
+    const unavailable = lines
+        .filter(
+            ({ product }) => !product || product.active === false || product.deletedAt !== undefined
+        )
+        .map(({ productId, product }) => ({ productId: productId ?? '', title: product?.title }));
+    if (unavailable.length > 0)
+        return { ok: false, reason: 'product-unavailable', lines: unavailable };
+    /*
+     * Every short line, not just the first. A customer who trimmed one line only to be refused
+     * again on the next is being made to binary-search their own basket.
+     */
+    const shortfalls = lines
+        .filter(({ product, quantity }) => (quantity ?? 0) > (product?.available ?? 0))
+        .map(({ productId, product, quantity }) => ({
+            productId: productId ?? '',
+            title: product?.title ?? '',
+            requested: quantity ?? 0,
+            available: product?.available ?? 0
+        }));
+    if (shortfalls.length > 0) return { ok: false, reason: 'insufficient-stock', shortfalls };
+
+    return { ok: true };
+};

@@ -11,30 +11,36 @@ flowchart TD
     Primary -->|fork| W2[Worker 2]
     Primary -->|fork| Wn[Worker N]
     W1 --> Mongo[(MongoDB)]
-    W1 --> Redis[(Redis)]
     W2 --> Mongo
     Wn --> Mongo
+    W1 --> Redis[(Redis)]
+    W2 --> Redis
+    Wn --> Redis
 ```
 
 - One **primary** supervises the cluster: forks workers, watches exits, and coordinates shutdown.
 - One **worker per CPU core** by default (`os.cpus().length`), each running the full Express app.
 - Workers are independent processes; they do not share memory. State must live in Mongo or Redis.
+- Every worker opens its own connection to each, but they address the **same** database and the
+  **same** Redis keyspace — which is why a cache invalidation done by one worker needs no
+  broadcast to the others. → [Redis and the workers](../tools/redis-cache.md#redis-and-the-workers)
 
 ## Configuration
 
-| Env var                                  | Effect                                                                              |
-| ---------------------------------------- | ----------------------------------------------------------------------------------- |
-| `NODE_ENABLE_CLUSTERING`                 | `1` enables the primary/worker mode. Anything else loads `src/app.ts` directly.     |
-| `NODE_CLUSTER_WORKERS`                   | Number of workers (default: CPU count, minimum 1).                                  |
-| `NODE_CLUSTER_CRASH_WINDOW_MS`           | Sliding window for counting crashes (default 60 000 ms).                            |
-| `NODE_CLUSTER_CRASH_BACKOFF_BASE_MS`     | Base delay before respawning after a crash (default 500 ms, doubled per crash).      |
-| `NODE_CLUSTER_CRASH_BACKOFF_MAX_MS`      | Maximum respawn delay (default 30 000 ms).                                          |
-| `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS`       | Hard kill timeout during shutdown (default 15 000 ms).                              |
-| `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS`      | Worker-side hard exit timeout used by `src/app.ts`.                                 |
+| Env var                              | Effect                                                                          |
+| ------------------------------------ | ------------------------------------------------------------------------------- |
+| `NODE_ENABLE_CLUSTERING`             | `1` enables the primary/worker mode. Anything else loads `src/app.ts` directly. |
+| `NODE_CLUSTER_WORKERS`               | Number of workers; 0 or unset = one per available CPU (minimum 1).              |
+| `NODE_CLUSTER_CRASH_WINDOW_MS`       | Sliding window for counting crashes (default 60 000 ms).                        |
+| `NODE_CLUSTER_CRASH_BACKOFF_BASE_MS` | Base delay before respawning after a crash (default 500 ms, doubled per crash). |
+| `NODE_CLUSTER_CRASH_BACKOFF_MAX_MS`  | Maximum respawn delay (default 30 000 ms).                                      |
+| `NODE_CLUSTER_CRASH_LIMIT`           | Crashes in one window before the primary gives up and exits 1 (default 10).     |
+| `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS`   | Hard kill timeout during shutdown (default 15 000 ms).                          |
+| `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS`  | Worker-side hard exit timeout used by `src/app.ts`.                             |
 
 ## Crash backoff
 
-When a worker exits unexpectedly the primary respawns it with **exponential backoff**, capped at `NODE_CLUSTER_CRASH_BACKOFF_MAX_MS`. This avoids tight crash loops when something is broken at startup (bad config, missing DB, …).
+When a worker exits unexpectedly the primary respawns it with **exponential backoff**, capped at `NODE_CLUSTER_CRASH_BACKOFF_MAX_MS`. This avoids tight crash loops when something is broken at startup (bad config, missing DB, …). Past `NODE_CLUSTER_CRASH_LIMIT` crashes inside one window the primary stops respawning and exits with code 1, so the supervisor sees a failure instead of a primary that stays up with no workers.
 
 ```mermaid
 flowchart LR

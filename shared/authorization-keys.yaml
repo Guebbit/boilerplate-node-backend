@@ -1,0 +1,491 @@
+# Every permission key that exists, and the only place one may be introduced.
+#
+# Committed with identical bytes in `boilerplate-node-backend` and
+# `boilerplate-php-laravel-backend`. Neither repo's formatter touches it — see the exclusion in
+# `.prettierignore` / `dprint.json`, for the same reason `spectral.yaml` is excluded: two
+# formatters over one shared artefact is a silent fork.
+#
+# ROLES ARE DATA, PERMISSIONS ARE CODE. A deployment may create roles at runtime. It may never
+# invent a key, because a key nothing checks grants nothing while looking like it grants
+# something. Assignment validates against this file, not against a string.
+#
+# THE ONE INVARIANT, and the reason `scope` is a field rather than a naming convention:
+#   a bare key can never be satisfied by a platform-scope caller, and a `platform.` key can never
+#   be satisfied by a tenant-scope caller.
+# A platform operator administers shared reference data and is not a super-member. Mapping that
+# person onto the old `admin` boolean was one line to write and a total confidentiality failure.
+#
+# THE SHAPE: `<family>.<breadth>.<action>`, breadth ALWAYS written — `orders.self.read`,
+# `orders.any.read`, `products.any.create`. Breadth is `self` where the key is genuinely scoped to
+# the caller's own rows (`cart.self.checkout`) or to the narrow, default reading a family gives a
+# customer (`products.self.read`); `any` everywhere else, including every key with no owner to
+# scope by at all. An omitted breadth reads as "someone forgot one" — a key you can grep for by
+# shape beats a key you have to know the default of. There is no wildcard of any kind, per-family
+# or scope-wide; see the note at the foot of this file.
+
+version: 1
+
+# CASL's action vocabulary, plus the additions this model needs. `manage` is NOT in this list: it
+# is not a declared action, since there is no wildcard of any kind, per-family or scope-wide —
+# see the note at the foot of this file for why — so `manage` names nothing here.
+#
+# `write` is deliberately absent. It collapses create, update and delete into one key, and the
+# shop needs them apart: a support agent may update a user and may not delete one, a warehouse
+# operator may adjust stock and may not delete a product.
+#
+# `checkout`, `sweep` and `override` are the three additions beyond CASL's own CRUD vocabulary,
+# and all three follow the same rule: a verb is added only when CRUD cannot say the thing, never
+# when CRUD is merely inconvenient, and the reason is recorded on the key itself.
+#   - `checkout` is `cart.self.checkout`'s action, and nowhere else. CRUD has no verb for "spend
+#     the basket": `create` on `Cart` collided with `orders.any.create` (raising an order on
+#     someone else's behalf) and `update` said nothing about what changed.
+#   - `sweep` is `inventory.any.sweep`'s action, and nowhere else. A sweep clears expired
+#     reservation holds on a schedule: no noun it creates, no row whose update names the action.
+#   - `override` is `orders.any.override`'s action, and nowhere else. It skips the normal
+#     lifecycle gate to force a delivery move or correct a status by hand, with a recorded
+#     reason — `update` would hide that this write deliberately bypasses the ordinary rule.
+actions:
+    - read
+    - create
+    - update
+    - delete
+    - checkout
+    - sweep
+    - override
+
+# The two scopes. Never both, never derived from a flag — a caller resolves to exactly one.
+scopes:
+    tenant: Content belonging to one shop. Keys are bare.
+    platform: Shared operational data, across shops. Keys are prefixed `platform.`.
+
+# Step-up — the third axis, declared on the KEY rather than on a route.
+#
+# A key may carry `stepUp: critical | sensitive`, and `requirePermission` then demands that the
+# caller proved themselves within that window before it lets them through. The tiers are the ones
+# `REAUTH_TIME_CRITICAL` / `REAUTH_TIME_SENSITIVE` already name, so this adds a place to say WHICH
+# actions are worth a challenge, not a second mechanism for making one.
+#
+# On the key and not the route because the key is what the action IS: erasing somebody's account
+# deserves a fresh session wherever it is reached from, and a second route that reaches it would
+# otherwise have to remember. `amr` may also be named, so a future passkey tier is a line here
+# rather than a guard change — the reason `amr` was carried as a list rather than a boolean.
+
+# Conditions — the ABAC half, and the reason this is not pure RBAC.
+#
+# A key may carry `conditions`: a filter fragment that must ALSO hold of the row. It is the same
+# shape CASL takes as its third argument and the same shape both repositories already spread into
+# a query, which is what lets it be compiled INTO the read instead of checked after it.
+#
+# `$caller.<field>` is substituted from the resolved caller at request time. That is the whole
+# placeholder grammar; there is no expression language, on purpose.
+#
+# THE FIELD NAMES ARE THE MODEL'S, not either storage's. `active` and `userId` are what the rule
+# is ABOUT; one backend stores them under those names and the other under `active` and `user_id`,
+# and each maps this vocabulary onto its own columns on the way into a query. The shared artefact
+# is the condition set, and each backend generates its own query from it.
+#
+# Tenancy is NOT written here. Every tenant-scope rule has `tenantId: $caller.tenantId` injected
+# by the resolver, so no key can forget it and no request parameter can supply it.
+#
+# A key with no `conditions` is unconditional within its scope. `products.self.read` sees active,
+# undeleted rows; `products.any.read` sees every row — which is why breadth and condition move
+# together on the four families where the narrow reading is filtered at all.
+#
+# `deletedAt: null` is on the `self` reads of the subjects that HAVE it — `Product`, `Locale` and
+# `Order`. A payment is a record of money moving and is never withdrawn from view, so it carries
+# no such column and no such condition; a rule naming a column the table lacks is a query that
+# throws rather than one that narrows.
+#
+# It is on the narrow reads and not the wide ones, and that asymmetry is the rule
+# somebody would otherwise have to remember: a soft-deleted row is gone for the audience it was
+# hidden from and still there for the staff who can restore it. Matching `null` covers a field
+# that is absent as well as one that is set to nothing, which is what an "unset to restore" write
+# leaves behind.
+
+# The keys themselves.
+#
+# `subject` is the CASL subject type the key authorises — the concrete thing a rule is about. The
+# key's own first segment is the resource FAMILY, which is plural and matches the module folder;
+# the subject is the singular type. They differ on purpose: `orders.any.read` is a permission,
+# `Order` is a thing.
+#
+# Modules absent from this list have no keys, and that is a decision rather than an omission:
+# `wishlist` and `account` are *your own things*. What you may do with them follows from being
+# signed in, not from a role, and giving them keys would invite a role that grants access to
+# someone else's basket. `cart` is nearly the same — its one exception is `cart.self.checkout`
+# below, a fact about the ACCOUNT (has this address been proven?) rather than about the basket's
+# contents, which stay keyless.
+keys:
+    # -- products ------------------------------------------------------------------------------
+    - key: products.self.read
+      module: products
+      subject: Product
+      action: read
+      scope: tenant
+      description: Read active, undeleted products — the storefront's own view.
+      conditions:
+          active: true
+          deletedAt: null
+    - key: products.any.read
+      module: products
+      subject: Product
+      action: read
+      scope: tenant
+      description: Read every product regardless of publish state — what staff need to see a draft.
+    - key: products.any.create
+      module: products
+      subject: Product
+      action: create
+      scope: tenant
+      description: Add a product to the catalogue.
+    - key: products.any.update
+      module: products
+      subject: Product
+      action: update
+      scope: tenant
+      description: Change a product, including its price and its published state.
+    - key: products.any.delete
+      module: products
+      subject: Product
+      action: delete
+      scope: tenant
+      description: Remove a product. Separate from update because the blast radius is.
+
+    # -- cart ----------------------------------------------------------------------------------
+    # `cart` otherwise declares no keys — see the note above on `keys` — because a basket is your
+    # own thing. This one exception is not about the basket's CONTENTS (still keyless: add, remove,
+    # set quantity) but about spending it, which is a fact about the ACCOUNT — an unproven address
+    # must not be able to place an order — and a fact about the account belongs on a key, not a
+    # route mount. `checkout`, not `create` on `Order`: `orders.any.create` already means "raise an
+    # order on someone else's behalf", and reusing it here would be the identical CASL tuple,
+    # indistinguishable once packed for the browser. `self` because this is the one key that is
+    # genuinely about the caller's own basket — see docs/theory/authorization.md.
+    - key: cart.self.checkout
+      module: cart
+      subject: Cart
+      action: checkout
+      scope: tenant
+      description: Spend the caller's own basket — place an order and start paying for it.
+      # The 403 keeps its specific wording rather than `requirePermission`'s generic one: a
+      # customer refused THIS key is being told to confirm their email, not that they lack
+      # permission in the abstract. `t('generic.error-<deniedCode, kebab-cased>')`.
+      deniedCode: EMAIL_NOT_VERIFIED
+
+    # -- orders --------------------------------------------------------------------------------
+    - key: orders.self.read
+      module: orders
+      subject: Order
+      action: read
+      scope: tenant
+      description: Read the caller's own orders.
+      conditions:
+          userId: $caller.id
+          deletedAt: null
+    - key: orders.any.read
+      module: orders
+      subject: Order
+      action: read
+      scope: tenant
+      description: Read every order in the shop — the support desk and the warehouse, who help with or pack an order that is never their own.
+    - key: orders.any.create
+      module: orders
+      subject: Order
+      action: create
+      scope: tenant
+      description: Raise an order on someone else's behalf. Checking out is not this key.
+    - key: orders.any.update
+      module: orders
+      subject: Order
+      action: update
+      scope: tenant
+      description: Move an order along its status path.
+    - key: orders.any.delete
+      module: orders
+      subject: Order
+      action: delete
+      scope: tenant
+      description: Remove an order.
+    - key: orders.any.override
+      module: orders
+      subject: Order
+      action: override
+      scope: tenant
+      description: Skip the normal lifecycle gate to force a delivery move, or correct a status by hand, with a recorded reason.
+      # An override exists precisely to bypass the ordinary rule — the same reasoning
+      # payments.any.update carries this tier for: a stolen access token proves nothing about how
+      # recently its holder typed their password, and this key's damage (a wrong parcel/status
+      # written on the record) is not undone by another ordinary request.
+      stepUp: critical
+
+    # -- payments ------------------------------------------------------------------------------
+    - key: payments.self.read
+      module: payments
+      subject: Payment
+      action: read
+      scope: tenant
+      description: Read the caller's own payments.
+      conditions:
+          userId: $caller.id
+    - key: payments.any.read
+      module: payments
+      subject: Payment
+      action: read
+      scope: tenant
+      description: Read every payment in the shop — the support desk, helping with an order that is never their own.
+    - key: payments.any.create
+      module: payments
+      subject: Payment
+      action: create
+      scope: tenant
+      description: Record a payment that arrived outside the provider — cash, a transfer, by hand.
+      # Money the shop is now on the hook to have actually received. Same tier as
+      # payments.any.update: the admin's word is the only proof, and a stolen access token proves
+      # nothing about how recently its holder typed their password.
+      stepUp: critical
+    - key: payments.any.update
+      module: payments
+      subject: Payment
+      action: update
+      scope: tenant
+      description: Reconcile a payment against the provider, or return the money.
+      # Money leaving the shop. The one action here whose damage cannot be undone by another
+      # request.
+      stepUp: critical
+
+    # -- inventory -----------------------------------------------------------------------------
+    - key: inventory.any.read
+      module: inventory
+      subject: StockLevel
+      action: read
+      scope: tenant
+      description: Read stock levels and the movements behind them.
+    - key: inventory.any.create
+      module: inventory
+      subject: StockMovement
+      action: create
+      scope: tenant
+      description: Record a receipt or an adjustment. Stock never moves without one.
+    # Not a CRUD verb — see `actions:` above. Guards the one route that clears expired reservation
+    # holds on a schedule; granted to no preset role but `admin`, who holds it by name like every
+    # other key. See `inventory/routes.ts`.
+    - key: inventory.any.sweep
+      module: inventory
+      subject: StockLevel
+      action: sweep
+      scope: tenant
+      description: Clear expired reservation holds. The expiry tick, not a role's own tool.
+
+    # -- delivery ------------------------------------------------------------------------------
+    - key: delivery.any.read
+      module: delivery
+      subject: Shipment
+      action: read
+      scope: tenant
+      description: Read shipping methods and a shipment's progress.
+    - key: delivery.any.update
+      module: delivery
+      subject: Shipment
+      action: update
+      scope: tenant
+      description: Advance a consignment through the courier's steps.
+
+    # -- feedback ------------------------------------------------------------------------------
+    - key: feedback.any.read
+      module: feedback
+      subject: Feedback
+      action: read
+      scope: tenant
+      description: Read messages sent through the contact form.
+    - key: feedback.any.update
+      module: feedback
+      subject: Feedback
+      action: update
+      scope: tenant
+      description: Change a message's handling status.
+    - key: feedback.any.delete
+      module: feedback
+      subject: Feedback
+      action: delete
+      scope: tenant
+      description: Remove a message.
+
+    # -- locales -------------------------------------------------------------------------------
+    - key: locales.self.read
+      module: locales
+      subject: Locale
+      action: read
+      scope: tenant
+      description: Read active, undeleted locales and their dictionaries — the storefront's own view.
+      conditions:
+          active: true
+          deletedAt: null
+    - key: locales.any.read
+      module: locales
+      subject: Locale
+      action: read
+      scope: tenant
+      description: Read every locale regardless of publish state — what staff need to see a draft language.
+    - key: locales.any.create
+      module: locales
+      subject: Locale
+      action: create
+      scope: tenant
+      description: Add a locale.
+    - key: locales.any.update
+      module: locales
+      subject: Locale
+      action: update
+      scope: tenant
+      description: Change a locale or one of its entries.
+    - key: locales.any.delete
+      module: locales
+      subject: Locale
+      action: delete
+      scope: tenant
+      description: Remove a locale or one of its entries.
+
+    # A translation is its own subject, deliberately apart from `Locale`: a translator writes
+    # WORDS for an entity a locale is already active for, never the locale's own row. It is also
+    # apart from `Product`/whatever entity is translated, which is the whole point — a
+    # mistranslation can never become a mischanged price. Unconditional either way, so `any` is
+    # its only reading — there is no narrower one to make explicit.
+    - key: translations.any.read
+      module: locales
+      subject: Translation
+      action: read
+      scope: tenant
+      description: Read an entity's translated fields, in the admin shape (every locale at once).
+    - key: translations.any.update
+      module: locales
+      subject: Translation
+      action: update
+      scope: tenant
+      description: >-
+          Write an entity's translated fields. Never grants a write on the entity itself — that is
+          `products.any.update`, and the two are stacked on the product write route precisely so
+          one alone cannot turn a rewording into a repricing.
+
+    # -- users ---------------------------------------------------------------------------------
+    - key: users.any.read
+      module: users
+      subject: User
+      action: read
+      scope: tenant
+      description: Read other people's accounts. Reading your own is `account`, not a key.
+    - key: users.any.create
+      module: users
+      subject: User
+      action: create
+      scope: tenant
+      description: Create an account for someone else.
+    - key: users.any.update
+      module: users
+      subject: User
+      action: update
+      scope: tenant
+      description: Change someone else's account, including clearing their second factor.
+    - key: users.any.delete
+      module: users
+      subject: User
+      action: delete
+      scope: tenant
+      description: Erase someone else's account.
+      # Irreversible and about somebody else. A stolen session should not be able to reach it on
+      # the strength of a login that happened this morning.
+      stepUp: critical
+
+    # -- account -------------------------------------------------------------------------------
+    # `account` is otherwise keyless on purpose — what you may do to your OWN record follows from
+    # being signed in. This one is the exception because it is not about your own record: it prunes
+    # expired credentials across every account, which is an operational lever.
+    - key: tokens.any.delete
+      module: account
+      subject: AccountToken
+      action: delete
+      scope: tenant
+      description: Remove expired tokens from every account. Operational, not self-service.
+
+    # -- audit-logs ----------------------------------------------------------------------------
+    - key: audit.any.read
+      module: audit-logs
+      subject: AuditLog
+      action: read
+      scope: tenant
+      description: Read the audit trail. There is no write key — nothing edits an audit row.
+
+    # -- webhooks --------------------------------------------------------------------------------
+    - key: webhooks.any.read
+      module: webhooks
+      subject: WebhookSubscription
+      action: read
+      scope: tenant
+      description: Read this shop's webhook subscriptions, delivery log and event catalogue.
+    - key: webhooks.any.create
+      module: webhooks
+      subject: WebhookSubscription
+      action: create
+      scope: tenant
+      description: Add a subscription, minting its first secret.
+    - key: webhooks.any.update
+      module: webhooks
+      subject: WebhookSubscription
+      action: update
+      scope: tenant
+      description: >-
+          Change a subscription, rotate or drop a secret from its ring, and replay a delivery. The
+          blast radius of all three is the same — a party this shop did not intend gets signed
+          deliveries — so they share one key.
+    - key: webhooks.any.delete
+      module: webhooks
+      subject: WebhookSubscription
+      action: delete
+      scope: tenant
+      description: Remove a subscription. Separate from update because the blast radius is.
+
+    # -- api-keys --------------------------------------------------------------------------------
+    - key: apikeys.any.read
+      module: api-keys
+      subject: ApiKey
+      action: read
+      scope: tenant
+      description: List this shop's machine-to-machine credentials. Never returns a key's secret.
+    - key: apikeys.any.create
+      module: api-keys
+      subject: ApiKey
+      action: create
+      scope: tenant
+      description: >-
+          Mint a credential. Carries its own floor on top of this key: a credential can never hold
+          a permission the minter lacks.
+    - key: apikeys.any.delete
+      module: api-keys
+      subject: ApiKey
+      action: delete
+      scope: tenant
+      description: Revoke a credential. Soft and immediate; the row stays readable.
+
+    # -- observability -------------------------------------------------------------------------
+    # The only platform-scope module in the boilerplate, and it is what makes the invariant
+    # testable here rather than only in a downstream project: health, metrics and the operational
+    # audit are about the INSTALLATION, not about one shop's content.
+    - key: platform.observability.any.read
+      module: observability
+      subject: ObservabilitySnapshot
+      action: read
+      scope: platform
+      description: Read health, metrics overview and the operational audit.
+
+# WHY THERE IS NO WILDCARD OF ANY KIND ANY MORE
+#
+# The per-family `manage` key used to expand, unconditionally, to every action its family declared
+# — which was the only way to say "read everyone's, change nothing" for a family whose narrow read
+# carried a condition. That made the family's own write keys reachable through a route asking only
+# for the wide read, and it meant breadth was something a wildcard implied rather than something a
+# role stated. It went first, and breadth has been written on the keys themselves ever since.
+#
+# `all.manage` — the SCOPE wildcard, `admin`'s alone — is worth naming as the one remaining case:
+# the same argument applies one level up — "a key no module declares grants nothing" is only true
+# of the wildcard as long as nothing reads it as a shortcut instead. `admin` holds every declared
+# tenant key BY NAME, spelled out in `authorization-roles.yaml`, the same way every other role
+# does. A new key that should reach `admin` is a line in that file, not an assumption the wildcard
+# already covers it — the property this whole file exists for, applied to `admin` too.

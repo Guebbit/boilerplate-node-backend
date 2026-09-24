@@ -1,0 +1,55 @@
+name: Setup
+description: Set up Node, install dependencies, and provision mongod for test lanes.
+
+# Extracted because `ci.yml` deliberately runs many small parallel jobs (a red square names the
+# thing that broke) and pays for it in boilerplate: the same checkout/setup/install preamble in
+# every one. A composite action makes adding a job cheap, which is what stopped happening — five
+# gate checks reached `npm run complete` and never got a job of their own.
+#
+# It also centralizes the in-process Mongo preinstall for `mongodb-memory-server` lanes:
+# install `mongod` once, export `MONGOMS_SYSTEM_BINARY`, and every test job reuses that binary
+# instead of downloading from fastdl at runtime.
+#
+# The checkout stays in the caller: `commitlint` needs `fetch-depth: 0` to walk a commit range and
+# nothing else does, and hiding that behind an input would make the exception invisible.
+
+inputs:
+    node-version:
+        description: Node major version to install.
+        required: false
+        default: '22'
+    setup-mongod:
+        description: Install mongod and export MONGOMS_SYSTEM_BINARY.
+        required: false
+        default: 'false'
+
+runs:
+    using: composite
+    steps:
+        - name: Setup Node
+          uses: actions/setup-node@v4
+          with:
+              node-version: ${{ inputs.node-version }}
+              cache: npm
+              cache-dependency-path: package-lock.json
+
+        - name: Install dependencies
+          shell: bash
+          run: npm ci
+
+        - name: Install mongod
+          if: ${{ inputs.setup-mongod == 'true' }}
+          shell: bash
+          run: |
+              if command -v mongod >/dev/null 2>&1; then
+                  echo "MONGOMS_SYSTEM_BINARY=$(command -v mongod)" >> "$GITHUB_ENV"
+                  exit 0
+              fi
+
+              sudo apt-get update
+              sudo apt-get install -y gnupg curl
+              curl -fsSL https://pgp.mongodb.com/server-8.0.asc | gpg --dearmor | sudo tee /usr/share/keyrings/mongodb-server-8.0.gpg >/dev/null
+              echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/8.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-8.0.list
+              sudo apt-get update
+              sudo apt-get install -y mongodb-org-server
+              echo "MONGOMS_SYSTEM_BINARY=$(command -v mongod)" >> "$GITHUB_ENV"

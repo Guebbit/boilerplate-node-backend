@@ -1,0 +1,14 @@
+{
+    "webhooks": {
+        "subscription-cap-reached": "Questo negozio ha raggiunto il limite di sottoscrizioni webhook.",
+        "ring-cannot-be-empty": "Una sottoscrizione deve mantenere almeno un secret attivo.",
+        "subscription-not-found": "La sottoscrizione di questa consegna non esiste più.",
+        "delivery-in-progress": "Questa consegna è già in corso di tentativo. Riprova a breve.",
+        "email-disabled": {
+            "subject": "Una sottoscrizione webhook è stata disabilitata",
+            "meta-title": "Sottoscrizione webhook disabilitata",
+            "greeting": "Salve,",
+            "body": "Una delle tue sottoscrizioni webhook è stata disabilitata automaticamente dopo ripetuti errori di consegna. Correggi l'endpoint, poi riabilita la sottoscrizione — non riproverà da sola finché non lo farai."
+        }
+    }
+}

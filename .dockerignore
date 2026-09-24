@@ -1,6 +1,44 @@
+# Dependencies (installed inside the container)
 node_modules
+
+# Version control
 .git
+
+# Secrets
 .env
+
+# Per-client deployment config, one directory each. Mounted at runtime, never baked into the image.
+clients
+
+# IDE
 .idea
+
+# App build output
 dist
+
+# VitePress build output and dep cache (both rebuilt inside the docs container)
+docs/.vitepress/dist
+docs/.vitepress/cache
+
+# Test and analysis output — jest coverage, test/mutation reports, Stryker's own sandbox, per-run
+# Mongo data. None of it is read at runtime, and `tmp/reports/` alone is ~20 MB of mutation HTML —
+# every megabyte here is copied into the build context on every single build.
+tmp
+
+# Generated API-client collections for Bruno, Insomnia, Mockoon and Postman: ~900 KB of developer
+# tooling rebuilt by `npm run contracts:bundle -- bruno insomnia mockoon postman`. Only
+# `tests/cross-cutting/contract-bundles.test.ts` reads them, and the image build runs no tests —
+# `npm run build` is type-check plus lint.
+contract.bruno.yml
+contract.insomnia.json
+contract.mockoon.json
+contract.postman.json
+
+# Generated from openapi.yaml fragments by `postinstall` — see .gitignore. A stale host copy would
+# be overwritten anyway (`gen:api` starts with `rm -rf ./api`), but there is no reason to upload it
+# to the build daemon first.
+/openapi.yaml
+/api/
+
+# Logs
 *.log

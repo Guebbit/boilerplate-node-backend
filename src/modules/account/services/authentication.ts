@@ -1,0 +1,673 @@
+/**
+ * @module
+ * Authentication — proving who is asking, and the tokens that keep proving it. Signup and login
+ * establish an identity; `tokenAdd` and `tokenRemoveAll` are the two writes every flow that
+ * issues or revokes a token goes through. Deliberately NOT here: the credential's VALUE — hashing
+ * lives on the model's pre-save hook, signing in `../session/jwt`, password changes in
+ * `./profile`. See `./index` for why this module's service is a folder.
+ */
+
+import { z } from 'zod';
+import { getCurrentLocale, t } from '@infrastructure/i18n';
+import { environmentNumber } from '@infrastructure/runtime/environment';
+import bcrypt from 'bcrypt';
+import { randomBytes } from 'node:crypto';
+import { checkEmailPolicy } from '@infrastructure/adapters/antibot';
+import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
+import {
+    deleteRequestEmail,
+    resetRequestEmail,
+    setupRequestEmail,
+    recipientLocale
+} from '../emails';
+import { sendAccountMail } from './mail';
+import { LoginBody } from '@api/schemas.zod';
+import {
+    generateSuccess,
+    generateReject,
+    type ResponseSuccess,
+    type ResponseReject,
+    validationErrors
+} from '@infrastructure/http/response';
+import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
+import { zodUserSchema, userService, type TokenType, type UserDocument } from '@modules/users';
+import { parseFormBoolean } from '@infrastructure/http/request';
+import type { CallerContext } from '@types';
+import { optionalBooleanSchema } from '@infrastructure/http/schemas';
+import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
+import { recordAudit } from '@infrastructure/observability/audit';
+import { accountAnalyticsEvents } from '../analytics';
+import { accountAuditActions } from '../audit';
+import { rotateRefreshToken, TokenReuseError } from '../session/jwt';
+import { assignDefaultRole } from '@modules/access';
+import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+
+/**
+ * Add a token to the user (e.g. password reset).
+ * Tokens are consumed by the appropriate flow (passwordChange, etc.).
+ */
+export const tokenAdd = (
+    user: UserDocument,
+    type: string,
+    expirationTime?: number
+): Promise<string> => {
+    const token = randomBytes(16).toString('hex');
+    // Delegates to `userService.tokenAdd`, the named door onto the document method the JWT layer
+    // already uses, rather than duplicating "append a token" here. Both issue a `$push` — the
+    // array must be APPENDED TO, never rebuilt. Rebuilding it (`user.tokens = [...]`) writes the
+    // whole array back, erasing anything added by a concurrent request in between; `tokens` is
+    // exactly the field where two sessions and a reset link routinely collide like that.
+    return userService.tokenAdd(user, type, expirationTime ?? 0, token);
+};
+
+/**
+ * The `tokens.type` an account-deletion link carries — named for the same reason as
+ * {@link PASSWORD_RESET_TOKEN_TYPE}: policy, not detail, and `delete-account-confirm.ts` reads it
+ * from here rather than repeating the bare string.
+ */
+export const ACCOUNT_DELETE_TOKEN_TYPE = 'delete';
+
+/**
+ * Issue a delete-confirmation token, deliver it, and record the request. Wraps `tokenAdd`
+ * rather than emitting inside it, since `tokenAdd`'s other caller (`sendVerificationEmail`)
+ * must stay silent. The token value never leaves this file — returning it would hand a live
+ * delete credential to a layer that has no business holding one.
+ */
+export const requestAccountDeletion = (user: UserDocument, context: CallerContext): Promise<void> =>
+    tokenAdd(user, ACCOUNT_DELETE_TOKEN_TYPE, 3_600_000).then((token) => {
+        recordAudit(context, {
+            action: accountAuditActions.AUTH_ACCOUNT_DELETE_REQUESTED,
+            actor_user_id: user.id,
+            outcome: 'success'
+        });
+
+        /*
+         * The recipient's OWN language, the request's only as fallback. What reaches the queue is
+         * finished text, so the worker that sends it has no locale to work from and needs none.
+         */
+        const mail = deleteRequestEmail(
+            recipientLocale(user.locale, context),
+            user.username,
+            token
+        );
+        // High priority: a token-bearing link the user is actively waiting on, not a notification.
+        void sendAccountMail(user.email, mail);
+    });
+
+/**
+ * A bcrypt hash of no real password, computed once at import time (a one-time boot cost, not a
+ * per-request one). `login` compares against this on an unknown email, so "no such account"
+ * costs the same as "wrong password" — without it, bcrypt's own cost is exactly what makes the
+ * fast path a timing oracle for enumerating registered addresses.
+ */
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync(randomBytes(32).toString('hex'), 12);
+
+/**
+ * The `tokens.type` a password-reset link carries.
+ *
+ * Named here rather than spelled at each call site because it is policy, not detail — and because
+ * a bare string in a controller connects to nothing, least of all the TTL it belongs to.
+ * `./verification` states its own pair the same way.
+ */
+export const PASSWORD_RESET_TOKEN_TYPE = 'password';
+
+/** Fallback for `NODE_PASSWORD_RESET_TTL_MS`: an hour, in milliseconds. */
+const DEFAULT_PASSWORD_RESET_TTL_MS = 3_600_000;
+
+/**
+ * How long a reset link works — how long a stolen mailbox stays useful. Tunable because the safe
+ * direction is SHORTER, and that trade against a user who reads mail on a delay is a
+ * deployment's call, not this file's.
+ */
+const PASSWORD_RESET_TOKEN_TTL_MS = environmentNumber(
+    'NODE_PASSWORD_RESET_TTL_MS',
+    DEFAULT_PASSWORD_RESET_TTL_MS,
+    1
+);
+
+/**
+ * Issue a password-reset token and deliver it — or silently do nothing for an unregistered
+ * address. The silence is the feature: `POST /account/reset-request` always answers 200, so the
+ * response can't be used to enumerate registered addresses. The boolean return is for the
+ * caller's metric only, never a client-visible refusal — the caller audits unconditionally.
+ * Like {@link requestAccountDeletion}, the token value never leaves this file.
+ * @returns `true` when a mail was queued, `false` when the address has no account
+ */
+export const requestPasswordReset = (
+    email: string | undefined,
+    context: CallerContext
+): Promise<boolean> => {
+    if (!email) return Promise.resolve(false);
+
+    // Credentials included: issuing the token pushes onto this document's `tokens`.
+    return userService.findByEmail(email).then((user) => {
+        if (!user) return false;
+
+        return tokenAdd(user, PASSWORD_RESET_TOKEN_TYPE, PASSWORD_RESET_TOKEN_TTL_MS).then(
+            (token) => {
+                /*
+                 * The account's own language, so the email matches the rest of what this user
+                 * receives from us rather than the browser that happened to submit the form. The
+                 * copy is finished before the job is published, so the worker needs no locale.
+                 */
+                const mail = resetRequestEmail(
+                    recipientLocale(user.locale, context),
+                    user.username,
+                    token
+                );
+                // High priority: a token-bearing link the user is actively waiting on, not a notification.
+                void sendAccountMail(user.email, mail);
+                return true;
+            }
+        );
+    });
+};
+
+/**
+ * Issue a password-set token for an admin-created user with no password, and deliver it. Only
+ * caller: `users`' `USER_SETUP_REQUESTED` event — no `CallerContext`, so nothing to audit here
+ * (already recorded as `ADMIN_USER_CREATED` in `users/service.ts`). Reuses the reset token
+ * type/TTL; only the mail copy differs, see {@link setupRequestEmail}.
+ */
+export const requestAccountSetup = (user: UserDocument): Promise<void> =>
+    tokenAdd(user, PASSWORD_RESET_TOKEN_TYPE, PASSWORD_RESET_TOKEN_TTL_MS).then((token) => {
+        const mail = setupRequestEmail(recipientLocale(user.locale), user.username, token);
+        // High priority: a token-bearing link the user is actively waiting on, not a notification.
+        void sendAccountMail(user.email, mail);
+    });
+
+/**
+ * Revoke one of the caller's own sessions.
+ *
+ * `recordAudit` only when a token actually matched — `deleteSession` reports the same 404 as
+ * an invented id for someone else's session or a stale one, and an audit row would misrepresent a
+ * revoke that never happened.
+ */
+export const sessionRevoke = (
+    userId: string,
+    sessionId: string,
+    context: CallerContext
+): Promise<{ modifiedCount: number }> =>
+    userService.sessionRemove(userId, sessionId).then((result) => {
+        if (result.modifiedCount > 0)
+            recordAudit(context, {
+                action: accountAuditActions.AUTH_SESSION_REVOKED,
+                outcome: 'success'
+            });
+        return result;
+    });
+
+/**
+ * Log out of the current session only: revoke the refresh token the caller's cookie names, if
+ * any, and record it either way.
+ * A missing cookie isn't a failure — `postLogout` answers 200 for it either way — so the audit
+ * event still fires; there's simply nothing to revoke.
+ */
+export const logoutCurrentSession = (
+    refreshToken: string | undefined,
+    context: CallerContext
+): Promise<void> =>
+    (refreshToken ? userService.tokenRemoveByValue(refreshToken) : Promise.resolve()).then(() => {
+        recordAudit(context, {
+            action: accountAuditActions.AUTH_LOGGED_OUT,
+            outcome: 'success'
+        });
+        /*
+         * This route authenticates by cookie alone, so there is no bearer to resolve and
+         * `distinctId` falls back to 'anonymous'. Under Umami the visitor is still separated
+         * by the IP + user-agent hash; under PostHog these rows do not attribute to a person.
+         */
+        emitAnalyticsEvent({
+            ...buildAnalyticsBase(context),
+            event: accountAnalyticsEvents.USER_LOGGED_OUT,
+            properties: { scope: 'session' }
+        });
+    });
+
+/**
+ * The absence of a refresh cookie, as an error, so that the one `catch` below can tell the two
+ * failures apart without the happy path having to branch on the token twice.
+ */
+class MissingRefreshTokenError extends Error {
+    constructor() {
+        super('Refresh token missing');
+        this.name = 'MissingRefreshTokenError';
+    }
+}
+
+/**
+ * Exchange a refresh token for a fresh access token, ROTATING the refresh token in the same
+ * breath, and recording the attempt either way. Takes the cookie as
+ * found, absence included, so all three ordinary outcomes — missing, invalid, valid — are decided
+ * and recorded here; a fourth, reuse of an already-rotated token, gets its own audit action and
+ * `metadata.reason` rather than being folded into `invalid_token`, since it is a materially
+ * different fact for whoever reads the trail: not a caller with a stale cookie, but a token value
+ * that outlived the session it belonged to.
+ * @returns the new access/refresh tokens and the refresh cookie's new `maxAge`, for the
+ *   controller to set alongside the response
+ */
+export const refreshAccessToken = (
+    refreshToken: string | undefined,
+    context: CallerContext
+): Promise<{ accessToken: string; refreshToken: string; refreshMaxAgeMs: number }> =>
+    (refreshToken
+        ? rotateRefreshToken(refreshToken)
+        : Promise.reject(new MissingRefreshTokenError())
+    )
+        .then((result) => {
+            recordAudit(context, {
+                action: accountAuditActions.AUTH_TOKEN_REFRESHED,
+                outcome: 'success'
+            });
+            return result;
+        })
+        .catch((error: unknown) => {
+            const reuseDetected = error instanceof TokenReuseError;
+
+            recordAudit(context, {
+                action: reuseDetected
+                    ? accountAuditActions.AUTH_REFRESH_TOKEN_REUSE_DETECTED
+                    : accountAuditActions.AUTH_TOKEN_REFRESHED,
+                // The reuse case DOES know whose account this was — carry the id, unlike the
+                // ordinary failures below, which never got far enough to find out. `actor_role`
+                // is left to its default (`anonymous`): this request never carried a verified
+                // access token, so admin status isn't cheaply known, and getting it wrong would
+                // misreport a fact the id alone already establishes precisely.
+                actor_user_id: reuseDetected ? error.userId : 'anonymous',
+                outcome: 'failure',
+                ...(reuseDetected
+                    ? {}
+                    : {
+                          metadata: {
+                              reason:
+                                  error instanceof MissingRefreshTokenError
+                                      ? 'missing_token'
+                                      : 'invalid_token'
+                          }
+                      })
+            });
+            throw error;
+        });
+
+/**
+ * Everything `POST /account/signup` collects: the submitted fields, plus the image paths
+ * `readUploadedImage` derived from the multipart body. One object rather than a positional list
+ * because half of these are optional and two are booleans — an argument order nothing but a
+ * comment would keep honest.
+ */
+export interface SignupInput {
+    /** The submitted address; `zodUserSchema` owns its shape. */
+    email: string;
+
+    /** The submitted display name. */
+    username: string;
+
+    /** The submitted password, in the clear; hashed on the way to the document. */
+    password: string;
+
+    /** The repeat, compared against `password` and never stored. */
+    passwordConfirm: string;
+
+    /**
+     * Optional like `UpdateAccountRequest`'s, but with no "leave it alone" reading — there is no
+     * prior value at signup, so absent and `false` mean the same thing here.
+     */
+    analyticsConsent: boolean | undefined;
+
+    /**
+     * Not a stored default: the contract requires it, and `signup`'s schema rejects anything but
+     * `true`. Validated there rather than on `userSchema` so OAuth linking and the admin `/users`
+     * route — neither of which shows this checkbox — aren't forced to restate it.
+     */
+    termsAccepted: boolean;
+
+    /**
+     * Not `| null`: the contract declares `imageUrl` a string, so a null reaches zod as
+     * "expected string, received null" and is rejected before `signup`'s `?? ''` could see it.
+     * The caller coalesces a body-supplied null away, so `undefined` is the only absence here.
+     */
+    imageUrl: string | undefined;
+
+    /**
+     * Set together with `imageUrl` by `readUploadedImage` — never independently, and never part
+     * of the validated schema: both are server-derived, not client input.
+     */
+    thumbnailUrl: string | undefined;
+
+    /** The staged upload's storage key, handed to the image worker once the account exists. */
+    pendingImageKey: string | undefined;
+}
+
+/**
+ * Rejects a password found in a breach corpus. Checked ahead of the email-policy check and the
+ * database lookup below: a breached password fails signup on its own, so there's nothing to gain
+ * from checking anything else first.
+ * @returns the 422 reject, or `undefined` to let signup continue
+ */
+const guardBreachedPassword = (password: string): Promise<ResponseReject | undefined> =>
+    assertPasswordNotBreached(password).then((breachErrors) =>
+        breachErrors.length > 0 ? generateReject(422, breachErrors) : undefined
+    );
+
+/**
+ * Rung 2 of the anti-automation ladder — off by default, see `adapters/antibot`. A refused
+ * verdict answers exactly like a genuine signup, from a document this call never persists — a
+ * script gets nothing to iterate on. The unsaved-document check is how the audit trail and the
+ * upload cleanup still tell the two apart.
+ * @returns the decoy success, or `undefined` to let signup continue
+ */
+const guardEmailPolicy = (input: SignupInput): Promise<ResponseSuccess<UserDocument> | undefined> =>
+    checkEmailPolicy(input.email).then((verdict) =>
+        verdict === 'refused'
+            ? generateSuccess<UserDocument>(
+                  userService.buildSignupDecoy({
+                      email: input.email,
+                      username: input.username,
+                      imageUrl: input.imageUrl ?? '',
+                      thumbnailUrl: input.thumbnailUrl,
+                      analyticsConsent: input.analyticsConsent,
+                      termsAccepted: input.termsAccepted
+                  })
+              )
+            : undefined
+    );
+
+/**
+ * The one database round trip signup can't skip: an email already on an account refuses here,
+ * everything else creates one — one `.catch` for both, since a taken email is answered from the
+ * same lookup a database error would also throw from.
+ */
+const createAccountIfEmailFree = (
+    input: SignupInput
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
+    userService
+        .emailTaken(input.email)
+        .then<ResponseSuccess<UserDocument> | ResponseReject>((taken) => {
+            if (taken) return generateReject(409, [t('account.signup.email-already-used')]);
+            return userService
+                .registerSelfService({
+                    username: input.username,
+                    email: input.email,
+                    imageUrl: input.imageUrl ?? '',
+                    thumbnailUrl: input.thumbnailUrl,
+                    pendingImageKey: input.pendingImageKey,
+                    password: input.password,
+                    analyticsConsent: input.analyticsConsent,
+                    termsAccepted: input.termsAccepted,
+                    // The language they signed up in, kept for work that happens later without a
+                    // request to read `Accept-Language` from — a queued email, a nightly job.
+                    // Editable afterwards from the user endpoints.
+                    locale: getCurrentLocale()
+                })
+                .then((createdUser) =>
+                    // The membership, not a caller-supplied name — `assignDefaultRole` never
+                    // accepts one, which is what makes self-service signup structurally unable to
+                    // grant anything but `unverified`. A refused grant undoes the row rather than
+                    // leaving an account nobody can sign into and the email permanently unable to
+                    // retry.
+                    assignDefaultRole(String(createdUser._id), DEPLOYMENT_TENANT_ID).then(
+                        () => createdUser,
+                        (error: unknown) =>
+                            userService.discardFailedSignup(createdUser).then(() => {
+                                throw error;
+                            })
+                    )
+                )
+                .then((createdUser) =>
+                    userService
+                        .enqueueIfPending(createdUser)
+                        .then((user) => generateSuccess<UserDocument>(user))
+                );
+        })
+        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
+
+/**
+ * Register new user.
+ *
+ * @param input - the submitted fields and the server-derived image paths
+ * @param callerContext - the request's context, for the audit and analytics records
+ */
+export const signup = (
+    input: SignupInput,
+    callerContext: CallerContext
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
+    const {
+        email,
+        username,
+        password,
+        passwordConfirm,
+        analyticsConsent,
+        termsAccepted,
+        imageUrl
+    } = input;
+
+    const parseResult = zodUserSchema
+        .extend({
+            passwordConfirm: z.string(),
+            // Shared with `PUT /account`'s: both decode the same multipart-string trap
+            // (`optionalBooleanSchema`'s own doc covers it), signup just narrows it to
+            // non-optional-by-intent (absent lands as `undefined`, stored as `false`).
+            analyticsConsent: optionalBooleanSchema,
+            // Not `optionalBooleanSchema`'s shape: signup needs the multipart decode
+            // (`parseFormBoolean`) but a literal-true requirement, not an optional one.
+            termsAccepted: z.preprocess(
+                parseFormBoolean,
+                z.literal(true, { error: () => t('account.signup.terms-not-accepted') })
+            )
+        })
+        .superRefine(({ passwordConfirm, password }, refinementContext) => {
+            if (passwordConfirm !== password)
+                refinementContext.addIssue({
+                    code: 'custom',
+                    message: t('account.signup.password-dont-match')
+                });
+        })
+        .safeParse({
+            email,
+            username,
+            imageUrl,
+            password,
+            passwordConfirm,
+            analyticsConsent,
+            termsAccepted
+        });
+
+    // One gate per line: a breached password, then the antibot decoy, then the email-taken
+    // lookup that creates the account — the first one to answer is what signup returns.
+    const outcome: Promise<ResponseSuccess<UserDocument> | ResponseReject> = parseResult.success
+        ? guardBreachedPassword(password)
+              .then<ResponseReject | ResponseSuccess<UserDocument> | undefined>(
+                  (rejected) => rejected ?? guardEmailPolicy(input)
+              )
+              .then<ResponseReject | ResponseSuccess<UserDocument>>(
+                  (settled) => settled ?? createAccountIfEmailFree(input)
+              )
+        : Promise.resolve(generateReject(422, validationErrors(parseResult.error)));
+
+    return outcome.then((result) => {
+        // The audit trail must not name an account rung 2 refused, or record it as anything other
+        // than the refusal it was.
+        // `Document#isNew` stays true until `.save()`, and the rung-2 refusal path is the only
+        // one that returns a document never saved — so it reads backwards here: true means NO
+        // account was created. https://mongoosejs.com/docs/api/document.html#Document.prototype.isNew
+        if (!result.success || result.data.isNew) {
+            recordAudit(callerContext, {
+                action: accountAuditActions.AUTH_SIGNED_UP,
+                actor_user_id: 'anonymous',
+                actor_role: 'anonymous',
+                outcome: 'failure'
+            });
+            return result;
+        }
+
+        const newUserId = result.data.id;
+        recordAudit(callerContext, {
+            action: accountAuditActions.AUTH_SIGNED_UP,
+            actor_user_id: newUserId,
+            actor_role: 'user',
+            outcome: 'success'
+        });
+        emitAnalyticsEvent({
+            ...buildAnalyticsBase(callerContext),
+            distinctId: newUserId,
+            event: accountAnalyticsEvents.USER_SIGNED_UP
+        });
+        return result;
+    });
+};
+
+/**
+ * Login user by email/password.
+ */
+export const login = (
+    email?: string,
+    password?: string
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
+    const parseResult = LoginBody.safeParse({
+        email,
+        password
+    });
+
+    if (!parseResult.success)
+        return Promise.resolve(generateReject(422, validationErrors(parseResult.error)));
+
+    return (
+        userService
+            // `password` is select:false — this is one of the few flows that legitimately needs it.
+            // `parseResult.data.email`, not the raw `email` param: the parse above is what proves
+            // it's actually a string, which the outer `email?: string` signature can't itself tell TS.
+            .findForLogin(parseResult.data.email)
+            .then((user) => {
+                // Compare against DUMMY_PASSWORD_HASH on a miss, so an
+                // unknown email costs the same as a wrong password — an unconditional `return`
+                // here would answer 401 before bcrypt's own cost, the timing gap that lets an
+                // attacker tell "no such account" from "wrong password" by response time alone.
+                return bcrypt
+                    .compare(password ?? '', user?.password ?? DUMMY_PASSWORD_HASH)
+                    .then((doMatch) => {
+                        if (!user || !doMatch)
+                            return generateReject(401, [t('account.login.wrong-data')]);
+                        return generateSuccess<UserDocument>(user);
+                    });
+            })
+            .catch((error: unknown) => rejectDatabaseEnvelope('auth', error))
+    );
+};
+
+/**
+ * Remove all tokens of a given type for the user (logout-everywhere).
+ * The audit emit fires unconditionally: the caller's next step is "clear cookies, answer
+ * success" either way, so it was never actually gated on `result.success` — this preserves
+ * that rather than introducing a new condition.
+ */
+export const tokenRemoveAll = (
+    userId: string,
+    type: TokenType,
+    context: CallerContext
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
+    userService
+        // `tokens` is select:false — needed here to filter and re-save them
+        .findByIdWithCredentials(userId)
+        .then(
+            (
+                user
+            ):
+                | ResponseSuccess<UserDocument>
+                | ResponseReject
+                | Promise<ResponseSuccess<UserDocument>> => {
+                // Gone-but-verified is 401 here too — `openapi.yaml` declares no 404 for
+                // `logoutAll`, and the caller's session is exactly what no longer exists.
+                if (!user) return generateReject(401, []);
+                // `$pull` rather than filter-and-save: `user.tokens = user.tokens.filter(...)`
+                // rebuilds the array, writing it back whole and erasing anything added between
+                // this function's read and write. That race window is hard to assert in a test —
+                // `$pull` describes a change instead, closing it in the implementation.
+                return userService
+                    .tokenRemoveAll(user, type)
+                    .then(() => generateSuccess<UserDocument>(user));
+            }
+        )
+        .catch((error: unknown) => rejectDatabaseEnvelope('auth', error))
+        .then((result) => {
+            recordAudit(context, {
+                action: accountAuditActions.AUTH_LOGGED_OUT_EVERYWHERE,
+                outcome: 'success'
+            });
+            // Same name as the single-session logout, told apart by `scope`: one funnel counts
+            // logouts, and splitting it across two names would make every rate built on it wrong.
+            emitAnalyticsEvent({
+                ...buildAnalyticsBase(context),
+                event: accountAnalyticsEvents.USER_LOGGED_OUT,
+                properties: { scope: 'everywhere' }
+            });
+            return result;
+        });
+
+/**
+ * Verify the caller's OWN current password against their stored hash. 422 on a miss, never 401 —
+ * a 401 here reads as "session expired" to a client interceptor and would log out a session that
+ * is, in fact, still perfectly valid, in every flow that calls this. An OAuth-only account holds
+ * no password to compare against — same 422 as a wrong one, since there is equally nothing this
+ * step can do.
+ *
+ * @param userId - the caller's own id
+ * @param password - the password to confirm against the stored hash
+ * @param wrongKey - the i18n key each caller's own contract commits to for this rejection
+ * @returns the verified user on a match, or the 401/422 rejection
+ */
+export const verifyOwnPassword = (
+    userId: string,
+    password: string,
+    wrongKey: string
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
+    userService
+        // `password` is select:false — proving identity is this flow's whole point.
+        .findByIdWithCredentials(userId)
+        .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
+            // Gone-but-verified is 401 — same rule `updateProfile` follows, and `openapi.yaml`
+            // declares no 404 here either.
+            if (!user) return generateReject(401, []);
+            if (!user.password) return generateReject(422, [t(wrongKey)]);
+
+            return bcrypt
+                .compare(password, user.password)
+                .then((doMatch) =>
+                    doMatch
+                        ? generateSuccess<UserDocument>(user)
+                        : generateReject(422, [t(wrongKey)])
+                );
+        });
+
+/**
+ * Re-authenticate an already-signed-in caller by password — the verification half of
+ * `POST /account/reauth`. Proves the password and audits the attempt; re-minting the session (a
+ * fresh `auth_time`) is the CONTROLLER's job via `issueSession`, the same split `passwordChange`
+ * keeps from `postPasswordChange`'s own re-mint.
+ *
+ * Not `login`'s path: `login`'s 401 and its dummy-compare exist to stop an ANONYMOUS caller telling
+ *               "no such account" apart from "wrong password" by timing. There is no such caller
+ *               here — the access token already names exactly who is asking.
+ * Not re-checked: the active/deletedAt gate `isAuth` already ran for this request, same reason
+ *               `passwordChangeWithCurrent` and `updateProfile` skip it too.
+ *
+ * @param userId - the caller's own id, from their already-verified access token
+ * @param password - the password to confirm against the stored hash
+ * @param context - for the audit record
+ */
+export const reauth = (
+    userId: string,
+    password: string,
+    context: CallerContext
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
+    const outcome = verifyOwnPassword(userId, password, 'account.reauth.wrong-password').catch(
+        (error: unknown) => rejectDatabaseEnvelope('auth', error)
+    );
+
+    return outcome.then((result) => {
+        recordAudit(context, {
+            action: accountAuditActions.AUTH_REAUTHENTICATED,
+            outcome: result.success ? 'success' : 'failure'
+        });
+        return result;
+    });
+};

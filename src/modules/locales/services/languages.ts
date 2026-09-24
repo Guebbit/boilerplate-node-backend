@@ -1,0 +1,159 @@
+/**
+ * @module
+ * The language rows — registering one, editing it, and removing it with everything under it. Also
+ * the home of the rule the other files share: a language nobody has registered, and what an
+ * unknown tenant means on a write — refused, since it would store invisible copy. A read narrowed
+ * by an unknown tenant needs no such rule: filtering by an id nothing was ever written under
+ * already answers an empty page on its own.
+ */
+
+import { LocaleDirection, type CreateLocaleRequest, type UpdateLocaleRequest } from '@types';
+import { getFallbackLocale, t } from '@infrastructure/i18n';
+import {
+    generateReject,
+    generateSuccess,
+    type ResponseReject,
+    type ResponseSuccess
+} from '@infrastructure/http/response';
+import { normalizeTag, type LocaleDocument } from '../model';
+import { localeRepository } from '../repository';
+import { isKnownTenant } from '../tenants';
+import type { CallerContext } from '@types';
+import { recordAudit } from '@infrastructure/observability/audit';
+import { localeAuditActions } from '../audit';
+import { refreshOverlay } from './overlay';
+
+/** Not found, phrased the one way every route in this module phrases it. */
+export const languageNotFound = (): ResponseReject =>
+    generateReject(404, [t('locales.error-language-not-found')]);
+
+/**
+ * The deployment's fallback locale, deactivated or deleted — refused before either happens.
+ * Every translatable entity's source row lives there; losing it empties the catalogue in every
+ * language at once, so the guard sits here rather than trusting an operator to know that.
+ */
+const rejectFallbackLocale = (tag: string): ResponseReject | undefined =>
+    tag === getFallbackLocale()
+        ? generateReject(409, [t('locales.error-language-is-fallback')])
+        : undefined;
+
+/** A tenant this deployment does not know — refused before anything is written under it. */
+export const rejectUnknownTenant = (tenant: string): ResponseReject | undefined =>
+    isKnownTenant(tenant)
+        ? undefined
+        : generateReject(422, [t('locales.error-tenant-unknown', { tenant })]);
+
+/**
+ * Register a language in the dynamic tier.
+ * @param context - caller context for the `ADMIN_LOCALE_CREATED` audit emit; omitted by tests
+ *   that call this as a plain helper — no context means no emit
+ */
+export const createLanguage = (
+    payload: CreateLocaleRequest,
+    context?: CallerContext
+): Promise<ResponseSuccess<LocaleDocument> | ResponseReject> => {
+    const tag = normalizeTag(payload.tag);
+
+    // Checked here for the message, and by a unique index for the race — a concurrent creation of
+    // the same tag reaches E11000, which the shared interpreter answers 409 for anyway.
+    return localeRepository.findByTag(tag).then((existing) => {
+        if (existing) return generateReject(409, [t('locales.error-language-exists', { tag })]);
+
+        return localeRepository
+            .create({
+                tag,
+                name: payload.name.trim(),
+                nativeName: payload.nativeName.trim(),
+                direction: payload.direction ?? LocaleDirection.ltr,
+                active: payload.active ?? true
+            })
+            .then((language) => {
+                recordAudit(context, {
+                    action: localeAuditActions.ADMIN_LOCALE_CREATED,
+                    outcome: 'success',
+                    target_type: 'locale',
+                    target_id: tag,
+                    metadata: { active: language.active }
+                });
+
+                return generateSuccess(language, 201);
+            });
+    });
+};
+
+/**
+ * Edit a language's display fields or its visibility.
+ *
+ * `undefined` means "leave it alone", which is why each field is tested rather than assigned: a
+ * blanket assign would turn a request that changed one field into one that cleared the other three.
+ */
+export const updateLanguage = (
+    tag: string,
+    payload: UpdateLocaleRequest,
+    context?: CallerContext
+): Promise<ResponseSuccess<LocaleDocument> | ResponseReject> =>
+    localeRepository.findByTag(tag).then((language) => {
+        if (!language) return languageNotFound();
+
+        if (payload.active === false) {
+            const fallbackRefusal = rejectFallbackLocale(tag);
+            if (fallbackRefusal) return fallbackRefusal;
+        }
+
+        if (payload.name !== undefined) language.name = payload.name.trim();
+        if (payload.nativeName !== undefined) language.nativeName = payload.nativeName.trim();
+        if (payload.direction !== undefined) language.direction = payload.direction;
+        if (payload.active !== undefined) language.active = payload.active;
+
+        return localeRepository.save(language).then((saved) => {
+            recordAudit(context, {
+                action: localeAuditActions.ADMIN_LOCALE_UPDATED,
+                outcome: 'success',
+                target_type: 'locale',
+                target_id: tag,
+                // The visibility flag is the field worth having in the trail on its own: it is
+                // what makes a half-finished translation public, and the only edit here that
+                // changes what an anonymous caller can see.
+                metadata: { active: saved.active }
+            });
+
+            return generateSuccess(saved);
+        });
+    });
+
+/**
+ * Remove a language and everything translated into it.
+ *
+ * Refuses while still active — the two-step is the whole safeguard: this destroys days of work,
+ * and an accidental `DELETE` should cost a toggle first, not the work itself.
+ */
+export const deleteLanguage = (
+    tag: string,
+    context?: CallerContext
+): Promise<
+    ResponseSuccess<{ removedEntries: number; removedTranslations: number }> | ResponseReject
+> =>
+    localeRepository.findByTag(tag).then((language) => {
+        if (!language) return languageNotFound();
+
+        if (language.active) return generateReject(409, [t('locales.error-language-active')]);
+
+        const fallbackRefusal = rejectFallbackLocale(tag);
+        if (fallbackRefusal) return fallbackRefusal;
+
+        return localeRepository
+            .deleteLocaleCascade(language)
+            .then(({ entries: removedEntries, translations: removedTranslations }) => {
+                recordAudit(context, {
+                    action: localeAuditActions.ADMIN_LOCALE_DELETED,
+                    outcome: 'success',
+                    target_type: 'locale',
+                    target_id: tag,
+                    metadata: { removedEntries, removedTranslations }
+                });
+
+                refreshOverlay();
+
+                return generateSuccess({ removedEntries, removedTranslations });
+            });
+    });

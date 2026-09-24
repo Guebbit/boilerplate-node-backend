@@ -1,0 +1,79 @@
+{
+    "orders": {
+        "not-found": "The requested order was not found",
+        "hard-deleted": "Order was permanently deleted.",
+        "soft-deleted": "Order was soft deleted (hidden from the customer).",
+        "creation-success": "Order created with success.",
+        "cancel": {
+            "success": "Order cancelled.",
+            "not-cancellable": "This order can no longer be cancelled."
+        },
+        "transition": {
+            "not-allowed": "This order cannot move to that status from where it is now.",
+            "cancel-elsewhere": "Cancelling an order runs the cancellation sequence — cancel it through the order's cancel endpoint instead."
+        },
+        "override": {
+            "not-allowed": "This override cannot move the order to that status from where it is now."
+        },
+        "invoice": {
+            "meta-title": "Invoice — order {{order}}",
+            "title": "The order has been confirmed",
+            "line": "{{title}} — {{quantity}} × {{price}}",
+            "number": "Invoice no. {{number}}",
+            "date": "Date: {{date}}",
+            "vat": {
+                "column-description": "Description",
+                "column-quantity": "Qty",
+                "column-unit-price": "Unit price (gross)",
+                "column-net": "Net",
+                "column-rate": "VAT rate",
+                "column-tax": "VAT",
+                "column-gross": "Total",
+                "shipping-title": "Shipping",
+                "shipping-row": "Shipping, taxed at {{rate}}",
+                "summary-title": "VAT summary",
+                "summary-row": "Taxed at {{rate}}",
+                "net-total": "Net total",
+                "tax-total": "VAT total",
+                "grand-total": "Grand total",
+                "vat-number": "VAT number: {{number}}",
+                "vat-number-missing": "VAT number not configured"
+            }
+        },
+        "email-confirm": {
+            "subject": "Order confirmed",
+            "meta-title": "Order confirmed",
+            "greeting": "Hello, {{name}}!",
+            "body": "Your order has been confirmed.",
+            "line": "{{title}} — {{quantity}} × {{price}}",
+            "total": "Total: {{total}}",
+            "link-label": "View your order and invoice"
+        },
+        "email-transfer": {
+            "subject": "Complete your order by bank transfer",
+            "meta-title": "Bank transfer instructions",
+            "greeting": "Hello, {{name}}!",
+            "body": "Your order is reserved. Send the transfer below to complete it — include the reference so we can match your payment.",
+            "deadline": "We'll hold your order until {{payBy}}.",
+            "link-label": "View your order and invoice"
+        },
+        "email-transfer-expired": {
+            "subject": "Your order was cancelled — no transfer received",
+            "meta-title": "Order cancelled",
+            "greeting": "Hello!",
+            "body": "We didn't receive your bank transfer in time, so this order has been cancelled and its items released."
+        },
+        "email-product-unavailable": {
+            "subject": "Your order was cancelled — an item is no longer available",
+            "meta-title": "Order cancelled",
+            "greeting": "Hello!",
+            "body": "The following item is no longer available, so this order has been cancelled and nothing was charged:",
+            "line": "{{title}}"
+        },
+        "items-held": "This order's items cannot be changed while its stock is held or already sold.",
+        "insufficient-stock": "Some items on this order are no longer available in the quantity requested — see `details.lines`.",
+        "product-unavailable": "One or more products on this order are no longer available — see `details.lines`.",
+        "restored": "Order restored.",
+        "not-deleted": "This order is not deleted."
+    }
+}

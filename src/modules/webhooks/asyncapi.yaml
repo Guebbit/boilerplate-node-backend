@@ -1,0 +1,356 @@
+# The webhooks module's async contract — the public event catalogue.
+#
+# A complete AsyncAPI document on its own (see `observability/asyncapi.yaml`'s header for why),
+# merged by the bundler into `asyncapi.yaml` AND `asyncapi.public.yaml` — this is a `shared`
+# section (`scripts/contracts/asyncapi-bundles.ts`), unlike the queue this module also owns
+# (`worker.webhook.deliver`, in `./asyncapi.internal.yaml`, backend-only — its own private
+# section, since this file's `shared` scope is exactly what a queue must never be). That split IS
+# the module's whole point: `GET /webhooks/events` serves this section straight out of this very
+# file, so the catalogue a subscriber reads and the events this module can actually fire can never
+# drift apart.
+#
+# `webhooks/module.ts` subscribes to each of these on the kernel's domain-event bus
+# (`order.status_changed` filtered by `to`, `order.created`, `order.cancelled`,
+# `payment.succeeded`, `payment.failed` — see `orders/events.ts` and `payments/events.ts`) and
+# republishes the ones a subscription's filter matches, signed, to the URL it names. The SIX names
+# below are the shop's worked example; a deployment with no orders declares its own here and
+# deletes this file along with the rest of the module.
+#
+# Every body is the Standard Webhooks envelope, `{ type, timestamp, data }` — `type` names the
+# event (so a subscriber on more than one event type can tell them apart without inspecting
+# `data`'s shape), `timestamp` is when the underlying event occurred (stable across retries of the
+# same delivery), and `data` is the per-event payload below, unchanged. The `webhook-id`/
+# `webhook-timestamp`/`webhook-signature` headers carry the delivery id and signature — see
+# `transport/webhook-signing.ts`; `id` is NOT repeated in the body.
+asyncapi: 3.0.0
+info:
+    title: Webhooks async contract
+    version: 1.0.0
+    description: The events a webhook subscription may receive.
+servers:
+    subscriberEndpoint:
+        # A VARIABLE server, not a fixed host: every subscription names its own HTTPS URL, so there
+        # is no one address this document can print. `asyncapi-servers`/`asyncapi-channel-servers`
+        # (`spectral.asyncapi.modules.yaml`) still pass, because the channels below DO bind to a
+        # declared server — it just resolves per subscription instead of per deployment.
+        #
+        # Not a server this application runs — the reverse of every other section's server: a
+        # subscriber genuinely subscribes to receive these, over a connection this application
+        # opens outbound.
+        host: '{subscriberHost}'
+        pathname: '{subscriberPath}'
+        protocol: https
+        variables:
+            subscriberHost:
+                default: example.com
+                description: Host (and port, when non-default) of a subscription's configured URL.
+            subscriberPath:
+                default: /webhooks/inbox
+                description: Path of a subscription's configured URL.
+channels:
+    order.created:
+        address: order.created
+        description: A new order was placed.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            OrderCreatedEvent:
+                $ref: '#/components/messages/OrderCreatedEvent'
+    order.paid:
+        address: order.paid
+        description: An order's payment settled.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            OrderPaidEvent:
+                $ref: '#/components/messages/OrderPaidEvent'
+    order.shipped:
+        address: order.shipped
+        description: An order was marked shipped.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            OrderShippedEvent:
+                $ref: '#/components/messages/OrderShippedEvent'
+    order.cancelled:
+        address: order.cancelled
+        description: An order was cancelled.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            OrderCancelledEvent:
+                $ref: '#/components/messages/OrderCancelledEvent'
+    payment.succeeded:
+        address: payment.succeeded
+        description: A payment settled successfully.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            PaymentSucceededEvent:
+                $ref: '#/components/messages/PaymentSucceededEvent'
+    payment.failed:
+        address: payment.failed
+        description: A payment attempt was declined.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            PaymentFailedEvent:
+                $ref: '#/components/messages/PaymentFailedEvent'
+operations:
+    webhookOrderCreated:
+        action: send
+        channel:
+            $ref: '#/channels/order.created'
+        summary: An order was written for the first time.
+        description: >-
+            Fired once per order, from both an admin create and a storefront checkout — see
+            `orders/services/crud.ts`'s `recordCreated`.
+        messages:
+            - $ref: '#/channels/order.created/messages/OrderCreatedEvent'
+    webhookOrderPaid:
+        action: send
+        channel:
+            $ref: '#/channels/order.paid'
+        summary: An order moved to the `paid` status.
+        description: >-
+            Derived from `order.status_changed` (`to: 'paid'`) rather than its own domain
+            event — see `orders/events.ts`: "listeners filter on `to`; the event doesn't know
+            who cares."
+        messages:
+            - $ref: '#/channels/order.paid/messages/OrderPaidEvent'
+    webhookOrderShipped:
+        action: send
+        channel:
+            $ref: '#/channels/order.shipped'
+        summary: An order moved to the `shipped` status.
+        description: Derived from `order.status_changed` filtered to `to = 'shipped'`, same as `order.paid`.
+        messages:
+            - $ref: '#/channels/order.shipped/messages/OrderShippedEvent'
+    webhookOrderCancelled:
+        action: send
+        channel:
+            $ref: '#/channels/order.cancelled'
+        summary: A cancel went through; stock is already back on the shelf.
+        description: One-to-one with the `order.cancelled` domain event — see `orders/events.ts`.
+        messages:
+            - $ref: '#/channels/order.cancelled/messages/OrderCancelledEvent'
+    webhookPaymentSucceeded:
+        action: send
+        channel:
+            $ref: '#/channels/payment.succeeded'
+        summary: A payment reached `succeeded`.
+        description: One-to-one with the `payment.succeeded` domain event — see `payments/events.ts`.
+        messages:
+            - $ref: '#/channels/payment.succeeded/messages/PaymentSucceededEvent'
+    webhookPaymentFailed:
+        action: send
+        channel:
+            $ref: '#/channels/payment.failed'
+        summary: A payment reached `declined`.
+        description: >-
+            One-to-one with the `payment.failed` domain event. Retryable with another method,
+            so this can fire more than once for the same order.
+        messages:
+            - $ref: '#/channels/payment.failed/messages/PaymentFailedEvent'
+components:
+    messages:
+        OrderCreatedEvent:
+            name: OrderCreatedEvent
+            title: Order created
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/OrderCreatedEnvelope'
+        OrderPaidEvent:
+            name: OrderPaidEvent
+            title: Order paid
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/OrderPaidEnvelope'
+        OrderShippedEvent:
+            name: OrderShippedEvent
+            title: Order shipped
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/OrderShippedEnvelope'
+        OrderCancelledEvent:
+            name: OrderCancelledEvent
+            title: Order cancelled
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/OrderCancelledEnvelope'
+        PaymentSucceededEvent:
+            name: PaymentSucceededEvent
+            title: Payment succeeded
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/PaymentSucceededEnvelope'
+        PaymentFailedEvent:
+            name: PaymentFailedEvent
+            title: Payment failed
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/PaymentFailedEnvelope'
+    schemas:
+        WebhookHeaders:
+            type: object
+            description: >-
+                The three Standard Webhooks headers every delivery carries — see
+                `transport/webhook-signing.ts`. Documented here for the subscriber reading this
+                catalogue; nothing in this repo generates types off a message's `headers`.
+            required:
+                - webhook-id
+                - webhook-timestamp
+                - webhook-signature
+            properties:
+                webhook-id:
+                    type: string
+                    description: >-
+                        Shared by every subscription this event fanned out to, and by every retry
+                        of one delivery — the id a subscriber dedupes on.
+                webhook-timestamp:
+                    type: string
+                    description: Unix seconds when this attempt was signed, folded into the signature.
+                webhook-signature:
+                    type: string
+                    description: 'One or more space-separated `v1,<base64 HMAC-SHA256>` values.'
+        OrderIdPayload:
+            type: object
+            required:
+                - orderId
+            properties:
+                orderId:
+                    type: string
+            additionalProperties: false
+        OrderCancelledPayload:
+            type: object
+            required:
+                - orderId
+                - refund
+            properties:
+                orderId:
+                    type: string
+                refund:
+                    type: boolean
+                    description: >-
+                        Whether the cancel carries a refund — a customer cancelling is owed their
+                        money, an operator cancelling may not be. See `orders/events.ts`.
+            additionalProperties: false
+        PaymentEventPayload:
+            type: object
+            required:
+                - paymentId
+                - orderId
+            properties:
+                paymentId:
+                    type: string
+                orderId:
+                    type: string
+            additionalProperties: false
+        OrderCreatedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    type: string
+                    enum:
+                        - order.created
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/OrderIdPayload'
+            additionalProperties: false
+        OrderPaidEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    type: string
+                    enum:
+                        - order.paid
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/OrderIdPayload'
+            additionalProperties: false
+        OrderShippedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    type: string
+                    enum:
+                        - order.shipped
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/OrderIdPayload'
+            additionalProperties: false
+        OrderCancelledEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    type: string
+                    enum:
+                        - order.cancelled
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/OrderCancelledPayload'
+            additionalProperties: false
+        PaymentSucceededEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    type: string
+                    enum:
+                        - payment.succeeded
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/PaymentEventPayload'
+            additionalProperties: false
+        PaymentFailedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    type: string
+                    enum:
+                        - payment.failed
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/PaymentEventPayload'
+            additionalProperties: false

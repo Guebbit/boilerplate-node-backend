@@ -1,0 +1,8 @@
+{
+    "addresses": {
+        "added": "Address saved.",
+        "updated": "Address updated.",
+        "removed": "Address removed.",
+        "not-found": "The requested address was not found"
+    }
+}

@@ -1,0 +1,175 @@
+/**
+ * @module
+ * `GET /account/oauth/:provider/callback` controller — the redirect a provider's consent screen
+ * lands the browser back on. Three outcomes only ever reach the caller: a 404 for a provider this
+ * deployment never configured, a 400 for a state that doesn't match its cookie, or a 302 back to
+ * the paired frontend — with `?error=<code>` on the frontend redirect for everything else that can
+ * go wrong, since by then the browser is mid-navigation and a JSON body has nowhere to be read.
+ */
+
+import type { Request, Response } from 'express';
+import { t } from '@infrastructure/i18n';
+import { rejectResponse } from '@infrastructure/http/response';
+import { logger } from '@infrastructure/adapters/logger';
+import { callerContextOf } from '@infrastructure/http/request';
+import { cookieOf } from '@kernel/cookies';
+import { resolveOAuthProvider } from '../oauth/providers';
+import {
+    stateMatches,
+    destroyStateCookie,
+    destroyVerifierCookie,
+    OAUTH_STATE_COOKIE,
+    OAUTH_VERIFIER_COOKIE
+} from '../oauth/state';
+import { createMfaChallengeCookie } from '../oauth/mfa-redirect';
+import {
+    oauthRedirectUri,
+    oauthFrontendCallbackUrl,
+    oauthFrontendMfaCallbackUrl
+} from '../oauth/config';
+import {
+    loginOrCreateFromOAuth,
+    recordOAuthFailure,
+    twoFactorService,
+    OAuthEmailUnverifiedError,
+    OAuthAccountUnverifiedError
+} from '../services';
+import { issueSession } from '../session/session';
+import { recordLoginSuccess } from '../session/login-observability';
+import { authOauthTotal } from '../metrics';
+import { isUnrestrictedCaller } from '../roles';
+
+/**
+ * Clears both single-attempt OAuth cookies — called at every outcome of one login attempt,
+ * success or failure, since neither the state nor the verifier is any use past this callback.
+ */
+const clearOAuthCookies = (response: Response): void => {
+    destroyStateCookie(response);
+    destroyVerifierCookie(response);
+};
+
+/**
+ * GET /account/oauth/:provider/callback
+ * Validates the CSRF `state`, exchanges the code, then finds-or-creates the account and mints a
+ * session exactly the way `postLogin`'s success tail does — minus the access token, which the
+ * frontend's `GET /account/refresh` bootstrap mints once it lands.
+ */
+export const getOAuthCallback = (request: Request, response: Response) => {
+    const providerName = String(request.params.provider).toLowerCase();
+    const provider = resolveOAuthProvider(providerName);
+    const context = callerContextOf(request);
+
+    if (!provider) {
+        rejectResponse(response, 404, [t('account.oauth.unknown-provider')]);
+        return;
+    }
+
+    const query = request.query as Record<string, unknown>;
+
+    /** Audit + metric for a failed attempt, then clear both single-attempt cookies — the tail
+     * every failure path shares, whichever response follows. */
+    const recordFailureAndClear = (reason: string) => {
+        recordOAuthFailure(context, providerName, reason);
+        authOauthTotal.inc({ provider: providerName, status: 'failure' });
+        clearOAuthCookies(response);
+    };
+
+    /** `recordFailureAndClear`, then fail towards the FRONTEND with `?error=<reason>` rather
+     * than a JSON body — the browser is mid-navigation by the time any of this runs. */
+    const failToFrontend = (reason: string) => {
+        recordFailureAndClear(reason);
+        response.redirect(302, oauthFrontendCallbackUrl(reason));
+    };
+
+    if (!stateMatches(cookieOf(request, OAUTH_STATE_COOKIE), query.state)) {
+        recordFailureAndClear('invalid_state');
+        rejectResponse(response, 400, [t('account.oauth.invalid-state')]);
+        return;
+    }
+
+    // A missing verifier must fail closed, not silently redeem the code without PKCE: a provider
+    // that received no challenge at the start happily accepts an exchange with no verifier, so
+    // "no cookie" and "no PKCE" must never share a branch.
+    const verifier = cookieOf(request, OAUTH_VERIFIER_COOKIE);
+    if (typeof verifier !== 'string' || verifier.length === 0) {
+        recordFailureAndClear('invalid_verifier');
+        rejectResponse(response, 400, [t('account.oauth.invalid-verifier')]);
+        return;
+    }
+
+    // The provider redirects back with `error` instead of `code` when consent is declined.
+    if (typeof query.error === 'string') {
+        failToFrontend('access_denied');
+        return;
+    }
+    if (typeof query.code !== 'string') {
+        failToFrontend('provider_error');
+        return;
+    }
+
+    return provider
+        .exchangeCode(query.code, oauthRedirectUri(provider.name), verifier)
+        .then((identity) => loginOrCreateFromOAuth(provider.name, identity, context))
+        .then(({ user, outcome }) => {
+            /*
+             * A factor armed on the password path applies here too — 2FA is a control on the
+             * ACCOUNT, not on one login method. Minting a session directly would let a provider
+             * alone stand in for a second factor the owner deliberately turned on — see 1b in
+             * docs/theory/defences/authentication.md#federated-login.
+             */
+            if (!user.twoFactorEnabledAt) {
+                return issueSession(response, user.id, undefined, [provider.name]).then(() => {
+                    /*
+                     * Only a genuine LOGIN owes this: `link`/`signup` already audited themselves
+                     * in full inside `loginOrCreateFromOAuth` — recording AUTH_LOGIN here too
+                     * would double-count the event under a second action name. The role is read
+                     * fresh from the membership, never assumed, the same reasoning `postLogin`
+                     * gives for its own tail.
+                     */
+                    return (
+                        outcome === 'login'
+                            ? isUnrestrictedCaller(user.id).then((unrestricted) =>
+                                  recordLoginSuccess(request, user.id, unrestricted, {
+                                      via: provider.name
+                                  })
+                              )
+                            : Promise.resolve()
+                    ).then(() => {
+                        authOauthTotal.inc({ provider: providerName, status: 'success' });
+                        clearOAuthCookies(response);
+                        response.redirect(302, oauthFrontendCallbackUrl());
+                    });
+                });
+            }
+
+            return twoFactorService.buildLoginChallenge(user, [provider.name]).then((challenge) => {
+                createMfaChallengeCookie(response, challenge.challenge, challenge.expiresAt);
+                authOauthTotal.inc({ provider: providerName, status: 'mfa_required' });
+                clearOAuthCookies(response);
+                response.redirect(302, oauthFrontendMfaCallbackUrl(challenge));
+            });
+        })
+        .catch((error: unknown) => {
+            if (error instanceof OAuthEmailUnverifiedError) {
+                failToFrontend('email_unverified');
+                return;
+            }
+            // A DIFFERENT code from the one above, because the remedy is different: there the
+            // caller verifies with the provider, here they reset the password on the account
+            // already holding this address.
+            if (error instanceof OAuthAccountUnverifiedError) {
+                failToFrontend('account_unverified');
+                return;
+            }
+            // The provider/exchange detail is developer-facing only — same rule
+            // `rejectDatabaseError` follows for a driver failure.
+            // Stryker disable all
+            logger.error({
+                message: 'OAuth callback failed',
+                provider: providerName,
+                error
+            });
+            // Stryker restore all
+            failToFrontend('provider_error');
+        });
+};

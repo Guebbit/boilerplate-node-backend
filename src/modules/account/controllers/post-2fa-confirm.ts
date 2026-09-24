@@ -1,0 +1,54 @@
+/**
+ * @module
+ * `POST /account/2fa/methods/{method}/confirm` controller — thin HTTP adapter over
+ * `twoFactorService.confirmTwoFactorMethod`.
+ */
+
+import type { Request, Response } from 'express';
+import { ConfirmTwoFactorMethodBody, ConfirmTwoFactorMethodParams } from '@api/schemas.zod';
+import type { TwoFactorConfirmed, TwoFactorConfirmRequest } from '@types';
+import { successResponse } from '@infrastructure/http/response';
+import { rejectValidation, refused, catchAs } from '@infrastructure/http/controller';
+import { callerContextOf } from '@infrastructure/http/request';
+import { t } from '@infrastructure/i18n';
+import { twoFactorService } from '../services';
+import { authTwoFactorEnrollTotal } from '../metrics';
+
+/**
+ * POST /account/2fa/methods/{method}/confirm — arms the pending method against a code the caller
+ * has demonstrably received, and returns backup codes if this was the account's first factor.
+ */
+export const post2faConfirm = (
+    request: Request<{ method: string }, unknown, TwoFactorConfirmRequest>,
+    response: Response
+) => {
+    const { id } = request.authContext!;
+
+    const pathParameters = ConfirmTwoFactorMethodParams.safeParse(request.params);
+    if (!pathParameters.success) return rejectValidation(response, pathParameters.error);
+
+    const body = ConfirmTwoFactorMethodBody.safeParse(request.body);
+    if (!body.success) {
+        authTwoFactorEnrollTotal.inc({ method: pathParameters.data.method, status: 'failure' });
+        return rejectValidation(response, body.error);
+    }
+    const { method } = pathParameters.data;
+
+    return twoFactorService
+        .confirmTwoFactorMethod(id, method, body.data.code, callerContextOf(request))
+        .then((result) => {
+            if (refused(response, result)) {
+                authTwoFactorEnrollTotal.inc({ method, status: 'failure' });
+                return;
+            }
+
+            authTwoFactorEnrollTotal.inc({ method, status: 'success' });
+            successResponse<TwoFactorConfirmed>(
+                response,
+                result.data,
+                200,
+                t('account.two-factor.method-added')
+            );
+        })
+        .catch(catchAs(response, 'post2faConfirm'));
+};

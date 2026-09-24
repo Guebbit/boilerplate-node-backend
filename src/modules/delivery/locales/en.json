@@ -1,0 +1,17 @@
+{
+    "delivery": {
+        "order-not-found": "The order was not found",
+        "not-shipped": "Nothing has shipped for this order yet",
+        "not-processing": "This order is not ready to ship",
+        "not-shippable-for-delivery": "This order has not shipped yet",
+        "tracking-code-required": "A tracking code is required for this shipping method",
+        "override-reason-required": "A reason is required to force this move",
+        "email-shipped": {
+            "subject": "Your order is on its way",
+            "meta-title": "Order shipped",
+            "greeting": "Hello, {{name}}!",
+            "body": "Good news — your order has left the warehouse.",
+            "tracking": "Track your parcel with code {{code}}."
+        }
+    }
+}

@@ -1,0 +1,85 @@
+/**
+ * @module
+ * Shipment repository — standard CRUD via the repository factory, plus the lookups the carrier
+ * actually makes. The return type is written out because Mongoose's generics are too large for
+ * TypeScript to serialize an inferred one at an export boundary (TS7056), the same reason
+ * `Repository` exists. See: docs/modules/delivery.md
+ */
+
+import { shipmentModel, applyShipmentTransform } from './model';
+import type { ShipmentStatus } from '@types';
+import type { ShipmentDocument } from './model';
+import {
+    createRepository,
+    toObjectId,
+    type Repository,
+    type Wire
+} from '@infrastructure/persistence/create-repository';
+
+/** The shared repository factory's CRUD surface plus the carrier's own lookups. */
+export const shipmentRepository: Repository<ShipmentDocument, Wire<ShipmentDocument>> & {
+    findByOrderId: (orderId: string) => Promise<ShipmentDocument | null>;
+    findByOrderIds: (orderIds: string[]) => Promise<ShipmentDocument[]>;
+    upsertForOrder: (orderId: string, trackingCode?: string) => Promise<ShipmentDocument>;
+    updateStatusIfIn: (
+        orderId: string,
+        from: readonly ShipmentStatus[],
+        to: ShipmentStatus,
+        extra?: Partial<ShipmentDocument>
+    ) => Promise<ShipmentDocument | null>;
+} = {
+    ...createRepository<ShipmentDocument, Wire<ShipmentDocument>>(shipmentModel, {
+        transform: applyShipmentTransform
+    }),
+
+    /** The shipment behind an order, or `null` while nothing has left the warehouse. */
+    findByOrderId: (orderId: string) =>
+        shipmentModel.findOne({ orderId: toObjectId(orderId) }).exec(),
+
+    /**
+     * Every shipment behind a set of orders, in one query — for the account data export, joining
+     * shipments onto the caller's own orders. A loop of {@link findByOrderId} would work too, but
+     * one query per order for what is meant to be a single export request is the wrong shape.
+     */
+    findByOrderIds: (orderIds: string[]) =>
+        shipmentModel.find({ orderId: { $in: orderIds.map((id) => toObjectId(id)) } }).exec(),
+
+    /**
+     * Create the shipment for an order, idempotently: `unique` on `orderId` plus the upsert means
+     * two callers racing the same first-time `ship` only one inserts, and `$setOnInsert` never
+     * touches an existing document — the loser's own `trackingCode` argument is simply discarded
+     * rather than clobbering the winner's.
+     */
+    upsertForOrder: (orderId: string, trackingCode?: string) =>
+        shipmentModel
+            .findOneAndUpdate(
+                { orderId: toObjectId(orderId) },
+                {
+                    $setOnInsert: {
+                        status: 'shipped',
+                        ...(trackingCode ? { trackingCode } : {})
+                    }
+                },
+                { upsert: true, returnDocument: 'after' }
+            )
+            .exec(),
+
+    /**
+     * Move a parcel between statuses, but only from one of the expected ones — atomically, the
+     * same primitive `orderRepository`/`paymentRepository` expose. The condition rides in the
+     * FILTER, not a preceding read: two carrier ticks racing (a double click, a demo racing a
+     * manual advance) would otherwise both load the same `shipped` parcel and both stamp
+     * `deliveredAt`, the second write winning silently and the timestamp lying about when the
+     * parcel arrived. mongod evaluates the filter atomically, so exactly one tick matches; the
+     * loser gets `null`. Keyed on `orderId`, like `paymentRepository`'s, since `unique` on it
+     * makes it a key.
+     */
+    updateStatusIfIn: (orderId, from, to, extra = {}) =>
+        shipmentModel
+            .findOneAndUpdate(
+                { orderId: toObjectId(orderId), status: { $in: [...from] } },
+                { $set: { status: to, ...extra } },
+                { returnDocument: 'after' }
+            )
+            .exec()
+};

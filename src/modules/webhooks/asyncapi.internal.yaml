@@ -1,0 +1,72 @@
+# The webhooks module's OWN queue — private, unlike the module's public event catalogue in
+# `./asyncapi.yaml`. Merged only into `asyncapi.yaml`, never `asyncapi.public.yaml` — this is a
+# `backend`-only section (`scripts/contracts/asyncapi-bundles.ts`'s `SHARED_SECTIONS`), so the
+# paired frontend never sees it, matching every other `worker.*` queue.
+#
+# A fragment, not a complete document on its own, unlike a normal module section: it declares no
+# `asyncapi`/`info`/`servers` of its own, and is deliberately left out of
+# `lint:asyncapi:modules`'s glob for that reason. Its one channel binds to `rabbitmqLocal`, which
+# `shared/contracts/asyncapi.workers.yaml`'s `workers` section already declares — a second
+# declaration here would collide when the two sections merge into one document
+# (`asyncapi-bundles.ts`'s `mergeInto` refuses any duplicate key on purpose). Validated as part of
+# the BUNDLED output instead (`npm run lint:asyncapi`), where `rabbitmqLocal` is already present.
+channels:
+    worker.webhook.deliver:
+        address: worker.webhook.deliver
+        description: >-
+            Outbound webhook delivery job queue — the `webhooks` module's subscriber enqueues one
+            message per matching subscription, the webhook worker consumes it.
+        servers:
+            - $ref: '#/servers/rabbitmqLocal'
+        messages:
+            WebhookDeliverJobMessage:
+                $ref: '#/components/messages/WebhookDeliverJobMessage'
+operations:
+    workerWebhookDeliverPublish:
+        action: receive
+        channel:
+            $ref: '#/channels/worker.webhook.deliver'
+        summary: Enqueue one subscription's delivery attempt for a domain event.
+        description: >-
+            One event fan out to N subscriptions is N messages, never one message N
+            subscriptions read — a slow or dead endpoint must delay only its own deliveries,
+            not the sibling subscriptions matching the same event.
+        messages:
+            - $ref: '#/channels/worker.webhook.deliver/messages/WebhookDeliverJobMessage'
+    workerWebhookDeliverConsume:
+        action: send
+        channel:
+            $ref: '#/channels/worker.webhook.deliver'
+        summary: Webhook worker signs, sends, and records the attempt.
+        description: >-
+            Signs the payload (Standard Webhooks format), resolves and validates the target
+            through the SSRF guard, POSTs with a hard timeout, and records the outcome on the
+            delivery row this job names. A failure schedules `nextAttemptAt` for the retry
+            sweep rather than requeueing here — see `docs/reference/ops.md#scheduled-jobs`.
+        messages:
+            - $ref: '#/channels/worker.webhook.deliver/messages/WebhookDeliverJobMessage'
+components:
+    messages:
+        WebhookDeliverJobMessage:
+            name: WebhookDeliverJobMessage
+            title: Webhook delivery job
+            payload:
+                $ref: '#/components/schemas/WebhookDeliverJobPayload'
+    schemas:
+        WebhookDeliverJobPayload:
+            type: object
+            required:
+                - deliveryId
+            properties:
+                deliveryId:
+                    type: string
+                    description: >-
+                        The `webhookdeliveries` row this attempt updates in place — created
+                        `pending` before the job is published, so `GET /webhooks/deliveries` shows
+                        it immediately and a lost message still leaves a queryable trace. The
+                        Claim Check pattern (EIP): the row is the source of truth for everything
+                        else an attempt needs (`subscriptionId`, `eventId`, `eventType`, the
+                        payload, the current `attempt`), so the message carries only the key —
+                        nothing here can go stale on a replay, and no event payload sits twice in
+                        the broker.
+            additionalProperties: false

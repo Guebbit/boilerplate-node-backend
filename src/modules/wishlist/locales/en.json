@@ -1,0 +1,9 @@
+{
+    "wishlist": {
+        "added": "Product saved to wishlist.",
+        "removed": "Product removed from wishlist.",
+        "moved-to-cart": "Product moved to cart.",
+        "not-found": "This product is not on your wishlist.",
+        "product-not-found": "The requested product was not found"
+    }
+}

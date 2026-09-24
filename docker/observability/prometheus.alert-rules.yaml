@@ -1,0 +1,118 @@
+# Prometheus alert rules for the local API stack.
+# Why this file exists: dashboards are visual, but alerts define actionable SRE thresholds.
+# Local goal: starter coverage for availability, errors, latency, load, and memory.
+
+groups:
+    - name: api.rules
+      rules:
+          # Availability: API metrics endpoint unreachable.
+          - alert: ApiDown
+            expr: up{job="api"} == 0
+            for: 1m
+            labels:
+                severity: critical
+            annotations:
+                summary: 'API instance is down'
+                description: 'Prometheus cannot reach the /metrics endpoint of the API for > 1 min.'
+
+          # Error rate: failures are above normal baseline.
+          - alert: HighErrorRate
+            expr: |
+                (
+                    rate(http_request_errors_total[5m])
+                    /
+                    rate(http_requests_total[5m])
+                ) > 0.05
+            for: 5m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'High HTTP error rate (> 5 %)'
+                description: 'More than 5 % of requests are returning 4xx/5xx over the last 5 minutes.'
+
+          # Latency: user-perceived slowness at p95 percentile.
+          - alert: HighP95Latency
+            expr: |
+                histogram_quantile(
+                    0.95,
+                    rate(http_request_duration_milliseconds_bucket[5m])
+                ) > 2000
+            for: 5m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'p95 latency > 2 s'
+                description: 'The 95th-percentile request duration has exceeded 2 000 ms for 5 minutes.'
+
+          # Saturation: too many concurrent requests in-flight.
+          - alert: HighInFlightRequests
+            expr: http_requests_in_flight > 100
+            for: 2m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'Too many in-flight requests (> 100)'
+                description: 'More than 100 requests are being processed simultaneously for 2 minutes.'
+
+          # Memory pressure: Node.js heap close to exhaustion.
+          #
+          # The denominator is `nodejs_heap_size_limit_bytes` — V8's fixed ceiling — and not
+          # `nodejs_heap_size_total_bytes`, which is only the heap V8 has committed so far and
+          # which it grows on demand. Against `total` this ratio sits around 0.97 on an idle,
+          # healthy process, so the alert fired permanently and taught everyone to ignore it.
+          # The limit metric is registered by `infrastructure/observability/metrics-registry`.
+          - alert: HighHeapUsage
+            expr: |
+                nodejs_heap_size_used_bytes
+                /
+                nodejs_heap_size_limit_bytes > 0.90
+            for: 5m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'Node.js heap usage above 90 % of the V8 limit'
+                description: 'The heap is within 10 % of --max-old-space-size; OOM risk if left unaddressed.'
+
+          # Parked queue jobs: a job only reaches <queue>.dead after every retry the deployment's
+          # NODE_QUEUE_MAX_ATTEMPTS allows, or a permanent rejection that was never going to
+          # succeed on one. Nothing else reads that queue on its own, so this counter — registered
+          # by `infrastructure/observability/metrics-queue` — is the only thing that surfaces it.
+          # A rate above zero is the alert; there is no meaningful threshold above that.
+          - alert: QueueJobsParked
+            expr: increase(queue_jobs_dead_lettered_total[15m]) > 0
+            for: 0m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'A queue is parking jobs in its dead-letter queue'
+                description: 'queue_jobs_dead_lettered_total increased in the last 15 minutes for queue {{ $labels.queue }} — inspect and replay via the RabbitMQ management UI.'
+
+          # Fleet-wide webhook delivery failure: a failed delivery never parks (it reschedules on
+          # its own row, and the sweep republishes it), so `QueueJobsParked` above never fires for
+          # this queue — this is the signal that actually surfaces it. Zero successes while
+          # attempts keep landing is our-side (egress, DNS, signing), never one subscriber's
+          # endpoint — that stays quiet by design, see `docs/modules/webhooks.md`.
+          - alert: WebhookDeliveriesFailingEverywhere
+            expr: |
+                increase(webhook_delivery_attempts_total{outcome="success"}[30m]) == 0
+                and
+                increase(webhook_delivery_attempts_total{outcome="failure"}[30m]) > 10
+            for: 0m
+            labels:
+                severity: critical
+            annotations:
+                summary: 'Every webhook delivery attempt is failing'
+                description: 'No successful webhook delivery in 30 minutes while attempts keep arriving — a platform-side outage (egress, DNS, signing), not one endpoint.'
+
+          # The retry sweep (`scripts/ops/sweep-webhook-retries.ts`, every minute) is what moves a
+          # `pending` row back onto the queue once its `nextAttemptAt` arrives. A nonzero, growing
+          # `webhook_deliveries_overdue` (`metrics.ts`) for 15 minutes straight means the cron
+          # itself stopped running, not that deliveries are merely retrying on schedule.
+          - alert: WebhookRetriesStalled
+            expr: webhook_deliveries_overdue > 0
+            for: 15m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'Webhook retries are not being swept'
+                description: 'webhook_deliveries_overdue has stayed above zero for 15 minutes — the retry sweep cron may not be running.'

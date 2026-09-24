@@ -1,0 +1,57 @@
+# Per-Dockerfile override of the root `.dockerignore`, for `docker/Dockerfile` ONLY — Docker/
+# Buildah both look for `<dockerfile-name>.dockerignore` next to the Dockerfile before falling
+# back to the root file, and use it INSTEAD, not merged with it. This file therefore repeats the
+# root list in full; the one deliberate difference is `.git` staying IN.
+#
+# Why: `npm run complete` — which `docker-compose.test.yml`'s `gate` service and the
+# `container-gate` CI job both run inside this image — includes `lint`, and the
+# `local/comment-links` ESLint rule shells out to `git ls-files` to check that a
+# comment's file reference still exists. No `.git` directory means that rule hard-crashes rather
+# than reporting a finding, not a lint failure that could be waived. `docker/Dockerfile.production`
+# has the same gap and sidesteps it by never running `lint` at all — see the comment on its build
+# stage — which is not an option here because running `npm run complete` unmodified is the point.
+#
+# GENERATED from the root .dockerignore by scripts/docker/generate-dockerfile-dockerignore.ts —
+# `npm run regenerate` rebuilds it. Do not hand-edit.
+
+# Dependencies (installed inside the container)
+node_modules
+
+# Secrets
+.env
+
+# Per-client deployment config, one directory each. Mounted at runtime, never baked into the image.
+clients
+
+# IDE
+.idea
+
+# App build output
+dist
+
+# VitePress build output and dep cache (both rebuilt inside the docs container)
+docs/.vitepress/dist
+docs/.vitepress/cache
+
+# Test and analysis output — jest coverage, test/mutation reports, Stryker's own sandbox, per-run
+# Mongo data. None of it is read at runtime, and `tmp/reports/` alone is ~20 MB of mutation HTML —
+# every megabyte here is copied into the build context on every single build.
+tmp
+
+# Generated API-client collections for Bruno, Insomnia, Mockoon and Postman: ~900 KB of developer
+# tooling rebuilt by `npm run contracts:bundle -- bruno insomnia mockoon postman`. Only
+# `tests/cross-cutting/contract-bundles.test.ts` reads them, and the image build runs no tests —
+# `npm run build` is type-check plus lint.
+contract.bruno.yml
+contract.insomnia.json
+contract.mockoon.json
+contract.postman.json
+
+# Generated from openapi.yaml fragments by `postinstall` — see .gitignore. A stale host copy would
+# be overwritten anyway (`gen:api` starts with `rm -rf ./api`), but there is no reason to upload it
+# to the build daemon first.
+/openapi.yaml
+/api/
+
+# Logs
+*.log

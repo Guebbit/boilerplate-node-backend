@@ -1,0 +1,8 @@
+subdomain: core
+dependsOn:
+    - addresses # the checkout's delivery address
+    - delivery # shipping price, pure functions
+    - orders # placeOrder — the one function every order is written through
+    - payments # listPaymentMethods, to validate the requested method
+    - products # prices and availability
+    - users # the buyer
