@@ -175,6 +175,18 @@ describe('the umami provider', () => {
         expect(sentRequest().url).toBe('http://umami:3000/api/send');
     });
 
+    it('bounds the request, so a hung Umami cannot hold a socket for minutes per event', () => {
+        configureUmami();
+        emitAnalyticsEvent({
+            analyticsConsent: true,
+            distinctId: 'u1',
+            event: productsAnalyticsEvents.PRODUCT_VIEWED
+        });
+
+        const [, init] = (globalThis.fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
+        expect(init.signal).toBeInstanceOf(AbortSignal);
+    });
+
     it('tolerates a trailing slash on the host, because someone will paste one', () => {
         configureUmami();
         process.env.NODE_UMAMI_INGEST_HOST = 'http://umami:3000/';
@@ -532,7 +544,8 @@ describe('shutdownAnalytics', () => {
         });
 
         return shutdownAnalytics().then(() => {
-            expect(mockShutdown).toHaveBeenCalledTimes(1);
+            // Bounded, inside the process's own shutdown deadline.
+            expect(mockShutdown).toHaveBeenCalledWith(3000);
         });
     });
 

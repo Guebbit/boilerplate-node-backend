@@ -69,6 +69,9 @@ const buildEventData = (event: AnalyticsEvent): Record<string, unknown> => ({
     ...(event.traceId ? { trace_id: event.traceId } : {})
 });
 
+/** How long one event may take to reach Umami before it is abandoned. */
+const SEND_TIMEOUT_MS = 2000;
+
 /** The Umami implementation of the analytics port — see `./index` for the contract. */
 export const umamiAnalyticsProvider: AnalyticsProvider = {
     name: 'umami',
@@ -100,6 +103,9 @@ export const umamiAnalyticsProvider: AnalyticsProvider = {
         // X-Forwarded-For attributes it to the same visitor as the browser events around it.
         fetch(`${config.host}/api/send`, {
             method: 'POST',
+            // Bounded: a hung Umami would otherwise hold a socket for undici's 300s default, per
+            // event, for as long as it stays hung.
+            signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
             headers: {
                 'Content-Type': 'application/json',
                 'User-Agent': event.userAgent ?? SERVER_USER_AGENT,

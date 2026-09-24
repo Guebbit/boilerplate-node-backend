@@ -14,6 +14,9 @@ import { PostHog } from 'posthog-node';
 import { logger } from '@infrastructure/adapters/logger';
 import type { AnalyticsEvent, AnalyticsProvider } from './index';
 
+/** Upper bound on the final flush — see `shutdown` below. */
+const SHUTDOWN_TIMEOUT_MS = 3000;
+
 /**
  * Both key and host are required. The host is explicit because PostHog can be self-hosted or
  * EU/US cloud, and defaulting it would silently ship product data to the wrong region.
@@ -92,6 +95,9 @@ export const posthogAnalyticsProvider: AnalyticsProvider = {
         // Cleared before the flush resolves, so a `capture()` racing the shutdown builds a fresh
         // client rather than enqueueing onto one that is closing.
         _client = undefined;
-        return closing.shutdown();
+        // Bounded well inside the process's own shutdown deadline: the library default (30s)
+        // outlasts it, and a forced exit then skips the trace flush that runs after this.
+        // https://posthog.com/docs/libraries/node#shutdown
+        return closing.shutdown(SHUTDOWN_TIMEOUT_MS);
     }
 };
