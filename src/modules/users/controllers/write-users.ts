@@ -80,17 +80,13 @@ export const writeUsers = (
         },
         false
     );
-    if (errors.length > 0)
-        return (
-            deleteUpload()
-                // The answer does not depend on the cleanup succeeding. Without this catch, a
-                // storage backend having a bad moment turns a plain 422 into a 500 — and the
-                // client is told the server broke when what it sent was simply invalid.
-                .catch(() => undefined)
-                .then(() => {
-                    rejectResponse(response, 422, errors);
-                })
-        );
+    if (errors.length > 0) {
+        rejectResponse(response, 422, errors);
+        // `deleteUpload` never rejects (imageStore.remove/removeQuarantined both resolve on
+        // failure — see image-store.ts), so the response need not wait on it, and no catch is
+        // needed to keep a storage hiccup from becoming a second, different failure.
+        return deleteUpload();
+    }
 
     // Past the guard above, these have been checked against zodUserSchema — the assertion
     // records what the validator just established rather than assuming it. `thumbnailUrl` is on
