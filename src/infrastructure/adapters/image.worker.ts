@@ -17,7 +17,7 @@ import { imageStore } from '@infrastructure/adapters/image-store';
 import { digestImage, thumbnailImage } from '@infrastructure/adapters/image';
 import type { ReencodableImageMime } from '@infrastructure/adapters/image';
 import { identifyImage } from '@infrastructure/adapters/image-signatures';
-import { IMAGE_QUEUE, isQueueEnabled, publishToQueue } from '@infrastructure/adapters/queue';
+import { IMAGE_QUEUE, publishToQueue } from '@infrastructure/adapters/queue';
 import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
 
 /* Queue name for image digest jobs — owned by the adapter, re-exported for the worker registry. */
@@ -271,8 +271,9 @@ export const enqueueImageDigest = (
             ).then(() => urls)
         );
 
-    if (!isQueueEnabled()) return runInline();
-
+    // No `isQueueEnabled()` pre-check: `publishToQueue` already resolves `false` with no I/O when
+    // the broker is unconfigured, which the `!published` branch below runs inline exactly as a
+    // configured-but-unreachable broker would — one fallback covers both.
     return publishToQueue<ImageDigestJobPayload>({
         queue: IMAGE_QUEUE,
         payload

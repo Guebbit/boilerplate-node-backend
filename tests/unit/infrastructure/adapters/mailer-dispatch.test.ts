@@ -1,24 +1,22 @@
 /**
  * `enqueueEmail` — the queue-or-send-inline dispatch in `src/infrastructure/adapters/mailer.ts`.
  *
- * The docblock promises that "two fallbacks keep it safe: the queue being unconfigured, and the
- * queue being configured but momentarily unreachable. In both cases the email is still sent."
- * That is a three-branch claim, and it was asserted by nothing — `tests/unit/i18n/
- * email-locale.test.ts` drives this function, but only to check the locale that rides on the
- * payload, and it pins the queue as enabled and publishing successfully throughout.
- *
  * Which branch runs decides whether a password-reset email is delivered or silently dropped, and
  * the failure is invisible: `enqueueEmail` resolves `void` either way, so a caller cannot tell a
  * queued job from a lost one. It is also agnostic boilerplate — "publish to a broker, fall back to
  * doing it inline" is the pattern every project built on this repo inherits, whatever it sends.
  *
- * The three paths:
+ * The two paths, from `enqueueEmail`'s own point of view:
  *
- *   1. no broker configured           → send inline, now
- *   2. broker configured, publish OK  → enqueue, log at debug, do NOT send inline
- *   3. broker configured, publish NOT OK → send inline after all
+ *   1. publish resolves true  → enqueue, log at debug, do NOT send inline
+ *   2. publish resolves false → send inline
  *
- * Path 3 is the one worth the most: it is the only one that only happens when something else is
+ * There is no `isQueueEnabled()` pre-check here any more — `publishToQueue` already resolves
+ * `false` with no I/O when the broker is unconfigured, so "no broker" and "broker configured but
+ * refused/timed out" both land on path 2, indistinguishably. That collapse is deliberate: which of
+ * the two happened is `queue.test.ts`'s claim to prove, not this file's.
+ *
+ * Path 2 is the one worth the most: the broker-down half of it only happens when something else is
  * already broken.
  */
 import type { EmailJobPayload } from '@types';
@@ -33,9 +31,7 @@ jest.mock('nodemailer', () => ({
 }));
 
 const publishToQueueMock = jest.fn();
-const isQueueEnabledMock = jest.fn();
 jest.mock('@infrastructure/adapters/queue', () => ({
-    isQueueEnabled: () => isQueueEnabledMock(),
     publishToQueue: (job: unknown) => publishToQueueMock(job)
 }));
 
@@ -112,33 +108,8 @@ afterEach(async () => {
     else process.env.NODE_MAIL_SPOOL_PATH = originalSpoolPath;
 });
 
-describe('enqueueEmail — path 1: no broker configured', () => {
+describe('enqueueEmail — path 1: publish resolves true', () => {
     beforeEach(() => {
-        isQueueEnabledMock.mockReturnValue(false);
-    });
-
-    it('sends the email inline rather than dropping it', async () => {
-        await enqueueEmail(REQUEST, TEMPLATE, DATA);
-
-        expect(sendMailMock).toHaveBeenCalledTimes(1);
-    });
-
-    it('does not attempt to publish anything', async () => {
-        await enqueueEmail(REQUEST, TEMPLATE, DATA);
-
-        expect(publishToQueueMock).not.toHaveBeenCalled();
-    });
-
-    it('resolves undefined, not the SMTP info object', async () => {
-        // Both branches share a `Promise<void>` return type so callers cannot accidentally start
-        // depending on a `SentMessageInfo` that only exists on one path.
-        await expect(enqueueEmail(REQUEST, TEMPLATE, DATA)).resolves.toBeUndefined();
-    });
-});
-
-describe('enqueueEmail — path 2: broker configured, publish succeeds', () => {
-    beforeEach(() => {
-        isQueueEnabledMock.mockReturnValue(true);
         publishToQueueMock.mockResolvedValue(true);
     });
 
@@ -198,16 +169,21 @@ describe('enqueueEmail — path 2: broker configured, publish succeeds', () => {
     });
 });
 
-describe('enqueueEmail — path 3: broker configured, publish fails', () => {
+describe('enqueueEmail — path 2: publish resolves false (no broker, or one that refused)', () => {
     beforeEach(() => {
-        isQueueEnabledMock.mockReturnValue(true);
         publishToQueueMock.mockResolvedValue(false);
     });
 
+    it('still attempts the publish — publishToQueue itself is the no-op when unconfigured', async () => {
+        // No `isQueueEnabled()` pre-check any more: this call always reaches `publishToQueue`,
+        // which resolves `false` with no I/O of its own when nothing is configured — see
+        // `queue.test.ts` for that half of the contract.
+        await enqueueEmail(REQUEST, TEMPLATE, DATA);
+
+        expect(publishToQueueMock).toHaveBeenCalledTimes(1);
+    });
+
     it('falls back to sending inline, so the email is not lost', async () => {
-        // The branch that only runs when the broker is already having a bad day — and the one
-        // nothing was checking. Without it, a RabbitMQ blip silently swallows every password
-        // reset, and `enqueueEmail` still resolves as if it had worked.
         await enqueueEmail(REQUEST, TEMPLATE, DATA);
 
         expect(sendMailMock).toHaveBeenCalledTimes(1);
@@ -219,7 +195,9 @@ describe('enqueueEmail — path 3: broker configured, publish fails', () => {
         expect(loggerMock.debug).not.toHaveBeenCalled();
     });
 
-    it('still resolves undefined', async () => {
+    it('resolves undefined, not the SMTP info object', async () => {
+        // Both branches share a `Promise<void>` return type so callers cannot accidentally start
+        // depending on a `SentMessageInfo` that only exists on one path.
         await expect(enqueueEmail(REQUEST, TEMPLATE, DATA)).resolves.toBeUndefined();
     });
 });
@@ -232,7 +210,6 @@ describe('enqueueEmail — path 3: broker configured, publish fails', () => {
  */
 describe('enqueueEmail — a publish that rejects instead of answering false', () => {
     beforeEach(() => {
-        isQueueEnabledMock.mockReturnValue(true);
         publishToQueueMock.mockRejectedValue(new Error('Channel closed'));
     });
 
@@ -247,19 +224,17 @@ describe('enqueueEmail — a publish that rejects instead of answering false', (
 });
 
 describe('enqueueEmail — the paths are mutually exclusive', () => {
-    // Stated as a table over all three configurations: exactly one delivery attempt happens,
-    // whichever way the broker behaves. This is what fails when a branch condition is inverted.
+    // Stated as a table over both outcomes: exactly one delivery attempt happens, whichever way
+    // the broker behaves. This is what fails when the `published` branch is inverted.
     it.each([
-        ['no broker', false, false],
-        ['publish succeeds', true, true],
-        ['publish fails', true, false]
-    ])('%s → exactly one delivery path is taken', async (_label, queueEnabled, published) => {
-        isQueueEnabledMock.mockReturnValue(queueEnabled);
+        ['publish succeeds', true],
+        ['publish resolves false', false]
+    ])('%s → exactly one delivery path is taken', async (_label, published) => {
         publishToQueueMock.mockResolvedValue(published);
 
         await enqueueEmail(REQUEST, TEMPLATE, DATA);
 
-        const enqueued = publishToQueueMock.mock.calls.length > 0 && published ? 1 : 0;
+        const enqueued = published ? 1 : 0;
         const sentInline = sendMailMock.mock.calls.length;
 
         expect(enqueued + sentInline).toBe(1);
@@ -273,21 +248,7 @@ describe('enqueueEmail — the paths are mutually exclusive', () => {
  * the queued path, which has one.
  */
 describe('enqueueEmail — the inline paths discard their own attachment', () => {
-    it('discards it once a no-broker send settles', async () => {
-        isQueueEnabledMock.mockReturnValue(false);
-        const key = await spoolAttachment(Buffer.from('x'), 'pdf');
-
-        await enqueueEmail(
-            { ...REQUEST, attachments: [{ filename: 'x.pdf', key }] },
-            TEMPLATE,
-            DATA
-        );
-
-        await expect(fileExists(path.join(spoolRoot, key))).resolves.toBe(false);
-    });
-
-    it('discards it once the publish-failed fallback settles', async () => {
-        isQueueEnabledMock.mockReturnValue(true);
+    it('discards it once the publish-resolves-false fallback settles', async () => {
         publishToQueueMock.mockResolvedValue(false);
         const key = await spoolAttachment(Buffer.from('x'), 'pdf');
 
@@ -301,7 +262,7 @@ describe('enqueueEmail — the inline paths discard their own attachment', () =>
     });
 
     it('discards it, logs, and still resolves when the inline send itself rejects', async () => {
-        isQueueEnabledMock.mockReturnValue(false);
+        publishToQueueMock.mockResolvedValue(false);
         sendMailMock.mockRejectedValueOnce(new Error('smtp refused'));
         const key = await spoolAttachment(Buffer.from('x'), 'pdf');
 
@@ -316,7 +277,6 @@ describe('enqueueEmail — the inline paths discard their own attachment', () =>
     });
 
     it('never touches it on the queued path, which has a retry chain ahead of it', async () => {
-        isQueueEnabledMock.mockReturnValue(true);
         publishToQueueMock.mockResolvedValue(true);
         const key = await spoolAttachment(Buffer.from('x'), 'pdf');
 

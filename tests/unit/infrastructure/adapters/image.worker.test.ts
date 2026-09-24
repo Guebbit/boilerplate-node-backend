@@ -40,7 +40,6 @@ jest.mock('@infrastructure/adapters/image-signatures', () => ({
 
 jest.mock('@infrastructure/adapters/queue', () => ({
     IMAGE_QUEUE: 'worker.image.digest',
-    isQueueEnabled: jest.fn(),
     publishToQueue: jest.fn()
 }));
 
@@ -51,7 +50,7 @@ jest.mock('@infrastructure/adapters/cache', () => ({
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { digestImage, thumbnailImage } from '@infrastructure/adapters/image';
 import { identifyImage } from '@infrastructure/adapters/image-signatures';
-import { isQueueEnabled, publishToQueue } from '@infrastructure/adapters/queue';
+import { publishToQueue } from '@infrastructure/adapters/queue';
 import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
 import {
     digestQuarantinedImage,
@@ -70,7 +69,6 @@ const mockedRemove = imageStore.remove as jest.Mock;
 const mockedDigestImage = digestImage as jest.Mock;
 const mockedThumbnailImage = thumbnailImage as jest.Mock;
 const mockedIdentifyImage = identifyImage as jest.Mock;
-const mockedIsQueueEnabled = isQueueEnabled as jest.Mock;
 const mockedPublishToQueue = publishToQueue as jest.Mock;
 /** The cache sweep a finished digest triggers — asserted, so a silent writeback is a failure. */
 const mockedInvalidateCacheTagsLogged = invalidateCacheTagsLogged as jest.Mock;
@@ -249,7 +247,6 @@ describe('enqueueImageDigest', () => {
     });
 
     it('publishes and returns without digesting when the broker accepts the job', async () => {
-        mockedIsQueueEnabled.mockReturnValue(true);
         mockedPublishToQueue.mockResolvedValue(true);
 
         await enqueueImageDigest(payload, writeback);
@@ -262,14 +259,23 @@ describe('enqueueImageDigest', () => {
         expect(writeback).not.toHaveBeenCalled();
     });
 
-    it('runs the pipeline inline when no broker is configured', async () => {
-        mockedIsQueueEnabled.mockReturnValue(false);
+    /**
+     * No `isQueueEnabled()` pre-check any more: this always reaches `publishToQueue` first, which
+     * resolves `false` with no I/O of its own when nothing is configured (`queue.test.ts` proves
+     * that half) — so "no broker" and "a broker that refuses" are the same case here, both landing
+     * on the inline fallback below.
+     */
+    it('runs the pipeline inline when the publish resolves false', async () => {
+        mockedPublishToQueue.mockResolvedValue(false);
         primeSuccessfulDigest();
         writeback.mockResolvedValue(true);
 
         await enqueueImageDigest(payload, writeback);
 
-        expect(mockedPublishToQueue).not.toHaveBeenCalled();
+        expect(mockedPublishToQueue).toHaveBeenCalledWith({
+            queue: 'worker.image.digest',
+            payload
+        });
         expect(writeback).toHaveBeenCalledWith('doc1', 'abc123.png', {
             imageUrl: '/images/abc123.png',
             thumbnailUrl: '/images/thumbs/v1/abc123.webp'
@@ -278,26 +284,10 @@ describe('enqueueImageDigest', () => {
         expect(mockedInvalidateCacheTagsLogged).toHaveBeenCalledWith(['products']);
     });
 
-    /* Same fallback `enqueueEmail` takes: a broker that is configured but momentarily unreachable
-       must not leave the record stuck on its placeholder with no job ever dispatched. */
-    it('falls back to inline when the broker is configured but the publish fails', async () => {
-        mockedIsQueueEnabled.mockReturnValue(true);
-        mockedPublishToQueue.mockResolvedValue(false);
-        primeSuccessfulDigest();
-        writeback.mockResolvedValue(true);
-
-        await enqueueImageDigest(payload, writeback);
-
-        expect(writeback).toHaveBeenCalledWith('doc1', 'abc123.png', {
-            imageUrl: '/images/abc123.png',
-            thumbnailUrl: '/images/thumbs/v1/abc123.webp'
-        });
-    });
-
     /* The gap this file's own docblock calls out: the inline path shares `settleWriteback` with
        the queued one, so a stale/mismatched writeback cleans up here too, not only off the queue. */
     it('cleans up the promoted files when the inline writeback matches nothing', async () => {
-        mockedIsQueueEnabled.mockReturnValue(false);
+        mockedPublishToQueue.mockResolvedValue(false);
         primeSuccessfulDigest();
         writeback.mockResolvedValue(false);
 
@@ -335,7 +325,6 @@ describe('enqueueIfImagePending', () => {
      */
     it('awaits the inline fallback and copies its urls onto the returned document', async () => {
         const document = { _id: 'doc1', pendingImageKey: 'abc123.png' };
-        mockedIsQueueEnabled.mockReturnValue(true);
         mockedPublishToQueue.mockResolvedValue(false);
         primeSuccessfulDigest();
         writeback.mockResolvedValue(true);
@@ -355,7 +344,6 @@ describe('enqueueIfImagePending', () => {
 
     it('publishes and resolves with the document unchanged when the broker accepts the job', async () => {
         const document = { _id: 'doc1', pendingImageKey: 'abc123.png' };
-        mockedIsQueueEnabled.mockReturnValue(true);
         mockedPublishToQueue.mockResolvedValue(true);
 
         await expect(enqueueIfImagePending(document, 'products', writeback)).resolves.toBe(

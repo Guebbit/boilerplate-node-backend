@@ -35,12 +35,7 @@ import { resolveSpooled, discardSpooled } from '@infrastructure/adapters/mail-sp
 import { withSpan } from '@infrastructure/observability/tracer';
 // The queue name comes from the adapter, not from the worker that drains it: producer and
 // consumer must agree on the spelling, and `infrastructure` may not import application code to get it.
-import {
-    isQueueEnabled,
-    publishToQueue,
-    EMAIL_QUEUE,
-    type JobPriority
-} from '@infrastructure/adapters/queue';
+import { publishToQueue, EMAIL_QUEUE, type JobPriority } from '@infrastructure/adapters/queue';
 
 /**
  * Absolute path to the EJS email templates, overridable with `NODE_EMAIL_TEMPLATES_DIR`.
@@ -384,34 +379,34 @@ export const enqueueEmail = (
     data: Data,
     priority: JobPriority = 'normal'
 ): Promise<void> => {
-    const dispatch = isQueueEnabled()
-        ? // The type argument is the point: this literal is checked against the very type the
-          // worker declares, so producer and consumer cannot drift apart silently. It is the
-          // GENERATED contract type — `asyncapi.workers.yaml` declares `request` with
-          // `additionalProperties: false`, so a local widening would permit a field the contract
-          // forbids.
-          publishToQueue<EmailJobPayload>({
-              queue: EMAIL_QUEUE,
-              // Must be JSON-serializable — `publishToQueue` stringifies it. Anything non-plain
-              // (streams, Buffers, functions) in `request` would not survive the round trip.
-              payload: { request, templateName, data },
-              priority
-          }).then((published) => {
-              if (!published) {
-                  // Fallback: queue publish failed, send directly.
-                  return sendInline(request, templateName, data);
-              }
-              // `debug` level: enqueueing is routine, and the worker logs the actual delivery.
-              // Stryker disable all
-              logger.debug({
-                  message: 'Email job enqueued.',
-                  to: request.to,
-                  template: templateName
-              });
-              // Stryker restore all
-          })
-        : // No broker configured → send inline.
-          sendInline(request, templateName, data);
+    // No `isQueueEnabled()` pre-check: `publishToQueue` already resolves `false` with no I/O when
+    // the broker is unconfigured, which the `!published` branch below sends inline exactly as a
+    // configured-but-unreachable broker would — one fallback covers both, not two copies of it.
+    //
+    // The type argument is the point: this literal is checked against the very type the worker
+    // declares, so producer and consumer cannot drift apart silently. It is the GENERATED contract
+    // type — `asyncapi.workers.yaml` declares `request` with `additionalProperties: false`, so a
+    // local widening would permit a field the contract forbids.
+    const dispatch = publishToQueue<EmailJobPayload>({
+        queue: EMAIL_QUEUE,
+        // Must be JSON-serializable — `publishToQueue` stringifies it. Anything non-plain
+        // (streams, Buffers, functions) in `request` would not survive the round trip.
+        payload: { request, templateName, data },
+        priority
+    }).then((published) => {
+        if (!published) {
+            // Fallback: no broker configured, or the queue publish failed — send directly.
+            return sendInline(request, templateName, data);
+        }
+        // `debug` level: enqueueing is routine, and the worker logs the actual delivery.
+        // Stryker disable all
+        logger.debug({
+            message: 'Email job enqueued.',
+            to: request.to,
+            template: templateName
+        });
+        // Stryker restore all
+    });
 
     // Every one of this function's 13+ call sites writes `void enqueueEmail(...)` — a rejection
     // here has nobody left to catch it, and would otherwise surface as an unhandled rejection with
