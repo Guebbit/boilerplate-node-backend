@@ -80,6 +80,11 @@ export default tseslint.config(
          * above — foreign runtime, not this project's JavaScript.
          */
         'docker/mongo-init.js',
+        /*
+         * Runs inside a bare base image during `docker build`, before this project's
+         * dependencies or tsconfig exist there — plain Node with only `node:` imports.
+         */
+        'docker/install-supercronic.mjs',
         '**/node_modules/**',
         '**/dist/**',
         // The built docs site and its build cache; the authored source under `docs/` is markdown,

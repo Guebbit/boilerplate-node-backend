@@ -32,20 +32,22 @@ WORKDIR /app
 # `docker/Dockerfile.dockerignore` is what keeps `.git` itself in the build
 # context for it to query — the root `.dockerignore` excludes it, for every other image.
 #
-# `busybox` is for the compose `cron` service, which runs `busybox crond` against this image.
-# Alpine ships it in the base image; Debian slim does not.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
     ca-certificates \
     fonts-freefont-ttf \
     libcurl4 \
     git \
-    busybox \
     && rm -rf /var/lib/apt/lists/*
 
 # Where puppeteer-core looks for the browser. `src/infrastructure/adapters/pdf.ts`'s own fallback
 # (absent this var) is Alpine's binary name and path, which does not exist on Debian — so this
 # image MUST set it rather than lean on that fallback.
+# supercronic, for the compose `cron` service — the same scheduler, version and checksum as
+# production, so dev shows what production does.
+COPY docker/install-supercronic.mjs /tmp/install-supercronic.mjs
+RUN node /tmp/install-supercronic.mjs && rm /tmp/install-supercronic.mjs
+
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Copy the whole build context, not just package*.json: `npm ci`'s postinstall runs

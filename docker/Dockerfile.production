@@ -105,6 +105,12 @@ RUN apk add --no-cache dumb-init \
     apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefont; \
     fi
 
+# supercronic: the scheduler the compose `cron` service runs against this same image. ~14 MB, and
+# `app` never uses it — the price of `app`, `cron` and `setup` sharing one image. Pinned by
+# SHA-256; the script says why it replaced busybox crond.
+COPY docker/install-supercronic.mjs /tmp/install-supercronic.mjs
+RUN node /tmp/install-supercronic.mjs && rm /tmp/install-supercronic.mjs
+
 # Where puppeteer-core looks for the browser. `pdf.ts` already defaults to this path; declaring it
 # here keeps the image self-describing and lets a different base image override it in one place.
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser

@@ -1,5 +1,5 @@
 # Scheduled jobs for this deployment's `cron` service (docker-compose.yml and
-# docker-compose.production.yml). Busybox `crond` reads this file from `/etc/crontabs/root` — see
+# docker-compose.production.yml). supercronic reads this file from `/app/crontab` — see
 # docs/reference/ops.md#scheduled-jobs for what each job does and why it is safe to repeat.
 #
 # `scripts/run-script.ts` gives every entry point here a non-zero exit on failure and closes
@@ -20,21 +20,19 @@
 # `{ status, nextAttemptAt }` is cheap regardless of how the nightly jobs are staggered, so it
 # needs no offset from them.
 #
-# Output redirects to /proc/1/fd/1 and /proc/1/fd/2 — PID 1's own stdout/stderr — rather than
-# /dev/stdout: crond does not attach a cron job's stdout to the container's, so a plain redirect
-# would go nowhere. /proc/1/fd/* reaches the container's real log stream regardless, which is what
-# lets Promtail ship every run.
-0  2 * * * cd /app && npm run reap:quarantine        >> /proc/1/fd/1 2>> /proc/1/fd/2
+# No output redirects: supercronic hands each job's stdout/stderr straight to its own
+# (`-passthrough-logs`), which is the container's log stream Promtail ships.
+0  2 * * * cd /app && npm run reap:quarantine
 # WARNING: owned by the account module — delete it when removing the module (docs/modules/account.md)
-5  2 * * * cd /app && npm run reap:inactive-accounts >> /proc/1/fd/1 2>> /proc/1/fd/2
+5  2 * * * cd /app && npm run reap:inactive-accounts
 # WARNING: owned by the orders module — delete it when removing the module (docs/modules/orders.md)
-10 2 * * * cd /app && npm run reap:orders            >> /proc/1/fd/1 2>> /proc/1/fd/2
+10 2 * * * cd /app && npm run reap:orders
 # WARNING: owned by the payments module — delete it when removing the module (docs/modules/payments.md)
-15 2 * * * cd /app && npm run reap:payments          >> /proc/1/fd/1 2>> /proc/1/fd/2
+15 2 * * * cd /app && npm run reap:payments
 # WARNING: owned by the orders module — delete it when removing the module (docs/modules/orders.md)
-20 2 * * * cd /app && npm run sweep:order-effects    >> /proc/1/fd/1 2>> /proc/1/fd/2
+20 2 * * * cd /app && npm run sweep:order-effects
 # WARNING: owned by the webhooks module — delete it when removing the module (docs/modules/webhooks.md)
-*  * * * * cd /app && npm run sweep:webhook-retries  >> /proc/1/fd/1 2>> /proc/1/fd/2
+*  * * * * cd /app && npm run sweep:webhook-retries
 # WARNING: owned by the orders module — delete it when removing the module (docs/modules/orders.md)
-25 2 * * * cd /app && npm run reap:invoices          >> /proc/1/fd/1 2>> /proc/1/fd/2
-30 2 * * * cd /app && npm run reap:mail-spool         >> /proc/1/fd/1 2>> /proc/1/fd/2
+25 2 * * * cd /app && npm run reap:invoices
+30 2 * * * cd /app && npm run reap:mail-spool

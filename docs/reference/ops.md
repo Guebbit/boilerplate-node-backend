@@ -68,7 +68,7 @@ One config per service in the chain. Each is mounted into its container by the c
 
 ## Scheduled jobs
 
-The `cron` service in both compose files — busybox `crond` reading `docker/crontab` — is an
+The `cron` service in both compose files — [supercronic](https://github.com/aptible/supercronic) reading `docker/crontab` — is an
 external scheduler: the schedule is deployment configuration instead of code, and the shape
 survives a move off compose unchanged (a `CronJob` on Kubernetes, a systemd timer on a VM). It runs
 the same `scripts/ops/reap-*`/`sweep:*` entry points every one of them already documents as "meant to run

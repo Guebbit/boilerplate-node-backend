@@ -213,13 +213,11 @@ services:
     # differs, so this container runs `scripts/ops/reap-*`/`sweep:*` against the exact image
     # that was type-checked, never a copy built separately.
     #
-    # `crond -f -d 8`: busybox's cron daemon, already in `node:*-alpine`. `-f` foreground, `-d 8`
-    # debug-level logging to stderr (nothing here runs syslog). This image runs as the unprivileged
-    # `node` user (`docker/Dockerfile.production`'s `USER node`) rather than root, so
-    # `docker/crontab` is bind-mounted to `/etc/crontabs/node`, not `/etc/crontabs/root` — a
-    # non-root crond reads only the crontab named for its own user. Mounting just this one file is
-    # enough; the image already carries `scripts/ops/`, `scripts/run-script.ts` and
-    # `package.json`.
+    # supercronic (installed by `docker/install-supercronic.mjs`), not busybox `crond`: crond
+    # resets group membership before every job, which the unprivileged `node` user may not do, so
+    # every job failed. `-passthrough-logs` hands each job's output to the container's log stream
+    # untouched. Mounting `docker/crontab` is enough; the image already carries `scripts/ops/`,
+    # `scripts/run-script.ts` and `package.json`.
     #
     # `replicas: 1` is what actually keeps two `reap:orders` passes from racing; the Mongo lease
     # (`src/infrastructure/persistence/lease.ts`) is the backstop for a future job that does need it.
@@ -241,7 +239,7 @@ services:
         <<: *hardening
 
         volumes:
-            - ./docker/crontab:/etc/crontabs/node:ro
+            - ./docker/crontab:/app/crontab:ro
             # `reap:quarantine`, `reap:invoices` and `reap:mail-spool` all sweep directories
             # `app` writes, so cron mounts the same two volumes. Without these the jobs would
             # walk an empty read-only path and report nothing to do, every night, silently.
@@ -250,7 +248,7 @@ services:
             # Same reasoning as `app`'s own mount — `scripts/ops/reap-*`/`sweep:*` connect to
             # Mongo too.
             - mongo-ca-dir:/ca-dir:ro
-        command: ['crond', '-f', '-d', '8']
+        command: ['supercronic', '-passthrough-logs', '/app/crontab']
         depends_on:
             database:
                 condition: service_healthy
