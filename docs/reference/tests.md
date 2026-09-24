@@ -41,9 +41,9 @@ passes because an earlier file left state behind (a fixture, a cached module) lo
 one that doesn't, until the file order changes.
 
 `npm run test:order-random` runs the same three suites shuffled (`--randomize --showSeed`) instead
-of gating on it. Not part of `npm run test` or CI — cheap enough to run by hand after touching
-shared test fixtures or module-level state, and `--showSeed` prints the seed a red run needs to
-reproduce.
+of gating on it. Not part of `npm run test` or the merge gate: it runs nightly in
+`.github/workflows/order-random.yml`, and is cheap enough to run by hand after touching shared test
+fixtures or module-level state. `--showSeed` prints the seed a red run needs to reproduce.
 
 ## Three numbers, and they are not the same question
 

@@ -1,0 +1,43 @@
+name: Order-random (nightly)
+
+# Runs the integration, contract and fuzz suites with jest's `--randomize`, which shuffles the
+# order of tests inside each file. A test that only passes because an earlier one left state
+# behind — a fixture, a cached module, a counter — fails here on the night the order changes.
+#
+# A HUNTER, not a gate: a red run is a finding for a person to read, and the seed printed by
+# `--showSeed` (plus RANDOM_DATA_SEED for the fuzz suite) is what reproduces it.
+# See docs/reference/tests.md, "Order-dependence".
+
+on:
+    schedule:
+        # 04:30 UTC — after schemathesis.yml (04:00), so the nightlies do not compete for runners.
+        - cron: '30 4 * * *'
+    workflow_dispatch:
+
+concurrency:
+    group: order-random-${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+env:
+    NODE_VERSION: 22
+
+jobs:
+    order-random:
+        runs-on: ubuntu-latest
+        # Three suites in one `--runInBand` process, so slower than any one CI job.
+        timeout-minutes: 60
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  setup-mongod: 'true'
+
+            # Rerun a red night with `npx jest --seed=<seed>` on the same suites to reproduce it.
+            - name: Run the suites in shuffled order
+              run: npm run test:order-random
