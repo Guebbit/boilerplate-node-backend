@@ -16,7 +16,7 @@ import 'dotenv/config';
 import { logger } from '@infrastructure/adapters/logger';
 import { reapSpooled } from '@infrastructure/adapters/mail-spool';
 import { environmentNumber } from '@infrastructure/runtime/environment';
-import { runScript } from '../db/run-script';
+import { runScript } from '../run-script';
 
 /** How long a spooled file is left alone before it counts as abandoned. One hour by default — a
  * mail job settles in seconds; anything still here past that is a job that died mid-flight. */

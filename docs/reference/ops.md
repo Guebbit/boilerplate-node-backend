@@ -72,7 +72,7 @@ The `cron` service in both compose files — busybox `crond` reading `docker/cro
 external scheduler: the schedule is deployment configuration instead of code, and the shape
 survives a move off compose unchanged (a `CronJob` on Kubernetes, a systemd timer on a VM). It runs
 the same `scripts/ops/reap-*`/`sweep:*` entry points every one of them already documents as "meant to run
-periodically", via `scripts/db/run-script.ts`.
+periodically", via `scripts/run-script.ts`.
 
 | Job                              | Schedule (UTC) | Leased | What it does                                                                                            |
 | -------------------------------- | -------------- | ------ | ------------------------------------------------------------------------------------------------------- |

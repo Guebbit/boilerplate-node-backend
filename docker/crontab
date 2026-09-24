@@ -2,7 +2,7 @@
 # docker-compose.production.yml). Busybox `crond` reads this file from `/etc/crontabs/root` — see
 # docs/reference/ops.md#scheduled-jobs for what each job does and why it is safe to repeat.
 #
-# `scripts/db/run-script.ts` gives every entry point here a non-zero exit on failure and closes
+# `scripts/run-script.ts` gives every entry point here a non-zero exit on failure and closes
 # its Mongo connection on both paths, which is exactly the contract a scheduler wants.
 #
 # Every line below MUST name an existing `npm run` script, and every `reap:*`/`sweep:*` script in

@@ -13,7 +13,7 @@ import 'dotenv/config';
 import { start, stopDatabase } from '@infrastructure/runtime/database';
 import { logger } from '@infrastructure/adapters/logger';
 import { orderService } from '@modules/orders';
-import { runScript } from '../db/run-script';
+import { runScript } from '../run-script';
 
 /** Connect, run both sweeps, and log how many files each one reaped. */
 const main = (): Promise<void> =>

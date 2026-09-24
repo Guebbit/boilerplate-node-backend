@@ -21,7 +21,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { reapDirectory } from '@infrastructure/adapters/filesystem';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import { quarantineRoot } from '@infrastructure/adapters/image-store';
-import { runScript } from '../db/run-script';
+import { runScript } from '../run-script';
 
 /** How long a quarantine file is left alone before it counts as abandoned. 24 hours by default —
  * long enough that a broker outage lasting a normal maintenance window does not lose anything. */

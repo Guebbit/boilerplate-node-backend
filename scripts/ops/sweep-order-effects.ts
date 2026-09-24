@@ -24,7 +24,7 @@ import { start, stopDatabase } from '@infrastructure/runtime/database';
 import { registerModules } from '@kernel/registry';
 import { enabledModules } from '../../src/modules';
 import { orderService } from '@modules/orders';
-import { runScript } from '../db/run-script';
+import { runScript } from '../run-script';
 
 /**
  * Connect, install the event subscriptions, retry every owed effect, and resolve nothing.

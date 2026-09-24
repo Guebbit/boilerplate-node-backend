@@ -21,7 +21,7 @@
 import 'dotenv/config';
 import { start, stopDatabase } from '@infrastructure/runtime/database';
 import { paymentService } from '@modules/payments';
-import { runScript } from '../db/run-script';
+import { runScript } from '../run-script';
 
 /** Connect, delete every abandoned payment attempt past its retention window, and resolve nothing. */
 const main = (): Promise<void> =>

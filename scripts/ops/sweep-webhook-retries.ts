@@ -23,7 +23,7 @@
 import 'dotenv/config';
 import { start, stopDatabase } from '@infrastructure/runtime/database';
 import { sweepDueWebhookDeliveries } from '@modules/webhooks';
-import { runScript } from '../db/run-script';
+import { runScript } from '../run-script';
 
 /** Connect, enqueue every due retry, and resolve nothing. */
 const main = (): Promise<void> => start().then(() => sweepDueWebhookDeliveries());

@@ -218,7 +218,7 @@ services:
     # `node` user (`docker/Dockerfile.production`'s `USER node`) rather than root, so
     # `docker/crontab` is bind-mounted to `/etc/crontabs/node`, not `/etc/crontabs/root` — a
     # non-root crond reads only the crontab named for its own user. Mounting just this one file is
-    # enough; the image already carries `scripts/ops/`, `scripts/db/run-script.ts` and
+    # enough; the image already carries `scripts/ops/`, `scripts/run-script.ts` and
     # `package.json`.
     #
     # `replicas: 1` is what actually keeps two `reap:orders` passes from racing; the Mongo lease

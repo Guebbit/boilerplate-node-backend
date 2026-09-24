@@ -145,7 +145,7 @@ one-off script under `scripts/ops/`, run through the same wrapper as every sched
 import 'dotenv/config';
 import mongoose from 'mongoose';
 import { start, stopDatabase } from '@infrastructure/runtime/database';
-import { runScript } from '../scripts/db/run-script';
+import { runScript } from '../scripts/run-script';
 
 /** Split `name` into `firstName` / `lastName` on rows written before the split. */
 const main = (): Promise<void> =>
@@ -221,4 +221,4 @@ against a real database — from nothing, against drift, and twice over — and
 | File                        | What it is                                                                                                                                                                                                                                                                                                    | Read next                                      |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
 | `scripts/db/cache-clear.ts` | Drops every cached response belonging to this app — `npm run db:cache:clear`. The API invalidates its own cache on every write it handles, so this is for the writes it did **not** handle: a `scripts/ops/` script, a manual edit, a restored dump.                                                          | [Redis Cache](../tools/redis-cache.md)         |
-| `scripts/db/run-script.ts`  | The entry-point wrapper the one-shot scripts in `scripts/db/` and `scripts/ops/` run through. Gives them the three things a bare promise chain does not: a connection opened and closed around the work, a non-zero exit on failure, and the failure printed rather than swallowed as an unhandled rejection. | [Package Scripts](../tools/package-scripts.md) |
+| `scripts/run-script.ts`     | The entry-point wrapper the one-shot scripts in `scripts/db/` and `scripts/ops/` run through. Gives them the three things a bare promise chain does not: a connection opened and closed around the work, a non-zero exit on failure, and the failure printed rather than swallowed as an unhandled rejection. | [Package Scripts](../tools/package-scripts.md) |

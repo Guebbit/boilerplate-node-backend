@@ -48,7 +48,7 @@ import { userService, type UserDocument } from '@modules/users';
 import { inactivityWarningEmail } from '@modules/account';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { withLease } from '@infrastructure/persistence/lease';
-import { runScript } from '../db/run-script';
+import { runScript } from '../run-script';
 
 /** Fixed pause between stages — not configurable, to keep this script's one dial to a single day count. */
 const GRACE_DAYS = 30;

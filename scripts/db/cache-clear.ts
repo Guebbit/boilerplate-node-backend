@@ -17,7 +17,7 @@
 import 'dotenv/config';
 import { clearCache, stopCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
-import { runScript } from './run-script';
+import { runScript } from '../run-script';
 
 void runScript(
     async () => {

@@ -19,7 +19,7 @@ import 'dotenv/config';
 import mongoose from 'mongoose';
 import { start, connection } from '@infrastructure/runtime/database';
 import { logger } from '@infrastructure/adapters/logger';
-import { runScript } from './run-script';
+import { runScript } from '../run-script';
 import { applyIndexSync, planIndexSync, type IndexDiff } from './index-sync';
 
 /** Report the plan without touching the database. */

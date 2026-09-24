@@ -21,7 +21,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';
 import { logger } from '@infrastructure/adapters/logger';
-import { runScript } from '../db/run-script';
+import { runScript } from '../run-script';
 
 /** Source corpus: real breached passwords, largest list SecLists publishes. */
 const SOURCE_URL =

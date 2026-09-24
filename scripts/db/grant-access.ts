@@ -24,7 +24,7 @@ import { start, stopDatabase } from '@infrastructure/runtime/database';
 import { logger } from '@infrastructure/adapters/logger';
 import type { AuthorizationScope } from '@types';
 import { grantAccess } from './access-grant';
-import { runScript } from './run-script';
+import { runScript } from '../run-script';
 
 /**
  * `node:util`'s own CLI arg parser — https://nodejs.org/api/util.html#utilparseargsconfig. Two

@@ -5,7 +5,7 @@
  * the failure path, and a logged reason. The middle one is load-bearing — without it `scenario:apply`
  * leaves its Mongo and Redis sockets open on a throw, and the process hangs instead of exiting.
  */
-import { runScript } from '../../../../scripts/db/run-script';
+import { runScript } from '../../../scripts/run-script';
 import { logger } from '@infrastructure/adapters/logger';
 
 // Inline `jest.fn()`s rather than outer consts: `jest.mock` is hoisted above the imports, so a

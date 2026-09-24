@@ -132,6 +132,9 @@ RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 #   api/      orval-generated request/response types and zod schemas, imported as @api/*
 #   shared/   EJS email templates (`shared/views/templates-emails`, resolved against the working
 #             directory by `adapters/mailer.ts`) and the contract fragments
+#   scripts/run-script.ts   the entry-point wrapper every script in scripts/db/ and scripts/ops/
+#                 imports as a sibling — has to ship alongside them or their `tsx` run fails to
+#                 resolve it
 #   scripts/db/   the deploy-time scripts — `db:sync`, `access:bootstrap`, `access:grant`.
 #                 Named file by file, not as a directory, so the image carries only what it runs
 #   scripts/ops/  the scheduled `reap:*` jobs, run by a cron container against this image
@@ -140,7 +143,8 @@ RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 COPY --from=build --chown=node:node /app/src ./src
 COPY --from=build --chown=node:node /app/api ./api
 COPY --from=build --chown=node:node /app/shared ./shared
-COPY --from=build --chown=node:node /app/scripts/db/run-script.ts /app/scripts/db/index-sync.ts \
+COPY --from=build --chown=node:node /app/scripts/run-script.ts ./scripts/
+COPY --from=build --chown=node:node /app/scripts/db/index-sync.ts \
     /app/scripts/db/sync-indexes.ts /app/scripts/db/cache-clear.ts \
     /app/scripts/db/bootstrap-access.ts /app/scripts/db/grant-access.ts \
     /app/scripts/db/access-grant.ts ./scripts/db/

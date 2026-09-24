@@ -168,7 +168,7 @@ The three libraries underneath them:
 
 One of the two subtrees that **ship in the production image** — see the intro above. These run
 against a live database from a cron container rather than from a developer's terminal. Each one
-takes the `scripts/db/run-script.ts` wrapper, which gives it an exit code, cleanup on the failure
+takes the `scripts/run-script.ts` wrapper, which gives it an exit code, cleanup on the failure
 path, and a readable error.
 
 | File                                        | What it is                                                                                                                                                                                                                                                                                | Read next                                                       |
