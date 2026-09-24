@@ -42,9 +42,11 @@ process.env.NODE_APP_NO_LISTEN = '1';
  * this makes several hundred requests from one address in seconds. Left alone, the auth rung
  * refuses the shop owner's very first login and the build dies on a 429 that names none of this.
  *
- * Safe because of the production gate below — and because the limiters read `process.env` at
- * request time, so this binds only the app this process is about to boot, for as long as the seed
- * takes. `dotenv/config` above has already run and never overwrites a key that is present.
+ * Safe because of the production gate below — and because `buildRateLimiter` reads `process.env`
+ * once, when the middleware is wired up during the dynamic `import('../src/app')` below, never
+ * per request. Setting these here, before that import ever runs, binds only the app this process
+ * is about to boot, for as long as the seed takes. `dotenv/config` above has already run and
+ * never overwrites a key that is present.
  */
 Object.assign(process.env, SCRIPTED_RATE_LIMITS);
 

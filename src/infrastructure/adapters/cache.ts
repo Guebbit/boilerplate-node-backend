@@ -393,6 +393,9 @@ export const clearCache = (): Promise<ClearCacheResult> =>
             // Stryker disable all
             logger.warn({
                 message: 'Redis cache clear failed.',
+                // Passed raw: `JSON.stringify(new Error())` yields `{}`. This only survives with a
+                // message and stack because `redactFormat` (`adapters/logger.ts`) unpacks it
+                // before winston's `json()` format ever sees it.
                 error
             });
             // Stryker restore all

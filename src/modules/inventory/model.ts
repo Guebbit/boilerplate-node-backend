@@ -111,11 +111,13 @@ export interface StockLevelDocument extends Document {
     onHand: number;
     reserved: number;
     /**
-     * `onHand - reserved`, clamped at zero — stored and kept in step by `applyTransition` rather
-     * than derived at read time, so the stock board's `maxAvailable` narrowing runs against an
-     * indexed column instead of scanning to derive it first: owning the collection is what makes
-     * that free. The board's own tie-break sort still runs over the narrowed set in memory — see
-     * `./repository`'s `stockBoard`.
+     * `onHand - reserved` — kept in step by `applyTransition`'s own `$inc`, never derived or
+     * clamped after the fact: `reserve`'s and `adjust`'s own guard conditions refuse any
+     * transition that would push this below zero, so it can only ever land non-negative. Stored
+     * rather than derived at read time, so the stock board's `maxAvailable` narrowing runs against
+     * an indexed column instead of scanning to derive it first: owning the collection is what
+     * makes that free. The board's own tie-break sort still runs over the narrowed set in memory
+     * — see `./repository`'s `stockBoard`.
      */
     available: number;
     createdAt?: Date;

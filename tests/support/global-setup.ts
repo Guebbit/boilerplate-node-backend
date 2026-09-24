@@ -25,12 +25,13 @@ export interface TestGlobals {
  * 201 MB of RAM apiece, and once it fills, everything on the machine that writes to `/tmp` starts
  * failing with ENOSPC.
  *
- * The fix is ownership, not detection. Each jest instance gets its own directory under the repo,
- * named for its pid, and deletes exactly that directory when it finishes ({@link globalTeardown}).
- * Nothing has to work out whether a directory belongs to a live server, because no instance can
- * see another's. Detecting that instead — parsing `mongod.lock`, probing pids with
- * `process.kill(pid, 0)`, telling EPERM from ESRCH, applying age thresholds — answers a question
- * that does not arise once each run owns its own root.
+ * The fix is ownership, not general detection. Each jest instance gets its own directory under
+ * the repo, named for its pid, and deletes exactly that directory when it finishes
+ * ({@link globalTeardown}). Nothing has to work out WHOSE directory a stray one is, because no
+ * instance can see another's. What ownership leaves is the narrower question {@link isAlive}
+ * answers with a plain `process.kill(pid, 0)`: is the pid a directory is already named for still
+ * running. Parsing `mongod.lock` or applying age thresholds — the harder machinery a shared,
+ * unowned tmp directory would need — never comes up.
  *
  * A SIGKILLed instance still leaves its directory behind. It lands in the repo's gitignored
  * `tmp/test/`, where every mutation entry point (`scripts/mutation/stryker-run.ts`) clears the lot
