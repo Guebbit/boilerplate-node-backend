@@ -11,7 +11,8 @@ import { isDemoMode } from '@infrastructure/runtime/demo-profile';
 import type { CallerContext } from '@types';
 import type { TwoFactorMethodRecord, UserDocument } from '@modules/users';
 import type { TwoFactorDelivery } from '@types';
-import { twoFactorCodeEmail, recipientLocale, sendAccountMail } from '../../emails';
+import { twoFactorCodeEmail, recipientLocale } from '../../emails';
+import { sendAccountMail } from '../../services/mail';
 import type { TwoFactorMethodHandler } from '../registry';
 import {
     armDeliveredCode,

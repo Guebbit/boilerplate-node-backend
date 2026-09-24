@@ -14,9 +14,9 @@ import {
     resetConfirmEmail,
     deleteConfirmEmail,
     emailChangeNoticeEmail,
-    recipientLocale,
-    sendAccountMail
+    recipientLocale
 } from '../emails';
+import { sendAccountMail } from './mail';
 import { sendVerificationEmail, markVerified, EMAIL_CHANGE_TOKEN_TYPE } from './verification';
 import { verifyOwnPassword } from './authentication';
 import { UpdateAccountBody } from '@api/schemas.zod';

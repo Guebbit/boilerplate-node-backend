@@ -18,9 +18,9 @@ import {
     deleteRequestEmail,
     resetRequestEmail,
     setupRequestEmail,
-    recipientLocale,
-    sendAccountMail
+    recipientLocale
 } from '../emails';
+import { sendAccountMail } from './mail';
 import { LoginBody } from '@api/schemas.zod';
 import {
     generateSuccess,

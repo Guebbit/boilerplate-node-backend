@@ -46,6 +46,7 @@ export {
     completeEmailChange
 } from './verification';
 export { runTokenCleanup } from './token-cleanup';
+export { sendAccountMail } from './mail';
 export {
     loginOrCreateFromOAuth,
     recordOAuthFailure,
