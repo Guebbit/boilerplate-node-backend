@@ -5,36 +5,38 @@
  * input", not "does this specific scenario behave correctly". Deterministic tests must keep
  * using the hand-written factories; this is additive.
  *
- * Why an in-repo walker instead of a library (`zod-fixture`, `@anatine/zod-mock`): both lag zod
- * majors, and this project is on zod v4 — a dependency-version-lag risk for ~150 lines of AST
- * walking is not worth taking. `_zod.def` is zod v4's own (typed, public) introspection surface,
- * not an implementation-detail hack — see `node_modules/zod/v4/core/schemas.d.ts`.
- *
- * Why a hand-rolled PRNG instead of `@faker-js/faker`: tried it first. `@faker-js/faker@10` ships
- * ESM-only, and this project's Jest setup (ts-jest, CommonJS `module` target, no
- * `transformIgnorePatterns` override) can't load it — `SyntaxError: Cannot use import statement
- * outside a module`, thrown from inside faker's own entry point. Fixing that means teaching Jest
- * to transform an ESM dependency, a config change with a much larger blast radius than this
- * file's actual requirement, which is only "deterministic, reproducible-by-seed values" — not
- * faker's realism. Mulberry32 below is ~10 lines and has no such problem.
+ * No lib:      why an in-repo walker instead of a library (`zod-fixture`, `@anatine/zod-mock`):
+ *              both lag zod majors, and this project is on zod v4 — a dependency-version-lag risk
+ *              for ~150 lines of AST walking is not worth taking. `_zod.def` is zod v4's own
+ *              (typed, public) introspection surface, not an implementation-detail hack — see
+ *              `node_modules/zod/v4/core/schemas.d.ts`.
+ * No faker:    why a hand-rolled PRNG instead of `@faker-js/faker`: tried it first.
+ *              `@faker-js/faker@10` ships ESM-only, and this project's Jest setup (ts-jest,
+ *              CommonJS `module` target, no `transformIgnorePatterns` override) can't load it —
+ *              `SyntaxError: Cannot use import statement outside a module`, thrown from inside
+ *              faker's own entry point. Fixing that means teaching Jest to transform an ESM
+ *              dependency, a config change with a much larger blast radius than this file's
+ *              actual requirement, which is only "deterministic, reproducible-by-seed values" —
+ *              not faker's realism. Mulberry32 below is ~10 lines and has no such problem.
  *
  * Two entry points:
  *
  *   validPayload(schema)     — a payload that satisfies the schema
  *   invalidPayloads(schema)  — payloads that each violate exactly one constraint
  *
- * Both draw from a PRNG seeded once per process (`RANDOM_DATA_SEED`, or a fresh value printed
- * on first use) — not reseeded per call, so repeated calls in one test file draw
- * different-but-reproducible values (distinct emails, ids, ...) from the same seeded stream.
- *
- * `RANDOM_DATA_SEED` is deliberately the same name the paired frontend reads for its own random
- * mock profile generator, over in `<paired-frontend>`. The two sides keep their own PRNGs
- * — this Mulberry32 against faker's Mersenne Twister — and given one seed they produce unrelated
- * values. That is fine and intended: they generate opposite halves of the same contract (requests
- * here, responses there) from different schema surfaces, so making the streams agree would buy
- * nothing and would couple two independently-correct implementations. What the shared name buys
- * is a shared vocabulary — a seed quoted in a failure report is a number both repos understand
- * how to act on, instead of one that means something in only one of them.
+ * Seeding:     both draw from a PRNG seeded once per process (`RANDOM_DATA_SEED`, or a fresh value
+ *              printed on first use) — not reseeded per call, so repeated calls in one test file
+ *              draw different-but-reproducible values (distinct emails, ids, ...) from the same
+ *              seeded stream.
+ * Shared name: `RANDOM_DATA_SEED` is deliberately the same name the paired frontend reads for its
+ *              own random mock profile generator, over in `<paired-frontend>`. The two sides keep
+ *              their own PRNGs — this Mulberry32 against faker's Mersenne Twister — and given one
+ *              seed they produce unrelated values. That is fine and intended: they generate
+ *              opposite halves of the same contract (requests here, responses there) from
+ *              different schema surfaces, so making the streams agree would buy nothing and would
+ *              couple two independently-correct implementations. What the shared name buys is a
+ *              shared vocabulary — a seed quoted in a failure report is a number both repos
+ *              understand how to act on, instead of one that means something in only one of them.
  */
 import { asStub } from './stub';
 import { sampleForPattern } from './pattern-samples';
