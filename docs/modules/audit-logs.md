@@ -65,6 +65,27 @@ trail — everything one actor did, and everyone who did one thing.
 Field names are `snake_case` here and `camelCase` everywhere else, because an audit row is a log
 record rather than a domain document.
 
+## Offline writes
+
+`bufferCommands: false` on this schema fails a write immediately when Mongo is unreachable,
+instead of queueing it.
+
+Mongoose's default is to BUFFER any operation issued while disconnected and hold it for
+`bufferTimeoutMS` — ten seconds — before rejecting. For every other collection here that is the
+right behaviour: it rides out a reconnect and the request waiting on the answer gets one.
+
+This collection is the exception, because nothing waits on it. `auditLogService.record` is
+fire-and-forget by contract and the audit LOG LINE is the compliance record — the stored copy is
+the queryable convenience on top of it. Buffering cannot save an entry that matters; it only
+converts "not persisted, logged, moved on" into a pending timer per audited request, held for ten
+seconds each, for as long as Mongo is away.
+
+It showed up as a test that would not exit: `tests/integration/locale.test.ts` drives
+`POST /account/signup` and deliberately runs with no database, so every rejected signup emitted
+`auth.signup.failed`, buffered the insert, and left a 10s timer holding the worker's event loop
+open. Jest waited its one second and force-killed the worker — `A worker process has failed to
+exit gracefully` — which names the symptom and not this.
+
 ## The pipeline
 
 The gap in the middle is the design on the write side. No call site imports this module; it
