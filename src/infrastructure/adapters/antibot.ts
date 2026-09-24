@@ -23,8 +23,8 @@ export const isEmailPolicy = (value: string): value is EmailPolicy =>
     value === 'off' || value === 'disposable' || value === 'mx';
 
 /**
- * The active policy, read fresh per call — same arrangement as `payments/config.ts`'s
- * `defaultCurrency`. Exported so `GET /antibot/config` can publish it alongside rung 3's provider.
+ * The active policy, read fresh per call — same arrangement as `orders/config.ts`'s
+ * `shopCurrency`. Exported so `GET /antibot/config` can publish it alongside rung 3's provider.
  *
  * @throws {Error} when the variable names something outside the closed set; silently falling
  *   back to `off` would turn a deployment's typo into an unnoticed loss of protection.

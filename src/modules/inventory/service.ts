@@ -131,8 +131,8 @@ const applyTransition = async (
     if (!(await stockLevelRepository.findByProductId(productId))) {
         /*
          * `release`/`expire`/`commit` read "no row" as "nothing to move", not a failure: a
-         * product's level row is deleted alongside it (see the `PRODUCT_DELETED` listener
-         * below), so a hold still open against a since-deleted line has nowhere left to land.
+         * product's level row is deleted alongside it (see `module.ts`'s `PRODUCT_DELETED`
+         * listener), so a hold still open against a since-deleted line has nowhere left to land.
          * Reporting `true` (moved, trivially) is what lets `releaseForOrder`/`commitForOrder`
          * keep going instead of logging an alarm for counters that no longer exist by design —
          * the sweep must still be able to expire the REST of an order's lines. `receive`/`adjust`
@@ -596,7 +596,7 @@ export const adjust = (
  * A page of the stock board — every product's counters, scarcest first, sorted by what's left
  * rather than name. Paged and sorted inside mongod on `stocklevels` alone; the title each row
  * needs is asked of `productService` AFTER the page is settled, API composition rather than a
- * database join across module boundaries — see `repository.ts`'s `stockBoard` and 1-D1's writeup.
+ * database join across module boundaries — see `repository.ts`'s `stockBoard`.
  * A row whose product `findManyByIds` cannot find falls back to the id itself rather than
  * dropping the row: a hard-deleted product's level row cannot outlive it, so this should be
  * unreachable in practice, and a row a buggy future change left behind is still worth an admin

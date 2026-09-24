@@ -11,8 +11,6 @@
 
 import type { Request, Response } from 'express';
 import type { Caller, CallerContext, TenantCallerContext } from '@types';
-// `ParamsDictionary` is Express' default type for `request.params` (a `Record<string, string>`).
-// Naming it explicitly in generics keeps `request.params.id` typed instead of `any`.
 // i18next translation function — messages are resolved against the request's locale, which the
 // i18next middleware has already set up by the time a controller runs.
 import { t } from '@infrastructure/i18n';

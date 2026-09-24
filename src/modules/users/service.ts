@@ -626,9 +626,9 @@ const markInactivityWarned = (user: UserDocument): Promise<UserDocument> => {
 };
 
 /**
- * Persist a 2FA method array mutated in place — `account/services/two-factor.ts`'s own
- * `saveMethods` calls this as its last step, for every enrollment, confirmation, removal, disable
- * and backup-code action. `markModified` is not belt-and-braces: several of those paths UNSET a
+ * Persist a 2FA method array mutated in place — `account/services/two-factor.ts` calls this
+ * directly as the last step of every enrollment, confirmation, removal, disable and backup-code
+ * action. `markModified` is not belt-and-braces: several of those paths UNSET a
  * field on a subdocument (a spent code, a replaced secret), and Mongoose does not always see a
  * delete inside an array element as a change on its own — the write would silently do nothing.
  * The mutation itself stays `account`'s: this operation only knows "persist whatever changed",
