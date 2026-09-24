@@ -46,9 +46,7 @@ const documentKey = () => fc.string().filter((key) => key !== '__proto__');
  * layered on top so every generated case exercises the rename and the version-key deletion.
  */
 const documentLike = () =>
-    fc
-        .dictionary(documentKey(), fc.jsonValue(), { maxKeys: 8 })
-        .map((body) => ({ ...body }));
+    fc.dictionary(documentKey(), fc.jsonValue(), { maxKeys: 8 }).map((body) => ({ ...body }));
 
 const withReservedFields = () =>
     fc

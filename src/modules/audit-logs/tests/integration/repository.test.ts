@@ -14,16 +14,15 @@ import type { AuditLogDocument } from '@modules/audit-logs/model';
 setupTestDb();
 
 /** A complete entry, shaped exactly as `emitAuditEvent` hands one to the sink. */
-const makeEntry = (overrides: Partial<AuditEntry> = {}): Partial<AuditLogDocument> =>
-    ({
-        actor_user_id: 'user-1',
-        actor_role: 'user',
-        action: coreAuditActions.SECURITY_UNAUTHORIZED,
-        outcome: 'success',
-        timestamp: new Date('2026-08-01T10:00:00.000Z'),
-        level: 'info',
-        ...overrides
-    });
+const makeEntry = (overrides: Partial<AuditEntry> = {}): Partial<AuditLogDocument> => ({
+    actor_user_id: 'user-1',
+    actor_role: 'user',
+    action: coreAuditActions.SECURITY_UNAUTHORIZED,
+    outcome: 'success',
+    timestamp: new Date('2026-08-01T10:00:00.000Z'),
+    level: 'info',
+    ...overrides
+});
 
 /*
  * Every fixture below uses `coreAuditActions`, never a domain's.

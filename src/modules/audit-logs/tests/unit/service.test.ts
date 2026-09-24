@@ -42,16 +42,15 @@ jest.mock('@infrastructure/adapters/logger', () => ({
 const mockedRepository = auditLogRepository as jest.Mocked<typeof auditLogRepository>;
 const mockedLogger = logger as jest.Mocked<typeof logger>;
 
-const makeEntry = (overrides: Partial<AuditEntry> = {}): AuditEntry =>
-    ({
-        actor_user_id: 'user-1',
-        actor_role: 'user',
-        action: 'auth.login',
-        outcome: 'success',
-        timestamp: new Date('2026-08-01T10:00:00.000Z'),
-        level: 'info',
-        ...overrides
-    });
+const makeEntry = (overrides: Partial<AuditEntry> = {}): AuditEntry => ({
+    actor_user_id: 'user-1',
+    actor_role: 'user',
+    action: 'auth.login',
+    outcome: 'success',
+    timestamp: new Date('2026-08-01T10:00:00.000Z'),
+    level: 'info',
+    ...overrides
+});
 
 describe('auditLogService.record', () => {
     it('hands the entry to the repository unchanged', () => {

@@ -57,6 +57,5 @@ export const turnstileProvider: HumanChallengeProvider = {
         siteKey: process.env.NODE_ANTIBOT_TURNSTILE_SITE_KEY ?? '',
         scriptUrl: 'https://challenges.cloudflare.com/turnstile/v0/api.js'
     }),
-    verify: (token, remoteAddress) =>
-        siteverify(token, remoteAddress).catch(() => 'refused')
+    verify: (token, remoteAddress) => siteverify(token, remoteAddress).catch(() => 'refused')
 };

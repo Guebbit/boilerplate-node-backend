@@ -160,7 +160,7 @@ export const indexOptionSpecs = (schema: IntrospectableSchema): string[] =>
  * appear once per assertion.
  */
 export const pathOptions = (schema: IntrospectableSchema, path: string): Record<string, unknown> =>
-    ((schema.path(path) as SchemaPath | undefined)?.options ?? {});
+    (schema.path(path) as SchemaPath | undefined)?.options ?? {};
 
 /** The `default:` declared on a path, or `undefined`. Functions are called, as Mongoose calls them. */
 export const defaultOf = (schema: IntrospectableSchema, path: string): unknown => {
