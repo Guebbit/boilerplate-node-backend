@@ -42,9 +42,9 @@ services:
         # Enviroment variables that get injected into the container at runtime
         # If the .env variable change: a rebuild is necessary to apply the change.
         environment:
-            # The Mongo connection string comes from `.env` (NODE_DB_URI), which already points at
-            # the "database" service hostname. Do not redeclare it here — an entry in this block
-            # shadows `.env` and makes an Atlas/external URI impossible to set without editing compose.
+            # The Mongo connection comes from `.env`: NODE_MONGODB_HOST already names the
+            # "database" service, or NODE_DB_URI when set. Do not redeclare it here — an entry in
+            # this block shadows `.env` and makes an external URI impossible to set without editing compose.
             NODE_ENV: 'development' # Node environment (production or development)
             NODE_REDIS_URL: 'redis://redis:6379'
             NODE_RABBITMQ_URL: 'amqp://guest:guest@rabbitmq:5672'
