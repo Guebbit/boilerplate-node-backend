@@ -11,7 +11,6 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, forceOrderStatus, toOrderItem } from '@modules/orders/tests/factories';
-import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
 import { orderService } from '@modules/orders';
 import { productService } from '@modules/products';
@@ -28,13 +27,7 @@ import {
 import { paymentRepository } from '@modules/payments/repository';
 import { FAKE_DECLINE_METHOD, fakePaymentProvider } from '@modules/payments/providers/fake';
 import paymentsModule from '@modules/payments/module';
-import inventoryModule from '@modules/inventory/module';
-import ordersModule from '@modules/orders/module';
-import productsModule from '@modules/products/module';
-import usersModule from '@modules/users/module';
-import accountModule from '@modules/account/module';
-import cartModule from '@modules/cart/module';
-import deliveryModule from '@modules/delivery/module';
+import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asReject } from '@tests/response';
 import { asCustomer, asAdmin, asModerator, testCallerContext } from '@tests/callers';
 
@@ -288,21 +281,12 @@ describe('getForOrder', () => {
 
 /*
  * The refund rides the ORDER_CANCELLED event, and the subscription only exists once the
- * registry has run — a test that skipped `registerModules` would assert the refund never
+ * registry has run — a test that skipped `registerCheckoutModules` would assert the refund never
  * happens and pass for the wrong reason (same shape as the cart's USER_DELETED suite).
  */
 describe('refund on cancel', () => {
     beforeEach(() => {
-        registerModules([
-            accountModule,
-            deliveryModule,
-            productsModule,
-            usersModule,
-            inventoryModule,
-            ordersModule,
-            cartModule,
-            paymentsModule
-        ]);
+        registerCheckoutModules([paymentsModule]);
     });
 
     afterEach(() => {
@@ -871,16 +855,7 @@ describe('recordOfflinePayment', () => {
 
 describe('recordOfflinePayment — refunding it back', () => {
     beforeEach(() => {
-        registerModules([
-            accountModule,
-            deliveryModule,
-            productsModule,
-            usersModule,
-            inventoryModule,
-            ordersModule,
-            cartModule,
-            paymentsModule
-        ]);
+        registerCheckoutModules([paymentsModule]);
     });
 
     afterEach(() => {

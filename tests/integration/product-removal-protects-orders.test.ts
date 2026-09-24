@@ -9,7 +9,6 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext, asCustomer } from '@tests/callers';
-import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 
@@ -36,14 +35,8 @@ jest.mock('../../src/modules/orders/services/invoice', () => ({
  * already landed before a case clears or asserts on the mock. */
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
-import productsModule from '@modules/products/module';
-import inventoryModule from '@modules/inventory/module';
-import ordersModule from '@modules/orders/module';
 import paymentsModule from '@modules/payments/module';
-import cartModule from '@modules/cart/module';
-import deliveryModule from '@modules/delivery/module';
-import accountModule from '@modules/account/module';
-import usersModule from '@modules/users/module';
+import { registerCheckoutModules } from '@tests/checkout-modules';
 
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, readProduct } from '@modules/products/tests/factories';
@@ -58,16 +51,7 @@ import type { ResponseReject } from '@infrastructure/http/response';
 setupTestDb();
 
 beforeEach(() => {
-    registerModules([
-        accountModule,
-        usersModule,
-        deliveryModule,
-        productsModule,
-        inventoryModule,
-        ordersModule,
-        paymentsModule,
-        cartModule
-    ]);
+    registerCheckoutModules([paymentsModule]);
     mockEnqueueEmail.mockClear();
 });
 

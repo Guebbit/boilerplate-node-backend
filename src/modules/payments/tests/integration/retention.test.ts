@@ -11,7 +11,6 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
-import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
 import { detachOrderUserId } from '@modules/orders/tests/factories';
 import { createIntent, confirmPayment, reapAbandonedPayments } from '@modules/payments/services';
@@ -19,13 +18,7 @@ import { paymentRepository } from '@modules/payments/repository';
 import { paymentModel } from '@modules/payments/model';
 import { userService } from '@modules/users';
 import paymentsModule from '@modules/payments/module';
-import inventoryModule from '@modules/inventory/module';
-import ordersModule from '@modules/orders/module';
-import productsModule from '@modules/products/module';
-import usersModule from '@modules/users/module';
-import accountModule from '@modules/account/module';
-import cartModule from '@modules/cart/module';
-import deliveryModule from '@modules/delivery/module';
+import { registerCheckoutModules } from '@tests/checkout-modules';
 import type { ResponseSuccess } from '@infrastructure/http/response';
 import type { Payment } from '@types';
 import { asCustomer, asAdmin, testCallerContext } from '@tests/callers';
@@ -34,16 +27,7 @@ setupTestDb();
 
 describe('payments — detach on account erasure', () => {
     beforeEach(() => {
-        registerModules([
-            accountModule,
-            deliveryModule,
-            productsModule,
-            usersModule,
-            inventoryModule,
-            ordersModule,
-            paymentsModule,
-            cartModule
-        ]);
+        registerCheckoutModules([paymentsModule]);
     });
 
     afterEach(() => {
@@ -99,16 +83,7 @@ describe('payments — reapAbandonedPayments (reap-payments sweep)', () => {
     const originalRetention = process.env.NODE_PAYMENT_ABANDONED_RETENTION_DAYS;
 
     beforeEach(() => {
-        registerModules([
-            accountModule,
-            deliveryModule,
-            productsModule,
-            usersModule,
-            inventoryModule,
-            ordersModule,
-            paymentsModule,
-            cartModule
-        ]);
+        registerCheckoutModules([paymentsModule]);
     });
 
     afterEach(() => {

@@ -59,12 +59,7 @@ import { resetDomainEvents, emitDomainEvent } from '@kernel/events';
 import { PRODUCT_DELETED } from '@modules/products';
 import { logger } from '@infrastructure/adapters/logger';
 import cartModule from '@modules/cart/module';
-import inventoryModule from '@modules/inventory/module';
-import productsModule from '@modules/products/module';
-import usersModule from '@modules/users/module';
-import ordersModule from '@modules/orders/module';
-import accountModule from '@modules/account/module';
-import deliveryModule from '@modules/delivery/module';
+import { registerCheckoutModules } from '@tests/checkout-modules';
 import { countOrders, findOrder } from '@modules/orders/tests/factories';
 import { productService } from '@modules/products';
 import { asReject } from '@tests/response';
@@ -1091,15 +1086,7 @@ describe('productRemoveFromCartsById', () => {
  */
 describe('cartDeleteByUserId', () => {
     beforeEach(() => {
-        registerModules([
-            accountModule,
-            deliveryModule,
-            productsModule,
-            usersModule,
-            inventoryModule,
-            ordersModule,
-            cartModule
-        ]);
+        registerCheckoutModules();
     });
 
     afterEach(() => {

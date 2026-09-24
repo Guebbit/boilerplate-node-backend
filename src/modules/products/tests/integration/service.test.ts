@@ -14,15 +14,8 @@ import { productRepository } from '../../repository';
 import type { ResponseReject } from '@infrastructure/http/response';
 import type { ProductDocument } from '../../model';
 import type { Caller } from '@types';
-import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
-import productsModule from '@modules/products/module';
-import inventoryModule from '@modules/inventory/module';
-import cartModule from '@modules/cart/module';
-import deliveryModule from '@modules/delivery/module';
-import accountModule from '@modules/account/module';
-import usersModule from '@modules/users/module';
-import ordersModule from '@modules/orders/module';
+import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asCustomer, asAdmin, testCallerContext } from '@tests/callers';
 
 /**
@@ -584,15 +577,7 @@ describe('productService.removeById', () => {
      * exist, so a test that skipped this would pass for the wrong reason.
      */
     it('hard-deletes the product and removes it from all carts', async () => {
-        registerModules([
-            accountModule,
-            deliveryModule,
-            productsModule,
-            usersModule,
-            inventoryModule,
-            ordersModule,
-            cartModule
-        ]);
+        registerCheckoutModules();
 
         const product = await createProduct({ active: true });
         const pid = product._id.toString();

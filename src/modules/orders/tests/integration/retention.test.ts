@@ -13,15 +13,8 @@ import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { orderRepository } from '../../repository';
 import { orderService } from '@modules/orders/services';
 import { userService } from '@modules/users';
-import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
-import ordersModule from '@modules/orders/module';
-import inventoryModule from '@modules/inventory/module';
-import productsModule from '@modules/products/module';
-import usersModule from '@modules/users/module';
-import accountModule from '@modules/account/module';
-import cartModule from '@modules/cart/module';
-import deliveryModule from '@modules/delivery/module';
+import { registerCheckoutModules } from '@tests/checkout-modules';
 
 setupTestDb();
 
@@ -29,15 +22,7 @@ describe('orders — detach on account erasure', () => {
     const originalRetention = process.env.NODE_ORDER_PII_RETENTION_DAYS;
 
     beforeEach(() => {
-        registerModules([
-            accountModule,
-            deliveryModule,
-            productsModule,
-            usersModule,
-            inventoryModule,
-            ordersModule,
-            cartModule
-        ]);
+        registerCheckoutModules();
     });
 
     afterEach(() => {

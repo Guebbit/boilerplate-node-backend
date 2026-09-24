@@ -18,16 +18,9 @@ import { orderRepository, readOrder } from '@modules/orders/tests/factories';
 import { inventoryService } from '@modules/inventory';
 import { cartRepository } from '@modules/cart/repository';
 import { logger } from '@infrastructure/adapters/logger';
-import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
-import inventoryModule from '@modules/inventory/module';
-import ordersModule from '@modules/orders/module';
 import paymentsModule from '@modules/payments/module';
-import productsModule from '@modules/products/module';
-import usersModule from '@modules/users/module';
-import accountModule from '@modules/account/module';
-import cartModule from '@modules/cart/module';
-import deliveryModule from '@modules/delivery/module';
+import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asCustomer, testCallerContext } from '@tests/callers';
 
 setupTestDb();
@@ -40,16 +33,7 @@ setupTestDb();
  */
 beforeEach(() => {
     resetDomainEvents();
-    registerModules([
-        accountModule,
-        cartModule,
-        deliveryModule,
-        inventoryModule,
-        ordersModule,
-        paymentsModule,
-        productsModule,
-        usersModule
-    ]);
+    registerCheckoutModules([paymentsModule]);
 });
 
 /** Both counters and the number derived from them — what every assertion here reads. */
