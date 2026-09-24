@@ -17,7 +17,7 @@ Asserts the **content** of `APP_NON_MODULE_CHECKS` — the app-tier boot-time en
 - **`assertApp()`** — calls `assertRequiredConfig([], APP_NON_MODULE_CHECKS)` exactly as `src/app.ts` wires it.
 - **`withoutEnvironmentInThisFile([...])`** — registered once at module top; clears the listed `NODE_*` vars in a `beforeEach` so tests are isolated from the host environment.
 - **`afterEach`** — disables the demo profile and calls `resetAnalyticsProvider()` to prevent a memoised provider from leaking between tests.
-- **Three `describe` blocks** — _application-wide variables_ (NODE_URL, NODE_CORS_ORIGIN), _the SMTP group_ (host/credentials/sender), _the provider-selector group_ (NODE_ANALYTICS_PROVIDER, NODE_MAIL_TRANSPORT, NODE_LOG_PERSONAL_FIELDS).
+- **Three `describe` blocks** — _application-wide variables_ (NODE*URL, NODE_CORS_ORIGIN), \_the SMTP group* (host/credentials/sender), _the provider-selector group_ (NODE_ANALYTICS_PROVIDER, NODE_MAIL_TRANSPORT, NODE_LOG_PERSONAL_FIELDS).
 
 ## Relationships
 
