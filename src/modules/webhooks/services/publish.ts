@@ -9,8 +9,8 @@
  * The queue publish is fire-and-forget from here on purpose: when it fails (no broker configured,
  * or a publish error), the row it already wrote stays `pending` and `scripts/ops/sweep-webhook-retries.ts`
  * picks it up on its next pass — never lost, at worst delayed to the sweep interval. That is the
- * same "degrades to queued rather than to lost" story the delayed-retry decision
- * already accepts for a mid-chain retry, just reached one step earlier.
+ * same "degrades to queued rather than to lost" story `./attempt.ts`'s `recordFailure` already
+ * accepts for a mid-chain retry, just reached one step earlier.
  */
 
 import { randomUUID } from 'node:crypto';
