@@ -15,7 +15,6 @@ startTracing();
 import 'dotenv/config';
 import express from 'express';
 import type { Server } from 'node:http';
-import i18next from 'i18next';
 import mongoose from 'mongoose';
 import { start } from '@infrastructure/runtime/database';
 import { startCache } from '@infrastructure/adapters/cache';
@@ -25,15 +24,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import { registerValidationMessages } from '@infrastructure/http/validation-messages';
 import { shutdownInfra, registerSignalHandlers } from '@infrastructure/runtime/server-lifecycle';
-import {
-    getDefaultLocale,
-    getFallbackLocale,
-    listSupportedLocales,
-    loadLocaleResources,
-    refreshLocaleOverrides,
-    registerLocaleDirectories,
-    startLocaleOverrideRefresh
-} from '@infrastructure/i18n';
+import { bootI18n, refreshLocaleOverrides, startLocaleOverrideRefresh } from '@infrastructure/i18n';
 
 import {
     registerModules,
@@ -93,25 +84,16 @@ export const bootInfrastructure = () => {
             .then(() => startCache())
             .then(() => startQueue())
             .then(() => registerWorkers())
-            .then(() => {
-                // Modules carry their own copy, so deleting one deletes its strings. `infrastructure` sits
-                // below every module and cannot go looking for them, so the paths are handed in —
-                // and they must be handed in BEFORE `init`, which reads the merged result.
-                registerLocaleDirectories(
+            .then(() =>
+                // Modules carry their own copy, so deleting one deletes its strings. `infrastructure`
+                // sits below every module and cannot go looking for them, so the paths are handed in.
+                // Every dictionary in src/locales is registered, so dropping in a file is the only
+                // step needed to add a language — the middleware negotiates against the same list.
+                bootI18n(
                     enabledModules
                         .map((appModule) => appModule.locales)
                         .filter((directory) => directory !== undefined)
-                );
-            })
-            .then(() =>
-                // Every dictionary in src/locales is registered, so dropping in a file is the only
-                // step needed to add a language — the middleware negotiates against the same list.
-                i18next.init({
-                    lng: getDefaultLocale(),
-                    fallbackLng: getFallbackLocale(),
-                    supportedLngs: listSupportedLocales(),
-                    resources: loadLocaleResources()
-                })
+                )
             )
             /*
              * Layer whatever has been edited on top of the files just loaded, then keep doing it.

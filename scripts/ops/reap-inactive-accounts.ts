@@ -37,18 +37,11 @@
  * See: docs/reference/ops.md
  */
 import 'dotenv/config';
-import i18next from 'i18next';
 import { logger } from '@infrastructure/adapters/logger';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import { start, stopDatabase } from '@infrastructure/runtime/database';
 import { stopQueue } from '@infrastructure/adapters/queue';
-import {
-    getDefaultLocale,
-    getFallbackLocale,
-    listSupportedLocales,
-    loadLocaleResources,
-    registerLocaleDirectories
-} from '@infrastructure/i18n';
+import { bootI18n, getDefaultLocale } from '@infrastructure/i18n';
 import { registerModules } from '@kernel/registry';
 import { enabledModules } from '../../src/modules';
 import { userService, type UserDocument } from '@modules/users';
@@ -75,23 +68,16 @@ const daysAgo = (days: number): Date => new Date(Date.now() - days * 24 * 60 * 6
 
 /**
  * Bring up just enough of the app's own boot sequence (`app.ts`'s `startServer`) to render
- * translated email copy outside the HTTP process: module locale directories, then `i18next.init`.
- * Nothing else `startServer` does (cache, queue readiness, route mounting) is this script's
- * concern.
+ * translated email copy outside the HTTP process: `bootI18n` with the enabled modules' locale
+ * directories. Nothing else `startServer` does (cache, queue readiness, route mounting) is this
+ * script's concern.
  */
-const initI18n = (): Promise<unknown> => {
-    registerLocaleDirectories(
+const initI18n = (): Promise<unknown> =>
+    bootI18n(
         enabledModules
             .map((appModule) => appModule.locales)
             .filter((directory) => directory !== undefined)
     );
-    return i18next.init({
-        lng: getDefaultLocale(),
-        fallbackLng: getFallbackLocale(),
-        supportedLngs: listSupportedLocales(),
-        resources: loadLocaleResources()
-    });
-};
 
 /** Stage one: warn, and stamp so this account is not warned twice. */
 const warn = (user: UserDocument): Promise<void> => {

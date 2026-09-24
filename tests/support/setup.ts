@@ -13,13 +13,7 @@
  */
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
-import i18next from 'i18next';
-import {
-    getFallbackLocale,
-    listSupportedLocales,
-    loadLocaleResources,
-    registerLocaleDirectories
-} from '@infrastructure/i18n';
+import { bootI18n } from '@infrastructure/i18n';
 import { registerValidationMessages } from '@infrastructure/http/validation-messages';
 
 /**
@@ -258,18 +252,12 @@ process.env.NODE_SMTP_HOST ??= 'smtp.test.invalid';
  * import knows the whole application.
  */
 const MODULES_ROOT = path.join(__dirname, '../../src/modules');
-registerLocaleDirectories(
+void bootI18n(
     readdirSync(MODULES_ROOT)
         .map((name) => path.join(MODULES_ROOT, name, 'locales'))
-        .filter((directory) => existsSync(directory))
+        .filter((directory) => existsSync(directory)),
+    'en'
 );
-
-void i18next.init({
-    lng: 'en',
-    fallbackLng: getFallbackLocale(),
-    supportedLngs: listSupportedLocales(),
-    resources: loadLocaleResources()
-});
 
 /*
  * The other half of `app.ts`'s boot: without it, Zod answers its own English here and the suite
