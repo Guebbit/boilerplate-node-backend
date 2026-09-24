@@ -1,33 +1,19 @@
 /**
  * @module
  * Admin read controller — every language a product has, for the editor's form to populate its
- * tabs. Not `createItemController`: that factory names its handler `get<Entity>Item`, which does
- * not fit this operation's own name, but the CastError-to-404 handling below matches it exactly.
- * A `CastError` on `id` reads as 404 rather than the 422 `databaseErrorInterpreter` would
- * otherwise answer — the same choice `get-product-item.ts` makes, for the same reason: a
- * malformed id and an unknown one look identical from outside. `rejectDatabaseError`'s own 422
- * still applies to anything else the interpreter recognises, e.g. a `BSONError` — which is why
- * the contract still declares it.
+ * tabs. Built on `createItemController` with `handlerSuffix: 'Admin'`, since the factory's default
+ * (`get<Entity>Item`) would collide with `get-product-item.ts`'s own handler on the same entity.
+ * The CastError-to-404 handling this needed — a malformed id and an unknown one look identical
+ * from outside — is the factory's own default behaviour, so nothing extra is needed here.
  */
 
-import type { Request, Response } from 'express';
-import { t } from '@infrastructure/i18n';
 import { productService } from '../service';
-import { rejectResponse, successResponse } from '@infrastructure/http/response';
-import { catchAsNotFound } from '@infrastructure/http/controller';
-import type { ProductAdmin } from '@types';
+import { createItemController } from '@infrastructure/surfaces/create-item-controller';
 
-/** GET /products/:id/admin — a product with every language it has a row for. */
-export const getProductAdmin = (request: Request, response: Response) =>
-    productService
-        .getAdmin(String(request.params.id))
-        .then((product) => {
-            if (!product) {
-                rejectResponse(response, 404, [t('products.not-found')]);
-                return;
-            }
-            successResponse<ProductAdmin>(response, product);
-        })
-        // A malformed id reaches Mongoose as a CastError rather than a miss — the same 404 a
-        // well-formed unknown id gets, since this route offers no 422 to fall back on.
-        .catch(catchAsNotFound(response, 'getProductAdmin', 'products.not-found'));
+/** GET /products/:id/admin — a product with every language it has a row for, admin only. */
+export const getProductAdmin = createItemController({
+    entity: 'product',
+    notFoundKey: 'products.not-found',
+    handlerSuffix: 'Admin',
+    fetch: (id) => productService.getAdmin(id)
+});
