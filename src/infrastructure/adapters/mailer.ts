@@ -20,12 +20,8 @@ import {
 } from 'nodemailer';
 // OTel semantic-convention keys for messaging spans — using the standard names lets tracing
 // backends render this as a messaging operation instead of an opaque span. Still incubating,
-// hence the `/incubating` subpath: the older `SEMATTRS_*` aliases are deprecated, and
-// `SEMATTRS_MESSAGING_DESTINATION` moved from `messaging.destination` to `.destination.name`.
-import {
-    ATTR_MESSAGING_SYSTEM,
-    ATTR_MESSAGING_DESTINATION_NAME
-} from '@opentelemetry/semantic-conventions/incubating';
+// hence the `/incubating` subpath: the older `SEMATTRS_*` aliases are deprecated.
+import { ATTR_MESSAGING_SYSTEM } from '@opentelemetry/semantic-conventions/incubating';
 import type { EmailJobPayload } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import { environmentNumber, environmentChoice } from '@infrastructure/runtime/environment';
@@ -92,13 +88,21 @@ const MAIL_TRANSPORTS: readonly MailTransport[] = ['smtp', 'log', 'outbox'];
  * Below those, `NODE_MAIL_TRANSPORT` decides, and SMTP is what a deployment that says nothing
  * gets — the behaviour every existing caller already had.
  *
- * @throws {Error} when it is set to something none of the three transports recognise
+ * @throws {Error} when it is set to something none of the three transports recognise, or to
+ *   `outbox` in production
  */
 export const resolveMailTransport = (): MailTransport => {
     if (isDemoMode()) return 'outbox';
     if (process.env.NODE_ENV === 'test') return 'log';
 
-    return environmentChoice('NODE_MAIL_TRANSPORT', MAIL_TRANSPORTS, 'smtp');
+    const named = environmentChoice('NODE_MAIL_TRANSPORT', MAIL_TRANSPORTS, 'smtp');
+    // The outbox sends nothing and keeps every message, reset tokens included, in memory for
+    // good. In a deployment that is silent non-delivery, so the boot gate refuses it.
+    if (named === 'outbox' && process.env.NODE_ENV === 'production')
+        throw new Error(
+            'NODE_MAIL_TRANSPORT=outbox sends no mail and is for the demo profile only; use smtp in production.'
+        );
+    return named;
 };
 
 /**
@@ -133,8 +137,7 @@ export const resetTransporter = (): void => {
 };
 
 /**
- * The transport, built on first use and reused: nodemailer pools connections, so a per-email
- * transport would pay the TCP + TLS + AUTH handshake every time. LAZY rather than module-scope,
+ * The transport, built on first use and reused rather than rebuilt per email. LAZY rather than module-scope,
  * so the environment is read when first needed, not frozen at import — which is also what lets
  * {@link resetTransporter} hand a suite a fresh one after it varies the configuration.
  *
@@ -168,6 +171,11 @@ const getTransporter = (): Transporter => {
                   // STARTTLS. Compared as a NUMBER, so a zero-padded `0465` cannot read as "not
                   // 465" and open a plaintext connection to a port expecting TLS immediately.
                   secure: port === 465,
+                  // On 587, refuse to go on without STARTTLS. nodemailer otherwise upgrades only
+                  // when the server advertises it, so an attacker who strips the advertisement
+                  // gets the AUTH credentials in cleartext.
+                  // https://nodemailer.com/smtp/#tls-options
+                  requireTLS: port === 587,
                   // SMTP AUTH credentials. Empty strings when unset, in which case nodemailer
                   // attempts an unauthenticated send and the server rejects it — the failure
                   // surfaces at send time, not at boot, because email is not a hard startup
@@ -257,14 +265,12 @@ export const sendTemplatedEmail = (
     // Wrap the entire email operation in an OTel span to track latency and failures.
     return withSpan('email.send', (span) => {
         // Span attributes = searchable/filterable dimensions on the trace. These let you ask
-        // "which template is slowest?" or "which recipients failed?" in the tracing backend.
+        // "which template is slowest?" in the tracing backend. Never the recipient: a trace
+        // backend applies none of the logger's personal-field redaction.
         span.setAttributes({
             // `messaging.system` — the transport being used. Standard key, so backends group
             // this alongside other messaging spans.
             [ATTR_MESSAGING_SYSTEM]: 'smtp',
-            // `messaging.destination.name` — the recipient. `to` is a plain required string
-            // on the contract's own `request` shape, unlike nodemailer's own wider type.
-            [ATTR_MESSAGING_DESTINATION_NAME]: envelope.to,
             // Custom attribute: email template used to render the body.
             'email.template': templateName
         });
@@ -305,7 +311,7 @@ export const sendTemplatedEmail = (
                     // `messageId` is the SMTP server's identifier — the handle you need to trace
                     // a specific email through mail-server logs or a provider dashboard.
                     // Stryker disable next-line all
-                    logger.info('Message sent: %s', info.messageId);
+                    logger.info({ message: 'Message sent.', messageId: info.messageId });
                     return info;
                 })
             // No .catch(): a rejection propagates so `withSpan` can mark the span as errored
@@ -402,7 +408,8 @@ export const enqueueEmail = (
         // Stryker disable all
         logger.debug({
             message: 'Email job enqueued.',
-            to: request.to,
+            // Under `email`, the key the logger's personal-field mode hashes or redacts.
+            email: request.to,
             template: templateName
         });
         // Stryker restore all
@@ -417,7 +424,8 @@ export const enqueueEmail = (
         logger.error({
             message: 'Email dispatch failed; the message was not delivered.',
             template: templateName,
-            to: request.to,
+            // Under `email`, the key the logger's personal-field mode hashes or redacts.
+            email: request.to,
             error
         });
     });

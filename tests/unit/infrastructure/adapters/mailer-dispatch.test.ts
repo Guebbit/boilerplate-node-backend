@@ -212,7 +212,7 @@ describe('enqueueEmail — a publish that rejects instead of answering false', (
 
         expect(sendMailMock).not.toHaveBeenCalled();
         expect(loggerMock.error).toHaveBeenCalledWith(
-            expect.objectContaining({ template: TEMPLATE, to: REQUEST.to })
+            expect.objectContaining({ template: TEMPLATE, email: REQUEST.to })
         );
     });
 });
@@ -266,7 +266,7 @@ describe('enqueueEmail — the inline paths discard their own attachment', () =>
 
         await expect(fileExists(path.join(spoolRoot, key))).resolves.toBe(false);
         expect(loggerMock.error).toHaveBeenCalledWith(
-            expect.objectContaining({ template: TEMPLATE, to: REQUEST.to })
+            expect.objectContaining({ template: TEMPLATE, email: REQUEST.to })
         );
     });
 

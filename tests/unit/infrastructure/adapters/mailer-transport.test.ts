@@ -109,6 +109,14 @@ describe('TLS mode follows the port, which is a security decision', () => {
         expect(options.secure).toBe(false);
     });
 
+    it('refuses to send on 587 unless the connection upgrades to TLS', async () => {
+        // Without it, an attacker who strips the server's STARTTLS advertisement receives the
+        // AUTH credentials in cleartext.
+        const options = await transportOptions({ ...SMTP_ENVIRONMENT, NODE_SMTP_PORT: '587' });
+
+        expect(options.requireTLS).toBe(true);
+    });
+
     it('does not use implicit TLS on any other port', async () => {
         const options = await transportOptions({
             ...SMTP_ENVIRONMENT,
@@ -204,6 +212,13 @@ describe('resolveMailTransport', () => {
         enableDemoProfile();
 
         expect(resolveMailTransport()).toBe('outbox');
+    });
+
+    it('refuses the outbox in production, where it would silently send nothing', () => {
+        process.env.NODE_ENV = 'production';
+        process.env.NODE_MAIL_TRANSPORT = 'outbox';
+
+        expect(() => resolveMailTransport()).toThrow(/demo profile only/);
     });
 
     it('refuses to let a test run reach a real mail server', () => {
