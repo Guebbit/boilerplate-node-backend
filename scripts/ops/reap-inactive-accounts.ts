@@ -29,7 +29,7 @@
  *
  * Meant to run periodically (the same cron container that runs `reap:quarantine` and
  * `reap:orders`), never on every boot. Guarded by `withLease` — the one job wired to the
- * primitive today, since a double-run here is the most expensive of the five.
+ * primitive today, since a double-run here is the most expensive of the nightly jobs.
  *
  * Removal: owned by `account` — deletes with the module, along with the `reap:inactive-accounts`
  * npm script and its `docker/crontab` line.
@@ -55,7 +55,7 @@ const GRACE_DAYS = 30;
 
 /**
  * Reference implementation for `withLease` — see `docs/reference/ops.md#scheduled-jobs`. Picked
- * for this because a double-run here is the most expensive of the five nightly jobs: it hard-
+ * for this because a double-run here is the most expensive of the nightly jobs: it hard-
  * deletes accounts, not just files or already-settled rows.
  *
  * Generous relative to a normal run (email enqueues, then a handful of Mongo writes per stage):

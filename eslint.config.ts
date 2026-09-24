@@ -206,7 +206,8 @@ export default tseslint.config(
              *                        CommonJS, so `import.meta.dirname` would be `undefined` at
              *                        runtime. Fifty findings, every one a rename into a crash.
              *
-             * A rule that needs six exemptions is not catching bugs, it is collecting signatures.
+             * A rule that needs this many exemptions is not catching bugs, it is collecting
+             * signatures.
              */
             'unicorn/no-null': 'off',
             'unicorn/no-useless-undefined': 'off',
@@ -417,7 +418,7 @@ export default tseslint.config(
     },
 
     /**
-     * The two project-local rules — defined in `scripts/eslint/`, unit-tested in
+     * The project-local rule — defined in `scripts/eslint/`, unit-tested in
      * `tests/unit/scripts/eslint/` — plus the try/catch restriction.
      *
      * Scoped to `src/`, deliberately: a test asserting what the reject envelope does with a
@@ -487,7 +488,8 @@ export default tseslint.config(
              * checks here are about truth, not presence:
              *
              * Not set:                    `require-param`, `require-returns` — they would demand
-             *                             1,057 rows that mostly restate a typed signature.
+             *                             a row per parameter across the codebase, mostly
+             *                             restating a typed signature.
              * disableMissingParamChecks:  document the one parameter that needs a word, skip the
              *                             three that do not — but never name one that is not there.
              * checkDestructured: false:   an options bag is documented on its interface, not one
