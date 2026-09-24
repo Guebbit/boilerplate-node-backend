@@ -26,6 +26,15 @@ const configure = (): void => {
 
 afterEach(() => enableDemoProfile(false));
 
+/** One module requiring `SECRET`, at least 16 characters, not the shipped placeholder. */
+const SECRET_MODULE: AppModule[] = [
+    {
+        name: 'demo',
+        requiredConfig: [{ key: 'SECRET', minLength: 16, placeholder: 'change-me' }],
+        personalData: 'none'
+    }
+];
+
 describe('module-declared variables', () => {
     it('names a variable still set to its shipped placeholder', () => {
         configure();
@@ -92,6 +101,20 @@ describe('module-declared variables', () => {
         ];
 
         expect(() => assertRequiredConfig(modules)).not.toThrow();
+    });
+
+    it('reads a trailing comma as a typo, not as an empty member', () => {
+        configure();
+        process.env.SECRET = 'a-real-secret-value,';
+
+        expect(() => assertRequiredConfig(SECRET_MODULE)).not.toThrow();
+    });
+
+    it('still refuses a value that is nothing but commas', () => {
+        configure();
+        process.env.SECRET = ',,';
+
+        expect(() => assertRequiredConfig(SECRET_MODULE)).toThrow(/SECRET/);
     });
 });
 

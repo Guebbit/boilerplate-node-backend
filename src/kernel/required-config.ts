@@ -63,8 +63,13 @@ const applies = ({ productionOnly }: RequiredConfig): boolean =>
  * anywhere in the ring — not just its first entry — still refuses to boot.
  */
 const fails = ({ key, minLength, placeholder }: RequiredConfig): boolean => {
-    const value = process.env[key] ?? '';
-    return value.split(',').some((member) => member.length < minLength || member === placeholder);
+    // Blank members dropped, the way every reader of a list value drops them (`app/security.ts`'s
+    // CORS origins): a trailing comma is a typo, not a missing value. An empty list still fails.
+    const members = (process.env[key] ?? '').split(',').filter((member) => member.trim() !== '');
+    return (
+        members.length === 0 ||
+        members.some((member) => member.length < minLength || member === placeholder)
+    );
 };
 
 /**
