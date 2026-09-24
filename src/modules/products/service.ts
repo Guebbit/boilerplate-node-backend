@@ -105,7 +105,7 @@ export const callerScope = (context?: AuthContext) => accessibleFilter(context, 
  * @param filters - id, text, minPrice, maxPrice, page (1-based), pageSize
  * @param scope - which rows this caller may read ({@link callerScope})
  */
-export const search = async (
+export const search = (
     filters: SearchProductsRequest = {},
     scope?: Record<string, unknown>
 ): Promise<{
@@ -116,16 +116,17 @@ export const search = async (
 
     // No free-text term: `category`/`tag`/`minPrice`/`maxPrice`/`active` still apply as declared
     // on the repository, unioning nothing.
-    const result = pattern
-        ? await searchWithTranslatedText(filters, scope, pattern)
-        : await productRepository.search(filters, scope);
+    const resultPromise = pattern
+        ? searchWithTranslatedText(filters, scope, pattern)
+        : productRepository.search(filters, scope);
 
     // `.search()` already normalized every item (`_id` → `id`, dates to ISO strings), so this
     // overlays the caller's locale on top of an already wire-shaped page — one batched query,
     // never one per item. A no-op when nothing is registered or no row matches, which is why
     // this can sit in the base function rather than only in the viewed wrapper below.
-    const items = await applyTranslations('product', result.items);
-    return { ...result, items };
+    return resultPromise.then((result) =>
+        applyTranslations('product', result.items).then((items) => ({ ...result, items }))
+    );
 };
 
 /**
@@ -135,7 +136,7 @@ export const search = async (
  * `text`/`title` are stripped before `buildWhere` runs a second time — `where.$or` below already
  * carries the product's own match, and leaving them in would AND a second, redundant one in.
  */
-const searchWithTranslatedText = async (
+const searchWithTranslatedText = (
     filters: SearchProductsRequest,
     scope: Record<string, unknown> | undefined,
     pattern: string
@@ -144,19 +145,18 @@ const searchWithTranslatedText = async (
     const ownMatch = productRepository.buildWhere({ text, title });
 
     const candidates = localeCandidatesFor(getCurrentLocale());
-    const translatedIds = await searchTranslatedEntityIds(
-        'product',
-        TRANSLATABLE_SEARCH_FIELDS,
-        pattern,
-        candidates
+    return searchTranslatedEntityIds('product', TRANSLATABLE_SEARCH_FIELDS, pattern, candidates).then(
+        (translatedIds) => {
+            const union =
+                translatedIds.length === 0
+                    ? ownMatch
+                    : {
+                          $or: [ownMatch, { _id: { $in: translatedIds.map((id) => toObjectId(id)) } }]
+                      };
+
+            return productRepository.search(rest, { ...scope, ...union });
+        }
     );
-
-    const union =
-        translatedIds.length === 0
-            ? ownMatch
-            : { $or: [ownMatch, { _id: { $in: translatedIds.map((id) => toObjectId(id)) } }] };
-
-    return productRepository.search(rest, { ...scope, ...union });
 };
 
 /**
@@ -197,20 +197,22 @@ export const searchViewed = (
  *
  * @param scope - which rows this caller may read ({@link callerScope})
  */
-export const getById = async (
+export const getById = (
     id: string | undefined,
     scope?: Record<string, unknown>
 ): Promise<Product | null | undefined> => {
     // Return early without triggering a DB call when no id is provided
-    if (!id) return undefined;
+    if (!id) return Promise.resolve(undefined);
 
-    const product = await productRepository.findByIdScoped(id, scope);
-    if (!product) return product;
+    return productRepository.findByIdScoped(id, scope).then((product) => {
+        if (!product) return product;
 
-    // A single `as` narrows a cast the compiler cannot see through: `toJSON()`'s return type is
-    // the schema's own `Document['toJSON']` overload, not this module's wire type.
-    const [resolved] = await applyTranslations('product', [product.toJSON() as Product]);
-    return resolved;
+        // A single `as` narrows a cast the compiler cannot see through: `toJSON()`'s return type is
+        // the schema's own `Document['toJSON']` overload, not this module's wire type.
+        return applyTranslations('product', [product.toJSON() as Product]).then(
+            ([resolved]) => resolved
+        );
+    });
 };
 
 /**
@@ -506,23 +508,25 @@ export const writeUpdate = async (
  * form to populate its tabs. Unscoped (the route is admin-only) and never resolved to one
  * language, unlike {@link getById}.
  */
-export const getAdmin = async (id: string): Promise<ProductAdmin | null> => {
-    const product = await productRepository.findById(id);
-    if (!product) return null;
+export const getAdmin = (id: string): Promise<ProductAdmin | null> =>
+    productRepository.findById(id).then((product) => {
+        if (!product) return null;
 
-    const rows = await readAllTranslations('product', id);
-    const translations: Record<string, ProductTranslationFields> = {};
-    for (const [locale, fields] of rows)
-        translations[locale] = {
-            title: fields.title,
-            // `TranslationFields` types as `Record<string, string>`, but a row can genuinely omit
-            // the key — `in` is a runtime presence check `fields.description === undefined` isn't,
-            // since the index signature already promises every key is a `string`.
-            ...('description' in fields ? { description: fields.description } : {})
-        };
+        return readAllTranslations('product', id).then((rows) => {
+            const translations: Record<string, ProductTranslationFields> = {};
+            for (const [locale, fields] of rows)
+                translations[locale] = {
+                    title: fields.title,
+                    // `TranslationFields` types as `Record<string, string>`, but a row can genuinely
+                    // omit the key — `in` is a runtime presence check `fields.description ===
+                    // undefined` isn't, since the index signature already promises every key is a
+                    // `string`.
+                    ...('description' in fields ? { description: fields.description } : {})
+                };
 
-    return { ...toProduct(product), translations };
-};
+            return { ...toProduct(product), translations };
+        });
+    });
 
 /**
  * Remove a product document (soft or hard delete). Hard delete also removes the image file;
