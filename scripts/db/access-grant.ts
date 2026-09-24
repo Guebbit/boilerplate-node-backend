@@ -21,8 +21,8 @@ export class GrantAccessError extends Error {}
  * of the three callers allowed to grant with nobody to escalate from, hence no `granter` argument.
  *
  * @throws GrantAccessError when no account holds `email`
- * @throws AccessInvariantError when `assignRole` refuses the role itself — undeclared, or a key
- *   the granted role would hold that no module owns
+ * @throws AccessInvariantError when `roleName` is not a declared role in `scope` — the only way
+ *   `assignRole` can refuse here, since this caller passes no `granter` to escalate from
  */
 export const grantAccess = (
     email: string,

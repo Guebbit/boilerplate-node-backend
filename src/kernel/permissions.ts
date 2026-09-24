@@ -227,7 +227,7 @@ export const PERMISSION_SUBJECTS: readonly string[] = [
     ...new Set(PERMISSION_KEYS.map((entry) => entry.subject))
 ].toSorted();
 
-/** The preset roles a deployment starts with, and may edit afterwards. */
+/** Every preset role, read once at import — fixed data, not a runtime-editable set; see this module's own docblock. */
 export const PRESET_ROLES: readonly PresetRole[] = rolesDocument.roles;
 
 /** What an unauthenticated request resolves to — a value in the model, not a null to handle. */
@@ -249,11 +249,13 @@ const byRoleName = new Map<string, RoleLookup>(
 );
 
 /**
- * A preset role by name, or `undefined`.
+ * A preset role by name, or `undefined` — a plain lookup, not an assertion.
  *
- * A deployment may add roles at runtime, so an unknown name here is not automatically a mistake —
- * it is a role this build did not ship. What it must never be is a caller with no permissions and
- * no complaint, which is why `permissionsOfRole` throws instead of returning an empty list.
+ * Left as `undefined` here rather than thrown, because the two callers need different errors:
+ * {@link permissionsOfRole} throws a name-only message, `access/service.ts`'s `validateGrant`
+ * throws a scope-aware one. Neither treats a miss as anything but a mistake — roles are fixed
+ * data (see this module's own docblock), so an unknown name is never a role this deployment
+ * simply hasn't heard of yet.
  */
 export const findRole = (name: string): RoleLookup | undefined => byRoleName.get(name);
 

@@ -130,7 +130,7 @@ const validateGrant = (
  * a role change before saving the rest of the document.
  *
  * @param granter - same meaning as {@link assignRole}'s own parameter
- * @throws AccessInvariantError for the same three reasons `assignRole` refuses
+ * @throws AccessInvariantError for the same two reasons `assignRole` refuses
  */
 export const assertCanGrant = (
     scope: AuthorizationScope,
