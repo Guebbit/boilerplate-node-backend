@@ -139,7 +139,6 @@ RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 #                 Named file by file, not as a directory, so the image carries only what it runs
 #   scripts/ops/  the scheduled `reap:*` jobs, run by a cron container against this image
 #   public/   express.static root — CSS, favicon, and the committed seed images
-#   openapi.yaml / asyncapi.yaml   served by the docs endpoints and read by response validation
 COPY --from=build --chown=node:node /app/src ./src
 COPY --from=build --chown=node:node /app/api ./api
 COPY --from=build --chown=node:node /app/shared ./shared
@@ -150,7 +149,6 @@ COPY --from=build --chown=node:node /app/scripts/db/index-sync.ts \
     /app/scripts/db/access-grant.ts ./scripts/db/
 COPY --from=build --chown=node:node /app/scripts/ops ./scripts/ops
 COPY --from=build --chown=node:node /app/public ./public
-COPY --from=build --chown=node:node /app/openapi.yaml /app/asyncapi.yaml ./
 COPY --from=build --chown=node:node /app/tsconfig.json ./
 
 # Uploads, invoice cache/mail spool and quarantined files land under these three directories at
