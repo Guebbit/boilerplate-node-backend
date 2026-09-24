@@ -2,7 +2,7 @@ name: Schemathesis (stateful contract fuzz)
 
 # Drives REQUEST SEQUENCES through openapi.yaml's declared `links` — create an order, pay it,
 # cancel it — the class of state-dependent failure `test:fuzz` and `test:prism` cannot see because
-# both only ever send one request at a time. See DETERMINISTIC_TOOLS.md, "The real gap".
+# both only ever send one request at a time. See docs/tools/fuzz-testing.md, "Stateful fuzzing".
 #
 # Schemathesis is a Python tool; it never enters this repo's dependency tree. It runs from its
 # own official Docker image, in this workflow only, against the real app booted via `npm run demo`
@@ -56,12 +56,32 @@ jobs:
             - name: Wait for the API to accept requests
               run: timeout 60 bash -c 'until curl -sf http://localhost:${{ env.NODE_PORT }}/products >/dev/null; do sleep 1; done'
 
+            # A bearer token for the demo profile's admin, so the chains reach the routes behind a
+            # session instead of stopping at the first 401. The credentials come from the demo's
+            # own `GET /__test/scenario` rather than a copy here, so a seed-password override
+            # cannot leave this step logging in with a stale one. Masked, like any secret.
+            - name: Mint an admin token against the demo API
+              id: token
+              run: |
+                  credentials=$(curl -sf http://localhost:${{ env.NODE_PORT }}/__test/scenario)
+                  token=$(curl -sf -X POST http://localhost:${{ env.NODE_PORT }}/account/login \
+                    -H 'Content-Type: application/json' \
+                    -d "$(echo "$credentials" | jq -c '.accounts.admin | {email, password}')" \
+                    | jq -r '.data.token')
+                  if [ -z "$token" ] || [ "$token" = "null" ]; then
+                      echo "::error::Could not log in as the demo admin."
+                      exit 1
+                  fi
+                  echo "::add-mask::$token"
+                  echo "token=$token" >> "$GITHUB_OUTPUT"
+
             # Schemathesis: https://schemathesis.readthedocs.io/en/stable/
             # `--stateful=links` follows the OpenAPI `links` declared in openapi.yaml to chain
             # requests (createOrder -> pay -> cancel, etc.) instead of firing one at a time.
             # `--hypothesis-derandomize` pins the seed so a failure reproduces on re-run.
             # `--network host`: the app listens directly on the runner, not in a container, so the
             # container needs the runner's own network namespace to reach it on localhost.
+            # `--header`: sent on every request, so the whole run acts as that admin.
             - name: Run Schemathesis
               run: |
                   docker run --rm --network host \
@@ -69,6 +89,7 @@ jobs:
                     schemathesis/schemathesis:stable \
                     run /spec/openapi.yaml \
                     --url http://localhost:${{ env.NODE_PORT }} \
+                    --header "Authorization: Bearer ${{ steps.token.outputs.token }}" \
                     --checks all \
                     --stateful=links \
                     --hypothesis-derandomize
