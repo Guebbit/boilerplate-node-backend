@@ -8,7 +8,9 @@
  * to preserve.
  */
 
-// OTel must initialize before express/http/mongoose are imported.
+// OTel must initialize before express/http/mongoose are imported. That only holds when
+// `cluster.ts` is the entry and imports this file dynamically: as the entry itself, the static
+// imports below are hoisted above this call.
 import { startTracing } from '@infrastructure/runtime/otel-sdk';
 startTracing();
 
@@ -23,7 +25,12 @@ import { registerWorkers } from '@app/workers';
 import { logger } from '@infrastructure/adapters/logger';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import { registerValidationMessages } from '@infrastructure/http/validation-messages';
-import { shutdownInfra, registerSignalHandlers } from '@infrastructure/runtime/server-lifecycle';
+import {
+    failBoot,
+    listenOn,
+    registerSignalHandlers,
+    shutdownInfra
+} from '@infrastructure/runtime/server-lifecycle';
 import { bootI18n, refreshLocaleOverrides, startLocaleOverrideRefresh } from '@infrastructure/i18n';
 
 import {
@@ -132,34 +139,27 @@ export const startServer = () => {
              * flows this runs drive the app on a throwaway loopback listener of their own.
              */
             .then(() => (isDemoMode() ? restoreScenario() : undefined))
-            .then(
-                () =>
-                    new Promise<Server>((resolve) => {
-                        const port = environmentNumber('NODE_PORT', DEFAULT_PORT, 1);
-                        // Unset by default, which binds every interface — the shape every
-                        // profile but the demo one wants. `run-server.ts` sets it to loopback:
-                        // the demo profile's tokens are signed with a public, hard-coded secret,
-                        // so binding every interface would let anyone on the LAN mint one.
-                        const host = process.env.NODE_HOST?.trim();
-                        // Stryker disable next-line all
-                        logger.info('------------- SERVER START -------------');
-                        const onListening = () => {
-                            // Stryker disable next-line all
-                            logger.info(`Server listening on port ${port}`);
-                            activeServer = server;
-                            resolve(server);
-                        };
-                        const server = host
-                            ? app.listen(port, host, onListening)
-                            : app.listen(port, onListening);
-                        /*
-                         * After `listen`, because the server object is what carries them — and
-                         * before the first request can arrive, because they bound how long one may
-                         * take to send. See `app/security.ts`.
-                         */
-                        applyServerTimeouts(server);
-                    })
-            )
+            .then(() => {
+                const port = environmentNumber('NODE_PORT', DEFAULT_PORT, 1);
+                // Unset by default, which binds every interface — the shape every profile but
+                // the demo one wants. `run-server.ts` sets it to loopback: the demo profile's
+                // tokens are signed with a public, hard-coded secret, so binding every interface
+                // would let anyone on the LAN mint one.
+                const host = process.env.NODE_HOST?.trim();
+                // Stryker disable next-line all
+                logger.info('------------- SERVER START -------------');
+                return listenOn(app, port, host || undefined).then((server) => {
+                    /*
+                     * Before the first request can arrive, because they bound how long one may
+                     * take to send. See `app/security.ts`.
+                     */
+                    applyServerTimeouts(server);
+                    // Stryker disable next-line all
+                    logger.info(`Server listening on port ${String(port)}`);
+                    activeServer = server;
+                    return server;
+                });
+            })
     );
 };
 
@@ -239,8 +239,5 @@ installErrorHandling(app);
  */
 if (process.env.NODE_ENV !== 'test' && process.env.NODE_APP_NO_LISTEN !== '1') {
     registerSignalHandlers(stopServer);
-    void startServer().catch((error: unknown) =>
-        // Stryker disable next-line all
-        logger.error({ message: '------------- SERVER ERROR -------------', error })
-    );
+    void startServer().catch((error: unknown) => failBoot(error, stopServer));
 }

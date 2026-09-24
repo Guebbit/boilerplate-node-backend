@@ -7,6 +7,7 @@
  */
 
 import type { Server } from 'node:http';
+import type { Express } from 'express';
 import { logger } from '@infrastructure/adapters/logger';
 import { shutdownAnalytics } from '@infrastructure/observability/analytics';
 import { shutdownTracing } from '@infrastructure/runtime/otel-sdk';
@@ -33,20 +34,80 @@ export const getShutdownTimeoutMs = () =>
     environmentNumber('NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS', DEFAULT_SHUTDOWN_TIMEOUT_MS, 1);
 
 /**
+ * Bind `app` and resolve once it is actually listening; reject when the bind fails.
+ *
+ * Express 5's `listen` hands a bind error (EADDRINUSE, EACCES) to the same callback as success,
+ * so a callback that ignores its argument reports "listening" on a socket that never opened.
+ * https://expressjs.com/en/5x/api.html#app.listen
+ *
+ * @param app - the application to serve
+ * @param port - the port to bind
+ * @param host - the interface to bind; every interface when unset
+ */
+export const listenOn = (app: Express, port: number, host?: string): Promise<Server> =>
+    new Promise<Server>((resolve, reject) => {
+        const onListening = (error?: Error) => {
+            if (error) {
+                reject(error);
+                return;
+            }
+            resolve(server);
+        };
+        const server = host ? app.listen(port, host, onListening) : app.listen(port, onListening);
+    });
+
+/**
+ * A boot that failed: tear down whatever did start, then exit non-zero.
+ *
+ * Exiting is the point. A process that connected to Mongo but never listened stays alive on that
+ * socket, and a restart policy only acts on a process that exited.
+ *
+ * @param error - why the boot failed
+ * @param stopFunction - the teardown to run first (normally `stopServer`)
+ */
+export const failBoot = (error: unknown, stopFunction: () => Promise<void>): Promise<void> => {
+    // Stryker disable next-line all
+    logger.error({ message: '------------- SERVER ERROR -------------', error });
+    return stopFunction()
+        .catch(() => undefined)
+        .finally(() => process.exit(1));
+};
+
+/**
+ * Share of the shutdown deadline a draining server gets before its remaining connections are cut.
+ * The rest is left for the stores behind it to close cleanly.
+ */
+const DRAIN_SHARE = 0.5;
+
+/**
  * Promisify server.close() — resolves once all connections are drained.
  *
- * `http.Server.close()` is callback-based, stops accepting new connections while letting
- * in-flight requests finish, and only fires its callback once the last socket is idle.
+ * `http.Server.close()` stops accepting new connections while letting in-flight requests finish,
+ * and only fires its callback once the last socket closes. Two things would hold it open:
+ *
+ * - idle keep-alive sockets: closed straight away, since nothing is running on them;
+ * - a long-lived response (an SSE stream never ends on its own): cut at half the deadline, so the
+ *   queue, database and telemetry still get their turn to close before the forced exit.
+ *
+ * https://nodejs.org/api/http.html#servercloseallconnections
  */
 export const closeServer = (server: Server) =>
     new Promise<void>((resolve, reject) => {
+        const cutTimer = setTimeout(
+            () => server.closeAllConnections(),
+            getShutdownTimeoutMs() * DRAIN_SHARE
+        );
+        // Must not, on its own, keep a process alive that has nothing else left to do.
+        cutTimer.unref();
         server.close((error) => {
+            clearTimeout(cutTimer);
             if (error) {
                 reject(error);
                 return;
             }
             resolve();
         });
+        server.closeIdleConnections();
     });
 
 /**
@@ -67,9 +128,11 @@ export const shutdownInfra = (server?: Server) =>
             return closeServer(s);
         })
         .then(() => stopLocaleOverrideRefresh())
+        // The queue before the cache: a job still running would otherwise reopen the cache
+        // connection that was just closed under it.
+        .then(() => stopQueue())
         .then(() => stopCache())
         .then(() => stopRateLimitStore())
-        .then(() => stopQueue())
         .then(() => stopDatabase())
         .then(() => shutdownAnalytics())
         .then(() => shutdownTracing());
