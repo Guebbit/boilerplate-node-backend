@@ -129,7 +129,8 @@ export const KEYED_BY_ADDRESS = 'address';
 export const KEYED_BY_ADDRESS_BLOCK = 'address block (IPv4 /24, IPv6 /64)';
 
 /** `keyedBy` label for a budget bucketed on a submitted email — see {@link identityOf}. */
-export const KEYED_BY_SUBMITTED_EMAIL = 'the submitted email, normalised and hashed';
+export const KEYED_BY_SUBMITTED_EMAIL =
+    'the submitted email, normalised and hashed (falls back to address block when absent)';
 
 /** `keyedBy` label for a budget bucketed on the caller's authenticated account. */
 export const KEYED_BY_AUTHENTICATED_ACCOUNT = 'the authenticated account';
@@ -166,18 +167,21 @@ export const readBodyField = (request: Request, field: string): string | undefin
  * `Ada@Example.com` and `ada@example.com` are two budgets for one account.
  *
  * Hashed because the key reaches Redis, and a `KEYS *` or RDB dump should not hand over the user
- * list. An attempt naming nobody is bucketed as `anonymous`, which still costs something.
+ * list.
+ *
+ * An attempt naming nobody falls back to the caller's address block, not one shared bucket. A
+ * multipart body is still unparsed when a limiter runs, so a shared bucket would let five junk
+ * uploads lock every multipart signup out site-wide.
  *
  * Shared machinery: reused by every module's own budget keyed on a submitted email rather than
  * the caller's address.
  */
 export const identityOf = (request: Request): string => {
     const named = readBodyField(request, 'email') ?? readBodyField(request, 'username');
-    const identity = named?.trim().toLowerCase() ?? '';
+    const identity = named?.trim().toLowerCase();
+    if (!identity) return `anon:${addressBlockOf(request)}`;
 
-    return createHash('sha256')
-        .update(identity || 'anonymous')
-        .digest('hex');
+    return createHash('sha256').update(identity).digest('hex');
 };
 
 /**

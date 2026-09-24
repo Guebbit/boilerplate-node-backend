@@ -9,7 +9,10 @@
  * route, not a shared budget — and is pinned in that module's own
  * `tests/unit/metrics-scraper.test.ts`.
  */
+import type { Request } from 'express';
+import { asStub } from '@tests/stub';
 import {
+    identityOf,
     DEFAULT_RATE_LIMIT_MAX,
     DEFAULT_RATE_LIMIT_WINDOW_MS,
     DEFAULT_API_KEY_RATE_LIMIT_MAX,
@@ -41,3 +44,22 @@ describe('rate limit defaults', () => {
  * through `express-rate-limit`'s middleware, which `no-restricted-imports` treats as an
  * integration concern: see `src/modules/feedback/tests/integration/submission-rate-limit.test.ts`.
  */
+
+/** A request as a limiter sees it: `body` is whatever the parsers left, `ip` the caller. */
+const requestWith = (body: unknown, ip: string) => asStub<Request>({ body, ip });
+
+describe('identityOf', () => {
+    it('buckets one account the same however its email is cased', () => {
+        expect(identityOf(requestWith({ email: 'Ada@Example.com' }, '1.2.3.4'))).toBe(
+            identityOf(requestWith({ email: 'ada@example.com ' }, '5.6.7.8'))
+        );
+    });
+
+    it('buckets an attempt naming nobody by its address block, not one shared bucket', () => {
+        // An unparsed multipart body is exactly this: nothing to read.
+        const first = identityOf(requestWith({}, '1.2.3.4'));
+
+        expect(first).toBe(identityOf(requestWith(undefined, '1.2.3.200')));
+        expect(first).not.toBe(identityOf(requestWith({}, '9.9.9.9')));
+    });
+});
