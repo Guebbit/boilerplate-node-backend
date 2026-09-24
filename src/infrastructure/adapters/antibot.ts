@@ -7,7 +7,7 @@
  * this module only answers the yes/no question.
  */
 
-import { resolveMx } from 'node:dns/promises';
+import { Resolver } from 'node:dns/promises';
 import { isDisposableEmailDomain } from 'disposable-email-domains-js';
 import type { RungVerdict } from './antibot-verdict';
 
@@ -48,12 +48,20 @@ const domainSetFrom = (value: string | undefined): Set<string> =>
     );
 
 /**
+ * The resolver the MX rung asks: one try, two seconds. The default (`resolveMx` on its own)
+ * retries for up to tens of seconds against a slow nameserver, all of it inside a signup request.
+ * https://nodejs.org/api/dns.html#class-dnspromisesresolver
+ */
+const mxResolver = new Resolver({ timeout: 2000, tries: 1 });
+
+/**
  * Node: MX lookup, used only by the `mx` policy. Resolves `false` — never rejects — for NXDOMAIN,
  * a timeout, or a domain with no mail exchanger: all three mean "refuse", not "unknown".
  * https://nodejs.org/api/dns.html#dnspromisesresolvemxhostname
  */
 const hasMxRecord = (domain: string): Promise<boolean> =>
-    resolveMx(domain)
+    mxResolver
+        .resolveMx(domain)
         .then((records) => records.length > 0)
         .catch(() => false);
 

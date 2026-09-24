@@ -8,13 +8,28 @@
  * make this "unit" suite depend on network access and an outside registry's uptime.
  */
 
-import { resolveMx } from 'node:dns/promises';
 import { checkEmailPolicy } from '@infrastructure/adapters/antibot';
 
-jest.mock('node:dns/promises', () => ({ resolveMx: jest.fn() }));
-
 /** The DNS lookup rung 2's `mx` policy makes — mocked, so no case reaches a real resolver. */
-const mockedResolveMx = jest.mocked(resolveMx);
+const mockedResolveMx = jest.fn();
+
+/*
+ * The adapter builds its resolver at import, before this file's own `const`s exist — so the
+ * options it was built with are kept inside the mock, and read back with `jest.requireMock`.
+ */
+jest.mock('node:dns/promises', () => {
+    const resolverOptions: unknown[] = [];
+    return {
+        resolverOptions,
+        Resolver: class {
+            constructor(options: unknown) {
+                resolverOptions.push(options);
+            }
+
+            resolveMx = (domain: string): unknown => mockedResolveMx(domain);
+        }
+    };
+});
 
 /** Sets an env var back to its original value, or deletes it if there wasn't one. */
 const restoreEnv = (key: string, value: string | undefined) => {
@@ -114,5 +129,15 @@ describe('checkEmailPolicy', () => {
 
             await expect(checkEmailPolicy('someone@example.com')).resolves.toBe('ok');
         });
+    });
+});
+
+describe('the MX lookup', () => {
+    it('is bounded to one try and two seconds, since it runs inside a signup request', () => {
+        const { resolverOptions } = jest.requireMock<{ resolverOptions: unknown[] }>(
+            'node:dns/promises'
+        );
+
+        expect(resolverOptions).toContainEqual({ timeout: 2000, tries: 1 });
     });
 });
