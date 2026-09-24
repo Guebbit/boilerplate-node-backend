@@ -1,8 +1,8 @@
 /**
  * @module
  * Resolves each order line's LIVE picture from the catalogue, at the serialization boundary —
- * never the frozen snapshot, which stopped carrying one (`orderLineProductSchema` no longer
- * declares `imageUrl`/`thumbnailUrl`; see `../model`). One batched `$in` query per response,
+ * never the frozen snapshot, which carries none (`orderLineProductSchema` declares no
+ * `imageUrl`/`thumbnailUrl`; see `../model`). One batched `$in` query per response,
  * however many orders or lines it holds, so a page of results costs one extra query rather than
  * one per line. `null` means the catalogue product (`product.id`) has been hard-deleted — the
  * frontend's placeholder, not a backend guess.

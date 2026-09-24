@@ -26,8 +26,8 @@ import { router } from './routes';
 import { cancelById, cancelPendingOrdersHolding, detachUserId, findOwnOrders } from './services';
 import { ordersRateLimits } from './rate-limits';
 // Side-effect only: registers this module's event declarations (ORDER_CANCELLED, ORDER_CREATED,
-// ORDER_STATUS_CHANGED) into the kernel's `DomainEventMap`. Nothing here listens to its own
-// `order.created` any more — `webhooks` is the only outside listener left.
+// ORDER_STATUS_CHANGED) into the kernel's `DomainEventMap`. `webhooks` is the only outside
+// listener for `order.created`; nothing in this module listens to its own event.
 import './events';
 
 /** This module's manifest entry: routes, the shop-identity config gate, event subscriptions, and locales. */

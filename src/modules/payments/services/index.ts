@@ -38,10 +38,9 @@ import { getOrderByReference } from './lookup';
 import { listPaymentMethods } from '../config';
 
 /*
- * Every operation is published by name as well as through the object below, exactly as the single
- * file did: `module.ts` wires `refundForOrder` and `detachUserId` into the events that trigger
- * them, and the suites drive the operations directly. A barrel that published less would make
- * this split a breaking change.
+ * Every operation is published by name as well as through the object below: `module.ts` wires
+ * `refundForOrder` and `detachUserId` into the events that trigger them, and the suites drive the
+ * operations directly. Publishing only the object would break both call sites.
  */
 export { createIntent } from './intent';
 export {

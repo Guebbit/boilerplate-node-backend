@@ -126,9 +126,9 @@ export const settlePayment = (
         // do. Acting again here is exactly the double-commit / wrongful-refund this guards.
         if (!succeeded) return { payment, orderLost: false };
 
-        // `paidOrder` is null in TWO different cases a redelivered event can now reach: this
+        // `paidOrder` is null in TWO different cases a redelivered event can reach: this
         // order was raced to `paid` by another settlement of the same charge (nothing lost —
-        // just not this call's doing), or it genuinely can no longer get there (cancelled). A
+        // just not this call's doing), or it is cancelled and cannot get there at all. A
         // stale `paidOrder` is not enough to tell them apart; the order's CURRENT status is.
         const orderNow = paidOrder ?? (await orderService.getById(orderId));
         const orderIsPaid = orderNow?.status === OrderStatus.paid;
@@ -149,7 +149,7 @@ export const settlePayment = (
          *
          * Reached at most once per order: `succeeded` above is itself an at-most-once write
          * (terminal once applied), and this is the only call whose `succeeded` write can ever
-         * be truthy — `paidOrder`'s own race no longer gates this, since a redelivered event
+         * be truthy — `paidOrder`'s own race does not gate this: a redelivered event
          * can legitimately lose it while still being the one true settlement. The result is not
          * checked: `false` covers both a harmless replay (the hold is already `committed`) and
          * a hold an expiry sweep beat the payment to — the customer has a paid order either
