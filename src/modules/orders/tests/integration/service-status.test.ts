@@ -6,9 +6,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { createUser } from '@modules/users/tests/factories';
-import { createProduct } from '@modules/products/tests/factories';
-import { createOrder, toOrderItem, readOrder } from '@modules/orders/tests/factories';
+import { seedOrder, readOrder } from '@modules/orders/tests/factories';
 import { markPaid, markShipped, markDelivered } from '../../services/status';
 import { ORDER_STATUS_CHANGED } from '../../events';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
@@ -17,12 +15,6 @@ import { OrderStatus } from '@types';
 setupTestDb();
 
 afterEach(() => resetDomainEvents());
-
-const seedOrder = async (status: OrderStatus) => {
-    const user = await createUser();
-    const product = await createProduct();
-    return createOrder(user, [toOrderItem(product, 1)], { status });
-};
 
 describe('markPaid', () => {
     it('moves a pending order to paid and announces it once', async () => {

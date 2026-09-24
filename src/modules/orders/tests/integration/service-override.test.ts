@@ -7,9 +7,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { callerContextAs } from '@tests/callers';
-import { createUser } from '@modules/users/tests/factories';
-import { createProduct } from '@modules/products/tests/factories';
-import { createOrder, toOrderItem, readOrder } from '@modules/orders/tests/factories';
+import { seedOrder, readOrder } from '@modules/orders/tests/factories';
 import { overrideStatus, forceMove } from '../../services/override';
 import { ORDER_STATUS_CHANGED } from '../../events';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
@@ -18,12 +16,6 @@ import { OrderStatus } from '@types';
 setupTestDb();
 
 afterEach(() => resetDomainEvents());
-
-const seedOrder = async (status: OrderStatus) => {
-    const user = await createUser();
-    const product = await createProduct();
-    return createOrder(user, [toOrderItem(product, 1)], { status });
-};
 
 describe('overrideStatus', () => {
     it('moves an order forward, records the history entry, and fires the status-changed event', async () => {

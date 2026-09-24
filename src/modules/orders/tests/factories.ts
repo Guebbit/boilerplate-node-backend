@@ -11,6 +11,8 @@ import { OrderStatus } from '@types';
 import type { OrderDocument } from '../model';
 import type { UserDocument } from '@modules/users';
 import { resolveTaxRate, type ProductDocument } from '@modules/products';
+import { createUser } from '@modules/users/tests/factories';
+import { createProduct } from '@modules/products/tests/factories';
 import { orderRepository } from '../repository';
 import {
     makeOrder as buildOrder,
@@ -78,6 +80,16 @@ export const createOrder = (
     items: OrderLineInput[],
     extras: OrderExtras = {}
 ): Promise<OrderDocument> => orderRepository.create(makeOrder(user, items, extras));
+
+/**
+ * A single-line order for a fresh user and product, forced straight to `status` — the fixture a
+ * status-transition test starts from when only the order's current status matters, not who placed
+ * it or what is in it.
+ */
+export const seedOrder = (status: OrderStatus): Promise<OrderDocument> =>
+    Promise.all([createUser(), createProduct()]).then(([user, product]) =>
+        createOrder(user, [toOrderItem(product, 1)], { status })
+    );
 
 /** The raw stored document, hydrated — a sibling's own assertion on persisted state. */
 export const readOrder = (id: string): Promise<OrderDocument | null> =>
