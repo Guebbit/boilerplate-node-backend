@@ -20,6 +20,7 @@ name: CI
 #   - architecture    dependency-graph, docs
 #   - container       container-gate — the same correctness gate again, but inside the image
 #                     `docker/Dockerfile` actually ships, with no services and no network
+#   - pair            frontend-e2e — the paired frontend's Cypress suite against this backend
 #   - supply chain    audit
 #
 # The slow and hunting suites live elsewhere on a schedule: mutation.yml, fuzz.yml (the deep pass —
@@ -548,6 +549,83 @@ jobs:
             - name: Run contract tests
               run: npm run test:contract
 
+    frontend-e2e:
+        # The paired frontend's own Cypress suite, against THIS change's backend. The frontend runs
+        # the same suite against the backend's main; only this job can say whether a backend PR
+        # breaks the app people actually use before it merges, rather than the morning after.
+        #
+        # Demo profile: the frontend's shard runner boots one `npm run demo` of this checkout per
+        # shard (in-memory Mongo, cache and queue off) — see the frontend's
+        # `scripts/e2e/run-shards.ts`. The frontend is checked out at its default branch, the
+        # version a merge here would meet.
+        runs-on: ubuntu-latest
+        timeout-minutes: 40
+        permissions:
+            contents: read
+        env:
+            # Where the frontend lands, beside this checkout rather than inside its tree walks.
+            FRONTEND_PATH: .frontend
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            # Installs this backend's dependencies and a system `mongod` for the demo profile's
+            # in-memory database — the same preamble the test jobs use.
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+                  setup-mongod: 'true'
+
+            - name: Checkout paired frontend
+              uses: actions/checkout@v4
+              with:
+                  # Override with a repository variable when the pair lives elsewhere.
+                  repository: ${{ vars.SPEC_SIBLING_REPO || 'Guebbit/boilerplate-vue-frontend' }}
+                  path: ${{ env.FRONTEND_PATH }}
+                  # Only needed when the sibling is private; falls back to this repo's token.
+                  token: ${{ secrets.SPEC_SIBLING_TOKEN || github.token }}
+
+            - name: Cache Cypress binary
+              uses: actions/cache@v4
+              with:
+                  path: ~/.cache/Cypress
+                  key: cypress-${{ runner.os }}-${{ hashFiles('.frontend/package-lock.json') }}
+                  restore-keys: |
+                      cypress-${{ runner.os }}-
+
+            - name: Install frontend dependencies
+              working-directory: ${{ env.FRONTEND_PATH }}
+              run: npm ci
+
+            # BACKEND_PATH: this checkout, absolute — the frontend resolves it from its own cwd.
+            # BACKEND_DEMO_COMMAND: how its shard runner boots each demo backend; `{backend}` is
+            # replaced with BACKEND_PATH. Same value the frontend's own CI uses.
+            - name: Run the frontend e2e suite against this backend
+              working-directory: ${{ env.FRONTEND_PATH }}
+              env:
+                  BACKEND_PATH: ${{ github.workspace }}
+                  BACKEND_DEMO_COMMAND: npm --prefix {backend} run demo
+              run: npm run test:e2e
+
+            - name: Upload failing-shard logs
+              if: failure()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: frontend-e2e-shard-logs
+                  path: .frontend/reports/e2e/
+                  retention-days: 14
+                  if-no-files-found: ignore
+
+            - name: Upload Cypress screenshots
+              if: failure()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: frontend-e2e-screenshots
+                  path: .frontend/tests/e2e/screenshots
+                  retention-days: 14
+                  if-no-files-found: ignore
+
     container-gate:
         # Proves the CONTAINER LANE, not just the code: builds `docker/Dockerfile` and runs
         # `npm run complete` inside it — no compose, no service containers, no network — so a
@@ -630,6 +708,7 @@ jobs:
             - test-integration
             - test-contract
             - container-gate
+            - frontend-e2e
             # `audit` is deliberately excluded — see its own comment above.
         runs-on: ubuntu-latest
         timeout-minutes: 5
