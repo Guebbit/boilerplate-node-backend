@@ -19,11 +19,9 @@ import { paymentRepository } from '@modules/payments/repository';
 import { inventoryService } from '@modules/inventory';
 import { onDomainEvent } from '@kernel/events';
 import { ORDER_STATUS_CHANGED } from '@modules/orders';
+import { MISSING_ID } from '@tests/ids';
 
 setupTestDb();
-
-/** A valid ObjectId that is guaranteed not to exist — the 404 branch, not the 422 one. */
-const MISSING_ID = '65dc8a99604c307b702b5ccc';
 
 // Literals, not imported from `providers/fake` — a contract test's inputs come from what the
 // contract itself publishes (openapi.yaml: "recognises `pm_card_visa` (succeeds),

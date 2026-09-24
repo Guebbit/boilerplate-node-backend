@@ -64,11 +64,9 @@ import { countOrders, findOrder } from '@modules/orders/tests/factories';
 import { productService } from '@modules/products';
 import { asReject } from '@tests/response';
 import { t } from '@infrastructure/i18n';
+import { MISSING_ID } from '@tests/ids';
 
 setupTestDb();
-
-/** An id that is structurally valid but present in no collection. */
-const MISSING_ID = '507f1f77bcf86cd799439011';
 
 /** What every read answers for a user with nothing in their cart. */
 const EMPTY_CART = { items: [], summary: { itemsCount: 0, totalQuantity: 0, total: 0 } };

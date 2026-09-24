@@ -29,6 +29,7 @@ import { inventoryService } from '@modules/inventory';
 import type { OrderDocument } from '../../model';
 import { asReject, asSuccess } from '@tests/response';
 import { asCustomer, asAdmin, testCallerContext } from '@tests/callers';
+import { MISSING_ID } from '@tests/ids';
 
 /**
  * `deleteCachedInvoice` is the one call `update()`'s line-rewrite path makes into
@@ -43,8 +44,6 @@ jest.mock('../../services/invoice', () => ({
 }));
 
 setupTestDb();
-
-const MISSING_ID = '507f1f77bcf86cd799439011';
 
 /** Creates an order through the service, returning the persisted document. */
 const seedOrder = async () => {

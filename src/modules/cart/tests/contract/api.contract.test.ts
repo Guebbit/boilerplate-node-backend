@@ -15,11 +15,9 @@ import { withEnvironment, withoutEnvironment } from '@tests/environment';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
+import { MISSING_ID } from '@tests/ids';
 
 setupTestDb();
-
-/** A valid ObjectId that is guaranteed not to exist — the 404 branch, not the 422 one. */
-const MISSING_ID = '65dc8a99604c307b702b5ccc';
 
 /** Logs a user in and puts one product in their cart, returning both. */
 const authenticateWithCart = async (quantity = 2) => {

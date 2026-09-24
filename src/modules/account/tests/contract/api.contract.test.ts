@@ -25,6 +25,7 @@ import { WEAK_PASSWORD } from '@modules/users/tests/factories';
 import { getExpiryTime, RefreshTokenExpiryTime } from '@modules/account/session/config';
 import { createIntent } from '@modules/payments';
 import { asCustomer } from '@tests/callers';
+import { MISSING_ID } from '@tests/ids';
 import type { ResponseSuccess } from '@infrastructure/http/response';
 import type { Payment } from '@types';
 
@@ -42,9 +43,6 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     ...jest.requireActual('@infrastructure/adapters/mailer'),
     enqueueEmail: jest.fn().mockResolvedValue(undefined)
 }));
-
-/** A valid ObjectId that is guaranteed not to exist — the 404 branch, not the 422 one. */
-const MISSING_ID = '65dc8a99604c307b702b5ccc';
 
 /**
  * Log a user in keeping BOTH credentials: the bearer token and the refresh cookie. The cookie is

@@ -13,12 +13,10 @@ import { api, authenticateAs } from '@tests/http';
 import { listSupportedLocales, getDefaultLocale, getFallbackLocale } from '@infrastructure/i18n';
 import { readLocaleDictionary } from '@infrastructure/i18n';
 import { createProduct } from '@modules/products/tests/factories';
+import { MISSING_ID } from '@tests/ids';
 import itTranslation from '../../../../locales/it.json';
 
 setupTestDb();
-
-/** A valid ObjectId that is guaranteed not to exist — the 404 branch, not the 422 one. */
-const MISSING_ID = '65dc8a99604c307b702b5ccc';
 
 /** The language every case below registers, unless it says otherwise. */
 const PORTUGUESE = { tag: 'pt', name: 'Portuguese', nativeName: 'Português' };

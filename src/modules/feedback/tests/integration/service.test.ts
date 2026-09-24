@@ -16,6 +16,7 @@ import * as auditPort from '@infrastructure/observability/audit';
 import { feedbackAuditActions } from '@modules/feedback/audit';
 import { FeedbackRequestStatus } from '@types';
 import { asReject, asSuccess } from '@tests/response';
+import { MISSING_ID } from '@tests/ids';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -65,8 +66,6 @@ afterAll(() => {
 });
 
 afterEach(() => jest.clearAllMocks());
-
-const MISSING_ID = '507f1f77bcf86cd799439011';
 
 /** A valid creation payload; overrides let each test vary one field at a time. */
 const makePayload = (overrides: Record<string, string> = {}) => ({

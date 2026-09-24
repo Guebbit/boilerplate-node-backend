@@ -10,11 +10,9 @@ import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
+import { MISSING_ID } from '@tests/ids';
 
 setupTestDb();
-
-/** A valid ObjectId that is guaranteed not to exist — the 404 branch, not the 422 one. */
-const MISSING_ID = '65dc8a99604c307b702b5ccc';
 
 /**
  * An id no ObjectId can be built from — the 422 branch.

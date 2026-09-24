@@ -9,15 +9,9 @@ import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
+import { MISSING_ID } from '@tests/ids';
 
 setupTestDb();
-
-/**
- * A syntactically valid ObjectId no fixture or seed can hold — the 404 branch, not the 422 one.
- * All-`f` rather than a plausible-looking hex string: a value that merely looks unused risks
- * later colliding with a real seeded id, where this one cannot.
- */
-const MISSING_ID = 'f'.repeat(24);
 
 describe('GET /inventory/levels', () => {
     it('matches the contract and reports all three numbers', async () => {
