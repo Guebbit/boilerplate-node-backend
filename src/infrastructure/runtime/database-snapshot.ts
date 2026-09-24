@@ -45,9 +45,9 @@ export const isDatabaseEmpty = async (): Promise<boolean> => {
 /**
  * Every document in every collection, as plain BSON — the input {@link restoreDatabaseCopy} takes.
  *
- * Keyed by collection NAME rather than by model: the walk is over
- * `connection.collections`, so a collection no model claims (a migration's own bookkeeping, say)
- * is copied too. `Document` here is the driver's raw shape, not a Mongoose document — nothing
+ * Keyed by collection NAME rather than by model. The walk is over `connection.collections`, which
+ * lists only collections a model (or a `connection.collection()` call) registered — one that
+ * exists only in the database is neither copied nor emptied. `Document` here is the driver's raw shape, not a Mongoose document — nothing
  * hydrates on the way out or on the way back in.
  */
 export type DatabaseCopy = Readonly<Record<string, Document[]>>;

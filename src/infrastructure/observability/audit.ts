@@ -238,8 +238,8 @@ export const buildAuditEvent = (
         >
 ): AuditEvent => ({
     // Explicit override wins, then the authenticated caller, then 'unknown'. The override matters
-    // for failed logins, where there is no caller id but the *attempted* identity (the submitted
-    // email) is the single most useful field in the record.
+    // where there is no caller id at all — a failed login records `'anonymous'` rather than
+    // `'unknown'`, so the two cases stay distinguishable.
     actor_user_id: fields.actor_user_id ?? context.caller.id ?? 'unknown',
     actor_role: fields.actor_role ?? resolveActorRole(context),
     actor_role_name: fields.actor_role_name ?? context.actorRoleName,

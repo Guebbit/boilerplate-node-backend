@@ -137,8 +137,8 @@ const send = (url: string, command: string[]): Promise<RedisReply> => {
     return connection.getOrThrow().then((redisClient) =>
         /*
          * The reply type is stated, not inferred: node-redis answers a wide `ReplyUnion` for an
-         * arbitrary command, while only `INCR`, `DECR`, `PTTL` and `DEL` are ever sent here — all
-         * four answer an integer.
+         * arbitrary command, and `rate-limit-redis`'s own `RedisReply` is the shape its commands
+         * (`SCRIPT LOAD`, `EVALSHA`, `DECR`, `DEL`) answer with.
          */
         redisClient.sendCommand<RedisReply>(command).catch((error: unknown) => {
             redisClient.destroy();

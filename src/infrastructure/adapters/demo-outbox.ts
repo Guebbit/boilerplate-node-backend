@@ -30,9 +30,9 @@ export interface DemoOutboxEmail {
     /** Every primitive template variable, for specs that assert on rendered content. */
     lines: string[];
     /**
-     * Filenames of any attachments this send carried — never the bytes. `sendTemplatedEmail()`
-     * discards the spooled files immediately after recording, same as a real send, so this is the
-     * only trace of them a demo-mode spec can read back.
+     * Filenames of any attachments this send carried — never the bytes. The send path discards
+     * the spooled files once the message is out (the inline send and the email worker both do),
+     * same as a real send, so this is the only trace of them a demo-mode spec can read back.
      */
     attachments?: string[];
 }

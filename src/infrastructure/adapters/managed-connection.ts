@@ -89,8 +89,9 @@ export interface ManagedConnectionOptions<THandle> {
      * Whether a handle already opened can still be used.
      *
      * Called before every reuse, so a dependency that died since the last call is reconnected
-     * rather than handed back dead. A handle whose close is supervised (see `queue.ts`, which
-     * calls {@link ManagedConnection.forget}) answers `true` — there, a handle still held IS live.
+     * rather than handed back dead. A handle whose close is supervised elsewhere (an adapter
+     * that calls {@link ManagedConnection.forget} itself) may answer `true` — there, a handle
+     * still held IS live.
      */
     isReady: (handle: THandle) => boolean;
 
@@ -98,8 +99,8 @@ export interface ManagedConnectionOptions<THandle> {
      * Close it, from {@link ManagedConnection.stop}.
      *
      * Called with whatever handle is live, or `undefined` when none is — an adapter that opened
-     * MORE than the handle still has to close it. `queue.ts`'s handle is a channel that can die
-     * while the TCP connection beneath it stays open; closing that connection is what releases it.
+     * MORE than the handle (a channel over a connection, say) still has to close what lies
+     * beneath it.
      */
     close: (handle: THandle | undefined) => Promise<void>;
 

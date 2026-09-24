@@ -1,7 +1,7 @@
 /**
  * @module
  * A Mongo-backed mutual-exclusion lease: one atomic upsert decides who runs a periodic job, so a
- * scaled-up cron container cannot run `reap:orders` twice in the same window. Recommended over a
+ * scaled-up cron container cannot run the same job twice in one window. Recommended over a
  * Redis lock because this collection is durable by construction — no eviction policy to get
  * wrong — and because the lock lives in the same store as the work it is guarding.
  *
