@@ -49,6 +49,9 @@ export const parseVersionedKeyRing = (raw: string | undefined): VersionedKey[] =
 const deriveKey = (secret: string): Buffer =>
     Buffer.from(hkdfSync('sha256', secret, '', 'versioned-secret', 32));
 
+/** GCM authentication tag length, in bytes — the full 128 bits, and the only length accepted back. */
+const AUTH_TAG_BYTES = 16;
+
 /**
  * Encrypt a secret for storage, always under the ring's newest (first) key.
  *
@@ -91,7 +94,11 @@ export const decryptVersionedSecret = (
     const decipher = createDecipheriv(
         'aes-256-gcm',
         deriveKey(configured.key),
-        Buffer.from(ivHex, 'hex')
+        Buffer.from(ivHex, 'hex'),
+        // The full 16-byte tag `encryptVersionedSecret` writes. Unset, Node also accepts a tag
+        // truncated to as little as 4 bytes, which is far easier to forge.
+        // https://nodejs.org/api/crypto.html#cryptocreatedecipherivalgorithm-key-iv-options
+        { authTagLength: AUTH_TAG_BYTES }
     );
     decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
     return Buffer.concat([

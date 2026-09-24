@@ -57,6 +57,15 @@ describe('encryptVersionedSecret / decryptVersionedSecret', () => {
         ).toThrow();
     });
 
+    it('refuses a truncated auth tag, which would be far easier to forge', () => {
+        const ciphertext = encryptVersionedSecret('JBSWY3DPEHPK3PXP', RING);
+        const [version, iv, tag, data] = ciphertext.split(':');
+
+        expect(() =>
+            decryptVersionedSecret(`${version}:${iv}:${tag.slice(0, 8)}:${data}`, RING, 'TOTP')
+        ).toThrow();
+    });
+
     it('rotation: encrypts under the newest (first) ring entry, decrypts old rows against the entry they were written under', () => {
         const oldRing = [KEY];
         const oldCiphertext = encryptVersionedSecret('written-before-rotation', oldRing);
