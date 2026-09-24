@@ -35,6 +35,14 @@ const REQUIRED_DEFAULTS: Record<string, string> = {
     // Real secrets guard real tokens; a demo signs throwaway tokens for a throwaway database.
     NODE_TOKEN_ACCESS: 'demo-access-secret',
     NODE_TOKEN_REFRESH: 'demo-refresh-secret',
+    // Same for the at-rest encryption keys: the seed writes address-book PII, and a key ring with
+    // no key cannot encrypt it — a checkout with no `.env` (every CI runner) died seeding.
+    NODE_PII_ENCRYPTION_KEY: 'demo-pii-encryption-key',
+    NODE_TOTP_ENCRYPTION_KEY: 'demo-totp-encryption-key',
+    NODE_WEBHOOK_SECRET_ENCRYPTION_KEY: 'demo-webhook-secret-encryption-key',
+    // Both local frontend ports: the dev server (8080) and the e2e preview (8085). Without the
+    // second, a browser on the preview is refused by CORS while every Node-side call passes.
+    NODE_CORS_ORIGIN: 'http://localhost:8080,http://localhost:8085',
     // The e2e suite is not a person browsing, and neither is the seeder behind it — see
     // `./rate-limits`, which `scenarios/apply.ts` needs for the same reason.
     ...SCRIPTED_RATE_LIMITS,
