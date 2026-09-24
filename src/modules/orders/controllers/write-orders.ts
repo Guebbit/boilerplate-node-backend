@@ -9,11 +9,12 @@ import type { ParamsDictionary } from 'express-serve-static-core';
 import { t } from '@infrastructure/i18n';
 import { CreateOrderBody, UpdateOrderBody, UpdateOrderByIdBody } from '@api/schemas.zod';
 import { orderService } from '../services';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { rejectResponse } from '@infrastructure/http/response';
 import { readInput, callerContextOf } from '@infrastructure/http/request';
-import type { CreateOrderRequest, UpdateOrderRequest, UpdateOrderByIdRequest, Order } from '@types';
+import type { CreateOrderRequest, UpdateOrderRequest, UpdateOrderByIdRequest } from '@types';
 import { orderCreatedTotal } from '../metrics';
 import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
+import { respondWithOrder } from './respond';
 
 /**
  * POST /orders — create a new order from an explicit payload (admin).
@@ -60,9 +61,13 @@ export const writeOrders = (
                 // The confirmation mail is `orderService.create`'s — it is a fact about the order,
                 // not about the request that asked for one. See `CallerContext.locale`.
                 orderCreatedTotal.inc();
-                return orderService.withActions(result.data, request.authContext).then((order) => {
-                    successResponse<Order>(response, order, 201);
-                });
+                return respondWithOrder(
+                    response,
+                    result.data,
+                    request.authContext,
+                    'createOrder',
+                    201
+                );
             })
             .catch(catchAs(response, 'createOrder'));
     }
@@ -83,9 +88,7 @@ export const writeOrders = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            return orderService.withActions(result.data, request.authContext).then((order) => {
-                successResponse<Order>(response, order);
-            });
+            return respondWithOrder(response, result.data, request.authContext, 'writeOrder');
         })
         .catch(catchAs(response, 'writeOrder'));
 };

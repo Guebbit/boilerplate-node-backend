@@ -6,10 +6,10 @@
 
 import type { Request, Response } from 'express';
 import { orderService } from '../services';
-import type { CancelOrderRequest, Order } from '@types';
-import { successResponse } from '@infrastructure/http/response';
+import type { CancelOrderRequest } from '@types';
 import { callerContextOf } from '@infrastructure/http/request';
 import { catchAs, refused } from '@infrastructure/http/controller';
+import { respondWithOrder } from './respond';
 
 /**
  * POST /orders/:id/cancel — the one order write a customer can make.
@@ -34,8 +34,13 @@ export const postCancelOrder = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            return orderService.withActions(result.data, request.authContext).then((order) => {
-                successResponse<Order>(response, order, 200, result.message);
-            });
+            return respondWithOrder(
+                response,
+                result.data,
+                request.authContext,
+                'postCancelOrder',
+                200,
+                result.message
+            );
         })
         .catch(catchAs(response, 'postCancelOrder'));

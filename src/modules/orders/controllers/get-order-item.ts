@@ -7,10 +7,10 @@
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { orderService } from '../services';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { rejectResponse } from '@infrastructure/http/response';
 import { isValidObjectId } from '@infrastructure/http/request';
 import { catchAs } from '@infrastructure/http/controller';
-import type { Order } from '@types';
+import { respondWithOrder } from './respond';
 
 /**
  * GET /orders/:id — single order by path id; non-admin callers see only their own.
@@ -38,9 +38,7 @@ export const getOrderItem = (
             }
             // The body carries what THIS caller may do to the order, so the client renders its
             // controls from the server's answer rather than from a copy of the lifecycle.
-            return orderService.withActions(order, request.authContext).then((resolved) => {
-                successResponse<Order>(response, resolved);
-            });
+            return respondWithOrder(response, order, request.authContext, 'getOrderItem');
         })
         .catch(catchAs(response, 'getOrderItem'));
 };

@@ -8,11 +8,12 @@
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { orderService } from '../services';
-import type { StatusOverrideRequest, Order } from '@types';
+import type { StatusOverrideRequest } from '@types';
 import { OverrideOrderStatusBody } from '@api/schemas.zod';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { rejectResponse } from '@infrastructure/http/response';
 import { callerContextOf, isValidObjectId } from '@infrastructure/http/request';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
+import { respondWithOrder } from './respond';
 
 /**
  * POST /orders/:id/status-override — force `to`, with `reason`, and no parcel/email consequence.
@@ -34,9 +35,12 @@ export const postOrderStatusOverride = (
         .then((result) => {
             if (refused(response, result)) return;
 
-            return orderService.withActions(result.data, request.authContext).then((order) => {
-                successResponse<Order>(response, order);
-            });
+            return respondWithOrder(
+                response,
+                result.data,
+                request.authContext,
+                'postOrderStatusOverride'
+            );
         })
         .catch(catchAs(response, 'postOrderStatusOverride'));
 };
