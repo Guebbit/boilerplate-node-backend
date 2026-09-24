@@ -124,6 +124,30 @@ const notifyShipped = (
     });
 
 /**
+ * The order-related audit entry every admin action in this module writes: one line, on success,
+ * naming the order as the target. Shared so {@link afterShipmentRecorded} and
+ * {@link moveAndStampDelivered} differ only in which action fired, never in the entry's shape.
+ * @param context - the caller
+ * @param orderId - the order the action targets
+ * @param action - which of this module's two audit actions fired
+ */
+const auditOrderEvent = (
+    context: CallerContext,
+    orderId: string,
+    action: (typeof deliveryAuditActions)[keyof typeof deliveryAuditActions]
+): void =>
+    recordAudit(context, {
+        action,
+        outcome: 'success',
+        target_type: 'order',
+        target_id: orderId
+    });
+
+/** The refusal shared by both {@link recordShipment} gates: forced or not, this order isn't `processing`. */
+const notProcessing = (): ResponseReject =>
+    generateReject(409, [{ code: 'ORDER_NOT_PROCESSING', message: t('delivery.not-processing') }]);
+
+/**
  * Everything a successful parcel write unlocks: move the order to `shipped` — forced past the
  * normal gate when `forced` says so — then, only once that move is confirmed, mail the carrier
  * notification and record the admin action. The move is checked first because the parcel write is
@@ -149,18 +173,10 @@ const afterShipmentRecorded = (
         : orderService.markShipped(orderId);
 
     return moveOrder.then((moved) => {
-        if (!moved)
-            return generateReject(409, [
-                { code: 'ORDER_NOT_PROCESSING', message: t('delivery.not-processing') }
-            ]);
+        if (!moved) return notProcessing();
 
         return notifyShipped(orderId, order, shipment).then(() => {
-            recordAudit(context, {
-                action: deliveryAuditActions.ADMIN_ORDER_SHIPPED,
-                outcome: 'success',
-                target_type: 'order',
-                target_id: orderId
-            });
+            auditOrderEvent(context, orderId, deliveryAuditActions.ADMIN_ORDER_SHIPPED);
             return generateSuccess(toShipmentResponse(shipment));
         });
     });
@@ -195,10 +211,7 @@ export const recordShipment = (
         const eligible = forced
             ? canOverrideTo(order.status, OrderStatus.shipped)
             : canTransition(order.status, OrderStatus.shipped, 'system');
-        if (!eligible)
-            return generateReject(409, [
-                { code: 'ORDER_NOT_PROCESSING', message: t('delivery.not-processing') }
-            ]);
+        if (!eligible) return notProcessing();
 
         const method = order.shippingMethod ? findShippingMethod(order.shippingMethod) : undefined;
         if (method?.tracked && !trackingCode)
@@ -218,7 +231,7 @@ export const recordShipment = (
 };
 
 /** The refusal every {@link recordDelivery} gate answers alike — one shape, one place. */
-const notShippedReject = (): ResponseReject =>
+const notShipped = (): ResponseReject =>
     generateReject(409, [
         { code: 'ORDER_NOT_SHIPPED', message: t('delivery.not-shippable-for-delivery') }
     ]);
@@ -244,19 +257,14 @@ const moveAndStampDelivered = (
         : orderService.markDelivered(orderId);
 
     return moveOrder.then((moved) => {
-        if (!moved) return notShippedReject();
+        if (!moved) return notShipped();
 
         return shipmentRepository
             .updateStatusIfIn(orderId, ['shipped'], 'delivered', { deliveredAt: new Date() })
             .then((updated) => {
-                if (!updated) return notShippedReject();
+                if (!updated) return notShipped();
 
-                recordAudit(context, {
-                    action: deliveryAuditActions.ADMIN_ORDER_DELIVERED,
-                    outcome: 'success',
-                    target_type: 'order',
-                    target_id: orderId
-                });
+                auditOrderEvent(context, orderId, deliveryAuditActions.ADMIN_ORDER_DELIVERED);
                 return generateSuccess(toShipmentResponse(updated));
             });
     });
@@ -288,10 +296,10 @@ export const recordDelivery = (
         const eligible = forced
             ? canOverrideTo(order.status, OrderStatus.delivered)
             : canTransition(order.status, OrderStatus.delivered, 'system');
-        if (!eligible) return notShippedReject();
+        if (!eligible) return notShipped();
 
         return shipmentRepository.findByOrderId(orderId).then((shipment) => {
-            if (shipment?.status !== 'shipped') return notShippedReject();
+            if (shipment?.status !== 'shipped') return notShipped();
 
             return moveAndStampDelivered(orderId, context, forced, reason);
         });
