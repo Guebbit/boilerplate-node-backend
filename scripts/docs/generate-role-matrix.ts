@@ -20,9 +20,7 @@
  * which keys a role holds.
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { format, resolveConfig } from 'prettier';
 import {
     ANONYMOUS_ROLE,
     PERMISSION_KEYS,
@@ -31,6 +29,7 @@ import {
     isUnrestricted
 } from '@kernel/permissions';
 import { heldKeys } from '@kernel/ability';
+import { applyMarkerBlocks } from './marker-block';
 import type { AuthorizationScope, Caller } from '@types';
 
 /** Report drift instead of rewriting the page — what `complete` runs. */
@@ -154,46 +153,14 @@ const body = (): string =>
         'why `admin` — unrestricted **inside one shop** — cannot reach observability either.'
     ].join('\n');
 
-/**
- * Write the block into the page, or report that it drifted.
- *
- * Formatted before comparing or writing, for the reason `generate-module-graph.ts` gives: `complete`
- * also runs `prettier --check` over `docs/`, and an unformatted block would leave the two checks
- * demanding different bytes from one file.
- *
- * @returns the process exit code
- */
-const apply = async (): Promise<number> => {
-    const label = path.relative(ROOT, PAGE);
-    const page = readFileSync(PAGE, 'utf8');
-    const from = page.indexOf(START);
-    const to = page.indexOf(END);
-
-    if (from === -1 || to === -1) {
-        console.error(`[role-matrix] markers ${START} / ${END} not found in ${label}`);
-        return 1;
-    }
-
-    const next = await format(
-        `${page.slice(0, from + START.length)}\n\n${body()}\n\n${page.slice(to)}`,
-        { ...(await resolveConfig(PAGE)), filepath: PAGE }
-    );
-
-    if (next === page) return 0;
-
-    if (checkOnly) {
-        console.error(
-            `[role-matrix] ${label} is out of date with the permission model.\n` +
-                '              Run `npm run docs:roles` and commit the result.'
-        );
-        return 1;
-    }
-
-    writeFileSync(PAGE, next);
-    console.log(`[role-matrix] ${label} updated.`);
-    return 0;
-};
-
-void apply().then((code) => {
+void applyMarkerBlocks({
+    file: PAGE,
+    root: ROOT,
+    blocks: [{ start: START, end: END, body: body() }],
+    label: 'role-matrix',
+    checkOnly,
+    driftSubject: 'the permission model',
+    rerunScript: 'docs:roles'
+}).then((code) => {
     process.exitCode = code;
 });

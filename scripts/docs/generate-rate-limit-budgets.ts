@@ -11,12 +11,11 @@
  * checks for internal consistency — this script trusts that test to have already run in `complete`.
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { format, resolveConfig } from 'prettier';
 import { enabledModules } from '../../src/modules';
 import { resolveRateLimits } from '@kernel/registry';
 import { INFRASTRUCTURE_RATE_LIMITS } from '@infrastructure/http/middlewares/rate-limit';
+import { applyMarkerBlocks } from './marker-block';
 import type { RateLimitBudget } from '@types';
 
 /** Report drift instead of rewriting the page — what `complete` runs. */
@@ -57,46 +56,14 @@ const budgetTable = (): string =>
         )
     ].join('\n');
 
-/**
- * Write the block into the page, or report that it drifted.
- *
- * Formatted before comparing or writing, for the reason `generate-module-graph.ts` gives:
- * `complete` also runs `prettier --check` over `docs/`, and an unformatted block would leave the
- * two checks demanding different bytes from one file.
- *
- * @returns the process exit code
- */
-const apply = async (): Promise<number> => {
-    const label = path.relative(ROOT, PAGE);
-    const page = readFileSync(PAGE, 'utf8');
-    const from = page.indexOf(START);
-    const to = page.indexOf(END);
-
-    if (from === -1 || to === -1) {
-        console.error(`[rate-limit-budgets] markers ${START} / ${END} not found in ${label}`);
-        return 1;
-    }
-
-    const next = await format(
-        `${page.slice(0, from + START.length)}\n\n${budgetTable()}\n\n${page.slice(to)}`,
-        { ...(await resolveConfig(PAGE)), filepath: PAGE }
-    );
-
-    if (next === page) return 0;
-
-    if (checkOnly) {
-        console.error(
-            `[rate-limit-budgets] ${label} is out of date with the rate-limit manifests.\n` +
-                '                      Run `npm run docs:rate-limits` and commit the result.'
-        );
-        return 1;
-    }
-
-    writeFileSync(PAGE, next);
-    console.log(`[rate-limit-budgets] ${label} updated.`);
-    return 0;
-};
-
-void apply().then((code) => {
+void applyMarkerBlocks({
+    file: PAGE,
+    root: ROOT,
+    blocks: [{ start: START, end: END, body: budgetTable() }],
+    label: 'rate-limit-budgets',
+    checkOnly,
+    driftSubject: 'the rate-limit manifests',
+    rerunScript: 'docs:rate-limits'
+}).then((code) => {
     process.exitCode = code;
 });

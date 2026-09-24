@@ -27,10 +27,10 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { format, resolveConfig } from 'prettier';
 import { readModuleDescriptor } from './module-descriptor';
+import { applyMarkerBlocks } from './marker-block';
 
 const checkOnly = process.argv.includes('--check');
 
@@ -266,40 +266,16 @@ const render = (edges: [string, string][]): string => {
 };
 
 /** Writes one generated block into its page, or reports that it drifted. Returns the exit code. */
-const applyTarget = async ({ file, start, end, body }: Target): Promise<number> => {
-    const label = path.relative(ROOT, file);
-    const page = readFileSync(file, 'utf8');
-    const from = page.indexOf(start);
-    const to = page.indexOf(end);
-    if (from === -1 || to === -1) {
-        console.error(`[module-graph] markers ${start} / ${end} not found in ${label}`);
-        return 1;
-    }
-
-    /*
-     * Formatted before it is compared or written. `prettier --check` runs over `docs/` in
-     * `complete` too, so an unformatted block would leave the two checks demanding different
-     * bytes from the same file — each one undoing the other.
-     */
-    const next = await format(
-        `${page.slice(0, from + start.length)}\n\n${body}\n\n${page.slice(to)}`,
-        { ...(await resolveConfig(file)), filepath: file }
-    );
-
-    if (next === page) return 0;
-
-    if (checkOnly) {
-        console.error(
-            `[module-graph] ${label} is out of date with the module graph.\n` +
-                '               Run `npm run docs:graph` and commit the result.'
-        );
-        return 1;
-    }
-
-    writeFileSync(file, next);
-    console.log(`[module-graph] ${label} updated.`);
-    return 0;
-};
+const applyTarget = ({ file, start, end, body }: Target): Promise<number> =>
+    applyMarkerBlocks({
+        file,
+        root: ROOT,
+        blocks: [{ start, end, body }],
+        label: 'module-graph',
+        checkOnly,
+        driftSubject: 'the module graph',
+        rerunScript: 'docs:graph'
+    });
 
 /** Every block this script owns: the index map, then one neighbourhood per module page. */
 const targets = (): Target[] => {

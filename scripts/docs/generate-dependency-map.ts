@@ -17,16 +17,16 @@
  * visible, not a build failure, per `docs/theory/modules.md`'s "less policing" stance.
  */
 
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { builtinModules } from 'node:module';
 import path from 'node:path';
-import { format, resolveConfig } from 'prettier';
 import {
     DEV_GROUPS,
     RUNTIME_GROUPS,
     matchesGroup,
     type DependencyGroup
 } from './dependency-groups';
+import { applyMarkerBlocks } from './marker-block';
 
 /** Report drift instead of rewriting the page — what `complete` runs. */
 const checkOnly = process.argv.includes('--check');
@@ -287,13 +287,6 @@ const renderTable = (
         .join('\n');
 };
 
-/** A generated block and the page it belongs in. */
-interface Target {
-    start: string;
-    end: string;
-    body: string;
-}
-
 /** Writes every block into the page in one pass, or reports drift. */
 const apply = async (): Promise<number> => {
     const manifest = readManifest();
@@ -301,49 +294,26 @@ const apply = async (): Promise<number> => {
     const development = Object.keys(manifest.devDependencies ?? {}).toSorted();
     const ownership = readOwnership([...runtime, ...development]);
 
-    const targets: Target[] = [
-        {
-            start: RUNTIME_START,
-            end: RUNTIME_END,
-            body: renderTable(runtime, RUNTIME_GROUPS, ownership)
-        },
-        { start: DEV_START, end: DEV_END, body: renderTable(development, DEV_GROUPS, ownership) }
-    ];
-
-    const label = path.relative(ROOT, PAGE);
-    let page = readFileSync(PAGE, 'utf8');
-
-    for (const { start, end, body } of targets) {
-        const from = page.indexOf(start);
-        const to = page.indexOf(end);
-        if (from === -1 || to === -1) {
-            console.error(`[dependency-map] markers ${start} / ${end} not found in ${label}`);
-            return 1;
-        }
-        page = `${page.slice(0, from + start.length)}\n\n${body}\n\n${page.slice(to)}`;
-    }
-
-    /*
-     * Formatted before it is compared or written. `prettier --check` runs over `docs/` in
-     * `complete` too, so an unformatted block would leave the two checks demanding different bytes
-     * from the same file.
-     */
-    const original = readFileSync(PAGE, 'utf8');
-    const next = await format(page, { ...(await resolveConfig(PAGE)), filepath: PAGE });
-
-    if (next === original) return 0;
-
-    if (checkOnly) {
-        console.error(
-            `[dependency-map] ${label} is out of date with package.json and the source tree.\n` +
-                '                 Run `npm run docs:dependencies` and commit the result.'
-        );
-        return 1;
-    }
-
-    writeFileSync(PAGE, next);
-    console.log(`[dependency-map] ${label} updated.`);
-    return 0;
+    return applyMarkerBlocks({
+        file: PAGE,
+        root: ROOT,
+        blocks: [
+            {
+                start: RUNTIME_START,
+                end: RUNTIME_END,
+                body: renderTable(runtime, RUNTIME_GROUPS, ownership)
+            },
+            {
+                start: DEV_START,
+                end: DEV_END,
+                body: renderTable(development, DEV_GROUPS, ownership)
+            }
+        ],
+        label: 'dependency-map',
+        checkOnly,
+        driftSubject: 'package.json and the source tree',
+        rerunScript: 'docs:dependencies'
+    });
 };
 
 void apply().then((code) => {
