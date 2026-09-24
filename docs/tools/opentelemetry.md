@@ -23,7 +23,9 @@ All of this is wired in `src/infrastructure/runtime/otel-sdk.ts`. `startTracing(
 | Env var                       | Effect                                                                                    |
 | ----------------------------- | ----------------------------------------------------------------------------------------- |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP base URL of the **OTel Collector**. When unset, traces are simply not exported. |
-| `OTEL_EXPORTER_OTLP_HEADERS`  | Optional `key=value,key=value` for auth/tenant headers.                                   |
+| `OTEL_EXPORTER_OTLP_HEADERS`  | Optional `key=value,key=value` for auth/tenant headers; values may be percent-encoded.    |
+| `OTEL_EXPORTER_OTLP_TRACES_*` | The traces-only overrides of the two above, per the OTel spec; the exporter reads them.   |
+| `OTEL_TRACES_SAMPLER`         | Sampling, per the OTel spec (default `parentbased_always_on`: every trace is kept).       |
 | `NODE_SERVICE_NAME`           | The `service.name` resource attribute used by Tempo/Grafana (default `api`).              |
 
 Local docker-compose sets `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318` automatically.

@@ -22,7 +22,11 @@ import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic
 // instead of one HTTP call per span (SimpleSpanProcessor). `SpanProcessor` is the interface type.
 // From `@opentelemetry/sdk-trace`, not the `-node` package: the latter now only re-exports the
 // former and its own README points callers there directly.
-import { BatchSpanProcessor, type SpanProcessor } from '@opentelemetry/sdk-trace';
+import {
+    BatchSpanProcessor,
+    NoopSpanProcessor,
+    type SpanProcessor
+} from '@opentelemetry/sdk-trace';
 // `OTLPTraceExporter` speaks OTLP over HTTP/protobuf — the vendor-neutral wire format
 // understood by Jaeger, Tempo, Honeycomb, Datadog, the OTel Collector, etc.
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
@@ -30,9 +34,49 @@ import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 // without touching business code. Only the four libraries this app actually uses are loaded,
 // which keeps startup cost lower than the `@opentelemetry/auto-instrumentations-node` bundle.
 import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
+import { IncomingMessage, type ClientRequest } from 'node:http';
+import type { Span } from '@opentelemetry/api';
 import { ExpressInstrumentation } from '@opentelemetry/instrumentation-express';
 import { MongooseInstrumentation } from '@opentelemetry/instrumentation-mongoose';
 import { RedisInstrumentation } from '@opentelemetry/instrumentation-redis';
+
+/**
+ * Query parameters no span may carry in clear: the OAuth callback's one-time `code` and its CSRF
+ * `state`, which the HTTP instrumentation otherwise records in the span's URL attributes.
+ */
+const QUERY_SECRETS = ['code', 'state'];
+
+/**
+ * `target` (a path plus query) with every {@link QUERY_SECRETS} value replaced by `REDACTED`;
+ * returned as-is when it carries none.
+ *
+ * @param target - the request target, e.g. `/account/oauth/google/callback?code=…&state=…`
+ */
+export const redactUrlSecrets = (target: string): string => {
+    const url = new URL(target, 'http://placeholder');
+    const secrets = QUERY_SECRETS.filter((name) => url.searchParams.has(name));
+    if (secrets.length === 0) return target;
+    for (const name of secrets) url.searchParams.set(name, 'REDACTED');
+    return `${url.pathname}${url.search}`;
+};
+
+/**
+ * Overwrite an incoming span's URL attributes, both semantic-convention generations, when the
+ * request's query carries a secret.
+ *
+ * @param span - the span the instrumentation just started
+ * @param request - the incoming request; outgoing ones are left alone
+ */
+const redactIncomingUrl = (span: Span, request: ClientRequest | IncomingMessage): void => {
+    if (!(request instanceof IncomingMessage) || !request.url) return;
+    const target = redactUrlSecrets(request.url);
+    if (target === request.url) return;
+    span.setAttributes({
+        'http.target': target,
+        'http.url': `http://${request.headers.host ?? 'localhost'}${target}`,
+        'url.query': target.split('?')[1] ?? ''
+    });
+};
 
 /** The single SDK instance. Kept at module scope so `shutdownTracing()` can flush the same object. */
 let sdk: NodeSDK | undefined;
@@ -47,43 +91,26 @@ let started = false;
 /**
  * Build the OTLP processor when an endpoint is configured.
  *
- * Returning an empty array is a deliberate no-op mode: without `OTEL_EXPORTER_OTLP_ENDPOINT`
- * the SDK still runs (spans are created, `traceId` is available for log correlation) but
- * nothing is shipped anywhere. That is what keeps local dev and tests quiet.
+ * The exporter reads everything else from the standard variables itself — the endpoint (with
+ * `/v1/traces` appended), `OTEL_EXPORTER_OTLP_HEADERS` (split and percent-decoded per the spec,
+ * so a padded base64 value survives) and their `_TRACES_` overrides.
+ * https://opentelemetry.io/docs/specs/otel/protocol/exporter/
+ *
+ * Without an endpoint, a processor that drops every span. Still a processor, not none: with an
+ * empty list the SDK registers no tracer provider at all, spans stay no-ops, and logs and audit
+ * rows lose the trace id they correlate by.
  *
  * Exported so a test can construct the real processor without going through `startTracing()`,
  * which monkey-patches global modules and is not safe to call inside a shared Jest worker.
  */
 export const buildProcessors = (): SpanProcessor[] => {
-    // Standard OTel env var, e.g. `http://localhost:4318` (collector) — base URL only, no path.
-    const otlpEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
-    if (!otlpEndpoint) return [];
+    const endpoint =
+        process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+    if (!endpoint) return [new NoopSpanProcessor()];
 
-    return [
-        // `@opentelemetry/sdk-trace`'s `BatchSpanProcessor` takes one options object (`{ exporter,
-        // ... }`), unlike the deprecated `sdk-trace-base` two-argument form this replaced.
-        new BatchSpanProcessor({
-            exporter: new OTLPTraceExporter({
-                // OTLP/HTTP mandates the `/v1/traces` suffix; the env var holds only the base.
-                url: `${otlpEndpoint}/v1/traces`,
-                // Optional auth/tenant headers, supplied as `key=value,key2=value2`
-                // (the format the OTel spec defines for OTEL_EXPORTER_OTLP_HEADERS).
-                // Parsed here into the `Record<string, string>` the exporter expects.
-                headers: process.env.OTEL_EXPORTER_OTLP_HEADERS
-                    ? Object.fromEntries(
-                          process.env.OTEL_EXPORTER_OTLP_HEADERS.split(',').map(
-                              (header): [string, string] => {
-                                  const [key = '', value = ''] = header
-                                      .split('=')
-                                      .map((part) => part.trim());
-                                  return [key, value];
-                              }
-                          )
-                      )
-                    : {}
-            })
-        })
-    ];
+    // `@opentelemetry/sdk-trace`'s `BatchSpanProcessor` takes one options object (`{ exporter,
+    // ... }`), unlike the deprecated `sdk-trace-base` two-argument form this replaced.
+    return [new BatchSpanProcessor({ exporter: new OTLPTraceExporter() })];
 };
 
 /** Start the OpenTelemetry SDK. Safe to call multiple times. */
@@ -105,13 +132,16 @@ export const startTracing = (): void => {
     sdk = new NodeSDK({
         // Attributes merged into every span produced by this process (see `resource` above).
         resource,
-        // Export pipeline. Empty array = spans are created but dropped instead of shipped.
+        // Export pipeline — see `buildProcessors` for the no-endpoint case.
         spanProcessors: buildProcessors(),
         // Libraries to auto-instrument. Order is irrelevant; each patches a different module.
         instrumentations: [
             // Inbound/outbound HTTP: creates the root SERVER span per request and
             // injects/extracts the W3C `traceparent` header so traces span services.
-            new HttpInstrumentation(),
+            // `requestHook` rewrites the URL attributes of an incoming span whose query carries
+            // a secret — see `redactUrlSecrets`. (`redactedQueryParams` covers outgoing requests
+            // only.) https://www.npmjs.com/package/@opentelemetry/instrumentation-http
+            new HttpInstrumentation({ requestHook: redactIncomingUrl }),
             // Express: adds child spans per middleware and per route handler, and supplies
             // the route template (`/products/:id`) that keeps span names low-cardinality.
             new ExpressInstrumentation(),

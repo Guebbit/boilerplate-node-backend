@@ -17,7 +17,8 @@ import type { ReadableSpan } from '@opentelemetry/sdk-trace';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { asStub } from '@tests/stub';
 import { withEnvironment } from '@tests/environment';
-import { buildProcessors } from '@infrastructure/runtime/otel-sdk';
+import { NoopSpanProcessor } from '@opentelemetry/sdk-trace';
+import { buildProcessors, redactUrlSecrets } from '@infrastructure/runtime/otel-sdk';
 
 /**
  * Enough of a `ReadableSpan` to survive `onEnd`'s sampled check and `_flushOneBatch`'s resource
@@ -30,11 +31,26 @@ const sampledSpanStub = (): ReadableSpan =>
     });
 
 describe('otel-sdk — buildProcessors', () => {
-    it('is a no-op without OTEL_EXPORTER_OTLP_ENDPOINT', () => {
+    it('drops every span without an endpoint, but still registers a processor', () => {
         // Never set by any test's own environment — this is the suite's ambient default, not a
-        // fixture this case has to arrange.
+        // fixture this case has to arrange. A processor, not none: with none the SDK registers
+        // no tracer provider, and logs lose their trace ids.
         expect(process.env.OTEL_EXPORTER_OTLP_ENDPOINT).toBeUndefined();
-        expect(buildProcessors()).toEqual([]);
+        const processors = buildProcessors();
+
+        expect(processors).toHaveLength(1);
+        expect(processors[0]).toBeInstanceOf(NoopSpanProcessor);
+    });
+
+    it('exports when only the traces-specific endpoint is set', async () => {
+        await withEnvironment(
+            'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT',
+            'http://localhost:4318/v1/traces',
+            () => {
+                expect(buildProcessors()[0]).not.toBeInstanceOf(NoopSpanProcessor);
+                return Promise.resolve();
+            }
+        );
     });
 
     it('forwards a finished span to a real exporter at flush time', async () => {
@@ -52,5 +68,17 @@ describe('otel-sdk — buildProcessors', () => {
 
         expect(exportSpy).toHaveBeenCalledTimes(1);
         exportSpy.mockRestore();
+    });
+});
+
+describe('otel-sdk — redactUrlSecrets', () => {
+    it("hides the OAuth callback's code and state", () => {
+        expect(redactUrlSecrets('/account/oauth/google/callback?code=abc&state=xyz&x=1')).toBe(
+            '/account/oauth/google/callback?code=REDACTED&state=REDACTED&x=1'
+        );
+    });
+
+    it('leaves a URL with nothing to hide untouched', () => {
+        expect(redactUrlSecrets('/products?page=2')).toBe('/products?page=2');
     });
 });
