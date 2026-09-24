@@ -4,7 +4,7 @@
  * twice. Shaped as the library's own `Store` interface and backed by this app's cache.
  */
 
-import { getCacheValue, setCacheValue } from '../cache';
+import { claimCacheKey } from '../cache';
 
 /** How long a spent record must live: past this, the challenge itself has expired anyway. */
 const RECORD_TTL_SECONDS = 600;
@@ -28,19 +28,40 @@ const sweepExpired = (): void => {
 const keyOf = (key: string): string => `antibot:spent:${key}`;
 
 /**
+ * Longest challenge id this store records. A real one is a short nonce; the id is read from the
+ * unverified payload, so an attacker could otherwise make each record kilobytes long.
+ */
+const MAX_KEY_LENGTH = 256;
+
+/**
+ * Claim `key` locally, synchronously — the in-process half of the single-use check.
+ *
+ * @returns whether this call was the first to claim it
+ */
+const claimLocally = (key: string): boolean => {
+    sweepExpired();
+    if (spentLocally.has(key)) return false;
+    spentLocally.set(key, Date.now() + RECORD_TTL_SECONDS * 1000);
+    return true;
+};
+
+/**
  * ALTCHA's `Store` contract: `get` answers whether this challenge was already used, `set` records
- * that it now has been. The library calls both around its own verification.
- * https://github.com/altcha-org/altcha-lib
+ * that it now has been. https://github.com/altcha-org/altcha-lib
+ *
+ * The library awaits `get`, then calls `set`. Two requests carrying the same solution could both
+ * pass `get` before either reached `set`, so `get` itself CLAIMS the id — locally at once, then in
+ * Redis with `SET NX` — and `set` has nothing left to do. The first caller gets "unused"; every
+ * other caller, in any process, gets "used".
  */
 export const altchaStore = {
     get: (key: string): Promise<unknown> => {
-        sweepExpired();
-        if (spentLocally.has(keyOf(key))) return Promise.resolve(true);
-        return getCacheValue(keyOf(key)).then((value) => value !== undefined);
+        if (key.length > MAX_KEY_LENGTH) return Promise.resolve(true);
+        if (!claimLocally(keyOf(key))) return Promise.resolve(true);
+        // `unavailable` (no Redis) keeps the local claim as the answer: single-use within this
+        // process, the same floor as before Redis is reachable.
+        return claimCacheKey(keyOf(key), RECORD_TTL_SECONDS).then((claim) => claim === 'taken');
     },
 
-    set: (key: string, value: boolean): Promise<unknown> => {
-        spentLocally.set(keyOf(key), Date.now() + RECORD_TTL_SECONDS * 1000);
-        return setCacheValue(keyOf(key), String(value), RECORD_TTL_SECONDS);
-    }
+    set: (): Promise<unknown> => Promise.resolve()
 };

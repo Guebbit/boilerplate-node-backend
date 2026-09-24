@@ -54,6 +54,17 @@ describe('the altcha provider', () => {
         await expect(altchaProvider.verify(payload)).resolves.toBe('refused');
     });
 
+    it('accepts the same solution only once, even when both requests arrive together', async () => {
+        const payload = await solvedPayload();
+
+        const verdicts = await Promise.all([
+            altchaProvider.verify(payload),
+            altchaProvider.verify(payload)
+        ]);
+
+        expect(verdicts.toSorted()).toEqual(['ok', 'refused']);
+    });
+
     it('refuses a payload this server never signed', async () => {
         const payload = await solvedPayload();
         process.env.NODE_ANTIBOT_ALTCHA_SECRET = 'a-completely-different-secret!';
