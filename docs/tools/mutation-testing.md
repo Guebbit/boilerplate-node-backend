@@ -213,7 +213,10 @@ and `bson`'s 17 MiB buffer makes each leftover file expensive. The cause and the
             "<rootDir>/tests/fuzz/",
             "<rootDir>/src/modules/[^/]+/tests/contract/",
             "<rootDir>/tests/cross-cutting/contract-bundles.test.ts",
-            "<rootDir>/tests/cross-cutting/outbox-names.test.ts"
+            "<rootDir>/tests/cross-cutting/outbox-names.test.ts",
+            "<rootDir>/tests/cluster/",
+            "<rootDir>/tmp/",
+            "<rootDir>/.claude/worktrees/"
         ]
     }
 }
@@ -225,15 +228,19 @@ boot, and a one-line change in one module would drag in the whole contract suite
 non-deterministic by construction: a mutant killed by a random input on one run and not the next
 produces a score that moves on its own, which is the one thing a ratchet cannot tolerate.
 
+`tests/cluster/` forks real workers against a Redis and is not part of `npm test` either. `tmp/` and
+`.claude/worktrees/` are not suites at all: they hold Stryker's own sandboxes and other checkouts'
+copies of the tests, which jest would otherwise discover and run as if they were this tree's.
+
 The two `tests/cross-cutting/` entries are excluded for an unrelated, sandbox-specific reason — not cost, correctness:
 
 - **`outbox-names.test.ts`** reads `emails.ts`' source text and regex-matches `template: '...'` as a plain string literal. Stryker's mutator rewrites every string literal in the files it mutates to `stryMutAct_9fa48(id) ? '' : (stryCov_9fa48(id), '...')`, which the regex no longer matches — so the dry run fails a check about mail naming before a single mutant runs, even though nothing about mail naming is actually broken. The sandboxed source just doesn't look like source any more.
 - **`contract-bundles.test.ts`** asserts each committed contract document is byte-identical to the sources it's built from. Stryker's sandbox prepends `// @ts-nocheck` to every file it copies (`disableTypeChecks`), so the sources it reads carry lines the committed bundle doesn't — the byte comparison can never hold. Turning `disableTypeChecks` off is the wrong fix: `ts-jest` runs with diagnostics on, so a type-breaking mutant would fail to _compile_, count as killed, and inflate the score with kills no assertion earned. Excluding the file costs nothing either way — it exercises committed files and `scripts/`, neither of which is in `mutate`.
 
-**The exclusion depends on a naming rule, and that is the fragile part.** A file under
+**The unit layer's cost depends on a naming rule, and that is the fragile part.** A file under
 `src/modules/*/tests/unit/` that calls `setupTestDb()` starts a real `mongod` and connects mongoose
-to it, and is excluded by neither pattern — because it is named `unit`. So a database-touching spec
-lives in its module's `tests/integration/`, and `unit-layer-stays-database-free` in
+to it, while nothing about its name warns that it does. So a database-touching spec lives in its
+module's `tests/integration/`, and `unit-layer-stays-database-free` in
 `.dependency-cruiser.cjs` is what keeps a new one from drifting back in — it asks whether a spec can
 REACH a database, so a helper that pulls one in is caught too. Confirm the unit layer is clean with:
 
@@ -309,7 +316,7 @@ belongs here — the sandbox needs what the TESTS read, not what the repository 
 committed file under `public/images/seed/`. Leave it out of `ignorePatterns` and Stryker refuses to
 start at all.
 
-## What to be wary of — per-file setup costs
+## What to be wary of — per-file setup costs {#per-file-setup-costs}
 
 Mutation testing multiplies whatever the suite does on setup by the mutant count. A cost that is
 invisible at `npm test` becomes the whole run here.
@@ -1061,9 +1068,10 @@ true statement worth keeping in front of people.
 
 `src/app/**` is the exception, and it is worth understanding why it is not a precedent. The Express
 wiring measured **0.00% across all eight files: 126 mutants, every one `NoCoverage`, not a single
-survivor** — because it is exercised by `tests/integration` and `tests/contract`, both excluded from
-this _runner_ by `testPathIgnorePatterns` (they drive the real app against a live database and fail
-the dry run), and by no unit test at all.
+survivor** — because it is exercised by `tests/contract`, which this _runner_ excludes by
+`testPathIgnorePatterns` (see [What is still excluded](#what-is-still-excluded-and-why)), and by no
+unit test at all. The measurement predates [one ruler](#one-ruler); `tests/integration` runs under
+Stryker now, and the tier stays out of `mutate` until someone re-measures it with that ruler.
 
 That made it a different animal from an honest zero. An honest zero is code a suite _could_ reach
 and none does — a finding, and actionable. These 126 mutants had **no test that could ever kill

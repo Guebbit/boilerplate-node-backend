@@ -1338,13 +1338,10 @@ export default tseslint.config(
      * The unit layer does not boot the application, and does not open a database.
      *
      * "Unit" here means two things: no HTTP, and no Mongo, real or in-memory. The second is what
-     * mutation testing costs. Calling `setupTestDb()` from a unit spec is defensible for
-     * `npm test` — most of what a repository or a service does IS what Mongo does — and indefensible
-     * under Stryker, which executes the unit suite once per mutant: anything the layer imports or
-     * connects to at module scope is paid thousands of times over, and a `beforeEach` wipe that is
-     * microseconds in a normal run adds up across a mutant count in the thousands. A spec that needs
-     * a database belongs in its module's `tests/integration/` — see
-     * docs/tools/mutation-testing.md#why-only-the-unit-suite-runs — and
+     * mutation testing costs: Stryker re-runs every related spec once per mutant, so a database a
+     * unit spec opens at setup is paid thousands of times over for a check that needs none. A spec
+     * that needs a database belongs in its module's `tests/integration/`, where the layer's name
+     * says what it costs — see docs/tools/mutation-testing.md#per-file-setup-costs — and
      * `unit-layer-stays-database-free` in `.dependency-cruiser.cjs` is
      * what keeps one from drifting back in. That rule is stated as REACHABILITY, so it also
      * catches the way it actually arrives: a spec importing a helper that already had the database.
