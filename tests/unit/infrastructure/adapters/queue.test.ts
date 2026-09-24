@@ -44,7 +44,9 @@ const mockConsume = jest.fn().mockResolvedValue({ consumerTag: 'tag-1' });
 const mockAssertExchange = jest.fn().mockResolvedValue({ exchange: DEAD_LETTER_EXCHANGE });
 const mockBindQueue = jest.fn().mockResolvedValue({});
 const mockChannelOn = jest.fn();
+const mockCancel = jest.fn().mockResolvedValue({});
 const channelMock = () => ({
+    cancel: mockCancel,
     assertQueue: mockAssertQueue,
     assertExchange: mockAssertExchange,
     bindQueue: mockBindQueue,
@@ -186,6 +188,24 @@ describe('isQueueEnabled()', () => {
         enableRabbitMQ();
         process.env.NODE_RABBITMQ_ENABLED = '0';
         expect(isQueueEnabled()).toBe(false);
+    });
+
+    it('encodes credentials assembled from parts, so a generated password survives the URL', async () => {
+        delete process.env.NODE_RABBITMQ_URL;
+        process.env.NODE_RABBITMQ_PORT = '5672';
+        process.env.NODE_RABBITMQ_USER = 'app';
+        process.env.NODE_RABBITMQ_PASS = 'p@ss/w#rd';
+        await stopQueue();
+        mockConnect.mockClear();
+
+        await startQueue();
+
+        expect(mockConnect).toHaveBeenCalledWith(
+            'amqp://app:p%40ss%2Fw%23rd@127.0.0.1:5672',
+            expect.anything()
+        );
+        delete process.env.NODE_RABBITMQ_USER;
+        delete process.env.NODE_RABBITMQ_PASS;
     });
 });
 
@@ -380,6 +400,30 @@ describe('the channel is supervised, not only the connection', () => {
     });
 });
 
+describe('a channel refused for mismatched queue arguments', () => {
+    afterEach(disableRabbitMQ);
+
+    it('is not re-opened in a loop, since no reopen can fix it', async () => {
+        jest.useFakeTimers();
+        try {
+            await ensureConnected();
+            const on = (event: string) =>
+                mockChannelOn.mock.calls.findLast(([name]) => name === event)?.[1] as (
+                    error?: unknown
+                ) => void;
+            mockCreateConfirmChannel.mockClear();
+
+            on('error')(Object.assign(new Error('PRECONDITION_FAILED'), { code: 406 }));
+            on('close')();
+            await jest.advanceTimersByTimeAsync(5000);
+
+            expect(mockCreateConfirmChannel).not.toHaveBeenCalled();
+        } finally {
+            jest.useRealTimers();
+        }
+    });
+});
+
 describe('consumeFromQueue()', () => {
     afterEach(disableRabbitMQ);
 
@@ -487,6 +531,9 @@ const captureConsumerCallback = async (handler: jest.Mock, schema?: ZodType) => 
  * @param headers - `x-death`/etc, as a real redelivered message would carry them; empty for a
  *   first delivery, same as amqplib hands the consumer one.
  */
+/** Let a delivery's handler chain settle — however many ticks it takes. */
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+
 const delivery = (body: unknown, headers: Record<string, unknown> = {}) => ({
     content: Buffer.from(JSON.stringify(body)),
     properties: { headers }
@@ -502,12 +549,24 @@ const deadLetteredCountFor = async (queue: string): Promise<number> => {
 describe('consumeFromQueue acknowledgement policy', () => {
     afterEach(disableRabbitMQ);
 
+    it('routes a handler that throws synchronously to the retry queue, like any other throw', async () => {
+        const handler = jest.fn(() => {
+            throw new Error('boom');
+        });
+        const onMessage = await captureConsumerCallback(handler);
+
+        await onMessage(delivery({ jobId: 1 }));
+        await settle();
+
+        expect(mockNack).toHaveBeenCalledWith(expect.anything(), false, false);
+    });
+
     it('acks when the handler reports success', async () => {
         const handler = jest.fn().mockResolvedValue(true);
         const onMessage = await captureConsumerCallback(handler);
 
         await onMessage(delivery({ jobId: 1 }));
-        await Promise.resolve();
+        await settle();
 
         expect(mockAck).toHaveBeenCalledTimes(1);
         expect(mockNack).not.toHaveBeenCalled();
@@ -532,7 +591,7 @@ describe('consumeFromQueue acknowledgement policy', () => {
         const onMessage = await captureConsumerCallback(handler);
 
         await onMessage(delivery({ jobId: 2 }));
-        await Promise.resolve();
+        await settle();
 
         expect(mockSendToQueue).toHaveBeenCalledWith(
             'jobs.dead',
@@ -553,7 +612,7 @@ describe('consumeFromQueue acknowledgement policy', () => {
         const onMessage = await captureConsumerCallback(handler);
 
         await onMessage(delivery({ jobId: 3 }));
-        await Promise.resolve();
+        await settle();
 
         expect(mockNack).toHaveBeenCalledWith(expect.anything(), false, false);
         expect(mockSendToQueue).not.toHaveBeenCalledWith(
@@ -586,7 +645,7 @@ describe('consumeFromQueue acknowledgement policy', () => {
                 }
             )
         );
-        await Promise.resolve();
+        await settle();
 
         expect(mockNack).not.toHaveBeenCalled();
         expect(mockSendToQueue).toHaveBeenCalledWith(
@@ -654,7 +713,7 @@ describe('consumeFromQueue contract validation', () => {
         await onMessage(
             delivery({ request: { to: 'a@example.com' }, templateName: 'account.reset', data: {} })
         );
-        await Promise.resolve();
+        await settle();
 
         expect(handler).toHaveBeenCalledTimes(1);
         expect(mockAck).toHaveBeenCalledTimes(1);
@@ -667,7 +726,7 @@ describe('consumeFromQueue contract validation', () => {
         // No `templateName`: the worker would have refused this too, but only after the payload
         // had already reached code that trusts it.
         await onMessage(delivery({ request: { to: 'a@example.com' }, data: {} }));
-        await Promise.resolve();
+        await settle();
 
         expect(handler).not.toHaveBeenCalled();
         expect(mockNack).not.toHaveBeenCalled();
@@ -693,7 +752,7 @@ describe('consumeFromQueue contract validation', () => {
                 data: {}
             })
         );
-        await Promise.resolve();
+        await settle();
 
         expect(handler).not.toHaveBeenCalled();
         expect(mockNack).not.toHaveBeenCalled();
@@ -710,7 +769,7 @@ describe('consumeFromQueue contract validation', () => {
         const onMessage = await captureConsumerCallback(handler);
 
         await onMessage(delivery({ anything: 'at all' }));
-        await Promise.resolve();
+        await settle();
 
         expect(handler).toHaveBeenCalledTimes(1);
     });
@@ -744,7 +803,7 @@ describe('a reconnect gets its consumers back', () => {
 
         const onMessage = rebound![1] as (message: unknown) => void | Promise<void>;
         await onMessage(delivery({ jobId: 'after-reconnect' }));
-        await Promise.resolve();
+        await settle();
 
         expect(handler).toHaveBeenCalledWith({ jobId: 'after-reconnect' }, expect.anything());
         expect(mockAck).toHaveBeenCalledTimes(1);
@@ -836,5 +895,35 @@ describe('startQueue() never waits for the broker', () => {
         mockConnect.mockImplementationOnce(() => new Promise(() => undefined));
 
         await expect(startQueue()).resolves.toBeUndefined();
+    });
+});
+
+describe('stopQueue() on a live connection', () => {
+    afterEach(disableRabbitMQ);
+
+    it('cancels its consumers and lets a running job finish before closing', async () => {
+        let finish: ((ack: boolean) => void) | undefined;
+        const handler = jest.fn(
+            () =>
+                new Promise<boolean>((resolve) => {
+                    finish = resolve;
+                })
+        );
+        const onMessage = await captureConsumerCallback(handler);
+        void onMessage(delivery({ jobId: 1 }));
+        await settle();
+        mockModelClose.mockClear();
+
+        const stopping = stopQueue();
+        await settle();
+
+        expect(mockCancel).toHaveBeenCalledWith('tag-1');
+        expect(mockModelClose).not.toHaveBeenCalled();
+
+        finish?.(true);
+        await stopping;
+
+        expect(mockAck).toHaveBeenCalled();
+        expect(mockModelClose).toHaveBeenCalled();
     });
 });

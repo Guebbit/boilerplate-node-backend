@@ -58,8 +58,10 @@ const getAmqpUrl = (): string | undefined => {
 
     const host = process.env.NODE_RABBITMQ_HOST ?? '127.0.0.1';
     const port = process.env.NODE_RABBITMQ_PORT;
-    const user = process.env.NODE_RABBITMQ_USER ?? 'guest';
-    const pass = process.env.NODE_RABBITMQ_PASS ?? 'guest';
+    // Encoded: a generated password routinely holds `@`, `/` or `#`, each of which would
+    // otherwise end the userinfo part of the URL early.
+    const user = encodeURIComponent(process.env.NODE_RABBITMQ_USER ?? 'guest');
+    const pass = encodeURIComponent(process.env.NODE_RABBITMQ_PASS ?? 'guest');
     return `amqp://${user}:${pass}@${host}:${port}`;
 };
 
@@ -118,6 +120,19 @@ const unavailabilityLog = unavailabilityLatch((error) =>
 const CHANNEL_REOPEN_DELAY_MS = 1000;
 
 /**
+ * AMQP reply code for PRECONDITION_FAILED: a queue already exists on the broker with different
+ * arguments than this process declares (a changed retry delay, say). Reopening cannot fix it —
+ * every reopen re-declares the same arguments and is refused the same way.
+ */
+const PRECONDITION_FAILED = 406;
+
+/** Consumers registered on the current channel, by tag — what {@link stopQueue} cancels. */
+const consumerTags = new Set<string>();
+
+/** Handlers still running, so {@link stopQueue} can let them finish before closing. */
+const inFlightHandlers = new Set<Promise<unknown>>();
+
+/**
  * amqplib's recovery `setup` — runs after every successful (re)connect, the first one included,
  * and is AWAITED before that connect counts as done. The one place a fresh channel is created and
  * every known consumer re-bound: a fresh channel starts with none of its own, whether this is
@@ -138,10 +153,26 @@ const setupChannel = async (model: ChannelModel): Promise<void> => {
     // backoff. If the connection is ALSO down, `createConfirmChannel` below rejects harmlessly —
     // amqplib's own recovery reaches `setupChannel` again once it reconnects, same as any other
     // (re)connect; this is only for the channel-only close that recovery never sees at all.
-    ch.on('error', unavailabilityLog.report);
+    let lastError: unknown;
+    ch.on('error', (error: unknown) => {
+        lastError = error;
+        unavailabilityLog.report(error);
+    });
     ch.on('close', () => {
         if (currentChannel !== ch) return;
         currentChannel = undefined;
+        consumerTags.clear();
+        if ((lastError as { code?: unknown } | undefined)?.code === PRECONDITION_FAILED) {
+            // Not retried, and logged every time rather than through the once-only latch: this
+            // is a configuration mismatch only a deploy fixes, and it must not read as a blip.
+            // Stryker disable next-line all
+            logger.error({
+                message:
+                    'RabbitMQ refused a queue declaration (PRECONDITION_FAILED): a queue exists with different arguments. Queue work runs inline until the queue is redeclared and the app restarted.',
+                error: lastError
+            });
+            return;
+        }
         // `.unref()` — same reasoning as `RECOVERY_OPTIONS`'s own docblock: a timer nothing else
         // is waiting on must not be the reason a test process (or a graceful shutdown) hangs.
         const retry = setTimeout(() => {
@@ -246,12 +277,58 @@ export const startQueue = (): Promise<void> => {
  */
 export const stopQueue = (): Promise<void> => {
     const connection = recoveringConnection;
+    const channel = currentChannel;
     recoveringConnection = undefined;
     connectionStarted = false;
-    currentChannel = undefined;
     unavailabilityLog.clear();
-    if (!connection) return Promise.resolve();
-    return connection.close().catch(() => undefined);
+    if (!connection) {
+        currentChannel = undefined;
+        return Promise.resolve();
+    }
+    // Stop taking deliveries, let the ones already running settle (and ack), then close. Closing
+    // first would strand every running job's ack, and the broker would redeliver work that
+    // already finished — an email sent twice on every deploy.
+    return cancelConsumers(channel)
+        .then(() => drainHandlers(DRAIN_TIMEOUT_MS))
+        .then(() => {
+            currentChannel = undefined;
+            return connection.close();
+        })
+        .catch(() => undefined);
+};
+
+/** How long {@link stopQueue} waits for running handlers — inside the process's own deadline. */
+const DRAIN_TIMEOUT_MS = 5000;
+
+/**
+ * Cancel every consumer on `channel`, so the broker stops delivering to this process.
+ *
+ * @param channel - the live channel, or `undefined` when there is none to cancel on
+ */
+const cancelConsumers = (channel: ConfirmChannel | undefined): Promise<void> => {
+    if (!channel) return Promise.resolve();
+    const tags = [...consumerTags];
+    consumerTags.clear();
+    return Promise.all(tags.map((tag) => channel.cancel(tag))).then(() => undefined);
+};
+
+/**
+ * Wait for the handlers still running, or for `timeoutMs`, whichever comes first. A handler that
+ * outlives the wait is simply redelivered once the connection closes.
+ *
+ * @param timeoutMs - the most to wait
+ */
+const drainHandlers = (timeoutMs: number): Promise<void> => {
+    if (inFlightHandlers.size === 0) return Promise.resolve();
+    let timer: NodeJS.Timeout | undefined;
+    const deadline = new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs);
+        timer.unref();
+    });
+    return Promise.race([
+        Promise.allSettled(inFlightHandlers).then(() => undefined),
+        deadline
+    ]).finally(() => clearTimeout(timer));
 };
 
 // ─── Queue names ──────────────────────────────────────────────────────────────
@@ -635,6 +712,25 @@ const safeNack = (
  * @param incoming - the raw delivered message, moved byte-for-byte
  */
 const parkInDead = (ch: ConfirmChannel, queue: string, incoming: ConsumeMessage): void => {
+    // Same guard as {@link safeAck}: `sendToQueue` on a closed channel throws synchronously, and
+    // the unacked delivery is redelivered anyway once the broker sees the channel gone.
+    if (currentChannel !== ch) return;
+    // eslint-disable-next-line no-restricted-syntax -- amqplib throws synchronously for a channel that closed between the guard and the call; this is the guard, not a swallowed rejection
+    try {
+        publishToDead(ch, queue, incoming);
+    } catch (error) {
+        unavailabilityLog.report(error);
+    }
+};
+
+/**
+ * The confirmed publish {@link parkInDead} makes — split out so the guard around it stays flat.
+ *
+ * @param ch - the channel to publish and ack/nack on
+ * @param queue - the work queue this message came from
+ * @param incoming - the raw delivered message, moved byte-for-byte
+ */
+const publishToDead = (ch: ConfirmChannel, queue: string, incoming: ConsumeMessage): void => {
     ch.sendToQueue(
         deadLetterQueueOf(queue),
         incoming.content,
@@ -714,8 +810,11 @@ const handleDelivery = <TPayload>(
      * `Partial<…>` rather than fully-formed. Keeping it here means it happens once, at the
      * boundary, instead of once per worker.
      */
-    // The handler's boolean *is* the ack decision — see the policy above.
-    handler(parsed as TPayload, incoming)
+    // The handler's boolean *is* the ack decision — see the policy above. Started inside a
+    // `.then` so a handler that throws synchronously lands in the `.catch` below instead of
+    // escaping into amqplib's frame handling.
+    const settled = Promise.resolve()
+        .then(() => handler(parsed as TPayload, incoming))
         .then((ack) => {
             // `ack` removes the message from the queue permanently.
             if (ack) safeAck(ch, incoming);
@@ -743,6 +842,8 @@ const handleDelivery = <TPayload>(
             // Stryker restore all
             parkInDead(ch, queue, incoming);
         });
+    inFlightHandlers.add(settled);
+    void settled.finally(() => inFlightHandlers.delete(settled));
 };
 
 /**
@@ -788,8 +889,10 @@ const bindConsumer = <TPayload>(
                     handleDelivery(ch, queue, handler, incoming, maxAttempts, schema);
                 })
             )
-            // Discard the consumerTag reply; callers only need "consumer registered".
-            .then(() => undefined)
+            // Kept, so a graceful shutdown can cancel this consumer before closing.
+            .then(({ consumerTag }) => {
+                consumerTags.add(consumerTag);
+            })
     );
 };
 
