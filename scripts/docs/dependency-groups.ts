@@ -113,6 +113,8 @@ export const DEV_GROUPS: DependencyGroup[] = [
             'jest',
             'jest-environment-node',
             'ts-jest',
+            // babel-jest's one plugin: downlevels the ESM-only `@scure`/`@noble` packages to CJS.
+            '@babel/plugin-transform-modules-commonjs',
             '@swc/core',
             '@swc/jest',
             'supertest',
