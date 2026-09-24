@@ -8,10 +8,10 @@
  * authenticate a request on its own, nothing else here is worth anything.
  */
 
-import { generate } from 'otplib';
 import { decode } from 'jsonwebtoken';
 import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
+import { codeFor } from '@tests/totp';
 import { TokenType, hashToken } from '@modules/users';
 import { userRepository } from '@modules/users/tests/factories';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
@@ -43,17 +43,6 @@ setupTestDb();
 beforeEach(() => {
     mockOutbox.length = 0;
 });
-
-/**
- * Generates the code a real authenticator app would show for this secret, at a given RFC 6238
- * time step relative to now. `stepsFromNow` defaults to 0 ("right now"); a caller after
- * `enrollTotp` — which already spends the "now" step confirming — passes 1 to land on the
- * NEXT step, so replay protection does not reject a code this suite never actually replayed.
- * `epochTolerance` on the server side is symmetric (past and future), so a code minted one step
- * ahead still verifies immediately rather than needing a real 30-second wait.
- */
-const codeFor = (secret: string, stepsFromNow = 0): Promise<string> =>
-    generate({ secret, epoch: Math.floor(Date.now() / 1000) + stepsFromNow * 30 });
 
 /** The digits from the most recent two-factor mail — what the recipient would type. */
 const mailedCode = (): string => {
@@ -102,7 +91,7 @@ const enrollTotp = async (bearer: string) => {
     const confirm = await api()
         .post('/account/2fa/methods/totp/confirm')
         .set('Authorization', bearer)
-        .send({ code: await codeFor(secret) });
+        .send({ code: await codeFor(secret, 0) });
 
     return { secret, backupCodes: (confirm.body.data.backupCodes ?? []) as string[] };
 };

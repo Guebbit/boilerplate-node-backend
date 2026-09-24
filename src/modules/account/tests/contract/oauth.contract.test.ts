@@ -7,11 +7,11 @@
  */
 
 import '@tests/contract';
-import { generate } from 'otplib';
 import { decode } from 'jsonwebtoken';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api } from '@tests/http';
 import { setCookie, cookieHeader } from '@tests/cookies';
+import { codeFor } from '@tests/totp';
 import { createUser, userRepository } from '@modules/users/tests/factories';
 import { enableDemoProfile } from '@infrastructure/runtime/demo-profile';
 import * as auditPort from '@infrastructure/observability/audit';
@@ -214,14 +214,6 @@ const fakeLogin = async () => {
         .set('Cookie', attemptCookies(start));
 };
 
-/**
- * The code a real authenticator app would show for this secret. `stepsFromNow` defaults to the
- * NEXT RFC 6238 step — same reasoning `tests/integration/two-factor.test.ts#codeFor` gives: the
- * confirm step already spent the "now" step, and replay protection refuses reusing it.
- */
-const codeFor = (secret: string, stepsFromNow = 1): Promise<string> =>
-    generate({ secret, epoch: Math.floor(Date.now() / 1000) + stepsFromNow * 30 });
-
 /*
  * B24: an already-linked identity used to resolve straight to a session (case 1 in
  * `services/oauth.ts`) regardless of `active`/`deletedAt` — the ONLY thing standing between a
@@ -296,7 +288,7 @@ describe('GET /account/oauth/:provider/callback — 2FA armed (1b)', () => {
         const finished = await api()
             .post('/account/login/2fa')
             .set('Cookie', setCookie(challenged, 'oauth_mfa_challenge')!)
-            .send({ code: await codeFor(secret) });
+            .send({ code: await codeFor(secret, 1) });
 
         expect(finished.status).toBe(200);
         const claims = decode(finished.body.data.token as string) as { amr?: string[] };
