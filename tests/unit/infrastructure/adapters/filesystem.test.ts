@@ -6,7 +6,7 @@
  * the public directory (a disk, or a mounted volume). So the EXDEV fallback is not a defensive
  * branch for an exotic host — on a normal Linux deployment it is the only branch that ever runs.
  */
-import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, unlink, utimes, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -161,6 +161,19 @@ describe('reapDirectory', () => {
 
         expect(result).toEqual({ checked: 1, reaped: 0 });
         expect(existsSync(nested)).toBe(true);
+    });
+
+    it('skips an entry that is gone by the time it is checked, instead of failing the sweep', async () => {
+        const { reapDirectory } = await import('@infrastructure/adapters/filesystem');
+        // A dangling link: listed by `readdir`, ENOENT to `stat` — the same answer a file
+        // deleted mid-sweep gives.
+        await symlink(path.join(root, 'already-gone'), path.join(root, 'dangling'));
+
+        await expect(reapDirectory(root, Date.now(), 'Test')).resolves.toEqual({
+            checked: 1,
+            reaped: 0
+        });
+        await unlink(path.join(root, 'dangling'));
     });
 
     it('reports zero, rather than throwing, for a directory that does not exist', async () => {

@@ -134,11 +134,18 @@ export const reapDirectory = (root: string, cutoffMs: number, label: string): Pr
             Promise.all(
                 entries.map((name) => {
                     const filePath = path.join(root, name);
-                    return stat(filePath).then((info) =>
-                        info.isFile() && info.mtimeMs <= cutoffMs
-                            ? unlink(filePath).then(() => true)
-                            : false
-                    );
+                    return stat(filePath)
+                        .then((info) =>
+                            info.isFile() && info.mtimeMs <= cutoffMs
+                                ? unlink(filePath).then(() => true)
+                                : false
+                        )
+                        .catch((error: unknown) => {
+                            // Gone between the listing and here — another sweep, or the store's
+                            // own cleanup, got to it first. Not this sweep's failure.
+                            if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+                            throw error;
+                        });
                 })
             ).then((results) => ({
                 checked: entries.length,
