@@ -560,14 +560,17 @@ describe('productService.removeById', () => {
         expect(refreshed!.deletedAt).toBeDefined();
     });
 
-    it('restores a soft-deleted product when called again (toggle)', async () => {
-        const product = await createProduct({ deletedAt: new Date() });
+    it('leaves a soft-deleted product deleted when the delete is repeated', async () => {
+        // DELETE must be safe to retry: a second one never brings the product back.
+        const deletedAt = new Date('2026-01-01T00:00:00Z');
+        const product = await createProduct({ deletedAt });
         const id = product._id.toString();
 
-        await productService.removeById(id, false);
+        const result = await productService.removeById(id, false);
 
-        const restored = await productRepository.findById(id);
-        expect(restored!.deletedAt).toBeUndefined();
+        expect(result.success).toBe(true);
+        const refreshed = await productRepository.findById(id);
+        expect(refreshed!.deletedAt).toEqual(deletedAt);
     });
 
     /**
@@ -617,8 +620,8 @@ describe('productService.removeById', () => {
     });
 
     /**
-     * A soft delete is reversible — `removeById(id, false)` on an already-deleted product restores
-     * it — so deleting the image would restore a product with a broken one.
+     * A soft delete is reversible — `restoreById` brings the product back — so deleting the image
+     * would restore a product with a broken one.
      */
     it('keeps the image on a soft delete', async () => {
         const product = await createProduct({ imageUrl: '/images/survives.jpg' });
@@ -633,6 +636,32 @@ describe('productService.removeById', () => {
         const result = await productService.removeById('000000000000000000000000', false);
 
         expect(result.success).toBe(false);
+        expect((result as ResponseReject).status).toBe(404);
+    });
+});
+
+describe('productService.restoreById', () => {
+    it('clears the soft-delete stamp and answers the restored product', async () => {
+        const product = await createProduct({ deletedAt: new Date() });
+        const id = product._id.toString();
+
+        const result = await productService.restoreById(id);
+
+        expect(result.success).toBe(true);
+        expect((await productRepository.findById(id))!.deletedAt).toBeUndefined();
+    });
+
+    it('answers 409 for a product that is not deleted', async () => {
+        const product = await createProduct();
+
+        const result = await productService.restoreById(product._id.toString());
+
+        expect((result as ResponseReject).status).toBe(409);
+    });
+
+    it('answers 404 for a product that does not exist', async () => {
+        const result = await productService.restoreById('000000000000000000000000');
+
         expect((result as ResponseReject).status).toBe(404);
     });
 });

@@ -1484,6 +1484,8 @@ paths:
         $ref: '../../src/modules/users/openapi.yaml#/paths/~1users'
     /users/{id}:
         $ref: '../../src/modules/users/openapi.yaml#/paths/~1users~1{id}'
+    /users/{id}/restore:
+        $ref: '../../src/modules/users/openapi.yaml#/paths/~1users~1{id}~1restore'
     /users/{id}/hard:
         $ref: '../../src/modules/users/openapi.yaml#/paths/~1users~1{id}~1hard'
     /users/{id}/2fa:
@@ -1510,6 +1512,8 @@ paths:
         $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1{id}'
     /products/{id}/admin:
         $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1{id}~1admin'
+    /products/{id}/restore:
+        $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1{id}~1restore'
     /products/{id}/hard:
         $ref: '../../src/modules/products/openapi.yaml#/paths/~1products~1{id}~1hard'
     /products/search:
@@ -1544,6 +1548,8 @@ paths:
         $ref: '../../src/modules/orders/openapi.yaml#/paths/~1orders~1search'
     /orders/{id}:
         $ref: '../../src/modules/orders/openapi.yaml#/paths/~1orders~1{id}'
+    /orders/{id}/restore:
+        $ref: '../../src/modules/orders/openapi.yaml#/paths/~1orders~1{id}~1restore'
     /orders/{id}/hard:
         $ref: '../../src/modules/orders/openapi.yaml#/paths/~1orders~1{id}~1hard'
     /orders/{id}/cancel:

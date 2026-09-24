@@ -140,6 +140,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `orders`         | `ORDER_CANCELLED`                           | `order.cancelled`                           | `order`                |
 | `orders`         | `ORDER_CREATED`                             | `order.created`                             | `order`                |
 | `orders`         | `ORDER_DELETED`                             | `order.deleted`                             | `order`                |
+| `orders`         | `ORDER_RESTORED`                            | `order.restored`                            | `order`                |
 | `orders`         | `ORDER_STATUS_OVERRIDDEN`                   | `order.status_overridden`                   | `order`                |
 | `orders`         | `ORDER_UPDATED`                             | `order.updated`                             | `order`                |
 | `payments`       | `ADMIN_PAYMENT_REFUNDED`                    | `admin.payment.refunded`                    | `order`                |
@@ -148,11 +149,13 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `payments`       | `PAYMENT_RECORDED_OFFLINE`                  | `payment.recorded_offline`                  | `order`                |
 | `products`       | `ADMIN_PRODUCT_CREATED`                     | `admin.product.created`                     | `product`              |
 | `products`       | `ADMIN_PRODUCT_DELETED`                     | `admin.product.deleted`                     | `product`              |
+| `products`       | `ADMIN_PRODUCT_RESTORED`                    | `admin.product.restored`                    | `product`              |
 | `products`       | `ADMIN_PRODUCT_UPDATED`                     | `admin.product.updated`                     | `product`              |
 | `users`          | `ADMIN_USER_2FA_DISABLED`                   | `admin.user.two_factor_disabled`            | `user`                 |
 | `users`          | `ADMIN_USER_BANNED`                         | `admin.user.banned`                         | —                      |
 | `users`          | `ADMIN_USER_CREATED`                        | `admin.user.created`                        | `user`                 |
 | `users`          | `ADMIN_USER_ERASED`                         | `admin.user.erased`                         | `user`                 |
+| `users`          | `ADMIN_USER_RESTORED`                       | `admin.user.restored`                       | `user`                 |
 | `users`          | `ADMIN_USER_SOFT_DELETED`                   | `admin.user.soft_deleted`                   | `user`                 |
 | `users`          | `ADMIN_USER_UNBANNED`                       | `admin.user.unbanned`                       | —                      |
 | `users`          | `ADMIN_USER_UPDATED`                        | `admin.user.updated`                        | —                      |

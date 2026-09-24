@@ -35,6 +35,7 @@ describe('order routes — what is mounted', () => {
             'GET /:id',
             'PUT /:id',
             'DELETE /:id',
+            'POST /:id/restore',
             'DELETE /:id/hard'
         ]);
     });

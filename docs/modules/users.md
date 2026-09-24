@@ -113,9 +113,10 @@ path, `toUser` (`model.ts`) decrypts it on the way out, whether the source docum
 
 ## Soft delete vs. erasure
 
-`DELETE /users/:id` soft-deletes by default — `deletedAt` is stamped, nothing else moves, and a
-second `DELETE` restores it. `?hardDelete=true` is the one that fires `user.deleted` (the cascade
-above) and actually removes the row.
+`DELETE /users/:id` soft-deletes by default — `deletedAt` is stamped, the account's sessions are
+revoked, and a repeated `DELETE` changes nothing. `POST /users/:id/restore` undoes it; the owner
+signs in again. `?hardDelete=true` is the one that fires `user.deleted` (the cascade above) and
+actually removes the row.
 
 Only the hard path **discharges an Art. 17 erasure request**. The audit trail says
 so explicitly: a soft delete emits `admin.user.soft_deleted`, a hard one `admin.user.erased` — two

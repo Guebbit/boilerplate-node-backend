@@ -56,6 +56,7 @@ export const productRepository: Repository<ProductDocument, Product> & {
              * clauses contradict and the page is empty rather than listing the unlisted catalogue.
              */
             booleans: { active: 'active' },
+            presence: { deleted: 'deletedAt' },
             ranges: { price: { min: 'minPrice', max: 'maxPrice' } }
         }
     }),

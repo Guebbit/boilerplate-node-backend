@@ -534,14 +534,14 @@ export const getAdmin = (id: string): Promise<ProductAdmin | null> =>
 
 /**
  * Remove a product document (soft or hard delete). Hard delete also removes the image file;
- * soft delete toggles `deletedAt`, acting as a restore when already soft-deleted.
+ * soft delete stamps `deletedAt`, and repeating it is a no-op — DELETE must be safe to retry, so
+ * undoing it is {@link restoreById}'s job, never a second DELETE's.
  *
  * `product.deleted` is emitted and awaited before the write, so a listener that cleans up
  * references (cart empties the product from every cart) has run before it can stop resolving —
  * this module doesn't know who listens, which keeps the dependency arrow one-way.
  *
- * @param hardDelete - `true` destroys the row; `false` toggles `deletedAt`, which
- *   acts as a restore when the row is already soft-deleted.
+ * @param hardDelete - `true` destroys the row; `false` stamps `deletedAt` once
  */
 export const remove = (
     product: ProductDocument,
@@ -553,8 +553,8 @@ export const remove = (
     // Translations go with it, in this same operation — through the port, never the
     // `PRODUCT_DELETED` event above: that event fires on a SOFT delete too, with the same
     // `productId` — `hardDelete` on the payload is what lets a subscriber (`inventory`'s level
-    // row, `orders`' pending-order cancellation) tell the two apart. Soft delete is a flip that
-    // doubles as a restore, and both the rows and the counters must survive it.
+    // row, `orders`' pending-order cancellation) tell the two apart. A soft delete can be
+    // restored, so both the rows and the counters must survive it.
     if (hardDelete)
         return emitDomainEvent(PRODUCT_DELETED, { productId: id, hardDelete: true })
             .then(() => productRepository.deleteOne(product))
@@ -562,10 +562,11 @@ export const remove = (
             .then(() => imageStore.remove(product.imageUrl))
             .then(() => generateSuccess(undefined, 200, t('products.hard-deleted')));
 
-    // SOFT delete (or restore)
-    // A FLIP, not an assignment: run against an already soft-deleted product this restores it,
-    // which is what the `hardDelete: false` half of `hardDeleteSchema` means.
-    product.deletedAt = product.deletedAt ? undefined : new Date();
+    // SOFT delete. Already deleted: nothing to do, and nothing to announce again.
+    if (product.deletedAt)
+        return Promise.resolve(generateSuccess(product, 200, t('products.soft-deleted')));
+
+    product.deletedAt = new Date();
     return emitDomainEvent(PRODUCT_DELETED, { productId: id, hardDelete: false })
         .then(() => productRepository.save(product))
         .then((saved) => generateSuccess(saved, 200, t('products.soft-deleted')));
@@ -575,8 +576,7 @@ export const remove = (
  * Remove a product by ID (soft or hard delete).
  * Fetches the document then delegates to remove().
  *
- * @param hardDelete - `true` destroys the row; `false` toggles `deletedAt`, which
- *   acts as a restore when the row is already soft-deleted.
+ * @param hardDelete - `true` destroys the row; `false` stamps `deletedAt` once
  */
 export const removeById = (
     id: string,
@@ -587,6 +587,25 @@ export const removeById = (
         .then((product) =>
             product ? remove(product, hardDelete) : generateReject(404, [t('products.not-found')])
         );
+
+/**
+ * Undo a soft delete. Announces nothing: what the delete set in motion (pending orders
+ * cancelled, carts emptied) stays done — a restore puts the product back on sale, not the past.
+ *
+ * @param id - the product to restore
+ * @returns the restored product; 404 when there is none, 409 when it is not soft-deleted
+ */
+export const restoreById = (
+    id: string
+): Promise<ResponseSuccess<ProductDocument> | ResponseReject> =>
+    productRepository.findById(id).then((product) => {
+        if (!product) return generateReject(404, [t('products.not-found')]);
+        if (!product.deletedAt) return generateReject(409, [t('products.not-deleted')]);
+        product.deletedAt = undefined;
+        return productRepository
+            .save(product)
+            .then((saved) => generateSuccess(saved, 200, t('products.restored')));
+    });
 
 /**
  * Every category and tag the PUBLIC catalogue carries, with counts.
@@ -675,6 +694,7 @@ export const productService = {
     writeUpdate,
     remove,
     removeById,
+    restoreById,
     // A controller may not reach `./model` directly (the persistence wall), so the shaping
     // helper it needs to build a response rides through the service instead.
     toProduct,

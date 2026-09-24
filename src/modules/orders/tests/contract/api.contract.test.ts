@@ -344,3 +344,34 @@ describe('POST /orders/{id}/status-override', () => {
         expect(response.body.data.statusOverrides).toBeUndefined();
     });
 });
+
+/** DELETE is one-way and safe to retry; undoing a soft delete is its own verb. */
+describe('POST /orders/{id}/restore', () => {
+    it('brings a soft-deleted order back, matching the contract', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const order = await seedOrderFor(await createUser());
+        await api()
+            .delete(`/orders/${String(order._id)}`)
+            .set('Authorization', bearer);
+
+        const response = await api()
+            .post(`/orders/${String(order._id)}/restore`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect((await orderRepository.findById(String(order._id)))!.deletedAt).toBeUndefined();
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('answers 409 for an order that is not deleted', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const order = await seedOrderFor(await createUser());
+
+        const response = await api()
+            .post(`/orders/${String(order._id)}/restore`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(409);
+        expect(response).toSatisfyApiSpec();
+    });
+});

@@ -40,7 +40,8 @@ const searchProductsQuerySchema = SearchProductsBody.extend({
         z.coerce.number().min(searchProductsBodyMaxPriceMin).optional()
     ),
     // A query string spells a boolean as text; the body carries a real one.
-    active: optionalBooleanSchema
+    active: optionalBooleanSchema,
+    deleted: optionalBooleanSchema
 });
 
 /**

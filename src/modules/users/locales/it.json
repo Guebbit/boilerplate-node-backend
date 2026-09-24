@@ -14,6 +14,8 @@
         "not-found": "L'utente richiesto non è stato trovato.",
         "hard-deleted": "L'utente è stato eliminato definitivamente.",
         "soft-deleted": "L'utente è stato eliminato logicamente (disattivato).",
-        "two-factor-disabled": "L'autenticazione a due fattori è stata disattivata per questo utente."
+        "two-factor-disabled": "L'autenticazione a due fattori è stata disattivata per questo utente.",
+        "restored": "Utente ripristinato. Le sue sessioni restano disconnesse.",
+        "not-deleted": "Questo utente non è eliminato."
     }
 }

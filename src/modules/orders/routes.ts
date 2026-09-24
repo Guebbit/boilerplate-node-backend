@@ -10,6 +10,7 @@ import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authoriz
 import { getOrders, searchOrdersKeyParameters } from './controllers/get-orders';
 import { writeOrders } from './controllers/write-orders';
 import { deleteOrders } from './controllers/delete-orders';
+import { restoreOrders } from './controllers/restore-orders';
 import { getOrderItem } from './controllers/get-order-item';
 import { getOrderInvoice } from './controllers/get-order-invoice';
 import { postCancelOrder } from './controllers/post-cancel-order';
@@ -98,6 +99,14 @@ router.delete(
     requirePermission('orders.any.delete'),
     invalidateCache(['orders']),
     deleteOrders
+);
+
+// POST /orders/:id/restore — undo a soft delete; a second DELETE never does
+router.post(
+    '/:id/restore',
+    requirePermission('orders.any.delete'),
+    invalidateCache(['orders']),
+    restoreOrders
 );
 
 // DELETE /orders/:id/hard — the same operation, with the flag spelled in the path

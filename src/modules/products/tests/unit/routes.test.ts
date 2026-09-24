@@ -44,6 +44,7 @@ describe('product routes — what is mounted', () => {
             'PATCH /:id',
             'GET /:id/admin',
             'DELETE /:id',
+            'POST /:id/restore',
             'DELETE /:id/hard'
         ]);
     });

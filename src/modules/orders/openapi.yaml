@@ -39,6 +39,14 @@ paths:
                   in: query
                   schema:
                       type: string
+                - name: deleted
+                  in: query
+                  description: >-
+                      `true` lists only soft-deleted rows, `false` only live ones; absent lists
+                      both. Admin-effective: a caller who cannot see deleted rows at all gets an
+                      empty page for `true`.
+                  schema:
+                      type: boolean
             responses:
                 '200':
                     description: Orders page
@@ -129,7 +137,7 @@ paths:
         delete:
             tags: [Orders]
             summary: Delete order
-            description: Deletes the order identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; a `true` from any source wins, so a `false` sent elsewhere does not cancel it.
+            description: Deletes the order identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; a `true` from any source wins, so a `false` sent elsewhere does not cancel it. A soft delete is one-way and safe to repeat — undo it with `POST /orders/{id}/restore`.
             operationId: deleteOrder
             x-alias-of: deleteOrderById
             security:
@@ -247,7 +255,7 @@ paths:
         delete:
             tags: [Orders]
             summary: Delete order
-            description: Deletes the order identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. Functionally equivalent to `DELETE /orders`.
+            description: Deletes the order identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. A soft delete is one-way and safe to repeat — undo it with `POST /orders/{id}/restore`. Functionally equivalent to `DELETE /orders`.
             operationId: deleteOrderById
             security:
                 - bearerAuth: []
@@ -265,6 +273,32 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    # Undoes a soft delete. A separate verb because DELETE must be safe to repeat (RFC 9110
+    # §9.2.2): a retried DELETE never brings a record back.
+    /orders/{id}/restore:
+        post:
+            tags: [Orders]
+            summary: Restore order
+            description: Undoes the soft delete of the order identified by `{id}`. Answers 409 when the order is not soft-deleted, so a restore can never be mistaken for an ordinary read.
+            operationId: restoreOrderById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: Restored order
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OrderEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
@@ -482,6 +516,11 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaymentMethodId'
                 notes:
                     type: string
+                # `true`: only soft-deleted rows; `false`: only live ones; absent: both.
+                # Admin-effective, like `active`: a caller who cannot see deleted rows at all
+                # gets an empty page for `true`.
+                deleted:
+                    type: boolean
 
         CreateOrderRequest:
             type: object

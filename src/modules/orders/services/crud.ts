@@ -453,13 +453,12 @@ export const updateById = (
     });
 
 /**
- * Remove an order document (soft or hard delete). Soft toggles `deletedAt` (restores if already
- * soft-deleted) — an order is a financial record, so hiding it isn't destroying it. Hard gives
+ * Remove an order document (soft or hard delete). Soft stamps `deletedAt` once — an order is a
+ * financial record, so hiding it isn't destroying it; `restoreById` undoes it. Hard gives
  * the units back first: an order holds stock, and destroying the row without releasing it
  * leaves the shelf holding units for nothing, until the TTL sweep records the deletion as an
  * expiry.
- * @param hardDelete - `true` destroys the row; `false` toggles `deletedAt`, which
- *   acts as a restore when the row is already soft-deleted.
+ * @param hardDelete - `true` destroys the row; `false` stamps `deletedAt` once
  */
 export const remove = (
     order: OrderDocument,
@@ -481,21 +480,38 @@ export const remove = (
                 .then(() => generateSuccess(undefined, 200, t('orders.hard-deleted')))
         );
 
-    // SOFT delete (or restore) — the default path for an order, which is a financial record.
-    // A FLIP, not an assignment: run against an already soft-deleted order this restores it,
-    // which is what the `hardDelete: false` half of `hardDeleteSchema` means.
-    order.deletedAt = order.deletedAt ? undefined : new Date();
+    // SOFT delete — the default path for an order, which is a financial record. Already
+    // deleted: nothing to do. DELETE must be safe to retry; undoing it is `restoreById`.
+    if (order.deletedAt)
+        return Promise.resolve(generateSuccess(order, 200, t('orders.soft-deleted')));
+
+    order.deletedAt = new Date();
     return orderRepository
         .save(order)
         .then((saved) => generateSuccess(saved, 200, t('orders.soft-deleted')));
 };
 
 /**
+ * Undo a soft delete.
+ *
+ * @param id - the order to restore
+ * @returns the restored order; 404 when there is none, 409 when it is not soft-deleted
+ */
+export const restoreById = (id: string): Promise<ResponseSuccess<OrderDocument> | ResponseReject> =>
+    orderRepository.findById(id).then((order) => {
+        if (!order) return generateReject(404, [t('orders.not-found')]);
+        if (!order.deletedAt) return generateReject(409, [t('orders.not-deleted')]);
+        order.deletedAt = undefined;
+        return orderRepository
+            .save(order)
+            .then((saved) => generateSuccess(saved, 200, t('orders.restored')));
+    });
+
+/**
  * Remove an order by ID (soft or hard delete).
  * Fetches the document then delegates to remove().
  *
- * @param hardDelete - `true` destroys the row; `false` toggles `deletedAt`, which
- *   acts as a restore when the row is already soft-deleted.
+ * @param hardDelete - `true` destroys the row; `false` stamps `deletedAt` once
  */
 export const removeById = (
     id: string,

@@ -20,6 +20,7 @@ import {
     updateById,
     remove,
     removeById,
+    restoreById,
     search,
     callerScope,
     orderService
@@ -601,16 +602,38 @@ describe('remove', () => {
         expect(stored!.deletedAt).toBeInstanceOf(Date);
     });
 
-    it('restores an already soft-deleted order', async () => {
+    it('leaves an already soft-deleted order deleted when the delete is repeated', async () => {
+        // DELETE must be safe to retry: a second one never brings the order back.
         const { order } = await seedOrder();
 
         await remove(order);
         await remove(order);
 
         const stored = await orderRepository.findById(String(order._id));
+        expect(stored!.deletedAt).toBeInstanceOf(Date);
+    });
+});
+
+describe('restoreById', () => {
+    it('restores a soft-deleted order', async () => {
+        const { order } = await seedOrder();
+        await remove(order);
+
+        const result = await restoreById(String(order._id));
+
+        expect(result.success).toBe(true);
+        const stored = await orderRepository.findById(String(order._id));
         // `undefined`, not null: the field is unset, which is what `callerScope`'s compiled
         // `deletedAt: null` matches (Mongo's `{ field: null }` matches missing OR null).
         expect(stored!.deletedAt).toBeUndefined();
+    });
+
+    it('answers 409 for an order that is not deleted', async () => {
+        const { order } = await seedOrder();
+
+        const result = await restoreById(String(order._id));
+
+        expect(asReject(result).status).toBe(409);
     });
 
     it('hard-deletes when asked', async () => {

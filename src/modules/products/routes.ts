@@ -13,6 +13,7 @@ import { getProducts, searchProductsKeyParameters } from './controllers/get-prod
 import { createProduct } from './controllers/create-product';
 import { updateProduct } from './controllers/update-product';
 import { deleteProducts } from './controllers/delete-products';
+import { restoreProducts } from './controllers/restore-products';
 import { getProductItem } from './controllers/get-product-item';
 import { getProductAdmin } from './controllers/get-product-admin';
 import { getCatalogueFacets } from './controllers/get-catalogue-facets';
@@ -107,6 +108,15 @@ router.delete(
     requirePermission('products.any.delete'),
     invalidateCache(['products']),
     deleteProducts
+);
+
+// POST /products/:id/restore — undo a soft delete; a second DELETE never does
+router.post(
+    '/:id/restore',
+    isAuthOrCredential,
+    requirePermission('products.any.delete'),
+    invalidateCache(['products']),
+    restoreProducts
 );
 
 // DELETE /products/:id/hard — the same operation, with the flag spelled in the path

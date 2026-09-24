@@ -38,6 +38,7 @@ const ALL = [
     'GET /:id',
     'PUT /:id',
     'DELETE /:id',
+    'POST /:id/restore',
     'DELETE /:id/hard',
     'DELETE /:id/2fa'
 ];

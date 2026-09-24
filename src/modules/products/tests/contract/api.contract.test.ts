@@ -340,3 +340,77 @@ describe('GET /products/categories', () => {
         expect(response).toSatisfyApiSpec();
     });
 });
+
+/**
+ * DELETE is one-way and safe to retry (RFC 9110 §9.2.2); undoing a soft delete is its own verb.
+ */
+describe('POST /products/{id}/restore', () => {
+    it('brings a soft-deleted product back, matching the contract', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct({ deletedAt: new Date() });
+
+        const response = await api()
+            .post(`/products/${String(product._id)}/restore`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect((await stored(String(product._id)))!.deletedAt).toBeUndefined();
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('answers 409 for a product that is not deleted', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+
+        const response = await api()
+            .post(`/products/${String(product._id)}/restore`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(409);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('is refused to a caller who may not delete products', async () => {
+        const { bearer } = await authenticateAs('user');
+        const product = await createProduct({ deletedAt: new Date() });
+
+        const response = await api()
+            .post(`/products/${String(product._id)}/restore`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(403);
+    });
+});
+
+describe('DELETE /products/{id} repeated', () => {
+    it('leaves the product deleted — a retried DELETE never restores it', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+        const path = `/products/${String(product._id)}`;
+
+        await api().delete(path).set('Authorization', bearer);
+        const retried = await api().delete(path).set('Authorization', bearer);
+
+        expect(retried.status).toBe(200);
+        expect((await stored(String(product._id)))!.deletedAt).toBeInstanceOf(Date);
+    });
+});
+
+/** The ids on one page of a product listing. */
+const idsOf = (body: { data: { items: { id: string }[] } }) =>
+    body.data.items.map((item) => item.id);
+
+describe('GET /products?deleted=', () => {
+    it('lists only soft-deleted products for true, and only live ones for false', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const live = await createProduct();
+        const gone = await createProduct({ deletedAt: new Date() });
+
+        const deleted = await api().get('/products?deleted=true').set('Authorization', bearer);
+        const kept = await api().get('/products?deleted=false').set('Authorization', bearer);
+
+        expect(idsOf(deleted.body)).toEqual([String(gone._id)]);
+        expect(idsOf(kept.body)).toEqual([String(live._id)]);
+        expect(deleted).toSatisfyApiSpec();
+    });
+});

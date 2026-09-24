@@ -13,6 +13,7 @@ import { upload } from '@infrastructure/http/middlewares/upload';
 import { getUsers, searchUsersKeyParameters } from './controllers/get-users';
 import { writeUsers } from './controllers/write-users';
 import { deleteUsers } from './controllers/delete-users';
+import { restoreUsers } from './controllers/restore-users';
 import { getUserItem } from './controllers/get-user-item';
 import { deleteUserTwoFactor } from './controllers/delete-user-two-factor';
 import { invalidateCache, searchCache, setCache } from '@infrastructure/http/middlewares/cache';
@@ -89,6 +90,9 @@ router.put(
 
 // DELETE /users/:id — soft delete unless ?hardDelete=true
 router.delete('/:id', requirePermission('users.any.delete'), invalidateUsers, deleteUsers);
+
+// POST /users/:id/restore — undo a soft delete; a second DELETE never does
+router.post('/:id/restore', requirePermission('users.any.delete'), invalidateUsers, restoreUsers);
 
 // DELETE /users/:id/hard — the same operation, with the flag spelled in the path
 router.delete(

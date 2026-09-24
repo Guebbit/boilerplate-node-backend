@@ -21,7 +21,8 @@ import {
     update,
     updateById,
     remove,
-    removeById
+    removeById,
+    restoreById
 } from './crud';
 import { placeOrder } from './place';
 import { sendOrderPlacedEmail, mailBuyer } from './notify';
@@ -50,6 +51,7 @@ export {
     updateById,
     remove,
     removeById,
+    restoreById,
     ownOrderIds,
     findOwnOrders
 } from './crud';
@@ -95,6 +97,7 @@ export const orderService = {
     updateById,
     remove,
     removeById,
+    restoreById,
     markPaid,
     markShipped,
     markDelivered,

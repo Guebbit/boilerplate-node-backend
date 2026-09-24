@@ -382,8 +382,8 @@ export const updateById = (
     });
 
 /**
- * Remove a user document (soft or hard delete). Soft delete toggles `deletedAt` (restores if
- * already soft-deleted). A hard delete first revokes EVERY membership the account holds —
+ * Remove a user document (soft or hard delete). Soft delete stamps `deletedAt` once;
+ * `restoreById` undoes it. A hard delete first revokes EVERY membership the account holds —
  * `revokeAllOf`, not a single tenant-scoped `revokeRole`: an account can hold a platform seat
  * alongside its tenant one, and either row surviving the user it points at is an erasure gap.
  * Only then does it emit `user.deleted`, awaited before the write, so cart cleanup happens
@@ -402,20 +402,35 @@ export const remove = (
             .then(() => imageStore.remove(user.imageUrl))
             .then(() => generateSuccess(undefined, 200, t('users.hard-deleted')));
 
-    // A FLIP, not an assignment: run against an already soft-deleted user this restores it,
-    // which is what the `hardDelete: false` half of `hardDeleteSchema` means.
-    const isNewSoftDelete = !user.deletedAt;
-    user.deletedAt = user.deletedAt ? undefined : new Date();
-    return userRepository.save(user).then((saved) => {
+    // Already deleted: nothing to do. DELETE must be safe to retry; undoing it is `restoreById`.
+    if (user.deletedAt) return Promise.resolve(generateSuccess(user, 200, t('users.soft-deleted')));
+
+    user.deletedAt = new Date();
+    return userRepository.save(user).then((saved) =>
         // Soft delete revokes every refresh token too — same defense-in-depth reasoning as
-        // `update`'s deactivation branch above. Only on the delete half of the flip: a restore
-        // should not log anyone out.
-        const revoke = isNewSoftDelete
-            ? saved.tokenRemoveAll(TokenType.REFRESH).catch(() => undefined)
-            : Promise.resolve();
-        return revoke.then(() => generateSuccess(saved, 200, t('users.soft-deleted')));
-    });
+        // `update`'s deactivation branch above.
+        saved
+            .tokenRemoveAll(TokenType.REFRESH)
+            .catch(() => undefined)
+            .then(() => generateSuccess(saved, 200, t('users.soft-deleted')))
+    );
 };
+
+/**
+ * Undo a soft delete. The account's sessions stay revoked: the owner logs in again.
+ *
+ * @param id - the user to restore
+ * @returns the restored user; 404 when there is none, 409 when it is not soft-deleted
+ */
+export const restoreById = (id: string): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
+    userRepository.findById(id).then((user) => {
+        if (!user) return generateReject(404, [t('users.not-found')]);
+        if (!user.deletedAt) return generateReject(409, [t('users.not-deleted')]);
+        user.deletedAt = undefined;
+        return userRepository
+            .save(user)
+            .then((saved) => generateSuccess(saved, 200, t('users.restored')));
+    });
 
 /**
  * Find a user by email address.
@@ -764,6 +779,7 @@ export const userService = {
     updateById,
     remove,
     removeById,
+    restoreById,
     adminDisableTwoFactor,
     findByEmail,
     emailTaken,

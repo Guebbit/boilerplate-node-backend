@@ -9,7 +9,8 @@
 export const productsAuditActions = {
     ADMIN_PRODUCT_CREATED: 'admin.product.created',
     ADMIN_PRODUCT_UPDATED: 'admin.product.updated',
-    ADMIN_PRODUCT_DELETED: 'admin.product.deleted'
+    ADMIN_PRODUCT_DELETED: 'admin.product.deleted',
+    ADMIN_PRODUCT_RESTORED: 'admin.product.restored'
 } as const;
 
 /** Registers this module's actions into the app-wide `AuditActionMap` union. */

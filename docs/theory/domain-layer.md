@@ -166,10 +166,10 @@ every ternary in the codebase into `domain/`.
 > reader would otherwise reintroduce. A one-line expression with one caller and no trap is
 > inlined, and its comment goes with it.**
 
-The comment is the part worth keeping. `order.deletedAt = order.deletedAt ? undefined : new Date()`
-with a line pointing at `hardDeleteSchema`, where the toggle's semantics are written once for every
-collection, says everything a `nextDeletionState(deletedAt, now)` said — minus an import, a barrel
-line and a hop.
+The comment is the part worth keeping. `if (order.deletedAt) return …; order.deletedAt = new Date()`
+with a line pointing at `hardDeleteSchema`, where the soft-delete semantics are written once for
+every collection, says everything a `nextDeletionState(deletedAt, now)` said — minus an import, a
+barrel line and a hop.
 
 Both halves are live:
 

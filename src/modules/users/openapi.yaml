@@ -30,6 +30,14 @@ paths:
                   in: query
                   schema:
                       type: boolean
+                - name: deleted
+                  in: query
+                  description: >-
+                      `true` lists only soft-deleted rows, `false` only live ones; absent lists
+                      both. Admin-effective: a caller who cannot see deleted rows at all gets an
+                      empty page for `true`.
+                  schema:
+                      type: boolean
             responses:
                 '200':
                     description: Users list page
@@ -103,7 +111,7 @@ paths:
         delete:
             tags: [Users]
             summary: Delete user
-            description: Deletes the user identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; a `true` from any source wins, so a `false` sent elsewhere does not cancel it.
+            description: Deletes the user identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; a `true` from any source wins, so a `false` sent elsewhere does not cancel it. A soft delete is one-way and safe to repeat — undo it with `POST /users/{id}/restore`.
             operationId: deleteUser
             x-alias-of: deleteUserById
             security:
@@ -186,7 +194,7 @@ paths:
         delete:
             tags: [Users]
             summary: Delete user
-            description: Deletes the user identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. Functionally equivalent to `DELETE /users`.
+            description: Deletes the user identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. A soft delete is one-way and safe to repeat — undo it with `POST /users/{id}/restore`. Functionally equivalent to `DELETE /users`.
             operationId: deleteUserById
             security:
                 - bearerAuth: []
@@ -204,6 +212,32 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    # Undoes a soft delete. A separate verb because DELETE must be safe to repeat (RFC 9110
+    # §9.2.2): a retried DELETE never brings a record back.
+    /users/{id}/restore:
+        post:
+            tags: [Users]
+            summary: Restore user
+            description: Undoes the soft delete of the user identified by `{id}`. Answers 409 when the user is not soft-deleted, so a restore can never be mistaken for an ordinary read.
+            operationId: restoreUserById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: Restored user
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/UserEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
@@ -310,11 +344,15 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
                 username:
                     type: string
-                # Filters the stored `active` column. It does NOT filter soft-deletion: the two
-                # are independent facts, and `deletedAt` is not exposed on `User` at all, so
-                # there is no filter for it here. `active: false` means "deactivated", never
-                # "deleted".
+                # Filters the stored `active` column. It does NOT filter soft-deletion — that is
+                # `deleted` below: the two are independent facts. `active: false` means
+                # "deactivated", never "deleted".
                 active:
+                    type: boolean
+                # `true`: only soft-deleted rows; `false`: only live ones; absent: both.
+                # Admin-effective, like `active`: a caller who cannot see deleted rows at all
+                # gets an empty page for `true`.
+                deleted:
                     type: boolean
 
         CreateUserRequest:

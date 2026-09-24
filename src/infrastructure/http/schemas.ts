@@ -58,8 +58,8 @@ export const blankToUndefined = (value: unknown): unknown =>
  * Read as a VALUE, never as presence: `!!request.query.hardDelete` would make `?hardDelete=false`
  * permanently delete the record, since the string `'false'` is truthy. `readInput` decodes the
  * URL's string spellings; anything unrecognised fails this schema and answers 422 rather than
- * being guessed at. Absent means soft delete — a TOGGLE that stamps `deletedAt` if absent and
- * clears it if present, so a second `DELETE` RESTORES the record.
+ * being guessed at. Absent means soft delete: `deletedAt` is stamped once, and a repeated DELETE
+ * is a no-op — undoing it is `POST /<collection>/:id/restore`, never a second DELETE.
  */
 export const hardDeleteSchema = z.preprocess(
     blankToUndefined,

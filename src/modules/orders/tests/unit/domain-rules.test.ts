@@ -35,7 +35,7 @@ describe('checkOrderLines', () => {
     });
 });
 
-// Not here: the soft-delete toggle and the read scope. Both are one-line expressions with one
+// Not here: the soft delete and the read scope. Both are one-line expressions with one
 // caller each, so they live in the service (`../../services/crud`, `../../services/scope`) rather
-// than the domain layer — `service-crud.test.ts` covers the toggle and `service-scope.test.ts` the
+// than the domain layer — `service-crud.test.ts` covers the soft delete and `service-scope.test.ts` the
 // scope, including the fail-closed cases.

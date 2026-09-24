@@ -36,7 +36,8 @@ const base = createRepository<OrderDocument, Order>(orderModel, {
         },
         exact: { email: 'email', status: 'status', paymentMethod: 'paymentMethod' },
         // Staff-written text on the order, so the filter is only reachable by someone who sees it.
-        regex: { notes: 'notes' }
+        regex: { notes: 'notes' },
+        presence: { deleted: 'deletedAt' }
     }
 });
 

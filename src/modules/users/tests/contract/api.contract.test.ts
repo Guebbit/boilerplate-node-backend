@@ -306,3 +306,31 @@ describe('DELETE /users/{id} — the audit action names which discharge happened
         );
     });
 });
+
+/** DELETE is one-way and safe to retry; undoing a soft delete is its own verb. */
+describe('POST /users/{id}/restore', () => {
+    it('brings a soft-deleted user back, matching the contract', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const user = await createUser({ deletedAt: new Date() });
+
+        const response = await api()
+            .post(`/users/${String(user._id)}/restore`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect((await userRepository.findById(String(user._id)))!.deletedAt).toBeUndefined();
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('answers 409 for a user who is not deleted', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const user = await createUser();
+
+        const response = await api()
+            .post(`/users/${String(user._id)}/restore`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(409);
+        expect(response).toSatisfyApiSpec();
+    });
+});

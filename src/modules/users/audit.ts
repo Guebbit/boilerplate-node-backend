@@ -18,6 +18,7 @@ export const usersAuditActions = {
      */
     ADMIN_USER_SOFT_DELETED: 'admin.user.soft_deleted',
     ADMIN_USER_ERASED: 'admin.user.erased',
+    ADMIN_USER_RESTORED: 'admin.user.restored',
     /** An admin stripped a user's second factor — the one non-self-service 2FA recovery path. */
     ADMIN_USER_2FA_DISABLED: 'admin.user.two_factor_disabled',
     /*

@@ -9,7 +9,7 @@ import { holdsKey } from '@kernel/ability';
 import { SearchOrdersBody } from '@api/schemas.zod';
 import { orderService } from '../services';
 import { callerContextOf } from '@infrastructure/http/request';
-import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
+import { optionalBooleanSchema, pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
 import { createSearchController } from '@infrastructure/surfaces/create-search-controller';
 
 /**
@@ -19,7 +19,9 @@ import { createSearchController } from '@infrastructure/surfaces/create-search-c
  */
 const searchOrdersQuerySchema = SearchOrdersBody.extend({
     page: pageSchema,
-    pageSize: pageSizeSchema
+    pageSize: pageSizeSchema,
+    // A query string carries `true` as text; the body's own boolean passes straight through.
+    deleted: optionalBooleanSchema
 });
 
 /**

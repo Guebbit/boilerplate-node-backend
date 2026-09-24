@@ -748,14 +748,33 @@ describe('userService.removeById', () => {
         expect(updated!.deletedAt).toBeDefined();
     });
 
-    it('restores a soft-deleted user when called again (toggle)', async () => {
-        const user = await createUser({ deletedAt: new Date() });
+    it('leaves a soft-deleted user deleted when the delete is repeated', async () => {
+        // DELETE must be safe to retry: a second one never brings the account back.
+        const deletedAt = new Date('2026-01-01T00:00:00Z');
+        const user = await createUser({ deletedAt });
         const id = user._id.toString();
 
         await userService.removeById(id);
 
-        const restored = await userRepository.findById(id);
-        expect(restored!.deletedAt).toBeUndefined();
+        expect((await userRepository.findById(id))!.deletedAt).toEqual(deletedAt);
+    });
+
+    it('restores a soft-deleted user through restoreById', async () => {
+        const user = await createUser({ deletedAt: new Date() });
+        const id = user._id.toString();
+
+        const result = await userService.restoreById(id);
+
+        expect(result.success).toBe(true);
+        expect((await userRepository.findById(id))!.deletedAt).toBeUndefined();
+    });
+
+    it('answers 409 when restoring a user who is not deleted', async () => {
+        const user = await createUser();
+
+        const result = await userService.restoreById(user._id.toString());
+
+        expect((result as ResponseReject).status).toBe(409);
     });
 
     it('hard-deletes a user when hardDelete is true', async () => {
@@ -801,8 +820,8 @@ describe('userService.removeById', () => {
     });
 
     /**
-     * A soft delete is reversible — calling `removeById` again on an already-deleted user
-     * restores it — so deleting the avatar would restore a user with a broken one.
+     * A soft delete is reversible — `restoreById` brings the account back — so deleting the
+     * avatar would restore a user with a broken one.
      */
     it('keeps the avatar on a soft delete', async () => {
         const user = await createUser({ imageUrl: '/images/survives-avatar.jpg' });

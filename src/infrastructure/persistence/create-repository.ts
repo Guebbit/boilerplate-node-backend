@@ -88,6 +88,11 @@ export interface SearchSpec {
     text?: string[];
     /** Mongo path → the two filter keys bounding it, e.g. `price: { min: 'minPrice', … }`. */
     ranges?: Record<string, { min: string; max: string }>;
+    /**
+     * Whether a field holds a value at all, from a boolean filter — `deleted: 'deletedAt'` reads
+     * `true` as "soft-deleted" and `false` as "not". Same pre-decoded boolean as `booleans`.
+     */
+    presence?: Record<string, string>;
 }
 
 /** Treat empty/blank/nullish as "the caller did not filter on this". */
@@ -138,6 +143,11 @@ const buildWhere = (filters: object, spec: SearchSpec): Record<string, unknown> 
     // Type check, not `isPresent`: `false` is a filter, and the value is pre-decoded by now.
     for (const [key, path] of Object.entries(spec.booleans ?? {}))
         if (typeof bag[key] === 'boolean') where[path] = bag[key];
+
+    // `null` matches a missing field and an explicit null alike, so either spelling of "unset" in
+    // a stored document reads the same.
+    for (const [key, path] of Object.entries(spec.presence ?? {}))
+        if (typeof bag[key] === 'boolean') where[path] = bag[key] ? { $ne: null } : null;
 
     // Both regex helpers escape the input — an unescaped `$regex` is a public ReDoS.
     for (const [key, path] of Object.entries(spec.regex ?? {}))

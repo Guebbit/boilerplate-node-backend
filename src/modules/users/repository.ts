@@ -90,7 +90,8 @@ export const userRepository: Repository<UserDocument, UserWire> & {
             // see `@modules/access`. Filtering a search by role needs a two-step resolve
             // (membership rows holding that role, then the users among those ids) that this
             // generic `exact` filter can't express; deliberately not rebuilt yet.
-            booleans: { active: 'active' }
+            booleans: { active: 'active' },
+            presence: { deleted: 'deletedAt' }
         }
     }),
 

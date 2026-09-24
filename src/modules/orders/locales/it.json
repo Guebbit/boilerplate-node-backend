@@ -72,6 +72,8 @@
         },
         "items-held": "Gli articoli di questo ordine non possono essere modificati mentre le scorte sono impegnate o già vendute.",
         "insufficient-stock": "Alcuni articoli di questo ordine non sono più disponibili nella quantità richiesta — vedi `details.lines`.",
-        "product-unavailable": "Uno o più prodotti di questo ordine non sono più disponibili — vedi `details.lines`."
+        "product-unavailable": "Uno o più prodotti di questo ordine non sono più disponibili — vedi `details.lines`.",
+        "restored": "Ordine ripristinato.",
+        "not-deleted": "Questo ordine non è eliminato."
     }
 }

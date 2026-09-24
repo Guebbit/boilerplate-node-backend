@@ -24,7 +24,8 @@ import type { PaginatedMeta } from '@infrastructure/persistence/search';
 const searchUsersQuerySchema = SearchUsersBody.extend({
     page: pageSchema,
     pageSize: pageSizeSchema,
-    active: optionalBooleanSchema
+    active: optionalBooleanSchema,
+    deleted: optionalBooleanSchema
 });
 
 /**
