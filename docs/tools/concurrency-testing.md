@@ -52,9 +52,9 @@ The trap is that the test still **passes**: "not two users" is trivially true wh
 
 **`--runInBand`.** It serialises test _files_, not the requests inside a test. `Promise.allSettled` is still genuinely concurrent. Removing the flag would not make these "more concurrent" — it would make them flaky for an unrelated reason, because parallel jest workers would share one in-memory Mongo.
 
-## The four races, and their shapes
+## The races, and their shapes
 
-Reading the code found four. Two were ordinary bugs; the other two are worth knowing as patterns.
+Reading the code found four; a later sweep over money found a fifth. Three were ordinary bugs; the other two are worth knowing as patterns.
 
 | Pattern                                                          | Symptom                                                                                       | Fix                                                                                            |
 | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
@@ -62,8 +62,9 @@ Reading the code found four. Two were ordinary bugs; the other two are worth kno
 | **Read → write → clear**, with nothing tying step 3 to step 1    | One cart becomes two orders; the customer is charged twice                                    | Conditional write on the version read, plus a compensating delete for the loser                |
 | **Read-modify-write** on a document array (`push` then `save()`) | Concurrent logins silently lose sessions; the user is logged out immediately after logging in | Atomic `$push` / `$pull`, evaluated by the database at write time                              |
 | **Contended upsert** carrying its condition in the filter        | _(none — this one was already correct)_                                                       | Nothing. It was correct, documented, and completely untested; the tests were the deliverable   |
+| **Decide on a stale copy** between two conditional writes        | A customer cancels a just-paid order; the charge lands after and is kept                      | Re-read the state the decision depends on _after_ the last write, not before it                |
 
-The last row is the interesting one. Correct code with no tests is one refactor away from incorrect code, and its retry branch, attempt budget and duplicate-key check were all live mutants behind a comment explaining why they worked.
+The fourth row is the interesting one. Correct code with no tests is one refactor away from incorrect code, and its retry branch, attempt budget and duplicate-key check were all live mutants behind a comment explaining why they worked.
 
 ## Order matters when fixing a race
 
@@ -104,14 +105,17 @@ Two things follow, and the second is the reason this section exists:
 
 A race test that never actually races is a green test that measured nothing. Each file records, in a comment, how often the race was observed to be contended over repeated runs — so a future reader can tell "this passes because the code is correct" from "this passes because the race never happened".
 
+When the window is too narrow to hit over HTTP, force it instead. The cancel-vs-pay race in `payment-races.test.ts` never landed in its window in repeated runs; the bug it guards was found by reading, and is pinned deterministically in `src/modules/payments/tests/integration/service.test.ts` by running the cancel inside a wrapped `markPaid`.
+
 ## File map
 
-| Path                                               | Contents                                                                              |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| `tests/integration/concurrency/auth-races.test.ts` | Signup, login, token revocation, one-time reset tokens, and the limiter proof         |
-| `tests/integration/concurrency/cart-races.test.ts` | Cart upsert under contention, checkout, account deletion racing a cart write          |
-| `tests/support/race.ts`                            | `raceN`, status helpers, and the shared "no 5xx, no 429, nobody hung up" assertion    |
-| `tests/support/setup.ts`                           | Where the rate-limit budgets are raised, and why they are raised rather than disabled |
+| Path                                                  | Contents                                                                              |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `tests/integration/concurrency/auth-races.test.ts`    | Signup, login, token revocation, one-time reset tokens, and the limiter proof         |
+| `tests/integration/concurrency/cart-races.test.ts`    | Cart upsert under contention, checkout, account deletion racing a cart write          |
+| `tests/integration/concurrency/payment-races.test.ts` | Double confirm, webhook redelivery, confirm vs webhook, overselling, cancel vs pay    |
+| `tests/support/race.ts`                               | `raceN`, status helpers, and the shared "no 5xx, no 429, nobody hung up" assertion    |
+| `tests/support/setup.ts`                              | Where the rate-limit budgets are raised, and why they are raised rather than disabled |
 
 Run with `npm run test:integration` — they are part of the ordinary integration suite, not a separate command, because they gate merges like the rest of it.
 
