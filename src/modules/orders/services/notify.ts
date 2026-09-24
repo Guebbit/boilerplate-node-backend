@@ -10,6 +10,8 @@
 import { logger } from '@infrastructure/adapters/logger';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { spoolAttachment } from '@infrastructure/adapters/mail-spool';
+import { getDefaultLocale } from '@infrastructure/i18n';
+import { userService } from '@modules/users';
 import {
     bankTransferBeneficiary,
     bankTransferIbanFriendly,
@@ -105,3 +107,48 @@ export const sendOrderPlacedEmail = (
         )
     );
 };
+
+/**
+ * The one buyer-mail policy `create`'s admin confirmation, `cancelById`'s bank-transfer-expired
+ * notice and delivery's shipped notice all follow — see `docs/modules/orders.md`. Looks the buyer
+ * up, then hands `build` the resolved locale and display name; `build` does the actual send
+ * ({@link sendOrderPlacedEmail}, or a bare `enqueueEmail` call for a mail with no attachment).
+ *
+ * A failed lookup is logged and never blocks the mail: the display name falls back to the order's
+ * own email, same as `build`'s own `name` parameter always has elsewhere. `build` itself runs
+ * inside this function's own catch, so neither a rejected lookup nor a throwing `build` can ever
+ * reject back into a caller — cancellation and shipment are both mid state-transition when they
+ * call this, and a mail hiccup must not undo either.
+ * @param order - the order the mail is about; `order.userId` is the account to look up, absent
+ *   once a detach has erased it — `order.email` is always the recipient
+ * @param build - given the resolved locale and display name, builds and sends the mail
+ * @returns settles once `build` has run, for a caller that wants to sequence a next step after
+ *   the mail (delivery's audit line); never rejects
+ */
+export const mailBuyer = (
+    order: OrderDocument,
+    build: (locale: string, name: string) => void
+): Promise<void> =>
+    (order.userId ? userService.getById(String(order.userId)) : Promise.resolve(undefined))
+        .catch((error: unknown) => {
+            // Stryker disable all
+            logger.error({
+                message: 'Buyer lookup failed; mailing the order with the fallback name.',
+                orderId: String(order._id),
+                error
+            });
+            // Stryker restore all
+            return undefined;
+        })
+        .then((buyer) => {
+            build(buyer?.locale ?? getDefaultLocale(), buyer?.username ?? order.email);
+        })
+        .catch((error: unknown) => {
+            // Stryker disable all
+            logger.error({
+                message: 'mailBuyer: sending the buyer mail failed.',
+                orderId: String(order._id),
+                error
+            });
+            // Stryker restore all
+        });

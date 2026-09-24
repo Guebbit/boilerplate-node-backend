@@ -24,7 +24,7 @@ import {
     removeById
 } from './crud';
 import { placeOrder } from './place';
-import { sendOrderPlacedEmail } from './notify';
+import { sendOrderPlacedEmail, mailBuyer } from './notify';
 import { detachUserId, anonymizeDueOrders } from './retention';
 import { callerScope, ownerScope, withActions } from './scope';
 import { cancelById, retryPendingEffects } from './cancel';
@@ -55,7 +55,7 @@ export {
 } from './crud';
 export { retractOrder } from './retract';
 export { placeOrder, type PlaceOrderInput, type PlaceOrderOutcome } from './place';
-export { sendOrderPlacedEmail } from './notify';
+export { sendOrderPlacedEmail, mailBuyer } from './notify';
 export { cancelById, retryPendingEffects } from './cancel';
 export { markPaid, markShipped, markDelivered } from './status';
 export { overrideStatus, forceMove } from './override';
@@ -87,6 +87,7 @@ export const orderService = {
     create,
     placeOrder,
     sendOrderPlacedEmail,
+    mailBuyer,
     countOpenBankTransfers,
     getByTransferReference,
     recordCreated,

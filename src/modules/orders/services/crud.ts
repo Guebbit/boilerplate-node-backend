@@ -7,6 +7,7 @@
  */
 
 import { getDefaultLocale, t } from '@infrastructure/i18n';
+import { logger } from '@infrastructure/adapters/logger';
 import { OrderStatus } from '@types';
 import type { SearchOrdersRequest, CartItem, UpdateOrderByIdRequest, Order } from '@types';
 import type { OrderDocument } from '../model';
@@ -32,7 +33,7 @@ import { resolveCurrentImages } from './current';
 import { freezeOrderLines } from './snapshot';
 import { placeOrder } from './place';
 import { deleteCachedInvoice } from './invoice';
-import { sendOrderPlacedEmail } from './notify';
+import { sendOrderPlacedEmail, mailBuyer } from './notify';
 // `userId` is stored as an ObjectId, so writes have to coerce it. The rule (and its failure
 // mode on a malformed id) lives in the repository layer; this is the only import of it here.
 import { toObjectId } from '@infrastructure/persistence/create-repository';
@@ -192,13 +193,27 @@ export const create = async (
     items: CartItem[],
     context: CallerContext
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
-    // The whole language chain — both the snapshot each line freezes and, further down, the
-    // placed-order email — decided once so the two cannot disagree. The BUYER's stored language,
-    // never the caller's: this endpoint lets an admin place an order for someone else, and
-    // `context.locale` there is the admin's own UI language, not the recipient's. Same rule and
-    // same lookup as `@modules/cart`'s checkout, so the two creation paths cannot diverge.
-    const buyer = await userService.getById(userId);
-    const buyerLocale = buyer?.locale ?? getDefaultLocale();
+    // The snapshot each line freezes wants the BUYER's stored language, never the caller's: this
+    // endpoint lets an admin place an order for someone else, and `context.locale` there is the
+    // admin's own UI language, not the recipient's. Same rule as `@modules/cart`'s checkout.
+    //
+    // Guarded: a lookup failure here must fall back to the default locale, not abort the order
+    // this endpoint is about to place. `mailBuyer`, further down, covers the same failure for the
+    // placed-order email with its own independent lookup — the two normally agree, since both
+    // read the same account, but neither may block on the other.
+    const buyerLocale = await userService
+        .getById(userId)
+        .then((buyer) => buyer?.locale ?? getDefaultLocale())
+        .catch((error: unknown) => {
+            // Stryker disable all
+            logger.error({
+                message: 'Buyer lookup failed while pricing a new order; using the default locale.',
+                userId,
+                error
+            });
+            // Stryker restore all
+            return getDefaultLocale();
+        });
 
     // `Promise.all([])` settles without a query, so an empty basket still costs no round trip.
     const resolvedItems = await resolveItemProducts(items);
@@ -231,10 +246,10 @@ export const create = async (
     recordCreated(order, context);
 
     // `recordCreated` is shared with `@modules/cart`'s checkout, which sends its own placed-order
-    // email, so mailing here too would double-send if this weren't split per caller. `buyer` was
-    // already loaded above for the locale — reused here so the greeting uses their name, not a
-    // second copy of their own email address.
-    sendOrderPlacedEmail(order, buyerLocale, buyer?.username ?? email, email);
+    // email, so mailing here too would double-send if this weren't split per caller. `mailBuyer`
+    // re-resolves the buyer for the mail's own locale/name — see this function's own guarded
+    // lookup above for why a second, independent attempt is worth the extra read.
+    void mailBuyer(order, (locale, name) => sendOrderPlacedEmail(order, locale, name, email));
 
     return generateSuccess(order, 201, t('orders.creation-success'));
 };

@@ -15,6 +15,8 @@ import { ORDER_CANCELLED } from '../../events';
 import { orderRepository } from '../../repository';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
+import { userService } from '@modules/users';
+import { logger } from '@infrastructure/adapters/logger';
 import * as auditPort from '@infrastructure/observability/audit';
 import * as analyticsPort from '@infrastructure/observability/analytics';
 import { ordersAuditActions } from '../../audit';
@@ -329,6 +331,31 @@ describe('cancelById — the bank-transfer-expired email', () => {
         await orderService.cancelById(String(order._id), asUser(user), {}, testCallerContext);
 
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
+    });
+
+    it('still cancels and sends the expiry notice when the buyer lookup fails', async () => {
+        mockEnqueueEmail.mockClear();
+        const loggedError = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+        const user = await createUser();
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            paymentMethod: 'bank_transfer'
+        });
+        jest.spyOn(userService, 'getById').mockRejectedValueOnce(new Error('lookup unavailable'));
+
+        // Mirrors module.ts's RESERVATION_EXPIRED handler: admin scope, no CallerContext. Before
+        // the fix, this `await` threw straight out of `afterCancel` — the cancel itself never
+        // committed.
+        const result = await orderService.cancelById(String(order._id), asAdmin());
+
+        expect(result.success).toBe(true);
+        const stored = await orderRepository.findById(String(order._id));
+        expect(stored?.status).toBe('cancelled');
+        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+        const [envelope, template] = mockEnqueueEmail.mock.calls[0];
+        expect(envelope.to).toBe(order.email);
+        expect(template).toBe('orders.order-transfer-expired');
+        expect(loggedError).toHaveBeenCalled();
     });
 });
 

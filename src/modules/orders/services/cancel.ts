@@ -7,7 +7,7 @@
  */
 
 import { callerForSubject, SYSTEM_ACTOR } from '@kernel/permissions';
-import { getDefaultLocale, t } from '@infrastructure/i18n';
+import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import { environmentNumber } from '@infrastructure/runtime/environment';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
@@ -21,7 +21,6 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { inventoryService } from '@modules/inventory';
-import { userService } from '@modules/users';
 import { emitDomainEvent } from '@kernel/events';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
@@ -33,6 +32,7 @@ import { orderRepository } from '../repository';
 import { statusesLeadingTo } from '../domain';
 import { bankTransferExpiredEmail } from '../emails';
 import { getById } from './crud';
+import { mailBuyer } from './notify';
 import { callerScope, actorOf } from './scope';
 
 /** The effect set a refunding cancel writes down. Frozen, since it rides into a `$set`. */
@@ -91,10 +91,10 @@ const afterCancel = async (
      * needs no explanation of itself.
      */
     if (isSystemExpiry && order.paymentMethod === 'bank_transfer') {
-        const buyer = order.userId ? await userService.getById(String(order.userId)) : null;
-        const locale = buyer?.locale ?? getDefaultLocale();
-        const mail = bankTransferExpiredEmail(locale, order);
-        void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
+        await mailBuyer(order, (locale) => {
+            const mail = bankTransferExpiredEmail(locale, order);
+            void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
+        });
     }
 
     recordAudit(emitContext, {

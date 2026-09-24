@@ -6,7 +6,7 @@
  * ever asks it to move. See: docs/modules/delivery.md
  */
 
-import { t, getDefaultLocale } from '@infrastructure/i18n';
+import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import {
@@ -20,9 +20,8 @@ import { OrderStatus } from '@types';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { deliveryAuditActions } from './audit';
-import { orderService, canTransition, canOverrideTo } from '@modules/orders';
+import { orderService, canTransition, canOverrideTo, mailBuyer } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
-import { userService } from '@modules/users';
 import { holdsKey } from '@kernel/ability';
 import { findShippingMethod, methodsForWeight } from './domain';
 import { shipmentShippedEmail } from './emails';
@@ -101,23 +100,16 @@ const refuseUnearnedForce = (
  * The shipped-parcel notification: the carrier email, addressed in the buyer's own language when
  * an account is still attached, and the operator-facing log line — {@link recordShipment}'s own
  * notification step, named so the chain around it reads as steps rather than nested callbacks.
- * `order.userId` is absent once a detach has erased the account — nothing to look up, the
- * pre-existing "id points at nobody" case just below covers the rest.
+ * `order.userId` is absent once a detach has erased the account, and a lookup that fails for any
+ * other reason is `mailBuyer`'s own policy to log and fall back on — see `@modules/orders`.
  */
 const notifyShipped = (
     orderId: string,
     order: OrderDocument,
     shipment: ShipmentDocument
 ): Promise<void> =>
-    (order.userId
-        ? userService.getById(String(order.userId)).catch(() => null)
-        : Promise.resolve(null)
-    ).then((user) => {
-        const mail = shipmentShippedEmail(
-            user?.locale ?? getDefaultLocale(),
-            user?.username ?? order.email,
-            shipment.trackingCode
-        );
+    mailBuyer(order, (locale, name) => {
+        const mail = shipmentShippedEmail(locale, name, shipment.trackingCode);
         void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
         // Stryker disable next-line all
         logger.info(`Order ${orderId} shipped as ${shipment.trackingCode ?? '(untracked)'}`);

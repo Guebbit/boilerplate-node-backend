@@ -30,20 +30,41 @@ import type { OrderDocument } from '../../model';
 import { asReject, asSuccess } from '@tests/response';
 import { asCustomer, asAdmin, testCallerContext } from '@tests/callers';
 import { MISSING_ID } from '@tests/ids';
+import { enqueueEmail } from '@infrastructure/adapters/mailer';
+import { logger } from '@infrastructure/adapters/logger';
+import { userService } from '@modules/users';
+
+// The queue, not the copy: `mail-copy.test.ts` pins what the placed-order email says.
+jest.mock('@infrastructure/adapters/mailer', () => ({
+    __esModule: true,
+    enqueueEmail: jest.fn()
+}));
+const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 /**
  * `deleteCachedInvoice` is the one call `update()`'s line-rewrite path makes into
  * `services/invoice.ts` — spied on rather than proven through a real cache file, since
  * `invoiceCacheTtlMinutes()` is forced `0` under `NODE_ENV=test` and would never write one in the
  * first place. Everything else in the module stays real.
+ *
+ * `renderInvoicePdf` is mocked alongside it for the same reason `cart`'s own checkout suite mocks
+ * it: `create`'s placed-order email attaches the invoice, and a real render is a Chromium launch
+ * this suite has no business paying for on every order it creates.
  */
 const deleteCachedInvoiceMock = jest.fn().mockResolvedValue(true);
+const renderInvoicePdfMock = jest.fn().mockResolvedValue(undefined);
 jest.mock('../../services/invoice', () => ({
     ...jest.requireActual('../../services/invoice'),
-    deleteCachedInvoice: (orderId: string) => deleteCachedInvoiceMock(orderId)
+    deleteCachedInvoice: (orderId: string) => deleteCachedInvoiceMock(orderId),
+    renderInvoicePdf: (orderId: string) => renderInvoicePdfMock(orderId)
 }));
 
+/** Waits out `create`'s fire-and-forget placed-order email, same convention as `cart`'s checkout suite. */
+const flush = () => new Promise((resolve) => setImmediate(resolve));
+
 setupTestDb();
+
+afterEach(() => jest.restoreAllMocks());
 
 /** Creates an order through the service, returning the persisted document. */
 const seedOrder = async () => {
@@ -198,6 +219,34 @@ describe('create', () => {
         );
 
         await expect(orderRepository.count({})).resolves.toBe(0);
+    });
+
+    it('still creates the order and mails the fallback name when the buyer lookup fails', async () => {
+        mockEnqueueEmail.mockClear();
+        const loggedError = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+        const user = await createUser({ email: 'buyer@example.com' });
+        const product = await createProduct({ title: 'Keyboard', price: 25 });
+        // Every `userService.getById` call rejects — the pre-order locale lookup AND `mailBuyer`'s
+        // own lookup for the placed-order email both have to survive this, not just one of them.
+        jest.spyOn(userService, 'getById').mockRejectedValue(new Error('lookup unavailable'));
+
+        const result = await create(
+            String(user._id),
+            user.email,
+            [{ productId: String(product._id), quantity: 1 }],
+            testCallerContext
+        );
+        await flush();
+
+        expect(result.success).toBe(true);
+        expect(asSuccess(result).status).toBe(201);
+        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+        const [envelope, template, data] = mockEnqueueEmail.mock.calls[0];
+        expect(envelope.to).toBe(user.email);
+        expect(template).toBe('orders.order-confirm');
+        // The fallback name policy: `username ?? email`, and no username was ever resolved.
+        expect(data?.greeting).toContain(user.email);
+        expect(loggedError).toHaveBeenCalled();
     });
 });
 

@@ -9,7 +9,9 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
+import { logger } from '@infrastructure/adapters/logger';
 import { createUser } from '@modules/users/tests/factories';
+import { userService } from '@modules/users';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { orderService } from '@modules/orders';
@@ -27,6 +29,8 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 setupTestDb();
+
+afterEach(() => jest.restoreAllMocks());
 
 /** An order ready to ship — `processing`, no shipping method frozen (so `tracked` is `false`). */
 const processingOrderFor = async () => {
@@ -94,6 +98,26 @@ describe('recordShipment', () => {
         expect(envelope.to).toBe(order.email);
         expect(template).toBe('delivery.shipment-shipped');
         expect(String(data?.tracking)).toContain('TRK-ABCDEF12');
+    });
+
+    it('still ships and mails the fallback name when the buyer lookup fails, and logs it', async () => {
+        mockEnqueueEmail.mockClear();
+        const loggedError = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+        const { order } = await processingOrderFor();
+        jest.spyOn(userService, 'getById').mockRejectedValueOnce(new Error('lookup unavailable'));
+
+        const result = await recordShipment(String(order._id), 'TRK-FALLBACK1', testCallerContext);
+
+        expect(result.success).toBe(true);
+        const shipment = await shipmentRepository.findByOrderId(String(order._id));
+        expect(shipment!.status).toBe('shipped');
+        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+        const [envelope, template, data] = mockEnqueueEmail.mock.calls[0];
+        expect(envelope.to).toBe(order.email);
+        expect(template).toBe('delivery.shipment-shipped');
+        // Fallback name policy: `username ?? email`, and no username was ever resolved.
+        expect(data?.greeting).toContain(order.email);
+        expect(loggedError).toHaveBeenCalled();
     });
 
     it('refuses an order that is not processing', async () => {
