@@ -278,8 +278,8 @@ services:
             - '${NODE_REDIS_PORT:-6379}:6379'
 
     # RabbitMQ: message broker for async tasks (email, PDF generation, etc.). Matches production
-    # (docker-compose.production.yml) — quorum queues need 4.x's default delivery-limit handling,
-    # and dev must run what prod runs. See docs/tools/rabbitmq.md#quorum-queues.
+    # (docker-compose.production.yml) — quorum-queue message priority is a 4.x feature, and dev
+    # must run what prod runs. See docs/tools/rabbitmq.md#queue-type-quorum.
     rabbitmq:
         logging: *container-logging
         image: rabbitmq:4-management

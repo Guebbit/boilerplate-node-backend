@@ -683,6 +683,38 @@ describe('consumeFromQueue acknowledgement policy', () => {
         expect(await deadLetteredCountFor('jobs')).toBe(before + 1);
     });
 
+    it('parks a message whose crash cycles used up every attempt, without running the handler', async () => {
+        // A consumer that crashes never reaches the handler's `.catch`: the broker's delivery
+        // limit sends it round the retry queue instead. 5 completed cycles = the default 5 attempts.
+        const handler = jest.fn().mockResolvedValue(true);
+        const onMessage = await captureConsumerCallback(handler);
+
+        await onMessage(
+            delivery(
+                { jobId: 5 },
+                {
+                    'x-death': [
+                        {
+                            queue: 'jobs.retry',
+                            count: 5,
+                            reason: 'expired',
+                            exchange: 'dead-letter'
+                        }
+                    ]
+                }
+            )
+        );
+        await settle();
+
+        expect(handler).not.toHaveBeenCalled();
+        expect(mockSendToQueue).toHaveBeenCalledWith(
+            'jobs.dead',
+            expect.any(Buffer),
+            expect.objectContaining({ persistent: true }),
+            expect.any(Function)
+        );
+    });
+
     it('parks a message that will never parse, rather than cycling it through retries', async () => {
         // The poison-message case. These bytes are not JSON and never will be, so retrying hands
         // the same delivery straight back and the failure repeats identically every time.

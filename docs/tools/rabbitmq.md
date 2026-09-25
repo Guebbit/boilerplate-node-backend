@@ -106,7 +106,7 @@ When none of the vars are set, all queue operations silently no-op — the rest 
 
 The `docker-compose.yml` includes a `rabbitmq` service with the management plugin, `rabbitmq:4-management` —
 matching `docker-compose.production.yml`'s own image, which is what makes quorum queues' 4.x
-default delivery-limit behaviour ([Queue type: quorum](#queue-type-quorum)) the same in dev as in
+behaviour ([Queue type: quorum](#queue-type-quorum), [Priority](#priority)) the same in dev as in
 production:
 
 - **AMQP port**: `5672`
@@ -231,14 +231,21 @@ this stays a runbook line rather than a procedure anyone has had to run.
 
 ### Queue type: quorum
 
-Every queue this file declares — work, retry and dead-letter alike — carries
+Every queue `queue.ts` declares — work, retry and dead-letter alike — carries
 `x-queue-type: quorum`. Quorum queues are RabbitMQ 4's recommended durable type; classic MIRRORED
 queues, their predecessor, are gone in 4.x. The reason it matters here specifically: a quorum
 queue tracks its own `delivery-count`, incremented on EVERY redelivery — a consumer that crashes
-mid-handler included, not only a `nack` the app chose to send. That is what closes the bug a
-classic queue could not: a message that kills its consumer before the handler ever gets to nack
-it used to be redelivered forever, since the app's own `x-death`-based attempt count
-(`NODE_QUEUE_MAX_ATTEMPTS`) only grows on a `nack`.
+mid-handler included, not only a `nack` the app chose to send. That is what bounds a message that
+kills its consumer before the handler ever gets to nack it, which the app's own `x-death`-based
+attempt count (`NODE_QUEUE_MAX_ATTEMPTS`) alone cannot, since the handler's failure path never
+runs:
+
+```mermaid
+flowchart LR
+    W["work queue"] -->|"x-delivery-limit crashes"| R["&lt;queue&gt;.retry<br/>(TTL)"]
+    R -->|"expires: x-death +1"| W
+    W -->|"x-death ≥ NODE_QUEUE_MAX_ATTEMPTS:<br/>parked before the handler runs"| D["&lt;queue&gt;.dead"]
+```
 
 | Queue argument           | Value            | Where                    | Why                                                                                                                                                                                           |
 | ------------------------ | ---------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -273,10 +280,9 @@ module's token-bearing links (password reset, account deletion, account setup, e
 verification — all short-TTL, all a person is staring at an inbox for) pass `'high'`. Order
 confirmations, delivery notices and the rest stay `'normal'`.
 
-Two levels, deliberately: RabbitMQ's priority ordering is approximate under load — it reorders
-within whatever the broker currently has buffered, not a strict global heap — so this is "give
-the few urgent things a preference," not a real-time scheduler. See
-[RabbitMQ: Priority Queue Support](https://www.rabbitmq.com/docs/priority).
+Two levels, deliberately: this is "give the few urgent things a preference" — one gap between
+most things and what a person is actively blocked on — not a real-time scheduler. See
+[RabbitMQ: Quorum Queues — Priorities](https://www.rabbitmq.com/docs/quorum-queues#priority).
 
 ### Options
 
