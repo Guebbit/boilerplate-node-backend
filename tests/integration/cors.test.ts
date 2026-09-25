@@ -94,4 +94,29 @@ describe('CORS', () => {
         expect(response.status).toBeLessThan(500);
         expect(response.headers['access-control-allow-origin']).toBeUndefined();
     });
+
+    /**
+     * A header a browser will actually send has to be pre-cleared here, or the preflight refuses
+     * it and the real request never leaves the browser — `humanChallengeGate`
+     * (`src/infrastructure/http/middlewares/human-challenge.ts`) reads
+     * `x-antibot-challenge-token`, and the signup form sends `x-analytics-consent`; neither reaching
+     * the server is a silent break, not a 4xx anyone would notice here.
+     */
+    it('allows the antibot and analytics-consent headers through preflight', async () => {
+        const response = await api()
+            .options('/account/login')
+            .set('Origin', ALLOWED_ORIGIN)
+            .set('Access-Control-Request-Method', 'POST')
+            .set(
+                'Access-Control-Request-Headers',
+                'x-antibot-challenge-token, x-analytics-consent'
+            );
+
+        expect(response.status).toBeLessThan(300);
+        const allowedHeaders = (response.headers['access-control-allow-headers'] ?? '')
+            .split(',')
+            .map((header: string) => header.trim().toLowerCase());
+        expect(allowedHeaders).toContain('x-antibot-challenge-token');
+        expect(allowedHeaders).toContain('x-analytics-consent');
+    });
 });

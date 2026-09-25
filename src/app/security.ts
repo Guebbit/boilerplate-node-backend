@@ -173,7 +173,12 @@ export const installSecurity = (app: Express): void => {
                 'traceparent',
                 // Declared by the contract on the retry-safe writes; a browser sending it would
                 // otherwise fail the preflight.
-                'Idempotency-Key'
+                'Idempotency-Key',
+                // Read by humanChallengeGate (human-challenge.ts) once a provider is active.
+                'x-antibot-challenge-token',
+                // Read by callerContextOf (infrastructure/http/request.ts) for every request's
+                // analytics-consent flag.
+                'x-analytics-consent'
             ],
             // What a browser client may read off a response: the rate-limit answer (draft-7
             // headers, see `rate-limit.ts`) is what lets it back off instead of retrying blind.
