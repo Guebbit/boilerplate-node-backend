@@ -50,6 +50,13 @@ export interface WeighedCartLine {
 }
 
 /**
+ * Whether this line rides in a parcel — the one predicate {@link basketWeight} and
+ * {@link needsShipping} share, so "counts toward weight" and "needs a method" never disagree.
+ */
+const isShippedLine = ({ product }: WeighedCartLine): boolean =>
+    product?.requiresShipping !== false;
+
+/**
  * The basket's total weight, in grams — every SHIPPED line's `product.weight` (absent counts as
  * 0, the same rule `Product.weight` documents) times its quantity, summed. A digital good
  * (`requiresShipping: false`) contributes nothing: it never rides in the parcel a method's weight
@@ -64,19 +71,21 @@ export interface WeighedCartLine {
  */
 export const basketWeight = (lines: readonly WeighedCartLine[]): number => {
     let total = 0;
-    for (const { product, quantity } of lines) {
-        if (product?.requiresShipping === false) continue;
-        total += (product?.weight ?? 0) * (quantity ?? 0);
+    for (const line of lines) {
+        if (!isShippedLine(line)) continue;
+        total += (line.product?.weight ?? 0) * (line.quantity ?? 0);
     }
     return total;
 };
 
 /**
- * Whether the basket needs a shipment at all — mirrors {@link basketWeight}'s own predicate, so
- * "counts toward weight" and "needs a method" never disagree about the same line.
+ * Whether the basket needs a shipment at all.
+ *
+ * @param lines - the basket's lines, joined to their products
+ * @returns `true` when at least one line ships
  */
-const needsShipping = (lines: readonly WeighedCartLine[]): boolean =>
-    lines.some((line) => line.product?.requiresShipping !== false);
+export const needsShipping = (lines: readonly WeighedCartLine[]): boolean =>
+    lines.some((line) => isShippedLine(line));
 
 /** What a checkout still owes delivery, once the basket itself is known good. */
 export type ShippingRequirementVerdict =
@@ -87,9 +96,7 @@ export type ShippingRequirementVerdict =
 /**
  * Does this checkout have what shipping the basket needs? A digital-only basket needs neither. A
  * basket with any physical line needs a method; if that method itself needs an address
- * (`ShippingMethod.requiresAddress`), it needs one of those too. Mirrors `orders`' invariant that
- * a shippable order always names how it ships, deliberately unshared for the same reason
- * {@link evaluateCheckout}'s own docblock gives: a cart is a draft, an order a commitment.
+ * (`ShippingMethod.requiresAddress`), it needs one of those too.
  *
  * @param lines - the basket's lines, joined to their products
  * @param method - the chosen shipping method, or `undefined` for none
@@ -98,13 +105,12 @@ export type ShippingRequirementVerdict =
  */
 export const evaluateShippingRequirement = (
     lines: readonly WeighedCartLine[],
-    method: { requiresAddress?: boolean } | undefined,
+    method: { requiresAddress: boolean } | undefined,
     hasAddress: boolean
 ): ShippingRequirementVerdict => {
     if (!needsShipping(lines)) return { ok: true };
     if (!method) return { ok: false, reason: 'method-required' };
-    if (method.requiresAddress === true && !hasAddress)
-        return { ok: false, reason: 'address-required' };
+    if (method.requiresAddress && !hasAddress) return { ok: false, reason: 'address-required' };
     return { ok: true };
 };
 

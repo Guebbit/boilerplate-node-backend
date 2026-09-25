@@ -10,14 +10,13 @@ import type { ShippingMethod } from '@types';
 
 /**
  * The methods this shop offers. Flat rates on purpose — a full zone matrix is a real-project
- * concern with no demo value; the weight range each method accepts is the one dimension worth
- * demonstrating, since it is what keeps a carrier's own limits honest. `pickup` proves "cheapest
- * method" and "no method" stay distinct, and carries no weight ceiling — nothing about a counter
- * collection cares how heavy the box is. `tracked` decides whether
- * `POST /delivery/order/{orderId}/ship` requires a tracking code — `express` is the one method
- * worth the carrier's own visibility; `standard` and `pickup` are not. `requiresAddress` is what
- * checkout enforces to decide whether an address is mandatory — `pickup` is the one method that
- * ships nowhere, so it is also the one that needs none.
+ * concern with no demo value. `pickup` proves "cheapest method" and "no method" stay distinct.
+ *
+ * Weight range:    the one dimension worth demonstrating — it keeps a carrier's limits honest.
+ *                  `pickup` has no ceiling: a counter collection doesn't care how heavy the box is.
+ * tracked:         whether `POST /delivery/order/{orderId}/ship` requires a tracking code — only
+ *                  `express` is worth the carrier's own visibility.
+ * requiresAddress: whether checkout demands an address — `pickup` ships nowhere, so it needs none.
  */
 export const SHIPPING_METHODS: readonly ShippingMethod[] = [
     {

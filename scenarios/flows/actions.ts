@@ -55,7 +55,7 @@ export const receiveStock = (owner: Caller, productId: string, quantity: number)
  * The cart is filled line by line because that is what `POST /cart` takes; the lines land in one
  * order either way, since a cart belongs to one account and this awaits each add.
  *
- * Defaults to `pickup`: every demo product is physical, so checkout now refuses a basket with no
+ * Defaults to `pickup`: every demo product is physical, so checkout refuses a basket with no
  * method at all, and `pickup` is the one method that needs no address — not every seeded shopper
  * has one. A flow demonstrating a real shipment (`standard`) overrides it.
  *

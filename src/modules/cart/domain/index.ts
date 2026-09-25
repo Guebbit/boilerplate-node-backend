@@ -4,6 +4,11 @@
  * See `docs/theory/domain-layer.md`.
  */
 
-export { evaluateCheckout, basketWeight, evaluateShippingRequirement } from './rules';
+export {
+    evaluateCheckout,
+    basketWeight,
+    needsShipping,
+    evaluateShippingRequirement
+} from './rules';
 
 export type { CheckoutShortfall, UnavailableCartLine, ShippingRequirementVerdict } from './rules';

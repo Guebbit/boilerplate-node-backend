@@ -43,20 +43,13 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
 /**
- * `deleteCachedInvoice` is the one call `update()`'s line-rewrite path makes into
- * `services/invoice.ts` — spied on rather than proven through a real cache file, since
- * `invoiceCacheTtlMinutes()` is forced `0` under `NODE_ENV=test` and would never write one in the
- * first place. Everything else in the module stays real.
- *
- * `renderInvoicePdf` is mocked alongside it for the same reason `cart`'s own checkout suite mocks
- * it: `create`'s placed-order email attaches the invoice, and a real render is a Chromium launch
- * this suite has no business paying for on every order it creates.
+ * `renderInvoicePdf` is mocked for the same reason `cart`'s own checkout suite mocks it: `create`'s
+ * placed-order email attaches the invoice, and a real render is a Chromium launch this suite has no
+ * business paying for on every order it creates. Everything else in the module stays real.
  */
-const deleteCachedInvoiceMock = jest.fn().mockResolvedValue(true);
 const renderInvoicePdfMock = jest.fn().mockResolvedValue(undefined);
 jest.mock('../../services/invoice', () => ({
     ...jest.requireActual('../../services/invoice'),
-    deleteCachedInvoice: (orderId: string) => deleteCachedInvoiceMock(orderId),
     renderInvoicePdf: (orderId: string) => renderInvoicePdfMock(orderId)
 }));
 
@@ -453,15 +446,6 @@ describe('update', () => {
         const reloaded = await orderRepository.findById(String(order._id));
         expect(reloaded!.email).toBe(originalEmail);
         expect(reloaded!.items).toHaveLength(2);
-    });
-
-    it('leaves the cache alone since update never touches order lines', async () => {
-        const { order } = await seedOrder();
-        deleteCachedInvoiceMock.mockClear();
-
-        await update(order, { email: 'new-address@example.com' });
-
-        expect(deleteCachedInvoiceMock).not.toHaveBeenCalled();
     });
 });
 

@@ -58,8 +58,8 @@ flowchart TD
 ```
 
 Steps 1–7 are reads and refusals — genuinely checkout's own job: deciding whether this basket, this
-account and this address are allowed to become an order at all. Step 7 also carries the full
-shipping rule: any `requiresShipping: true` line needs a method (`CART_SHIPPING_METHOD_REQUIRED`
+account and this address are allowed to become an order at all. Step 7 also carries the shipping
+requirement: any `requiresShipping: true` line needs a method (`CART_SHIPPING_METHOD_REQUIRED`
 otherwise), and once a method is chosen, `ShippingMethod.requiresAddress` says whether it also needs
 an address (`CART_ADDRESS_REQUIRED` otherwise) — a digital-only basket needs neither. The weight
 check is the authoritative one: `GET /delivery/methods?weight=` (used to build the selector) is

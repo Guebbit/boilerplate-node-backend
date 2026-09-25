@@ -613,8 +613,8 @@ describe('orderConfirm', () => {
         await cartItemSetById(user.id, String(keyboard._id), 2);
         await cartItemSetById(user.id, String(mouse._id), 1);
 
-        // `pickup`: both products are physical, so checkout now needs a method — pickup needs
-        // no address either, keeping this test about order creation, not shipping.
+        // `pickup`: both products are physical, so checkout needs a method — pickup needs no
+        // address either, keeping this test about order creation, not shipping.
         const result = await orderConfirm(user.id, testCallerContext, undefined, 'pickup');
 
         expect(result.success).toBe(true);
@@ -728,8 +728,8 @@ describe('orderConfirm', () => {
 
     it('an omitted method leaves both shipping fields absent', async () => {
         const user = await createUser();
-        // Digital: a physical line would now refuse checkout outright with no method chosen —
-        // this case is about what an omitted method itself leaves behind, not that refusal.
+        // Digital: a physical line would refuse checkout outright with no method chosen — this
+        // case is about what an omitted method itself leaves behind, not that refusal.
         const product = await createProduct({ requiresShipping: false });
         await cartItemSetById(user.id, String(product._id), 1);
 

@@ -36,6 +36,7 @@ import { cartRepository } from '../repository';
 import {
     evaluateCheckout,
     basketWeight,
+    needsShipping,
     evaluateShippingRequirement,
     type CheckoutShortfall,
     type UnavailableCartLine
@@ -107,10 +108,9 @@ const resolvePaymentMethod = async (
 /**
  * Which method and address this checkout ships to, resolved before any stock moves: a named
  * method or address entry that does not resolve refuses the checkout while nothing has been
- * written yet. Both are optional — `undefined` for either is fine, since neither a method nor an
- * address is required to buy. Shipping cost, and whether the method fits the basket, are decided
- * later, once the joined lines total — this only resolves WHICH method and address, not whether
- * they still apply to what ends up in the basket.
+ * written yet. Both are optional HERE — whether the basket needs them is
+ * {@link evaluateShippingRequirement}'s call, made later once the joined lines are known, as are
+ * shipping cost and whether the method fits. This only resolves WHICH method and address.
  *
  * @param userId - the caller's id, whose address book `addressId` is looked up against
  * @param addressId - the shipping address's entry id, or `undefined` for the default/no address
@@ -280,7 +280,7 @@ const runCheckout = async (
      * (`requiresShipping: false`). Refused rather than silently ignored: a client that thinks it
      * is paying for shipping on a purchase that never ships should not proceed uncorrected.
      */
-    if (shippingMethod && joined.every(({ product }) => product.requiresShipping === false))
+    if (shippingMethod && !needsShipping(joined))
         return generateReject(409, [
             {
                 code: 'CART_SHIPPING_NOT_APPLICABLE',
@@ -289,9 +289,9 @@ const runCheckout = async (
         ]);
 
     /*
-     * The full rule, once shipping applicability itself is settled above: a physical basket
-     * names a method, and — only when that method demands it — an address. Neither is required
-     * of a digital-only basket, unchanged from before this rule existed.
+     * The rest of the rule, once shipping applicability itself is settled above: a physical
+     * basket names a method, and — only when that method demands it — an address. A
+     * digital-only basket needs neither.
      */
     const shippingRequirement = evaluateShippingRequirement(
         joined,

@@ -99,8 +99,8 @@ describe('CORS', () => {
      * A header a browser will actually send has to be pre-cleared here, or the preflight refuses
      * it and the real request never leaves the browser — `humanChallengeGate`
      * (`src/infrastructure/http/middlewares/human-challenge.ts`) reads
-     * `x-antibot-challenge-token`, and the signup form sends `x-analytics-consent`; neither reaching
-     * the server is a silent break, not a 4xx anyone would notice here.
+     * `x-antibot-challenge-token`, and `callerContextOf` reads `x-analytics-consent`; neither
+     * reaching the server is a silent break, not a 4xx anyone would notice here.
      */
     it('allows the antibot and analytics-consent headers through preflight', async () => {
         const response = await api()

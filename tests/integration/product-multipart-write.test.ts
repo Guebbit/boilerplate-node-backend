@@ -159,8 +159,8 @@ describe('writing a product through a multipart body', () => {
             .set('Authorization', bearer)
             .field('translations', JSON.stringify({ en: { title: 'Digital good on arrival' } }))
             .field('price', '5')
-            // The string 'false' is truthy — same trap as `active` above, on the field the
-            // create controller was missing from its `booleans` decode list.
+            // The string 'false' is truthy — same trap as `active` above, so the create
+            // controller's `booleans` decode list has to carry this field too.
             .field('requiresShipping', 'false')
             .attach('imageUpload', PNG_BYTES, {
                 filename: 'product.png',

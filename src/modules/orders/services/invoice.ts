@@ -131,8 +131,7 @@ export const renderInvoicePdf = (orderId: string): Promise<Buffer | undefined> =
 };
 
 /**
- * Deletes an order's cached invoice PDF, if one exists — `remove()`'s hard-delete cleanup, any
- * write that changes what the invoice prints (`services/crud.ts`'s line-rewrite path), and
+ * Deletes an order's cached invoice PDF, if one exists — `remove()`'s hard-delete cleanup, and
  * {@link reapOrphanedInvoices}'s per-file action once a name has no order left to name it. Status
  * moves and cancellations never call this: nothing about them appears on the invoice.
  *
