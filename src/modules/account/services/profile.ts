@@ -257,8 +257,7 @@ export const removeOwnAccount = (
  * What `PUT /account` and `PATCH /account` both ultimately write, validated with this codebase's
  * messages. `email`/`username` come from `zodUserSchema` (carries the i18n thunks); `locale`,
  * `imageUrl`, `phone`, `website` come straight from `UpdateAccountBody` — the merge-shaped
- * contract schema (AUDIT_0924 D17d), since every field this function sees is already optional by
- * the time it runs: `update-account.ts`'s PUT path already filled an omitted one with `null`
+ * contract schema, since every field this function sees is already optional by the time it runs: `update-account.ts`'s PUT path already filled an omitted one with `null`
  * before calling here. `.partial()` last: every field is optional, and absence means "leave it
  * alone".
  */
@@ -419,12 +418,12 @@ export const updateProfile = (
         : Promise.resolve(generateReject(422, validationErrors(parseResult.error)));
 
     return outcome.then((result) => {
-        if (result.success)
-            recordAudit(context, {
-                action: accountAuditActions.AUTH_PROFILE_UPDATED,
-                outcome: 'success'
-            });
-        return result;
+        if (!result.success) return result;
+        recordAudit(context, {
+            action: accountAuditActions.AUTH_PROFILE_UPDATED,
+            outcome: 'success'
+        });
+        return generateSuccess(result.data, 200, t('account.update.success'));
     });
 };
 
