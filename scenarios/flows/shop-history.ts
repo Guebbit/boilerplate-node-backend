@@ -289,21 +289,13 @@ const driveCatalogueEdits = async (owner: Caller): Promise<void> => {
  * Last of all, and after every shopper has signed out: he places two of the orders above, and a
  * banned account cannot use the session it placed them with.
  *
- * `PUT /users/{id}` validates the whole identity rather than the field being changed, so the row
- * is read back first — which is also what an admin screen does before it saves.
+ * `PATCH`, not `PUT`: a PUT replaces the whole user, and would clear his avatar, locale, phone and
+ * website along with the one field this changes.
  */
-const banOneCustomer = async (owner: Caller): Promise<void> => {
-    const banned = await owner.call<{ username: string; email: string; role: string }>(
-        'GET',
-        `/users/${SEED_CUSTOMER_IDS.marcus}`
-    );
-    await owner.call('PUT', `/users/${SEED_CUSTOMER_IDS.marcus}`, {
-        username: banned.username,
-        email: banned.email,
-        role: banned.role,
-        active: false
-    });
-};
+const banOneCustomer = (owner: Caller): Promise<void> =>
+    owner
+        .call('PATCH', `/users/${SEED_CUSTOMER_IDS.marcus}`, { active: false })
+        .then(() => undefined);
 
 /**
  * Every caller signs out of every device — `POST /account/logout-all`.

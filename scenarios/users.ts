@@ -147,7 +147,7 @@ export const SEED_CUSTOMER_EMAILS = Object.fromEntries(
  * The generated customer base — verified, ACTIVE accounts, alternating consent and avatar.
  *
  * None is seeded banned, however much the demo needs a banned one: `marcus` shops first and is
- * then banned by the owner through `PUT /users/{id}`, so the audit trail records the ban actually
+ * then banned by the owner through `PATCH /users/{id}`, so the audit trail records the ban actually
  * happening instead of a row asserting that it did.
  */
 const customerUsers = CUSTOMER_NAMES.map(([key, username], index) =>
