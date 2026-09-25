@@ -592,14 +592,15 @@ components:
                 # `readOnly: true` on `Product.onHand` is why this is spelled out here rather
                 # than inherited: the response field is read-only, the opening count is not.
                 #
-                # The demo default is declared for the same reason `active`'s is (see below): an
-                # undeclared default is one the paired frontend's mock has to guess at. `100`
-                # rather than `0` because a boilerplate demo's new product exists to be bought;
-                # a real shop lowers it to 0 and receives stock deliberately.
+                # The default is declared for the same reason `active`'s is (see below): an
+                # undeclared default is one the paired frontend's mock has to guess at. `0`,
+                # not a phantom stock level — Shopify and WooCommerce both start a new product
+                # unstocked, and the create form now takes this as an explicit opening-stock
+                # input rather than relying on the default (FE_PARITY_0924 P3).
                 onHand:
                     type: integer
                     minimum: 0
-                    default: 100
+                    default: 0
                 # ---------- On `active`, and why it is declared here but not on the updates ----------
                 #
                 # `active` and `deletedAt` are INDEPENDENT. A record can be active or not regardless
@@ -665,14 +666,15 @@ components:
                 # `readOnly: true` on `Product.onHand` is why this is spelled out here rather
                 # than inherited: the response field is read-only, the opening count is not.
                 #
-                # The demo default is declared for the same reason `active`'s is (see below): an
-                # undeclared default is one the paired frontend's mock has to guess at. `100`
-                # rather than `0` because a boilerplate demo's new product exists to be bought;
-                # a real shop lowers it to 0 and receives stock deliberately.
+                # The default is declared for the same reason `active`'s is (see below): an
+                # undeclared default is one the paired frontend's mock has to guess at. `0`,
+                # not a phantom stock level — Shopify and WooCommerce both start a new product
+                # unstocked, and the create form now takes this as an explicit opening-stock
+                # input rather than relying on the default (FE_PARITY_0924 P3).
                 onHand:
                     type: integer
                     minimum: 0
-                    default: 100
+                    default: 0
                 # Same default, same reasoning as `CreateProductRequest.active` above.
                 active:
                     type: boolean

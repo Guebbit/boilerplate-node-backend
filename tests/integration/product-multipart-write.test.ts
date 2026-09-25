@@ -151,6 +151,29 @@ describe('writing a product through a multipart body', () => {
         expect(response.body.data.active).toBe(false);
     });
 
+    it('decodes requiresShipping alongside active', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .post('/products')
+            .set('Authorization', bearer)
+            .field(
+                'translations',
+                JSON.stringify({ en: { title: 'Digital good on arrival' } })
+            )
+            .field('price', '5')
+            // The string 'false' is truthy — same trap as `active` above, on the field the
+            // create controller was missing from its `booleans` decode list.
+            .field('requiresShipping', 'false')
+            .attach('imageUpload', PNG_BYTES, {
+                filename: 'product.png',
+                contentType: 'image/png'
+            });
+
+        expect(response.status).toBe(201);
+        expect(response.body.data.requiresShipping).toBe(false);
+    });
+
     it('defaults active to true when the form omits it', async () => {
         const { bearer } = await authenticateAs('admin');
 

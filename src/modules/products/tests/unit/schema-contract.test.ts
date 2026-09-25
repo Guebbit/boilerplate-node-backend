@@ -2,7 +2,8 @@
  * @module
  * The product schema's contract, and the availability it derives from the two stock counters
  * `inventory` writes. Each default decides what a product means when a field was never set —
- * e.g. `onHand: 100` keeps a freshly created product sellable rather than invisible.
+ * e.g. `onHand: 0` keeps a freshly created product honestly out-of-stock rather than
+ * phantom-stocked (FE_PARITY_0924 P3).
  */
 
 import { productSchema, applyProductTransform } from '@modules/products/model';
