@@ -40,6 +40,7 @@ import {
 } from '@infrastructure/adapters/managed-connection';
 import { WORKER_CHANNELS } from '@types';
 import { environmentFlag, environmentNumber } from '@infrastructure/runtime/environment';
+import { settleWithin } from '@infrastructure/runtime/settle';
 import { queueJobsDeadLetteredTotal } from '@infrastructure/observability/metrics-queue';
 
 // ─── Configuration ────────────────────────────────────────────────────────────
@@ -288,13 +289,16 @@ export const stopQueue = (): Promise<void> => {
     // Stop taking deliveries, let the ones already running settle (and ack), then close. Closing
     // first would strand every running job's ack, and the broker would redeliver work that
     // already finished — an email sent twice on every deploy.
-    return cancelConsumers(channel)
-        .then(() => drainHandlers(DRAIN_TIMEOUT_MS))
-        .then(() => {
-            currentChannel = undefined;
-            return connection.close();
-        })
-        .catch(() => undefined);
+    return (
+        cancelConsumers(channel)
+            // A handler that outlives the wait is simply redelivered once the connection closes.
+            .then(() => settleWithin(inFlightHandlers, DRAIN_TIMEOUT_MS))
+            .then(() => {
+                currentChannel = undefined;
+                return connection.close();
+            })
+            .catch(() => undefined)
+    );
 };
 
 /** How long {@link stopQueue} waits for running handlers — inside the process's own deadline. */
@@ -310,25 +314,6 @@ const cancelConsumers = (channel: ConfirmChannel | undefined): Promise<void> => 
     const tags = [...consumerTags];
     consumerTags.clear();
     return Promise.all(tags.map((tag) => channel.cancel(tag))).then(() => undefined);
-};
-
-/**
- * Wait for the handlers still running, or for `timeoutMs`, whichever comes first. A handler that
- * outlives the wait is simply redelivered once the connection closes.
- *
- * @param timeoutMs - the most to wait
- */
-const drainHandlers = (timeoutMs: number): Promise<void> => {
-    if (inFlightHandlers.size === 0) return Promise.resolve();
-    let timer: NodeJS.Timeout | undefined;
-    const deadline = new Promise<void>((resolve) => {
-        timer = setTimeout(resolve, timeoutMs);
-        timer.unref();
-    });
-    return Promise.race([
-        Promise.allSettled(inFlightHandlers).then(() => undefined),
-        deadline
-    ]).finally(() => clearTimeout(timer));
 };
 
 // ─── Queue names ──────────────────────────────────────────────────────────────

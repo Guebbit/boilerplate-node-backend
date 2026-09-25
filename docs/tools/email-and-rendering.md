@@ -104,9 +104,10 @@ flowchart LR
 **Shutdown waits for a render in flight.** A placed-order email renders its invoice
 fire-and-forget, so a process can reach its exit mid-render — a seeding script does it every time
 it places orders. Exiting there orphans the Chromium it launched, and its ~120 MB temporary profile
-stays on disk: a long run of `cy.restore()` re-seeds filled a 16 GB `/tmp` this way. `shutdownInfra`
-therefore calls `settleRenders`, which waits for every render already started — bounded by half the
-graceful-shutdown timeout, so a hung browser cannot hold the exit hostage.
+stays on disk — enough repeated re-seeds fill `/tmp`. `shutdownInfra` therefore calls
+`settleRenders`, which waits for every render already started — bounded by a quarter of the
+graceful-shutdown timeout, so a hung browser cannot hold the exit hostage and the stores behind it
+still get their turn to close.
 
 The invoice is never a durable file — `services/invoice.ts`'s `renderInvoicePdf` renders on demand and caches the result for a short TTL (`NODE_INVOICE_CACHE_TTL_MINUTES`), never as the system of record. The copy an email carries travels through the mail spool (`mail-spool.ts`): the render is spooled to disk, the queue message carries the key, never the bytes, and `mailer.ts#resolveAttachments` resolves the key back to a path before `sendTemplatedEmail()` sends; the file is discarded once the send has settled — the Claim Check pattern, the same shape `worker.image.digest`'s quarantine store already uses for an upload too large for a message.
 

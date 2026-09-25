@@ -11,6 +11,7 @@
 import puppeteer from 'puppeteer-core';
 // Page-geometry options for `page.pdf()` (format, margins, landscape, printBackground, ...).
 import type { PDFOptions } from 'puppeteer-core';
+import { settleWithin } from '@infrastructure/runtime/settle';
 
 /** A4 portrait — the default for invoices. Override per call when a document needs otherwise. */
 const DEFAULT_PDF_OPTIONS: PDFOptions = { format: 'A4' };
@@ -115,19 +116,8 @@ export const renderHtmlToPdf = (
  * @param timeoutMs - the most it may wait; a hung render must not hold shutdown hostage
  * @returns resolves once every render has finished, or the time is up
  */
-export const settleRenders = (timeoutMs: number): Promise<void> => {
-    if (inFlight.size === 0) return Promise.resolve();
-
-    let timer: NodeJS.Timeout | undefined;
-    const deadline = new Promise<void>((resolve) => {
-        timer = setTimeout(resolve, timeoutMs);
-        // Never, on its own, the thing keeping the process alive.
-        timer.unref();
-    });
-    return Promise.race([Promise.allSettled(inFlight).then(() => undefined), deadline]).finally(
-        () => clearTimeout(timer)
-    );
-};
+export const settleRenders = (timeoutMs: number): Promise<void> =>
+    settleWithin(inFlight, timeoutMs);
 
 /**
  * One render: launch, print, close — see {@link renderHtmlToPdf}.

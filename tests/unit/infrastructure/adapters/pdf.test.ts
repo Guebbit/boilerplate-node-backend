@@ -181,11 +181,6 @@ describe('renderHtmlToPdf', () => {
     });
 });
 
-/*
- * The shutdown half: an exiting process must not orphan a render it started. The render below is
- * held open by a print that has not answered yet — the state a seeding script is in when it calls
- * `process.exit` right after a fire-and-forget invoice.
- */
 /**
  * A print that answers only when the case says so — the render stays in flight until then.
  *
@@ -199,6 +194,11 @@ const heldPrint = () => {
     return { printed, release: () => resolvePrint?.(pdfBuffer) };
 };
 
+/*
+ * The shutdown half: an exiting process must not orphan a render it started. The render below is
+ * held open by a print that has not answered yet — the state a seeding script is in when it calls
+ * `process.exit` right after a fire-and-forget invoice.
+ */
 describe('settleRenders', () => {
     it('waits for a render already in flight, so its browser is closed before exit', async () => {
         const print = heldPrint();
@@ -217,16 +217,24 @@ describe('settleRenders', () => {
     });
 
     it('gives up on a render that never finishes, rather than holding shutdown hostage', async () => {
-        pdf.mockImplementationOnce(() => new Promise<typeof pdfBuffer>(() => undefined));
-        void renderHtmlToPdf('<p>hung</p>');
+        const print = heldPrint();
+        pdf.mockImplementationOnce(() => print.printed);
+        const render = renderHtmlToPdf('<p>hung</p>');
 
         const startedAt = Date.now();
         await settleRenders(50);
 
         expect(Date.now() - startedAt).toBeLessThan(2000);
+        // Released only now, so the next case starts with nothing in flight and both slots free.
+        print.release();
+        await render;
     });
 
     it('resolves at once when nothing is rendering', async () => {
-        await expect(settleRenders(5000)).resolves.toBeUndefined();
+        const startedAt = Date.now();
+
+        await settleRenders(5000);
+
+        expect(Date.now() - startedAt).toBeLessThan(1000);
     });
 });

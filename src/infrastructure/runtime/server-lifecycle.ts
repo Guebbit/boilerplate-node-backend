@@ -81,6 +81,13 @@ export const failBoot = (error: unknown, stopFunction: () => Promise<void>): Pro
 const DRAIN_SHARE = 0.5;
 
 /**
+ * Share of the shutdown deadline in-flight PDF renders get, after the server has drained. Kept
+ * below what {@link DRAIN_SHARE} leaves over, so the queue, cache and database still close before
+ * the forced exit.
+ */
+const RENDER_SHARE = 0.25;
+
+/**
  * Promisify server.close() — resolves once all connections are drained.
  *
  * `http.Server.close()` stops accepting new connections while letting in-flight requests finish,
@@ -131,7 +138,7 @@ export const shutdownInfra = (server?: Server) =>
         .then(() => stopLocaleOverrideRefresh())
         // Renders already started finish (or time out) before the process can exit: an exit
         // mid-render orphans the Chromium it launched, and its temporary profile with it.
-        .then(() => settleRenders(getShutdownTimeoutMs() * DRAIN_SHARE))
+        .then(() => settleRenders(getShutdownTimeoutMs() * RENDER_SHARE))
         // The queue before the cache: a job still running would otherwise reopen the cache
         // connection that was just closed under it.
         .then(() => stopQueue())
