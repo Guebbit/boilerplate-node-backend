@@ -189,17 +189,19 @@ services:
             setup:
                 condition: service_completed_successfully
 
-        # Liveness only — `/` depends on no module, so it survives deleting any of them. `node -e`,
-        # not `curl -f`: the runtime image is node:*-alpine and ships no curl. `start_period` is
-        # generous because `setup` (indexes + the shop's row) has already run by the time this
-        # container starts — the wait is for Mongo's own connection handshake, not for a seed.
+        # Readiness, not liveness: `/readyz` answers 503 while booting, while draining, or with
+        # Mongo down, so a load balancer stops routing here before this container's connections
+        # are cut — `/` would report healthy through all three. `node -e`, not `curl -f`: the
+        # runtime image is node:*-alpine and ships no curl. `start_period` is generous because
+        # `setup` (indexes + the shop's row) has already run by the time this container starts —
+        # the wait is for Mongo's own connection handshake, not for a seed.
         healthcheck:
             test:
                 [
                     'CMD',
                     'node',
                     '-e',
-                    "fetch('http://localhost:${NODE_PORT:-3000}/').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+                    "fetch('http://localhost:${NODE_PORT:-3000}/readyz').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
                 ]
             interval: 30s
             timeout: 5s

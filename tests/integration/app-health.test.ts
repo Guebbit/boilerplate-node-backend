@@ -13,6 +13,7 @@ import type { IncomingMessage } from 'node:http';
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createAdminUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
+import { markServerListening, markServerDraining } from '@infrastructure/runtime/readiness';
 
 setupTestDb();
 
@@ -50,6 +51,38 @@ describe('System routes', () => {
         expect(response.headers['x-request-id']).toMatch(
             /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i
         );
+    });
+});
+
+describe('GET /readyz', () => {
+    // `src/app.ts`'s auto-start is skipped under `NODE_ENV=test` (see `tests/support/http.ts`'s
+    // own docblock), so this process never calls `markServerListening` on its own — every case
+    // below drives the phase directly instead. The 'still booting' case must run first: it is the
+    // one case this file does not itself set up, and would otherwise pass by accident after a
+    // later case marks the process listening.
+    it('answers 503 with an empty body while still booting', async () => {
+        const response = await api().get('/readyz');
+
+        expect(response.status).toBe(503);
+        expect(response.body).toEqual({});
+        expect(response.text).toBe('');
+    });
+
+    it('answers 200 with an empty body once listening, database included', async () => {
+        markServerListening();
+
+        const response = await api().get('/readyz');
+
+        expect(response.status).toBe(200);
+        expect(response.text).toBe('');
+    });
+
+    it('answers 503 again once draining starts, even though the database is still up', async () => {
+        markServerDraining();
+
+        const response = await api().get('/readyz');
+
+        expect(response.status).toBe(503);
     });
 });
 
