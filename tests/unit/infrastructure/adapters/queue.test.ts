@@ -12,6 +12,17 @@ import {
 } from '@infrastructure/adapters/queue';
 import { queueJobsDeadLetteredTotal } from '@infrastructure/observability/metrics-queue';
 
+/**
+ * The two argument groups `queue.ts` declares every quorum queue with — not exported (they are
+ * `assertJobQueue`'s own detail), so mirrored here rather than imported. A change to either is a
+ * change these `assertQueue` expectations must catch, not silently agree with.
+ */
+const QUORUM_QUEUE_TYPE = { 'x-queue-type': 'quorum' };
+const AT_LEAST_ONCE_DEAD_LETTERING = {
+    'x-dead-letter-strategy': 'at-least-once',
+    'x-overflow': 'reject-publish'
+};
+
 // ─── Mock amqplib ─────────────────────────────────────────────────────────────
 
 const mockAck = jest.fn();
@@ -225,7 +236,9 @@ describe('publishToQueue()', () => {
         expect(mockSendToQueue).toHaveBeenCalledWith(
             'emails',
             expect.any(Buffer),
-            { persistent: true, priority: 0 },
+            // 4, not 0: a quorum queue has no `x-max-priority` opt-in and treats an unmarked
+            // message as priority 4 — 'normal' has to sit at 4 too, or it would rank BELOW one.
+            { persistent: true, priority: 4 },
             expect.any(Function)
         );
     });
@@ -303,13 +316,15 @@ describe('publishToQueue()', () => {
             durable: true
         });
         expect(mockAssertQueue).toHaveBeenCalledWith(deadLetterQueueOf('emails'), {
-            durable: true
+            durable: true,
+            arguments: QUORUM_QUEUE_TYPE
         });
         expect(mockAssertQueue).toHaveBeenCalledWith('emails.retry', {
             durable: true,
             messageTtl: 30_000,
             deadLetterExchange: DEAD_LETTER_EXCHANGE,
-            deadLetterRoutingKey: 'emails'
+            deadLetterRoutingKey: 'emails',
+            arguments: { ...QUORUM_QUEUE_TYPE, ...AT_LEAST_ONCE_DEAD_LETTERING }
         });
         expect(mockBindQueue).toHaveBeenCalledWith(
             'emails.retry',
@@ -320,7 +335,11 @@ describe('publishToQueue()', () => {
             durable: true,
             deadLetterExchange: DEAD_LETTER_EXCHANGE,
             deadLetterRoutingKey: 'emails.retry',
-            arguments: { 'x-max-priority': 1 }
+            arguments: {
+                ...QUORUM_QUEUE_TYPE,
+                ...AT_LEAST_ONCE_DEAD_LETTERING,
+                'x-delivery-limit': 3
+            }
         });
         expect(mockBindQueue).toHaveBeenCalledWith('emails', DEAD_LETTER_EXCHANGE, 'emails');
         // `.dead` gets no binding at all — nothing dead-letters into it automatically.
@@ -444,7 +463,11 @@ describe('consumeFromQueue()', () => {
             durable: true,
             deadLetterExchange: DEAD_LETTER_EXCHANGE,
             deadLetterRoutingKey: 'pdfs.retry',
-            arguments: { 'x-max-priority': 1 }
+            arguments: {
+                ...QUORUM_QUEUE_TYPE,
+                ...AT_LEAST_ONCE_DEAD_LETTERING,
+                'x-delivery-limit': 3
+            }
         });
         expect(mockPrefetch).toHaveBeenCalledWith(1);
         expect(mockConsume).toHaveBeenCalled();
@@ -850,7 +873,8 @@ describe('parkedCounts()', () => {
         expect(mockPlainAssertQueue).toHaveBeenCalledTimes(Object.keys(WORKER_CHANNELS).length);
         for (const queue of Object.values(WORKER_CHANNELS))
             expect(mockPlainAssertQueue).toHaveBeenCalledWith(deadLetterQueueOf(queue), {
-                durable: true
+                durable: true,
+                arguments: QUORUM_QUEUE_TYPE
             });
         expect(result).toHaveLength(Object.keys(WORKER_CHANNELS).length);
         expect(result.every(({ parked }) => parked === 3)).toBe(true);

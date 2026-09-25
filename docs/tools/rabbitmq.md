@@ -104,7 +104,10 @@ When none of the vars are set, all queue operations silently no-op — the rest 
 
 ## Docker Compose
 
-The `docker-compose.yml` includes a `rabbitmq` service with the management plugin:
+The `docker-compose.yml` includes a `rabbitmq` service with the management plugin, `rabbitmq:4-management` —
+matching `docker-compose.production.yml`'s own image, which is what makes quorum queues' 4.x
+default delivery-limit behaviour ([Queue type: quorum](#queue-type-quorum)) the same in dev as in
+production:
 
 - **AMQP port**: `5672`
 - **Management UI**: `http://localhost:15672` (guest / guest)
@@ -215,24 +218,55 @@ back onto `<queue>`), not an app endpoint — a parked job is a morning's work t
 something to automate blindly.
 
 **Upgrading an existing broker.** `assertQueue` throws `PRECONDITION_FAILED` when a queue already
-exists with different arguments — which is what this retry topology (and, before it, the
-`x-max-priority` argument in [Priority](#priority)) does to a broker holding queues declared
-without them. The channel dies, is replaced, and fails the same way. Delete the old queues once
-(`rabbitmqctl delete_queue worker.email.send`, and the same for `worker.image.digest` and any
-module-owned queue) with the consumers stopped, then restart the app — the declarations, `.retry`
-included, are recreated on the first publish. Nothing is deployed against a broker outside this
-compose stack as of this writing, so this stays a runbook line rather than a procedure anyone has
-had to run.
+exists with different arguments — which is what this retry topology, the priority argument, and
+[the move to quorum queues](#queue-type-quorum) each do in turn to a broker holding queues
+declared without them. The channel dies, is replaced, and fails the same way — and a queue's TYPE
+is the one property that cannot be changed by re-declaring it at all, `PRECONDITION_FAILED`
+included: it can only be dropped and recreated. Delete the old queues once
+(`rabbitmqctl delete_queue worker.email.send`, and the same for `worker.image.digest`,
+`worker.email.send.retry`/`.dead` and any module-owned queue's own pair) with the consumers
+stopped, then restart the app — the declarations, `.retry` included, are recreated on the first
+publish. Nothing is deployed against a broker outside this compose stack as of this writing, so
+this stays a runbook line rather than a procedure anyone has had to run.
+
+### Queue type: quorum
+
+Every queue this file declares — work, retry and dead-letter alike — carries
+`x-queue-type: quorum`. Quorum queues are RabbitMQ 4's recommended durable type; classic MIRRORED
+queues, their predecessor, are gone in 4.x. The reason it matters here specifically: a quorum
+queue tracks its own `delivery-count`, incremented on EVERY redelivery — a consumer that crashes
+mid-handler included, not only a `nack` the app chose to send. That is what closes the bug a
+classic queue could not: a message that kills its consumer before the handler ever gets to nack
+it used to be redelivered forever, since the app's own `x-death`-based attempt count
+(`NODE_QUEUE_MAX_ATTEMPTS`) only grows on a `nack`.
+
+| Queue argument           | Value            | Where                    | Why                                                                                                                                                                                           |
+| ------------------------ | ---------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `x-queue-type`           | `quorum`         | work, retry, dead-letter | RabbitMQ 4's recommended durable type — see above.                                                                                                                                            |
+| `x-delivery-limit`       | `3`              | work queue only          | Caps the broker's OWN redelivery count, explicit rather than trusting 4.x's default of 20 — a message that kills the process on contact should not get 20 chances before it is dead-lettered. |
+| `x-dead-letter-strategy` | `at-least-once`  | work, retry              | The default, `at-most-once`, can silently drop a message in transit to its dead-letter target.                                                                                                |
+| `x-overflow`             | `reject-publish` | work, retry              | `at-least-once` requires it — the alternative default, `drop-head`, would silently discard the oldest queued message instead.                                                                 |
+
+When `x-delivery-limit` is reached, the work queue dead-letters the message through the SAME
+target a `nack` already uses (`<queue>.retry`) — a crash-redelivered message re-enters the
+ordinary retry cycle instead of a second, parallel one.
+
+See [RabbitMQ: Quorum Queues](https://www.rabbitmq.com/docs/quorum-queues) and
+[Upgrading an existing broker](#retries-and-parking) above — a queue TYPE cannot change in place
+any more than its other arguments can.
 
 ### Priority
 
-Every work queue is declared with `x-max-priority: 1`, so every message carries one of two
-levels:
+Quorum queues have no `x-max-priority` opt-in: every queue always offers the full 0-31 range, and
+a message published with no `priority` at all lands at **4**, not 0
+(https://www.rabbitmq.com/docs/quorum-queues#priority). `JobPriority`'s two levels sit above that
+default rather than at the classic-queue `0`/`1`, or `'normal'` would rank BELOW an unmarked
+message:
 
 | `JobPriority` | Number | Meaning                                                                                                        |
 | ------------- | ------ | -------------------------------------------------------------------------------------------------------------- |
-| `'normal'`    | `0`    | Default. Everything informational.                                                                             |
-| `'high'`      | `1`    | A person is actively blocked on this — jumps ahead of `'normal'` messages currently waiting on the same queue. |
+| `'normal'`    | `4`    | Default — level with what an unmarked message gets, never below it.                                            |
+| `'high'`      | `8`    | A person is actively blocked on this — jumps ahead of `'normal'` messages currently waiting on the same queue. |
 
 `enqueueEmail()` defaults to `'normal'` and takes an optional fourth argument; the account
 module's token-bearing links (password reset, account deletion, account setup, email

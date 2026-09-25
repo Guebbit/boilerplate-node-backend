@@ -358,6 +358,15 @@ export const IMAGE_QUEUE = WORKER_CHANNELS.IMAGE_DIGEST;
 export const DEAD_LETTER_EXCHANGE = 'dead-letter';
 
 /**
+ * Arguments every queue in this file declares with. `x-queue-type: quorum` is RabbitMQ 4's
+ * recommended durable queue type — classic MIRRORED queues, quorum's predecessor, are gone in
+ * 4.x — and it is what makes a broker-tracked delivery count exist at all for
+ * {@link assertJobQueue}'s work queue: a classic queue has none, only the app's own `x-death`.
+ * https://www.rabbitmq.com/docs/quorum-queues
+ */
+const QUORUM_QUEUE_TYPE = { 'x-queue-type': 'quorum' } as const;
+
+/**
  * The parking lot for a work queue's exhausted or permanently-rejected messages — a plain durable
  * queue with no consumer and no `x-dead-letter-*` of its own. Nothing routes here automatically any
  * more (see {@link assertJobQueue}); `handleDelivery` publishes to it directly, once, the moment a
@@ -386,10 +395,11 @@ export const retryQueueOf = (queue: string): string => `${queue}.retry`;
  *           other dependency's state, which is already tracked in memory.
  * Channel:  a dedicated, short-lived one, never {@link getChannel}'s shared one. `assertQueue` on
  *           a queue this process has never published to or consumed from creates it, harmlessly,
- *           with the same `durable: true` {@link assertJobQueue} already declares its dead-letter
- *           queues with — but any OTHER broker error on this call closes whatever channel it ran
- *           on, and the shared channel every publisher depends on is not something a health check
- *           may risk.
+ *           with the same `durable: true` and {@link QUORUM_QUEUE_TYPE} {@link assertJobQueue}
+ *           already declares its dead-letter queues with — a mismatch on EITHER answers
+ *           `PRECONDITION_FAILED` instead of the count — but any OTHER broker error on this call
+ *           closes whatever channel it ran on, and the shared channel every publisher depends on
+ *           is not something a health check may risk.
  * Settling: `Promise.allSettled`, not `Promise.all` — one queue's failure closing the channel must
  *           not zero out the queues already checked before it; a partial answer is still useful,
  *           an empty one looks like "nothing is parked anywhere," a false negative.
@@ -407,7 +417,10 @@ export const parkedCounts = (): Promise<{ name: string; parked: number }[]> => {
             Promise.allSettled(
                 Object.values(WORKER_CHANNELS).map((queue) =>
                     ch
-                        .assertQueue(deadLetterQueueOf(queue), { durable: true })
+                        .assertQueue(deadLetterQueueOf(queue), {
+                            durable: true,
+                            arguments: QUORUM_QUEUE_TYPE
+                        })
                         .then((ok) => ({ name: queue, parked: ok.messageCount }))
                 )
             )
@@ -442,7 +455,7 @@ const defaultRetryDelaySeconds = (): number =>
 
 /**
  * The two job-priority levels every work queue supports, named rather than passed as raw numbers
- * so a publish call reads as intent (`'high'`) instead of a magic 0/1 whose meaning lives only
+ * so a publish call reads as intent (`'high'`) instead of a magic number whose meaning lives only
  * here. Kept to two on purpose: RabbitMQ's priority ordering is approximate under load — it
  * reorders within whatever is currently buffered, not a strict global heap — so more levels would
  * invite a false sense of a real scheduler. The idea is one gap, between "most things" and "the
@@ -452,8 +465,46 @@ const defaultRetryDelaySeconds = (): number =>
  */
 export type JobPriority = 'normal' | 'high';
 
-/** `JobPriority` as the number RabbitMQ's `priority` publish option and `x-max-priority` expect. */
-const JOB_PRIORITY_VALUES: Record<JobPriority, number> = { normal: 0, high: 1 };
+/**
+ * `JobPriority` as the number RabbitMQ's `priority` publish option expects.
+ *
+ * NOT 0/1: a quorum queue has no `x-max-priority` opt-in — it always offers the FULL 0-31 range,
+ * and a message with no `priority` property lands at 4, not 0
+ * (https://www.rabbitmq.com/docs/quorum-queues#priority). `normal: 0` would rank BELOW every
+ * unmarked message reaching this queue from anywhere else; both levels sit above that default
+ * instead, so "normal" still means "ahead of nothing in particular", same as before.
+ */
+const JOB_PRIORITY_VALUES: Record<JobPriority, number> = { normal: 4, high: 8 };
+
+/**
+ * Deliveries a QUORUM QUEUE itself will attempt before dead-lettering a message — RabbitMQ's own
+ * `delivery-count`, incremented on EVERY redelivery regardless of cause (a consumer that crashed
+ * mid-handler included), unlike the app's `x-death`-based {@link defaultMaxAttempts}, which only
+ * grows on a `nack` the app chose to send. This is what closes D5: a message that kills its
+ * consumer before the handler can nack it is not redelivered forever, because the broker is
+ * counting independently of whether the app ever got a turn.
+ *
+ * Set explicitly rather than trusting RabbitMQ 4's own default (20, https://www.rabbitmq.com/docs/quorum-queues#delivery-limit)
+ * — a message that kills the process on contact should not get 20 servers' worth of chances
+ * before this queue's own dead-letter target (`<queue>.retry`, the same one `nack` routes to)
+ * takes over.
+ */
+const QUORUM_DELIVERY_LIMIT = 3;
+
+/**
+ * Arguments for a quorum queue that dead-letters somewhere (this file's work and retry queues,
+ * never the parking queue, which has no dead-letter target of its own): `at-least-once` routes a
+ * dead-lettered message through an internal consumer that only acks its own publish once the
+ * TARGET queue has confirmed receipt, so a message in transit between the two is never silently
+ * dropped — the default, `at-most-once`, can lose it. `reject-publish` is the overflow behaviour
+ * `at-least-once` requires: the alternative default, `drop-head`, would silently discard the
+ * OLDEST queued message to make room, which is exactly the loss this pair exists to close.
+ * https://www.rabbitmq.com/docs/quorum-queues#dead-lettering
+ */
+const AT_LEAST_ONCE_DEAD_LETTERING = {
+    'x-dead-letter-strategy': 'at-least-once',
+    'x-overflow': 'reject-publish'
+} as const;
 
 /**
  * Declare a work queue and its two companions, wired for the retry design
@@ -464,7 +515,10 @@ const JOB_PRIORITY_VALUES: Record<JobPriority, number> = { normal: 0, high: 1 };
  * ```
  *
  * Routing:    the work queue's `deadLetterRoutingKey` points at `<queue>.retry`, never
- *             `<queue>.dead` — a `nack(msg, false, false)` always means "try again later".
+ *             `<queue>.dead` — a `nack(msg, false, false)` always means "try again later", and so
+ *             does the work queue's OWN {@link QUORUM_DELIVERY_LIMIT} exhausting: both dead-letter
+ *             to the same place, so a message that crashed its consumer without ever being
+ *             nacked still enters the ordinary retry cycle instead of a second, parallel one.
  *             `<queue>.retry` points BACK at the work queue (bound under the work queue's own
  *             name), so a message that sits out its TTL there reappears on the work queue with
  *             RabbitMQ's own `x-death` array one entry longer — the free attempt count
@@ -477,8 +531,8 @@ const JOB_PRIORITY_VALUES: Record<JobPriority, number> = { normal: 0, high: 1 };
  *             already must agree on `durable`, or `assertQueue` throws `PRECONDITION_FAILED` on
  *             the second call. In practice this app's consumers register at boot
  *             (`app/workers.ts`), before anything publishes.
- * Upgrading:  see `docs/tools/rabbitmq.md` for upgrading an existing broker — the dead-letter
- *             target changing shape here is exactly the kind of change that needs one.
+ * Upgrading:  see `docs/tools/rabbitmq.md` for upgrading an existing broker — a queue TYPE cannot
+ *             change in place any more than the dead-letter target's shape could before it.
  *
  * @param ch - the channel to declare on
  * @param queue - the work queue
@@ -491,13 +545,19 @@ const assertJobQueue = (ch: ConfirmChannel, queue: string): Promise<void> => {
 
     return ch
         .assertExchange(DEAD_LETTER_EXCHANGE, 'direct', { durable: true })
-        .then(() => ch.assertQueue(deadLetterQueueOf(queue), { durable: true }))
+        .then(() =>
+            ch.assertQueue(deadLetterQueueOf(queue), {
+                durable: true,
+                arguments: QUORUM_QUEUE_TYPE
+            })
+        )
         .then(() =>
             ch.assertQueue(retryQueue, {
                 durable: true,
                 messageTtl: retryDelaySeconds * 1000,
                 deadLetterExchange: DEAD_LETTER_EXCHANGE,
-                deadLetterRoutingKey: queue
+                deadLetterRoutingKey: queue,
+                arguments: { ...QUORUM_QUEUE_TYPE, ...AT_LEAST_ONCE_DEAD_LETTERING }
             })
         )
         .then(() => ch.bindQueue(retryQueue, DEAD_LETTER_EXCHANGE, retryQueue))
@@ -508,11 +568,11 @@ const assertJobQueue = (ch: ConfirmChannel, queue: string): Promise<void> => {
                 durable: true,
                 deadLetterExchange: DEAD_LETTER_EXCHANGE,
                 deadLetterRoutingKey: retryQueue,
-                // `x-max-priority`: the ceiling `JOB_PRIORITY_VALUES` publishes against. Every
-                // queue gets it, so any producer may opt into `priority: 'high'` without a
-                // separate per-queue declaration.
-                // https://www.rabbitmq.com/docs/priority
-                arguments: { 'x-max-priority': Math.max(...Object.values(JOB_PRIORITY_VALUES)) }
+                arguments: {
+                    ...QUORUM_QUEUE_TYPE,
+                    ...AT_LEAST_ONCE_DEAD_LETTERING,
+                    'x-delivery-limit': QUORUM_DELIVERY_LIMIT
+                }
             })
         )
         .then(() => ch.bindQueue(queue, DEAD_LETTER_EXCHANGE, queue))
