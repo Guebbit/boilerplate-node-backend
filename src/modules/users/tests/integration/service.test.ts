@@ -593,11 +593,10 @@ describe('userService.updateById', () => {
     });
 
     /*
-     * B21: the controller always sends a STRING `imageUrl` — `''` when nothing was uploaded, since
-     * the validation schema requires one (`write-users.ts`'s `imageUrl = ''` default) — so
-     * `data.imageUrl !== undefined` is never a safe "was a new image uploaded" check on this path.
+     * B21: `data.imageUrl !== undefined` is never a safe "was a new image uploaded" check — an
+     * empty string reaching the service must keep the stored avatar, the same as an absent one.
      */
-    it('keeps the avatar when an update carries an empty-string imageUrl, same as the controller sends', async () => {
+    it('keeps the avatar when an update carries an empty-string imageUrl', async () => {
         const user = await createUser({ imageUrl: '/images/keep-avatar.jpg' });
         const id = user._id.toString();
 

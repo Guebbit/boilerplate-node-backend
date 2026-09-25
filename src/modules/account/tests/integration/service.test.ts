@@ -227,10 +227,10 @@ describe('signup', () => {
         expect(response.errors.length).toBeGreaterThan(0);
     });
 
-    // AUDIT_0924 D17c: `''` is never a legal `imageUrl` (the shared `ImageUrl` schema's own
-    // `minLength: 1`) — an absent image now genuinely means "the schema default", the same real,
-    // non-empty placeholder every OTHER route already promised (`orders/services/current.ts`'s
-    // `product.imageUrl!` relies on no product/user ever having an empty one).
+    // `''` is never a legal `imageUrl` (the shared `ImageUrl` schema's own `minLength: 1`) — an
+    // absent image means "the schema default", the same real, non-empty placeholder every OTHER
+    // route already promised (`orders/services/current.ts`'s `product.imageUrl!` relies on no
+    // product/user ever having an empty one).
     it('stores an absent image as the schema default, never an empty string', async () => {
         await accountService.signup(
             {

@@ -73,8 +73,8 @@ describe('POST /feedback/contact', () => {
         expect(response).toSatisfyApiSpec();
     });
 
-    // D2: `maxLength` moved from a controller-only zod override into openapi.yaml itself, so the
-    // generated schema is now what enforces it — this pins the limit stays enforced end to end.
+    // `maxLength` lives in openapi.yaml itself, so the generated schema is what enforces it —
+    // this pins the limit end to end.
     it('matches the error contract for a message past the 5000-character limit', async () => {
         const response = await api()
             .post('/feedback/contact')
@@ -206,7 +206,7 @@ describe('PUT /feedback/{id}', () => {
         expect(response).toSatisfyApiSpec();
     });
 
-    // AUDIT_0924 D17: a PUT body IS the new resource (RFC 9110 §9.3.4) — an omitted optional
+    // A PUT body IS the new resource (RFC 9110 §9.3.4) — an omitted optional
     // field is cleared, not left alone.
     it('clears adminNotes when the PUT body omits it', async () => {
         const { bearer } = await authenticateAs('admin');

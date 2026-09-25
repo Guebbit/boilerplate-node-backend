@@ -332,7 +332,7 @@ export interface SignupInput {
      * `SignupRequest` — there is no existing account to clear an image FROM at signup — so
      * `undefined` is the only absence a caller here ever has to coalesce away, into
      * {@link DEFAULT_USER_IMAGE_URL} rather than `''`, which is invalid input on every OTHER
-     * route now (`ImageUrl`'s own `minLength: 1`, AUDIT_0924 D17c).
+     * route (`ImageUrl`'s own `minLength: 1`).
      */
     imageUrl: string | undefined;
 

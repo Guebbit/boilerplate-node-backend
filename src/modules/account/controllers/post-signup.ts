@@ -51,8 +51,7 @@ export const postSignup = (
         termsAccepted = false
     } = request.body ?? {};
 
-    // No `= ''` default (AUDIT_0924 D17c): `''` is invalid input now (`ImageUrl`'s own
-    // `minLength: 1`), and `undefined` already means "not provided" to `zodUserSchema`'s
+    // No `= ''` default: `''` is invalid input (`ImageUrl`'s own `minLength: 1`), and `undefined` already means "not provided" to `zodUserSchema`'s
     // `.optional()` field, same as an absent key.
     const { imageUrl, thumbnailUrl, pendingImageKey, deleteUpload } = readUploadedImage(request);
 

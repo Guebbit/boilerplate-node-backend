@@ -440,7 +440,7 @@ components:
                     type: string
                 active:
                     type: boolean
-                # `null` removes the image — AUDIT_0924 D17c. Omitted leaves it unchanged; `''` is
+                # `null` removes the image. Omitted leaves it unchanged; `''` is
                 # invalid (`ImageUrl`'s own `minLength: 1`), never a third spelling of "no image".
                 imageUrl:
                     nullable: true

@@ -151,7 +151,7 @@ describe('POST /account/login — remember me', () => {
 });
 
 describe('PUT /account', () => {
-    // AUDIT_0924 D17: a PUT body IS the new resource (RFC 9110 §9.3.4) — `email`/`username` are
+    // A PUT body IS the new resource (RFC 9110 §9.3.4) — `email`/`username` are
     // the Replace schema's `required` set, and an omitted optional field (`locale`, `phone`, …)
     // is cleared rather than left alone.
     it('replaces the profile, requiring email and username', async () => {
@@ -1022,7 +1022,7 @@ describe('the address book: /account/addresses', () => {
         expect(response).toSatisfyApiSpec();
     });
 
-    // AUDIT_0924 D17: a PUT body IS the new resource (RFC 9110 §9.3.4) — every writable field
+    // A PUT body IS the new resource (RFC 9110 §9.3.4) — every writable field
     // this resource has must be nameable, and the five identity fields are genuinely required.
     it('PUT replaces the whole entry, requiring every identity field', async () => {
         const { bearer } = await authenticateAs('user');

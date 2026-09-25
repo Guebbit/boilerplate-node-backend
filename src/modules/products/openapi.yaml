@@ -595,8 +595,7 @@ components:
                 # The default is declared for the same reason `active`'s is (see below): an
                 # undeclared default is one the paired frontend's mock has to guess at. `0`,
                 # not a phantom stock level — Shopify and WooCommerce both start a new product
-                # unstocked, and the create form now takes this as an explicit opening-stock
-                # input rather than relying on the default (FE_PARITY_0924 P3).
+                # unstocked.
                 onHand:
                     type: integer
                     minimum: 0
@@ -669,8 +668,7 @@ components:
                 # The default is declared for the same reason `active`'s is (see below): an
                 # undeclared default is one the paired frontend's mock has to guess at. `0`,
                 # not a phantom stock level — Shopify and WooCommerce both start a new product
-                # unstocked, and the create form now takes this as an explicit opening-stock
-                # input rather than relying on the default (FE_PARITY_0924 P3).
+                # unstocked.
                 onHand:
                     type: integer
                     minimum: 0
@@ -726,7 +724,7 @@ components:
                     minimum: 0
                     nullable: true
                     description: Grams. Absent counts as 0 for shipping-method filtering.
-                # `null` removes the image — AUDIT_0924 D17c. Omitted leaves it unchanged; `''` is
+                # `null` removes the image. Omitted leaves it unchanged; `''` is
                 # invalid (`ImageUrl`'s own `minLength: 1`), never a third spelling of "no image".
                 imageUrl:
                     nullable: true

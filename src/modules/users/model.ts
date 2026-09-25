@@ -296,13 +296,9 @@ export const zodUserSchema = CreateUserBody.extend({
 });
 
 /**
- * The Mongoose schema for user documents — field-level comments below cover the non-obvious
- * defaults.
- */
-/**
- * The image every user starts with, and the one `imageUrl: null` (AUDIT_0924 D17c) resets it back
- * to — a local asset, never a third-party host: a remote placeholder service is one outage away
- * from a catalogue of broken images. `/images/system/` is served by `app/static-assets.ts`, the
+ * The image every user starts with, and the one `imageUrl: null` resets it back to — a local
+ * asset, never a third-party host: a remote placeholder service is one outage away from a
+ * catalogue of broken images. `/images/system/` is served by `app/static-assets.ts`, the
  * same as `NODE_PENDING_IMAGE_URL`'s own placeholder. Exported so `service.ts#update` can resolve
  * a `null` to the SAME value the schema default below would give a brand new account, rather than
  * the two ever being free to drift apart.
@@ -310,6 +306,10 @@ export const zodUserSchema = CreateUserBody.extend({
 export const DEFAULT_USER_IMAGE_URL =
     process.env.NODE_DEFAULT_IMAGE_USER ?? '/images/system/placeholder-user.png';
 
+/**
+ * The Mongoose schema for user documents — field-level comments below cover the non-obvious
+ * defaults.
+ */
 export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
     {
         email: {

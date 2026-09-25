@@ -362,9 +362,9 @@ components:
             description: >-
                 Absolute URL or server-relative upload path (e.g. `/uploads/abc.jpg`).
                 `uri-reference`, not `uri`: an uploaded image is stored and returned as a
-                path relative to the API host, which is not a valid absolute URI. `minLength: 1` —
-                AUDIT_0924 D17c: `''` is never a synonym for "no image", only `null` is, on a
-                field that allows it.
+                path relative to the API host, which is not a valid absolute URI. `minLength: 1`:
+                `''` is never a synonym for "no image" — only `null` is, on a field that allows
+                it.
         ThumbnailUrl:
             type: string
             format: uri-reference

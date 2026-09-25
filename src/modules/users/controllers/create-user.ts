@@ -1,7 +1,6 @@
 /**
  * @module
- * Controller for `POST /users` — staff create. The update half of what used to be one combined
- * handler now lives in `update-user.ts`, built on the shared PUT/PATCH factory (AUDIT_0924 D17d).
+ * Controller for `POST /users` — staff create. The update half lives in `update-user.ts`.
  *
  * See: docs/modules/users.md
  */
@@ -43,8 +42,7 @@ export const createUser = (
     // already on every branch of `request.body`'s own generated type, declared above.
     const { role } = request.body ?? {};
 
-    // No `= ''` default (AUDIT_0924 D17c): `''` is invalid input now (`ImageUrl`'s own
-    // `minLength: 1`), and `undefined` already means "no change" to `zodUserSchema`'s
+    // No `= ''` default: `''` is invalid input (`ImageUrl`'s own `minLength: 1`), and `undefined` already means "no change" to `zodUserSchema`'s
     // `.optional()` field the same way an absent key does — a defaulted empty string would
     // reach the validator as a rejected value instead of the no-op it is meant to be.
     const { imageUrl, thumbnailUrl, pendingImageKey, deleteUpload } = readUploadedImage(request);

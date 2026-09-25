@@ -39,9 +39,9 @@ export const updateProduct = (
             jsonFields: ['translations']
         });
 
-    // No `= ''` default (AUDIT_0924 D17c): `''` is invalid input now (`ImageUrl`'s own
-    // `minLength: 1`) — `undefined` means "leave the image alone", `null` clears it (see
-    // `service.ts#update`), and both must reach the schema as what they actually are.
+    // No `= ''` default: `''` is invalid input (`ImageUrl`'s own `minLength: 1`) — `undefined`
+    // means "leave the image alone", `null` clears it (see `service.ts#update`), and both must
+    // reach the schema as what they actually are.
     const { imageUrl, thumbnailUrl, pendingImageKey, deleteUpload } = readUploadedImage(request);
 
     if (!id) {

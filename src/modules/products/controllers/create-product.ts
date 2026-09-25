@@ -37,8 +37,7 @@ export const createProduct = (
             jsonFields: ['translations']
         });
 
-    // No `= ''` default (AUDIT_0924 D17c): `''` is invalid input now (`ImageUrl`'s own
-    // `minLength: 1`) — `undefined` is what "no image" means to `zodProductCreateSchema`'s
+    // No `= ''` default: `''` is invalid input (`ImageUrl`'s own `minLength: 1`) — `undefined` is what "no image" means to `zodProductCreateSchema`'s
     // `.optional()` field.
     const { imageUrl, thumbnailUrl, pendingImageKey, deleteUpload } = readUploadedImage(request);
 
