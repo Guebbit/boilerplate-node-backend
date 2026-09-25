@@ -106,8 +106,35 @@ paths:
     /feedback/{id}:
         put:
             tags: [Feedback]
+            summary: Replace feedback request status
+            description: Replaces the triage state of a feedback request (RFC 9110 §9.3.4, an omitted optional field is cleared). `status` is required — a PUT names the whole triage state, not one field of it.
+            operationId: replaceFeedbackRequestStatus
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReplaceFeedbackRequestStatusRequest'
+            responses:
+                '200':
+                    description: Updated feedback request
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/FeedbackRequestEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        patch:
+            tags: [Feedback]
             summary: Update feedback request status
-            description: Updates status/notes of a feedback request.
+            description: Merges a status and/or notes change into a feedback request (RFC 7396, an omitted field is left unchanged, `null` clears `adminNotes`).
             operationId: updateFeedbackRequestStatus
             security:
                 - bearerAuth: []
@@ -262,6 +289,21 @@ components:
                 email:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
 
+        # PUT /feedback/{id} — RFC 9110 §9.3.4: the body IS the new triage state, so `status` is
+        # genuinely required; `adminNotes` stays optional-nullable, same as PATCH.
+        ReplaceFeedbackRequestStatusRequest:
+            type: object
+            additionalProperties: false
+            required: [status]
+            properties:
+                status:
+                    $ref: '#/components/schemas/FeedbackRequestStatus'
+                adminNotes:
+                    type: string
+                    minLength: 1
+                    nullable: true
+
+        # PATCH /feedback/{id} — RFC 7396: every field optional, omitted means unchanged.
         UpdateFeedbackRequestStatusRequest:
             type: object
             additionalProperties: false

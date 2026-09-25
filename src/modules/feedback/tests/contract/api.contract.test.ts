@@ -193,7 +193,7 @@ describe('POST /feedback/search', () => {
 });
 
 describe('PUT /feedback/{id}', () => {
-    it('matches the contract when updating status and notes', async () => {
+    it('matches the contract when replacing status and notes', async () => {
         const { bearer } = await authenticateAs('admin');
         const id = await createFeedbackRequest();
         const response = await api()
@@ -203,6 +203,38 @@ describe('PUT /feedback/{id}', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.status).toBe('resolved');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    // AUDIT_0924 D17: a PUT body IS the new resource (RFC 9110 §9.3.4) — an omitted optional
+    // field is cleared, not left alone.
+    it('clears adminNotes when the PUT body omits it', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const id = await createFeedbackRequest();
+        await api()
+            .put(`/feedback/${id}`)
+            .set('Authorization', bearer)
+            .send({ status: 'in_progress', adminNotes: 'triaging' });
+
+        const response = await api()
+            .put(`/feedback/${id}`)
+            .set('Authorization', bearer)
+            .send({ status: 'resolved' });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.adminNotes).toBeUndefined();
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('refuses a PUT body missing the required status', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const id = await createFeedbackRequest();
+        const response = await api()
+            .put(`/feedback/${id}`)
+            .set('Authorization', bearer)
+            .send({ adminNotes: 'no status here' });
+
+        expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
     });
 
@@ -222,6 +254,68 @@ describe('PUT /feedback/{id}', () => {
         const { bearer } = await authenticateAs('admin');
         const response = await api()
             .put(`/feedback/${MISSING_ID}`)
+            .set('Authorization', bearer)
+            .send({ status: 'spam' });
+
+        expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('PATCH /feedback/{id}', () => {
+    it('leaves adminNotes unchanged when the PATCH body omits it', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const id = await createFeedbackRequest();
+        await api()
+            .patch(`/feedback/${id}`)
+            .set('Authorization', bearer)
+            .send({ adminNotes: 'first pass' });
+
+        const response = await api()
+            .patch(`/feedback/${id}`)
+            .set('Authorization', bearer)
+            .send({ status: 'resolved' });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.status).toBe('resolved');
+        expect(response.body.data.adminNotes).toBe('first pass');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('clears adminNotes on an explicit null', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const id = await createFeedbackRequest();
+        await api()
+            .patch(`/feedback/${id}`)
+            .set('Authorization', bearer)
+            .send({ adminNotes: 'to be cleared' });
+
+        const response = await api()
+            .patch(`/feedback/${id}`)
+            .set('Authorization', bearer)
+            .send({ adminNotes: null });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.adminNotes).toBeUndefined();
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('refuses "" for adminNotes, never a synonym for null', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const id = await createFeedbackRequest();
+        const response = await api()
+            .patch(`/feedback/${id}`)
+            .set('Authorization', bearer)
+            .send({ adminNotes: '' });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('matches the error contract for a request that does not exist', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const response = await api()
+            .patch(`/feedback/${MISSING_ID}`)
             .set('Authorization', bearer)
             .send({ status: 'spam' });
 

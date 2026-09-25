@@ -13,7 +13,7 @@ import { Router } from 'express';
 import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
 import { postFeedbackContact } from './controllers/post-feedback-contact';
 import { getFeedback } from './controllers/get-feedback';
-import { putFeedbackStatus } from './controllers/put-feedback-status';
+import { replaceFeedbackStatus, updateFeedbackStatus } from './controllers/update-feedback-status';
 import { deleteFeedback } from './controllers/delete-feedback';
 import { privateNoCache } from '@infrastructure/http/middlewares/cache';
 import { contactLimiters } from './rate-limits';
@@ -58,5 +58,9 @@ router.use(getAuth, isAuthOrCredential);
 router.post('/search', requirePermission('feedback.any.read'), privateNoCache, getFeedback);
 
 router.get('/', requirePermission('feedback.any.read'), privateNoCache, getFeedback);
-router.put('/:id', requirePermission('feedback.any.update'), putFeedbackStatus);
+
+// PUT /feedback/:id (replace) and PATCH /feedback/:id (merge) — AUDIT_0924 D17d.
+router.put('/:id', requirePermission('feedback.any.update'), replaceFeedbackStatus);
+router.patch('/:id', requirePermission('feedback.any.update'), updateFeedbackStatus);
+
 router.delete('/:id', requirePermission('feedback.any.delete'), deleteFeedback);

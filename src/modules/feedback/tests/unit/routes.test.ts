@@ -26,6 +26,7 @@ describe('feedback routes — what is mounted', () => {
             'POST /search',
             'GET /',
             'PUT /:id',
+            'PATCH /:id',
             'DELETE /:id'
         ]);
     });
@@ -41,7 +42,7 @@ describe('feedback routes — the positional guard', () => {
         expect(guards).not.toContain('requirePermissionGuard');
     });
 
-    it.each(['POST /search', 'GET /', 'PUT /:id', 'DELETE /:id'])(
+    it.each(['POST /search', 'GET /', 'PUT /:id', 'PATCH /:id', 'DELETE /:id'])(
         '%s sits below the gate and is keyed',
         (signature) => {
             const guards = guardsOn(router, signature);

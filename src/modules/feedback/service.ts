@@ -45,7 +45,7 @@ const FEEDBACK_STATUS_VALUES = Object.values(FeedbackRequestStatus) as string[];
 
 /**
  * A write's `status` narrowed onto the closed set — unreachable with an invalid value, since the
- * generated Zod enum already answers 422 before this runs (`put-feedback-status.ts`). Exists so
+ * generated Zod enum already answers 422 before this runs (`update-feedback-status.ts`). Exists so
  * `updateStatus` holds a real `FeedbackRequestStatus` rather than trusting the generated type
  * alone against a caller that bypasses the HTTP layer.
  */
