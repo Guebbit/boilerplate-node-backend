@@ -293,13 +293,14 @@ const driveCatalogueEdits = async (owner: Caller): Promise<void> => {
  * is read back first — which is also what an admin screen does before it saves.
  */
 const banOneCustomer = async (owner: Caller): Promise<void> => {
-    const banned = await owner.call<{ username: string; email: string }>(
+    const banned = await owner.call<{ username: string; email: string; role: string }>(
         'GET',
         `/users/${SEED_CUSTOMER_IDS.marcus}`
     );
     await owner.call('PUT', `/users/${SEED_CUSTOMER_IDS.marcus}`, {
         username: banned.username,
         email: banned.email,
+        role: banned.role,
         active: false
     });
 };
