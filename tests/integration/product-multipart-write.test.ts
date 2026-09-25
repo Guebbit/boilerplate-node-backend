@@ -157,10 +157,7 @@ describe('writing a product through a multipart body', () => {
         const response = await api()
             .post('/products')
             .set('Authorization', bearer)
-            .field(
-                'translations',
-                JSON.stringify({ en: { title: 'Digital good on arrival' } })
-            )
+            .field('translations', JSON.stringify({ en: { title: 'Digital good on arrival' } }))
             .field('price', '5')
             // The string 'false' is truthy — same trap as `active` above, on the field the
             // create controller was missing from its `booleans` decode list.

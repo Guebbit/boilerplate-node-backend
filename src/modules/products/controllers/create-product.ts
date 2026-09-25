@@ -28,22 +28,14 @@ export const createProduct = (
     >,
     response: Response
 ) => {
-    const {
-        price,
-        active,
-        requiresShipping,
-        onHand,
-        weight,
-        categories,
-        tags,
-        translations
-    } = readInput(request, {
-        surface: 'create',
-        booleans: ['active', 'requiresShipping'],
-        numbers: ['price', 'onHand', 'weight'],
-        stringArrays: ['categories', 'tags'],
-        jsonFields: ['translations']
-    });
+    const { price, active, requiresShipping, onHand, weight, categories, tags, translations } =
+        readInput(request, {
+            surface: 'create',
+            booleans: ['active', 'requiresShipping'],
+            numbers: ['price', 'onHand', 'weight'],
+            stringArrays: ['categories', 'tags'],
+            jsonFields: ['translations']
+        });
 
     // No `= ''` default (AUDIT_0924 D17c): `''` is invalid input now (`ImageUrl`'s own
     // `minLength: 1`) — `undefined` is what "no image" means to `zodProductCreateSchema`'s

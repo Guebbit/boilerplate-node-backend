@@ -351,7 +351,8 @@ export const update = (
     if (data.email !== undefined) order.email = data.email;
 
     return orderRepository.save(order).then((saved) => {
-        if (nextStatus === undefined || nextStatus === previousStatus) return generateSuccess(saved);
+        if (nextStatus === undefined || nextStatus === previousStatus)
+            return generateSuccess(saved);
 
         return applyStatusMove(saved, previousStatus, nextStatus);
     });
