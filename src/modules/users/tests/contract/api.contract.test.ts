@@ -8,6 +8,7 @@ import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { createUser, PLAIN_PASSWORD, userRepository } from '@modules/users/tests/factories';
+import { DEFAULT_USER_IMAGE_URL } from '@modules/users/model';
 import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
 
@@ -209,8 +210,8 @@ describe('POST /users', () => {
 });
 
 describe('PUT /users/{id}', () => {
-    // AUDIT_0924 D17: a PUT body IS the new resource (RFC 9110 §9.3.4) — every omitted optional
-    // field is cleared, not left alone. `password` is the one exception (D17d): it keeps its own
+    // A PUT body IS the new resource (RFC 9110 §9.3.4) — every omitted optional field is
+    // cleared, not left alone. `password` is the one exception: it keeps its own
     // flow and is never cleared this way, so it is left out of this body entirely.
     it('replaces every writable field, clearing every omitted optional one', async () => {
         const { bearer } = await authenticateAs('admin');
@@ -236,9 +237,7 @@ describe('PUT /users/{id}', () => {
 
         expect(response.status).toBe(200);
         expect(response).toSatisfyApiSpec();
-        expect(response.body.data.imageUrl).not.toBe(
-            'https://cdn.example.com/avatars/original.png'
-        );
+        expect(response.body.data.imageUrl).toBe(DEFAULT_USER_IMAGE_URL);
         expect(response.body.data.phone).toBeUndefined();
     });
 
@@ -310,8 +309,7 @@ describe('PUT /users/{id}', () => {
 });
 
 describe('PATCH /users/{id}', () => {
-    // The live bug AUDIT_0924 D17 was named for: the paired frontend's `updateOwnRole` sends
-    // `{ role }` alone — a full PUT body 422ed against the old always-strict validator.
+    // The paired frontend's `updateOwnRole` sends `{ role }` alone.
     it('merges only the given field, leaving email and username unchanged', async () => {
         const { bearer } = await authenticateAs('admin');
         const target = await createUser(
@@ -322,10 +320,11 @@ describe('PATCH /users/{id}', () => {
         const response = await api()
             .patch(`/users/${String(target._id)}`)
             .set('Authorization', bearer)
-            .send({ role: 'customer' });
+            .send({ role: 'moderator' });
 
         expect(response.status).toBe(200);
         expect(response).toSatisfyApiSpec();
+        expect(response.body.data.role).toBe('moderator');
         expect(response.body.data.email).toBe(target.email);
         expect(response.body.data.username).toBe(target.username);
     });
@@ -471,8 +470,7 @@ describe('POST /users/{id}/restore', () => {
 
 /*
  * The body-addressed twin of `DELETE /users/{id}`, the explicit hard delete, the admin 2FA
- * reset — and the refusals every one of them owes an anonymous caller. `PUT /users` (id in the
- * body) had no frontend caller and duplicated `PUT /users/{id}` — removed, AUDIT_0924 D17b.
+ * reset — and the refusals every one of them owes an anonymous caller.
  */
 describe('DELETE /users — the id in the body', () => {
     it('matches the contract for a soft delete', async () => {
