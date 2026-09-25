@@ -32,8 +32,8 @@ If access-token verification fails, protected routes return `401`. The client ca
 **A database outage while resolving a token is not "invalid credentials".** `getAuth` tells the
 two apart (`kernel/middlewares/authorizations.ts`, `infrastructure/http/errors.ts#isInfrastructureError`):
 a Mongo/Redis connection failure is forwarded to the global error handler, which answers `503` with
-`Retry-After`; everything else a resolver can reject with (a bad signature, an expired token, a
-deleted user) still proceeds anonymous, exactly as before. RFC 9110 §15.5.2 vs §15.5.4 — telling a
+`Retry-After`; everything else (a bad signature, an expired token, a user who no longer exists)
+proceeds anonymous. RFC 9110 §15.5.2 vs §15.6.4 — telling a
 client its credentials are wrong when the server is the one that is broken is a lie the client acts
 on, logging out a session that was never invalid.
 

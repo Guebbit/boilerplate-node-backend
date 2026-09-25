@@ -73,7 +73,7 @@ const auditRefusal = (
 
 /**
  * `getAuth`'s shared `.catch()`: an infrastructure failure goes to the global error handler as a
- * 503, anything else (an invalid/expired token, a user who no longer exists) proceeds anonymous —
+ * 503, anything else (an invalid or expired token) proceeds anonymous —
  * see `getAuth`'s own docblock for why the two must not be told apart the same way.
  *
  * @param next - called once, with the error only when it is an infrastructure failure
@@ -112,8 +112,8 @@ export const getTokenBearer = (request: Request) => request.header('Authorizatio
  *
  * @param request - populated with `authContext` (JWT) or `caller`/`credentialId` (credential) on success
  * @param response - unused on the JWT path; answers 429 on the credential path's own rate limit
- * @param next - called once on every path — with the error for an infrastructure failure,
- *   otherwise with none
+ * @param next - called once on every path but a rate-limited credential's 429 — with the error
+ *   for an infrastructure failure, otherwise with none
  */
 export const getAuth = (request: Request, response: Response, next: NextFunction) => {
     // Two modules can share a URL prefix (e.g. `account` and `addresses` both under `/account`),

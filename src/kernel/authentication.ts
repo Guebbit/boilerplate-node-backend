@@ -62,19 +62,28 @@ export const registerCredentialResolver = (implementation: CredentialResolver): 
 };
 
 /**
- * Resolve an access token, for the `Authorization: Bearer` path.
+ * The registered resolver.
  *
- * Resolves `undefined`, never rejects, when no module has registered a resolver: a build with no
- * `account` module has no authentication, which is the same "no caller" outcome `AuthResolver`
- * already has for a token naming nobody — not an infrastructure failure the caller guard should
- * answer 503 for. Mirrors {@link resolveCredential}'s own `?.` for the same reason.
+ * Unregistered is a real state, not a misconfiguration: a build with no `account` module has no
+ * authentication. Rejecting for the same reason a bad token does means the guards need no branch —
+ * and a plain `Error` is never an infrastructure failure, so `getAuth` still proceeds anonymous.
+ * @throws {Error} when no module has registered one
  */
-export const resolveAccessToken = (token: string): Promise<AuthContext | undefined> =>
-    Promise.resolve().then(() => resolver?.fromAccessToken(token));
+const requireResolver = (): AuthResolver => {
+    if (!resolver)
+        throw new Error(
+            'No auth resolver is registered: this build has no module providing authentication.'
+        );
+    return resolver;
+};
 
-/** {@link resolveAccessToken}, for the cookie path. */
+/** Resolve an access token, for the `Authorization: Bearer` path. */
+export const resolveAccessToken = (token: string): Promise<AuthContext | undefined> =>
+    Promise.resolve().then(() => requireResolver().fromAccessToken(token));
+
+/** Resolve a refresh token, for the cookie path. */
 export const resolveRefreshToken = (token: string): Promise<AuthContext | undefined> =>
-    Promise.resolve().then(() => resolver?.fromRefreshToken(token));
+    Promise.resolve().then(() => requireResolver().fromRefreshToken(token));
 
 /**
  * Resolve an `sk_...` credential, for the machine-to-machine path.

@@ -10,7 +10,7 @@ import type { Express, Request, Response, NextFunction } from 'express';
 import { MulterError } from 'multer';
 import { logger, auditLogger } from '@infrastructure/adapters/logger';
 import { rejectResponse } from '@infrastructure/http/response';
-import { databaseErrorInterpreter } from '@infrastructure/http/errors';
+import { databaseErrorInterpreter, rejectServiceUnavailable } from '@infrastructure/http/errors';
 import {
     getActiveSpanContext,
     recordErrorOnActiveSpan
@@ -58,14 +58,6 @@ const CLIENT_ERROR_COPY: Record<number, { code: string; messageKey: string }> = 
     413: { code: 'PAYLOAD_TOO_LARGE', messageKey: 'generic.error-payload-too-large' },
     415: { code: 'UNSUPPORTED_MEDIA_TYPE', messageKey: 'generic.error-unsupported-media-type' }
 };
-
-/**
- * A rough hint, not a promise — how long a client should wait before retrying a 503. There is no
- * backoff state to read this from (an infra outage's real duration is unknown), so one constant
- * for every 503 is honest about that, rather than inventing a number that looks computed.
- * RFC 9110 §10.2.3.
- */
-const RETRY_AFTER_SECONDS = 5;
 
 /**
  * What status this error should answer, decided once so the log line and the response cannot
@@ -133,6 +125,9 @@ export const handleUncaughtError = (
             }
         ]);
 
+    // A dependency outage — the same answer a controller's own `.catch` gives it.
+    if (status === 503) return rejectServiceUnavailable(response);
+
     /*
      * The client is told that something failed, and nothing else: a CONSTANT, never
      * `error.message`, which would leak field paths, hosts, filesystem layout or a URL with a key
@@ -140,17 +135,6 @@ export const handleUncaughtError = (
      *
      * See: docs/theory/request-flow.md#the-500-branch-says-nothing
      */
-    if (status === 503) {
-        // RFC 9110 §10.2.3 — a hint for the client's retry, not a guarantee.
-        response.setHeader('Retry-After', RETRY_AFTER_SECONDS.toString());
-        return rejectResponse(response, 503, [
-            {
-                code: 'SERVICE_UNAVAILABLE',
-                message: t('generic.error-service-unavailable')
-            }
-        ]);
-    }
-
     if (status >= 500)
         return rejectResponse(response, 500, [
             {

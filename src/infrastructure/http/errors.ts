@@ -1,7 +1,8 @@
 /**
  * @module
- * The database-error interpreter — the single place a Mongo/Mongoose driver failure is mapped to
- * an HTTP status, so all twelve models answer a duplicate key or a bad ObjectId the same way.
+ * The database-error interpreter — the single place a driver failure (Mongo, Mongoose, or an
+ * unreachable Redis) is mapped to an HTTP status, so all twelve models answer a duplicate key, a
+ * bad ObjectId or an outage the same way.
  *
  * No "throw with a status from anywhere" facility here: a middleware with the `Response` already
  * in hand answers `rejectResponse` directly instead. If a genuine need for one arises, the
@@ -10,6 +11,7 @@
  */
 
 import { logger } from '@infrastructure/adapters/logger';
+import { t } from '@infrastructure/i18n';
 import { isDuplicateKey, isConnectionError } from '@infrastructure/persistence/mongo-errors';
 import { isRedisConnectionError } from '@infrastructure/adapters/redis';
 import { generateReject, rejectResponse } from './response';
@@ -17,10 +19,8 @@ import type { Response } from 'express';
 
 /**
  * Whether a failure means an infrastructure dependency (Mongo, Redis) was unreachable, rather
- * than a request the server understood and refused. RFC 9110 §15.5.4: 503 says the SERVER is
- * temporarily broken; every other branch below is about the REQUEST. `kernel/middlewares/
- * authorizations.ts`'s `getAuth` is the other caller — a DB blip while resolving a token must not
- * read as "invalid credentials".
+ * than a request the server understood and refused. RFC 9110 §15.6.4: 503 says the SERVER is
+ * temporarily broken; every other branch below is about the REQUEST.
  *
  * @param error - whatever the caught rejection actually was
  */
@@ -28,9 +28,9 @@ export const isInfrastructureError = (error: unknown): boolean =>
     isConnectionError(error) || isRedisConnectionError(error);
 
 /**
- * Decide which driver failures describe the REQUEST rather than the server — the single place
- * that answer is made, so all twelve models agree on it. A fifth branch belongs here, not in a
- * controller.
+ * Decide what status a driver failure deserves — the request's fault (4xx), a dependency outage
+ * (503), or a bug (500) — in the single place that answer is made, so all twelve models agree on
+ * it. A new branch belongs here, not in a controller.
  *
  * See: docs/theory/request-flow.md#the-database-error-interpreter
  *
@@ -81,6 +81,31 @@ export function databaseErrorInterpreter(error: unknown): [number, string] {
 }
 
 /**
+ * A rough hint, not a promise — how long a client should wait before retrying a 503. There is no
+ * backoff state to read this from (an infra outage's real duration is unknown), so one constant
+ * for every 503 is honest about that, rather than inventing a number that looks computed.
+ * RFC 9110 §10.2.3.
+ */
+const RETRY_AFTER_SECONDS = 5;
+
+/** The one error item every 503 carries, whichever path noticed the outage. */
+const serviceUnavailableError = () => ({
+    code: 'SERVICE_UNAVAILABLE',
+    message: t('generic.error-service-unavailable')
+});
+
+/**
+ * Answer a dependency outage: 503, `SERVICE_UNAVAILABLE`, and a `Retry-After` hint — the same
+ * answer from the global error handler and from a controller's own `.catch`.
+ *
+ * @param response - the express response
+ */
+export const rejectServiceUnavailable = (response: Response) => {
+    response.setHeader('Retry-After', RETRY_AFTER_SECONDS.toString());
+    return rejectResponse(response, 503, [serviceUnavailableError()]);
+};
+
+/**
  * Answer a failed database operation with the status it actually deserves — the single entry
  * point every controller's `.catch` uses. The status is DERIVED by
  * {@link databaseErrorInterpreter}, never assumed, and the driver's message is logged, never
@@ -100,7 +125,7 @@ export const rejectDatabaseError = (response: Response, context: string, error: 
     // Stryker disable next-line all
     logger.error(`${context} - ${detail}`, { status, error });
 
-    return rejectResponse(response, status);
+    return status === 503 ? rejectServiceUnavailable(response) : rejectResponse(response, status);
 };
 
 /**
@@ -118,5 +143,8 @@ export const rejectDatabaseEnvelope = (context: string, error: unknown) => {
     // Stryker disable next-line all
     logger.error(`${context} - ${detail}`, { status, error });
 
-    return generateReject(status);
+    // No `Retry-After` here: an envelope has no response to set it on.
+    return status === 503
+        ? generateReject(503, [serviceUnavailableError()])
+        : generateReject(status);
 };

@@ -243,7 +243,7 @@ describe('getAuth', () => {
         expect(request.authContext).toBeUndefined();
     });
 
-    // D16: a DB blip must not be told to the client as "your credentials are wrong" (RFC 9110
+    // A DB blip must not be told to the client as "your credentials are wrong" (RFC 9110
     // §15.5.2). `getAuth` forwards it to the global error handler instead, which answers 503.
     it('forwards an infrastructure failure to the error handler, instead of going anonymous', async () => {
         const outage = Object.assign(new Error('server selection timed out'), {
@@ -297,7 +297,7 @@ describe('getAuth', () => {
         expect(mockedVerifyAccessToken).not.toHaveBeenCalled();
     });
 
-    // D16, the credential twin of the JWT-path test above: `resolveCredential` failing because
+    // The credential twin of the JWT-path test above: `resolveCredential` failing because
     // the database is unreachable is not "unknown credential" (which resolves `undefined`, never
     // rejects — see `resolveCredential`'s own docblock).
     it('forwards an infrastructure failure on the credential path too, instead of going anonymous', async () => {

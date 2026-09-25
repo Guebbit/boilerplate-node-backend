@@ -32,8 +32,8 @@ export const isBadObjectId = (error: unknown): boolean =>
 
 /**
  * Driver/Mongoose error NAMES that mean "no server was reachable", never a request-shape problem
- * — checked the same way {@link isDuplicateKey} and `isPermanentConnectError`
- * (`runtime/database.ts`) do: by `.name`, not `instanceof`, since `mongodb` is a transitive
+ * — checked the same way `isPermanentConnectError` (`runtime/database.ts`) does: by `.name`, not
+ * `instanceof`, since `mongodb` is a transitive
  * dependency of more than one package and an `instanceof` against the wrong copy silently misses.
  */
 const CONNECTION_ERROR_NAMES = new Set([
@@ -54,13 +54,14 @@ const BUFFERING_TIMEOUT_MESSAGE = 'buffering timed out';
 
 /**
  * Whether a Mongo/Mongoose failure means the database was unreachable, as opposed to a request
- * the server understood and refused. The HTTP layer answers this 503 (RFC 9110 §15.5.4, "the
+ * the server understood and refused. The HTTP layer answers this 503 (RFC 9110 §15.6.4, "the
  * server is currently unable to handle the request") rather than the generic 500 a programmer
  * error gets — see `infrastructure/http/errors.ts#databaseErrorInterpreter`.
  *
  * @param error - whatever the caught rejection actually was
  */
 export const isConnectionError = (error: unknown): boolean => {
+    // Both read as `unknown`: a caught rejection may be any value, and a non-string fails below.
     const { name, message } = (error ?? {}) as { name?: unknown; message?: unknown };
     if (typeof name !== 'string') return false;
     if (CONNECTION_ERROR_NAMES.has(name)) return true;

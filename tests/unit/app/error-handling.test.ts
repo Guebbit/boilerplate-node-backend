@@ -67,7 +67,7 @@ describe('handleUncaughtError', () => {
         expect(response.status).not.toHaveBeenCalled();
     });
 
-    // D16: a DB/Redis outage answers 503 (RFC 9110 §15.5.4), not the generic 500 every other
+    // A DB/Redis outage answers 503 (RFC 9110 §15.6.4), not the generic 500 every other
     // server-side failure gets — the whole point being that a client can tell "retry shortly"
     // apart from "something is broken".
     describe('a Mongo/Redis outage (the databaseErrorInterpreter 503 branch)', () => {

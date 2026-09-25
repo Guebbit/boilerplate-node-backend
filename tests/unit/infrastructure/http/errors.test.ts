@@ -18,6 +18,7 @@ import {
 } from '@infrastructure/http/errors';
 import { logger } from '@infrastructure/adapters/logger';
 import type { CastError } from 'mongoose';
+import { ClientClosedError } from 'redis';
 import { makeResponseStub } from '@tests/express';
 
 jest.mock('@infrastructure/adapters/logger', () => ({
@@ -306,9 +307,8 @@ const makeConnectionError = () =>
         name: 'MongoServerSelectionError'
     });
 
-/** A node-redis error: same shape, a different registry of names. */
-const makeRedisError = () =>
-    Object.assign(new Error('The client is closed'), { name: 'ClientClosedError' });
+/** A node-redis connection error, as the client really throws it. */
+const makeRedisError = () => new ClientClosedError();
 
 describe('isInfrastructureError', () => {
     it('recognises a Mongo connection failure', () => {
@@ -326,8 +326,8 @@ describe('isInfrastructureError', () => {
 });
 
 describe('connection-error branch', () => {
-    // D16: an anonymous caller's login attempt must not be told "your credentials are wrong"
-    // (401) when the real answer is "the database is unreachable" — RFC 9110 §15.5.2 vs §15.5.4.
+    // An anonymous caller's login attempt must not be told "your credentials are wrong" (401)
+    // when the real answer is "the database is unreachable" — RFC 9110 §15.5.2 vs §15.6.4.
     it('answers 503, not the catch-all 500, for a Mongo outage', () => {
         expect(databaseErrorInterpreter(makeConnectionError())).toEqual([
             503,
@@ -343,6 +343,28 @@ describe('connection-error branch', () => {
         const [, message] = databaseErrorInterpreter(makeConnectionError());
 
         expect(message).not.toContain('27017');
+    });
+
+    it('answers a controller-caught outage the way the global handler does', () => {
+        const response = makeResponseStub();
+        const setHeader = jest.fn();
+        Object.assign(response, { setHeader });
+
+        rejectDatabaseError(response, 'getProducts', makeConnectionError());
+
+        expect(response.status).toHaveBeenCalledWith(503);
+        expect(setHeader).toHaveBeenCalledWith('Retry-After', expect.any(String));
+        expect(response.json).toHaveBeenCalledWith(
+            expect.objectContaining({
+                errors: [expect.objectContaining({ code: 'SERVICE_UNAVAILABLE' })]
+            })
+        );
+    });
+
+    it('carries the same error code on a service envelope', () => {
+        expect(rejectDatabaseEnvelope('auth', makeRedisError()).errors).toEqual([
+            expect.objectContaining({ code: 'SERVICE_UNAVAILABLE' })
+        ]);
     });
 });
 
