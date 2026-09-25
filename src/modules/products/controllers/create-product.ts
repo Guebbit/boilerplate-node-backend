@@ -36,13 +36,10 @@ export const createProduct = (
         jsonFields: ['translations']
     });
 
-    // `= ''` because an absent image is an empty url here — see `zodProductCreateSchema`.
-    const {
-        imageUrl = '',
-        thumbnailUrl,
-        pendingImageKey,
-        deleteUpload
-    } = readUploadedImage(request);
+    // No `= ''` default (AUDIT_0924 D17c): `''` is invalid input now (`ImageUrl`'s own
+    // `minLength: 1`) — `undefined` is what "no image" means to `zodProductCreateSchema`'s
+    // `.optional()` field.
+    const { imageUrl, thumbnailUrl, pendingImageKey, deleteUpload } = readUploadedImage(request);
 
     return productService
         .writeCreate(

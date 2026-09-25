@@ -31,6 +31,7 @@ import {
 } from '@infrastructure/http/response';
 import type { FacetCount } from '@types';
 import { imageStore, applyImageWriteback } from '@infrastructure/adapters/image-store';
+import { clearedOrValue } from '@infrastructure/surfaces/create-update-controller';
 import { enqueueIfImagePending } from '@infrastructure/adapters/image.worker';
 import { emitDomainEvent } from '@kernel/events';
 import type { CallerContext } from '@types';
@@ -39,7 +40,12 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { productsAnalyticsEvents } from './analytics';
 import { productsAuditActions } from './audit';
 import { PRODUCT_DELETED, PRODUCT_CREATED, PRODUCT_DEACTIVATED } from './events';
-import { zodProductCreateSchema, zodProductUpdateSchema, toProduct } from './model';
+import {
+    zodProductCreateSchema,
+    zodProductUpdateSchema,
+    toProduct,
+    DEFAULT_PRODUCT_IMAGE_URL
+} from './model';
 import type { ProductDocument } from './model';
 import { productRepository } from './repository';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
@@ -300,9 +306,15 @@ export const create = (
  */
 export const update = (
     product: ProductDocument,
-    data: Partial<Omit<Product, 'id'>> & {
+    // `imageUrl`/`weight` widened to accept `null` — AUDIT_0924 D17c — since the domain type
+    // `Product` states them as always a real value (`imageUrl`) or absent-means-zero (`weight`),
+    // never explicitly cleared. `imageUrl: null` resolves to {@link DEFAULT_PRODUCT_IMAGE_URL}
+    // below rather than ever reaching the document as a null; `weight: null` genuinely unsets it.
+    data: Partial<Omit<Product, 'id' | 'imageUrl' | 'weight'>> & {
         /** Set alongside a new pending-image placeholder — see `readUploadedImage`. */
         pendingImageKey?: string;
+        imageUrl?: string | null;
+        weight?: number | null;
     }
 ): Promise<ProductDocument> => {
     // Apply incoming field changes
@@ -322,13 +334,20 @@ export const update = (
     if (data.active !== undefined) product.active = data.active;
     if (data.categories !== undefined) product.categories = sanitizeStringArray(data.categories);
     if (data.tags !== undefined) product.tags = sanitizeStringArray(data.tags);
-    if (data.weight !== undefined) product.weight = data.weight;
+    // `null` clears a recorded weight back to unset (AUDIT_0924 D17c) — $unset on save.
+    if (data.weight !== undefined) product.weight = clearedOrValue(data.weight);
     if (data.taxClass !== undefined) product.taxClass = data.taxClass;
     if (data.requiresShipping !== undefined) product.requiresShipping = data.requiresShipping;
 
     // If a new image was uploaded, update the url, thumbnail and pending key together — see
     // `applyImageWriteback`'s own docblock for the gate shared with `users`' own `update`.
-    const oldImageUrl = applyImageWriteback(product, data);
+    // `null` (AUDIT_0924 D17c) resolves to the default placeholder before it gets there:
+    // `applyImageWriteback` only ever sees a real value, so "cleared" and "set to this string"
+    // are the SAME code path, old-image deletion included.
+    const oldImageUrl = applyImageWriteback(product, {
+        ...data,
+        imageUrl: data.imageUrl === null ? DEFAULT_PRODUCT_IMAGE_URL : data.imageUrl
+    });
 
     // Persist the updated document
     return productRepository.save(product).then((updatedProduct) => {
@@ -345,7 +364,12 @@ export const update = (
  */
 export const updateById = (
     id: string,
-    data: Partial<Omit<Product, 'id'>> & { pendingImageKey?: string },
+    // `imageUrl`/`weight` widened to accept `null` — see `update`'s own docblock.
+    data: Partial<Omit<Product, 'id' | 'imageUrl' | 'weight'>> & {
+        pendingImageKey?: string;
+        imageUrl?: string | null;
+        weight?: number | null;
+    },
     context: CallerContext
 ): Promise<ResponseSuccess<ProductDocument> | ResponseReject> =>
     productRepository.findById(id).then((product) => {

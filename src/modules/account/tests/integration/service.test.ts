@@ -16,7 +16,7 @@ import {
     REPLACEMENT_PASSWORD
 } from '@modules/users/tests/factories';
 import { accountService } from '@modules/account/services';
-import { hashToken } from '@modules/users';
+import { hashToken, DEFAULT_USER_IMAGE_URL } from '@modules/users';
 import { userRepository } from '@modules/users/tests/factories';
 import { TokenType, type Token, type UserDocument } from '@modules/users';
 import { asReject, asSuccess } from '@tests/response';
@@ -227,11 +227,11 @@ describe('signup', () => {
         expect(response.errors.length).toBeGreaterThan(0);
     });
 
-    it('stores an absent image as an empty string, not as the schema default', async () => {
-        // `imageUrl` carries a mongoose `default` (a placeholder avatar url). Coalescing to `''`
-        // is what keeps that default from firing, so an account created without a picture has an
-        // empty field the UI can branch on rather than a stock image it cannot tell apart from a
-        // deliberate one.
+    // AUDIT_0924 D17c: `''` is never a legal `imageUrl` (the shared `ImageUrl` schema's own
+    // `minLength: 1`) — an absent image now genuinely means "the schema default", the same real,
+    // non-empty placeholder every OTHER route already promised (`orders/services/current.ts`'s
+    // `product.imageUrl!` relies on no product/user ever having an empty one).
+    it('stores an absent image as the schema default, never an empty string', async () => {
         await accountService.signup(
             {
                 email: 'noimage@example.com',
@@ -249,7 +249,8 @@ describe('signup', () => {
 
         const stored = await userRepository.findOne({ email: 'noimage@example.com' });
 
-        expect(stored?.imageUrl).toBe('');
+        expect(stored?.imageUrl).toBe(DEFAULT_USER_IMAGE_URL);
+        expect(stored?.imageUrl).not.toBe('');
     });
 
     it('rejects signup with 422 when terms are not accepted', async () => {

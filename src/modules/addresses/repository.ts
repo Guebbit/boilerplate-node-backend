@@ -15,6 +15,7 @@ import {
 } from '@infrastructure/persistence/create-repository';
 import { encryptPii } from '@infrastructure/security/pii-encryption';
 import { encryptAddressItem, decryptAddressItem } from './pii';
+import { clearedOrValue } from '@infrastructure/surfaces/create-update-controller';
 
 /**
  * Every book this module hands back is decrypted first — `findByUserId` and every write method's
@@ -112,13 +113,17 @@ export const addressBookRepository: Repository<AddressBookDocument, Wire<Address
         const entry = book?.items.find((item) => String(item._id) === addressId);
         if (!book || !entry) return null;
 
-        if (changes.label !== undefined) entry.label = changes.label;
+        // `label`/`phone` are AUDIT_0924 D17c's nullable fields — `null` clears them
+        // ($unset on save, via `clearedOrValue`); the other five are required on the resource
+        // itself, so the contract refuses `null` for them before this ever runs.
+        if (changes.label !== undefined) entry.label = clearedOrValue(changes.label);
         if (changes.fullName !== undefined) entry.fullName = encryptPii(changes.fullName);
         if (changes.street !== undefined) entry.street = encryptPii(changes.street);
         if (changes.city !== undefined) entry.city = encryptPii(changes.city);
         if (changes.zip !== undefined) entry.zip = encryptPii(changes.zip);
         if (changes.country !== undefined) entry.country = encryptPii(changes.country);
-        if (changes.phone !== undefined) entry.phone = encryptPii(changes.phone);
+        if (changes.phone !== undefined)
+            entry.phone = changes.phone === null ? undefined : encryptPii(changes.phone);
         if (changes.default === true) {
             for (const item of book.items) item.default = false;
             entry.default = true;

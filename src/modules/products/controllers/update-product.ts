@@ -39,12 +39,10 @@ export const updateProduct = (
             jsonFields: ['translations']
         });
 
-    const {
-        imageUrl = '',
-        thumbnailUrl,
-        pendingImageKey,
-        deleteUpload
-    } = readUploadedImage(request);
+    // No `= ''` default (AUDIT_0924 D17c): `''` is invalid input now (`ImageUrl`'s own
+    // `minLength: 1`) — `undefined` means "leave the image alone", `null` clears it (see
+    // `service.ts#update`), and both must reach the schema as what they actually are.
+    const { imageUrl, thumbnailUrl, pendingImageKey, deleteUpload } = readUploadedImage(request);
 
     if (!id) {
         rejectResponse(response, 422, [t('generic.error-missing-data')]);

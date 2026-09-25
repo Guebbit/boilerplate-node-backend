@@ -363,8 +363,11 @@ components:
                     format: uri
                     pattern: '(?:^https://)'
                     description: Must be `https://` — same rule `CreateWebhookSubscriptionRequest` states.
+                # `null` clears it. Omitted leaves it unchanged; `''` is invalid.
                 description:
                     type: string
+                    minLength: 1
+                    nullable: true
                 eventTypes:
                     type: array
                     items: { type: string }

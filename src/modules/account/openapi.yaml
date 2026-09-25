@@ -1298,14 +1298,25 @@ components:
                 username:
                     type: string
                     minLength: 3
+                # `null` clears the override, falling back to the deployment default/negotiated locale.
                 locale:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                    nullable: true
+                    allOf:
+                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                # `null` removes the image — AUDIT_0924 D17c. Omitted leaves it unchanged; `''` is
+                # invalid (`ImageUrl`'s own `minLength: 1`), never a third spelling of "no image".
                 imageUrl:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                    nullable: true
+                    allOf:
+                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
                 phone:
                     type: string
+                    minLength: 1
+                    nullable: true
                 website:
                     type: string
+                    minLength: 1
+                    nullable: true
                 # Absent means "leave it alone" like every other field here — a client withdraws
                 # consent by sending `false` explicitly, never by omission.
                 analyticsConsent:
@@ -1321,7 +1332,9 @@ components:
                     type: string
                     minLength: 3
                 locale:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                    nullable: true
+                    allOf:
+                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
                 imageUpload:
                     # No maxLength/contentMediaType by design — see the note under `ImageUrl`.
                     type: string
@@ -1329,8 +1342,12 @@ components:
                     description: Optional user profile image
                 phone:
                     type: string
+                    minLength: 1
+                    nullable: true
                 website:
                     type: string
+                    minLength: 1
+                    nullable: true
                 analyticsConsent:
                     type: boolean
 

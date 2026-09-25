@@ -23,7 +23,8 @@ import {
 import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
 import { encryptPii } from '@infrastructure/security/pii-encryption';
 import { imageStore, applyImageWriteback } from '@infrastructure/adapters/image-store';
-import { zodUserSchema, TokenType, hashToken, toUser } from './model';
+import { zodUserSchema, TokenType, hashToken, toUser, DEFAULT_USER_IMAGE_URL } from './model';
+import { clearedOrValue } from '@infrastructure/surfaces/create-update-controller';
 import type { UserDocument, Token, UserWire } from './model';
 import type { CreateUserRequest, SearchUsersRequest, UpdateUserByIdRequest, User } from '@types';
 import { userRepository } from './repository';
@@ -251,12 +252,19 @@ export const update = (
             if (data.active !== undefined) user.active = data.active;
             // The old url is captured before the overwrite so `updateSavedUser` can delete it once
             // the new one is durably saved — see `applyImageWriteback`'s own docblock for the gate
-            // shared with `products/service.ts`'s own `update`.
-            const oldImageUrl = applyImageWriteback(user, data);
-            // The preference that outlives the request — see the `locale` field on the user schema.
-            if (data.locale !== undefined) user.locale = data.locale;
-            if (data.phone !== undefined) user.phone = encryptPii(data.phone);
-            if (data.website !== undefined) user.website = data.website;
+            // shared with `products/service.ts`'s own `update`. `null` (AUDIT_0924 D17c) resolves
+            // to the default placeholder before it gets there — see `products/service.ts#update`'s
+            // own comment for why that keeps "cleared" and "set to this string" one code path.
+            const oldImageUrl = applyImageWriteback(user, {
+                ...data,
+                imageUrl: data.imageUrl === null ? DEFAULT_USER_IMAGE_URL : data.imageUrl
+            });
+            // The preference that outlives the request — see the `locale` field on the user
+            // schema. `null` clears the override (AUDIT_0924 D17c) — $unset on save.
+            if (data.locale !== undefined) user.locale = clearedOrValue(data.locale);
+            if (data.phone !== undefined)
+                user.phone = data.phone === null ? undefined : encryptPii(data.phone);
+            if (data.website !== undefined) user.website = clearedOrValue(data.website);
             // Absent leaves the stored choice alone, same as every field above; only an explicit
             // boolean changes it.
             if (data.analyticsConsent !== undefined) user.analyticsConsent = data.analyticsConsent;

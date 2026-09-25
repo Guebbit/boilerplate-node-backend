@@ -8,7 +8,7 @@
  */
 
 import { getCurrentLocale } from '@infrastructure/i18n';
-import { userService, type UserDocument } from '@modules/users';
+import { userService, DEFAULT_USER_IMAGE_URL, type UserDocument } from '@modules/users';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
@@ -104,7 +104,7 @@ const signupFromOAuth = (
             email: identity.email,
             // No display name from the provider: the address is at least unique, unlike a blank.
             username: identity.name ?? identity.email,
-            imageUrl: identity.imageUrl ?? process.env.NODE_DEFAULT_IMAGE_USER ?? '',
+            imageUrl: identity.imageUrl ?? DEFAULT_USER_IMAGE_URL,
             // The provider vouches for this identity, same reasoning `userService.create`'s admin
             // path already applies to a typed-in address — no password, so no email loop either.
             // This account skips `unverified` entirely, the same as an operator-created one; the

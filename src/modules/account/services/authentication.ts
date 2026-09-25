@@ -30,7 +30,13 @@ import {
     validationErrors
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
-import { zodUserSchema, userService, type TokenType, type UserDocument } from '@modules/users';
+import {
+    zodUserSchema,
+    userService,
+    DEFAULT_USER_IMAGE_URL,
+    type TokenType,
+    type UserDocument
+} from '@modules/users';
 import { parseFormBoolean } from '@infrastructure/http/request';
 import type { CallerContext } from '@types';
 import { optionalBooleanSchema } from '@infrastructure/http/schemas';
@@ -322,9 +328,11 @@ export interface SignupInput {
     termsAccepted: boolean;
 
     /**
-     * Not `| null`: the contract declares `imageUrl` a string, so a null reaches zod as
-     * "expected string, received null" and is rejected before `signup`'s `?? ''` could see it.
-     * The caller coalesces a body-supplied null away, so `undefined` is the only absence here.
+     * Not `| null`: the contract declares `imageUrl` a plain (nullable-free) string on
+     * `SignupRequest` — there is no existing account to clear an image FROM at signup — so
+     * `undefined` is the only absence a caller here ever has to coalesce away, into
+     * {@link DEFAULT_USER_IMAGE_URL} rather than `''`, which is invalid input on every OTHER
+     * route now (`ImageUrl`'s own `minLength: 1`, AUDIT_0924 D17c).
      */
     imageUrl: string | undefined;
 
@@ -363,7 +371,7 @@ const guardEmailPolicy = (input: SignupInput): Promise<ResponseSuccess<UserDocum
                   userService.buildSignupDecoy({
                       email: input.email,
                       username: input.username,
-                      imageUrl: input.imageUrl ?? '',
+                      imageUrl: input.imageUrl ?? DEFAULT_USER_IMAGE_URL,
                       thumbnailUrl: input.thumbnailUrl,
                       analyticsConsent: input.analyticsConsent,
                       termsAccepted: input.termsAccepted
@@ -388,7 +396,7 @@ const createAccountIfEmailFree = (
                 .registerSelfService({
                     username: input.username,
                     email: input.email,
-                    imageUrl: input.imageUrl ?? '',
+                    imageUrl: input.imageUrl ?? DEFAULT_USER_IMAGE_URL,
                     thumbnailUrl: input.thumbnailUrl,
                     pendingImageKey: input.pendingImageKey,
                     password: input.password,

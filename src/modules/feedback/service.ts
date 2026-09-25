@@ -38,6 +38,7 @@ import type { Lean } from '@infrastructure/persistence/create-repository';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { feedbackAuditActions } from './audit';
+import { clearedOrValue } from '@infrastructure/surfaces/create-update-controller';
 
 /** Every value the generated `FeedbackRequestStatus` enum declares, for the membership check below. */
 const FEEDBACK_STATUS_VALUES = Object.values(FeedbackRequestStatus) as string[];
@@ -189,7 +190,8 @@ export const updateStatus = (
 ): Promise<ResponseSuccess<FeedbackRequestDocument>> => {
     const nextStatus = toFeedbackStatus(payload.status);
     if (nextStatus !== undefined) feedback.status = nextStatus;
-    if (payload.adminNotes !== undefined) feedback.adminNotes = payload.adminNotes;
+    // `null` clears the notes (AUDIT_0924 D17c) — $unset on save, via `clearedOrValue`.
+    if (payload.adminNotes !== undefined) feedback.adminNotes = clearedOrValue(payload.adminNotes);
     if (nextStatus === FeedbackRequestStatus.resolved && !feedback.respondedAt)
         feedback.respondedAt = new Date();
     return feedbackRequestRepository.save(feedback).then((saved) => generateSuccess(saved));

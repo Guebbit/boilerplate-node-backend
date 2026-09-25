@@ -54,13 +54,11 @@ export const writeUsers = (
     // already on every branch of `request.body`'s own generated type, declared above.
     const { role } = request.body ?? {};
 
-    // `= ''` because `zodUserSchema` wants a string: an absent image is an empty url here.
-    const {
-        imageUrl = '',
-        thumbnailUrl,
-        pendingImageKey,
-        deleteUpload
-    } = readUploadedImage(request);
+    // No `= ''` default (AUDIT_0924 D17c): `''` is invalid input now (`ImageUrl`'s own
+    // `minLength: 1`), and `undefined` already means "no change" to `zodUserSchema`'s
+    // `.optional()` field the same way an absent key does — a defaulted empty string would
+    // reach the validator as a rejected value instead of the no-op it is meant to be.
+    const { imageUrl, thumbnailUrl, pendingImageKey, deleteUpload } = readUploadedImage(request);
 
     /**
      * `false`: password is never required at this schema layer. An edit may leave it untouched;

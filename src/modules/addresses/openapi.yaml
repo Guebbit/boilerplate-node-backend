@@ -172,8 +172,13 @@ components:
             type: object
             additionalProperties: false
             properties:
+                # `null` clears the nickname; `fullName`/`street`/`city`/`zip`/`country` below stay
+                # NON-nullable — omitting one leaves it unchanged, but a `null` is a 400: those are
+                # required on the resource itself, an address is not valid without them.
                 label:
                     type: string
+                    minLength: 1
+                    nullable: true
                 fullName:
                     type: string
                     minLength: 1
@@ -191,6 +196,8 @@ components:
                     minLength: 1
                 phone:
                     type: string
+                    minLength: 1
+                    nullable: true
                 default:
                     type: boolean
 

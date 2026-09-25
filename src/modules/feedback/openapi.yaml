@@ -268,8 +268,11 @@ components:
             properties:
                 status:
                     $ref: '#/components/schemas/FeedbackRequestStatus'
+                # `null` clears the notes. Omitted leaves them unchanged; `''` is invalid.
                 adminNotes:
                     type: string
+                    minLength: 1
+                    nullable: true
 
         FeedbackRequestsResponse:
             type: object

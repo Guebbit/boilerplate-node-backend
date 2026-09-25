@@ -51,13 +51,10 @@ export const postSignup = (
         termsAccepted = false
     } = request.body ?? {};
 
-    // `= ''` because `signup` passes this straight to `zodUserSchema`, which wants a string.
-    const {
-        imageUrl = '',
-        thumbnailUrl,
-        pendingImageKey,
-        deleteUpload
-    } = readUploadedImage(request);
+    // No `= ''` default (AUDIT_0924 D17c): `''` is invalid input now (`ImageUrl`'s own
+    // `minLength: 1`), and `undefined` already means "not provided" to `zodUserSchema`'s
+    // `.optional()` field, same as an absent key.
+    const { imageUrl, thumbnailUrl, pendingImageKey, deleteUpload } = readUploadedImage(request);
 
     return accountService
         .signup(
