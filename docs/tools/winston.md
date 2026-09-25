@@ -206,6 +206,7 @@ why `db:bootstrap` syncs before the server starts.
 | `NODE_LOG_LEVEL`           | logger level (`error`, `warn`, `info`, `debug`, …). Defaults to `info` in production, `debug` elsewhere. |
 | `NODE_SERVICE_NAME`        | tag on every log entry. Useful when several services ship logs to the same aggregator.                   |
 | `NODE_LOG_PERSONAL_FIELDS` | `hash` (default), `redact`, or `plain` — see [Personal data](#personal-data) below.                      |
+| `NODE_LOG_HASH_KEY`        | HMAC key for `hash` mode. Required in production; unset elsewhere uses a fixed dev key.                  |
 
 ## Redaction
 
@@ -215,7 +216,7 @@ why `db:bootstrap` syncs before the server starts.
 
 A second, separate list — `PERSONAL_FIELDS` (`email`, `ip`, `phone`, `street`, `zip`, `fullName`) — covers fields that are personal data without being credentials. Data minimisation applies to logs the same as it applies to collections, and these flow into Winston, and from there into [Loki](./loki.md), same as everything else.
 
-Kept apart from `SENSITIVE_FIELDS` on purpose: a credential is always replaced outright, never kept in any form. A personal field defaults to **hashed** instead (`NODE_LOG_PERSONAL_FIELDS=hash`, sha256, truncated to 12 hex characters, `sha256:`-prefixed) — the same input always produces the same digest, so a trace stays followable ("did this user's requests all fail the same way") without the log line being readable on its own. `redact` drops it entirely, like a credential; `plain` leaves it untouched, for local development where the log never leaves the machine.
+Kept apart from `SENSITIVE_FIELDS` on purpose: a credential is always replaced outright, never kept in any form. A personal field defaults to **hashed** instead (`NODE_LOG_PERSONAL_FIELDS=hash`, HMAC-SHA256 under `NODE_LOG_HASH_KEY`, truncated to 12 hex characters, `sha256:`-prefixed) — the same input always produces the same digest, so a trace stays followable ("did this user's requests all fail the same way") without the log line being readable on its own. The hash is keyed rather than bare: an unkeyed `sha256(email)` or `sha256(ip)` is brute-forced from a breach list or the whole IPv4 space in seconds, which is GDPR pseudonymisation in name only. `redact` drops it entirely, like a credential; `plain` leaves it untouched, for local development where the log never leaves the machine.
 
 The private setting (`hash`) is the default deliberately: a boilerplate's default config is the one most deployments never revisit.
 

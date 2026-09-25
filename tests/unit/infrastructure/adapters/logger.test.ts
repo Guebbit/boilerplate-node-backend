@@ -343,10 +343,13 @@ describe('the sensitive-field policy, entry by entry', () => {
 
 describe('the personal-data policy', () => {
     const originalMode = process.env.NODE_LOG_PERSONAL_FIELDS;
+    const originalKey = process.env.NODE_LOG_HASH_KEY;
 
     afterEach(() => {
         if (originalMode === undefined) delete process.env.NODE_LOG_PERSONAL_FIELDS;
         else process.env.NODE_LOG_PERSONAL_FIELDS = originalMode;
+        if (originalKey === undefined) delete process.env.NODE_LOG_HASH_KEY;
+        else process.env.NODE_LOG_HASH_KEY = originalKey;
     });
 
     // Table-driven over the REAL set, same reasoning as the sensitive-field policy above: a field
@@ -383,6 +386,24 @@ describe('the personal-data policy', () => {
         >;
 
         expect(first.email).not.toBe(second.email);
+    });
+
+    it('hashes the SAME input to a DIFFERENT digest under a different NODE_LOG_HASH_KEY', () => {
+        // The whole point of a KEYED hash (D7, GDPR pseudonymisation): a digest is only stable
+        // for callers who share the key, not universally guessable like a bare sha256 would be.
+        delete process.env.NODE_LOG_HASH_KEY;
+        const withDefaultKey = redactSensitiveFields({ email: 'user@example.com' }) as Record<
+            string,
+            unknown
+        >;
+
+        process.env.NODE_LOG_HASH_KEY = 'a-different-key-entirely';
+        const withCustomKey = redactSensitiveFields({ email: 'user@example.com' }) as Record<
+            string,
+            unknown
+        >;
+
+        expect(withCustomKey.email).not.toBe(withDefaultKey.email);
     });
 
     it('drops personal fields entirely under NODE_LOG_PERSONAL_FIELDS=redact', () => {
