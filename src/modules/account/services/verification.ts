@@ -2,7 +2,7 @@
  * @module
  * Email verification — issuing a token and sending the mail, in one place. Two KINDS of
  * verification share this mechanism — proving the address an account already has (signup, the
- * explicit re-send), and proving the address a `PUT /account` change has asked for
+ * explicit re-send), and proving the address a `PUT/PATCH /account` change has asked for
  * (docs/modules/account.md#proving-an-address) — and every flow that starts either one calls this
  * and nothing else, so they cannot drift. Old tokens of the SAME kind are removed before the new
  * one is issued — not for security, since spending any of them proves the same mailbox, but so "the
@@ -39,7 +39,7 @@ export const EMAIL_VERIFY_TOKEN_TYPE = 'verify';
 
 /**
  * The `tokens.type` under which an email-CHANGE token is stored — proves the address a
- * `PUT /account` change has ASKED FOR (`user.pendingEmail`), never the one it already has. A
+ * `PUT/PATCH /account` change has ASKED FOR (`user.pendingEmail`), never the one it already has. A
  * distinct type from {@link EMAIL_VERIFY_TOKEN_TYPE}, not a reuse: spending one must not do the
  * other's work, since a signup-verify token swapping in a `pendingEmail` would be a bug with an
  * account takeover on the end of it.

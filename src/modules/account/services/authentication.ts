@@ -315,7 +315,7 @@ export interface SignupInput {
     passwordConfirm: string;
 
     /**
-     * Optional like `UpdateAccountRequest`'s, but with no "leave it alone" reading — there is no
+     * Optional like `PatchAccountRequest`'s, but with no "leave it alone" reading — there is no
      * prior value at signup, so absent and `false` mean the same thing here.
      */
     analyticsConsent: boolean | undefined;
@@ -452,7 +452,7 @@ export const signup = (
     const parseResult = zodUserSchema
         .extend({
             passwordConfirm: z.string(),
-            // Shared with `PUT /account`'s: both decode the same multipart-string trap
+            // Shared with `PUT/PATCH /account`'s: both decode the same multipart-string trap
             // (`optionalBooleanSchema`'s own doc covers it), signup just narrows it to
             // non-optional-by-intent (absent lands as `undefined`, stored as `false`).
             analyticsConsent: optionalBooleanSchema,

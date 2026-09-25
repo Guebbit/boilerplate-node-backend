@@ -33,7 +33,7 @@ import {
 } from '@kernel/middlewares/authorizations';
 import { upload } from '@infrastructure/http/middlewares/upload';
 import { getAccount } from './controllers/get-account';
-import { putAccount } from './controllers/put-account';
+import { replaceAccount, patchAccount } from './controllers/update-account';
 import { postLogin } from './controllers/post-login';
 import { postSignup } from './controllers/post-signup';
 import { postResetRequest } from './controllers/post-reset-request';
@@ -68,14 +68,14 @@ import { noStore } from '@infrastructure/http/middlewares/cache';
 import { getMyAbilities } from './controllers/get-my-abilities';
 
 /**
- * Whether THIS `PUT /account` request is changing the caller's email — the one field
- * `requireFreshAuthWhen` gates on `PUT /`. Mirrors the exact comparison `putAccount` itself makes
- * (`email !== undefined && email !== currentEmail`), so the guard and the controller can never
- * disagree about what counts as an email change.
+ * Whether THIS request is changing the caller's email — the one field `requireFreshAuthWhen`
+ * gates on `PUT /` and `PATCH /`. Mirrors the exact comparison `accountService.updateProfile`
+ * itself makes (`email !== undefined && email !== currentEmail`), so the guard and the service
+ * can never disagree about what counts as an email change.
  *
- * MUST run after `upload.image()`: `PUT /account` accepts `multipart/form-data`,
- * so `request.body` does not exist until multer has parsed it — a predicate mounted earlier reads
- * an empty object, concludes "no email change", and gates nothing.
+ * MUST run after `upload.image()`: both verbs accept `multipart/form-data`, so `request.body`
+ * does not exist until multer has parsed it — a predicate mounted earlier reads an empty object,
+ * concludes "no email change", and gates nothing.
  */
 const isChangingEmail = (request: Request): boolean => {
     const email = (request.body as { email?: string } | undefined)?.email;
@@ -101,18 +101,26 @@ router.use(noStore);
 // GET /account — current user profile (requires auth)
 router.get('/', isAuth, getAccount);
 
-// PUT /account — update own profile (requires auth). The upload mirrors signup's.
-// requireFreshAuthWhen AFTER upload.image(): see isChangingEmail's own doc for why the order is
-// load-bearing. Sensitive tier, not critical: an unconditional gate here would ask for a
-// password on every avatar upload — this route is the takeover path specifically BECAUSE of
-// the email field, not the write in general.
+// PUT /account (replace) and PATCH /account (merge) — own profile, requires auth. The upload
+// mirrors signup's. requireFreshAuthWhen AFTER upload.image(): see isChangingEmail's own doc for
+// why the order is load-bearing. Sensitive tier, not critical: an unconditional gate here would
+// ask for a password on every avatar upload — this route is the takeover path specifically
+// BECAUSE of the email field, not the write in general.
 router.put(
     '/',
     uploadLimiter,
     isAuth,
     upload.image(),
     requireFreshAuthWhen(isChangingEmail, REAUTH_TIME_SENSITIVE),
-    putAccount
+    replaceAccount
+);
+router.patch(
+    '/',
+    uploadLimiter,
+    isAuth,
+    upload.image(),
+    requireFreshAuthWhen(isChangingEmail, REAUTH_TIME_SENSITIVE),
+    patchAccount
 );
 
 // DELETE /account — request account deletion (requires auth). Critical: destruction.

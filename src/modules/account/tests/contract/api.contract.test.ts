@@ -96,7 +96,7 @@ const verifyTokenFromMail = (): string => {
 };
 
 /**
- * The queued mail addressed to `to` — a SEARCH, not "the last one": a genuine `PUT /account`
+ * The queued mail addressed to `to` — a SEARCH, not "the last one": a genuine `PATCH /account`
  * email change queues two mails per request (the notice to the OLD address, the link to the
  * NEW one), so reading only the last call would miss the notice.
  */
@@ -151,11 +151,41 @@ describe('POST /account/login — remember me', () => {
 });
 
 describe('PUT /account', () => {
+    // AUDIT_0924 D17: a PUT body IS the new resource (RFC 9110 §9.3.4) — `email`/`username` are
+    // the Replace schema's `required` set, and an omitted optional field (`locale`, `phone`, …)
+    // is cleared rather than left alone.
+    it('replaces the profile, requiring email and username', async () => {
+        const { user, bearer } = await authenticateAs('user');
+
+        const response = await api()
+            .put('/account')
+            .set('Authorization', bearer)
+            .send({ email: user.email, username: 'replaced-self' });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.username).toBe('replaced-self');
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('refuses a body missing the required username', async () => {
+        const { user, bearer } = await authenticateAs('user');
+
+        const response = await api()
+            .put('/account')
+            .set('Authorization', bearer)
+            .send({ email: user.email });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+});
+
+describe('PATCH /account', () => {
     it('matches the contract when a plain user updates their own profile', async () => {
         const { bearer } = await authenticateAs('user');
 
         const response = await api()
-            .put('/account')
+            .patch('/account')
             .set('Authorization', bearer)
             .send({ username: 'self-renamed' });
 
@@ -168,7 +198,7 @@ describe('PUT /account', () => {
         const { user, bearer } = await authenticateAs('user');
 
         const response = await api()
-            .put('/account')
+            .patch('/account')
             .set('Authorization', bearer)
             .send({ email: 'fresh-address@example.com' });
 
@@ -185,12 +215,12 @@ describe('PUT /account', () => {
     it('cancels a pending change when the CURRENT address is restated', async () => {
         const { user, bearer } = await loginWithCookie({ verifiedAt: new Date() });
         await api()
-            .put('/account')
+            .patch('/account')
             .set('Authorization', bearer)
             .send({ email: 'someone-else-typed-this@example.com' });
 
         const response = await api()
-            .put('/account')
+            .patch('/account')
             .set('Authorization', bearer)
             .send({ email: user.email });
 
@@ -207,7 +237,7 @@ describe('PUT /account', () => {
         });
 
         const response = await api()
-            .put('/account')
+            .patch('/account')
             .set('Authorization', bearer)
             .send({ email: 'taken@example.com' });
 
@@ -219,7 +249,7 @@ describe('PUT /account', () => {
         const { bearer } = await authenticateAs('user');
 
         const response = await api()
-            .put('/account')
+            .patch('/account')
             .set('Authorization', bearer)
             .send({ email: 'not-an-email' });
 
@@ -750,12 +780,12 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
     });
 });
 
-describe('PUT /account (email change) and /account/email-change-confirm', () => {
+describe('PATCH /account (email change) and /account/email-change-confirm', () => {
     it('notifies the OLD address and mails a link to the NEW one, the moment the change is requested', async () => {
         const { user, bearer } = await loginWithCookie({ verifiedAt: new Date() });
 
         const response = await api()
-            .put('/account')
+            .patch('/account')
             .set('Authorization', bearer)
             .send({ email: 'new-address@example.com' });
 
@@ -769,7 +799,7 @@ describe('PUT /account (email change) and /account/email-change-confirm', () => 
     it('confirming the token swaps pendingEmail into email and re-verifies the account', async () => {
         const { user, bearer } = await loginWithCookie({ verifiedAt: new Date() });
         await api()
-            .put('/account')
+            .patch('/account')
             .set('Authorization', bearer)
             .send({ email: 'new-address@example.com' });
         const token = verifyTokenFromMail();
@@ -786,7 +816,7 @@ describe('PUT /account (email change) and /account/email-change-confirm', () => 
     it('round-trips a plus-tag address: confirms, and GET /account shows it', async () => {
         const { bearer } = await loginWithCookie({ verifiedAt: new Date() });
         const changeRequest = await api()
-            .put('/account')
+            .patch('/account')
             .set('Authorization', bearer)
             .send({ email: 'ada+shop@mail.example.photography' });
         expect(changeRequest.status).toBe(200);
@@ -803,7 +833,7 @@ describe('PUT /account (email change) and /account/email-change-confirm', () => 
     it('keeps authenticating under the OLD address until the token is spent', async () => {
         const { user, bearer } = await loginWithCookie({ verifiedAt: new Date() });
         await api()
-            .put('/account')
+            .patch('/account')
             .set('Authorization', bearer)
             .send({ email: 'new-address@example.com' });
 
@@ -829,7 +859,7 @@ describe('PUT /account (email change) and /account/email-change-confirm', () => 
     it('revokes every other session on a confirmed email change', async () => {
         const { user, bearer, jwtCookie } = await loginWithCookie({ verifiedAt: new Date() });
         await api()
-            .put('/account')
+            .patch('/account')
             .set('Authorization', bearer)
             .send({ email: 'new-address@example.com' });
         const token = verifyTokenFromMail();
@@ -855,7 +885,7 @@ describe('PUT /account (email change) and /account/email-change-confirm', () => 
     it('an `email-change` token is refused by the plain verify-confirm', async () => {
         const { bearer } = await loginWithCookie({ verifiedAt: new Date() });
         await api()
-            .put('/account')
+            .patch('/account')
             .set('Authorization', bearer)
             .send({ email: 'new-address@example.com' });
         const token = verifyTokenFromMail();
@@ -876,7 +906,7 @@ describe('PUT /account (email change) and /account/email-change-confirm', () => 
     });
 
     /*
-     * B17: `PUT /account`'s own request-time check (`emailOrPendingEmailTaken`) already refuses a
+     * B17: `PATCH /account`'s own request-time check (`emailOrPendingEmailTaken`) already refuses a
      * SECOND request naming an address already pending elsewhere — so the only way this write
      * still collides is a genuine concurrent race that check cannot see (two requests landing
      * within the same brief window), which a sequential test cannot reproduce deterministically.
@@ -890,7 +920,7 @@ describe('PUT /account (email change) and /account/email-change-confirm', () => 
             verifiedAt: new Date()
         });
         await api()
-            .put('/account')
+            .patch('/account')
             .set('Authorization', changer.bearer)
             .send({ email: 'contested@example.com' });
         const token = verifyTokenFromMail();

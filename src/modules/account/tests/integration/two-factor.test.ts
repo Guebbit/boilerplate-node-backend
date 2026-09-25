@@ -54,7 +54,7 @@ const mailedCode = (): string => {
 /**
  * A signed-in account whose address is VERIFIED, which is what the email factor requires.
  * `authenticateAs` defaults to a verified account (most callers want one usable end to end,
- * `PUT /account`'s pending-email rules among the reasons), so this suite states the requirement
+ * `PUT/PATCH /account`'s pending-email rules among the reasons), so this suite states the requirement
  * explicitly rather than depending on that default.
  */
 const authenticateVerified = async () => {

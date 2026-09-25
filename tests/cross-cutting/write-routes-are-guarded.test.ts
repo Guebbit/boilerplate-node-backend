@@ -71,6 +71,7 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         reason: 'the one order write a customer may make — the service scopes it to their own order'
     },
     'account PUT /': { requiresAuth: true, reason: "editing the caller's own profile" },
+    'account PATCH /': { requiresAuth: true, reason: "editing the caller's own profile" },
     'account DELETE /': {
         requiresAuth: true,
         reason: "requesting deletion of the caller's own account"

@@ -215,6 +215,25 @@ describe('createUpdateController', () => {
         );
     });
 
+    it('reads the id from idFrom instead of the path, for a self-service resource like /account', async () => {
+        const update = jest.fn().mockResolvedValue(generateSuccess({ title: 'x' }));
+        const { patch } = createUpdateController({
+            entity: 'widget',
+            replaceSchema,
+            patchSchema,
+            writableFields: ['title', 'note'],
+            update,
+            present: (row) => row,
+            notFoundKey: 'widgets.not-found',
+            idFrom: () => 'the-callers-own-id'
+        });
+
+        // No `:id` at all — `idFrom` is the only source, exactly like `/account`'s own route.
+        await patch(makeRequest({ title: 'x' }, undefined), makeResponseStub());
+
+        expect(update).toHaveBeenCalledWith('the-callers-own-id', { title: 'x' }, expect.anything());
+    });
+
     it('never audits on its own when auditAction is omitted, trusting update() already did', async () => {
         // DM2 (DECISION_MADE.md): every module wired to this factory so far already calls
         // `recordAudit` inside its own `update()` — a static action here on top of that would

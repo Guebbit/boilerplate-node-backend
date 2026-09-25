@@ -76,6 +76,14 @@ export interface UpdateControllerSpec<TReplace extends ZodType, TPatch extends Z
     auditAction?: AuditAction;
     /** The i18n key answered when the id is well-formed but matches nothing. */
     notFoundKey: string;
+    /**
+     * Where the row's id comes from, when it is not `:id` in the path — `PUT /account` and
+     * `PATCH /account` act on the caller's OWN record, which has no id anywhere in the request:
+     * it is `request.authContext.id`, already guaranteed present by the `isAuth` middleware every
+     * mount behind this runs after. Omit it for the ordinary `/x/:id` shape, which still 422s a
+     * missing or malformed path id the way every other id-taking controller does.
+     */
+    idFrom?: (request: Request) => string;
 }
 
 /**
@@ -116,7 +124,7 @@ export const clearedOrValue = <T>(value: T | null): T | undefined => value ?? un
  * Build a module's update controller: one PUT (replace) handler and one PATCH (merge) handler,
  * sharing everything but which schema validates the body and whether omitted fields are filled.
  *
- * @param spec - the six things that differ per entity
+ * @param spec - the things that differ per entity
  * @returns `{ replace, patch }` — two named express handlers over one body
  */
 export const createUpdateController = <TReplace extends ZodType, TPatch extends ZodType, TRow>({
@@ -127,7 +135,8 @@ export const createUpdateController = <TReplace extends ZodType, TPatch extends 
     update,
     present,
     auditAction,
-    notFoundKey
+    notFoundKey,
+    idFrom
 }: UpdateControllerSpec<TReplace, TPatch, TRow>): {
     replace: (request: Request, response: Response) => Promise<void>;
     patch: (request: Request, response: Response) => Promise<void>;
@@ -140,7 +149,11 @@ export const createUpdateController = <TReplace extends ZodType, TPatch extends 
     const run =
         (operation: string, schema: ZodType, fillOmitted: boolean) =>
         (request: Request, response: Response): Promise<void> => {
-            const id = extractAndValidateId(request, response, 'path');
+            // `idFrom` (UpdateControllerSpec's own docblock): `/account`'s two verbs act on the
+            // caller's own record, so there is no path id to 422 — skip straight to it.
+            const id = idFrom
+                ? idFrom(request)
+                : extractAndValidateId(request, response, 'path');
             if (!id) return Promise.resolve();
 
             const body = parseBody(schema, request.body, response) as

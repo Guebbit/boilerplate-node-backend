@@ -54,6 +54,7 @@ const RATE_LIMITED = [
 const AUTHENTICATED = [
     'GET /',
     'PUT /',
+    'PATCH /',
     'DELETE /',
     'POST /password',
     'POST /reauth',
@@ -76,6 +77,7 @@ describe('account routes — what is mounted', () => {
         expect(routeSignatures(router)).toEqual([
             'GET /',
             'PUT /',
+            'PATCH /',
             'DELETE /',
             'DELETE /delete-confirm',
             'POST /login',
@@ -254,7 +256,7 @@ describe('account routes — cache invalidation and uploads', () => {
             ).toBe(false);
     });
 
-    it.each(['PUT /', 'POST /signup'])(
+    it.each(['PUT /', 'PATCH /', 'POST /signup'])(
         '%s accepts the imageUpload field and validates what arrives',
         (signature) => {
             const chain = chainOf(router, signature);

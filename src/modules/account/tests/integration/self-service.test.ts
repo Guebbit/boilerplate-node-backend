@@ -118,7 +118,7 @@ describe('updateProfile', () => {
 
     it('answers 401, not 404, for an account that no longer exists', async () => {
         // A verified token for a deleted account is unauthenticated, not missing — `openapi.yaml`
-        // declares no 404 on `PUT /account`, and `isAuth` treats this exact case as 401 everywhere else.
+        // declares no 404 on `PUT/PATCH /account`, and `isAuth` treats this exact case as 401 everywhere else.
         const user = await createUser();
         await userRepository.deleteOne(user);
 

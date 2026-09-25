@@ -19,7 +19,7 @@ import {
 import { sendAccountMail } from './mail';
 import { sendVerificationEmail, markVerified, EMAIL_CHANGE_TOKEN_TYPE } from './verification';
 import { verifyOwnPassword } from './authentication';
-import { UpdateAccountBody } from '@api/schemas.zod';
+import { PatchAccountBody } from '@api/schemas.zod';
 import { optionalBooleanSchema } from '@infrastructure/http/schemas';
 import {
     generateSuccess,
@@ -254,23 +254,26 @@ export const removeOwnAccount = (
 };
 
 /**
- * What `PUT /account` accepts, validated with this codebase's messages.
- * `email`/`username` come from `zodUserSchema` (carries the i18n thunks); `locale`, `imageUrl`,
- * `phone`, `website` come straight from `UpdateAccountBody` — the contract's own constraints are
- * the whole rule. `.partial()` last: every field is optional, and absence means "leave it alone".
+ * What `PUT /account` and `PATCH /account` both ultimately write, validated with this codebase's
+ * messages. `email`/`username` come from `zodUserSchema` (carries the i18n thunks); `locale`,
+ * `imageUrl`, `phone`, `website` come straight from `PatchAccountBody` — the merge-shaped
+ * contract schema (AUDIT_0924 D17d), since every field this function sees is already optional by
+ * the time it runs: `update-account.ts`'s PUT path already filled an omitted one with `null`
+ * before calling here. `.partial()` last: every field is optional, and absence means "leave it
+ * alone".
  */
 const zodProfileSchema = zodUserSchema
     .pick({ email: true, username: true })
     .extend({
-        locale: UpdateAccountBody.shape.locale,
-        imageUrl: UpdateAccountBody.shape.imageUrl,
-        phone: UpdateAccountBody.shape.phone,
-        website: UpdateAccountBody.shape.website,
+        locale: PatchAccountBody.shape.locale,
+        imageUrl: PatchAccountBody.shape.imageUrl,
+        phone: PatchAccountBody.shape.phone,
+        website: PatchAccountBody.shape.website,
         // Absence still means "leave it alone", same as every other field here, not "withdraw
-        // consent". `optionalBooleanSchema`, not `UpdateAccountBody.shape` directly: a multipart
+        // consent". `optionalBooleanSchema`, not `PatchAccountBody.shape` directly: a multipart
         // request carries this as a string, and `'false'` is truthy.
         analyticsConsent: optionalBooleanSchema,
-        // Not on `UpdateAccountBody` — both are `readOnly`/absent from the contract because the
+        // Not on `PatchAccountBody` — both are `readOnly`/absent from the contract because the
         // server, not the client, produces them. They ride along here only because the controller
         // passes them from its own `readUploadedImage` call, the same way `imageUrl` does when an
         // upload — rather than a body value — is what set it.
@@ -280,7 +283,7 @@ const zodProfileSchema = zodUserSchema
     .partial();
 
 /**
- * Result of evaluating `PUT /account`'s `email` field against the pending-change rules — see
+ * Result of evaluating `PUT/PATCH /account`'s `email` field against the pending-change rules — see
  * {@link applyEmailChangeRequest}. `requested` is true only when THIS call is what set
  * `pendingEmail`, which is what gates the old-address notice and the new verification link: a
  * plain cancellation or a profile update that never touched `email` sends neither.
@@ -291,7 +294,7 @@ interface EmailChangeOutcome {
 }
 
 /**
- * Applies `PUT /account`'s `email` field to `user.pendingEmail` — never straight to `user.email`.
+ * Applies `PUT/PATCH /account`'s `email` field to `user.pendingEmail` — never straight to `user.email`.
  * The account keeps its current, PROVEN address until the new one is confirmed through
  * `POST /account/email-change-confirm` — docs/modules/account.md#proving-an-address.
  *
@@ -344,7 +347,7 @@ const sendEmailChangeMail = (user: UserDocument, context: CallerContext): Promis
 };
 
 /**
- * The fields `PUT /account` accepts, after parsing — the input half of {@link writeProfile}.
+ * The fields `PUT/PATCH /account` accepts, after parsing — the input half of {@link writeProfile}.
  */
 type ProfileFields = z.infer<typeof zodProfileSchema>;
 

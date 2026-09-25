@@ -101,7 +101,7 @@ The OAuth callback does not consult `twoFactorEnabledAt` — see
 
 Two **kinds** of email verification share one mechanism, and the distinction is the whole design.
 One proves the address an account **already has** — signup, and the explicit re-send. The other
-proves the address a `PUT /account` change has **asked for**. They are stored under different
+proves the address a `PUT`/`PATCH /account` change has **asked for**. They are stored under different
 `tokens.type` values (`verify` and `email-change`), and neither can do the other's work: a signup
 token that could swap in a `pendingEmail` would be an account takeover with an extra step.
 
@@ -112,7 +112,7 @@ proven address — until the new one is confirmed.
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 50}}}%%
 flowchart TB
-    P["PUT /account<br/><i>email: new@…</i>"] --> C{"which address?"}
+    P["PUT/PATCH /account<br/><i>email: new@…</i>"] --> C{"which address?"}
     C -->|"the current one"| X["cancels any pending change<br/><i>no mail, no token</i>"]
     C -->|"taken by another account"| R["409<br/><i>email or pendingEmail</i>"]
     C -->|"any other"| W["pendingEmail set"]
