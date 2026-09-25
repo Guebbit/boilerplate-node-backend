@@ -320,6 +320,7 @@ components:
         Text:
             type: string
             minLength: 1
+            maxLength: 200
             description: Free-text search string
         Email:
             type: string
