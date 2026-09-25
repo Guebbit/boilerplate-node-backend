@@ -7,7 +7,7 @@
  * the one write they may make; its safety comes from the service's scoped conditional write, not
  * the router.
  */
-import { routeTable, routeSignatures, guardsOn, optionsOf, chainOf } from '@tests/routes';
+import { routeTable, routeSignatures, guardsOn, chainOf } from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
@@ -100,29 +100,18 @@ describe('order routes — authorization', () => {
 });
 
 describe('order routes — caching', () => {
-    it('caches the two listings under one shared key', () => {
-        const listing = chainOf(router, 'GET /').find((entry) => entry.startsWith('setCache'));
-        const search = chainOf(router, 'POST /search').find((entry) =>
-            entry.startsWith('setCache')
-        );
+    // D2: an order's answer depends on who is asking (non-admins see only their own), so none
+    // of the three may go through the shared Redis cache — RFC 9111 §3.5. `privateNoCache` lets
+    // the BROWSER keep its own copy, revalidated every time.
+    it.each(['GET /', 'POST /search', 'GET /:id'])(
+        '%s is never Redis-cached, only privateNoCache',
+        (signature) => {
+            const chain = chainOf(router, signature);
 
-        expect(listing).toBe(search);
-        expect(listing).toContain('setCache(3600');
-        expect(optionsOf(chainOf(router, 'GET /'), 'setCache')).toMatchObject({
-            tags: ['orders'],
-            keyAs: 'orders:search'
-        });
-        expect(optionsOf(chainOf(router, 'GET /'), 'setCache').keyParameters).not.toHaveLength(0);
-    });
-
-    it('GET /:id is cached under the orders tag', () => {
-        const entry = chainOf(router, 'GET /:id').find((each) => each.startsWith('setCache'));
-
-        expect(entry).toContain('setCache(3600');
-        expect(optionsOf(chainOf(router, 'GET /:id'), 'setCache')).toMatchObject({
-            tags: ['orders']
-        });
-    });
+            expect(chain).toContain('privateNoCache');
+            expect(chain.some((entry) => entry.startsWith('setCache'))).toBe(false);
+        }
+    );
 
     // Not cached — every hit renders fresh, and there is no separate ready/pending status left to
     // invalidate a cache entry over.
@@ -132,21 +121,19 @@ describe('order routes — caching', () => {
         ).toBe(false);
     });
 
-    it('invalidates products too wherever stock moves, and only there', () => {
+    it('invalidates products wherever stock moves, and nothing on this router is Redis-cached any more', () => {
         // Creating an order and cancelling one both change availability, so both must clear the
-        // catalogue. A plain edit or delete does not touch stock — clearing `products` there
-        // would be a needless cache stampede, and the asymmetry is deliberate.
-        expect(chainOf(router, 'POST /')).toContain('invalidateCache([orders|products])');
-        expect(chainOf(router, 'POST /:id/cancel')).toContain('invalidateCache([orders|products])');
+        // catalogue. `orders` is gone from both — the last route on this router that tagged a
+        // cache entry `orders` was removed by D2, so there is nothing left to invalidate.
+        expect(chainOf(router, 'POST /')).toContain('invalidateCache([products])');
+        expect(chainOf(router, 'POST /:id/cancel')).toContain('invalidateCache([products])');
 
-        for (const signature of [
-            'PUT /',
-            'DELETE /',
-            'PUT /:id',
-            'DELETE /:id',
-            'DELETE /:id/hard'
-        ])
-            expect(chainOf(router, signature)).toContain('invalidateCache([orders])');
+        for (const signature of routeSignatures(router))
+            expect(
+                chainOf(router, signature).some((entry) => entry.startsWith('invalidateCache'))
+            ).toBe(
+                signature === 'POST /' || signature === 'POST /:id/cancel' // the two above
+            );
     });
 
     it('reaches the hard delete only through the flag route', () => {

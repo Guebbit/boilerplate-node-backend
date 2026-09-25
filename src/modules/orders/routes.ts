@@ -7,7 +7,7 @@
 
 import { Router } from 'express';
 import { getAuth, isAuth, requirePermission } from '@kernel/middlewares/authorizations';
-import { getOrders, searchOrdersKeyParameters } from './controllers/get-orders';
+import { getOrders } from './controllers/get-orders';
 import { writeOrders } from './controllers/write-orders';
 import { deleteOrders } from './controllers/delete-orders';
 import { restoreOrders } from './controllers/restore-orders';
@@ -15,7 +15,7 @@ import { getOrderItem } from './controllers/get-order-item';
 import { getOrderInvoice } from './controllers/get-order-invoice';
 import { postCancelOrder } from './controllers/post-cancel-order';
 import { postOrderStatusOverride } from './controllers/post-order-status-override';
-import { invalidateCache, searchCache, setCache } from '@infrastructure/http/middlewares/cache';
+import { invalidateCache, privateNoCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 import { invoiceLimiter } from './rate-limits';
@@ -35,45 +35,39 @@ export const router = Router();
  */
 router.use(getAuth, isAuth);
 
-/** Shared cache middleware for both search entry points, keyed on the query parameters that change the answer. */
-const cacheOrdersSearch = searchCache('orders', searchOrdersKeyParameters);
-
-// POST /orders/search — must come before /:id
-router.post('/search', cacheOrdersSearch, getOrders);
+// POST /orders/search — must come before /:id. Never Redis-cached (D2): the answer depends on who
+// is asking (non-admin sees only their own orders), so a shared cache must never hold it — RFC
+// 9111 §3.5. `privateNoCache` lets the browser keep its own copy, revalidated every time.
+router.post('/search', privateNoCache, getOrders);
 
 // GET /orders — list (non-admin sees own orders only)
-router.get('/', cacheOrdersSearch, getOrders);
+router.get('/', privateNoCache, getOrders);
 
 // POST /orders — admin creates order directly. idempotencyKey first: a retried creation must
-// replay the SAME order rather than mint a second one.
+// replay the SAME order rather than mint a second one. `products`, not `orders` — no route on
+// this router still tags a cache entry `orders`.
 router.post(
     '/',
     requirePermission('orders.any.create'),
     idempotencyKey,
-    invalidateCache(['orders', 'products']),
+    invalidateCache(['products']),
     writeOrders
 );
 
 // PUT /orders — admin, id in body (update)
-router.put('/', requirePermission('orders.any.update'), invalidateCache(['orders']), writeOrders);
+router.put('/', requirePermission('orders.any.update'), writeOrders);
 
 // DELETE /orders — admin, id in body
-router.delete(
-    '/',
-    requirePermission('orders.any.delete'),
-    invalidateCache(['orders']),
-    deleteOrders
-);
+router.delete('/', requirePermission('orders.any.delete'), deleteOrders);
 
 // POST /orders/:id/cancel — the one order write a customer can make (owner or admin;
 // the service's conditional write carries the caller's scope)
-router.post('/:id/cancel', invalidateCache(['orders', 'products']), postCancelOrder);
+router.post('/:id/cancel', invalidateCache(['products']), postCancelOrder);
 
 // POST /orders/:id/status-override — must come before /:id
 router.post(
     '/:id/status-override',
     requirePermission('orders.any.override'),
-    invalidateCache(['orders']),
     postOrderStatusOverride
 );
 
@@ -82,38 +76,23 @@ router.post(
 // actually flushed. `invoiceLimiter` guards the Chromium launch every render spawns.
 router.get('/:id/invoice', invoiceLimiter, getOrderInvoice);
 
-// GET /orders/:id
-router.get('/:id', setCache(3600, { tags: ['orders'], keyParameters: [] }), getOrderItem);
+// GET /orders/:id — never Redis-cached (D2), same reasoning as the search routes above: this is
+// the caller's OWN order.
+router.get('/:id', privateNoCache, getOrderItem);
 
 // PUT /orders/:id — admin only (update)
-router.put(
-    '/:id',
-    requirePermission('orders.any.update'),
-    invalidateCache(['orders']),
-    writeOrders
-);
+router.put('/:id', requirePermission('orders.any.update'), writeOrders);
 
 // DELETE /orders/:id — admin only (soft delete unless ?hardDelete=true)
-router.delete(
-    '/:id',
-    requirePermission('orders.any.delete'),
-    invalidateCache(['orders']),
-    deleteOrders
-);
+router.delete('/:id', requirePermission('orders.any.delete'), deleteOrders);
 
 // POST /orders/:id/restore — undo a soft delete; a second DELETE never does
-router.post(
-    '/:id/restore',
-    requirePermission('orders.any.delete'),
-    invalidateCache(['orders']),
-    restoreOrders
-);
+router.post('/:id/restore', requirePermission('orders.any.delete'), restoreOrders);
 
 // DELETE /orders/:id/hard — the same operation, with the flag spelled in the path
 router.delete(
     '/:id/hard',
     requirePermission('orders.any.delete'),
-    invalidateCache(['orders']),
     routeFlag('hardDelete'),
     deleteOrders
 );

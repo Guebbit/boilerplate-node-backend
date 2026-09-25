@@ -7,14 +7,7 @@
  * logged-in customer. Both are asserted per endpoint rather than once, so a route mounted above
  * that `use` still fails here.
  */
-import {
-    routeTable,
-    routeSignatures,
-    guardsOn,
-    optionsOf,
-    identityGuardIndex,
-    chainOf
-} from '@tests/routes';
+import { routeTable, routeSignatures, guardsOn, identityGuardIndex, chainOf } from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
@@ -84,26 +77,18 @@ describe('user routes — authorization', () => {
 });
 
 describe('user routes — caching and uploads', () => {
-    it('caches the two listings under one shared key', () => {
-        const listing = chainOf(router, 'GET /').find((entry) => entry.startsWith('setCache'));
-        const search = chainOf(router, 'POST /search').find((entry) =>
-            entry.startsWith('setCache')
-        );
+    // D2: the answer depends on who is asking (an admin's directory search, someone's own
+    // profile by id), so none of the three may go through the shared Redis cache — RFC 9111
+    // §3.5. `privateNoCache` lets the BROWSER keep its own copy, revalidated every time.
+    it.each(['GET /', 'POST /search', 'GET /:id'])(
+        '%s is never Redis-cached, only privateNoCache',
+        (signature) => {
+            const chain = chainOf(router, signature);
 
-        expect(listing).toBe(search);
-        expect(listing).toContain('setCache(3600');
-        expect(optionsOf(chainOf(router, 'GET /'), 'setCache')).toMatchObject({
-            tags: ['users'],
-            keyAs: 'users:search'
-        });
-        expect(optionsOf(chainOf(router, 'GET /'), 'setCache').keyParameters).not.toHaveLength(0);
-    });
-
-    it('caches the single read under the users tag', () => {
-        expect(optionsOf(chainOf(router, 'GET /:id'), 'setCache')).toMatchObject({
-            tags: ['users']
-        });
-    });
+            expect(chain).toContain('privateNoCache');
+            expect(chain.some((entry) => entry.startsWith('setCache'))).toBe(false);
+        }
+    );
 
     it.each([
         'POST /',
@@ -113,11 +98,14 @@ describe('user routes — caching and uploads', () => {
         'DELETE /:id',
         'DELETE /:id/hard',
         'DELETE /:id/2fa'
-    ])('%s clears both the users and account tags', (signature) => {
-        // Both, because the same row is served by two modules: `/users/:id` to an admin and
-        // `/account` to its owner. Clearing one leaves the other serving the old profile.
-        expect(chainOf(router, signature)).toContain('invalidateCache([users|account])');
-    });
+    ])(
+        '%s carries no cache invalidation — nothing on this router is Redis-cached any more',
+        (signature) => {
+            expect(
+                chainOf(router, signature).some((entry) => entry.startsWith('invalidateCache'))
+            ).toBe(false);
+        }
+    );
 
     it.each(['POST /', 'PUT /', 'PUT /:id'])(
         '%s accepts the imageUpload field and validates it',

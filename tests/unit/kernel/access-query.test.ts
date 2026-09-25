@@ -8,7 +8,7 @@
  * missing.
  */
 
-import { accessibleFilter } from '@kernel/access/query';
+import { accessibleFilter, hasAnonymousReadScope } from '@kernel/access/query';
 import { Types } from 'mongoose';
 import { asCustomer, asManager, asAdmin, asOperator } from '../../support/callers';
 
@@ -67,5 +67,44 @@ describe('accessibleFilter', () => {
         expect(accessibleFilter(asCustomer(), 'Product', 'update')).toEqual({
             $expr: { $eq: [0, 1] }
         });
+    });
+});
+
+/** `callerScope`-shaped wrappers, same signature `hasAnonymousReadScope` expects a module's own to have. */
+const productScope = (context?: Parameters<typeof accessibleFilter>[0]) =>
+    accessibleFilter(context, 'Product');
+
+/** The 'Order' twin of {@link productScope}. */
+const orderScope = (context?: Parameters<typeof accessibleFilter>[0]) =>
+    accessibleFilter(context, 'Order');
+
+/**
+ * `hasAnonymousReadScope` — what `infrastructure/http/middlewares/cache.ts`'s D2 fix uses to
+ * decide whether a caller may share the guest cache entry. Built on `accessibleFilter` (proven
+ * above), so these are about the COMPARISON, not about re-proving any one role's rules.
+ */
+describe('hasAnonymousReadScope', () => {
+    it('is true for anonymous compared against itself', () => {
+        expect(hasAnonymousReadScope(productScope, undefined)).toBe(true);
+    });
+
+    it('is true for a role that reads exactly the published catalogue, same as a guest', () => {
+        // `asCustomer()` and a guest both resolve to `{ active: true, deletedAt: null }` — proven
+        // by `accessibleFilter`'s own cases above.
+        expect(hasAnonymousReadScope(productScope, asCustomer())).toBe(true);
+    });
+
+    it('is false for a role that reads more than a guest', () => {
+        // `asAdmin()` resolves to `{}` — unrestricted, strictly wider than the guest filter.
+        expect(hasAnonymousReadScope(productScope, asAdmin())).toBe(false);
+    });
+
+    it('is false for a role whose filter merely DIFFERS from anonymous, not just widens it', () => {
+        // A customer reads their OWN orders (`{ userId: ..., deletedAt: null }`) where a guest
+        // reads none at all (`{ $expr: { $eq: [0, 1] } }`) — neither is a superset of the other,
+        // and the comparison must still catch that they are not the same filter.
+        expect(hasAnonymousReadScope(orderScope, asCustomer('507f1f77bcf86cd799439011'))).toBe(
+            false
+        );
     });
 });

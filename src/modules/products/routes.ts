@@ -5,6 +5,7 @@
  * `/categories`) would otherwise be swallowed by `/:id`.
  */
 
+import type { Request } from 'express';
 import { Router } from 'express';
 import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
 import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
@@ -19,6 +20,8 @@ import { getProductAdmin } from './controllers/get-product-admin';
 import { getCatalogueFacets } from './controllers/get-catalogue-facets';
 import { invalidateCache, searchCache, setCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
+import { hasAnonymousReadScope } from '@kernel/access/query';
+import { callerScope } from './service';
 
 /** Express router for product catalogue endpoints (public read, admin write). */
 export const router = Router();
@@ -33,10 +36,19 @@ export const router = Router();
 router.use(getAuth);
 
 /**
+ * D2: a caller who reads exactly what a guest reads shares the guest's cached entry; a caller who
+ * sees more (admins — inactive products included) bypasses Redis entirely rather than risk
+ * serving or storing their wider answer under that shared key. `hasAnonymousReadScope` is what
+ * makes this safe BY CONSTRUCTION — see its own docblock.
+ */
+const cacheScopeKey = (request: Request): string | undefined =>
+    hasAnonymousReadScope(callerScope, request.authContext) ? 'guest' : undefined;
+
+/**
  * Shared cache middleware for both search entry points, keyed on the query parameters that
  * change the answer.
  */
-const cacheProductsSearch = searchCache('products', searchProductsKeyParameters);
+const cacheProductsSearch = searchCache('products', searchProductsKeyParameters, cacheScopeKey);
 
 // POST /products/search — must come before /:id to avoid matching "search" as an id
 router.post('/search', cacheProductsSearch, getProducts);
@@ -69,15 +81,22 @@ router.delete(
 );
 
 // GET /products/categories — the filter chips; a static segment, so declared before /:id
-// for the same readability rule the create route follows
+// for the same readability rule the create route follows. `() => 'guest'`, not `cacheScopeKey`:
+// `productService.facets()` scopes to active rows UNCONDITIONALLY (see its own comment) — it
+// never reads more for an admin the way search/`:id` do, so every caller already shares one
+// answer and there is nobody to bypass the cache for.
 router.get(
     '/categories',
-    setCache(3600, { tags: ['products'], keyParameters: [] }),
+    setCache(3600, { tags: ['products'], keyParameters: [], scopeKey: () => 'guest' }),
     getCatalogueFacets
 );
 
 // GET /products/:id — public
-router.get('/:id', setCache(3600, { tags: ['products'], keyParameters: [] }), getProductItem);
+router.get(
+    '/:id',
+    setCache(3600, { tags: ['products'], keyParameters: [], scopeKey: cacheScopeKey }),
+    getProductItem
+);
 
 // PATCH /products/:id — admin only (update, merging). Same two keys as the create door.
 router.patch(

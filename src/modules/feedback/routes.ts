@@ -12,10 +12,10 @@
 import { Router } from 'express';
 import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
 import { postFeedbackContact } from './controllers/post-feedback-contact';
-import { getFeedback, searchFeedbackKeyParameters } from './controllers/get-feedback';
+import { getFeedback } from './controllers/get-feedback';
 import { putFeedbackStatus } from './controllers/put-feedback-status';
 import { deleteFeedback } from './controllers/delete-feedback';
-import { invalidateCache, searchCache } from '@infrastructure/http/middlewares/cache';
+import { privateNoCache } from '@infrastructure/http/middlewares/cache';
 import { contactLimiters } from './rate-limits';
 import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
@@ -35,14 +35,7 @@ export const router = Router();
  * `humanChallengeGate` next — rung 3, off by default (`NODE_ANTIBOT_PROVIDER`) — before the write it
  * would otherwise refuse just as cheaply after.
  */
-router.post(
-    '/contact',
-    contactLimiters,
-    humanChallengeGate,
-    idempotencyKey,
-    invalidateCache(['feedback']),
-    postFeedbackContact
-);
+router.post('/contact', contactLimiters, humanChallengeGate, idempotencyKey, postFeedbackContact);
 
 /*
  * Everything below is admin-only. POSITIONAL — guards routes below it, not above — which is why
@@ -55,27 +48,15 @@ router.post(
 router.use(getAuth, isAuthOrCredential);
 
 /**
- * The DTO form of `GET /` — a GET body has no defined semantics and `setCache` keys only on
- * query parameters, so this exists to carry filters. Mounted ABOVE any future `/:id` route so
- * "search" can't later match as an id.
+ * The DTO form of `GET /` — a GET body has no defined semantics, so this exists to carry filters.
+ * Mounted ABOVE any future `/:id` route so "search" can't later match as an id.
  *
- * Shares its cache key with the GET above (`keyAs: 'feedback:search'`), so either warms the
- * other. Wire response stays `no-store` — this is a Redis-side cache, not a browser-cacheable POST.
+ * Never Redis-cached (D2): this is one admin's queue, filtered by them, and used to be keyed per
+ * admin caller for no shared benefit. `privateNoCache` lets the browser keep its own copy,
+ * revalidated every time.
  */
-const cacheFeedbackSearch = searchCache('feedback', searchFeedbackKeyParameters, 600);
+router.post('/search', requirePermission('feedback.any.read'), privateNoCache, getFeedback);
 
-router.post('/search', requirePermission('feedback.any.read'), cacheFeedbackSearch, getFeedback);
-
-router.get('/', requirePermission('feedback.any.read'), cacheFeedbackSearch, getFeedback);
-router.put(
-    '/:id',
-    requirePermission('feedback.any.update'),
-    invalidateCache(['feedback']),
-    putFeedbackStatus
-);
-router.delete(
-    '/:id',
-    requirePermission('feedback.any.delete'),
-    invalidateCache(['feedback']),
-    deleteFeedback
-);
+router.get('/', requirePermission('feedback.any.read'), privateNoCache, getFeedback);
+router.put('/:id', requirePermission('feedback.any.update'), putFeedbackStatus);
+router.delete('/:id', requirePermission('feedback.any.delete'), deleteFeedback);

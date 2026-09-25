@@ -193,27 +193,46 @@ interface CacheOptions {
      * browser revalidates and gets `304` when the ETag matches — one round trip, edit visible at once.
      */
     browserRevalidate?: boolean;
+
+    /**
+     * Whether THIS caller's answer is safe to share with every other cacheable caller, and under
+     * what key.
+     *
+     * Returns the scope string cacheable callers share — `'guest'` for every route in this
+     * codebase today, since RFC 9111 §3.5 rules out caching an answer that depends on WHO is
+     * asking, and the only routes still declaring a `CacheOptions` are the ones whose answer does
+     * not (see `docs/theory/request-input.md` / the D2 audit note this type replaces). Returns
+     * `undefined` for a caller who sees something a guest does not — an admin viewing inactive
+     * rows — which BYPASSES Redis for this request entirely rather than risk serving or storing a
+     * wider answer under the shared key.
+     *
+     * Required, same reasoning as `keyParameters`: which requests may share an answer is a
+     * correctness question, not a missed optimisation. `kernel/access/query.ts#hasAnonymousReadScope`
+     * is what makes answering it safe BY CONSTRUCTION — compare the caller's compiled read filter
+     * to an anonymous one's, so a role change that widens visibility fails this comparison on its
+     * own, with nobody having to remember to touch the cache key too.
+     */
+    scopeKey: (request: Request) => string | undefined;
 }
 
 /**
- * Keep cache entries separated by user.
- * This avoids serving one user's private data to another user.
- */
-const getCacheScope = (request: Request) => {
-    const userId = request.authContext?.id;
-    if (!userId) return 'guest';
-    return `user:${userId}`;
-};
-
-/**
- * Build one cache key from method + path + the declared query parameters + user scope + language.
+ * Build one cache key from method + path + the declared query parameters + the resolved scope +
+ * language.
  *
  * Locale is in the key because it changes the body (translated copy) — same reasoning as the
  * `Vary: Authorization` note in `setCache` below. The raw query string is deliberately NOT part of
  * the key: query-string order is not stable across clients, and only `keyParameters` —
  * pre-sorted, JSON-serialized — can reach the key, so `?anything=else` cannot mint its own entry.
+ *
+ * @param scope - `options.scopeKey`'s answer for this request — never `undefined` here, since
+ *   `serveOrArm` bypasses Redis entirely before a key is ever built for that case
  */
-const getCacheKey = (request: Request, sortedKeyParameters: readonly string[], keyAs?: string) => {
+const getCacheKey = (
+    request: Request,
+    sortedKeyParameters: readonly string[],
+    scope: string,
+    keyAs?: string
+) => {
     // Path only. `originalUrl` is the sole place the mounted prefix and the route path are
     // already joined, so it is split rather than reassembled from `baseUrl` + `path`.
     const [path] = request.originalUrl.split('?');
@@ -246,7 +265,7 @@ const getCacheKey = (request: Request, sortedKeyParameters: readonly string[], k
         })
         .join('&');
 
-    return `${identity}?${values}:${getCacheScope(request)}:${request.locale ?? '-'}`;
+    return `${identity}?${values}:${scope}:${request.locale ?? '-'}`;
 };
 
 /**
@@ -315,10 +334,16 @@ const armCacheWrite = (
  * of bug `GET /account` had). `Accept-Language`, because `attachLocale` already sets it and a
  * route reaching this by another path should still declare it.
  *
- * @param request - decides GET vs POST framing and public/private scope
+ * `cacheScope === undefined` (this caller sees more than the shared answer, per `options.scopeKey`)
+ * answers `private, no-cache` regardless of `browserRevalidate` — {@link serveOrArm} is about to
+ * bypass Redis for this same request, and a shared/browser cache must not store this ONE
+ * caller's wider answer as if it were the generic one.
+ *
+ * @param request - decides GET vs POST framing
  * @param response - headers are set on this response; `noStore` is read from it too
  * @param options - the route's declared cache identity — see {@link CacheOptions}
  * @param ttl - the resolved (possibly dev-clamped) TTL used to build `max-age`
+ * @param cacheScope - `options.scopeKey(request)`'s answer — see {@link CacheOptions.scopeKey}
  * @returns whether this request is a GET — reused by {@link serveOrArm}
  * @throws {Error} on either mounting mistake described above
  */
@@ -326,7 +351,8 @@ const applyCacheHeaders = (
     request: Request,
     response: Response,
     options: CacheOptions,
-    ttl: number
+    ttl: number,
+    cacheScope: string | undefined
 ): boolean => {
     if (response.locals.noStore)
         throw new Error(
@@ -342,13 +368,14 @@ const applyCacheHeaders = (
                 'there is nothing for the browser to revalidate. See the comment in this file.'
         );
 
-    const scope = request.authContext ? 'private' : 'public';
     response.set(
         'Cache-Control',
         cacheableRead
-            ? options.browserRevalidate
-                ? `${scope}, no-cache`
-                : `${scope}, max-age=${ttl}, stale-while-revalidate=${STALE_WHILE_REVALIDATE_SECONDS}, stale-if-error=${STALE_IF_ERROR_SECONDS}`
+            ? cacheScope === undefined
+                ? 'private, no-cache'
+                : options.browserRevalidate
+                  ? 'public, no-cache'
+                  : `public, max-age=${ttl}, stale-while-revalidate=${STALE_WHILE_REVALIDATE_SECONDS}, stale-if-error=${STALE_IF_ERROR_SECONDS}`
             : 'no-store'
     );
     response.vary('Authorization');
@@ -373,8 +400,10 @@ const applyCacheHeaders = (
  * @param ttl - the resolved TTL; `<= 0` skips Redis entirely
  * @param sortedKeyParameters - `options.keyParameters`, pre-sorted once at route-registration time
  * @param options - the route's key parameters, tags and cache identity — see {@link CacheOptions}
+ * @param cacheScope - `options.scopeKey(request)`'s answer; `undefined` skips Redis entirely,
+ *   same as `ttl <= 0` — see {@link CacheOptions.scopeKey}
  * @returns the pending Redis lookup, so a caller (a test, chiefly) can await the whole decision;
- *   `undefined` on the synchronous not-cacheable / ttl<=0 exit
+ *   `undefined` on the synchronous not-cacheable / ttl<=0 / no-scope exit
  */
 const serveOrArm = (
     request: Request,
@@ -383,10 +412,11 @@ const serveOrArm = (
     cacheableRead: boolean,
     ttl: number,
     sortedKeyParameters: readonly string[],
-    options: CacheOptions
+    options: CacheOptions,
+    cacheScope: string | undefined
 ): Promise<void> | undefined => {
     const servedFromCache = cacheableRead || options.keyAs !== undefined;
-    if (!servedFromCache || ttl <= 0) {
+    if (!servedFromCache || ttl <= 0 || cacheScope === undefined) {
         next();
         return undefined;
     }
@@ -397,7 +427,7 @@ const serveOrArm = (
     // nearly a minute after it landed.
     const graceSeconds = Math.min(STALE_WHILE_REVALIDATE_SECONDS, ttl);
 
-    const cacheKey = getCacheKey(request, sortedKeyParameters, options.keyAs);
+    const cacheKey = getCacheKey(request, sortedKeyParameters, cacheScope, options.keyAs);
     return (
         getCacheValue(cacheKey)
             .then((raw) => {
@@ -422,8 +452,9 @@ const serveOrArm = (
 
                 // Past the soft TTL: exactly one caller, across every worker and replica, rebuilds —
                 // everyone else reads back their OWN key's stale body rather than wait. Nobody ever
-                // receives the rebuilder's response object, so this cannot leak across callers (see
-                // the trap note on getCacheScope above `armCacheWrite`'s docblock).
+                // receives the rebuilder's response object, so this cannot leak across callers —
+                // every caller sharing this key already shares the same answer by construction,
+                // per `options.scopeKey`'s own docblock.
                 return claimCacheRefresh(cacheKey, graceSeconds).then((wonClaim) => {
                     if (!wonClaim) {
                         response.set('x-cache', 'STALE');
@@ -466,7 +497,10 @@ export const setCache = (seconds = 0, options: CacheOptions) => {
         // API cannot leave stale answers around for an hour — resolved before the headers so
         // browsers are told the lifetime the server will actually honour.
         const ttl = resolveCacheTtl(seconds);
-        const cacheableRead = applyCacheHeaders(request, response, options, ttl);
+        // Resolved once, up front: both the headers and the Redis decision below must agree on
+        // whether THIS caller may share the cached answer — see CacheOptions.scopeKey.
+        const cacheScope = options.scopeKey(request);
+        const cacheableRead = applyCacheHeaders(request, response, options, ttl, cacheScope);
         return serveOrArm(
             request,
             response,
@@ -474,7 +508,8 @@ export const setCache = (seconds = 0, options: CacheOptions) => {
             cacheableRead,
             ttl,
             sortedKeyParameters,
-            options
+            options,
+            cacheScope
         );
     };
 };
@@ -482,15 +517,20 @@ export const setCache = (seconds = 0, options: CacheOptions) => {
 /**
  * `setCache` for a module's two search spellings — `GET /x` and `POST /x/search` — which must
  * share one `keyAs` identity (see the note on it above) so that whichever spelling asks first
- * warms the other. Every module wired the same three fields onto both routes by hand; this is
- * that declaration, made once and reused, so the two routes cannot drift apart into two keys.
+ * warms the other. Every module wired the same fields onto both routes by hand; this is that
+ * declaration, made once and reused, so the two routes cannot drift apart into two keys.
  *
  * @param entity - the module's cache tag, and half of its `keyAs` — `'products'` → `products:search`
  * @param keyParameters - the module's own schema-derived key parameters
+ * @param scopeKey - see {@link CacheOptions.scopeKey} — the module's own guest-equivalence check
  * @param seconds - TTL; defaults to the hour every search endpoint but `feedback` uses
  */
-export const searchCache = (entity: string, keyParameters: readonly string[], seconds = 3600) =>
-    setCache(seconds, { tags: [entity], keyParameters, keyAs: `${entity}:search` });
+export const searchCache = (
+    entity: string,
+    keyParameters: readonly string[],
+    scopeKey: CacheOptions['scopeKey'],
+    seconds = 3600
+) => setCache(seconds, { tags: [entity], keyParameters, keyAs: `${entity}:search`, scopeKey });
 
 /**
  * Clear Redis cache groups after successful write operations — e.g. after writing a product,
@@ -535,5 +575,24 @@ export const noStore = (request: Request, response: Response, next: NextFunction
     delete request.headers['if-none-match'];
     delete request.headers['if-modified-since'];
 
+    next();
+};
+
+/**
+ * For a GET whose answer depends on who is asking (`orders`, `users`, `feedback`) — never a
+ * SERVER-side cache, which is the D2 fix: RFC 9111 §3.5 rules out a shared cache storing an
+ * authenticated answer, and keying Redis per caller (what this codebase used to do) only grows
+ * the store for an optimisation nobody but that one caller ever benefits from. Unlike
+ * {@link noStore}, the BROWSER may still keep its own private copy — it just has to prove it is
+ * still fresh before reusing it, which Express's own strong ETag (`app.set('etag', 'strong')`)
+ * already makes cheap: a `304` on no change, a full body the moment there is one.
+ *
+ * `Vary: Authorization` for the same reason `setCache` sets it: an intermediary that ignores
+ * `private` must still be told the answer depends on who asked, not just what was asked.
+ */
+export const privateNoCache = (request: Request, response: Response, next: NextFunction) => {
+    response.set('Cache-Control', 'private, no-cache');
+    response.vary('Authorization');
+    response.vary('Accept-Language');
     next();
 };

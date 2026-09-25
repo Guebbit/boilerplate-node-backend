@@ -8,7 +8,7 @@
  * whatever happened.
  */
 
-import { routeSignatures, guardsOn, optionsOf, identityGuardIndex, chainOf } from '@tests/routes';
+import { routeSignatures, guardsOn, identityGuardIndex, chainOf } from '@tests/routes';
 
 jest.mock('@infrastructure/http/middlewares/cache', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').cacheMock()
@@ -71,45 +71,36 @@ describe('feedback routes — the positional guard', () => {
 });
 
 describe('feedback routes — caching', () => {
-    it('caches the admin listing and its DTO twin on one key, at the shorter TTL', () => {
-        const listing = chainOf(router, 'GET /').find((entry) => entry.startsWith('setCache'));
-        const search = chainOf(router, 'POST /search').find((entry) =>
-            entry.startsWith('setCache')
-        );
-
-        expect(listing).toBe(search);
-        // 600, not the 3600 the catalogue uses: an operator queue is read while it changes.
-        expect(listing).toContain('setCache(600');
-        expect(optionsOf(chainOf(router, 'GET /'), 'setCache')).toMatchObject({
-            tags: ['feedback'],
-            keyAs: 'feedback:search'
-        });
-        expect(optionsOf(chainOf(router, 'GET /'), 'setCache').keyParameters).not.toHaveLength(0);
-    });
-
-    it.each(['POST /contact', 'PUT /:id', 'DELETE /:id'])(
-        '%s invalidates the feedback tag',
+    // D2: this is one admin's queue, filtered by them, never a shared Redis answer — RFC 9111
+    // §3.5. `privateNoCache` lets the BROWSER keep its own copy, revalidated every time.
+    it.each(['GET /', 'POST /search'])(
+        '%s is never Redis-cached, only privateNoCache',
         (signature) => {
-            // Every write invalidates: a visitor submitting adds a row to the operator's queue, an
-            // operator changing a status changes what that queue shows, and deleting a row removes
-            // one from it.
-            expect(chainOf(router, signature)).toContain('invalidateCache([feedback])');
+            const chain = chainOf(router, signature);
+
+            expect(chain).toContain('privateNoCache');
+            expect(chain.some((entry) => entry.startsWith('setCache'))).toBe(false);
         }
     );
+
+    it('carries no cache invalidation anywhere — nothing on this router is Redis-cached any more', () => {
+        for (const signature of routeSignatures(router))
+            expect(
+                chainOf(router, signature).some((entry) => entry.startsWith('invalidateCache'))
+            ).toBe(false);
+    });
 });
 
 describe('feedback routes — submission rate limiting', () => {
-    it('rate-limits the contact form before it can invalidate the cache or write anything', () => {
-        // The whole point is that a spent budget costs no cache invalidation and no database
-        // write — see `contactLimiters`' own docs for why this is a DIFFERENT set of limiters
-        // from `credentialLimiters`. All THREE dimensions — address, identity, address-block.
+    it('rate-limits the contact form before it can write anything', () => {
+        // The whole point is that a spent budget costs no database write — see
+        // `contactLimiters`' own docs for why this is a DIFFERENT set of limiters from
+        // `credentialLimiters`. All THREE dimensions — address, identity, address-block.
         const chain = chainOf(router, 'POST /contact');
         const limiters = chain.filter((entry) => entry.startsWith('submission'));
 
         expect(limiters).toEqual(['submissions', 'submission-identity', 'submission-block']);
-        expect(chain.indexOf('submissions')).toBeLessThan(
-            chain.indexOf('invalidateCache([feedback])')
-        );
+        expect(chain.indexOf('submissions')).toBeLessThan(chain.indexOf('postFeedbackContact'));
     });
 
     it('leaves every other route unbudgeted by the contact-form limiters', () => {

@@ -64,7 +64,7 @@ import { deleteAccountConfirm } from './controllers/delete-account-confirm';
 import { getOAuthProviders } from './controllers/get-oauth-providers';
 import { getOAuthStart } from './controllers/get-oauth-start';
 import { getOAuthCallback } from './controllers/get-oauth-callback';
-import { invalidateCache, noStore } from '@infrastructure/http/middlewares/cache';
+import { noStore } from '@infrastructure/http/middlewares/cache';
 import { getMyAbilities } from './controllers/get-my-abilities';
 
 /**
@@ -110,7 +110,6 @@ router.put(
     '/',
     uploadLimiter,
     isAuth,
-    invalidateCache(['users', 'account']),
     upload.image(),
     requireFreshAuthWhen(isChangingEmail, REAUTH_TIME_SENSITIVE),
     putAccount
@@ -120,7 +119,7 @@ router.put(
 router.delete('/', isAuth, requireFreshAuth(REAUTH_TIME_CRITICAL), deleteAccountRequest);
 
 // DELETE /account/delete-confirm — confirm account deletion with token
-router.delete('/delete-confirm', invalidateCache(['users', 'account']), deleteAccountConfirm);
+router.delete('/delete-confirm', deleteAccountConfirm);
 
 // POST /account/login — authenticate and get tokens. `loginChallengeGate` (rung 3, off by
 // default) only engages once `credentialLimiters`' identity budget is mostly spent — never on an
@@ -139,7 +138,6 @@ router.post(
     signupLimiters,
     uploadLimiter,
     humanChallengeGate,
-    invalidateCache(['users', 'account']),
     upload.image(),
     idempotencyKey,
     postSignup
@@ -150,12 +148,7 @@ router.post(
 router.post('/reset', resetRequestLimiters, humanChallengeGate, postResetRequest);
 
 // POST /account/reset-confirm — complete password reset with token
-router.post(
-    '/reset-confirm',
-    credentialLimiters,
-    invalidateCache(['users', 'account']),
-    postResetConfirm
-);
+router.post('/reset-confirm', credentialLimiters, postResetConfirm);
 
 // POST /account/password — change password by proving the current one (requires auth)
 router.post('/password', credentialLimiters, isAuth, postPasswordChange);
@@ -187,13 +180,7 @@ router.post('/logout', postLogout);
 
 // POST /account/logout-all — revoke all refresh tokens (requires auth). Sensitive: evicting the
 // owner is an attack, not just an action, if a stolen-but-unfresh session could do it.
-router.post(
-    '/logout-all',
-    isAuth,
-    requireFreshAuth(REAUTH_TIME_SENSITIVE),
-    invalidateCache(['account']),
-    postLogoutEverywhere
-);
+router.post('/logout-all', isAuth, requireFreshAuth(REAUTH_TIME_SENSITIVE), postLogoutEverywhere);
 
 // GET /account/sessions — list live refresh tokens as sessions (requires auth)
 router.get('/sessions', isAuth, getSessions);
@@ -211,28 +198,17 @@ router.delete(
 router.post('/verify-request', credentialLimiters, isAuth, postVerifyRequest);
 
 // POST /account/verify-confirm — spend the emailed token; public, the token is the credential
-router.post(
-    '/verify-confirm',
-    credentialLimiters,
-    invalidateCache(['users', 'account']),
-    postVerifyConfirm
-);
+router.post('/verify-confirm', credentialLimiters, postVerifyConfirm);
 
 // POST /account/email-change-confirm — spend the emailed `email-change` token; public, same
 // reasoning as verify-confirm. A DIFFERENT token type — see `services/verification.ts`.
-router.post(
-    '/email-change-confirm',
-    credentialLimiters,
-    invalidateCache(['users', 'account']),
-    postEmailChangeConfirm
-);
+router.post('/email-change-confirm', credentialLimiters, postEmailChangeConfirm);
 
 // DELETE /account/tokens/expired — remove expired tokens from the DB (`tokens.any.delete`)
 router.delete(
     '/tokens/expired',
     isAuth,
     requirePermission('tokens.any.delete'),
-    invalidateCache(['users', 'account']),
     deleteExpiredTokens
 );
 

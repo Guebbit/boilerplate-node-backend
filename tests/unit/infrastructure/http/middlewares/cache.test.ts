@@ -35,6 +35,13 @@ jest.mock('@infrastructure/adapters/logger', () => ({
 
 const mockedCache = jest.mocked(cache);
 
+/**
+ * The `scopeKey` every test below uses unless it is specifically exercising the D2 mechanism
+ * (`CacheOptions.scopeKey` itself) — a caller who always shares the one answer every other
+ * caller does, the ordinary case for every route in this suite's fixtures.
+ */
+const GUEST_SCOPE = () => 'guest';
+
 const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
 const ORIGINAL_TTL_MAX = process.env.NODE_REDIS_CACHE_DEV_TTL_MAX;
 const ORIGINAL_MAX_BYTES = process.env.NODE_REDIS_CACHE_MAX_BYTES;
@@ -91,7 +98,7 @@ const keyFor = async (
     originalUrl = '/products'
 ) => {
     mockedCache.getCacheValue.mockResolvedValue(undefined);
-    const middleware = setCache(60, { tags: ['products'], keyParameters });
+    const middleware = setCache(60, { tags: ['products'], keyParameters, scopeKey: GUEST_SCOPE });
     await middleware(
         asStub<Request>({ method: 'GET', originalUrl, query, locale: 'en' }),
         createResponse().response,
@@ -114,7 +121,12 @@ const bodyKeyFor = async (
     keyAs = 'products:search'
 ) => {
     mockedCache.getCacheValue.mockResolvedValue(undefined);
-    const middleware = setCache(60, { tags: ['products'], keyParameters, keyAs });
+    const middleware = setCache(60, {
+        tags: ['products'],
+        keyParameters,
+        keyAs,
+        scopeKey: GUEST_SCOPE
+    });
     await middleware(
         asStub<Request>({
             method: 'POST',
@@ -136,7 +148,12 @@ const sharedQueryKeyFor = async (
     keyAs = 'products:search'
 ) => {
     mockedCache.getCacheValue.mockResolvedValue(undefined);
-    const middleware = setCache(60, { tags: ['products'], keyParameters, keyAs });
+    const middleware = setCache(60, {
+        tags: ['products'],
+        keyParameters,
+        keyAs,
+        scopeKey: GUEST_SCOPE
+    });
     await middleware(
         asStub<Request>({ method: 'GET', originalUrl: '/products', query, locale: 'en' }),
         createResponse().response,
@@ -148,7 +165,11 @@ const sharedQueryKeyFor = async (
 /** Drive one MISS through the middleware and let the controller answer with `body`. */
 const storeThrough = async (body: unknown, seconds = 60) => {
     mockedCache.getCacheValue.mockResolvedValue(undefined);
-    const middleware = setCache(seconds, { tags: ['products'], keyParameters: [] });
+    const middleware = setCache(seconds, {
+        tags: ['products'],
+        keyParameters: [],
+        scopeKey: GUEST_SCOPE
+    });
     const { response } = createResponse();
 
     await middleware(
@@ -185,7 +206,11 @@ describe('setCache', () => {
             JSON.stringify({ status: 200, body: { success: true }, staleAt: Date.now() + 60_000 })
         );
 
-        const middleware = setCache(60, { tags: ['products'], keyParameters: ['page'] });
+        const middleware = setCache(60, {
+            tags: ['products'],
+            keyParameters: ['page'],
+            scopeKey: GUEST_SCOPE
+        });
         const { response, headers } = createResponse();
         const next = jest.fn() as NextFunction;
         const request = asStub<Request>({
@@ -213,7 +238,11 @@ describe('setCache', () => {
     it('treats a corrupt entry as a miss rather than throwing', async () => {
         mockedCache.getCacheValue.mockResolvedValue('{not json');
 
-        const middleware = setCache(60, { tags: ['products'], keyParameters: [] });
+        const middleware = setCache(60, {
+            tags: ['products'],
+            keyParameters: [],
+            scopeKey: GUEST_SCOPE
+        });
         const { response, headers } = createResponse();
         const next = jest.fn() as NextFunction;
 
@@ -236,7 +265,11 @@ describe('setCache', () => {
         const redisError = new Error('redis down');
         mockedCache.getCacheValue.mockRejectedValue(redisError);
 
-        const middleware = setCache(60, { tags: ['products'], keyParameters: [] });
+        const middleware = setCache(60, {
+            tags: ['products'],
+            keyParameters: [],
+            scopeKey: GUEST_SCOPE
+        });
         const { response } = createResponse();
         const next = jest.fn() as NextFunction;
 
@@ -249,20 +282,24 @@ describe('setCache', () => {
         expect(next).toHaveBeenCalledWith(redisError);
     });
 
-    it('stores successful uncached responses after the handler runs', async () => {
+    it('stores successful uncached responses, keyed by whatever scopeKey resolves', async () => {
         mockedCache.getCacheValue.mockResolvedValue(undefined);
 
-        const middleware = setCache(120, { tags: ['products'], keyParameters: [] });
+        // A stand-in for `hasAnonymousReadScope`'s own answer in a real route — this test's job
+        // is only to prove the key carries whatever `scopeKey` returns, not to re-test that
+        // comparison (`tests/unit/kernel/access-query.test.ts` owns that).
+        const middleware = setCache(120, {
+            tags: ['products'],
+            keyParameters: [],
+            scopeKey: () => 'tenant:acme'
+        });
         const { response, headers } = createResponse();
         const next = jest.fn() as NextFunction;
         const request = asStub<Request>({
             method: 'GET',
             originalUrl: '/products',
             query: {},
-            locale: 'en',
-            authContext: {
-                id: '507f1f77bcf86cd799439011'
-            }
+            locale: 'en'
         });
 
         await middleware(request, response, next);
@@ -275,7 +312,7 @@ describe('setCache', () => {
 
         // Redis holds the entry past its soft expiry: 120s TTL + min(60, 120)s grace.
         expect(mockedCache.setCacheValue).toHaveBeenCalledWith(
-            'GET:/products?:user:507f1f77bcf86cd799439011:en',
+            'GET:/products?:tenant:acme:en',
             expect.stringContaining('"status":201,"body":{"success":true,"data":[]}'),
             180,
             ['products']
@@ -287,7 +324,11 @@ describe('setCache', () => {
         process.env.NODE_REDIS_CACHE_DEV_TTL_MAX = '30';
         mockedCache.getCacheValue.mockResolvedValue(undefined);
 
-        const middleware = setCache(3600, { tags: ['products'], keyParameters: [] });
+        const middleware = setCache(3600, {
+            tags: ['products'],
+            keyParameters: [],
+            scopeKey: GUEST_SCOPE
+        });
         const { response, headers } = createResponse();
         const request = asStub<Request>({
             method: 'GET',
@@ -313,41 +354,37 @@ describe('setCache', () => {
         );
     });
 
-    // The Redis key is scoped per user, but that tells the *browser* nothing about the body
-    // depending on who asked: an anonymous `GET /products` answering `public, max-age=30` is
-    // stored locally and replayed to an admin hitting the same URL seconds later — admin header,
-    // admin row controls, anonymous data, no request reaching the API at all. Both scopes must
-    // name `Authorization` in `Vary`, since it is the only input `getAuth` reads.
-    //
-    // `Accept-Language` is there for the same reason with a different header: bodies carry
-    // translated `message` / `errors` copy, so a cache that does not key on it hands an Italian
-    // body to the next English caller of the same URL.
+    // A caller `scopeKey` shares the guest entry with answers `public, max-age` — the whole point
+    // being that the body is the SAME one a guest gets, so a shared/edge cache may hold it too.
+    // A caller who sees more (`scopeKey` returns `undefined`) answers `private, no-cache` instead:
+    // that caller's wider answer must never be stored as if it were the generic one, and Redis is
+    // bypassed for them entirely (`describe('the cache is bypassed...')` below). Both cases name
+    // `Authorization` in `Vary` regardless — an intermediary that ignores `private` must still be
+    // told the answer depends on who asked. `Accept-Language` is there for the same reason with a
+    // different header: bodies carry translated `message`/`errors` copy, so a cache that does not
+    // key on it hands an Italian body to the next English caller of the same URL.
     it.each([
         [
-            'guest',
-            {} as Partial<Request>,
+            'shares the guest scope',
+            GUEST_SCOPE,
             'public, max-age=30, stale-while-revalidate=60, stale-if-error=300'
         ],
-        [
-            'authenticated',
-            { authContext: { id: '507f1f77bcf86cd799439011' } } as Partial<Request>,
-            'private, max-age=30, stale-while-revalidate=60, stale-if-error=300'
-        ]
+        ['sees more than guest', () => undefined, 'private, no-cache']
     ])(
-        'varies a %s response on Authorization and Accept-Language',
-        async (_scope, extraRequest, cacheControl) => {
+        'varies a caller who %s on Authorization and Accept-Language',
+        async (_label, scopeKey, cacheControl) => {
             mockedCache.getCacheValue.mockResolvedValue(undefined);
 
             const middleware = setCache(30, {
                 tags: ['products'],
-                keyParameters: ['page', 'pageSize']
+                keyParameters: ['page', 'pageSize'],
+                scopeKey
             });
             const { response, headers } = createResponse();
             const request = asStub<Request>({
                 method: 'GET',
                 originalUrl: '/products?page=1&pageSize=10',
-                query: { page: '1', pageSize: '10' },
-                ...extraRequest
+                query: { page: '1', pageSize: '10' }
             });
 
             await middleware(request, response, jest.fn() as NextFunction);
@@ -364,7 +401,11 @@ describe('setCache', () => {
     it('keys the Redis entry by locale, so languages cannot share an entry', async () => {
         mockedCache.getCacheValue.mockResolvedValue(undefined);
 
-        const middleware = setCache(30, { tags: ['products'], keyParameters: [] });
+        const middleware = setCache(30, {
+            tags: ['products'],
+            keyParameters: [],
+            scopeKey: GUEST_SCOPE
+        });
 
         for (const locale of ['en', 'it'])
             await middleware(
@@ -496,7 +537,8 @@ describe('setCache', () => {
             const middleware = setCache(60, {
                 tags: ['products'],
                 keyParameters: declared,
-                keyAs: 'products:search'
+                keyAs: 'products:search',
+                scopeKey: GUEST_SCOPE
             });
             await middleware(
                 asStub<Request>({
@@ -529,7 +571,8 @@ describe('setCache', () => {
             const middleware = setCache(60, {
                 tags: ['products'],
                 keyParameters: [],
-                keyAs: 'products:search'
+                keyAs: 'products:search',
+                scopeKey: GUEST_SCOPE
             });
 
             await middleware(
@@ -551,7 +594,11 @@ describe('setCache', () => {
         // Without the identity a POST would key on `POST:/path` and cache whatever mounted this
         // next — a write included. Requiring it makes caching a POST an explicit claim.
         it('refuses to cache a POST that declared no shared identity', async () => {
-            const middleware = setCache(60, { tags: ['products'], keyParameters: [] });
+            const middleware = setCache(60, {
+                tags: ['products'],
+                keyParameters: [],
+                scopeKey: GUEST_SCOPE
+            });
             const next = jest.fn() as NextFunction;
 
             await middleware(
@@ -576,7 +623,8 @@ describe('setCache', () => {
                 tags: ['products'],
                 keyParameters: [],
                 keyAs: 'products:search',
-                browserRevalidate: true
+                browserRevalidate: true,
+                scopeKey: GUEST_SCOPE
             });
 
             expect(() =>
@@ -595,7 +643,11 @@ describe('setCache', () => {
     });
 
     it('skips caching entirely when the TTL resolves to zero', async () => {
-        const middleware = setCache(0, { tags: ['products'], keyParameters: [] });
+        const middleware = setCache(0, {
+            tags: ['products'],
+            keyParameters: [],
+            scopeKey: GUEST_SCOPE
+        });
         const { response } = createResponse();
         const next = jest.fn() as NextFunction;
         const request = asStub<Request>({
@@ -614,7 +666,11 @@ describe('setCache', () => {
         const { response, headers } = createResponse();
         noStore(asStub<Request>({ headers: {} }), response, jest.fn() as NextFunction);
 
-        const middleware = setCache(3600, { tags: ['account'], keyParameters: [] });
+        const middleware = setCache(3600, {
+            tags: ['products'],
+            keyParameters: [],
+            scopeKey: GUEST_SCOPE
+        });
         const request = asStub<Request>({ method: 'GET', originalUrl: '/account', query: {} });
 
         expect(() => middleware(request, response, jest.fn() as NextFunction)).toThrow(/noStore/);
@@ -623,6 +679,84 @@ describe('setCache', () => {
         // stop: unchecked, setCache would call response.set('Cache-Control', …) right here.
         expect(headers['cache-control']).toBe('no-store');
         expect(mockedCache.getCacheValue).not.toHaveBeenCalled();
+    });
+
+    /**
+     * D2: a caller `scopeKey` says sees more than the shared answer (an admin viewing inactive
+     * rows a guest never does) must never touch Redis for this request — not read from it, in
+     * case a wider answer got in under the shared key some other way, and not write to it, since
+     * that would be exactly the bug this decision closes.
+     */
+    describe('scopeKey bypass', () => {
+        it('never reads from Redis for a caller scopeKey says sees more', async () => {
+            const middleware = setCache(60, {
+                tags: ['products'],
+                keyParameters: [],
+                scopeKey: () => undefined
+            });
+            const next = jest.fn() as NextFunction;
+
+            await middleware(
+                asStub<Request>({
+                    method: 'GET',
+                    originalUrl: '/products',
+                    query: {},
+                    locale: 'en'
+                }),
+                createResponse().response,
+                next
+            );
+
+            expect(mockedCache.getCacheValue).not.toHaveBeenCalled();
+            expect(next).toHaveBeenCalledTimes(1);
+        });
+
+        it('never writes to Redis for that same caller either', async () => {
+            const middleware = setCache(60, {
+                tags: ['products'],
+                keyParameters: [],
+                scopeKey: () => undefined
+            });
+            const { response } = createResponse();
+
+            await middleware(
+                asStub<Request>({
+                    method: 'GET',
+                    originalUrl: '/products',
+                    query: {},
+                    locale: 'en'
+                }),
+                response,
+                jest.fn() as NextFunction
+            );
+
+            response.statusCode = 200;
+            response.json({ success: true });
+
+            expect(mockedCache.setCacheValue).not.toHaveBeenCalled();
+        });
+
+        it('answers private, no-cache instead of the shared entry headers', async () => {
+            const middleware = setCache(60, {
+                tags: ['products'],
+                keyParameters: [],
+                scopeKey: () => undefined
+            });
+            const { response, headers } = createResponse();
+
+            await middleware(
+                asStub<Request>({
+                    method: 'GET',
+                    originalUrl: '/products',
+                    query: {},
+                    locale: 'en'
+                }),
+                response,
+                jest.fn() as NextFunction
+            );
+
+            expect(headers['cache-control']).toBe('private, no-cache');
+        });
     });
 });
 
@@ -642,7 +776,7 @@ describe('refresh-ahead (stale-while-revalidate)', () => {
         mockedCache.getCacheValue.mockResolvedValue(freshEnvelope({ ok: true }));
         const { response, headers } = createResponse();
 
-        await setCache(60, { tags: ['products'], keyParameters: [] })(
+        await setCache(60, { tags: ['products'], keyParameters: [], scopeKey: GUEST_SCOPE })(
             staleGetRequest(),
             response,
             jest.fn() as NextFunction
@@ -659,7 +793,7 @@ describe('refresh-ahead (stale-while-revalidate)', () => {
         const { response, headers } = createResponse();
         const next = jest.fn() as NextFunction;
 
-        await setCache(60, { tags: ['products'], keyParameters: [] })(
+        await setCache(60, { tags: ['products'], keyParameters: [], scopeKey: GUEST_SCOPE })(
             staleGetRequest(),
             response,
             next
@@ -689,7 +823,7 @@ describe('refresh-ahead (stale-while-revalidate)', () => {
         const { response, headers } = createResponse();
         const next = jest.fn() as NextFunction;
 
-        await setCache(60, { tags: ['products'], keyParameters: [] })(
+        await setCache(60, { tags: ['products'], keyParameters: [], scopeKey: GUEST_SCOPE })(
             staleGetRequest(),
             response,
             next
@@ -708,7 +842,7 @@ describe('refresh-ahead (stale-while-revalidate)', () => {
         const { response, headers } = createResponse();
         const next = jest.fn() as NextFunction;
 
-        await setCache(60, { tags: ['products'], keyParameters: [] })(
+        await setCache(60, { tags: ['products'], keyParameters: [], scopeKey: GUEST_SCOPE })(
             staleGetRequest(),
             response,
             next
@@ -727,7 +861,7 @@ describe('refresh-ahead (stale-while-revalidate)', () => {
         mockedCache.getCacheValue.mockResolvedValue(undefined);
         const { response } = createResponse();
 
-        await setCache(3600, { tags: ['products'], keyParameters: [] })(
+        await setCache(3600, { tags: ['products'], keyParameters: [], scopeKey: GUEST_SCOPE })(
             staleGetRequest(),
             response,
             jest.fn() as NextFunction
@@ -749,7 +883,7 @@ describe('refresh-ahead (stale-while-revalidate)', () => {
         mockedCache.getCacheValue.mockResolvedValue(undefined);
         const { response, headers } = createResponse();
 
-        await setCache(60, { tags: ['products'], keyParameters: [] })(
+        await setCache(60, { tags: ['products'], keyParameters: [], scopeKey: GUEST_SCOPE })(
             staleGetRequest(),
             response,
             jest.fn() as NextFunction
@@ -764,7 +898,7 @@ describe('refresh-ahead (stale-while-revalidate)', () => {
         const incSpy = jest.spyOn(cacheRequestsTotal, 'inc');
 
         mockedCache.getCacheValue.mockResolvedValue(freshEnvelope({}));
-        await setCache(60, { tags: ['products'], keyParameters: [] })(
+        await setCache(60, { tags: ['products'], keyParameters: [], scopeKey: GUEST_SCOPE })(
             staleGetRequest(),
             createResponse().response,
             jest.fn() as NextFunction
@@ -772,7 +906,7 @@ describe('refresh-ahead (stale-while-revalidate)', () => {
         expect(incSpy).toHaveBeenCalledWith({ result: 'hit' });
 
         mockedCache.getCacheValue.mockResolvedValue(undefined);
-        await setCache(60, { tags: ['products'], keyParameters: [] })(
+        await setCache(60, { tags: ['products'], keyParameters: [], scopeKey: GUEST_SCOPE })(
             staleGetRequest(),
             createResponse().response,
             jest.fn() as NextFunction
@@ -781,7 +915,7 @@ describe('refresh-ahead (stale-while-revalidate)', () => {
 
         mockedCache.getCacheValue.mockResolvedValue(staleEnvelope({}));
         mockedCache.claimCacheRefresh.mockResolvedValue(true);
-        await setCache(60, { tags: ['products'], keyParameters: [] })(
+        await setCache(60, { tags: ['products'], keyParameters: [], scopeKey: GUEST_SCOPE })(
             staleGetRequest(),
             createResponse().response,
             jest.fn() as NextFunction
@@ -789,7 +923,7 @@ describe('refresh-ahead (stale-while-revalidate)', () => {
         expect(incSpy).toHaveBeenCalledWith({ result: 'refresh' });
 
         mockedCache.claimCacheRefresh.mockResolvedValue(false);
-        await setCache(60, { tags: ['products'], keyParameters: [] })(
+        await setCache(60, { tags: ['products'], keyParameters: [], scopeKey: GUEST_SCOPE })(
             staleGetRequest(),
             createResponse().response,
             jest.fn() as NextFunction
@@ -944,7 +1078,11 @@ describe('the per-entry size limit', () => {
     // response still goes out.
     it('still answers the request it refused to cache', async () => {
         mockedCache.getCacheValue.mockResolvedValue(undefined);
-        const middleware = setCache(60, { tags: ['products'], keyParameters: [] });
+        const middleware = setCache(60, {
+            tags: ['products'],
+            keyParameters: [],
+            scopeKey: GUEST_SCOPE
+        });
         const { response } = createResponse();
         // Held before the middleware runs: `setCache` replaces `response.json` with the wrapper
         // that writes to the cache, and the wrapper is what must still reach this one.

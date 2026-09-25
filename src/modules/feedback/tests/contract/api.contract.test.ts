@@ -131,10 +131,9 @@ describe('GET /feedback', () => {
 });
 
 /*
- * The DTO form of the list above. `GET /feedback` cannot read filters from a body — one no browser
- * sends on a GET, and one `setCache` cannot key on, so two different searches would share one
- * cached page. `POST /feedback/search` is the sibling that carries what a body would; these assert
- * it does.
+ * The DTO form of the list above. `GET /feedback` cannot read filters from a body — no browser
+ * sends one on a GET. `POST /feedback/search` is the sibling that carries what a body would;
+ * these assert it does.
  */
 describe('POST /feedback/search', () => {
     it('matches the contract', async () => {

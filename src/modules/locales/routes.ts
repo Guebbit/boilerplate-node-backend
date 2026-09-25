@@ -9,9 +9,12 @@
  * wildcard instead.
  */
 
+import type { Request } from 'express';
 import { Router } from 'express';
 import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
 import { invalidateCache, setCache } from '@infrastructure/http/middlewares/cache';
+import { hasAnonymousReadScope } from '@kernel/access/query';
+import { localeService } from './services';
 import { getLocales, getLocaleDictionary } from './controllers/get-locales';
 import { getLocaleMessages } from './controllers/get-locale-messages';
 import { getLocaleTenants } from './controllers/get-locale-tenants';
@@ -34,16 +37,23 @@ import { upsertEntityTranslations } from './controllers/upsert-entity-translatio
 export const router = Router();
 
 /**
- * The three public reads, all `browserRevalidate`: Redis still holds them for the hour, but the
+ * The four public reads, all `browserRevalidate`: Redis still holds them for the hour, but the
  * flag tells the BROWSER to revalidate rather than answer from its own store. Without it, an
  * editor's save clears Redis but not the browser's copy, and reads as "saving is broken" — the
  * one failure this tier cannot afford. Costs one conditional request per read, answered `304`
  * when nothing changed.
+ *
+ * `scopeKey`, D2: three of the four never see `request.authContext` at all (no `getAuth` mounted
+ * ahead of them), so they are trivially guest-equivalent; `GET /locales` does take `getAuth`, for
+ * the admin manifest that includes inactive languages — `hasAnonymousReadScope` is what tells
+ * that caller apart from a guest and bypasses Redis for them, safe BY CONSTRUCTION.
  */
 const publicLocaleCache = setCache(3600, {
     tags: ['locales'],
     keyParameters: [],
-    browserRevalidate: true
+    browserRevalidate: true,
+    scopeKey: (request: Request) =>
+        hasAnonymousReadScope(localeService.callerScope, request.authContext) ? 'guest' : undefined
 });
 
 // GET /locales — which languages this deployment offers, and what each of them can do.

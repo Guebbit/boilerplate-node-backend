@@ -243,24 +243,15 @@ describe('account routes — human-challenge gate (rung 3)', () => {
 });
 
 describe('account routes — cache invalidation and uploads', () => {
-    it.each([
-        'PUT /',
-        'DELETE /delete-confirm',
-        'POST /signup',
-        'POST /reset-confirm',
-        'POST /verify-confirm',
-        'POST /email-change-confirm',
-        'DELETE /tokens/expired'
-    ])('%s clears both the users and account tags', (signature) => {
-        // The same row is served as `/account` to its owner and `/users/:id` to an admin.
-        // Clearing one tag leaves the other serving the profile as it was.
-        expect(chainOf(router, signature)).toContain('invalidateCache([users|account])');
-    });
-
-    it('clears only the account tag when revoking every session', () => {
-        // Sessions are not part of the admin user listing, so widening this would evict the whole
-        // user directory on every logout-all.
-        expect(chainOf(router, 'POST /logout-all')).toContain('invalidateCache([account])');
+    // D2: neither `/account` (`noStore`, never cached) nor `/users` (privateNoCache, never
+    // Redis-cached either, since D2) sets a `users` or `account`-tagged cache entry any more —
+    // the last route that did was removed in the same change. Nothing on this router has
+    // anything left to invalidate.
+    it('carries no cache invalidation anywhere', () => {
+        for (const signature of routeSignatures(router))
+            expect(
+                chainOf(router, signature).some((entry) => entry.startsWith('invalidateCache'))
+            ).toBe(false);
     });
 
     it.each(['PUT /', 'POST /signup'])(

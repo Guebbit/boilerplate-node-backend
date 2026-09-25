@@ -1,8 +1,8 @@
 /**
  * @module
  * Controller for `GET /feedback` and `POST /feedback/search` — the admin triage queue in its
- * cacheable query and DTO body spellings, built on the same factory `products`, `users` and
- * `orders` share. See docs/modules/feedback.md.
+ * query and DTO body spellings, built on the same factory `products` shares. Never Redis-cached
+ * (D2): the answer is one admin's queue, not a shared shop-wide answer. See docs/modules/feedback.md.
  */
 
 import type { FeedbackRequestsResponse } from '@types';
@@ -22,16 +22,8 @@ const searchFeedbackQuerySchema = SearchFeedbackRequestsBody.extend({
 });
 
 /**
- * Query parameters that change this endpoint's answer, and therefore its cache key. Derived from
- * the schema rather than hand-listed: a parameter the controller reads but the key omits would let
- * two different searches share one cached response.
- */
-export const searchFeedbackKeyParameters = Object.keys(searchFeedbackQuerySchema.shape);
-
-/**
  * GET /feedback and POST /feedback/search (admin)
- * Search and paginate feedback tickets by status, email, or text — the query form is cacheable,
- * the body form carries filters too broad for a URL.
+ * Search and paginate feedback tickets by status, email, or text.
  */
 export const getFeedback = createSearchController({
     entity: 'feedback',

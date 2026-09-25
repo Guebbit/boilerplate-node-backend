@@ -29,13 +29,6 @@ const searchUsersQuerySchema = SearchUsersBody.extend({
 });
 
 /**
- * Query parameters that change this endpoint's answer, and therefore its cache key.
- * Derived from the schema rather than hand-listed: a parameter the controller reads but the
- * key omits would let two different requests share one cached response.
- */
-export const searchUsersKeyParameters = Object.keys(searchUsersQuerySchema.shape);
-
-/**
  * GET /users
  * List/search users via query parameters (admin only).
  *

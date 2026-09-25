@@ -28,23 +28,60 @@ flowchart LR
 
 - cache is mainly for repeated reads,
 - writes invalidate related tags,
-- user-aware scope helps avoid cross-user leakage,
+- no route caches a response that depends on WHO is asking (see below),
 - the key is built from declared parameters, not the raw URL (see below),
 - oversized responses are served but not stored (see below),
 - a stale hot key is rebuilt by exactly one caller, not stampeded by all of them (see below),
 - if Redis is unavailable, the app keeps going.
 
+## No caching depends on who is asking
+
+RFC 9111 §3.5: a shared cache must not store a response to an authenticated request unless the
+response says it may be shared. `orders`, and `users`' own directory search and item read, and
+`feedback` never belong here at all — each answer is specific to the caller (their own orders, an
+admin's filtered queue), so a shared Redis entry is not an optimisation for them, only a store that
+keeps growing for no caller but the one who filled it. Those routes mount `privateNoCache`
+instead: `Cache-Control: private, no-cache` — the BROWSER may keep its own copy, but must always
+revalidate before reusing it (cheap, since `app.set('etag', 'strong')` gives every GET a
+conditional-request target for free), and there is no server-side entry to invalidate at all.
+
+`products` and `locales`, by contrast, answer the SAME thing to every caller with the same READ
+SCOPE — the published catalogue, the active locale manifest — so those stay cached, but never
+keyed per caller. Every route that still mounts `setCache`/`searchCache` supplies a `scopeKey`
+(`CacheOptions.scopeKey`, `infrastructure/http/middlewares/cache.ts`) that resolves, per request:
+
+- the SAME scope string every other cacheable caller gets (`'guest'`, in every case today) — this
+  request shares that entry;
+- `undefined` — this caller sees MORE than the shared answer (an admin, inactive rows included) —
+  Redis is bypassed for the request entirely, neither read nor written, and the response answers
+  `private, no-cache` instead of the shared entry's `public, max-age=…`.
+
+`kernel/access/query.ts#hasAnonymousReadScope` is what a `scopeKey` is built on: it compares the
+caller's compiled CASL read filter to an anonymous caller's, byte for byte, rather than branching
+on a role name — safe BY CONSTRUCTION, since a role change that widens visibility makes the two
+filters unequal on its own, with nobody needing to remember to touch the cache key too.
+
 ## The key is what the request asked for, not how it was written
 
-Every route declares which query parameters change its answer, and the key is built from those:
+Every route declares which query parameters change its answer, and the key is built from those
+plus the resolved `scopeKey` and the locale:
 
 ```ts
 router.get(
     '/',
-    setCache(3600, { tags: ['products'], keyParameters: searchProductsKeyParameters }),
+    setCache(3600, {
+        tags: ['products'],
+        keyParameters: searchProductsKeyParameters,
+        scopeKey: (request) =>
+            hasAnonymousReadScope(callerScope, request.authContext) ? 'guest' : undefined
+    }),
     getProducts
 );
-router.get('/:id', setCache(3600, { tags: ['products'], keyParameters: [] }), getProductItem);
+router.get(
+    '/:id',
+    setCache(3600, { tags: ['products'], keyParameters: [], scopeKey: cacheScopeKey }),
+    getProductItem
+);
 ```
 
 `keyParameters` is required rather than optional, because it decides which requests share a cached
@@ -69,9 +106,10 @@ Mongo query behind the second copy. The third row is why an arbitrary parameter 
 entry — not a vulnerability, since the app fails open and the rate limiter bounds the volume, but
 there is no reason to store the same body twice.
 
-Note what the key still separates, and must: the path, the caller (`getCacheScope`), the locale,
-and any declared parameter that genuinely differs — including a repeated one (`?tag=a&tag=b`
-arrives as an array) and a blank one, which is not assumed to mean the same as absent.
+Note what the key still separates, and must: the path, the resolved `scopeKey` (see above), the
+locale, and any declared parameter that genuinely differs — including a repeated one
+(`?tag=a&tag=b` arrives as an array) and a blank one, which is not assumed to mean the same as
+absent.
 
 ## Entry size is bounded
 
@@ -96,9 +134,11 @@ and regardless of whether that endpoint's page size is ever raised.
 ## Refresh-ahead: no stampede when a hot key goes stale
 
 A popular key expiring is a cache **stampede**: every request being served from it misses at the
-same instant, and all of them run the same expensive query. `getCacheScope` puts the caller in the
-key, so the only entry with a crowd behind it is the `guest` scope — every anonymous visitor to
-`GET /products`, say, shares one entry.
+same instant, and all of them run the same expensive query. `scopeKey` resolves to `'guest'` for
+every cacheable caller (see [No caching depends on who is asking](#no-caching-depends-on-who-is-asking)),
+so the crowd behind one entry is exactly that — every visitor to `GET /products` who reads the
+published catalogue, guest or logged-in alike, shares one entry; a caller who sees more bypasses
+Redis and has no crowd to be part of.
 
 The fix is the pattern behind Rails' `race_condition_ttl`, Caffeine's `refreshAfterWrite`,
 memcached leases and HTTP's `stale-while-revalidate` (RFC 5861): **serve the old value, let
@@ -146,9 +186,9 @@ flowchart TD
 ```
 
 Nobody waits, and nobody but the claimer ever runs the controller — everyone else reads back
-their own key's stale body. That is also the trap to keep in mind if this is ever changed: the
-key stays scoped by caller and locale (`getCacheScope`), because a rebuild collapsed across
-different callers would turn an availability fix into a data leak.
+their own key's stale body. That is also the trap to keep in mind if this is ever changed: the key
+stays scoped by `scopeKey` and locale, because a rebuild collapsed across a caller who sees more
+than the shared answer would turn an availability fix into a data leak.
 
 Every failure degrades to what already happens without this feature — there is no state that a
 crash or an evicted claim leaves stuck:

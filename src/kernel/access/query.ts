@@ -113,6 +113,26 @@ const collapse = (filter: Record<string, unknown>): Record<string, unknown> => {
 };
 
 /**
+ * Whether `context` reads exactly what an anonymous caller reads — compared by the compiled
+ * FILTER, not by probing a row, since only filter equality guarantees the same result set for
+ * every row that could ever exist. `scopeOf` is the module's own `callerScope` (or equivalent),
+ * so this never hardcodes a subject name of its own and stays correct if the module's rules
+ * change shape.
+ *
+ * Built for `infrastructure/http/middlewares/cache.ts`'s `scopeKey`: a caller who reads the same
+ * rows as a guest may share the guest's cached response; the comparison is what makes that safe
+ * BY CONSTRUCTION — a role change that widens visibility makes the two filters unequal on its
+ * own, rather than needing anyone to remember to touch the cache key too.
+ *
+ * @param scopeOf - a module's own `callerScope`-shaped function
+ * @param context - the caller to compare against anonymous, or `undefined` for anonymous itself
+ */
+export const hasAnonymousReadScope = (
+    scopeOf: (context?: AuthContext) => Record<string, unknown>,
+    context: AuthContext | undefined
+): boolean => JSON.stringify(scopeOf(context)) === JSON.stringify(scopeOf(undefined));
+
+/**
  * The filter that returns exactly the rows this caller may take this action on.
  *
  * SPREAD IT into a query (`{ ...accessibleFilter(ctx, 'Order'), status: 'paid' }`) — it is a

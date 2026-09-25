@@ -10,13 +10,13 @@ import { Router } from 'express';
 import { getAuth, isAuthOrCredential, requirePermission } from '@kernel/middlewares/authorizations';
 import { uploadLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { upload } from '@infrastructure/http/middlewares/upload';
-import { getUsers, searchUsersKeyParameters } from './controllers/get-users';
+import { getUsers } from './controllers/get-users';
 import { writeUsers } from './controllers/write-users';
 import { deleteUsers } from './controllers/delete-users';
 import { restoreUsers } from './controllers/restore-users';
 import { getUserItem } from './controllers/get-user-item';
 import { deleteUserTwoFactor } from './controllers/delete-user-two-factor';
-import { invalidateCache, searchCache, setCache } from '@infrastructure/http/middlewares/cache';
+import { privateNoCache } from '@infrastructure/http/middlewares/cache';
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 
 /** Express router for user management (admin only). */
@@ -31,74 +31,46 @@ export const router = Router();
 // accounts is the documented use case. No controller reads `authContext`.
 router.use(getAuth, isAuthOrCredential);
 
-/** Cache reader keyed on the same query parameters `getUsers`'s schema accepts. */
-const cacheUsersSearch = searchCache('users', searchUsersKeyParameters);
-
-/**
- * Cache invalidation shared by every write route below. A user change must clear both the cached
- * `GET /users` search and the cached `GET /account` the same caller reads — clearing only one
- * leaves the other serving the old profile.
- */
-const invalidateUsers = invalidateCache(['users', 'account']);
-
-// POST /users/search — must come before /:id to avoid matching "search" as an id
-router.post('/search', requirePermission('users.any.read'), cacheUsersSearch, getUsers);
+// POST /users/search — must come before /:id to avoid matching "search" as an id. Never
+// Redis-cached (D2): every worker keyed this per admin caller although the answer never depended
+// on WHICH admin asked, only that they could — an expanding, never-shared store for no benefit.
+// `privateNoCache` lets the browser keep its own copy, revalidated every time.
+router.post('/search', requirePermission('users.any.read'), privateNoCache, getUsers);
 
 // GET /users
-router.get('/', requirePermission('users.any.read'), cacheUsersSearch, getUsers);
+router.get('/', requirePermission('users.any.read'), privateNoCache, getUsers);
 
 // POST /users (create)
-router.post(
-    '/',
-    requirePermission('users.any.create'),
-    uploadLimiter,
-    invalidateUsers,
-    upload.image(),
-    writeUsers
-);
+router.post('/', requirePermission('users.any.create'), uploadLimiter, upload.image(), writeUsers);
 
 // PUT /users — id in body (update)
-router.put(
-    '/',
-    requirePermission('users.any.update'),
-    uploadLimiter,
-    invalidateUsers,
-    upload.image(),
-    writeUsers
-);
+router.put('/', requirePermission('users.any.update'), uploadLimiter, upload.image(), writeUsers);
 
 // DELETE /users — id in body
-router.delete('/', requirePermission('users.any.delete'), invalidateUsers, deleteUsers);
+router.delete('/', requirePermission('users.any.delete'), deleteUsers);
 
-// GET /users/:id
-router.get(
-    '/:id',
-    requirePermission('users.any.read'),
-    setCache(3600, { tags: ['users'], keyParameters: [] }),
-    getUserItem
-);
+// GET /users/:id — never Redis-cached (D2), same reasoning as the search routes above.
+router.get('/:id', requirePermission('users.any.read'), privateNoCache, getUserItem);
 
 // PUT /users/:id (update)
 router.put(
     '/:id',
     requirePermission('users.any.update'),
     uploadLimiter,
-    invalidateUsers,
     upload.image(),
     writeUsers
 );
 
 // DELETE /users/:id — soft delete unless ?hardDelete=true
-router.delete('/:id', requirePermission('users.any.delete'), invalidateUsers, deleteUsers);
+router.delete('/:id', requirePermission('users.any.delete'), deleteUsers);
 
 // POST /users/:id/restore — undo a soft delete; a second DELETE never does
-router.post('/:id/restore', requirePermission('users.any.delete'), invalidateUsers, restoreUsers);
+router.post('/:id/restore', requirePermission('users.any.delete'), restoreUsers);
 
 // DELETE /users/:id/hard — the same operation, with the flag spelled in the path
 router.delete(
     '/:id/hard',
     requirePermission('users.any.delete'),
-    invalidateUsers,
     routeFlag('hardDelete'),
     deleteUsers
 );
@@ -106,9 +78,4 @@ router.delete(
 // DELETE /users/:id/2fa — admin-assisted 2FA recovery, no code required. The one deliberate
 // exception to "prove the factor to remove it" — see the controller's own comment. Clearing a
 // second factor is `users.any.update`'s own description in `shared/authorization-keys.yaml`.
-router.delete(
-    '/:id/2fa',
-    requirePermission('users.any.update'),
-    invalidateUsers,
-    deleteUserTwoFactor
-);
+router.delete('/:id/2fa', requirePermission('users.any.update'), deleteUserTwoFactor);

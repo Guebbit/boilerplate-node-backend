@@ -161,9 +161,19 @@ const mockSetCache = (ttl: number, options?: Record<string, unknown>) =>
  * Built on {@link mockSetCache} rather than spread in from the real module: the real `searchCache`
  * closes over the real `setCache`, which would produce an unlabelled middleware `routeTable`
  * cannot see — the same reason `setCache` itself is replaced below.
+ *
+ * `scopeKey` is accepted (and dropped) rather than recorded: it is a function, which `text`/`list`
+ * cannot render meaningfully, and what it DECIDES is already proven by
+ * `tests/unit/kernel/access-query.test.ts` and `cache.test.ts`'s own `scopeKey` cases — a route
+ * table only needs to know that one was PASSED, which the real `searchCache`'s own required
+ * `CacheOptions.scopeKey` field already enforces at compile time.
  */
-const mockSearchCache = (entity: string, keyParameters: readonly string[], seconds = 3600) =>
-    mockSetCache(seconds, { tags: [entity], keyParameters, keyAs: `${entity}:search` });
+const mockSearchCache = (
+    entity: string,
+    keyParameters: readonly string[],
+    _scopeKey: unknown,
+    seconds = 3600
+) => mockSetCache(seconds, { tags: [entity], keyParameters, keyAs: `${entity}:search` });
 
 export const cacheMock = () => ({
     // Spread the real module first: `noStore` is exported from here too and is mounted directly

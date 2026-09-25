@@ -25,12 +25,6 @@ const searchOrdersQuerySchema = SearchOrdersBody.extend({
 });
 
 /**
- * Query parameters that change this endpoint's answer, and therefore its cache key.
- * Derived from the schema, not hand-listed, so the two cannot drift apart.
- */
-export const searchOrdersKeyParameters = Object.keys(searchOrdersQuerySchema.shape);
-
-/**
  * GET /orders
  * List/search orders via query parameters or request body.
  * Non-admin users are automatically scoped to their own orders; the userId filter is ignored for non-admin callers.
