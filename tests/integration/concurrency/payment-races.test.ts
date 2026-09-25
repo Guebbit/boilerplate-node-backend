@@ -82,7 +82,10 @@ const loggedInCustomer = async (): Promise<string> => {
 const orderAwaitingPayment = async (productId: string, quantity: number) => {
     const bearer = await loggedInCustomer();
     await api().post('/cart').set('Authorization', bearer).send({ productId, quantity });
-    const checkout = await api().post('/cart/checkout').set('Authorization', bearer);
+    const checkout = await api()
+        .post('/cart/checkout')
+        .set('Authorization', bearer)
+        .send({ shippingMethodId: 'pickup' });
     if (checkout.status !== 201) throw new Error(`checkout: ${JSON.stringify(checkout.body)}`);
     const orderId = String(checkout.body.data.order.id);
 
@@ -243,7 +246,10 @@ describe('P4 — more buyers than units, all at once', () => {
         );
 
         const results = await raceN(RACE_SIZE, (index) =>
-            api().post('/cart/checkout').set('Authorization', buyers[index])
+            api()
+                .post('/cart/checkout')
+                .set('Authorization', buyers[index])
+                .send({ shippingMethodId: 'pickup' })
         );
 
         expectNoServerErrors(results);

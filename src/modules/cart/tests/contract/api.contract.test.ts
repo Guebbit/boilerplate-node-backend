@@ -244,7 +244,10 @@ describe('GET /cart/summary', () => {
 describe('POST /cart/checkout', () => {
     it('matches the contract when the cart becomes an order', async () => {
         const { bearer } = await authenticateWithCart();
-        const response = await api().post('/cart/checkout').set('Authorization', bearer);
+        const response = await api()
+            .post('/cart/checkout')
+            .set('Authorization', bearer)
+            .send({ shippingMethodId: 'pickup' });
 
         expect(response.status).toBe(201);
         expect(response).toSatisfyApiSpec();
@@ -259,7 +262,7 @@ describe('POST /cart/checkout', () => {
         const response = await api()
             .post('/cart/checkout')
             .set('Authorization', bearer)
-            .send({ notes: 'Leave with the concierge' });
+            .send({ notes: 'Leave with the concierge', shippingMethodId: 'pickup' });
 
         expect(response.status).toBe(201);
         expect(response).toSatisfyApiSpec();
@@ -279,7 +282,10 @@ describe('POST /cart/checkout', () => {
 
     it('empties the cart on success', async () => {
         const { bearer } = await authenticateWithCart();
-        await api().post('/cart/checkout').set('Authorization', bearer);
+        await api()
+            .post('/cart/checkout')
+            .set('Authorization', bearer)
+            .send({ shippingMethodId: 'pickup' });
         const response = await api().get('/cart').set('Authorization', bearer);
 
         expect(response.body.data.items).toHaveLength(0);
@@ -350,7 +356,7 @@ describe('POST /cart/checkout', () => {
                 const response = await api()
                     .post('/cart/checkout')
                     .set('Authorization', bearer)
-                    .send({ paymentMethod: 'bank_transfer' });
+                    .send({ paymentMethod: 'bank_transfer', shippingMethodId: 'pickup' });
 
                 expect(response.status).toBe(201);
                 expect(response.body.data.order.paymentMethod).toBe('bank_transfer');

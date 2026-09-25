@@ -5,7 +5,12 @@
  * No mocks, no database. The verdict-to-status mapping is covered in `service.test.ts`.
  */
 
-import { evaluateCheckout, basketWeight, type CartLineCandidate } from '../../domain/rules';
+import {
+    evaluateCheckout,
+    basketWeight,
+    evaluateShippingRequirement,
+    type CartLineCandidate
+} from '../../domain/rules';
 
 /**
  * A line asking for `quantity`, against a product with `available` units left to sell — already
@@ -136,5 +141,52 @@ describe('basketWeight', () => {
 
     it('is zero for an empty basket', () => {
         expect(basketWeight([])).toBe(0);
+    });
+});
+
+/** A joined line, physical unless told otherwise. */
+const shipped = (requiresShipping?: boolean) => ({
+    quantity: 1,
+    product: { requiresShipping }
+});
+
+describe('evaluateShippingRequirement', () => {
+    it('needs neither a method nor an address for a digital-only basket', () => {
+        expect(evaluateShippingRequirement([shipped(false)], undefined, false)).toEqual({
+            ok: true
+        });
+    });
+
+    it('refuses a physical basket with no method chosen', () => {
+        expect(evaluateShippingRequirement([shipped()], undefined, false)).toEqual({
+            ok: false,
+            reason: 'method-required'
+        });
+    });
+
+    it('refuses a physical basket whose chosen method needs an address it was not given', () => {
+        expect(evaluateShippingRequirement([shipped()], { requiresAddress: true }, false)).toEqual({
+            ok: false,
+            reason: 'address-required'
+        });
+    });
+
+    it('accepts a physical basket under a method that needs no address, address or not', () => {
+        expect(evaluateShippingRequirement([shipped()], { requiresAddress: false }, false)).toEqual(
+            { ok: true }
+        );
+    });
+
+    it('accepts a physical basket once an address-requiring method has one', () => {
+        expect(evaluateShippingRequirement([shipped()], { requiresAddress: true }, true)).toEqual({
+            ok: true
+        });
+    });
+
+    it('needs a method as soon as any one line is physical', () => {
+        expect(evaluateShippingRequirement([shipped(false), shipped()], undefined, false)).toEqual({
+            ok: false,
+            reason: 'method-required'
+        });
     });
 });

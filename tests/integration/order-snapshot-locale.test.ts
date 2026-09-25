@@ -91,7 +91,12 @@ describe("cartService.orderConfirm freezes the snapshot in the buyer's stored lo
         await givenTranslation(String(product._id), 'it', { title: 'Cuccia' });
 
         await cartService.cartItemSetById(user.id, String(product._id), 1);
-        const result = await cartService.orderConfirm(user.id, testCallerContext);
+        const result = await cartService.orderConfirm(
+            user.id,
+            testCallerContext,
+            undefined,
+            'pickup'
+        );
 
         const order = asSuccess(result).data;
         expect(order.items[0].locale).toBe('it');
