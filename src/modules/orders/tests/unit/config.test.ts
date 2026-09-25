@@ -20,6 +20,7 @@ import {
     bankTransferIbanFriendly,
     bankTransferMaxOpenPerAccount,
     invoiceCacheTtlMinutes,
+    orderFrontendLink,
     shopCountry,
     shopLegalName,
     shopVatNumber
@@ -40,7 +41,9 @@ const TOUCHED = [
     'NODE_BANK_TRANSFER_BIC',
     'NODE_BANK_TRANSFER_HOLD_HOURS',
     'NODE_BANK_TRANSFER_MAX_OPEN_PER_ACCOUNT',
-    'NODE_INVOICE_CACHE_TTL_MINUTES'
+    'NODE_INVOICE_CACHE_TTL_MINUTES',
+    'NODE_FRONTEND_LINK_ORDER',
+    'NODE_FRONTEND_URL'
 ] as const;
 
 withoutEnvironmentInThisFile(TOUCHED);
@@ -194,5 +197,32 @@ describe('invoiceCacheTtlMinutes', () => {
         process.env.NODE_INVOICE_CACHE_TTL_MINUTES = '30';
 
         expect(invoiceCacheTtlMinutes()).toBe(0);
+    });
+});
+
+/**
+ * `orderFrontendLink` — this module's own D14 fix: `infrastructure/http/frontend-link.ts` only
+ * turns a resolved template into a URL, so the default template and its env-var override live
+ * here, not in infrastructure.
+ */
+describe('orderFrontendLink', () => {
+    it('builds the order link off the default template, id in the path, no query string', () => {
+        expect(orderFrontendLink({ locale: 'en', id: 'order-1' })).toBe(
+            'http://localhost:8080/en/orders/order-1'
+        );
+    });
+
+    it('lets a deployment override the template without touching account links', () => {
+        process.env.NODE_FRONTEND_LINK_ORDER = 'my-orders/{id}/details';
+
+        expect(orderFrontendLink({ locale: 'en', id: 'order-1' })).toBe(
+            'http://localhost:8080/en/my-orders/order-1/details'
+        );
+    });
+
+    it('URL-encodes the id', () => {
+        expect(orderFrontendLink({ locale: 'en', id: 'order 1/2' })).toBe(
+            'http://localhost:8080/en/orders/order%201%2F2'
+        );
     });
 });

@@ -40,7 +40,8 @@
         "too-big-items": "Non può contenere più di {{maximum}} elementi.",
         "not-multiple-of": "Deve essere un multiplo di {{divisor}}.",
         "unrecognized-keys": "Campo non riconosciuto: {{keys}}.",
-        "invalid-value": "Deve essere uno tra: {{values}}."
+        "invalid-value": "Deve essere uno tra: {{values}}.",
+        "password-breached": "Questa password è comparsa in una violazione di dati e non può essere usata. Scegline un'altra."
     },
     "email": {
         "footer": "Inviata dal team di Ecommerce Demo."

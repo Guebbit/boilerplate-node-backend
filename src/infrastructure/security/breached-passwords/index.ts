@@ -127,7 +127,7 @@ export const assertPasswordNotBreached = (password: string): Promise<ResponseErr
             ? [
                   {
                       code: 'VALIDATION_ERROR',
-                      message: t('account.signup.password-breached'),
+                      message: t('validation.password-breached'),
                       details: { field: 'password' }
                   }
               ]

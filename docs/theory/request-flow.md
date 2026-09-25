@@ -222,13 +222,14 @@ which driver failures describe the **request** rather than the server. One funct
 is the same on every model — a call-site `try`/`catch` is invisible to every endpoint that
 did not think to write one.
 
-| Raised by                    | Status | Why it is the caller's problem                                                                            |
-| ---------------------------- | ------ | --------------------------------------------------------------------------------------------------------- |
-| `CastError` (Mongoose)       | 422    | A value failed a schema path's cast — nearly always an ObjectId in a URL or a filter.                     |
-| `BSONError` (driver)         | 422    | `new ObjectId(...)` itself refused: `''`, `'%00'`, `'undefined'`, anything not 24 hex characters.         |
-| `E11000` duplicate key       | 409    | A unique index refused the write: something with that value already exists.                               |
-| `ValidationError` (Mongoose) | 422    | A schema validator refused — a `required` path left empty, a value outside `min`/`max`, a failed `match`. |
-| anything else                | 500    | Genuinely unrecognised.                                                                                   |
+| Raised by                          | Status | Why it is the caller's problem                                                                            |
+| ---------------------------------- | ------ | --------------------------------------------------------------------------------------------------------- |
+| `CastError` (Mongoose)             | 422    | A value failed a schema path's cast — nearly always an ObjectId in a URL or a filter.                     |
+| `BSONError` (driver)               | 422    | `new ObjectId(...)` itself refused: `''`, `'%00'`, `'undefined'`, anything not 24 hex characters.         |
+| `E11000` duplicate key             | 409    | A unique index refused the write: something with that value already exists.                               |
+| `ValidationError` (Mongoose)       | 422    | A schema validator refused — a `required` path left empty, a value outside `min`/`max`, a failed `match`. |
+| any module's `ConflictError` (D14) | 409    | The write was refused for what it would make true — `access`'s `AccessInvariantError` today.              |
+| anything else                      | 500    | Genuinely unrecognised.                                                                                   |
 
 Every branch above exists because something describing the CALLER was reaching the 500 and being
 reported as a server fault. `POST /products/search` is public and takes an `id` filter, so
@@ -237,9 +238,11 @@ as much as a correctness one.
 
 ### Three rules the branches share
 
-- **Detected by `name`, not `instanceof`.** Both `bson` and `mongoose` reach this process as
-  transitive dependencies of more than one package, and an `instanceof` against the wrong copy
-  silently returns false.
+- **The four driver/Mongoose branches are detected by `name`, not `instanceof`.** Both `bson` and
+  `mongoose` reach this process as transitive dependencies of more than one package, and an
+  `instanceof` against the wrong copy silently returns false. `ConflictError` is the one exception:
+  it is our own class, defined once, here — a module subclasses it and `instanceof` is exactly the
+  right tool, since there is no second copy of it anywhere to disagree with.
 - **The message is never the driver's.** E11000's text carries the index name and the duplicated
   value — user-supplied data, which has no business being echoed back. Mongoose's enumerates the
   failing paths, which describes the schema. Both are literals here instead.

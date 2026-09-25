@@ -1,45 +1,14 @@
 /**
  * @module
- * Links into the paired frontend, for the mails that carry one: an account confirmation token, or
- * an order's own page. Infrastructure rather than `@modules/account` or `@modules/orders`, because
- * both need it and neither owns the other — see `docs/theory/layers.md` for why a module may
- * depend downward but not sideways.
- *
- * Every kind's path is a template, individually overridable by its own `NODE_FRONTEND_LINK_*`
- * env var (`.env-example`) so a deployment can rename the paired frontend's routes without a code
- * change. The locale segment is never templated — it always comes first, straight from the
- * caller — since every route on the paired frontend lives under `/:locale`.
+ * One job: a path template plus parameters becomes a link into the paired frontend, with its
+ * origin and the caller's locale. Infrastructure builds URLs; it does not know which LINKS exist —
+ * `account` and `orders` each own their own kinds, `NODE_FRONTEND_LINK_*` env vars and default
+ * templates (`account/config.ts`, `orders/config.ts`) and call this with the template already
+ * resolved. See `docs/theory/layers.md` for why a module may depend downward but not sideways, and
+ * why infrastructure may not know a module by name.
  */
 
 import { getDefaultLocale, listSupportedLocales } from '@infrastructure/i18n';
-
-/** The four token-bearing account links — one per kind of proof a link can carry. */
-export type TokenLinkKind = 'verify' | 'reset' | 'delete' | 'email-change';
-
-/** Every kind {@link frontendLink} can build: the four token kinds, plus an order's own page. */
-export type FrontendLinkKind = TokenLinkKind | 'order';
-
-/** Each kind's env var — `.env-example` documents the default it falls back to. */
-const LINK_ENV_VAR: Record<FrontendLinkKind, string> = {
-    verify: 'NODE_FRONTEND_LINK_VERIFY',
-    reset: 'NODE_FRONTEND_LINK_RESET',
-    delete: 'NODE_FRONTEND_LINK_DELETE',
-    'email-change': 'NODE_FRONTEND_LINK_EMAIL_CHANGE',
-    order: 'NODE_FRONTEND_LINK_ORDER'
-};
-
-/**
- * Each kind's default template — the paired frontend's own routes
- * (`boilerplate-vue-frontend/src/modules/{account,orders}/routes.ts`). `{token}`/`{id}` are
- * filled in by {@link frontendLink}, never left for the frontend to parse out of the path itself.
- */
-const LINK_DEFAULT_TEMPLATE: Record<FrontendLinkKind, string> = {
-    verify: 'verify-email/confirm?token={token}',
-    reset: 'password-reset/confirm?token={token}',
-    delete: 'account-delete/confirm?token={token}',
-    'email-change': 'email-change/confirm?token={token}',
-    order: 'orders/{id}'
-};
 
 /**
  * The paired frontend's own origin. Same fallback as `account/oauth/config.ts`'s
@@ -56,29 +25,26 @@ const frontendOrigin = (): string => process.env.NODE_FRONTEND_URL ?? 'http://lo
 const supportedLocale = (locale: string): string =>
     listSupportedLocales().includes(locale) ? locale : getDefaultLocale();
 
-/** Builds a link for one of the four token-bearing kinds — signup, reset, delete, email-change. */
-export function frontendLink(
-    kind: TokenLinkKind,
-    parameters: { locale: string; token: string }
-): string;
-/** Builds the link to an order's own page. */
-export function frontendLink(kind: 'order', parameters: { locale: string; id: string }): string;
 /**
- * A link into the paired frontend: its origin, the email's own locale, and the kind's own
- * path template with `{token}` or `{id}` filled in.
+ * A link into the paired frontend: its origin, the email's own locale, and `template` with every
+ * `{name}` placeholder filled in and URL-encoded. The locale segment is never part of `template` —
+ * it always comes first, straight from `locale` — since every route on the paired frontend lives
+ * under `/:locale`.
  *
- * @param kind - which link — picks both the template and which of `token`/`id` it needs
- * @param parameters - `locale` the email is written in; `token` for the four confirm kinds, `id` for
- *   `order`
+ * @param template - the path, e.g. `orders/{id}` or `password-reset/confirm?token={token}` — the
+ *   caller's own default or its `NODE_FRONTEND_LINK_*` override, already resolved before this runs
+ * @param locale - the email's own locale
+ * @param parameters - one value per `{name}` placeholder `template` uses; a name `template` does
+ *   not use is simply never substituted
  */
-export function frontendLink(
-    kind: FrontendLinkKind,
-    parameters: { locale: string; token?: string; id?: string }
-): string {
-    const template = process.env[LINK_ENV_VAR[kind]] ?? LINK_DEFAULT_TEMPLATE[kind];
-    const path = template
-        .replace('{token}', encodeURIComponent(parameters.token ?? ''))
-        .replace('{id}', encodeURIComponent(parameters.id ?? ''));
+export const frontendLink = (
+    template: string,
+    locale: string,
+    parameters: Record<string, string> = {}
+): string => {
+    let path = template;
+    for (const [name, value] of Object.entries(parameters))
+        path = path.replaceAll(`{${name}}`, encodeURIComponent(value));
 
-    return `${frontendOrigin()}/${supportedLocale(parameters.locale)}/${path}`;
-}
+    return `${frontendOrigin()}/${supportedLocale(locale)}/${path}`;
+};
