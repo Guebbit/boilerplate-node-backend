@@ -19,7 +19,10 @@ import { clearCache, stopCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
 import { runScript } from '../run-script';
 
+// `undefined`: hand-run, and it never opens Mongo — recording an outcome would need a
+// connection this script has no other reason to hold. See `run-script.ts`.
 void runScript(
+    undefined,
     async () => {
         const { deleted, reachable } = await clearCache();
 

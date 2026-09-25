@@ -28,4 +28,4 @@ import { runScript } from '../run-script';
 /** Connect, enqueue every due retry, and resolve nothing. */
 const main = (): Promise<void> => start().then(() => sweepDueWebhookDeliveries());
 
-void runScript(main, stopDatabase);
+void runScript('sweep:webhook-retries', main, stopDatabase);

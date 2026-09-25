@@ -58,4 +58,5 @@ const main = (): Promise<void> => {
         });
 };
 
-void runScript(main, stopDatabase);
+// `undefined`: a hand-run admin utility, not a `docker/crontab` job — see `run-script.ts`.
+void runScript(undefined, main, stopDatabase);

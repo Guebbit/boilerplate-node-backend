@@ -8,11 +8,14 @@
  *
  * Filesystem-only and safe to run repeatedly: `NODE_MAIL_SPOOL_PATH` is never served and never
  * read by anything but `mailer.ts`, so there is nothing here a concurrent send could be relying
- * on past the retention window.
+ * on past the retention window. It still connects to Mongo, briefly: `runScript` records this
+ * job's outcome in the same `leases` collection every other crontab job does (D9,
+ * `docs/reference/ops.md#scheduled-jobs`), and that collection has no other home.
  *
  * See: docs/tools/email-and-rendering.md
  */
 import 'dotenv/config';
+import { start, stopDatabase } from '@infrastructure/runtime/database';
 import { logger } from '@infrastructure/adapters/logger';
 import { reapSpooled } from '@infrastructure/adapters/mail-spool';
 import { environmentNumber } from '@infrastructure/runtime/environment';
@@ -23,10 +26,12 @@ import { runScript } from '../run-script';
 const retentionMs = (): number =>
     environmentNumber('NODE_MAIL_SPOOL_RETENTION_HOURS', 1, 1) * 60 * 60 * 1000;
 
-/** Run the sweep and log how many files it reaped. */
+/** Connect (for `runScript`'s own outcome record — the sweep itself never touches Mongo), sweep, log. */
 const main = (): Promise<void> =>
-    reapSpooled(retentionMs()).then((reaped) => {
-        if (reaped > 0) logger.info({ message: 'Spooled mail attachments reaped.', reaped });
-    });
+    start()
+        .then(() => reapSpooled(retentionMs()))
+        .then((reaped) => {
+            if (reaped > 0) logger.info({ message: 'Spooled mail attachments reaped.', reaped });
+        });
 
-void runScript(main, () => Promise.resolve());
+void runScript('reap:mail-spool', main, stopDatabase);

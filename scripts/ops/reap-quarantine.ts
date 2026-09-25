@@ -12,11 +12,14 @@
  *
  * Filesystem-only and safe to run repeatedly: `NODE_QUARANTINE_PATH` is never served and never
  * read by anything but the digest pipeline, so there is nothing here a concurrent request could
- * be relying on past the retention window.
+ * be relying on past the retention window. It still connects to Mongo, briefly: `runScript`
+ * records this job's outcome in the same `leases` collection every other crontab job does (D9,
+ * `docs/reference/ops.md#scheduled-jobs`), and that collection has no other home.
  *
  * See: docs/tools/image-processing.md
  */
 import 'dotenv/config';
+import { start, stopDatabase } from '@infrastructure/runtime/database';
 import { logger } from '@infrastructure/adapters/logger';
 import { reapDirectory } from '@infrastructure/adapters/filesystem';
 import { environmentNumber } from '@infrastructure/runtime/environment';
@@ -28,13 +31,16 @@ import { runScript } from '../run-script';
 const retentionMs = (): number =>
     environmentNumber('NODE_QUARANTINE_RETENTION_HOURS', 24, 1) * 60 * 60 * 1000;
 
+/** Connect (for `runScript`'s own outcome record — the sweep itself never touches Mongo), sweep, log. */
 const main = (): Promise<void> => {
     const root = quarantineRoot();
 
-    return reapDirectory(root, Date.now() - retentionMs(), 'Quarantine').then(
-        ({ checked, reaped }) =>
-            void logger.info({ message: 'Quarantine reaped.', root, checked, reaped })
-    );
+    return start()
+        .then(() => reapDirectory(root, Date.now() - retentionMs(), 'Quarantine'))
+        .then(
+            ({ checked, reaped }) =>
+                void logger.info({ message: 'Quarantine reaped.', root, checked, reaped })
+        );
 };
 
-void runScript(main, () => Promise.resolve());
+void runScript('reap:quarantine', main, stopDatabase);

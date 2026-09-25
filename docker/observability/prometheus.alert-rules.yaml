@@ -116,3 +116,22 @@ groups:
             annotations:
                 summary: 'Webhook retries are not being swept'
                 description: 'webhook_deliveries_overdue has stayed above zero for 15 minutes — the retry sweep cron may not be running.'
+
+          # Every `docker/crontab` line except `sweep:webhook-retries`: that one runs every
+          # minute, not nightly, and already has its own purpose-built alert above — a shared
+          # 24-hour threshold would fire on it constantly. `job_last_success_timestamp_seconds`
+          # (`infrastructure/observability/metrics-registry.ts`) is written by every crontab job
+          # via `scripts/run-script.ts`, lease-guarded or not. Twice the nightly cadence, not the
+          # cadence itself, so a job landing a few minutes late in the 02:00-02:30 stagger never
+          # pages anyone. Catches both a job that FAILED (which still updates `lastError`, not
+          # `lastSuccessAt`) and one that never ran at all (a dead supercronic) — a failure
+          # counter alone would miss the second.
+          - alert: ScheduledJobStale
+            expr: |
+                time() - job_last_success_timestamp_seconds{job!="sweep:webhook-retries"} > 2 * 86400
+            for: 0m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'A scheduled job has not succeeded in over 48 hours'
+                description: '{{ $labels.job }} has not recorded a success in more than twice its expected daily interval — see docker/crontab and docs/reference/ops.md#scheduled-jobs.'

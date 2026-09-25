@@ -28,4 +28,5 @@ const main = (): Promise<void> =>
             logger.info(`Access model bootstrapped: shop "${String(tenant._id)}".`);
         });
 
-void runScript(main, stopDatabase);
+// `undefined`: a deploy-time setup script, not a `docker/crontab` job — see `run-script.ts`.
+void runScript(undefined, main, stopDatabase);

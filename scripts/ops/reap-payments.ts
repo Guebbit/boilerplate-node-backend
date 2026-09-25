@@ -29,4 +29,4 @@ const main = (): Promise<void> =>
         .then(() => paymentService.reapAbandonedPayments())
         .then(() => undefined);
 
-void runScript(main, stopDatabase);
+void runScript('reap:payments', main, stopDatabase);

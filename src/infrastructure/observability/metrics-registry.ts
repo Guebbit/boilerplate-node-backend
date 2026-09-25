@@ -1,15 +1,18 @@
 /**
  * @module
  * The shared prom-client registry, and the process-wide metrics that describe the registry itself
- * rather than any one domain: default Node.js/process collectors, uptime, and the heap ceiling.
- * Split from `metrics-http.ts` so a file named for HTTP is not where every module's `metrics.ts`
- * reaches for the registry it registers onto.
+ * rather than any one domain: default Node.js/process collectors, uptime, the heap ceiling, and
+ * every crontab job's last outcome. Split from `metrics-http.ts` so a file named for HTTP is not
+ * where every module's `metrics.ts` reaches for the registry it registers onto.
  *
  * See: docs/tools/opentelemetry.md
  */
 
 import { getHeapStatistics } from 'node:v8';
+import mongoose from 'mongoose';
 import { register, Gauge, collectDefaultMetrics } from 'prom-client';
+import { listLeaseSummaries } from '@infrastructure/persistence/lease';
+import { connection } from '@infrastructure/runtime/database';
 
 /**
  * Shared prom-client registry. `register` is the library's default global registry, the
@@ -55,6 +58,39 @@ const _heapSizeLimitGauge = new Gauge({
     registers: [metricsRegistry],
     collect() {
         this.set(getHeapStatistics().heap_size_limit);
+    }
+});
+
+/**
+ * When each crontab-scheduled job (`docker/crontab`, run through `scripts/run-script.ts`) last
+ * recorded a success — Prometheus's own "last success timestamp" pattern for batch jobs, from the
+ * same `leases` rows `GET /observability/health`'s `jobs` field already reads. `collect()` does
+ * I/O, unlike the two gauges above: the fact it reports happened in a DIFFERENT process, so there
+ * is no in-memory value here to read instead. `reset()` first, so a job the TTL index has
+ * reclaimed (`lease.ts`'s own retention window) stops being reported. A job that has never
+ * succeeded is left unset, not `0` — the Unix epoch would fire a staleness alert on a fresh
+ * deployment's first scrape, before the job ever had a chance to run.
+ *
+ * Skips the query entirely while Mongo is not connected rather than letting mongoose buffer it: an
+ * unconnected model queues a command and waits out the driver's own buffering timeout before
+ * rejecting, and a scrape must answer fast regardless of one dependency's state —
+ * `dependencyHealth`'s own database read is a memory check for the same reason.
+ */
+const _jobLastSuccessGauge = new Gauge({
+    name: 'job_last_success_timestamp_seconds',
+    help: "Unix time of each crontab job's last recorded success.",
+    labelNames: ['job'],
+    registers: [metricsRegistry],
+    collect() {
+        this.reset();
+        if (connection.readyState !== mongoose.ConnectionStates.connected) return;
+        return listLeaseSummaries()
+            .then((summaries) => {
+                for (const summary of summaries)
+                    if (summary.lastSuccessAt)
+                        this.set({ job: summary.name }, summary.lastSuccessAt.getTime() / 1000);
+            })
+            .catch(() => undefined);
     }
 });
 
