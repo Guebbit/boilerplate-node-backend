@@ -13,8 +13,8 @@ import { catchAs } from '@infrastructure/http/controller';
  * GET /account/addresses — the caller's whole address book.
  *
  * Short because reading a book genuinely is one service call. Every write in
- * `./write-addresses.ts` and `./delete-address.ts` answers with this same whole-book view, so a
- * client never has to re-read after changing an entry.
+ * `./add-address.ts`, `./update-address.ts` and `./delete-address.ts` answers with this same
+ * whole-book view, so a client never has to re-read after changing an entry.
  */
 export const getAddresses = (request: Request, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */

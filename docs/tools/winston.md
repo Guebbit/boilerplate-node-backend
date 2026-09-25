@@ -112,6 +112,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `account`        | `AUTH_SIGNED_UP`                            | `auth.signup`                               | —                      |
 | `account`        | `AUTH_TOKEN_EXPIRED_CLEANUP`                | `auth.token.expired_cleanup`                | —                      |
 | `account`        | `AUTH_TOKEN_REFRESHED`                      | `auth.token.refreshed`                      | —                      |
+| `addresses`      | `AUTH_ADDRESS_BOOK_ENTRY_UPDATED`           | `auth.address_book_entry.updated`           | —                      |
 | `api-keys`       | `ADMIN_API_KEY_MINTED`                      | `admin.api_key.minted`                      | `api_key`              |
 | `api-keys`       | `ADMIN_API_KEY_REVOKED`                     | `admin.api_key.revoked`                     | `api_key`              |
 | `cart`           | `USER_CART_ITEM_REMOVED`                    | `user.cart.item_removed`                    | `product`              |

@@ -48,8 +48,41 @@ paths:
     /account/addresses/{addressId}:
         put:
             tags: [Account]
+            summary: Replace an address
+            description: Replaces every writable field of one entry of the caller's own book (RFC 9110 §9.3.4, an omitted optional field is cleared). `default true` claims the default slot and demotes the previous holder; `default false` and an absent `default` both leave the assignment alone — demoting without naming a successor would leave the book with none.
+            operationId: replaceAddress
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: addressId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: Address identifier from `GET /account/addresses`
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ReplaceAddressRequest'
+            responses:
+                '200':
+                    description: The updated address book
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AddressesEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                # Well-formed id that names none of the CALLER's addresses — someone else's
+                # entry answers the same 404 as an invented one.
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+        patch:
+            tags: [Account]
             summary: Update an address
-            description: Updates one entry of the caller's own book. `default true` claims the default slot and demotes the previous holder; `default false` and an absent `default` both leave the assignment alone — demoting without naming a successor would leave the book with none.
+            description: Merges the given fields into one entry of the caller's own book (RFC 7396, an omitted field is left unchanged, `null` clears an optional one). `default true` claims the default slot and demotes the previous holder; `default false` and an absent `default` both leave the assignment alone — demoting without naming a successor would leave the book with none.
             operationId: updateAddress
             security:
                 - bearerAuth: []
@@ -168,6 +201,8 @@ components:
                 default:
                     type: boolean
 
+        # PATCH /account/addresses/{addressId} — RFC 7396: every field optional, omitted means
+        # unchanged.
         UpdateAddressRequest:
             type: object
             additionalProperties: false
@@ -198,8 +233,48 @@ components:
                     type: string
                     minLength: 1
                     nullable: true
+                # `null`/absent/`false` are all "no promotion asked" — see this operation's own
+                # description. `nullable: true` only so a PUT's fill-omitted-with-null step (D17)
+                # has a legal value to fill this optional field with; the repository already
+                # treats anything but a literal `true` as a no-op.
                 default:
                     type: boolean
+                    nullable: true
+
+        # PUT /account/addresses/{addressId} — RFC 9110 §9.3.4: the body IS the new resource, so
+        # every writable field this resource has must be nameable and the identity fields are
+        # genuinely required.
+        ReplaceAddressRequest:
+            type: object
+            additionalProperties: false
+            required: [fullName, street, city, zip, country]
+            properties:
+                label:
+                    type: string
+                    minLength: 1
+                    nullable: true
+                fullName:
+                    type: string
+                    minLength: 1
+                street:
+                    type: string
+                    minLength: 1
+                city:
+                    type: string
+                    minLength: 1
+                zip:
+                    type: string
+                    minLength: 1
+                country:
+                    type: string
+                    minLength: 1
+                phone:
+                    type: string
+                    minLength: 1
+                    nullable: true
+                default:
+                    type: boolean
+                    nullable: true
 
         AddressesResponse:
             type: object

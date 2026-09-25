@@ -983,7 +983,7 @@ describe('the address book: /account/addresses', () => {
 
         const officeId = defaults[0].id as string;
         const updated = await api()
-            .put(`/account/addresses/${officeId}`)
+            .patch(`/account/addresses/${officeId}`)
             .set('Authorization', bearer)
             .send({ city: 'Bologna' });
         expect(updated.status).toBe(200);
@@ -1014,11 +1014,98 @@ describe('the address book: /account/addresses', () => {
     it('matches the error contract for an entry the caller does not hold', async () => {
         const { bearer } = await authenticateAs('user');
         const response = await api()
-            .put(`/account/addresses/${MISSING_ID}`)
+            .patch(`/account/addresses/${MISSING_ID}`)
             .set('Authorization', bearer)
             .send({ city: 'Nowhere' });
 
         expect(response.status).toBe(404);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    // AUDIT_0924 D17: a PUT body IS the new resource (RFC 9110 §9.3.4) — every writable field
+    // this resource has must be nameable, and the five identity fields are genuinely required.
+    it('PUT replaces the whole entry, requiring every identity field', async () => {
+        const { bearer } = await authenticateAs('user');
+        const added = await api()
+            .post('/account/addresses')
+            .set('Authorization', bearer)
+            .send(HOME);
+        const addressId = added.body.data.addresses[0].id as string;
+
+        const response = await api()
+            .put(`/account/addresses/${addressId}`)
+            .set('Authorization', bearer)
+            .send({
+                fullName: 'Ada L.',
+                street: 'Via Torino 9',
+                city: 'Torino',
+                zip: '10121',
+                country: 'IT'
+            });
+
+        expect(response.status).toBe(200);
+        expect(response).toSatisfyApiSpec();
+        const replaced = response.body.data.addresses.find(
+            (a: { id: string }) => a.id === addressId
+        );
+        expect(replaced.city).toBe('Torino');
+        // Omitted on a PUT — RFC 9110 clears it, not "leaves it alone".
+        expect(replaced.label).toBeUndefined();
+    });
+
+    it('PUT refuses a body missing a required identity field', async () => {
+        const { bearer } = await authenticateAs('user');
+        const added = await api()
+            .post('/account/addresses')
+            .set('Authorization', bearer)
+            .send(HOME);
+        const addressId = added.body.data.addresses[0].id as string;
+
+        const response = await api()
+            .put(`/account/addresses/${addressId}`)
+            .set('Authorization', bearer)
+            .send({ fullName: 'Ada L.', street: 'Via Torino 9', city: 'Torino', zip: '10121' });
+
+        expect(response.status).toBe(422);
+        expect(response).toSatisfyApiSpec();
+    });
+
+    it('PATCH null clears the optional label, leaving everything else unchanged', async () => {
+        const { bearer } = await authenticateAs('user');
+        const added = await api()
+            .post('/account/addresses')
+            .set('Authorization', bearer)
+            .send(HOME);
+        const addressId = added.body.data.addresses[0].id as string;
+
+        const response = await api()
+            .patch(`/account/addresses/${addressId}`)
+            .set('Authorization', bearer)
+            .send({ label: null });
+
+        expect(response.status).toBe(200);
+        expect(response).toSatisfyApiSpec();
+        const patched = response.body.data.addresses.find(
+            (a: { id: string }) => a.id === addressId
+        );
+        expect(patched.label).toBeUndefined();
+        expect(patched.city).toBe(HOME.city);
+    });
+
+    it('PATCH refuses "" for the optional label, never a synonym for null', async () => {
+        const { bearer } = await authenticateAs('user');
+        const added = await api()
+            .post('/account/addresses')
+            .set('Authorization', bearer)
+            .send(HOME);
+        const addressId = added.body.data.addresses[0].id as string;
+
+        const response = await api()
+            .patch(`/account/addresses/${addressId}`)
+            .set('Authorization', bearer)
+            .send({ label: '' });
+
+        expect(response.status).toBe(422);
         expect(response).toSatisfyApiSpec();
     });
 

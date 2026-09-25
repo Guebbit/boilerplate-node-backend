@@ -160,6 +160,10 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: true,
         reason: "editing an entry in the caller's own address book"
     },
+    'addresses PATCH /addresses/:addressId': {
+        requiresAuth: true,
+        reason: "editing an entry in the caller's own address book"
+    },
     'addresses DELETE /addresses/:addressId': {
         requiresAuth: true,
         reason: "removing an entry from the caller's own address book"
